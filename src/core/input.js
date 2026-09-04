@@ -5,7 +5,7 @@
    ========================================================================== */
 import { clamp, IS_TOUCH } from './util.js';
 
-const BUTTONS = ['jump', 'crouch', 'primary', 'spawn', 'delete'];
+const BUTTONS = ['jump', 'crouch', 'primary', 'spawn', 'delete', 'use'];
 
 export class InputManager {
   constructor() {
@@ -87,11 +87,24 @@ export class InputManager {
     }
   }
 
+  /**
+   * The throw of the stick, measured from the element itself.
+   *
+   * This has to be read when the stick is pressed, not when the input system
+   * is wired up: at that point the game screen is still display:none, every
+   * rectangle measures zero, and a zero radius silently pins the stick to the
+   * centre so the player cannot move at all.
+   */
   _readStickHome() {
-    if (!this.stickBase) return;
+    if (!this.stickBase) return 0;
     const r = this.stickBase.getBoundingClientRect();
-    this._baseHome = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-    this.stick.radius = r.width * 0.46;
+    if (r.width > 8) {
+      this.stick.radius = r.width * 0.46;
+    } else {
+      const zone = this.stickZone ? this.stickZone.getBoundingClientRect().width : 0;
+      this.stick.radius = clamp(zone * 0.24, 36, 58);
+    }
+    return this.stick.radius;
   }
 
   /** Registers a HUD element as a virtual button. */
@@ -146,6 +159,7 @@ export class InputManager {
     if (!this.enabled) return;
     e.preventDefault();
     if (this.stick.active) return;
+    this._readStickHome();
     this.stick.active = true;
     this.stick.id = e.pointerId;
     // The stick re-centres under the thumb, but never leaves its corner.
@@ -186,8 +200,11 @@ export class InputManager {
   _placeStickBase(cx, cy) {
     if (!this.stickBase) return;
     const parent = this.stickZone.getBoundingClientRect();
+    // left/top with a centring transform, so the point we set is the point
+    // the ring is drawn around.
     this.stickBase.style.left = (cx - parent.left) + 'px';
-    this.stickBase.style.bottom = (parent.bottom - cy) + 'px';
+    this.stickBase.style.top = (cy - parent.top) + 'px';
+    this.stickBase.style.bottom = 'auto';
   }
 
   _stickUp(e) {
@@ -213,10 +230,12 @@ export class InputManager {
       case 'Space': set('jump'); break;
       case 'KeyC': case 'ControlLeft': case 'ControlRight': set('crouch'); break;
       case 'KeyF': case 'Enter': set('primary'); break;
+      case 'KeyE': set('use'); break;
       case 'KeyG': set('spawn'); break;
       case 'KeyX': set('delete'); break;
       case 'Digit1': if (isDown) this.onWeaponSelect?.(0); break;
       case 'Digit2': if (isDown) this.onWeaponSelect?.(1); break;
+      case 'Digit3': if (isDown) this.onWeaponSelect?.(2); break;
       case 'Tab': if (isDown) this.onToggleDrawer?.(); break;
       case 'Escape': if (isDown) this.onPause?.(); break;
       default: break;

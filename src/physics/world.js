@@ -13,6 +13,15 @@ const _v1 = new Vector3(), _v2 = new Vector3(), _v3 = new Vector3(), _v4 = new V
 
 let _pid = 1;
 
+/** How much of a muscle correction is allowed to become velocity. */
+const MUSCLE_VELOCITY_SHARE = 0.28;
+/** Metres per second no joint may exceed. */
+const MAX_PARTICLE_SPEED = 26;
+/** How elastic a body-against-flesh contact is. Barely. */
+const BODY_RESTITUTION = 0.85;
+/** Most speed a single contact may hand to one joint, in m/s. */
+const MAX_CONTACT_DV = 16;
+
 /* -------------------------------------------------------------------------- */
 /*                                  particle                                  */
 /* -------------------------------------------------------------------------- */
@@ -22,9 +31,10 @@ export class Particle {
     this.id = _pid++;
     this.x = x; this.y = y; this.z = z;
     this.px = x; this.py = y; this.pz = z;
-    // muscle target (where the animation wants this joint to be)
+    // muscle target (where the animation wants this joint to be) and how fast
+    // the animation is moving it, in metres per second
     this.tx = x; this.ty = y; this.tz = z;
-    this.ptx = x; this.pty = y; this.ptz = z;
+    this.tvx = 0; this.tvy = 0; this.tvz = 0;
     this.muscle = 0;
 
     this.mass = opts.mass != null ? opts.mass : 3;
@@ -325,10 +335,15 @@ export class PhysicsWorld {
     const gx = this.gravity.x * dt * dt, gy = this.gravity.y * dt * dt, gz = this.gravity.z * dt * dt;
     const drag = 0.9975;
 
+    const maxStep = MAX_PARTICLE_SPEED * dt;
     for (let i = 0; i < ps.length; i++) {
       const p = ps[i];
       if (p.pinned) { p.px = p.x; p.py = p.y; p.pz = p.z; continue; }
-      const vx = (p.x - p.px) * drag, vy = (p.y - p.py) * drag, vz = (p.z - p.pz) * drag;
+      let vx = (p.x - p.px) * drag, vy = (p.y - p.py) * drag, vz = (p.z - p.pz) * drag;
+      // Nothing in a human body has any business moving this fast; if it does,
+      // something upstream has gone wrong and this stops it leaving the map.
+      const sp = Math.sqrt(vx * vx + vy * vy + vz * vz);
+      if (sp > maxStep) { const s2 = maxStep / sp; vx *= s2; vy *= s2; vz *= s2; }
       p.px = p.x; p.py = p.y; p.pz = p.z;
       p.x += vx + gx; p.y += vy + gy; p.z += vz + gz;
       p.grounded = false;
@@ -339,13 +354,26 @@ export class PhysicsWorld {
       const p = ps[i];
       if (p.muscle <= 0) continue;
       if (p.muscle >= 0.999) {
+        /* Pinned to the animation. The previous position has to be derived
+           from the target's real speed and THIS substep, not from where the
+           target sat a whole frame ago - otherwise every joint carries a
+           velocity inflated by the substep ratio, and the moment the
+           character ragdolls the body is flung apart by it. */
         p.x = p.tx; p.y = p.ty; p.z = p.tz;
-        p.px = p.ptx; p.py = p.pty; p.pz = p.ptz;
+        p.px = p.tx - p.tvx * dt;
+        p.py = p.ty - p.tvy * dt;
+        p.pz = p.tz - p.tvz * dt;
       } else {
+        /* Verlet reads any position edit as velocity, so pulling a limb
+           towards its animated pose every substep pumps energy in and the
+           ragdoll winds itself up until it flies. Move the previous position
+           along with it and only a fixed share of the correction survives as
+           actual speed. */
         const k = p.muscle * p.muscle * 0.45;
-        p.x += (p.tx - p.x) * k;
-        p.y += (p.ty - p.y) * k;
-        p.z += (p.tz - p.z) * k;
+        const keep = 1 - MUSCLE_VELOCITY_SHARE;
+        const dx = (p.tx - p.x) * k, dy = (p.ty - p.y) * k, dz = (p.tz - p.z) * k;
+        p.x += dx; p.y += dy; p.z += dz;
+        p.px += dx * keep; p.py += dy * keep; p.pz += dz * keep;
       }
     }
 
@@ -369,7 +397,10 @@ export class PhysicsWorld {
           p.x > this.groundMin.x && p.x < this.groundMax.x &&
           p.z > this.groundMin.z && p.z < this.groundMax.z) {
         const pen = gy - (p.y - p.radius);
-        p.y += pen;
+        // Move the previous position with it: separating two overlapping
+        // things is a position fix, and Verlet would otherwise read it as a
+        // launch.
+        p.y += pen; p.py += pen;
         p.grounded = true;
         // tangential friction
         const f = p.friction;
@@ -440,8 +471,12 @@ export class PhysicsWorld {
     const pen = p.radius - d;
     if (!inside && pen <= 0) return;
 
-    // Move the particle out.
+    // Separate them. This is a position correction, so the previous position
+    // travels with it - otherwise a boulder ploughing through a crowd hands
+    // out tens of metres per second of free velocity through depenetration
+    // alone.
     p.x += _v3.x * pen; p.y += _v3.y * pen; p.z += _v3.z * pen;
+    p.px += _v3.x * pen; p.py += _v3.y * pen; p.pz += _v3.z * pen;
     if (_v3.y > 0.55) p.grounded = true;
 
     // Relative velocity along the normal for the coupling impulse.
@@ -455,7 +490,11 @@ export class PhysicsWorld {
     if (vn < 0) {
       const eff = p.invMass + body.invMass;
       if (eff > 1e-8) {
-        const j = (-1.02 * vn) / eff;
+        // Flesh does not bounce, and no single joint may be handed more than
+        // a survivable amount of speed by one contact.
+        let j = (-BODY_RESTITUTION * vn) / eff;
+        const dv = j * p.invMass;
+        if (dv > MAX_CONTACT_DV) j *= MAX_CONTACT_DV / dv;
         // particle side
         p.px -= _v3.x * j * p.invMass * dt;
         p.py -= _v3.y * j * p.invMass * dt;

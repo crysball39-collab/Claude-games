@@ -48,22 +48,27 @@ You spawn holding two things:
 | ---- | ---------- | ----------------------- |
 | 1 | **Fists** | `PUNCH` — alternates a left jab and a right jab |
 | 2 | **RCV2** (Reality Crusher Version 2) | `SHOOT`, `+` (spawn) and a delete button |
+| 3 | **Machete** — only once you are carrying one | `SLASH` — alternates a forehand and a backhand |
 
 `JUMP` and `CROUCH` sit above the right thumb at all times. The left half of the
 screen is a virtual stick; drag anywhere on the right half to look around.
 
 **To spawn something:** tap the three lines in the top left. The drawer has two side
-sections — **Objects** (Crate, Boulder) and **Humans** (Citizen). Pick one, close the
-drawer, equip the **RCV2**, and press **+**.
+sections — **Objects** (Crate, Boulder, Machete) and **Humans** (Citizen). Pick one,
+close the drawer, equip the **RCV2**, and press **+**.
 
 **To move something:** with the RCV2 equipped, tap `SHOOT` while aiming at anything
-that can move — a crate, a boulder, or a citizen. It is held in the beam until you
-tap `SHOOT` again. The delete button removes whatever you are holding, or whatever
-is under the crosshair.
+that can move — a crate, a boulder, a machete, or a citizen. It is held in the beam
+until you tap `SHOOT` again. The delete button removes whatever you are holding, or
+whatever is under the crosshair.
+
+**To pick something up:** spawn a **Machete**, walk over to it, and a `USE` button
+appears. Tap it to take the machete into your right hand; slot 3 lights up and the
+primary button becomes `SLASH`. `USE` turns into `DROP` while you are carrying it.
 
 Keyboard and mouse work too: `WASD`, mouse look (click to lock the pointer), `Space`
-jump, `C` crouch, `1`/`2` weapons, left click punch or grab, `G` spawn, `X` delete,
-`Tab` spawn menu, `Esc` pause.
+jump, `C` crouch, `1`/`2`/`3` weapons, left click punch, slash or grab, `E` use,
+`G` spawn, `X` delete, `Tab` spawn menu, `Esc` pause.
 
 ---
 
@@ -122,6 +127,11 @@ character; nothing else is consulted. Damage and knock-back come from the hand's
 actual velocity at the moment of contact, so spacing matters — reach out at full
 extension and it hurts, crowd in and you land a weak, early tap. Punch a crate and
 you shove the crate.
+
+The machete works the same way, only the geometry is the blade: its cutting edge is
+sampled from the guard to the tip and tested against real body parts, so its reach
+and timing are the weapon's own. Unlike a fist it cuts, so it opens wounds and tears
+clothing rather than just bruising — and the blood stays on the blade.
 
 ### Gore
 
@@ -186,7 +196,7 @@ src/
     gore.js           droplets, decals and which ink goes where
     paint.js          paintable surfaces and the gore/face drawing itself
     textures.js       procedural grass, wood, rock and sky
-    objects.js        crate and boulder
+    objects.js        crate, boulder and machete
     citizen.js        citizen spawner
     rcv2.js           the Reality Crusher V2
     map.js            maps, currently the Test Baseplate
@@ -209,6 +219,9 @@ this project is actually about still work:
 - you cannot walk through another person
 - jabs land at walking-in range and can eventually kill, leaving a corpse
 - an angry citizen fights back and can hurt you
+- the joystick moves you the moment you land in the map
+- a hard hit and a rolling boulder stagger a ragdoll without launching it
+- the machete can be picked up with USE, swung both ways, and put back down
 - a boulder rolls rather than slides
 
 ```

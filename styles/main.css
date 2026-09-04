@@ -163,12 +163,15 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
   font-size:.62rem;letter-spacing:.28em;color:#ff8a8a;text-shadow:0 0 6px #000;pointer-events:none}
 
 #stick-zone{position:absolute;left:calc(var(--safe-l) + 0px);bottom:0;width:44%;max-width:280px;height:56%;max-height:240px}
-#stick-base{position:absolute;left:78px;bottom:78px;width:118px;height:118px;margin:-59px 0 0 -59px;
+#stick-base{position:absolute;left:78px;top:auto;bottom:78px;width:118px;height:118px;
+  transform:translate(-50%,50%);transform-origin:center;
   border-radius:50%;border:2px solid rgba(255,255,255,.2);background:rgba(10,10,12,.3);
   backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);opacity:.55;transition:opacity .18s}
+/* once a thumb lands, the ring is positioned by left/top instead */
+#stick-zone.active #stick-base{transform:translate(-50%,-50%)}
 #stick-zone.active #stick-base{opacity:1}
 #stick-knob{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;
-  background:rgba(240,238,236,.28);border:2px solid rgba(255,255,255,.5)}
+  background:rgba(240,238,236,.28);border:2px solid rgba(255,255,255,.5);will-change:transform}
 
 #weapon-slots{position:absolute;bottom:calc(var(--safe-b) + 8px);left:50%;transform:translateX(-50%);display:flex;gap:8px}
 .wslot{position:relative;padding:.5rem .9rem;border-radius:8px;border:1.5px solid var(--hud-line);
@@ -183,6 +186,9 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
 #action-cluster .col{display:flex;flex-direction:column;gap:10px;align-items:center}
 #action-cluster #rcv2-extra{display:none}
 #action-cluster #rcv2-extra.show{display:flex}
+#action-cluster #btn-use{display:none;font-size:.68rem}
+#action-cluster #btn-use.show{display:flex}
+#btn-use{border-color:rgba(255,208,120,.55);color:#ffd98a}
 #btn-spawn{font-size:1.7rem;font-weight:400;line-height:1}
 #btn-delete{font-size:1.2rem}
 
@@ -230,6 +236,10 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
   repeating-linear-gradient(45deg,#a9793f 0 6px,#8d6231 6px 12px)}
 .ico.boulder{background:radial-gradient(circle at 34% 30%, #9c9c98, #565651 62%, #35352f);border-radius:50%}
 .ico.citizen{background:linear-gradient(180deg,#e8c39b 0 34%, #3f6ea8 34% 72%, #2b2b30 72%)}
+.ico.machete{background:
+  linear-gradient(105deg, transparent 0 42%, #cfd6dd 42% 56%, #8f979f 56% 62%, transparent 62%),
+  linear-gradient(105deg, transparent 0 30%, #2e2119 30% 42%, transparent 42%),
+  #14181c}
 .drawer-foot{margin-top:10px;font-size:.68rem;color:var(--muted);letter-spacing:.06em}
 .drawer-foot b{color:#ffcf7a}
 
@@ -255,7 +265,7 @@ body.portrait-block #rotate-overlay{display:flex}
 @media (max-height:430px){
   .hud-btn.big{width:72px;height:72px}
   .hud-btn.med{width:52px;height:52px}
-  #stick-base{left:66px;bottom:62px;width:100px;height:100px;margin:-50px 0 0 -50px}
+  #stick-base{left:66px;bottom:62px;width:100px;height:100px}
   #stick-knob{width:44px;height:44px;margin:-22px 0 0 -22px}
   #action-cluster{gap:8px}
   #action-cluster .col{gap:8px}

@@ -5,7 +5,7 @@
      node tools/verify.mjs
    ========================================================================== */
 import { boot } from './harness.mjs';
-const h = await boot({ width: 960, height: 500 });
+const h = await boot({ width: 960, height: 500, touch: true });
 const { page, shot, ev, logs, close } = h;
 const fail = [];
 
@@ -239,6 +239,115 @@ r = await page.evaluate(async () => {
   return { playerHurt: +(hp0 - g.player.health).toFixed(1), aiState: c.ai.state };
 });
 check('a citizen fights back and can hurt you', r.playerHurt > 0, JSON.stringify(r));
+
+// ---------- the joystick works the moment you land in the map ----------
+{
+  const grip = await h.dragStick(0, -70);
+  await page.waitForTimeout(120);
+  const held = await ev(() => ({
+    x: +window.GOREBOX.game.player.moveInput.x.toFixed(2),
+    z: +window.GOREBOX.game.player.moveInput.z.toFixed(2),
+  }));
+  const from = await ev(() => {
+    const p = window.GOREBOX.game.player;
+    return { x: p.pos.x, z: p.pos.z };
+  });
+  await page.waitForTimeout(1200);
+  r = await ev((f) => {
+    const p = window.GOREBOX.game.player;
+    return { moved: +Math.hypot(p.pos.x - f.x, p.pos.z - f.z).toFixed(2) };
+  }, from);
+  await grip.release();
+  r.held = held;
+  check('the joystick moves you', Math.abs(held.z) > 0.5 && r.moved > 1.5, JSON.stringify(r));
+}
+
+// ---------- nothing gets launched into orbit ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  const V = g.player.pos.constructor;
+  const { spawnCitizen } = await import('/src/game/citizen.js');
+  const { spawnBoulder } = await import('/src/game/objects.js');
+  g.clearSpawns();
+  const cs = [];
+  for (let i = 0; i < 3; i++) cs.push(spawnCitizen(g, new V(i * 1.5 - 1.5, 0, 0)));
+  await new Promise((res) => setTimeout(res, 500));
+  cs.forEach((c, i) => { c.ai.update = () => { c.moveInput.set(0, 0, 0); }; c.teleport(i * 1.5 - 1.5, 0, Math.PI); });
+  g.player.teleport(0, 8, 0);
+  await new Promise((res) => setTimeout(res, 300));
+
+  // a hard jab each, then a boulder straight through them
+  cs.forEach((c) => {
+    const b = c.rig.byName.upperTorso;
+    c.applyImpact(new V(b.worldPos.x, b.worldPos.y, b.worldPos.z + 0.1), new V(0, 7, -130),
+      { boneName: b.name, damage: 12, type: 'blunt' });
+  });
+  const rock = spawnBoulder(g, new V(-7, 0.6, 0.1));
+  rock.vel.set(16, 0, 0); rock.wake();
+
+  let peak = 0, high = 0;
+  for (let f = 0; f < 260; f++) {
+    await new Promise((res) => requestAnimationFrame(res));
+    for (const c of cs) {
+      for (const p of c.particleList) {
+        peak = Math.max(peak, Math.hypot(p.x - p.px, p.y - p.py, p.z - p.pz) * 90);
+        high = Math.max(high, p.y);
+      }
+    }
+  }
+  return {
+    peakSpeed: +peak.toFixed(1), maxHeight: +high.toFixed(2),
+    finite: cs.every((c) => Number.isFinite(c.pos.x) && Number.isFinite(c.pos.y)),
+  };
+});
+check('ragdolls take a hit without being launched',
+  r.finite && r.peakSpeed < 14 && r.maxHeight < 3, JSON.stringify(r));
+
+// ---------- the machete: pick it up, swing it, put it down ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  const V = g.player.pos.constructor;
+  const { spawnCitizen } = await import('/src/game/citizen.js');
+  g.clearSpawns();
+  g.player.teleport(0, 3, 0); g.camYaw = 0; g.camPitch = -0.2;
+  g.setEquipped('rcv2'); g.setSelected('machete');
+  await new Promise((res) => setTimeout(res, 150));
+  g.spawnSelected();
+  for (let i = 0; i < 110; i++) await new Promise((res) => requestAnimationFrame(res));
+  g.setEquipped('fists');
+  g.useAction();                                  // USE picks it up
+  const carried = !!g.carried && g.equipped === 'machete';
+
+  const c = spawnCitizen(g, new V(0, 0, 0));
+  await new Promise((res) => setTimeout(res, 400));
+  c.ai.update = () => { c.moveInput.set(0, 0, 0); };
+  const clips = []; let bled = false;
+  const startHp = c.health;
+  const frame = () => new Promise((res) => requestAnimationFrame(res));
+  for (let i = 0; i < 5 && !c.dead; i++) {
+    if (c.state !== 'controlled') { c.balance = 1; c.setState('controlled'); }
+    c.teleport(0, 0, Math.PI);
+    g.player.teleport(0, 0.85, 0); g.camYaw = 0; g.camPitch = 0.02;
+    for (let k = 0; k < 6; k++) await frame();
+    g.player.punchCooldown = 0; g.player.animator.cancelAction();
+    if (!g.player.slash()) continue;
+    clips.push(g.player.animator.actionName);
+    for (let k = 0; k < 240 && g.player.animator.actionActive; k++) await frame();
+  }
+  const damage = Math.round(startHp - c.health);
+  for (const [, e] of c.body.entries) {
+    if (e.skin.surface && e.skin.surface.bloodAmount > 0) bled = true;
+  }
+  g.useAction();                                  // USE puts it back down
+  return {
+    carried, clips, damage, bled,
+    dropped: !g.carried && g.spawnedBodies.some((b) => b.tag === 'machete'),
+    equippedAfter: g.equipped,
+  };
+});
+check('the machete can be picked up, swung and dropped',
+  r.carried && r.damage > 30 && r.bled && r.dropped &&
+  r.clips.includes('slashR') && r.clips.includes('slashL'), JSON.stringify(r));
 
 // ---------- boulder actually rolls ----------
 r = await page.evaluate(async () => {

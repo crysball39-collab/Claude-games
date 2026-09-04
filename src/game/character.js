@@ -137,6 +137,7 @@ export class Character {
     /* ------------------------------ combat ------------------------------ */
     this.equipped = 'fists';
     this.punchSide = 'R';
+    this.slashSide = 'L';       // so the first swing is the forehand
     this.punchCooldown = 0;
     this.struck = new Set();
     this.prevHand = { R: new Vector3(), L: new Vector3() };
@@ -249,6 +250,8 @@ export class Character {
       P.elbowR, P.elbowL, P.handEndR, P.handEndL,
       P.kneeR, P.kneeL, P.ankleR, P.ankleL,
     ];
+
+    this.totalMass = this.particleList.reduce((sum, p) => sum + p.mass, 0);
   }
 
   /* ---------------------------------------------------------------- helpers */
@@ -278,7 +281,7 @@ export class Character {
       const p = this.particles[name];
       p.setPosition(src.x, src.y, src.z);
       p.tx = src.x; p.ty = src.y; p.tz = src.z;
-      p.ptx = src.x; p.pty = src.y; p.ptz = src.z;
+      p.tvx = 0; p.tvy = 0; p.tvz = 0;
     }
   }
 
@@ -359,26 +362,24 @@ export class Character {
     if (this.dead && damage <= 0) return;
     const mag = force.length();
 
-    // spread the impulse over the nearest particles
-    let nearest = null, nd = Infinity;
+    /* An impulse acts on the whole body, not on whichever joint happens to be
+       nearest. Dividing it by one particle's mass instead of the body's is
+       what used to launch people across the map: a hard jab is 130 kg m/s,
+       which is 1.9 m/s to a 69 kg person but twenty times that to a wrist.
+       So: share it out by total mass, then add a local emphasis around the
+       point of contact so the struck part still snaps. */
+    const dt = this.world.fixedStep / this.world.substeps;
+    const base = 1 / Math.max(1, this.totalMass);
+    const REACH = 0.6;          // metres over which the emphasis fades out
+    const EMPHASIS = 2.4;       // how much harder the struck part reacts
+    const MAX_DV = 11;          // m/s, so nothing ever becomes a projectile
+
     for (let i = 0; i < this.particleList.length; i++) {
       const p = this.particleList[i];
-      const d = (p.x - point.x) ** 2 + (p.y - point.y) ** 2 + (p.z - point.z) ** 2;
-      if (d < nd) { nd = d; nearest = p; }
-    }
-    if (nearest) {
-      const dt = this.world.fixedStep / this.world.substeps;
-      const inv = nearest.invMass;
-      nearest.addVelocity(force.x * inv, force.y * inv, force.z * inv, dt);
-      // neighbours take a share so the whole body reacts, not just one joint
-      for (let i = 0; i < this.particleList.length; i++) {
-        const p = this.particleList[i];
-        if (p === nearest) continue;
-        const d = Math.sqrt((p.x - point.x) ** 2 + (p.y - point.y) ** 2 + (p.z - point.z) ** 2);
-        if (d > 0.55) continue;
-        const k = (1 - d / 0.55) * 0.34 * p.invMass;
-        p.addVelocity(force.x * k, force.y * k, force.z * k, dt);
-      }
+      const d = Math.sqrt((p.x - point.x) ** 2 + (p.y - point.y) ** 2 + (p.z - point.z) ** 2);
+      const near = d < REACH ? (1 - d / REACH) : 0;
+      const k = clamp(base * (1 + EMPHASIS * near * near), 0, MAX_DV / Math.max(mag, 1e-6));
+      p.addVelocity(force.x * k, force.y * k, force.z * k, dt);
     }
 
     if (damage > 0) this.applyDamage(damage, { boneName, point, type, attacker, force, severity });
@@ -457,7 +458,7 @@ export class Character {
     this.animator.update(dt);
     this._applyLookOffsets();
     this.rig.updateFK();
-    this._writeMuscleTargets();
+    this._writeMuscleTargets(dt);
   }
 
   _updateControlled(dt) {
@@ -828,15 +829,27 @@ export class Character {
 
   /* ----------------------------------------------------------- muscle target */
 
-  _writeMuscleTargets() {
+  /**
+   * Hands the solver where the animation wants each joint, and how fast it is
+   * moving it. The speed matters: it is what a limb carries away with it when
+   * the character stops being in control mid-swing.
+   */
+  _writeMuscleTargets(dt) {
     const layout = LAYOUT;
     const strength = this.strength;
+    const inv = dt > 1e-5 ? 1 / dt : 0;
+    const MAX_TARGET_SPEED = 14;
     for (let i = 0; i < layout.length; i++) {
       const [name, , , boneName, which] = layout[i];
       const bone = this.rig.byName[boneName];
       const src = which === 'pos' ? bone.worldPos : bone.worldEnd;
       const p = this.particles[name];
-      p.ptx = p.tx; p.pty = p.ty; p.ptz = p.tz;
+      let vx = (src.x - p.tx) * inv, vy = (src.y - p.ty) * inv, vz = (src.z - p.tz) * inv;
+      // A teleport or a state change moves a target a long way in one frame;
+      // that is not the limb travelling, so do not let it read as speed.
+      const sp = Math.sqrt(vx * vx + vy * vy + vz * vz);
+      if (sp > MAX_TARGET_SPEED) { const k = MAX_TARGET_SPEED / sp; vx *= k; vy *= k; vz *= k; }
+      p.tvx = vx; p.tvy = vy; p.tvz = vz;
       p.tx = src.x; p.ty = src.y; p.tz = src.z;
       p.muscle = strength;
     }
@@ -948,6 +961,20 @@ export class Character {
     return true;
   }
 
+  /** Swings the machete. Forehand across, then backhand back. */
+  slash(force = false) {
+    if (this.state !== STATE.CONTROLLED) return false;
+    if (this.equipped !== 'machete' && !force) return false;
+    if (this.punchCooldown > 0 || this.animator.actionActive) return false;
+    this.slashSide = this.slashSide === 'R' ? 'L' : 'R';
+    this.animator.playAction(this.slashSide === 'R' ? 'slashR' : 'slashL');
+    this.punchCooldown = 0.34;
+    this.struck.clear();
+    this.combatReady = true;
+    this.combatTimer = 3.5;
+    return true;
+  }
+
   _updateStrike(dt) {
     for (const S of ['R', 'L']) {
       const bone = this.rig.byName['hand' + S];
@@ -962,14 +989,18 @@ export class Character {
 
     const a = this.animator;
     if (!a.actionActive) return;
-    const clipName = a.actionName;
-    if (clipName !== 'punchR' && clipName !== 'punchL') return;
-    const side = clipName === 'punchR' ? 'R' : 'L';
+    const clip = a.actionName;
+    const isPunch = clip === 'punchR' || clip === 'punchL';
+    const isSlash = clip === 'slashR' || clip === 'slashL';
+    if (!isPunch && !isSlash) return;
     const strike = a.action.clip.strike;
     const t = a.actionTime;
     if (t < strike.from || t > strike.to) return;
 
-    this.onStrike?.(this, side, this.handVel[side]);
+    // Both weapons are held in a hand, so the hand is what carries the speed.
+    const side = strike.hand === 'handR' ? 'R' : 'L';
+    if (isPunch) this.onStrike?.(this, side, this.handVel[side]);
+    else this.onSlash?.(this, side, this.handVel[side]);
   }
 
   /* ------------------------------------------------------------------ misc */

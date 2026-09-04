@@ -11,17 +11,23 @@ import { getMap } from './map.js';
 import { Character, STATE } from './character.js';
 import { playerAppearance } from './appearance.js';
 import { spawnCitizen } from './citizen.js';
-import { spawnCrate, spawnBoulder, syncBodyMesh, disposeBody, prewarmObjectArt } from './objects.js';
+import {
+  spawnCrate, spawnBoulder, spawnMachete, createMacheteModel, syncBodyMesh,
+  disposeBody, prewarmObjectArt, MACHETE,
+} from './objects.js';
 import { GoreSystem, nearestBone } from './gore.js';
 import { NavGrid } from './ai.js';
 import { RCV2 } from './rcv2.js';
-import { boneCorners, pointInBone } from './skeleton.js';
+import { boneCorners, pointInBone, boneBoxCenter, HIP_HEIGHT } from './skeleton.js';
 import { clamp, clamp01, makeRng, yieldToPaint } from '../core/util.js';
 
 const _v1 = new Vector3(), _v2 = new Vector3(), _v3 = new Vector3(), _v4 = new Vector3();
 const _q1 = new Quaternion(), _q2 = new Quaternion();
 const _e = new Euler(0, 0, 0, 'YXZ');
 const UP = new Vector3(0, 1, 0);
+/* A machete continues the line of the fist, canted out a little so the blade
+   sits in view rather than straight down the forearm. */
+const MACHETE_TILT = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -0.30);
 
 export const QUALITY = {
   low: { shadows: false, shadowMap: 512, pixelRatio: 1.0, grassSize: 256, maxObjects: 40, maxCitizens: 10 },
@@ -33,6 +39,7 @@ export const SPAWNABLES = {
   objects: [
     { id: 'crate', name: 'Crate', icon: 'crate', hint: 'Wooden crate' },
     { id: 'boulder', name: 'Boulder', icon: 'boulder', hint: 'Rock boulder' },
+    { id: 'machete', name: 'Machete', icon: 'machete', hint: 'Pick it up with USE' },
   ],
   humans: [
     { id: 'citizen', name: 'Citizen', icon: 'citizen', hint: 'An ordinary person' },
@@ -71,6 +78,7 @@ export class Game {
     this.navTimer = 0;
 
     this.selected = { id: 'crate', name: 'Crate' };
+    this.carried = null;         // { kind, model } while something is in hand
     this.paused = false;
     this.running = false;
     this.time = 0;
@@ -152,6 +160,7 @@ export class Game {
     this.scene.add(this.player.body.group);
     this.player.onDamage = (info) => this.handleDamage(info);
     this.player.onStrike = (a, s, v) => this.resolveStrike(a, s, v);
+    this.player.onSlash = (a, s, v) => this.resolveSlash(a, s, v);
     this.registerCharacter(this.player);
     this.camYaw = this.player.yaw;
 
@@ -215,6 +224,12 @@ export class Game {
   }
 
   clearSpawns() {
+    if (this.carried) {
+      this.scene.remove(this.carried.model);
+      this.carried = null;
+      this.hud?.setCarrying(null);
+      this.setEquipped('fists');
+    }
     for (const b of [...this.spawnedBodies]) this.removeBody(b);
     for (const c of [...this.characters]) if (c !== this.player) this.removeCharacter(c);
     this.nav.dirty = true;
@@ -293,17 +308,124 @@ export class Game {
       const b = spawnBoulder(this, _v2);
       return { type: 'body', name: 'Boulder', entity: b };
     }
+    if (id === 'machete') {
+      _v2.y = Math.max(_v2.y, 0.6);
+      const b = spawnMachete(this, _v2);
+      return { type: 'body', name: 'Machete', entity: b };
+    }
     _v2.y = Math.max(_v2.y, 0.7);
     const b = spawnCrate(this, _v2);
     return { type: 'body', name: 'Crate', entity: b };
   }
 
+  /* ---------------------------------------------------------------- carrying */
+
+  /** The nearest thing in front of the player that can be picked up. */
+  pickupInReach() {
+    if (!this.player || this.player.state !== STATE.CONTROLLED) return null;
+    this.camera.getWorldDirection(_v1);
+    _v1.y = 0;
+    if (_v1.lengthSq() < 1e-6) return null;
+    _v1.normalize();
+    const feet = this.player.pos.y - HIP_HEIGHT;
+    let best = null, bestScore = -Infinity;
+    for (const b of this.spawnedBodies) {
+      if (!b.userData.pickup) continue;
+      // Measured flat, so something lying at your feet is in reach without
+      // having to stare at the ground first.
+      const dx = b.pos.x - this.player.pos.x, dz = b.pos.z - this.player.pos.z;
+      const d = Math.hypot(dx, dz);
+      if (d > 2.4) continue;
+      if (b.pos.y < feet - 0.6 || b.pos.y > feet + 2.0) continue;
+      const facing = d < 0.35 ? 1 : (dx * _v1.x + dz * _v1.z) / d;
+      if (facing < 0.1) continue;
+      const score = facing * 2 - d;
+      if (score > bestScore) { bestScore = score; best = b; }
+    }
+    return best;
+  }
+
+  /** The USE button: take what is in reach, or put down what is in hand. */
+  useAction() {
+    if (this.carried) { this.dropCarried(); return; }
+    const body = this.pickupInReach();
+    if (!body) { this.hud?.toast('Nothing to pick up'); return; }
+    this.pickUp(body);
+  }
+
+  pickUp(body) {
+    const kind = body.userData.pickup;
+    if (kind !== 'machete') return;
+    // The loose item becomes a held one: same model, no longer simulated.
+    const model = body.mesh;
+    model.userData.bodyOffset = null;
+    model.matrixAutoUpdate = false;
+    const i = this.spawnedBodies.indexOf(body);
+    if (i >= 0) this.spawnedBodies.splice(i, 1);
+    if (this.rcv2?.grab?.body === body) this.rcv2.grab = null;
+    this.world.removeBody(body);
+    this.stats.objects = this.spawnedBodies.length;
+    this.nav.dirty = true;
+
+    // bodyRef is kept only so the lazily created blade canvas can be found
+    // again; the body itself is no longer simulated.
+    this.carried = {
+      kind, model, bodyRef: body,
+      painter: body.userData.paintBlood,
+      surface: body.userData.paintSurface || null,
+      material: body.userData.material,
+    };
+    this.hud?.setCarrying(kind);
+    this.setEquipped('machete');
+    this.hud?.toast('Picked up the Machete');
+  }
+
+  dropCarried() {
+    const c = this.carried;
+    if (!c) return;
+    this.carried = null;
+    this.hud?.setCarrying(null);
+
+    // Put it back into the world where the blade actually is, moving the way
+    // the hand was moving.
+    const hand = this.player.rig.byName.handR;
+    boneBoxCenter(hand, _v1);
+    _q1.copy(hand.worldQuat).multiply(MACHETE_TILT);
+    _v2.set(0, MACHETE.length / 2 + 0.04, 0).applyQuaternion(_q1).add(_v1);
+    const body = spawnMachete(this, _v2, {
+      quat: _q1,
+      reuse: { model: c.model, material: c.material, surface: c.surface },
+    });
+    _v3.copy(this.player.handVel.R).clampLength(0, 9);
+    body.vel.copy(_v3).addScaledVector(_v1.set(0, 1, 0), 0.6);
+    body.angVel.set((this.rng() - 0.5) * 5, (this.rng() - 0.5) * 3, (this.rng() - 0.5) * 5);
+    body.wake();
+
+    this.setEquipped('fists');
+    this.hud?.toast('Dropped the Machete');
+  }
+
+  /** Keeps a carried item in the hand that is holding it. */
+  _syncCarried() {
+    const c = this.carried;
+    if (!c) return;
+    const hand = this.player.rig.byName.handR;
+    boneBoxCenter(hand, _v1);
+    _q1.copy(hand.worldQuat).multiply(MACHETE_TILT);
+    c.model.quaternion.copy(_q1);
+    c.model.position.copy(_v2.set(0, 0.035, 0).applyQuaternion(_q1)).add(_v1);
+    c.model.updateMatrix();
+    c.model.visible = this.equipped === 'machete';
+  }
+
   /* ----------------------------------------------------------------- weapons */
 
   setEquipped(name) {
+    if (name === 'machete' && !this.carried) name = 'fists';
     this.equipped = name;
     this.player.setEquipped(name);
     if (this.rcv2) this.rcv2.setVisible(name === 'rcv2');
+    if (this.carried) this.carried.model.visible = name === 'machete';
     this.hud?.setWeapon(name);
   }
 
@@ -312,6 +434,8 @@ export class Game {
     if (this.player.state !== STATE.CONTROLLED) return;
     if (this.equipped === 'fists') {
       this.player.punch();
+    } else if (this.equipped === 'machete') {
+      this.player.slash();
     } else {
       this.camera.getWorldDirection(_v1);
       const res = this.rcv2.shoot(this.camera.position, _v1);
@@ -425,6 +549,65 @@ export class Game {
   /* -------------------------------------------------------- realistic hits */
 
   /**
+   * A slash only lands where the blade actually is. Same rule as the fists:
+   * the edge of the machete is sampled along its length and tested against
+   * real body parts, so reach and timing are the weapon's own geometry.
+   */
+  resolveSlash(attacker, side, handVel) {
+    if (attacker !== this.player || !this.carried) return;
+    const hand = attacker.rig.byName.handR;
+    boneBoxCenter(hand, _v1);
+    _q1.copy(hand.worldQuat).multiply(MACHETE_TILT);
+
+    // the cutting edge, from just above the guard to the tip
+    const edge = [];
+    for (let i = 0; i <= 8; i++) {
+      const y = MACHETE.grip + 0.03 + (MACHETE.blade - 0.03) * (i / 8);
+      edge.push(_v3.set(MACHETE.width * 0.42, y + 0.035, 0).applyQuaternion(_q1).add(_v1).clone());
+    }
+    const tip = edge[edge.length - 1];
+
+    // speed of the tip, which is what a swing actually delivers
+    if (!this._prevTip) { this._prevTip = tip.clone(); return; }
+    const speed = Math.max(handVel.length(), tip.distanceTo(this._prevTip) * 60);
+
+    for (const target of this.characters) {
+      if (target === attacker || target.body.destroyed) continue;
+      if (attacker.struck.has(target.id)) continue;
+      if (Math.abs(target.center.x - _v1.x) > 2.0 ||
+          Math.abs(target.center.z - _v1.z) > 2.0 ||
+          Math.abs(target.center.y - _v1.y) > 2.2) continue;
+
+      let hitBone = null, hitPoint = null;
+      for (const bone of target.rig.bones) {
+        if (bone.def.finger) continue;
+        for (let i = 0; i < edge.length; i++) {
+          if (pointInBone(bone, edge[i], 0.01)) { hitBone = bone; hitPoint = edge[i]; break; }
+        }
+        if (hitBone) break;
+      }
+      if (!hitBone) continue;
+      attacker.struck.add(target.id);
+
+      const dmg = clamp((speed - 1.0) * 3.6, 3, 42);
+      const sev = clamp01((speed - 1.0) / 6);
+      _v3.copy(handVel).normalize();
+      _v4.copy(_v3).multiplyScalar(clamp(speed * 6, 8, 90));
+      _v4.y += 4;
+
+      // A blade opens people up; it does not merely bruise them.
+      target.applyImpact(hitPoint, _v4, {
+        boneName: hitBone.name, damage: dmg, type: 'impact', attacker, severity: Math.max(0.55, sev),
+      });
+      if (target.ai) target.ai.onHurt({ amount: dmg * 1.4, attacker });
+      this.carried.painter?.(hitPoint, Math.max(0.4, sev), { x: _v3.x, y: _v3.y, z: _v3.z });
+      if (!this.carried.surface) this.carried.surface = this.carried.bodyRef?.userData.paintSurface || null;
+      this.shake = Math.min(0.8, this.shake + 0.22);
+    }
+    this._prevTip.copy(tip);
+  }
+
+  /**
    * A jab only lands if the fist geometry genuinely overlaps a body part.
    * There is no separate attack hitbox anywhere in the game.
    */
@@ -520,6 +703,7 @@ export class Game {
       this.rcv2.attachToHand(this.player);
       this.rcv2.update(dt, this.camera);
     }
+    this._syncCarried();
 
     // --- gore ---
     if (this.gore) {
@@ -576,6 +760,7 @@ export class Game {
     if (input.pressed.primary) this.primaryAction();
     if (input.pressed.spawn) this.spawnAction();
     if (input.pressed.delete) this.deleteAction();
+    if (input.pressed.use) this.useAction();
     void dt;
   }
 
@@ -650,6 +835,11 @@ export class Game {
     } else {
       this.hud.setCrosshairActive(false);
       this.hud.setGrabbing(false);
+    }
+    this._useTimer = (this._useTimer || 0) - dt;
+    if (this._useTimer <= 0) {
+      this._useTimer = 0.12;
+      this.hud.setUseAvailable(!!this.carried || !!this.pickupInReach(), !!this.carried);
     }
   }
 

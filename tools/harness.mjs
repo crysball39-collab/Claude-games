@@ -35,7 +35,10 @@ function serve() {
  * plus a few conveniences. `port` defaults to 0 so the OS picks a free one,
  * which stops a stale run from blocking a new one.
  */
-export async function boot({ port = 0, width = 900, height = 560, shots = path.join(ROOT, '.shots') } = {}) {
+export async function boot({
+  port = 0, width = 900, height = 560, touch = false,
+  shots = path.join(ROOT, '.shots'),
+} = {}) {
   const server = serve();
   await new Promise((r) => server.listen(port, r));
   port = server.address().port;
@@ -48,7 +51,10 @@ export async function boot({ port = 0, width = 900, height = 560, shots = path.j
       '--enable-unsafe-swiftshader', '--disable-dev-shm-usage',
     ],
   });
-  const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 });
+  const ctx = await browser.newContext({
+    viewport: { width, height }, deviceScaleFactor: 1,
+    hasTouch: touch, isMobile: touch,
+  });
   const page = await ctx.newPage();
 
   const logs = [];
@@ -71,6 +77,22 @@ export async function boot({ port = 0, width = 900, height = 560, shots = path.j
     logs,
     ev: (fn, ...args) => page.evaluate(fn, ...args),
     shot: (name) => page.screenshot({ path: `${shots}/${name}.png` }),
+    /** Drags the on-screen joystick, the way a thumb would. */
+    dragStick: async (dx, dy, steps = 12) => {
+      const c = await page.evaluate(() => {
+        const r = document.querySelector('#stick-base').getBoundingClientRect();
+        return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+      });
+      const cdp = await page.context().newCDPSession(page);
+      const send = (type, x, y) => cdp.send('Input.dispatchTouchEvent', {
+        type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 1 }],
+      });
+      await send('touchStart', c.x, c.y);
+      for (let i = 1; i <= steps; i++) {
+        await send('touchMove', c.x + (dx * i) / steps, c.y + (dy * i) / steps);
+      }
+      return { release: () => send('touchEnd', c.x + dx, c.y + dy) };
+    },
     hideHud: () => page.evaluate(() => { document.querySelector('#hud').style.display = 'none'; }),
     showHud: () => page.evaluate(() => { document.querySelector('#hud').style.display = ''; }),
     close: async () => { await browser.close(); server.close(); },

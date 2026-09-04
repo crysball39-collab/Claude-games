@@ -224,9 +224,9 @@ export class RCV2 {
       boneBoxCenter(this.grab.bone, _v3);
       const pair = c.boneParticles[this.grab.bone.name];
       const parts = pair ? [c.particles[pair[0]], c.particles[pair[1]]] : [c.particles.mt];
-      _v4.copy(hold).sub(_v3).multiplyScalar(10);
+      _v4.copy(hold).sub(_v3).multiplyScalar(9);
       const speed = _v4.length();
-      if (speed > 24) _v4.multiplyScalar(24 / speed);
+      if (speed > 15) _v4.multiplyScalar(15 / speed);
       const h = 1 / 90;
       for (const p of parts) {
         p.px = p.x - _v4.x * h;

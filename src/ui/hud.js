@@ -29,20 +29,35 @@ export class Hud {
     input.bindButton(this.primary, 'primary');
     input.bindButton($('#btn-spawn'), 'spawn');
     input.bindButton($('#btn-delete'), 'delete');
+    input.bindButton($('#btn-use'), 'use');
+    this.useBtn = $('#btn-use');
+    this.macheteSlot = $('#slot-machete');
 
     this.onWeaponSelect = null;
-    this.slots.forEach((el, i) => {
+    this.slots.forEach((el) => {
       el.addEventListener('pointerdown', (e) => {
         e.preventDefault(); e.stopPropagation();
-        this.onWeaponSelect?.(i === 0 ? 'fists' : 'rcv2');
+        this.onWeaponSelect?.(el.dataset.weapon);
       }, { passive: false });
     });
   }
 
   setWeapon(name) {
-    this.primary.textContent = name === 'rcv2' ? 'SHOOT' : 'PUNCH';
+    this.primary.textContent =
+      name === 'rcv2' ? 'SHOOT' : name === 'machete' ? 'SLASH' : 'PUNCH';
     this.extra.classList.toggle('show', name === 'rcv2');
     this.slots.forEach((el) => el.classList.toggle('active', el.dataset.weapon === name));
+  }
+
+  /** Shows the machete slot only while one is actually in hand. */
+  setCarrying(kind) {
+    this.macheteSlot.classList.toggle('hidden', kind !== 'machete');
+  }
+
+  /** USE only appears when it would do something. */
+  setUseAvailable(available, carrying) {
+    this.useBtn.classList.toggle('show', !!available);
+    this.useBtn.textContent = carrying ? 'DROP' : 'USE';
   }
 
   setHealth(frac) {

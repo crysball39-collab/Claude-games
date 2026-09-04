@@ -6,8 +6,8 @@
      Citizen - a person (built in citizen.js)
    ========================================================================== */
 import {
-  Mesh, MeshLambertMaterial, SphereGeometry, Vector3, CanvasTexture,
-  SRGBColorSpace, LinearMipmapLinearFilter, Color,
+  Group, Mesh, MeshLambertMaterial, SphereGeometry, BoxGeometry, Vector3,
+  CanvasTexture, SRGBColorSpace, LinearMipmapLinearFilter, Color,
 } from 'three';
 import { RigidBody } from '../physics/rigid.js';
 import { makeAtlasBoxGeometry, localPointToFaceUV, faceRect } from './skeleton.js';
@@ -110,16 +110,33 @@ export function spawnCrate(game, position, { size = 0.72, mass = 24 } = {}) {
   return body;
 }
 
-/** Lazily gives a crate its own canvas the first time something lands on it. */
-function makeBoxPainter(body, material) {
-  let surface = null;
+/**
+ * Lazily gives a box its own canvas the first time something lands on it.
+ * An existing surface can be handed in so a machete keeps the blood on its
+ * blade when it is dropped and picked up again.
+ */
+function makeBoxPainter(body, material, adopt = null, base = 'wood') {
+  let surface = adopt;
+  if (surface) {
+    material.map = surface.texture;
+    material.needsUpdate = true;
+    body.userData.paintSurface = surface;
+  }
   return function paint(worldPoint, severity, vel) {
     if (!surface) {
-      const src = prewarmObjectArt().woodBase;
-      const c = makeCanvas(src.width, src.height);
-      c.getContext('2d').drawImage(src, 0, 0);
-      surface = { canvas: c, ctx: c.getContext('2d'), texture: textureFrom(c) };
+      const c = makeCanvas(192, 128);
+      const ctx = c.getContext('2d');
+      if (base === 'wood') {
+        ctx.drawImage(prewarmObjectArt().woodBase, 0, 0);
+      } else {
+        // Start from what the material already looks like, so painting the
+        // first drop of blood on a steel blade does not turn it into a plank.
+        ctx.fillStyle = '#' + material.color.getHexString();
+        ctx.fillRect(0, 0, c.width, c.height);
+      }
+      surface = { canvas: c, ctx, texture: textureFrom(c) };
       material.map = surface.texture;
+      material.color.set(0xffffff);
       material.needsUpdate = true;
       body.userData.paintSurface = surface;
     }
@@ -227,13 +244,115 @@ function makeSpherePainter(body, material, radius) {
 }
 
 /* -------------------------------------------------------------------------- */
+/*                                  machete                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Grip at the origin, blade running up +Y. Held that way it continues the
+ * line of the fist, which is what makes a swing read as a swing.
+ */
+export const MACHETE = {
+  grip: 0.115,          // length of the handle
+  blade: 0.46,          // length of the blade above the guard
+  width: 0.052,
+  thick: 0.011,
+  get length() { return this.grip + this.blade; },
+};
+
+let macheteParts = null;
+function macheteGeometry() {
+  if (!macheteParts) {
+    const M = MACHETE;
+    macheteParts = {
+      handle: new BoxGeometry(0.030, M.grip, 0.026),
+      guard: new BoxGeometry(0.062, 0.016, 0.030),
+      blade: makeAtlasBoxGeometry(M.width, M.blade, M.thick),
+      tip: new BoxGeometry(M.width * 0.62, 0.075, M.thick),
+      edge: new BoxGeometry(0.008, M.blade * 0.98, M.thick * 1.35),
+    };
+  }
+  return macheteParts;
+}
+
+/** The visible machete. Used both for the loose item and the carried one. */
+export function createMacheteModel() {
+  const M = MACHETE;
+  const g = macheteGeometry();
+  const group = new Group();
+  const steel = new MeshLambertMaterial({ color: 0x9aa2ab });
+  const edge = new MeshLambertMaterial({ color: 0xe8edf2 });
+  const grip = new MeshLambertMaterial({ color: 0x2e2119 });
+  const brass = new MeshLambertMaterial({ color: 0x7d6330 });
+
+  const add = (geo, mat, y, x = 0) => {
+    const m = new Mesh(geo, mat);
+    m.position.set(x, y, 0);
+    m.castShadow = true;
+    group.add(m);
+    return m;
+  };
+  add(g.handle, grip, M.grip / 2);
+  add(g.guard, brass, M.grip + 0.008);
+  const blade = add(g.blade, steel, M.grip + M.blade / 2);
+  add(g.edge, edge, M.grip + M.blade / 2, M.width / 2 - 0.004);
+  add(g.tip, steel, M.grip + M.blade + 0.030);
+
+  group.userData.bladeMesh = blade;
+  group.userData.bladeMat = steel;
+  group.userData.materials = [steel, edge, grip, brass];
+  return group;
+}
+
+/**
+ * @param {object} [reuse] an existing model, blade material and paint surface
+ *   to adopt, so a dropped machete is the same machete that was picked up.
+ */
+export function spawnMachete(game, position, { quat = null, reuse = null } = {}) {
+  const M = MACHETE;
+  const body = new RigidBody({
+    shape: 'box',
+    half: new Vector3(M.width / 2, M.length / 2, M.thick / 2 + 0.006),
+    mass: 1.1,
+    pos: position.clone(),
+    friction: 0.7,
+    restitution: 0.03,
+    linDamp: 0.25,
+    angDamp: 0.5,
+    tag: 'machete',
+  });
+  if (quat) body.quat.copy(quat);
+  else body.quat.setFromAxisAngle(_v1.set(0, 0, 1), Math.PI / 2 + (rng() - 0.5) * 0.4);
+  body.updateDerived();
+
+  const mesh = reuse ? reuse.model : createMacheteModel();
+  const bladeMat = reuse ? reuse.material : mesh.userData.bladeMat;
+  // the model's grip sits at its origin; the collider is centred on the blade
+  mesh.userData.bodyOffset = new Vector3(0, -M.length / 2, 0);
+  mesh.matrixAutoUpdate = false;
+  body.mesh = mesh;
+  body.userData.label = 'Machete';
+  body.userData.grabbable = true;
+  body.userData.pickup = 'machete';
+  body.userData.material = bladeMat;
+  // The painter has to be bound to THIS body: it maps a world point into the
+  // body's own frame, and a stale one would paint blood in the wrong place.
+  body.userData.paintBlood = makeBoxPainter(body, bladeMat, reuse ? reuse.surface : null, 'steel');
+  if (!reuse || !mesh.parent) game.scene.add(mesh);
+  game.world.addBody(body);
+  game.trackSpawn(body);
+  return body;
+}
+
+/* -------------------------------------------------------------------------- */
 
 /** Keeps the visible mesh glued to its rigid body. */
 export function syncBodyMesh(body) {
   const m = body.mesh;
   if (!m) return;
-  m.position.copy(body.pos);
   m.quaternion.copy(body.quat);
+  const off = m.userData.bodyOffset;
+  if (off) m.position.copy(off).applyQuaternion(body.quat).add(body.pos);
+  else m.position.copy(body.pos);
   m.updateMatrix();
 }
 
@@ -242,7 +361,9 @@ export function disposeBody(game, body) {
     game.scene.remove(body.mesh);
     const s = body.userData.paintSurface;
     if (s) s.texture.dispose();
-    if (body.userData.material) body.userData.material.dispose();
+    const mats = body.mesh.userData.materials;
+    if (mats) mats.forEach((m) => m.dispose());
+    else if (body.userData.material) body.userData.material.dispose();
   }
   game.world.removeBody(body);
 }
