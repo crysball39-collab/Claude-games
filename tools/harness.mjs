@@ -4,6 +4,8 @@
 
      npm install -D playwright && npx playwright install chromium
      node tools/verify.mjs
+
+   Set CHROMIUM_PATH to point at a chromium binary you already have.
    ========================================================================== */
 import { chromium } from 'playwright';
 import http from 'node:http';
@@ -15,30 +17,62 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
 const CHROME = process.env.CHROMIUM_PATH || undefined;
 
-export async function boot({ port = 8210, width = 900, height = 560, shots = path.join(ROOT, '.shots') } = {}) {
-  const server=http.createServer((req,res)=>{let p=decodeURIComponent(req.url.split('?')[0]);if(p==='/')p='/index.html';
-    const f=path.join(ROOT,p); if(!f.startsWith(ROOT)||!fs.existsSync(f)||fs.statSync(f).isDirectory()){res.writeHead(404);res.end();return;}
-    res.writeHead(200,{'Content-Type':MIME[path.extname(f)]||'application/octet-stream'}); fs.createReadStream(f).pipe(res);});
-  await new Promise(r=>server.listen(port,r));
-  fs.mkdirSync(shots,{recursive:true});
-  const browser=await chromium.launch({ executablePath: CHROME,
-    args:['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--disable-dev-shm-usage']});
-  const ctx=await browser.newContext({viewport:{width,height},deviceScaleFactor:1});
-  const page=await ctx.newPage();
-  const logs=[];
-  page.on('console',m=>{ if(m.type()==='error') logs.push('[err] '+m.text()); });
-  page.on('pageerror',e=>logs.push('[pageerror] '+e.message+'\n'+(e.stack||'').split('\n').slice(1,4).join('\n')));
-  await page.goto(`http://127.0.0.1:${port}/index.html`,{waitUntil:'load'});
-  await page.waitForSelector('#menu-screen.active',{timeout:30000});
+function serve() {
+  return http.createServer((req, res) => {
+    let rel = decodeURIComponent(req.url.split('?')[0]);
+    if (rel === '/') rel = '/index.html';
+    const file = path.join(ROOT, rel);
+    if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+      res.writeHead(404); res.end(); return;
+    }
+    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
+    fs.createReadStream(file).pipe(res);
+  });
+}
+
+/**
+ * Boots the game all the way into the Test Baseplate and returns the page
+ * plus a few conveniences. `port` defaults to 0 so the OS picks a free one,
+ * which stops a stale run from blocking a new one.
+ */
+export async function boot({ port = 0, width = 900, height = 560, shots = path.join(ROOT, '.shots') } = {}) {
+  const server = serve();
+  await new Promise((r) => server.listen(port, r));
+  port = server.address().port;
+  fs.mkdirSync(shots, { recursive: true });
+
+  const browser = await chromium.launch({
+    executablePath: CHROME,
+    args: [
+      '--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader',
+      '--enable-unsafe-swiftshader', '--disable-dev-shm-usage',
+    ],
+  });
+  const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 });
+  const page = await ctx.newPage();
+
+  const logs = [];
+  page.on('console', (m) => { if (m.type() === 'error') logs.push('[err] ' + m.text()); });
+  page.on('pageerror', (e) => logs.push(
+    '[pageerror] ' + e.message + '\n' + (e.stack || '').split('\n').slice(1, 4).join('\n')));
+
+  await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'load' });
+  await page.waitForSelector('#menu-screen.active', { timeout: 30000 });
   await page.click('#btn-maps'); await page.waitForTimeout(120);
   await page.click('.map-card'); await page.waitForTimeout(120);
   await page.click('#btn-play');
-  await page.waitForFunction(()=>!document.querySelector('#map-screen').classList.contains('active'),{timeout:150000});
+  await page.waitForFunction(
+    () => !document.querySelector('#map-screen').classList.contains('active'),
+    { timeout: 150000 });
   await page.waitForTimeout(1200);
-  const shot=(n)=>page.screenshot({path:`${shots}/${n}.png`});
-  const ev=(fn,...a)=>page.evaluate(fn,...a);
-  const hideHud=()=>ev(()=>{document.querySelector('#hud').style.display='none';});
-  const showHud=()=>ev(()=>{document.querySelector('#hud').style.display='';});
-  const close=async()=>{ await browser.close(); server.close(); };
-  return { page, shot, ev, logs, close, hideHud, showHud };
+
+  return {
+    page,
+    logs,
+    ev: (fn, ...args) => page.evaluate(fn, ...args),
+    shot: (name) => page.screenshot({ path: `${shots}/${name}.png` }),
+    hideHud: () => page.evaluate(() => { document.querySelector('#hud').style.display = 'none'; }),
+    showHud: () => page.evaluate(() => { document.querySelector('#hud').style.display = ''; }),
+    close: async () => { await browser.close(); server.close(); },
+  };
 }

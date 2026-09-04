@@ -5,16 +5,29 @@
      node tools/verify.mjs
    ========================================================================== */
 import { boot } from './harness.mjs';
-const h = await boot({ port: 8223, width: 960, height: 500 });
+const h = await boot({ width: 960, height: 500 });
 const { page, shot, ev, logs, close } = h;
 const fail = [];
+
+// Everything below waits on simulation state, never on the wall clock: under
+// software rendering a fixed sleep can end before the world has caught up.
+await page.evaluate(() => {
+  window.settle = async (test, maxFrames = 600) => {
+    for (let i = 0; i < maxFrames; i++) {
+      if (test()) return true;
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+    return false;
+  };
+  window.frames = async (n) => { for (let i = 0; i < n; i++) await new Promise((r) => requestAnimationFrame(r)); };
+});
 const check = (name, ok, extra='') => { console.log((ok?'PASS':'FAIL')+'  '+name+(extra?'  '+extra:'')); if(!ok) fail.push(name); };
 
 // ---------- jump ----------
 let r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;
   g.player.teleport(0, 6, 0);
-  await new Promise(r=>setTimeout(r,300));
+  await window.settle(() => g.player.grounded);
   const y0 = g.player.pos.y;
   g.player.wantJump = true;
   let peak = y0;
@@ -29,7 +42,7 @@ r = await page.evaluate(async () => {
   const eye = new (g.camera.position.constructor)();
   g.player.eyePosition(eye); const before = eye.y;
   g.player.crouchWant = true;
-  await new Promise(r=>setTimeout(r,900));
+  await window.settle(() => g.player.crouch > 0.97, 240);
   g.player.eyePosition(eye); const after = eye.y;
   g.player.crouchWant = false;
   return { before:+before.toFixed(2), after:+after.toFixed(2) };
@@ -64,18 +77,18 @@ r = await page.evaluate(async () => {
   g.clearSpawns();
   g.player.teleport(0, 4, 0); g.camYaw = 0; g.camPitch = 0;
   g.setEquipped('rcv2'); g.setSelected('crate');
-  await new Promise(r=>setTimeout(r,200));
+  await window.frames(3);
   g.spawnSelected();
-  await new Promise(r=>setTimeout(r,900));
+  const b = g.spawnedBodies[0];
+  // wait for the crate to actually be on the floor before aiming at it
+  await window.settle(() => b.sleeping || (Math.abs(b.vel.y) < 0.05 && b.pos.y < 0.5));
   g.camPitch = -0.48;          // look down at the crate on the ground
-  await new Promise(r=>requestAnimationFrame(r));
-  await new Promise(r=>requestAnimationFrame(r));
+  await window.frames(3);
   g.primaryAction();
   const held = g.rcv2.holding;
-  const b = g.spawnedBodies[0];
   const y0 = b.pos.y;
   g.camPitch = 0.6;
-  for (let i=0;i<90;i++) await new Promise(r=>requestAnimationFrame(r));
+  await window.settle(() => b.pos.y - y0 > 0.9, 300);
   const y1 = b.pos.y;
   const out = { held, lifted: +(y1-y0).toFixed(2) };
   g.primaryAction();      // release
@@ -90,14 +103,16 @@ r = await page.evaluate(async () => {
   g.clearSpawns();
   g.player.teleport(0, 4, 0); g.camYaw = 0; g.camPitch = 0;
   g.setSelected('citizen'); g.spawnSelected();
-  await new Promise(r=>setTimeout(r,900));
-  g.camPitch = -0.05;
-  g.primaryAction();
   const c = g.characters.find(x=>x!==g.player);
+  await window.settle(() => c.grounded && c.state === 'controlled');
+  await window.frames(3);
+  g.camPitch = -0.05;
+  await window.frames(2);
+  g.primaryAction();
   const held = g.rcv2.holding;
   const y0 = c.particles.mt.y;
   g.camPitch = 0.7;
-  for (let i=0;i<90;i++) await new Promise(r=>requestAnimationFrame(r));
+  await window.settle(() => c.particles.mt.y - y0 > 0.5, 300);
   const out = { held, state: c.state, lifted: +(c.particles.mt.y - y0).toFixed(2) };
   g.primaryAction();
   return out;
@@ -109,13 +124,13 @@ r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;
   g.clearSpawns();
   g.setSelected('boulder'); g.player.teleport(0, 4, 0); g.camYaw = 0; g.camPitch = 0;
-  await new Promise(r=>setTimeout(r,150));
+  await window.frames(2);
   g.spawnSelected();
-  await new Promise(r=>setTimeout(r,700));
+  const b = g.spawnedBodies[0];
+  await window.settle(() => b.sleeping || (Math.abs(b.vel.y) < 0.05 && b.pos.y < 0.8));
   const n0 = g.spawnedBodies.length;
   g.camPitch = -0.35;
-  await new Promise(r=>requestAnimationFrame(r));
-  await new Promise(r=>requestAnimationFrame(r));
+  await window.frames(3);
   g.deleteAction();
   return { n0, n1: g.spawnedBodies.length };
 });
@@ -126,11 +141,11 @@ r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;
   g.clearSpawns();
   g.player.applyDamage(999, { boneName: 'head', point: g.player.pos.clone(), type: 'impact', severity: 1 });
-  await new Promise(r=>setTimeout(r,900));
+  await window.settle(() => g.player.dead && g.player.state === 'dead');
   const dead = g.player.dead && g.player.state === 'dead';
   const overlay = !document.querySelector('#death-overlay').classList.contains('hidden');
   g.respawnPlayer();
-  await new Promise(r=>setTimeout(r,600));
+  await window.settle(() => g.player.state === 'controlled' && g.player.health === 100);
   return { dead, overlay, hp: Math.round(g.player.health), state: g.player.state };
 });
 check('player dies and respawns', r.dead && r.overlay && r.hp === 100 && r.state === 'controlled', JSON.stringify(r));
@@ -142,7 +157,7 @@ r = await page.evaluate(async () => {
   const V = g.player.pos.constructor;
   const { spawnCitizen } = await import('/src/game/citizen.js');
   const c = spawnCitizen(g, new V(0, 0, 0));
-  await new Promise(r => setTimeout(r, 300));
+  await window.settle(() => c.grounded);
   g.setEquipped('fists');
   c.ai.update = () => { c.moveInput.set(0, 0, 0); };
   c.health = 100; c.balance = 1; c.setState('controlled');
@@ -168,11 +183,9 @@ r = await page.evaluate(async () => {
   const V = g.player.pos.constructor;
   const { spawnCitizen } = await import('/src/game/citizen.js');
   const c = spawnCitizen(g, new V(0, 0, 0));
-  await new Promise(r => setTimeout(r, 300));
+  await window.settle(() => c.grounded);
   g.setEquipped('fists');
   c.ai.update = () => { c.moveInput.set(0, 0, 0); };
-  const frame = () => new Promise(r => requestAnimationFrame(r));
-
   const start = c.health;
   let landed = 0, swings = 0;
   for (let i = 0; i < 26 && !c.dead; i++) {
@@ -181,7 +194,7 @@ r = await page.evaluate(async () => {
     if (c.state !== 'controlled') { c.balance = 1; c.setState('controlled'); }
     c.teleport(0, 0, Math.PI);
     g.player.teleport(0, 0.62, 0); g.camYaw = 0; g.camPitch = 0.02;
-    for (let k = 0; k < 6; k++) await frame();
+    await window.frames(6);
 
     const before = c.health;
     g.player.punchCooldown = 0;
@@ -190,10 +203,10 @@ r = await page.evaluate(async () => {
     swings++;
     // Wait on the animation, not on the clock: under software rendering a
     // fixed sleep can end before the fist has even started travelling.
-    for (let k = 0; k < 240 && g.player.animator.actionActive; k++) await frame();
+    await window.settle(() => !g.player.animator.actionActive, 240);
     if (c.health < before) landed++;
   }
-  await new Promise(r => setTimeout(r, 2500));
+  await window.frames(60);
   return {
     dead: c.dead, state: c.state, hp: Math.round(c.health),
     swings, landed, damage: Math.round(start - c.health),
@@ -210,7 +223,7 @@ r = await page.evaluate(async () => {
   const V = g.player.pos.constructor;
   const { spawnCitizen } = await import('/src/game/citizen.js');
   const c = spawnCitizen(g, new V(0, 0, 0));
-  await new Promise(r => setTimeout(r, 300));
+  await window.settle(() => c.grounded);
   g.respawnPlayer();
   g.player.teleport(0, 0.7, 0);
   g.camYaw = 0; g.camPitch = 0;
