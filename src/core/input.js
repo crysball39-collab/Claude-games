@@ -114,6 +114,9 @@ export class InputManager {
     el.addEventListener('pointerdown', press, { passive: false });
     el.addEventListener('pointerup', release);
     el.addEventListener('pointercancel', release);
+    // Pointer capture means pointerleave may never arrive, so listen for the
+    // capture ending too - otherwise a thumb sliding off leaves a button stuck.
+    el.addEventListener('lostpointercapture', (e) => { if (this.down[name]) release(e); });
     el.addEventListener('pointerleave', (e) => { if (!repeat && this.down[name]) release(e); });
   }
 

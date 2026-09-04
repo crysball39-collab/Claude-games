@@ -13,7 +13,7 @@ import {
   InstancedMesh, PlaneGeometry, MeshBasicMaterial, Object3D, Vector3, Color,
   DoubleSide, DynamicDrawUsage,
 } from 'three';
-import { paintBlood, paintSplat, DecalSheet } from './paint.js';
+import { paintSplat, DecalSheet } from './paint.js';
 import { makeRng, clamp01, clamp } from '../core/util.js';
 import { boneBoxCenter } from './skeleton.js';
 

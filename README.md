@@ -173,14 +173,26 @@ tools/verify.mjs      functional smoke test, driven in a real browser
 
 ## Verifying it
 
-`tools/verify.mjs` boots the real game in Chromium and asserts that jumping,
-crouching, pathfinding around obstacles, RCV2 grabbing, deleting, dying, respawning
-and boulder rolling all still work.
+`tools/verify.mjs` boots the real game in Chromium and asserts that the systems
+this project is actually about still work:
+
+- jumping lifts you, and crouching lowers your eyeline
+- a citizen paths around a wall of crates instead of walking into it
+- the RCV2 grabs and lifts a crate, picks a citizen up into a ragdoll, and its
+  delete button removes the target
+- the player can die, see the death screen, and respawn intact
+- you cannot walk through another person
+- jabs land at walking-in range and can eventually kill, leaving a corpse
+- an angry citizen fights back and can hurt you
+- a boulder rolls rather than slides
 
 ```
 npm install -D playwright && npx playwright install chromium
 node tools/verify.mjs
 ```
+
+It exits non-zero if anything fails. Set `CHROMIUM_PATH` if you already have a
+Chromium build you would rather it used.
 
 ## Settings
 

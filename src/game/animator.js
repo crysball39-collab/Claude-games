@@ -107,6 +107,7 @@ export class Animator {
   get fullActive() { return !!this.full.clip; }
   get fullTime() { return this.full.time; }
   get fullName() { return this.full.clip ? this.full.clip.name : null; }
+  get fullDuration() { return this.full.clip ? this.full.clip.duration : 1; }
 
   /* -------------------------------- update ------------------------------- */
 

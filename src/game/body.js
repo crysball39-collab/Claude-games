@@ -3,7 +3,7 @@
    hair on the head, a painted face, and the machinery that lets damage be drawn
    onto whichever surface actually got hit.
    ========================================================================== */
-import { Group, Mesh, MeshLambertMaterial, Vector3, Color, DoubleSide, FrontSide } from 'three';
+import { Group, Mesh, MeshLambertMaterial, Vector3, DoubleSide, FrontSide } from 'three';
 import {
   makeAtlasBoxGeometry, localPointToFaceUV, worldToBoxLocal, FACE_NZ,
 } from './skeleton.js';
@@ -405,4 +405,3 @@ export class Body {
   }
 }
 
-export { Color };

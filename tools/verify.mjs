@@ -135,6 +135,98 @@ r = await page.evaluate(async () => {
 });
 check('player dies and respawns', r.dead && r.overlay && r.hp === 100 && r.state === 'controlled', JSON.stringify(r));
 
+// ---------- people are solid ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  g.clearSpawns();
+  const V = g.player.pos.constructor;
+  const { spawnCitizen } = await import('/src/game/citizen.js');
+  const c = spawnCitizen(g, new V(0, 0, 0));
+  await new Promise(r => setTimeout(r, 300));
+  g.setEquipped('fists');
+  c.ai.update = () => { c.moveInput.set(0, 0, 0); };
+  c.health = 100; c.balance = 1; c.setState('controlled');
+  c.teleport(0, 0, Math.PI);
+  g.player.teleport(0, 3, 0); g.camYaw = 0; g.camPitch = 0;
+  // stand in for a player leaning on the stick, walking straight into them
+  const orig = g._readInput.bind(g);
+  g._readInput = (dt, input) => { orig(dt, input); g.player.moveInput.set(0, 0, -1); g.player.wantRun = false; };
+  for (let i = 0; i < 200; i++) await new Promise(r => requestAnimationFrame(r));
+  g._readInput = orig;
+  return {
+    standoff: +Math.hypot(g.player.pos.x - c.pos.x, g.player.pos.z - c.pos.z).toFixed(2),
+    citizenState: c.state,
+  };
+});
+check('you cannot walk through people', r.standoff > 0.4 && r.standoff < 0.75, JSON.stringify(r));
+
+// ---------- a citizen can actually be killed ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  // Its own subject, so this check does not inherit whatever the last one did.
+  g.clearSpawns();
+  const V = g.player.pos.constructor;
+  const { spawnCitizen } = await import('/src/game/citizen.js');
+  const c = spawnCitizen(g, new V(0, 0, 0));
+  await new Promise(r => setTimeout(r, 300));
+  g.setEquipped('fists');
+  c.ai.update = () => { c.moveInput.set(0, 0, 0); };
+  const frame = () => new Promise(r => requestAnimationFrame(r));
+
+  const start = c.health;
+  let landed = 0, swings = 0;
+  for (let i = 0; i < 26 && !c.dead; i++) {
+    // Put the target back on its feet each round: this is a damage test, not
+    // a test of what happens to a body already on the floor.
+    if (c.state !== 'controlled') { c.balance = 1; c.setState('controlled'); }
+    c.teleport(0, 0, Math.PI);
+    g.player.teleport(0, 0.62, 0); g.camYaw = 0; g.camPitch = 0.02;
+    for (let k = 0; k < 6; k++) await frame();
+
+    const before = c.health;
+    g.player.punchCooldown = 0;
+    g.player.animator.cancelAction();
+    if (!g.player.punch()) continue;
+    swings++;
+    // Wait on the animation, not on the clock: under software rendering a
+    // fixed sleep can end before the fist has even started travelling.
+    for (let k = 0; k < 240 && g.player.animator.actionActive; k++) await frame();
+    if (c.health < before) landed++;
+  }
+  await new Promise(r => setTimeout(r, 2500));
+  return {
+    dead: c.dead, state: c.state, hp: Math.round(c.health),
+    swings, landed, damage: Math.round(start - c.health),
+    stillThere: g.characters.includes(c),
+  };
+});
+check('jabs land at walking-in range and can kill',
+  r.dead && r.state === 'dead' && r.stillThere && r.landed >= 4, JSON.stringify(r));
+
+// ---------- citizens can hurt you back ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  g.clearSpawns();
+  const V = g.player.pos.constructor;
+  const { spawnCitizen } = await import('/src/game/citizen.js');
+  const c = spawnCitizen(g, new V(0, 0, 0));
+  await new Promise(r => setTimeout(r, 300));
+  g.respawnPlayer();
+  g.player.teleport(0, 0.7, 0);
+  g.camYaw = 0; g.camPitch = 0;
+  // wind the citizen up: angry, brave, and looking straight at us
+  c.ai.anger = 1; c.ai.fear = 0; c.ai.bravery = 1; c.ai.aggression = 1;
+  c.ai.threat = g.player; c.ai.threatSeen = 9999;
+  c.ai._setState('fight');
+  const hp0 = g.player.health;
+  for (let i = 0; i < 600; i++) {
+    await new Promise(r => requestAnimationFrame(r));
+    if (g.player.health < hp0) break;
+  }
+  return { playerHurt: +(hp0 - g.player.health).toFixed(1), aiState: c.ai.state };
+});
+check('a citizen fights back and can hurt you', r.playerHurt > 0, JSON.stringify(r));
+
 // ---------- boulder actually rolls ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;

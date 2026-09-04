@@ -3,7 +3,7 @@
 
        boot loading screen -> main menu -> maps -> map loading screen -> game
    ========================================================================== */
-import { $, clamp, IS_TOUCH } from './core/util.js';
+import { $, IS_TOUCH } from './core/util.js';
 import { bootScreen, mapScreen } from './core/loading.js';
 import { input } from './core/input.js';
 import { Menu } from './ui/menu.js';
@@ -278,4 +278,4 @@ boot().catch((err) => {
 
 window.GOREBOX = app;
 
-export { app, settings, clamp };
+export { app, settings };

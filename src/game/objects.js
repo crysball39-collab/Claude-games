@@ -6,7 +6,7 @@
      Citizen - a person (built in citizen.js)
    ========================================================================== */
 import {
-  Mesh, MeshLambertMaterial, SphereGeometry, Vector3, Quaternion, CanvasTexture,
+  Mesh, MeshLambertMaterial, SphereGeometry, Vector3, CanvasTexture,
   SRGBColorSpace, LinearMipmapLinearFilter, Color,
 } from 'three';
 import { RigidBody } from '../physics/rigid.js';
@@ -16,7 +16,6 @@ import { paintSplat, paintBlood } from './paint.js';
 import { makeRng, clamp01 } from '../core/util.js';
 
 const _v1 = new Vector3(), _v2 = new Vector3();
-const _q = new Quaternion();
 
 const rng = makeRng(0x12345);
 
@@ -247,5 +246,3 @@ export function disposeBody(game, body) {
   }
   game.world.removeBody(body);
 }
-
-export { _q };

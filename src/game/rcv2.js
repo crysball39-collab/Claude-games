@@ -8,7 +8,7 @@ import {
 } from 'three';
 import { rayBone, boneBoxCenter } from './skeleton.js';
 import { STATE } from './character.js';
-import { clamp, clamp01, lerp } from '../core/util.js';
+import { clamp, clamp01 } from '../core/util.js';
 
 const _v1 = new Vector3(), _v2 = new Vector3(), _v3 = new Vector3(), _v4 = new Vector3();
 const _q1 = new Quaternion();
@@ -288,4 +288,3 @@ export class RCV2 {
    Splitting the difference points the barrel where the fist is aiming. */
 const HAND_FIX = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), Math.PI / 4);
 
-export { lerp };

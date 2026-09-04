@@ -4,7 +4,7 @@
    blood splatter and cloth tears end up exactly where the hit landed.
    ========================================================================== */
 import { CanvasTexture, SRGBColorSpace, LinearMipmapLinearFilter, RepeatWrapping } from 'three';
-import { makeRng, clamp01, clamp } from '../core/util.js';
+import { makeRng, clamp01 } from '../core/util.js';
 import { faceRect } from './skeleton.js';
 
 const rnd = makeRng(0x9e3779b9);
@@ -383,4 +383,3 @@ export class DecalSheet {
   }
 }
 
-export { clamp, rnd as paintRng };

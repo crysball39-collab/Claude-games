@@ -266,7 +266,6 @@ export class SkeletonRig {
   get(name) { return this.byName[name]; }
 }
 
-export { _q as _scratchQuat };
 
 /* -------------------------------------------------------------------------- */
 /*                      world space queries against a bone                    */

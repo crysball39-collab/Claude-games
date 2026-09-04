@@ -504,16 +504,22 @@ export class CitizenAI {
         const score = Math.hypot(x - t.pos.x, z - t.pos.z) - Math.abs(i - 4) * 0.8;
         if (score > bestScore) { bestScore = score; bestX = x; bestZ = z; }
       }
-      if (bestScore > -Infinity) { this.goal.set(bestX, 0, bestZ); this.hasGoal = true; this._repath(); }
+      if (bestScore > -Infinity) {
+        this.goal.set(bestX, 0, bestZ); this.hasGoal = true; this._repath();
+      } else {
+        this.hasGoal = false;      // nowhere left to run
+      }
     } else {
       this.repathTimer -= dt;
     }
-    this._followPath(dt, this.goal, 1.0, true);
 
-    // Cornered and terrified: duck and cover.
-    if (d < 2.2 && this.fear > 0.8 && this.hasGoal === false) {
+    if (this.hasGoal) {
+      this._followPath(dt, this.goal, 1.0, true);
+    } else if (d < 3.0 && this.fear > 0.7) {
+      // Cornered and terrified: stop, duck, cover up.
       c.crouchWant = true;
       c.moveInput.set(0, 0, 0);
+      this._facePoint(t.pos, dt, 6);
     }
   }
 

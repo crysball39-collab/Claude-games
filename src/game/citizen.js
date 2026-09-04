@@ -1,7 +1,6 @@
 /* =============================================================================
    Citizens: the one entry under Humans in the spawn menu.
    ========================================================================== */
-import { Vector3 } from 'three';
 import { Character } from './character.js';
 import { CitizenAI } from './ai.js';
 import { makeAppearance } from './appearance.js';
@@ -29,4 +28,3 @@ export function spawnCitizen(game, position, opts = {}) {
   return c;
 }
 
-export { Vector3 };

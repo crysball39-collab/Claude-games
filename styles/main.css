@@ -123,6 +123,7 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
 .setting select,.setting input[type=range]{background:rgba(255,255,255,.07);border:1px solid var(--line);color:var(--ink);
   border-radius:6px;padding:.3rem;font-family:inherit}
 .setting input[type=checkbox]{width:22px;height:22px;accent-color:var(--blood-lit)}
+.setting-note{margin:.5rem 0 0;color:#6f6a66;font-size:.72rem;line-height:1.5}
 
 /* --------------------------------- game ---------------------------------- */
 #viewport{position:absolute;inset:0;background:#87b3d8}

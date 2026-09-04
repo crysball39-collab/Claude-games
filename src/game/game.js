@@ -4,7 +4,7 @@
    ========================================================================== */
 import {
   Scene, PerspectiveCamera, WebGLRenderer, Vector3, Quaternion, Euler,
-  PCFSoftShadowMap, SRGBColorSpace, ACESFilmicToneMapping, MathUtils,
+  PCFSoftShadowMap, SRGBColorSpace, ACESFilmicToneMapping,
 } from 'three';
 import { PhysicsWorld } from '../physics/world.js';
 import { getMap } from './map.js';
@@ -15,8 +15,8 @@ import { spawnCrate, spawnBoulder, syncBodyMesh, disposeBody, prewarmObjectArt }
 import { GoreSystem, nearestBone } from './gore.js';
 import { NavGrid } from './ai.js';
 import { RCV2 } from './rcv2.js';
-import { boneBoxCenter, boneCorners, pointInBone, worldToBoxLocal, HIP_HEIGHT } from './skeleton.js';
-import { clamp, clamp01, lerp, damp, makeRng, yieldToPaint } from '../core/util.js';
+import { boneCorners, pointInBone } from './skeleton.js';
+import { clamp, clamp01, makeRng, yieldToPaint } from '../core/util.js';
 
 const _v1 = new Vector3(), _v2 = new Vector3(), _v3 = new Vector3(), _v4 = new Vector3();
 const _q1 = new Quaternion(), _q2 = new Quaternion();
@@ -413,6 +413,8 @@ export class Game {
     const c = info.character;
     if (c === this.player) {
       this.player.teleport(this.map.spawnPoint.x, this.map.spawnPoint.z, this.map.spawnYaw);
+      this.camYaw = this.map.spawnYaw;
+      this.camPitch = 0;
       this.player.health = Math.max(1, this.player.health - 35);
       this.hud?.flashDamage(0.7);
     } else {
@@ -635,9 +637,15 @@ export class Game {
     }
     this.hud.setHealth(this.player.health / this.player.maxHealth);
     if (this.equipped === 'rcv2') {
-      this.camera.getWorldDirection(_v1);
-      const hit = this.rcv2.holding ? true : !!this.rcv2.pick(this.camera.position, _v1, 30);
-      this.hud.setCrosshairActive(hit);
+      this._pickTimer = (this._pickTimer || 0) - dt;
+      if (this.rcv2.holding) {
+        this._crosshairHit = true;
+      } else if (this._pickTimer <= 0) {
+        this._pickTimer = 0.1;
+        this.camera.getWorldDirection(_v1);
+        this._crosshairHit = !!this.rcv2.pick(this.camera.position, _v1, 30);
+      }
+      this.hud.setCrosshairActive(this._crosshairHit);
       this.hud.setGrabbing(this.rcv2.holding);
     } else {
       this.hud.setCrosshairActive(false);
@@ -658,6 +666,8 @@ export class Game {
     p.body.washClean();
     p.body.setExpression('neutral');
     p.teleport(this.map.spawnPoint.x, this.map.spawnPoint.z, this.map.spawnYaw);
+    this.camYaw = this.map.spawnYaw;
+    this.camPitch = 0;
     this.shake = 0;
   }
 
@@ -678,4 +688,3 @@ export class Game {
   }
 }
 
-export { STATE, HIP_HEIGHT, boneBoxCenter, worldToBoxLocal, lerp, damp, MathUtils };

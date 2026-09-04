@@ -4,9 +4,8 @@
    rigid bodies, with two-way coupling between the two.
    ========================================================================== */
 import { Vector3, Quaternion } from 'three';
-import { clamp } from '../core/util.js';
 import {
-  RigidBody, Contact, collideBodies, resetContactPool, solveContacts,
+  Contact, collideBodies, resetContactPool, solveContacts,
   integrateBody, integratePositions,
 } from './rigid.js';
 
@@ -125,6 +124,12 @@ export class PhysicsWorld {
     this.time = 0;
 
     this._contacts = [];
+    // Uniform grid broadphase, rebuilt once per fixed step. Without it every
+    // particle would be tested against every body, six times an iteration.
+    this._grid = new Map();
+    this._gridCell = 2.0;
+    this._gridBodies = [];
+    this._gridOversized = [];   // too big to index; always considered
     this.onImpact = null;       // ({point, normal, speed, target, source}) => void
     this.onKillPlane = null;
   }
@@ -173,6 +178,7 @@ export class PhysicsWorld {
 
   _fixedStep(dt) {
     const h = dt / this.substeps;
+    this._rebuildBroadphase();
     for (let s = 0; s < this.substeps; s++) {
       for (let i = 0; i < this.characters.length; i++) this.characters[i].preSubstep(h, this);
       this._stepBodies(h);
@@ -180,6 +186,50 @@ export class PhysicsWorld {
       for (let i = 0; i < this.characters.length; i++) this.characters[i].postSubstep(h, this);
     }
     this._cullFallen();
+  }
+
+  /* ----------------------------- broadphase ------------------------------ */
+
+  _rebuildBroadphase() {
+    const grid = this._grid;
+    grid.clear();
+    const all = this._gridBodies;
+    all.length = 0;
+    this._gridOversized.length = 0;
+    for (let i = 0; i < this.staticBodies.length; i++) all.push(this.staticBodies[i]);
+    for (let i = 0; i < this.bodies.length; i++) all.push(this.bodies[i]);
+    const c = this._gridCell;
+    // Padded, so a body still lands in every cell it could reach during the
+    // substeps this grid has to survive, plus a particle's own radius.
+    const pad = 0.5;
+    for (let i = 0; i < all.length; i++) {
+      const b = all[i];
+      const x0 = Math.floor((b.aabbMin.x - pad) / c), x1 = Math.floor((b.aabbMax.x + pad) / c);
+      const y0 = Math.floor((b.aabbMin.y - pad) / c), y1 = Math.floor((b.aabbMax.y + pad) / c);
+      const z0 = Math.floor((b.aabbMin.z - pad) / c), z1 = Math.floor((b.aabbMax.z + pad) / c);
+      // A body spanning a silly number of cells is not worth indexing finely;
+      // it goes on the always-test list instead of being dropped.
+      if ((x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1) > 512) {
+        this._gridOversized.push(b);
+        continue;
+      }
+      for (let x = x0; x <= x1; x++) {
+        for (let y = y0; y <= y1; y++) {
+          for (let z = z0; z <= z1; z++) {
+            const key = x * 73856093 ^ y * 19349663 ^ z * 83492791;
+            let list = grid.get(key);
+            if (!list) { list = []; grid.set(key, list); }
+            list.push(b);
+          }
+        }
+      }
+    }
+  }
+
+  _bodiesNear(x, y, z) {
+    const c = this._gridCell;
+    const key = Math.floor(x / c) * 73856093 ^ Math.floor(y / c) * 19349663 ^ Math.floor(z / c) * 83492791;
+    return this._grid.get(key);
   }
 
   /* ------------------------------- bodies -------------------------------- */
@@ -302,11 +352,12 @@ export class PhysicsWorld {
     for (let it = 0; it < this.constraintIters; it++) {
       const cs = this.constraints;
       for (let i = 0; i < cs.length; i++) cs[i].solve();
-      this._collideParticles(dt, it === this.constraintIters - 1);
+      const last = it === this.constraintIters - 1;
+      this._collideParticles(dt, last, it >= this.constraintIters - 2);
     }
   }
 
-  _collideParticles(dt, lastIteration) {
+  _collideParticles(dt, lastIteration, closingIterations) {
     const ps = this.particles;
     const gy = this.groundY;
 
@@ -330,15 +381,18 @@ export class PhysicsWorld {
           if (impact > 4.5) this._reportParticleImpact(p, 0, 1, 0, impact);
         }
       }
-      // ---- static geometry ----
-      for (let j = 0; j < this.staticBodies.length; j++) {
-        this._particleVsBody(p, this.staticBodies[j], dt, lastIteration);
+      // ---- crates, boulders and map parts, via the broadphase ----
+      const near = this._bodiesNear(p.x, p.y, p.z);
+      if (near) {
+        for (let j = 0; j < near.length; j++) this._particleVsBody(p, near[j], dt, lastIteration);
       }
-      // ---- dynamic bodies ----
-      for (let j = 0; j < this.bodies.length; j++) {
-        this._particleVsBody(p, this.bodies[j], dt, lastIteration);
-      }
+      const big = this._gridOversized;
+      for (let j = 0; j < big.length; j++) this._particleVsBody(p, big[j], dt, lastIteration);
     }
+
+    // Limbs and body-to-body pushing are expensive and do not need solving on
+    // every constraint iteration, so they run on the closing ones only.
+    if (!closingIterations) return;
 
     // ---- limbs as segments (so forearms do not sink into the floor) ----
     for (let i = 0; i < this.segments.length; i++) {
@@ -607,4 +661,3 @@ export function raySlab(o, d, half) {
   return tmin >= 0 ? tmin : tmax;
 }
 
-export { RigidBody, clamp };

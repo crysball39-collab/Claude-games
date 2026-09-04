@@ -15,11 +15,11 @@
    so the ragdoll melts into the animation instead of snapping to it.
    ========================================================================== */
 import { Vector3, Quaternion, Matrix4 } from 'three';
-import { SkeletonRig, HIP_HEIGHT, boneBoxCenter, worldToBoxLocal, boneCorners, pointInBone } from './skeleton.js';
+import { SkeletonRig, HIP_HEIGHT, boneBoxCenter } from './skeleton.js';
 import { Body } from './body.js';
 import { Animator } from './animator.js';
 import { Particle, DistanceConstraint } from '../physics/world.js';
-import { clamp, clamp01, lerp, damp, dampAngle, angleDelta, makeRng, smoothstep } from '../core/util.js';
+import { clamp, clamp01, lerp, damp, makeRng, smoothstep } from '../core/util.js';
 
 const _v1 = new Vector3(), _v2 = new Vector3(), _v3 = new Vector3(), _v4 = new Vector3();
 const _q1 = new Quaternion(), _q2 = new Quaternion();
@@ -449,8 +449,8 @@ export class Character {
       case STATE.CONTROLLED: this._updateControlled(dt); break;
       case STATE.STUMBLE: this._updateStumble(dt); break;
       case STATE.RAGDOLL: this._updateRagdoll(dt); break;
-      case STATE.GETUP: this._updateGetUp(dt); break;
-      case STATE.DEAD: this._updateDead(dt); break;
+      case STATE.GETUP: this._updateGetUp(); break;
+      case STATE.DEAD: this._updateDead(); break;
       default: break;
     }
 
@@ -513,6 +513,7 @@ export class Character {
     if (this.pos.y < w.killY) return;
 
     this._resolveBodyCollisions(dt);
+    this._resolveCharacterCollisions();
 
     // --- animation selection ---
     this._jumpLatch = Math.max(0, (this._jumpLatch || 0) - dt);
@@ -604,6 +605,36 @@ export class Character {
     }
   }
 
+  /**
+   * People are solid. Only bodies that are still on their feet block you;
+   * a ragdoll on the floor is something you walk over, and its limbs are
+   * already handled by the particle collisions.
+   */
+  _resolveCharacterCollisions() {
+    const chars = this.world.characters;
+    const RADIUS = 0.26;
+    const minD = RADIUS * 2;
+    for (let i = 0; i < chars.length; i++) {
+      const o = chars[i];
+      if (o === this || !o.collidable) continue;
+      const upright = o.state === STATE.CONTROLLED ||
+        (o.state === STATE.STUMBLE && o.particles.hip.y > this.world.groundY + 0.55);
+      if (!upright) continue;
+      if (Math.abs(this.pos.y - o.pos.y) > 1.6) continue;
+      const dx = this.pos.x - o.pos.x, dz = this.pos.z - o.pos.z;
+      let d = Math.hypot(dx, dz);
+      if (d >= minD) continue;
+      let nx, nz;
+      if (d < 1e-5) { nx = 1; nz = 0; d = 0; } else { nx = dx / d; nz = dz / d; }
+      // Both sides run this, so half the overlap each resolves the pair.
+      const share = this.state === STATE.CONTROLLED ? 0.55 : 1;
+      this.pos.x += nx * (minD - d) * share;
+      this.pos.z += nz * (minD - d) * share;
+      const vn = this.vel.x * nx + this.vel.z * nz;
+      if (vn < 0) { this.vel.x -= vn * nx; this.vel.z -= vn * nz; }
+    }
+  }
+
   _updateStumble(dt) {
     const P = this.particles;
     this.animator.playBase('stagger', { fade: 0.2 });
@@ -649,26 +680,31 @@ export class Character {
         const k = (0.5 + this.rng()) * (this.painTimer > 0.3 ? 2.2 : 0.9);
         limb.addVelocity((this.rng() - 0.5) * 2.6 * k, this.rng() * 1.8 * k, (this.rng() - 0.5) * 2.6 * k, 1 / 90);
       }
-      // deliberate shoving with the arms and legs to right themselves
-      if (this.wantsUp && this.getUpDelay < 0.4) {
-        const push = _v1.set(this.moveInput.x, 0, this.moveInput.z);
-        if (push.lengthSq() > 0.01) {
-          push.normalize().multiplyScalar(3.2);
-          this.particles.hip.addVelocity(push.x, 0.4, push.z, 1 / 90);
-        }
+      // Deliberate shoving: a body on the floor can still drag itself about.
+      const push = _v1.set(this.moveInput.x, 0, this.moveInput.z);
+      if (push.lengthSq() > 0.01) {
+        push.normalize();
+        const k = this.wantsUp ? 3.4 : 2.2;
+        this.particles.hip.addVelocity(push.x * k, 0.45, push.z * k, 1 / 90);
+        this.particles.shoulders.addVelocity(push.x * k * 0.6, 0.25, push.z * k * 0.6, 1 / 90);
+      }
+      // Asking to jump is asking to get up now.
+      if (this.wantJump) {
+        this.wantJump = false;
+        this.getUpDelay = Math.min(this.getUpDelay, 0.05);
+        this.balance = Math.max(this.balance, 0.4);
       }
       const settled = this._ragdollSpeed() < 1.5;
-      if (this.getUpDelay <= 0 && settled && this.wantsUp !== false && this.balance > 0.35) {
+      if (this.getUpDelay <= 0 && settled && this.wantsUp && this.balance > 0.35) {
         this._beginGetUp();
       }
       this.balance = clamp01(this.balance + dt * 0.22);
     }
   }
 
-  _updateDead(dt) {
+  _updateDead() {
     this._rootFromPhysics();
     this.targetStrength = 0.012;
-    void dt;
   }
 
   get wantsUp() { return this._wantsUp !== false; }
@@ -676,8 +712,7 @@ export class Character {
 
   _beginGetUp() {
     const P = this.particles;
-    // Which way up are we? The chest's own up axis decides the animation.
-    const chestUp = _v1.copy(_v2.set(P.shoulders.x - P.hip.x, P.shoulders.y - P.hip.y, P.shoulders.z - P.hip.z));
+    // Which way up are we? That decides which get-up plays.
     const faceDown = this._facingDown();
     this.getUpYaw = this._physicsYaw();
     this.getUpX = P.hip.x;
@@ -690,12 +725,11 @@ export class Character {
       this.balance = Math.max(this.balance, 0.85);
       this.setState(STATE.CONTROLLED);
     });
-    void chestUp;
   }
 
-  _updateGetUp(dt) {
+  _updateGetUp() {
     const a = this.animator;
-    const prog = a.fullActive ? clamp01(a.fullTime / 1.85) : 1;
+    const prog = a.fullActive ? clamp01(a.fullTime / a.fullDuration) : 1;
     this.targetStrength = lerp(0.16, 1.0, smoothstep(prog * 1.12));
     const groundY = this._groundHeight(this.getUpX, this.getUpZ, 1e9);
     const absY = a.rootYAbs ? a.rootYAbs.value : HIP_HEIGHT;
@@ -704,7 +738,6 @@ export class Character {
     _q2.setFromAxisAngle(_v1.set(1, 0, 0), a.rootPitch);
     this.rig.rootQuat.copy(_q1).multiply(_q2);
     this.pos.set(this.getUpX, groundY + HIP_HEIGHT, this.getUpZ);
-    void dt;
   }
 
   /* --------------------------------------------------- physics derived root */
@@ -958,4 +991,3 @@ function distance(a, b) {
   return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 }
 
-export { boneCorners, worldToBoxLocal, pointInBone, HIP_HEIGHT, angleDelta, dampAngle };
