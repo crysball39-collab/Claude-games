@@ -223,10 +223,7 @@ function wireGameButtons() {
   $('#btn-quit').addEventListener('click', () => quitToMenu());
   $('#btn-clear').addEventListener('click', () => { app.game?.clearSpawns(); updatePauseStats(); });
   $('#btn-cleangore').addEventListener('click', () => { app.game?.washGore(); updatePauseStats(); });
-  $('#btn-respawn').addEventListener('click', () => {
-    app.game?.respawnPlayer();
-    app.hud.hideDeath();
-  });
+  $('#btn-respawn').addEventListener('click', () => app.game?.respawnPlayer());
 
   settings.on('sensitivity', (v) => { input.sensitivity = v; });
   settings.on('invertY', (v) => { input.invertY = v; });

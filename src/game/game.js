@@ -849,6 +849,10 @@ export class Game {
 
   respawnPlayer() {
     const p = this.player;
+    // Bringing the player back to life is what clears the death screen. It
+    // covers the whole HUD and swallows every touch, so leaving it to the
+    // caller means one missed call silently kills all input.
+    this.hud?.hideDeath();
     p.dead = false;
     p.health = p.maxHealth;
     p.balance = 1;
