@@ -204,6 +204,7 @@ src/
   ui/                 menu, HUD, spawn drawer
 tools/build-single-file.mjs  folds the whole game into dist/gorebox.html
 tools/verify.mjs      functional smoke test, driven in a real browser
+tools/verify-file.mjs  opens dist/gorebox.html off the filesystem, taps the HUD
 ```
 
 ## Verifying it
@@ -226,11 +227,21 @@ this project is actually about still work:
 
 ```
 npm install -D playwright && npx playwright install chromium
-node tools/verify.mjs
+npm run verify
 ```
 
-It exits non-zero if anything fails. Set `CHROMIUM_PATH` if you already have a
-Chromium build you would rather it used.
+`tools/verify-file.mjs` then checks the thing people actually download. It opens
+`dist/gorebox.html` from `file://` in a phone-sized browser with touch, and taps
+its way through: menu, map, the stick right after loading, the drawer, the RCV2,
+picking the machete up with USE and swinging it. It also fails if the page fetches
+anything at all, since a downloaded file has to work in flight mode.
+
+```
+npm run build && npm run verify:file
+```
+
+Both exit non-zero if anything fails. Set `CHROMIUM_PATH` if you already have a
+Chromium build you would rather they used.
 
 ## Settings
 

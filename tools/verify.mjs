@@ -329,6 +329,10 @@ r = await page.evaluate(async () => {
   g.player.teleport(dropped.entity.pos.x, dropped.entity.pos.z + 0.9, 0);
   for (let i = 0; i < 20; i++) await new Promise((res) => requestAnimationFrame(res));
   g.setEquipped('fists');
+  // The HUD only offers USE when something is actually in reach, so check the
+  // button turns itself on before pressing it.
+  for (let i = 0; i < 20; i++) await new Promise((res) => requestAnimationFrame(res));
+  const useOffered = document.querySelector('#btn-use').classList.contains('show');
   g.useAction();                                  // USE picks it up
   const carried = !!g.carried && g.equipped === 'machete';
 
@@ -354,13 +358,13 @@ r = await page.evaluate(async () => {
   }
   g.useAction();                                  // USE puts it back down
   return {
-    carried, clips, damage, bled,
+    carried, useOffered, clips, damage, bled,
     dropped: !g.carried && g.spawnedBodies.some((b) => b.tag === 'machete'),
     equippedAfter: g.equipped,
   };
 });
 check('the machete can be picked up, swung and dropped',
-  r.carried && r.damage > 30 && r.bled && r.dropped &&
+  r.carried && r.useOffered && r.damage > 30 && r.bled && r.dropped &&
   r.clips.includes('slashR') && r.clips.includes('slashL'), JSON.stringify(r));
 
 // ---------- boulder actually rolls ----------
