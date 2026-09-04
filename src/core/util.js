@@ -125,6 +125,41 @@ export function valueNoise2D(seed = 1) {
   };
 }
 
+/**
+ * Value noise that repeats exactly every `period` cells, so a texture built
+ * from it tiles without a seam. Each octave gets its own period, which is what
+ * keeps the whole stack seamless rather than just the first layer.
+ */
+export function makeTileableNoise(seed = 1) {
+  const rng = makeRng(seed);
+  const N = 256;
+  const table = new Float32Array(N * N);
+  for (let i = 0; i < table.length; i++) table[i] = rng();
+  const wrap = (v, p) => ((v % p) + p) % p;
+  const at = (x, y, p) => table[wrap(y, p) * N + wrap(x, p)];
+  return function noise(x, y, period) {
+    const xi = Math.floor(x), yi = Math.floor(y);
+    const xf = x - xi, yf = y - yi;
+    const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+    const a = at(xi, yi, period), b = at(xi + 1, yi, period);
+    const c = at(xi, yi + 1, period), d = at(xi + 1, yi + 1, period);
+    return lerp(lerp(a, b, u), lerp(c, d, u), v);
+  };
+}
+
+/** Seamless fbm over the unit square. `cells` is the base period. */
+export function tileableFbm(noise, u, v, cells = 4, octaves = 4, gain = 0.55) {
+  let sum = 0, norm = 0, amp = 1, p = cells;
+  for (let i = 0; i < octaves; i++) {
+    sum += amp * noise(u * p, v * p, p);
+    norm += amp;
+    amp *= gain;
+    p *= 2;
+    if (p > 256) break;
+  }
+  return sum / norm;
+}
+
 export function fbm(noise, x, y, octaves = 4, gain = 0.5, lacunarity = 2) {
   let amp = 1, freq = 1, sum = 0, norm = 0;
   for (let i = 0; i < octaves; i++) {

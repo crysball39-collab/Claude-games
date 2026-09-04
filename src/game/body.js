@@ -52,6 +52,8 @@ export class Body {
 
     this.sharedFingerMat = new MeshLambertMaterial({ color: look.skin });
     this.materials.push(this.sharedFingerMat);
+    this.fingerMeshes = [];
+    this.lodNear = true;
 
     this._build();
   }
@@ -75,6 +77,7 @@ export class Body {
       mesh.userData.bone = bone;
       this.group.add(mesh);
       this.meshes.push(mesh);
+      if (isFinger) this.fingerMeshes.push(mesh);
       entry.skin = {
         mesh, material: mat, kind: 'skin', cell: def.atlas || 24,
         base: look.skin.clone(), surface: null, bone,
@@ -381,6 +384,17 @@ export class Body {
   }
 
   setVisible(v) { this.group.visible = v; }
+
+  /**
+   * Twenty finger boxes per body is a lot of draw calls to spend on something
+   * nobody can see from across the plate.
+   */
+  setLod(distance) {
+    const near = distance < 8;
+    if (near === this.lodNear) return;
+    this.lodNear = near;
+    for (let i = 0; i < this.fingerMeshes.length; i++) this.fingerMeshes[i].visible = near;
+  }
 
   dispose() {
     this.destroyed = true;

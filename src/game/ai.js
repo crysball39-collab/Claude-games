@@ -291,8 +291,10 @@ export class CitizenAI {
   onHurt(info) {
     const c = this.c;
     const amount = info.amount || 0;
-    this.fear = clamp01(this.fear + amount * 0.035 + 0.12);
-    this.anger = clamp01(this.anger + amount * 0.030 * (0.4 + this.aggression));
+    // Getting hit makes a timid citizen run and an angry one swing back, so
+    // fear and anger have to grow at different rates.
+    this.fear = clamp01(this.fear + amount * 0.022 + 0.08);
+    this.anger = clamp01(this.anger + amount * 0.045 * (0.4 + this.aggression));
     if (info.attacker) { this.threat = info.attacker; this.threatSeen = 3.5; }
     else if (c.lastAttacker) { this.threat = c.lastAttacker; this.threatSeen = 3.0; }
     this.repathTimer = 0;
@@ -413,8 +415,8 @@ export class CitizenAI {
       return;
     }
     const hurt = 1 - c.health / c.maxHealth;
-    const willFight = (this.anger + this.aggression * 0.55 + this.bravery * 0.5)
-                    > (this.fear * 1.5 + hurt * 1.1 + 0.55);
+    const willFight = (this.anger * 1.2 + this.aggression * 0.6 + this.bravery * 0.7)
+                    > (this.fear * 1.3 + hurt * 0.9 + 0.45);
     if (this.fear > 0.16 || this.anger > 0.16) {
       this._setState(willFight ? AI_STATE.FIGHT : AI_STATE.FLEE);
     }

@@ -4,9 +4,10 @@
 import {
   Group, Mesh, BoxGeometry, PlaneGeometry, MeshLambertMaterial, MeshBasicMaterial,
   DirectionalLight, HemisphereLight, AmbientLight, Fog, Color, BackSide, Vector3,
-  SphereGeometry, DoubleSide,
+  SphereGeometry, DoubleSide, Float32BufferAttribute,
 } from 'three';
 import { makeGrassTexture, makeSkyTexture } from './textures.js';
+import { valueNoise2D, fbm, clamp01, lerp } from '../core/util.js';
 
 export const MAPS = [
   {
@@ -65,13 +66,41 @@ function buildBaseplate(ctx) {
 
   /* ------------------------------ the plate ------------------------------ */
   const grass = makeGrassTexture(quality.grassSize, 7);
-  grass.texture.repeat.set(28, 28);
-  const plateMat = new MeshLambertMaterial({ map: grass.texture });
-  const plate = new Mesh(new BoxGeometry(HALF * 2, 2, HALF * 2), plateMat);
-  plate.position.set(0, -1, 0);
+  grass.texture.repeat.set(16, 16);
+
+  // The top is its own subdivided plane carrying broad, non-repeating colour
+  // variation in its vertex colours, which is what stops a 16x tiled texture
+  // from reading as a grid from the air.
+  const topGeo = new PlaneGeometry(HALF * 2, HALF * 2, 56, 56);
+  topGeo.rotateX(-Math.PI / 2);
+  const pos = topGeo.attributes.position;
+  const noise = valueNoise2D(21);
+  const colors = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i);
+    const patch = fbm(noise, x * 0.055, z * 0.055, 4, 0.55, 2.1);
+    const dry = clamp01(fbm(noise, x * 0.021 + 30, z * 0.021 - 12, 3, 0.5, 2) * 1.5 - 0.55);
+    const k = 0.80 + patch * 0.40;
+    colors[i * 3] = clamp01(k + dry * 0.30);
+    colors[i * 3 + 1] = clamp01(k * (1 - dry * 0.10));
+    colors[i * 3 + 2] = clamp01(k * (1 - dry * 0.22) * lerp(1.0, 0.92, patch));
+  }
+  topGeo.setAttribute('color', new Float32BufferAttribute(colors, 3));
+
+  const plateMat = new MeshLambertMaterial({ map: grass.texture, vertexColors: true });
+  const top = new Mesh(topGeo, plateMat);
+  top.position.y = 0;
+  top.receiveShadow = quality.shadows;
+  group.add(top);
+  disposables.push(topGeo, plateMat, grass.texture);
+
+  // the slab under it, so the plate has thickness from the side
+  const slabMat = new MeshLambertMaterial({ color: 0x4d7a35 });
+  const plate = new Mesh(new BoxGeometry(HALF * 2, 2, HALF * 2), slabMat);
+  plate.position.set(0, -1.005, 0);
   plate.receiveShadow = quality.shadows;
   group.add(plate);
-  disposables.push(plate.geometry, plateMat, grass.texture);
+  disposables.push(plate.geometry, slabMat);
 
   // Painted-on side walls so the edge of the world reads as a slab, not a void.
   const sideMat = new MeshLambertMaterial({ color: 0x53412c });

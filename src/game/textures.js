@@ -6,7 +6,7 @@ import {
   CanvasTexture, RepeatWrapping, ClampToEdgeWrapping, SRGBColorSpace,
   NearestFilter, LinearFilter, LinearMipmapLinearFilter,
 } from 'three';
-import { makeRng, valueNoise2D, fbm, clamp01 } from '../core/util.js';
+import { makeRng, valueNoise2D, fbm, clamp01, makeTileableNoise, tileableFbm } from '../core/util.js';
 
 function makeCanvas(w, h) {
   const c = document.createElement('canvas');
@@ -31,44 +31,44 @@ function toTexture(canvas, { repeat = 1, srgb = true, nearest = false } = {}) {
 export function makeGrassTexture(size = 512, seed = 7) {
   const c = makeCanvas(size, size);
   const ctx = c.getContext('2d');
-  const noise = valueNoise2D(seed);
+  const noise = makeTileableNoise(seed);
   const rng = makeRng(seed * 31 + 5);
 
   const img = ctx.createImageData(size, size);
   for (let y = 0; y < size; y++) {
+    const v = y / size;
     for (let x = 0; x < size; x++) {
-      const n = fbm(noise, x / 26, y / 26, 4, 0.55, 2.1);
-      const m = fbm(noise, x / 5.5 + 40, y / 5.5 - 20, 2, 0.6, 2);
-      const t = clamp01(n * 0.72 + m * 0.42 - 0.08);
-      const r = 46 + t * 74;
-      const g = 92 + t * 96;
-      const b = 38 + t * 52;
+      const u = x / size;
+      // Two seamless layers: broad patches, and a fine blade-scale grain.
+      const broad = tileableFbm(noise, u, v, 6, 3, 0.55);
+      const fine = tileableFbm(noise, u + 0.37, v - 0.11, 26, 3, 0.6);
+      const t = clamp01(broad * 0.34 + fine * 0.74 - 0.06);
+      const dry = clamp01(tileableFbm(noise, u - 0.21, v + 0.44, 8, 2, 0.5) - 0.56) * 1.1;
       const i = (y * size + x) * 4;
-      img.data[i] = r; img.data[i + 1] = g; img.data[i + 2] = b; img.data[i + 3] = 255;
+      img.data[i] = 52 + t * 62 + dry * 40;
+      img.data[i + 1] = 100 + t * 76 - dry * 10;
+      img.data[i + 2] = 40 + t * 42 - dry * 6;
+      img.data[i + 3] = 255;
     }
   }
   ctx.putImageData(img, 0, 0);
 
-  // Scatter blades and a few dirt patches so it does not read as flat noise.
-  for (let i = 0; i < size * 5; i++) {
-    const x = rng() * size, y = rng() * size;
+  // Blades, drawn wrapped so the edges of the tile still line up.
+  const blade = (x, y) => {
     const h = 2 + rng() * 5;
     const shade = 40 + rng() * 120;
-    ctx.strokeStyle = `rgba(${(shade * 0.55) | 0},${(shade * 1.25) | 0},${(shade * 0.5) | 0},${0.28 + rng() * 0.4})`;
+    ctx.strokeStyle = `rgba(${(shade * 0.55) | 0},${(shade * 1.25) | 0},${(shade * 0.5) | 0},${0.24 + rng() * 0.36})`;
     ctx.lineWidth = 0.8 + rng() * 0.8;
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + (rng() - 0.5) * 2.4, y - h);
-    ctx.stroke();
-  }
-  for (let i = 0; i < 26; i++) {
-    const x = rng() * size, y = rng() * size, r = 8 + rng() * 34;
-    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-    g.addColorStop(0, `rgba(108,92,58,${0.10 + rng() * 0.16})`);
-    g.addColorStop(1, 'rgba(108,92,58,0)');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-  }
+    const dx = (rng() - 0.5) * 2.4;
+    for (const [ox, oy] of [[0, 0], [size, 0], [-size, 0], [0, size], [0, -size]]) {
+      ctx.beginPath();
+      ctx.moveTo(x + ox, y + oy);
+      ctx.lineTo(x + ox + dx, y + oy - h);
+      ctx.stroke();
+    }
+  };
+  for (let i = 0; i < size * 5; i++) blade(rng() * size, rng() * size);
+
   return { canvas: c, texture: toTexture(c, { repeat: 1 }) };
 }
 

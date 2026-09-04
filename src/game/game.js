@@ -506,7 +506,11 @@ export class Game {
     this.world.step(dt);
 
     // --- resolve visuals ---
-    for (let i = 0; i < this.characters.length; i++) this.characters[i].lateUpdate(dt);
+    for (let i = 0; i < this.characters.length; i++) {
+      const c = this.characters[i];
+      c.lateUpdate(dt);
+      c.body.setLod(c === this.player ? 0 : c.center.distanceTo(this.camPos));
+    }
     for (let i = 0; i < this.spawnedBodies.length; i++) syncBodyMesh(this.spawnedBodies[i]);
 
     // --- weapon ---
