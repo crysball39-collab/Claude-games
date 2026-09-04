@@ -242,6 +242,17 @@ check('a citizen fights back and can hurt you', r.playerHurt > 0, JSON.stringify
 
 // ---------- the joystick works the moment you land in the map ----------
 {
+  // Open ground, on our feet: this is a test of the stick, not of walking
+  // into whoever the last check left standing in front of us.
+  await ev(() => {
+    const g = window.GOREBOX.game;
+    g.clearSpawns();
+    g.player.balance = 1;
+    g.player.setState('controlled');
+    g.player.teleport(0, 0, 0);
+    g.camYaw = 0; g.camPitch = 0;
+  });
+  await page.waitForTimeout(400);
   const grip = await h.dragStick(0, -70);
   await page.waitForTimeout(120);
   const held = await ev(() => ({
