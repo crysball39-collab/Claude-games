@@ -1,0 +1,14 @@
+{
+  "name": "gorebox",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A 3D first person mobile physics sandbox.",
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "verify": "node tools/verify.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.49.0"
+  }
+}

@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="theme-color" content="#0a0a0c" />
+<meta name="description" content="GOREBOX - a first person mobile sandbox" />
+<title>GOREBOX</title>
+<link rel="icon" href="data:," />
+<link rel="stylesheet" href="styles/main.css" />
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js" } }
+</script>
+</head>
+<body>
+
+<!-- ============================ BOOT LOADING SCREEN ============================ -->
+<div id="boot-screen" class="loading-screen active">
+  <div class="ls-bg"></div>
+  <div class="ls-inner">
+    <h1 class="logo">GORE<span>BOX</span></h1>
+    <div class="ls-sub">SANDBOX &middot; PROTOTYPE BUILD</div>
+    <div class="bar"><div class="bar-fill" id="boot-bar"></div></div>
+    <div class="ls-status" id="boot-status">Waking up&hellip;</div>
+    <div class="ls-tip" id="boot-tip"></div>
+  </div>
+</div>
+
+<!-- ============================ MAP LOADING SCREEN ============================ -->
+<div id="map-screen" class="loading-screen">
+  <div class="ls-bg"></div>
+  <div class="ls-inner">
+    <div class="ls-maptitle" id="map-loading-title">TEST BASEPLATE</div>
+    <div class="ls-sub">LOADING MAP</div>
+    <div class="bar"><div class="bar-fill" id="map-bar"></div></div>
+    <div class="ls-status" id="map-status">Preparing&hellip;</div>
+    <div class="ls-tip" id="map-tip"></div>
+  </div>
+</div>
+
+<!-- ================================ MAIN MENU ================================= -->
+<div id="menu-screen" class="screen">
+  <div class="menu-bg"></div>
+  <div class="menu-vignette"></div>
+
+  <div class="menu-panel" id="panel-main">
+    <h1 class="logo big">GORE<span>BOX</span></h1>
+    <div class="menu-tagline">first person &middot; physics &middot; sandbox</div>
+    <div class="menu-buttons">
+      <button class="mbtn primary" id="btn-maps">MAPS</button>
+      <button class="mbtn" id="btn-controls">CONTROLS</button>
+      <button class="mbtn" id="btn-settings">SETTINGS</button>
+    </div>
+    <div class="menu-foot">v1.0 &middot; drag to look &middot; landscape recommended</div>
+  </div>
+
+  <div class="menu-panel hidden" id="panel-maps">
+    <div class="panel-head">
+      <button class="backbtn" data-back="panel-main">&#8592;</button>
+      <h2>MAPS</h2>
+    </div>
+    <div class="map-list" id="map-list"></div>
+    <div class="map-detail" id="map-detail">
+      <div class="md-empty" id="md-empty">Select a map</div>
+      <div class="md-body hidden" id="md-body">
+        <div class="md-title" id="md-title"></div>
+        <div class="md-desc" id="md-desc"></div>
+        <button class="mbtn primary wide" id="btn-play">PLAY</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="menu-panel hidden" id="panel-controls">
+    <div class="panel-head">
+      <button class="backbtn" data-back="panel-main">&#8592;</button>
+      <h2>CONTROLS</h2>
+    </div>
+    <div class="scroll-body">
+      <div class="ctl-group"><b>Touch</b>
+        <p>Left stick to move. Drag anywhere on the right half to look around.</p>
+        <p>JUMP and CROUCH sit above the right thumb.</p>
+        <p>Fists equipped &rarr; PUNCH button (alternates left / right jab).</p>
+        <p>RCV2 equipped &rarr; SHOOT (grab), + (spawn), and DELETE buttons.</p>
+        <p>The three lines in the top left open the spawn menu.</p>
+      </div>
+      <div class="ctl-group"><b>Keyboard &amp; mouse</b>
+        <p>WASD move &middot; Mouse look (click to lock) &middot; Space jump &middot; C or Ctrl crouch</p>
+        <p>1 fists &middot; 2 RCV2 &middot; Left click punch / grab &middot; G spawn &middot; X delete &middot; Tab spawn menu</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="menu-panel hidden" id="panel-settings">
+    <div class="panel-head">
+      <button class="backbtn" data-back="panel-main">&#8592;</button>
+      <h2>SETTINGS</h2>
+    </div>
+    <div class="scroll-body">
+      <label class="setting"><span>Graphics quality</span>
+        <select id="set-quality"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select>
+      </label>
+      <label class="setting"><span>Shadows</span><input type="checkbox" id="set-shadows" /></label>
+      <label class="setting"><span>Gore</span><input type="checkbox" id="set-gore" checked /></label>
+      <label class="setting"><span>Look sensitivity</span><input type="range" id="set-sens" min="30" max="300" value="120" /></label>
+      <label class="setting"><span>Field of view</span><input type="range" id="set-fov" min="60" max="105" value="78" /></label>
+      <label class="setting"><span>Invert look Y</span><input type="checkbox" id="set-inverty" /></label>
+    </div>
+  </div>
+</div>
+
+<!-- ================================= GAME ==================================== -->
+<div id="game-screen" class="screen">
+  <div id="viewport"></div>
+
+  <div id="hud">
+    <!-- top left -->
+    <button id="btn-hamburger" class="hud-btn square" aria-label="Spawn menu">
+      <span class="ham"><i></i><i></i><i></i></span>
+    </button>
+
+    <!-- top right -->
+    <div id="top-right">
+      <button id="btn-pause" class="hud-btn square small" aria-label="Pause">&#9199;</button>
+      <div class="health-wrap"><div class="health-bar"><div id="health-fill"></div></div><div class="health-label">HEALTH</div></div>
+    </div>
+
+    <div id="crosshair"><span></span></div>
+    <div id="grab-tag" class="hidden">HOLDING</div>
+
+    <!-- left stick -->
+    <div id="stick-zone"><div id="stick-base"><div id="stick-knob"></div></div></div>
+
+    <!-- weapon slots -->
+    <div id="weapon-slots">
+      <button class="wslot active" data-weapon="fists"><span class="wname">FISTS</span><span class="wkey">1</span></button>
+      <button class="wslot" data-weapon="rcv2"><span class="wname">RCV2</span><span class="wkey">2</span></button>
+    </div>
+
+    <!-- right action cluster -->
+    <div id="action-cluster">
+      <div class="col extra" id="rcv2-extra">
+        <button class="hud-btn round med" id="btn-spawn" aria-label="Spawn">+</button>
+        <button class="hud-btn round med danger" id="btn-delete" aria-label="Delete">&#128465;</button>
+      </div>
+      <div class="col">
+        <button class="hud-btn round med" id="btn-crouch">CROUCH</button>
+        <button class="hud-btn round med" id="btn-jump">JUMP</button>
+      </div>
+      <div class="col">
+        <button class="hud-btn round big" id="btn-primary">PUNCH</button>
+      </div>
+    </div>
+
+    <div id="selected-spawn" class="hidden">Selected: <b id="selected-name">-</b></div>
+    <div id="toast"></div>
+    <div id="damage-vignette"></div>
+    <div id="death-overlay" class="hidden">
+      <div class="death-text">YOU DIED</div>
+      <button class="mbtn primary" id="btn-respawn">RESPAWN</button>
+    </div>
+  </div>
+
+  <!-- spawn drawer -->
+  <div id="spawn-drawer" class="hidden">
+    <div class="drawer-panel">
+      <div class="drawer-head">
+        <h3>SPAWN MENU</h3>
+        <button id="btn-close-drawer" class="closebtn">&#10005;</button>
+      </div>
+      <div class="drawer-body">
+        <section class="drawer-section">
+          <h4>OBJECTS</h4>
+          <div class="item-grid" id="grid-objects"></div>
+        </section>
+        <section class="drawer-section">
+          <h4>HUMANS</h4>
+          <div class="item-grid" id="grid-humans"></div>
+        </section>
+      </div>
+      <div class="drawer-foot">Equip the <b>RCV2</b> and press <b>+</b> to spawn the selected item.</div>
+    </div>
+    <div class="drawer-scrim" id="drawer-scrim"></div>
+  </div>
+
+  <!-- pause -->
+  <div id="pause-overlay" class="hidden">
+    <div class="pause-card">
+      <h2>PAUSED</h2>
+      <button class="mbtn primary" id="btn-resume">RESUME</button>
+      <button class="mbtn" id="btn-clear">CLEAR SPAWNS</button>
+      <button class="mbtn" id="btn-cleangore">WASH THE BLOOD</button>
+      <button class="mbtn danger" id="btn-quit">QUIT TO MENU</button>
+      <div class="pause-stats" id="pause-stats"></div>
+    </div>
+  </div>
+</div>
+
+<div id="rotate-overlay"><div class="rot-inner"><div class="phone"></div><p>Rotate your device to landscape</p></div></div>
+<noscript><div class="noscript">GOREBOX needs JavaScript and WebGL.</div></noscript>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

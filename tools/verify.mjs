@@ -1,0 +1,159 @@
+/* =============================================================================
+   Functional smoke test. Drives the real game in a browser and asserts that
+   the systems this project is actually about still work.
+
+     node tools/verify.mjs
+   ========================================================================== */
+import { boot } from './harness.mjs';
+const h = await boot({ port: 8223, width: 960, height: 500 });
+const { page, shot, ev, logs, close } = h;
+const fail = [];
+const check = (name, ok, extra='') => { console.log((ok?'PASS':'FAIL')+'  '+name+(extra?'  '+extra:'')); if(!ok) fail.push(name); };
+
+// ---------- jump ----------
+let r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  g.player.teleport(0, 6, 0);
+  await new Promise(r=>setTimeout(r,300));
+  const y0 = g.player.pos.y;
+  g.player.wantJump = true;
+  let peak = y0;
+  for (let i=0;i<50;i++){ await new Promise(r=>requestAnimationFrame(r)); peak = Math.max(peak, g.player.pos.y); }
+  return { rise: +(peak - y0).toFixed(2), grounded: g.player.grounded };
+});
+check('jump lifts the player', r.rise > 0.8, JSON.stringify(r));
+
+// ---------- crouch ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  const eye = new (g.camera.position.constructor)();
+  g.player.eyePosition(eye); const before = eye.y;
+  g.player.crouchWant = true;
+  await new Promise(r=>setTimeout(r,900));
+  g.player.eyePosition(eye); const after = eye.y;
+  g.player.crouchWant = false;
+  return { before:+before.toFixed(2), after:+after.toFixed(2) };
+});
+check('crouch lowers the eyes', r.before - r.after > 0.20, JSON.stringify(r));
+
+// ---------- pathfinding around a wall of crates ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  g.clearSpawns();
+  g.player.teleport(16, 16, 0);          // out of the way of the test subject
+  const V = g.player.pos.constructor;
+  const { spawnCrate } = await import('/src/game/objects.js');
+  for (let i = -3; i <= 3; i++) {
+    spawnCrate(g, new V(i * 0.72, 0.4, 0), { size: 0.72 });
+    spawnCrate(g, new V(i * 0.72, 1.1, 0), { size: 0.72 });
+  }
+  g.nav.rebuild(g.world, { groundY: 0 });
+  const { spawnCitizen } = await import('/src/game/citizen.js');
+  const c = spawnCitizen(g, new V(0, 0, 5));
+  c.ai._setState('wander'); c.ai.hasGoal = true; c.ai.goal.set(0, 0, -5); c.ai.repathTimer = 0;
+  const start = c.pos.z;
+  let best = start;
+  for (let i=0;i<420;i++){ await new Promise(r=>requestAnimationFrame(r)); best = Math.min(best, c.pos.z); }
+  return { start:+start.toFixed(1), end:+best.toFixed(1), x:+c.pos.x.toFixed(1), pathLen: c.ai.path.length, state:c.ai.state };
+});
+check('citizen paths around a crate wall', r.end < 1.0, JSON.stringify(r));
+
+// ---------- RCV2 grab and carry ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  g.clearSpawns();
+  g.player.teleport(0, 4, 0); g.camYaw = 0; g.camPitch = 0;
+  g.setEquipped('rcv2'); g.setSelected('crate');
+  await new Promise(r=>setTimeout(r,200));
+  g.spawnSelected();
+  await new Promise(r=>setTimeout(r,900));
+  g.camPitch = -0.48;          // look down at the crate on the ground
+  await new Promise(r=>requestAnimationFrame(r));
+  await new Promise(r=>requestAnimationFrame(r));
+  g.primaryAction();
+  const held = g.rcv2.holding;
+  const b = g.spawnedBodies[0];
+  const y0 = b.pos.y;
+  g.camPitch = 0.6;
+  for (let i=0;i<90;i++) await new Promise(r=>requestAnimationFrame(r));
+  const y1 = b.pos.y;
+  const out = { held, lifted: +(y1-y0).toFixed(2) };
+  g.primaryAction();      // release
+  out.released = !g.rcv2.holding;
+  return out;
+});
+check('RCV2 grabs and lifts a crate', r.held && r.lifted > 0.5 && r.released, JSON.stringify(r));
+
+// ---------- RCV2 on a citizen ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  g.clearSpawns();
+  g.player.teleport(0, 4, 0); g.camYaw = 0; g.camPitch = 0;
+  g.setSelected('citizen'); g.spawnSelected();
+  await new Promise(r=>setTimeout(r,900));
+  g.camPitch = -0.05;
+  g.primaryAction();
+  const c = g.characters.find(x=>x!==g.player);
+  const held = g.rcv2.holding;
+  const y0 = c.particles.mt.y;
+  g.camPitch = 0.7;
+  for (let i=0;i<90;i++) await new Promise(r=>requestAnimationFrame(r));
+  const out = { held, state: c.state, lifted: +(c.particles.mt.y - y0).toFixed(2) };
+  g.primaryAction();
+  return out;
+});
+check('RCV2 picks up a citizen', r.held && r.state === 'ragdoll' && r.lifted > 0.4, JSON.stringify(r));
+
+// ---------- delete ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  g.clearSpawns();
+  g.setSelected('boulder'); g.player.teleport(0, 4, 0); g.camYaw = 0; g.camPitch = 0;
+  await new Promise(r=>setTimeout(r,150));
+  g.spawnSelected();
+  await new Promise(r=>setTimeout(r,700));
+  const n0 = g.spawnedBodies.length;
+  g.camPitch = -0.35;
+  await new Promise(r=>requestAnimationFrame(r));
+  await new Promise(r=>requestAnimationFrame(r));
+  g.deleteAction();
+  return { n0, n1: g.spawnedBodies.length };
+});
+check('delete removes the target', r.n1 === r.n0 - 1, JSON.stringify(r));
+
+// ---------- player death and respawn ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  g.clearSpawns();
+  g.player.applyDamage(999, { boneName: 'head', point: g.player.pos.clone(), type: 'impact', severity: 1 });
+  await new Promise(r=>setTimeout(r,900));
+  const dead = g.player.dead && g.player.state === 'dead';
+  const overlay = !document.querySelector('#death-overlay').classList.contains('hidden');
+  g.respawnPlayer();
+  await new Promise(r=>setTimeout(r,600));
+  return { dead, overlay, hp: Math.round(g.player.health), state: g.player.state };
+});
+check('player dies and respawns', r.dead && r.overlay && r.hp === 100 && r.state === 'controlled', JSON.stringify(r));
+
+// ---------- boulder actually rolls ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  g.clearSpawns();
+  const V = g.player.pos.constructor;
+  const { spawnBoulder } = await import('/src/game/objects.js');
+  const b = spawnBoulder(g, new V(0, 0.6, 0));
+  b.vel.set(6, 0, 0); b.angVel.set(0,0,0); b.wake();
+  let spin = 0;
+  for (let i=0;i<120;i++){ await new Promise(r=>requestAnimationFrame(r)); spin = Math.max(spin, b.angVel.length()); }
+  return { spin:+spin.toFixed(2), moved:+b.pos.x.toFixed(2) };
+});
+check('boulder rolls rather than slides', r.spin > 3 && r.moved > 2, JSON.stringify(r));
+
+await h.showHud();
+await ev(() => { const g=window.GOREBOX.game; g.clearSpawns(); g.debugCam=null; g.setEquipped('fists'); g.player.teleport(0,6,0); });
+await page.waitForTimeout(800);
+await shot('gameplay');
+console.log('\n=== LOGS ==='); console.log(logs.slice(0,15).join('\n')||'(none)');
+console.log(fail.length ? '\nFAILURES: ' + fail.join(', ') : '\nAll checks passed.');
+await close();
+process.exit(fail.length ? 1 : 0);
