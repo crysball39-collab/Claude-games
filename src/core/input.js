@@ -197,14 +197,24 @@ export class InputManager {
     if (this.stickKnob) this.stickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
   }
 
+  /**
+   * Moves the ring under the thumb. Same left/bottom pair the stylesheet uses,
+   * so the ring is anchored the same way whether it has been touched or not -
+   * mixing the two shifted it a full height down the screen on release, and
+   * after one drag it sat below the viewport where nothing could reach it.
+   */
   _placeStickBase(cx, cy) {
     if (!this.stickBase) return;
     const parent = this.stickZone.getBoundingClientRect();
-    // left/top with a centring transform, so the point we set is the point
-    // the ring is drawn around.
     this.stickBase.style.left = (cx - parent.left) + 'px';
-    this.stickBase.style.top = (cy - parent.top) + 'px';
-    this.stickBase.style.bottom = 'auto';
+    this.stickBase.style.bottom = (parent.bottom - cy) + 'px';
+  }
+
+  /** Puts the ring back in its corner. */
+  _homeStickBase() {
+    if (!this.stickBase) return;
+    this.stickBase.style.left = '';
+    this.stickBase.style.bottom = '';
   }
 
   _stickUp(e) {
@@ -213,6 +223,7 @@ export class InputManager {
     this.stick.id = -1;
     this.move.x = 0; this.move.y = 0;
     if (this.stickKnob) this.stickKnob.style.transform = '';
+    this._homeStickBase();
     this.stickZone.classList.remove('active');
   }
 
@@ -279,6 +290,7 @@ export class InputManager {
     this.stick.active = false; this.stick.id = -1; this.lookPointer = -1;
     for (const k in this._keys) this._keys[k] = false;
     if (this.stickKnob) this.stickKnob.style.transform = '';
+    this._homeStickBase();
     this.stickZone?.classList.remove('active');
   }
 

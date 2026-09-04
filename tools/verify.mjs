@@ -312,8 +312,11 @@ r = await page.evaluate(async () => {
   g.player.teleport(0, 3, 0); g.camYaw = 0; g.camPitch = -0.2;
   g.setEquipped('rcv2'); g.setSelected('machete');
   await new Promise((res) => setTimeout(res, 150));
-  g.spawnSelected();
+  const dropped = g.spawnSelected();
   for (let i = 0; i < 110; i++) await new Promise((res) => requestAnimationFrame(res));
+  // it lands a couple of metres out, so walk over to it first
+  g.player.teleport(dropped.entity.pos.x, dropped.entity.pos.z + 0.9, 0);
+  for (let i = 0; i < 20; i++) await new Promise((res) => requestAnimationFrame(res));
   g.setEquipped('fists');
   g.useAction();                                  // USE picks it up
   const carried = !!g.carried && g.equipped === 'machete';
