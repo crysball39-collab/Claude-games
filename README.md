@@ -4,12 +4,35 @@ A 3D, first person, mobile-first physics sandbox that runs in a browser. Landsca
 orientation, touch controls, no install, no build step, no assets on disk — every
 texture in the game is drawn procedurally onto a canvas at load time.
 
+## Getting it onto a phone
+
+**`dist/gorebox.html` is the whole game in one file.** Download it, open it, play —
+no server, no install, no network. Markup, styles, every module and three.js itself
+are all inlined, so nothing is ever fetched.
+
+| Phone | What to do |
+| ----- | ---------- |
+| **Android** | Download `dist/gorebox.html`, then open **Files → Downloads** and tap it. It opens in Chrome and runs. |
+| **iPhone / iPad** | Download it, then **Files → Downloads → tap `gorebox.html`**. Safari opens it and runs it. |
+
+Turn the phone **landscape** — the game asks you to if you are holding it upright.
+For a full-screen game with no browser bars, use **Add to Home Screen** from the
+share menu and launch it from the icon.
+
+### Running the source instead
+
 ```
 ./serve.sh            # then open http://localhost:8080 on a phone or a desktop
 ```
 
-It needs to be served over http (ES modules do not load from `file://`). Any static
-server works; `serve.sh` just wraps `python3 -m http.server`.
+The unbundled source needs to be served over http, because ES modules do not load
+from `file://`. Any static server works; `serve.sh` just wraps `python3 -m
+http.server`. To rebuild the single file after changing anything:
+
+```
+npm install -D esbuild
+npm run build          # -> dist/gorebox.html
+```
 
 ---
 
@@ -143,6 +166,7 @@ terrified. Knocked down, they crawl away from whatever hurt them, then get up.
 ## Layout
 
 ```
+dist/gorebox.html     the whole game in one downloadable file
 index.html            markup for every screen
 styles/main.css       mobile-first UI, safe-area aware
 vendor/three.module.js  three.js r169, vendored so the game runs offline
@@ -168,6 +192,7 @@ src/
     map.js            maps, currently the Test Baseplate
     game.js           scene, camera, player, spawning, damage routing
   ui/                 menu, HUD, spawn drawer
+tools/build-single-file.mjs  folds the whole game into dist/gorebox.html
 tools/verify.mjs      functional smoke test, driven in a real browser
 ```
 
