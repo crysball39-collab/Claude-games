@@ -222,7 +222,11 @@ this project is actually about still work:
 - an angry citizen fights back and can hurt you
 - the joystick moves you the moment you land in the map
 - a hard hit and a rolling boulder stagger a ragdoll without launching it
-- the machete can be picked up with USE, swung both ways, and put back down
+- the RCV2 carries a ragdoll about instead of flinging it, and the body settles
+- one punch staggers you rather than flooring you, but a beating still ends on
+  the floor
+- the machete can be picked up with USE, swung both ways, and put back down,
+  and carrying a blade looks nothing like carrying fists
 - a boulder rolls rather than slides
 
 ```

@@ -317,6 +317,61 @@ r = await page.evaluate(async () => {
 check('ragdolls take a hit without being launched',
   r.finite && r.peakSpeed < 14 && r.maxHeight < 3, JSON.stringify(r));
 
+// ---------- a ragdoll is carried by the RCV2, not flung by it ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  const V = g.player.pos.constructor;
+  const { spawnCitizen } = await import('/src/game/citizen.js');
+  g.clearSpawns();
+  g.player.teleport(0, 3, 0); g.camYaw = 0; g.camPitch = 0;
+  const c = spawnCitizen(g, new V(0, 0, -2));
+  c.ai.update = () => c.moveInput.set(0, 0, 0);
+  await new Promise((res) => setTimeout(res, 400));
+  g.setEquipped('rcv2');
+  g.rcv2.shoot(g.camera.position, g.camera.getWorldDirection(new V()));
+
+  const inv = 1 / g.world.substepDt;
+  const worst = () => {
+    let s = 0;
+    for (const p of c.particleList) {
+      s = Math.max(s, Math.hypot(p.x - p.px, p.y - p.py, p.z - p.pz) * inv);
+    }
+    return s;
+  };
+  // swing them about, hard, then let go
+  let held = 0;
+  for (let f = 0; f < 200; f++) {
+    g.camYaw = Math.sin(f * 0.09) * 1.4; g.camPitch = Math.sin(f * 0.13) * 0.5;
+    await new Promise((res) => requestAnimationFrame(res));
+    held = Math.max(held, worst());
+  }
+  g.rcv2.release();
+  let after = 0, high = 0;
+  for (let f = 0; f < 200; f++) {
+    await new Promise((res) => requestAnimationFrame(res));
+    after = Math.max(after, worst());
+    for (const p of c.particleList) high = Math.max(high, p.y);
+  }
+  // and once it is all over it should be lying still, not twitching
+  let settled = 0;
+  for (let f = 0; f < 120; f++) {
+    await new Promise((res) => requestAnimationFrame(res));
+    settled = Math.max(settled, worst());
+  }
+  let stretch = 1;
+  for (const con of c.constraints) {
+    if (con.kind !== 'eq' || !con.rest) continue;
+    stretch = Math.max(stretch, Math.hypot(con.a.x - con.b.x, con.a.y - con.b.y, con.a.z - con.b.z) / con.rest);
+  }
+  return {
+    held: +held.toFixed(1), after: +after.toFixed(1), high: +high.toFixed(2),
+    settled: +settled.toFixed(2), stretch: +stretch.toFixed(2),
+  };
+});
+check('the RCV2 carries a ragdoll instead of flinging it',
+  r.held < 13.5 && r.after < 13.5 && r.high < 3.2 && r.settled < 3 && r.stretch < 1.15,
+  JSON.stringify(r));
+
 // ---------- one punch staggers you, it does not floor you ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;
