@@ -49,12 +49,13 @@ You spawn holding two things:
 | 1 | **Fists** | `PUNCH` — alternates a left jab and a right jab |
 | 2 | **RCV2** (Reality Crusher Version 2) | `SHOOT`, `+` (spawn) and a delete button |
 | 3 | **Machete** — only once you are carrying one | `SLASH` — alternates a forehand and a backhand |
+| 4 | **Sledgehammer** — likewise | `SWING` — a two-handed chop, left then right |
 
 `JUMP` and `CROUCH` sit above the right thumb at all times. The left half of the
 screen is a virtual stick; drag anywhere on the right half to look around.
 
 **To spawn something:** tap the three lines in the top left. The drawer has two side
-sections — **Objects** (Crate, Boulder, Machete) and **Humans** (Citizen). Pick one,
+sections — **Objects** (Crate, Boulder, Machete, Sledgehammer) and **Humans** (Citizen). Pick one,
 close the drawer, equip the **RCV2**, and press **+**.
 
 **To move something:** with the RCV2 equipped, tap `SHOOT` while aiming at anything
@@ -133,6 +134,14 @@ sampled from the guard to the tip and tested against real body parts, so its rea
 and timing are the weapon's own. Unlike a fist it cuts, so it opens wounds and tears
 clothing rather than just bruising — and the blood stays on the blade.
 
+The **sledgehammer** works the same way with its own geometry: the contact points are
+the striking block across the top of the haft, plus the last stretch of the shaft for
+a swing that lands short. Seven and a half kilos on a stick swings slower than a
+blade and lands far harder, and it is the thing in the game that breaks bones.
+Because the head covers most of a body between one frame and the next, every contact
+point is swept from where it was to where it is, so a fast weapon connects on the
+path the steel actually took rather than passing clean through.
+
 ### Gore
 
 Every body part, every garment, every crate and the floor itself owns a canvas that
@@ -147,6 +156,28 @@ damage is painted onto, at the exact spot it landed.
 - **Cloth tears** — the garment's alpha is genuinely punched through and the edge
   frayed, so the skin shows underneath. Rare from blunt force, common from anything
   worse.
+
+#### Faces
+
+Every hit to the head is drawn onto the face itself.
+
+- **Bloodshot eye** — veins across the white, from any knock worth the name.
+- **Eyeball bleeding** — the lower lid fills and it runs down the cheek.
+- **Eye hanging out** — the socket empties and the eyeball becomes a real object
+  swinging on a cord, so it drags when the head moves and hangs when it stops.
+- **No eye** — the socket, and what is running out of it.
+- **Nose bleeding** and **mouth bleeding** — out of both nostrils, over the lip,
+  down the chin, dripping onto the floor as they go.
+- **Blindness** — one damaged eye dims the view, two takes it away entirely. A
+  blinded citizen cannot pick you out of a crowd and stops trying to fight.
+
+#### Broken bones
+
+Anything heavy enough breaks what it lands on — the sledgehammer is built for it.
+A broken bone bleeds at the break, sits at the wrong angle, and goes limp: the
+muscles below it stop holding it up, so the limb hangs and swings on its own.
+It is unusable, too. You cannot swing a weapon with a broken arm, you cannot jump
+on a broken leg, and two broken legs is a crawl you will not stay upright through.
 
 ### Citizen AI
 
@@ -227,6 +258,12 @@ this project is actually about still work:
   the floor
 - the machete can be picked up with USE, swung both ways, and put back down,
   and carrying a blade looks nothing like carrying fists
+- the sledgehammer is carried in its own two-handed pose, swings both ways, and
+  breaks bones with it
+- faces bruise, noses and mouths bleed, eyes redden and come out, and losing
+  both of them blinds you
+- a broken bone bleeds, goes limp, sits at the wrong angle, and stops working:
+  no swinging with a broken arm, no jumping on a broken leg
 - a boulder rolls rather than slides
 
 ```

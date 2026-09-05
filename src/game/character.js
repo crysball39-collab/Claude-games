@@ -26,6 +26,23 @@ const _q1 = new Quaternion(), _q2 = new Quaternion();
 const _m4 = new Matrix4();
 const UP = new Vector3(0, 1, 0);
 
+/* How far each eye state is down the road, and how much sight it costs. */
+const EYE_STATE = ['ok', 'bloodshot', 'bleeding', 'hanging', 'gone'];
+const EYE_LEVEL = { ok: 0, bloodshot: 1, bleeding: 2, hanging: 3, gone: 4 };
+const EYE_BLIND = { ok: 0, bloodshot: 0.08, bleeding: 0.3, hanging: 0.5, gone: 0.5 };
+const LEG_BONES = new Set([
+  'upperLegR', 'lowerLegR', 'footR', 'upperLegL', 'lowerLegL', 'footL',
+]);
+
+/** Which pair of one-shot clips each carried weapon swings with. */
+export const MELEE_CLIPS = {
+  machete: ['slashR', 'slashL'],
+  sledge: ['swingR', 'swingL'],
+};
+/** Which held pose each one stands in. */
+export const MELEE_HOLD = { machete: 'macheteHold', sledge: 'sledgeHold' };
+const MELEE_ACTIONS = new Set(Object.values(MELEE_CLIPS).flat());
+
 export const STATE = {
   CONTROLLED: 'controlled',
   STUMBLE: 'stumble',
@@ -133,6 +150,24 @@ export class Character {
     this.bleeding = 0;
     this.partHealth = Object.create(null);
     for (const b of this.rig.bones) this.partHealth[b.name] = b.hp;
+
+    /* ----------------------------- injuries ----------------------------- */
+    /* What is wrong with this person beyond a health bar. Eyes run
+       ok -> bloodshot -> bleeding -> hanging -> gone and never back. */
+    this.injuries = { eyeR: 'ok', eyeL: 'ok', noseBleed: 0, mouthBleed: 0 };
+    this.blind = 0;              // 0 sees fine, 1 sees nothing
+    this.broken = new Set();     // bone names that are broken
+    /* Per bone muscle multiplier. A broken bone cannot hold itself up, and
+       neither can anything hanging off it. */
+    this.limpScale = Object.create(null);
+    this.boneAncestry = Object.create(null);
+    for (const b of this.rig.bones) {
+      const chain = [];
+      for (let n = b; n; n = n.parent) chain.push(n.name);
+      this.boneAncestry[b.name] = chain;
+      this.limpScale[b.name] = 1;
+    }
+    this.onInjury = null;        // (info) => void, wired by the game
 
     /* ------------------------------ combat ------------------------------ */
     this.equipped = 'fists';
@@ -358,7 +393,7 @@ export class Character {
   }
 
   /** Knocks the character about. `force` is an impulse in kg*m/s. */
-  applyImpact(point, force, { boneName = null, damage = 0, type = 'blunt', attacker = null, severity = null } = {}) {
+  applyImpact(point, force, { boneName = null, damage = 0, type = 'blunt', attacker = null, severity = null, crush = 0 } = {}) {
     if (this.dead && damage <= 0) return;
     const mag = force.length();
 
@@ -382,7 +417,7 @@ export class Character {
       p.addVelocity(force.x * k, force.y * k, force.z * k, dt);
     }
 
-    if (damage > 0) this.applyDamage(damage, { boneName, point, type, attacker, force, severity });
+    if (damage > 0) this.applyDamage(damage, { boneName, point, type, attacker, force, severity, crush });
 
     /* Balance loss scales with the speed the hit actually imparts, not with
        the raw impulse: 130 kg m/s is a knockout to a wrist and a shove to a
@@ -396,7 +431,7 @@ export class Character {
     this._checkBalance();
   }
 
-  applyDamage(amount, { boneName = null, point = null, type = 'blunt', attacker = null, force = null, severity = null } = {}) {
+  applyDamage(amount, { boneName = null, point = null, type = 'blunt', attacker = null, force = null, severity = null, crush = 0 } = {}) {
     if (this.dead) {
       // corpses still take visible damage
       this.onDamage?.({ character: this, boneName, point, type, amount, severity: severity ?? clamp01(amount / 14), force, fatal: false });
@@ -419,10 +454,162 @@ export class Character {
       fatal: this.health <= 0,
     });
 
+    this._injure({
+      boneName, point, type, crush,
+      severity: severity ?? clamp01(amount / 14),
+      fatal: this.health <= 0,
+    });
+
     if (this.health <= 0) this.die();
     else if (dealt > 8) this.balance = clamp01(this.balance - (dealt - 8) / 90);
     this._checkBalance();
   }
+
+  /* ------------------------------------------------------------ injuries */
+
+  /**
+   * What a hit does beyond taking health off. Faces bleed and lose eyes;
+   * anything heavy enough breaks what it lands on.
+   */
+  _injure({ boneName, point, type, severity, crush = 0, fatal = false }) {
+    if (!boneName) return;
+    const rng = this.rng;
+    const sev = clamp01(severity);
+    const cut = type === 'impact';
+
+    if (boneName === 'head' || boneName === 'neck') {
+      const next = {};
+      // A nose goes at the slightest excuse, a lip almost as easily.
+      if (rng() < 0.45 + sev) next.noseBleed = clamp01(this.injuries.noseBleed + 0.2 + sev * 0.45);
+      if (rng() < 0.3 + sev * 0.7) next.mouthBleed = clamp01(this.injuries.mouthBleed + 0.15 + sev * 0.45);
+
+      /* Eyes. A knock reddens one, a real hit opens it, and something with an
+         edge or a lot of weight behind it takes it out of the socket. */
+      let level = 0;
+      // An eye normally comes out and hangs there. Losing it altogether takes
+      // something that carries it away.
+      if (cut) level = sev > 0.7 ? (rng() < 0.25 ? 4 : 3) : 2;
+      else if (sev > 0.8 || crush > 0.4) level = rng() < 0.4 ? 3 : 2;
+      else if (sev > 0.45) level = 2;
+      else if (sev > 0.12 && rng() < 0.55) level = 1;
+      if (level > 0) {
+        const side = rng() < 0.5 ? 'eyeR' : 'eyeL';
+        const now = EYE_LEVEL[this.injuries[side]];
+        if (level > now) next[side] = EYE_STATE[level];
+        // something that takes one eye out often catches the other
+        if (level >= 3 && rng() < 0.28) {
+          const other = side === 'eyeR' ? 'eyeL' : 'eyeR';
+          if (EYE_LEVEL[this.injuries[other]] < 2) next[other] = 'bleeding';
+        }
+      }
+      this.setInjuries(next, point);
+    }
+
+    // Breaks. The sledgehammer asks for them outright; anything else has to
+    // have already worked the part to pieces.
+    if (this.broken.has(boneName)) return;
+    const worn = this.partHealth[boneName] != null && this.partHealth[boneName] <= 0;
+    const chance = crush + (worn ? (cut ? 0.25 : 0.4) * sev : 0) + (fatal ? 0.1 : 0);
+    if (chance > 0 && rng() < chance) this.breakBone(boneName, point);
+  }
+
+  /** Applies a set of face injuries and repaints the face. */
+  setInjuries(next, point = null) {
+    let changed = false;
+    for (const key of Object.keys(next)) {
+      if (this.injuries[key] === next[key]) continue;
+      this.injuries[key] = next[key];
+      changed = true;
+    }
+    if (!changed) return false;
+    this.body.setInjuries(this.injuries);
+    /* Blindness is simply the sum of what the eyes can no longer do. Lose
+       both and you are in the dark. */
+    this.blind = clamp01(EYE_BLIND[this.injuries.eyeR] + EYE_BLIND[this.injuries.eyeL]);
+    if (this.injuries.noseBleed > 0 || this.injuries.mouthBleed > 0) {
+      this.bleeding = Math.min(4, this.bleeding + 0.4);
+    }
+    this.onInjury?.({ character: this, kind: 'face', point, injuries: this.injuries });
+    return true;
+  }
+
+  /** Breaks a bone: it bleeds, it goes limp, and it stops being any use. */
+  breakBone(boneName, point = null) {
+    const bone = this.rig.byName[boneName];
+    if (!bone || this.broken.has(boneName)) return false;
+    if (bone.def.finger || boneName === 'pelvis') return false;
+    this.broken.add(boneName);
+    // the angle it now sits at, decided once and kept
+    this.breakBend = this.breakBend || Object.create(null);
+    const sign = this.rng() < 0.5 ? -1 : 1;
+    this.breakBend[boneName] = {
+      x: sign * (0.45 + this.rng() * 0.55),
+      y: (this.rng() - 0.5) * 0.5,
+      z: sign * (0.30 + this.rng() * 0.45),
+    };
+
+    // everything hanging off a broken bone goes with it
+    for (const b of this.rig.bones) {
+      if (this.boneAncestry[b.name].includes(boneName)) {
+        this.limpScale[b.name] = b.name === boneName ? 0.05 : 0.08;
+      }
+    }
+    this.partHealth[boneName] = 0;
+    this.bleeding = Math.min(4, this.bleeding + 1.2);
+    this.balance = clamp01(this.balance - (LEG_BONES.has(boneName) ? 0.5 : 0.2));
+    this.painTimer = Math.max(this.painTimer, 1.4);
+    this.onInjury?.({ character: this, kind: 'break', boneName, point });
+    this._checkBalance();
+    return true;
+  }
+
+  /**
+   * A broken limb does not just go slack, it sits wrong. The bend is fixed at
+   * the moment of the break and rides on top of whatever the animation is
+   * doing, so the shape of the injury stays put.
+   */
+  _applyBreakBends() {
+    if (!this.breakBend) return;
+    for (const name of this.broken) {
+      const bend = this.breakBend[name];
+      const bone = this.rig.byName[name];
+      if (!bend || !bone) continue;
+      bone.anim.x += bend.x;
+      bone.anim.y += bend.y;
+      bone.anim.z += bend.z;
+    }
+  }
+
+  /** Puts everything back: health, breaks, eyes, all of it. */
+  heal() {
+    this.health = this.maxHealth;
+    this.balance = 1;
+    this.bleeding = 0;
+    this.dead = false;
+    this.blind = 0;
+    this.broken.clear();
+    this.breakBend = null;
+    for (const b of this.rig.bones) {
+      this.partHealth[b.name] = b.hp;
+      this.limpScale[b.name] = 1;
+    }
+    this.injuries = { eyeR: 'ok', eyeL: 'ok', noseBleed: 0, mouthBleed: 0 };
+    this.body.setInjuries(this.injuries);
+    this.body.setExpression('neutral');
+  }
+
+  /** True while any bone in that arm is broken. */
+  armBroken(side) {
+    return this.broken.has('upperArm' + side) || this.broken.has('lowerArm' + side) ||
+           this.broken.has('hand' + side);
+  }
+
+  legBroken(side) {
+    return this.broken.has('upperLeg' + side) || this.broken.has('lowerLeg' + side) ||
+           this.broken.has('foot' + side);
+  }
+
+  get canWalk() { return !(this.legBroken('R') && this.legBroken('L')); }
 
   _checkBalance() {
     if (this.dead) return;
@@ -462,6 +649,7 @@ export class Character {
 
     this.animator.update(dt);
     this._applyLookOffsets();
+    this._applyBreakBends();
     this.rig.updateFK();
     this._writeMuscleTargets(dt);
   }
@@ -475,10 +663,17 @@ export class Character {
     const wish = _v1.set(this.moveInput.x, 0, this.moveInput.z);
     const wishLen = Math.min(1, wish.length());
     if (wishLen > 1e-4) wish.multiplyScalar(1 / wish.length());
-    const running = this.wantRun && wishLen > 0.72 && this.crouch < 0.4;
+    const lame = (this.legBroken('R') ? 1 : 0) + (this.legBroken('L') ? 1 : 0);
+    const running = this.wantRun && wishLen > 0.72 && this.crouch < 0.4 && lame === 0;
     let speed = this.crouch > 0.45 ? this.speedCrouch : (running ? this.speedRun : this.speedWalk);
     speed *= wishLen;
     speed *= lerp(1, 0.55, clamp01(1 - this.health / this.maxHealth) * 0.9);
+    // A broken leg is a limp; two is a crawl, and you will not stay upright.
+    if (lame) {
+      speed *= lame === 1 ? 0.45 : 0.16;
+      this.balance = clamp01(this.balance - dt * (lame === 1 ? 0.30 : 0.85));
+      this._checkBalance();
+    }
 
     const accel = this.grounded ? 15 : 4.2;
     const targetVX = wish.x * speed, targetVZ = wish.z * speed;
@@ -488,6 +683,7 @@ export class Character {
     // --- jump ---
     if (this.wantJump) { this.jumpBuffer = 0.16; this.wantJump = false; }
     this.jumpBuffer = Math.max(0, this.jumpBuffer - dt);
+    if (lame) this.jumpBuffer = 0;                 // you cannot push off a break
     if (this.jumpBuffer > 0 && (this.grounded || this.coyote > 0)) {
       this.vel.y = 7.55;
       this.grounded = false;
@@ -550,9 +746,10 @@ export class Character {
       /* the jab owns the arms */
     } else if (this.equipped === 'rcv2') {
       this.animator.setUpper('holding');
-    } else if (this.equipped === 'machete') {
-      // A blade is not a fist: it is carried out and up, away from the leg.
-      this.animator.setUpper('macheteHold');
+    } else if (MELEE_HOLD[this.equipped]) {
+      // A blade is not a fist, and a sledgehammer is not a blade: each is
+      // carried the way its weight wants to be carried.
+      this.animator.setUpper(MELEE_HOLD[this.equipped]);
     } else {
       this.animator.setUpper(this.isPlayer || this.combatReady ? 'fistGuard' : null);
     }
@@ -854,6 +1051,7 @@ export class Character {
       const bone = this.rig.byName[boneName];
       const src = which === 'pos' ? bone.worldPos : bone.worldEnd;
       const p = this.particles[name];
+      const limp = this.limpScale[boneName];
       let vx = (src.x - p.tx) * inv, vy = (src.y - p.ty) * inv, vz = (src.z - p.tz) * inv;
       // A teleport or a state change moves a target a long way in one frame;
       // that is not the limb travelling, so do not let it read as speed.
@@ -861,7 +1059,9 @@ export class Character {
       if (sp > MAX_TARGET_SPEED) { const k = MAX_TARGET_SPEED / sp; vx *= k; vy *= k; vz *= k; }
       p.tvx = vx; p.tvy = vy; p.tvz = vz;
       p.tx = src.x; p.ty = src.y; p.tz = src.z;
-      p.muscle = strength;
+      // A broken bone holds nothing up: its joints go slack whatever the rest
+      // of the body is doing.
+      p.muscle = limp < 1 ? strength * limp : strength;
     }
   }
 
@@ -919,6 +1119,7 @@ export class Character {
       }
     }
     this._updateStrike(dt);
+    this.body._eyeDt = dt;
     this.body.sync();
     this.body.flush();
   }
@@ -963,7 +1164,11 @@ export class Character {
     if (this.state !== STATE.CONTROLLED) return false;
     if (this.equipped !== 'fists' && !force) return false;
     if (this.punchCooldown > 0 || this.animator.actionActive) return false;
-    this.punchSide = this.punchSide === 'R' ? 'L' : 'R';
+    // You throw the jab you still have an arm for.
+    const want = this.punchSide === 'R' ? 'L' : 'R';
+    const other = want === 'R' ? 'L' : 'R';
+    this.punchSide = !this.armBroken(want) ? want : (!this.armBroken(other) ? other : null);
+    if (!this.punchSide) return false;
     const clip = this.punchSide === 'R' ? 'punchR' : 'punchL';
     this.animator.playAction(clip);
     this.punchCooldown = 0.30;
@@ -973,14 +1178,17 @@ export class Character {
     return true;
   }
 
-  /** Swings the machete. Forehand across, then backhand back. */
+  /** Swings whatever is in hand. One way, then back the other. */
   slash(force = false) {
     if (this.state !== STATE.CONTROLLED) return false;
-    if (this.equipped !== 'machete' && !force) return false;
+    const clips = MELEE_CLIPS[this.equipped];
+    if (!clips && !force) return false;
+    if (this.armBroken('R')) return false;      // nothing to swing it with
     if (this.punchCooldown > 0 || this.animator.actionActive) return false;
+    const pair = clips || MELEE_CLIPS.machete;
     this.slashSide = this.slashSide === 'R' ? 'L' : 'R';
-    this.animator.playAction(this.slashSide === 'R' ? 'slashR' : 'slashL');
-    this.punchCooldown = 0.34;
+    this.animator.playAction(this.slashSide === 'R' ? pair[0] : pair[1]);
+    this.punchCooldown = pair === MELEE_CLIPS.sledge ? 0.52 : 0.34;
     this.struck.clear();
     this.combatReady = true;
     this.combatTimer = 3.5;
@@ -1003,7 +1211,7 @@ export class Character {
     if (!a.actionActive) return;
     const clip = a.actionName;
     const isPunch = clip === 'punchR' || clip === 'punchL';
-    const isSlash = clip === 'slashR' || clip === 'slashL';
+    const isSlash = MELEE_ACTIONS.has(clip);
     if (!isPunch && !isSlash) return;
     const strike = a.action.clip.strike;
     const t = a.actionTime;

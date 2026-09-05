@@ -225,8 +225,25 @@ export function paintTear(ctx, x, y, radius, rand = rnd) {
  * Rectangular eyes with a coloured iris and a pupil, a flat two dimensional
  * nose and a flat mouth. Drawn straight onto the head atlas' front face.
  */
+/**
+ * The face, drawn flat onto the head's front cell. `injuries` decides what has
+ * happened to it: each eye is one of
+ *
+ *   ok | bloodshot | bleeding | hanging | gone
+ *
+ * and the nose and mouth carry their own 0..1 bleed. A hanging eye leaves an
+ * empty socket here - the eyeball itself is a real object on a cord, built in
+ * body.js, because a dangling eye has to swing.
+ */
 export function drawFace(ctx, w, h, opts) {
-  const { eyeColor = '#4a7a3a', browColor = '#3a2a1c', mouth = 'neutral', skinShadow = null } = opts;
+  const {
+    eyeColor = '#4a7a3a', browColor = '#3a2a1c', mouth = 'neutral', skinShadow = null,
+    injuries = null, rand = rnd,
+  } = opts;
+  const inj = injuries || {};
+  const eyeState = { R: inj.eyeR || 'ok', L: inj.eyeL || 'ok' };
+  const noseBleed = inj.noseBleed || 0;
+  const mouthBleed = inj.mouthBleed || 0;
   const cx = w / 2;
   const px = (v) => Math.max(1, Math.round(v));
 
@@ -248,6 +265,9 @@ export function drawFace(ctx, w, h, opts) {
 
   for (const sgn of [-1, 1]) {
     const ex = cx + sgn * (gap / 2) - (sgn < 0 ? eyeW : 0);
+    /* The face is drawn as the character sees out of it, so the eye on the
+       left of the image is their right eye. */
+    const state = sgn < 0 ? eyeState.R : eyeState.L;
 
     // brow
     ctx.fillStyle = browColor;
@@ -257,9 +277,38 @@ export function drawFace(ctx, w, h, opts) {
     ctx.fillStyle = 'rgba(0,0,0,0.16)';
     ctx.fillRect(ex - w * 0.014, eyeY - h * 0.020, eyeW + w * 0.028, eyeH + h * 0.040);
 
+    if (state === 'gone' || state === 'hanging') {
+      // An empty socket: dark, wet, and running down the cheek.
+      ctx.fillStyle = '#1b0a09';
+      ctx.fillRect(ex, eyeY, eyeW, eyeH);
+      ctx.fillStyle = 'rgba(58,8,10,0.92)';
+      ctx.fillRect(ex + eyeW * 0.10, eyeY + eyeH * 0.16, eyeW * 0.80, eyeH * 0.68);
+      paintBlood(ctx, ex + eyeW * 0.5, eyeY + eyeH * 0.6, eyeW * 0.42, 1, rand, 0.15);
+      // the trail down the face
+      ctx.fillStyle = 'rgba(120,10,14,0.85)';
+      ctx.fillRect(ex + eyeW * 0.34, eyeY + eyeH, px(eyeW * 0.20), h * (state === 'hanging' ? 0.30 : 0.22));
+      paintBlood(ctx, ex + eyeW * 0.44, eyeY + eyeH * 2.4, eyeW * 0.24, 0.65, rand, 0.3);
+      continue;
+    }
+
     // sclera - a rectangle, as asked
     ctx.fillStyle = '#f4efe7';
     ctx.fillRect(ex, eyeY, eyeW, eyeH);
+
+    if (state === 'bloodshot' || state === 'bleeding') {
+      // veins across the white
+      ctx.strokeStyle = 'rgba(178,26,24,0.85)';
+      ctx.lineWidth = Math.max(1, w * 0.006);
+      for (let i = 0; i < 5; i++) {
+        const y0 = eyeY + eyeH * (0.2 + 0.6 * rand());
+        ctx.beginPath();
+        ctx.moveTo(ex, y0);
+        ctx.lineTo(ex + eyeW * (0.35 + 0.5 * rand()), y0 + eyeH * (rand() - 0.5) * 0.5);
+        ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(190,40,34,0.28)';
+      ctx.fillRect(ex, eyeY, eyeW, eyeH);
+    }
 
     // iris, also rectangular, in the character's eye colour
     const irisW = eyeW * 0.56, irisH = eyeH * 0.90;
@@ -283,6 +332,15 @@ export function drawFace(ctx, w, h, opts) {
     ctx.strokeStyle = 'rgba(28,18,12,0.5)';
     ctx.lineWidth = 1;
     ctx.strokeRect(ex + 0.5, eyeY + 0.5, eyeW - 1, eyeH - 1);
+
+    if (state === 'bleeding') {
+      // welling up along the lower lid, then down the cheek
+      ctx.fillStyle = 'rgba(140,12,16,0.95)';
+      ctx.fillRect(ex, eyeY + eyeH - px(h * 0.014), eyeW, px(h * 0.020));
+      ctx.fillStyle = 'rgba(126,10,14,0.8)';
+      ctx.fillRect(ex + eyeW * 0.38, eyeY + eyeH, px(eyeW * 0.16), h * 0.20);
+      paintBlood(ctx, ex + eyeW * 0.46, eyeY + eyeH * 2.0, eyeW * 0.20, 0.55, rand, 0.3);
+    }
   }
 
   /* -------------------------- the nose, flat and 2D ---------------------- */
@@ -297,6 +355,17 @@ export function drawFace(ctx, w, h, opts) {
   ctx.fillStyle = 'rgba(40,22,14,0.78)';
   ctx.fillRect(cx - w * 0.058, nBot - h * 0.012, px(w * 0.036), px(h * 0.026));
   ctx.fillRect(cx + w * 0.022, nBot - h * 0.012, px(w * 0.036), px(h * 0.026));
+
+  if (noseBleed > 0) {
+    // out of both nostrils, further down the harder it was hit
+    const run = h * (0.05 + noseBleed * 0.16);
+    ctx.fillStyle = 'rgba(132,10,14,0.92)';
+    for (const s2 of [-1, 1]) {
+      const x0 = cx + s2 * w * 0.040 - w * 0.014;
+      ctx.fillRect(x0, nBot - h * 0.006, px(w * 0.028), run);
+    }
+    paintBlood(ctx, cx, nBot + run * 0.9, w * (0.028 + noseBleed * 0.030), noseBleed * 0.7, rand, 0.25);
+  }
 
   /* ------------------------- the mouth, also flat ------------------------ */
   const my = h * 0.845, mw = w * 0.38;
@@ -315,6 +384,16 @@ export function drawFace(ctx, w, h, opts) {
     ctx.quadraticCurveTo(cx, my + h * 0.016, cx + mw / 2, my);
   }
   ctx.stroke();
+
+  if (mouthBleed > 0) {
+    // over the lip and down the chin
+    ctx.fillStyle = 'rgba(122,8,12,0.9)';
+    ctx.fillRect(cx - mw * 0.18, my + h * 0.008, px(mw * 0.36), h * (0.02 + mouthBleed * 0.05));
+    const run = h * (0.04 + mouthBleed * 0.10);
+    ctx.fillRect(cx - w * 0.026, my + h * 0.020, px(w * 0.030), run);
+    ctx.fillRect(cx + w * 0.008, my + h * 0.020, px(w * 0.022), run * 0.7);
+    paintBlood(ctx, cx, my + run + h * 0.03, w * (0.032 + mouthBleed * 0.036), mouthBleed * 0.7, rand, 0.28);
+  }
 }
 
 /** An open, pained mouth for when things have gone badly. */

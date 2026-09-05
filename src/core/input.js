@@ -247,6 +247,7 @@ export class InputManager {
       case 'Digit1': if (isDown) this.onWeaponSelect?.(0); break;
       case 'Digit2': if (isDown) this.onWeaponSelect?.(1); break;
       case 'Digit3': if (isDown) this.onWeaponSelect?.(2); break;
+      case 'Digit4': if (isDown) this.onWeaponSelect?.(3); break;
       case 'Tab': if (isDown) this.onToggleDrawer?.(); break;
       case 'Escape': if (isDown) this.onPause?.(); break;
       default: break;

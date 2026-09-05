@@ -12,6 +12,8 @@ import { makeRng, clamp01 } from '../core/util.js';
 
 const _v = new Vector3();
 const _local = new Vector3();
+const _anchor = new Vector3(), _off = new Vector3(), _n = new Vector3();
+const _up = new Vector3(0, 1, 0);
 
 /* Box geometries are shared between every character that uses the same size. */
 const geoCache = new Map();
@@ -49,6 +51,10 @@ export class Body {
     this.castShadow = castShadow;
     this.mouth = 'neutral';
     this.destroyed = false;
+    /* What has happened to the face. Each eye is ok | bloodshot | bleeding |
+       hanging | gone; the nose and mouth carry a 0..1 bleed. */
+    this.injuries = { eyeR: 'ok', eyeL: 'ok', noseBleed: 0, mouthBleed: 0 };
+    this.hangingEyes = { R: null, L: null };
 
     this.sharedFingerMat = new MeshLambertMaterial({ color: look.skin });
     this.materials.push(this.sharedFingerMat);
@@ -175,6 +181,8 @@ export class Body {
         browColor: '#' + (look.hairStyle === 'bald' ? look.skinShadow : look.hair).getHexString(),
         mouth: this.mouth,
         skinShadow: '#' + look.skinShadow.getHexString(),
+        injuries: this.injuries,
+        rand: this.rng,
       });
     });
   }
@@ -183,20 +191,139 @@ export class Body {
   setExpression(mouth) {
     if (mouth === this.mouth || !this.faceSurface) return;
     this.mouth = mouth;
+    this._repaintFace();
+  }
+
+  /** Wipes the face cell back to bare skin and redraws it. */
+  _repaintFace() {
+    if (!this.faceSurface) return;
     const entry = this.entries.get('head').skin;
-    // repaint the base skin on the face cell, then the new expression
     this.faceSurface.withFace(FACE_NZ, (ctx, w, h) => {
       ctx.fillStyle = '#' + entry.base.getHexString();
       ctx.fillRect(0, 0, w, h);
     });
     this._drawFaceInto(this.faceSurface);
-    // damage that had been painted on the face is lost; re-blot lightly
     if (this.faceSurface.bloodAmount > 0) {
       this.faceSurface.withFace(FACE_NZ, (ctx, w, h) => {
         paintBlood(ctx, w * 0.5, h * 0.62, w * 0.14, 0.6, this.rng, 0.4);
       });
     }
     this.faceSurface.flush();
+  }
+
+  /**
+   * Records what has been done to the face and redraws it. Returns true if
+   * anything actually changed, so callers can burst blood only on the change.
+   */
+  setInjuries(next) {
+    let changed = false;
+    for (const key of Object.keys(next)) {
+      if (this.injuries[key] === next[key]) continue;
+      this.injuries[key] = next[key];
+      changed = true;
+    }
+    if (!changed) return false;
+    this._repaintFace();
+    this._syncHangingEyes();
+    return true;
+  }
+
+  /* ------------------------------ hanging eyes ---------------------------- */
+
+  /**
+   * An eye out of its socket is a real object on a cord: it has to swing when
+   * the head moves and hang straight down when it stops.
+   */
+  _syncHangingEyes() {
+    for (const side of ['R', 'L']) {
+      const want = this.injuries['eye' + side] === 'hanging';
+      const have = this.hangingEyes[side];
+      if (want && !have) this.hangingEyes[side] = this._makeHangingEye(side);
+      else if (!want && have) {
+        this.group.remove(have.ball);
+        this.group.remove(have.cord);
+        const i = this.meshes.indexOf(have.ball);
+        if (i >= 0) this.meshes.splice(i, 1);
+        const j = this.meshes.indexOf(have.cord);
+        if (j >= 0) this.meshes.splice(j, 1);
+        this.hangingEyes[side] = null;
+      }
+    }
+  }
+
+  _makeHangingEye(side) {
+    const head = this.rig.byName.head;
+    const hs = head.boxSize;
+    // where the socket is on the face: the eyes sit at about 45% down the front
+    const socket = new Vector3(
+      (side === 'R' ? -1 : 1) * hs.x * 0.21,
+      head.boxOffset.y + hs.y * 0.07,
+      -hs.z / 2 - 0.004,
+    );
+    const ballMat = new MeshLambertMaterial({ color: 0xf1e9dd });
+    const cordMat = new MeshLambertMaterial({ color: 0x8d1418 });
+    this.materials.push(ballMat, cordMat);
+    const ball = new Mesh(boxGeo(_v.set(0.034, 0.034, 0.034)), ballMat);
+    // a dark front so it reads as an eye and not a sugar cube
+    const pupilMat = new MeshLambertMaterial({ color: 0x1a1a20 });
+    this.materials.push(pupilMat);
+    const pupil = new Mesh(boxGeo(_v.set(0.017, 0.017, 0.006)), pupilMat);
+    pupil.position.set(0, 0, -0.019);
+    pupil.matrixAutoUpdate = false;
+    pupil.updateMatrix();
+    ball.add(pupil);
+    const cord = new Mesh(boxGeo(_v.set(0.010, 1, 0.010)), cordMat);
+    for (const m of [ball, cord]) {
+      m.matrixAutoUpdate = false;
+      m.castShadow = this.castShadow;
+      this.group.add(m);
+      this.meshes.push(m);
+    }
+    return {
+      side, socket, ball, cord, ballMat, cordMat,
+      cordLen: 0.085 + this.rng() * 0.035,
+      pos: new Vector3(), vel: new Vector3(), started: false,
+    };
+  }
+
+  /** Swings whatever is hanging. Called once a frame with the frame time. */
+  updateHangingEyes(dt) {
+    for (const side of ['R', 'L']) {
+      const e = this.hangingEyes[side];
+      if (!e) continue;
+      const head = this.rig.byName.head;
+      _v.copy(e.socket).applyQuaternion(head.worldQuat).add(head.worldPos);
+      const anchor = _anchor.copy(_v);
+      if (!e.started) { e.pos.copy(anchor); e.pos.y -= e.cordLen; e.started = true; }
+
+      // gravity, drag, then pulled back onto the end of the cord
+      e.vel.y -= 24 * dt;
+      e.vel.multiplyScalar(Math.exp(-3.2 * dt));
+      e.pos.addScaledVector(e.vel, dt);
+      _off.copy(e.pos).sub(anchor);
+      const d = _off.length() || 1e-5;
+      if (d > e.cordLen) {
+        _off.multiplyScalar(e.cordLen / d);
+        e.pos.copy(anchor).add(_off);
+        // kill the component pulling along the cord, so it swings instead of
+        // stretching and snapping back
+        const n = _n.copy(_off).multiplyScalar(1 / e.cordLen);
+        const vn = e.vel.dot(n);
+        if (vn > 0) e.vel.addScaledVector(n, -vn);
+      }
+
+      e.ball.position.copy(e.pos);
+      e.ball.quaternion.copy(head.worldQuat);
+      e.ball.updateMatrix();
+
+      // the cord, stretched between socket and eye
+      _off.copy(e.pos).sub(anchor);
+      const len = Math.max(0.02, _off.length());
+      e.cord.position.copy(anchor).addScaledVector(_off, 0.5);
+      e.cord.quaternion.setFromUnitVectors(_up, _off.multiplyScalar(1 / len));
+      e.cord.scale.set(1, len, 1);
+      e.cord.updateMatrix();
+    }
   }
 
   /* ------------------------------- surfaces ------------------------------ */
@@ -372,6 +499,7 @@ export class Body {
         c.updateMatrix();
       }
     }
+    if (this.hangingEyes.R || this.hangingEyes.L) this.updateHangingEyes(this._eyeDt || 1 / 60);
     if (this.hairMeshes) {
       const head = this.rig.byName.head;
       for (const m of this.hairMeshes) {

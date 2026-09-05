@@ -22,6 +22,9 @@ const _obj = new Object3D();
 
 const MAX_DROPS = 320;
 
+/** How freely each eye state runs. */
+const EYE_DRIP = { ok: 0, bloodshot: 0, bleeding: 0.5, hanging: 0.8, gone: 0.7 };
+
 export class GoreSystem {
   constructor(scene, world, { enabled = true, decalSize = 1024, bounds = 40 } = {}) {
     this.scene = scene;
@@ -219,16 +222,48 @@ export class GoreSystem {
 
   /** A steady drip from someone who is bleeding out. */
   bleedTick(character, dt) {
-    if (!this.enabled || character.bleeding <= 0) return;
-    character._bleedAcc = (character._bleedAcc || 0) + dt * character.bleeding;
-    while (character._bleedAcc > 0.5) {
-      character._bleedAcc -= 0.5;
-      const bone = character.rig.byName.midTorso;
-      boneBoxCenter(bone, _v1);
-      _v1.x += (this.rng() - 0.5) * 0.2;
-      _v1.z += (this.rng() - 0.5) * 0.2;
-      this.burst(_v1, _v2.set(0, -1, 0), 1, { speed: 0.6, spread: 0.4, size: 0.026 });
+    if (!this.enabled) return;
+    if (character.bleeding > 0) {
+      character._bleedAcc = (character._bleedAcc || 0) + dt * character.bleeding;
+      while (character._bleedAcc > 0.5) {
+        character._bleedAcc -= 0.5;
+        // out of the worst of it: a break if there is one, the body otherwise
+        const bone = character.rig.byName[this._bleedFrom(character)];
+        boneBoxCenter(bone, _v1);
+        _v1.x += (this.rng() - 0.5) * 0.2;
+        _v1.z += (this.rng() - 0.5) * 0.2;
+        this.burst(_v1, _v2.set(0, -1, 0), 1, { speed: 0.6, spread: 0.4, size: 0.026 });
+      }
     }
+
+    /* A face runs on its own account: down the nose, off the chin, out of
+       whatever is left of an eye. */
+    const inj = character.injuries;
+    if (!inj) return;
+    const face = inj.noseBleed + inj.mouthBleed
+      + (EYE_DRIP[inj.eyeR] || 0) + (EYE_DRIP[inj.eyeL] || 0);
+    if (face <= 0) return;
+    character._faceBleedAcc = (character._faceBleedAcc || 0) + dt * face;
+    while (character._faceBleedAcc > 0.8) {
+      character._faceBleedAcc -= 0.8;
+      const head = character.rig.byName.head;
+      boneBoxCenter(head, _v1);
+      // just off the front of the face, roughly where it is coming from
+      _v3.set((this.rng() - 0.5) * 0.09, -0.02 - this.rng() * 0.05, -head.boxHalf.z - 0.01)
+        .applyQuaternion(head.worldQuat);
+      _v1.add(_v3);
+      this.burst(_v1, _v2.set(0, -1, 0), 1, { speed: 0.5, spread: 0.35, size: 0.021 });
+    }
+  }
+
+  /** The wound a drip should be coming from. */
+  _bleedFrom(character) {
+    if (character.broken && character.broken.size) {
+      for (const name of character.broken) {
+        if (character.rig.byName[name]) return name;
+      }
+    }
+    return 'midTorso';
   }
 
   /** Splatter arriving at a surface from a hard impact (falls, boulders). */

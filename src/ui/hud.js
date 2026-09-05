@@ -4,6 +4,11 @@
    ========================================================================== */
 import { $ } from '../core/util.js';
 
+/** What the big button says for each thing you can hold. */
+const PRIMARY_LABEL = {
+  rcv2: 'SHOOT', machete: 'SLASH', sledge: 'SWING', fists: 'PUNCH',
+};
+
 export class Hud {
   constructor(input) {
     this.input = input;
@@ -15,6 +20,8 @@ export class Hud {
     this.extra = $('#rcv2-extra');
     this.toastEl = $('#toast');
     this.vignette = $('#damage-vignette');
+    this.blindEl = $('#blind-overlay');
+    this._blind = -1;
     this.death = $('#death-overlay');
     this.selectedWrap = $('#selected-spawn');
     this.selectedName = $('#selected-name');
@@ -31,7 +38,8 @@ export class Hud {
     input.bindButton($('#btn-delete'), 'delete');
     input.bindButton($('#btn-use'), 'use');
     this.useBtn = $('#btn-use');
-    this.macheteSlot = $('#slot-machete');
+    // the slots that only exist while something is being carried
+    this.carrySlots = this.slots.filter((el) => el.id === 'slot-machete' || el.id === 'slot-sledge');
 
     this.onWeaponSelect = null;
     this.slots.forEach((el) => {
@@ -43,21 +51,31 @@ export class Hud {
   }
 
   setWeapon(name) {
-    this.primary.textContent =
-      name === 'rcv2' ? 'SHOOT' : name === 'machete' ? 'SLASH' : 'PUNCH';
+    this.primary.textContent = PRIMARY_LABEL[name] || 'PUNCH';
     this.extra.classList.toggle('show', name === 'rcv2');
     this.slots.forEach((el) => el.classList.toggle('active', el.dataset.weapon === name));
   }
 
-  /** Shows the machete slot only while one is actually in hand. */
+  /** A weapon slot is only there while that weapon is actually in hand. */
   setCarrying(kind) {
-    this.macheteSlot.classList.toggle('hidden', kind !== 'machete');
+    for (const el of this.carrySlots) {
+      el.classList.toggle('hidden', el.dataset.weapon !== kind);
+    }
   }
 
   /** USE only appears when it would do something. */
   setUseAvailable(available, carrying) {
     this.useBtn.classList.toggle('show', !!available);
     this.useBtn.textContent = carrying ? 'DROP' : 'USE';
+  }
+
+  /** How much of the view your own eyes have stopped delivering. */
+  setBlindness(v) {
+    const b = Math.max(0, Math.min(1, v));
+    if (Math.abs(b - this._blind) < 0.02) return;
+    this._blind = b;
+    // Half sight is a dimming; no sight is no picture at all.
+    this.blindEl.style.opacity = b < 0.05 ? '0' : (0.25 + b * 0.75).toFixed(2);
   }
 
   setHealth(frac) {

@@ -206,6 +206,13 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
 #damage-vignette{position:absolute;inset:0;pointer-events:none;opacity:0;
   background:radial-gradient(ellipse at center, transparent 42%, rgba(150,10,14,.85) 100%);transition:opacity .22s ease}
 
+/* What losing your eyes looks like from the inside. */
+#blind-overlay{position:absolute;inset:0;pointer-events:none;opacity:0;z-index:14;
+  background:
+    radial-gradient(ellipse at center, rgba(0,0,0,.35) 0%, rgba(0,0,0,.88) 46%, #000 74%),
+    radial-gradient(ellipse at 50% 55%, rgba(120,8,10,.5), transparent 60%);
+  transition:opacity .35s ease}
+
 #death-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:1.2rem;background:rgba(40,0,2,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px)}
 .death-text{font-size:clamp(2rem,9vw,3.4rem);font-weight:900;letter-spacing:.2em;color:#f04b4b;text-shadow:0 0 24px rgba(240,40,40,.6)}
@@ -240,6 +247,10 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
 .ico.machete{background:
   linear-gradient(105deg, transparent 0 42%, #cfd6dd 42% 56%, #8f979f 56% 62%, transparent 62%),
   linear-gradient(105deg, transparent 0 30%, #2e2119 30% 42%, transparent 42%),
+  #14181c}
+.ico.sledge{background:
+  linear-gradient(90deg, transparent 0 40%, #8a6438 40% 58%, transparent 58%),
+  linear-gradient(0deg, transparent 0 62%, #767c84 62% 88%, transparent 88%),
   #14181c}
 .drawer-foot{margin-top:10px;font-size:.68rem;color:var(--muted);letter-spacing:.06em}
 .drawer-foot b{color:#ffcf7a}

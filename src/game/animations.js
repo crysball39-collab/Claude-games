@@ -476,6 +476,87 @@ const slashL = {
   strike: { hand: 'handR', from: 0.135, to: 0.325 },
 };
 
+/* ------------------------------ sledgehammer ------------------------------ */
+/* Two hands on the haft, the weight of it carried on the right hip. Everything
+   about this one is slower than the blade: it is seven kilos on a stick. */
+const sledgeHold = {
+  name: 'sledgeHold', duration: 4.0, loop: true, mask: 'upper',
+  tracks: {
+    midTorso: [[0, 0.010, -0.060, 0.030], [2.0, 0.020, -0.074, 0.030], [4.0, 0.010, -0.060, 0.030]],
+    upperTorso: [[0, 0.020, -0.130, 0.055], [2.0, 0.034, -0.150, 0.055], [4.0, 0.020, -0.130, 0.055]],
+    neck: [[0, -0.020, 0.040, 0]],
+    head: [[0, -0.010, 0.040, 0]],
+
+    /* Carried up where you can see it: right hand on the butt of the haft at
+       chest height, left hand further along it, the head out to the left. */
+    upperArmR: [[0, 0.820, -0.090, -0.230], [2.0, 0.862, -0.092, -0.240], [4.0, 0.820, -0.090, -0.230]],
+    lowerArmR: [[0, 1.560, 0.290, 0.130], [2.0, 1.600, 0.290, 0.130], [4.0, 1.560, 0.290, 0.130]],
+    handR: [[0, -0.050, 0.120, 0]],
+    upperArmL: [[0, 1.060, 0.060, 0.140], [2.0, 1.100, 0.062, 0.150], [4.0, 1.060, 0.060, 0.140]],
+    lowerArmL: [[0, 1.300, -0.180, -0.080], [2.0, 1.340, -0.180, -0.080], [4.0, 1.300, -0.180, -0.080]],
+    handL: [[0, -0.090, -0.150, 0]],
+    ...fingers('R', [[0, -1.360, 0, 0]], [[0, -1.420, 0, 0]]),
+    ...fingers('L', [[0, -1.300, 0, 0]], [[0, -1.380, 0, 0]]),
+  },
+};
+
+/* Over the right shoulder, then down and across. Slow to wind up, brutal
+   through the middle, and it takes a moment to gather back afterwards. */
+const swingR = {
+  name: 'swingR', duration: 0.86, loop: false, mask: 'upper',
+  tracks: {
+    midTorso: [[0, 0.010, -0.060, 0.030], [0.20, 0.080, -0.300, 0.050],
+      [0.38, -0.090, 0.120, -0.020], [0.50, -0.190, 0.220, -0.030],
+      [0.62, -0.130, 0.150, -0.020], [0.86, 0.010, -0.060, 0.030]],
+    upperTorso: [[0, 0.020, -0.130, 0.055], [0.20, 0.150, -0.560, 0.090],
+      [0.38, -0.160, 0.220, -0.040], [0.50, -0.330, 0.380, -0.060],
+      [0.62, -0.220, 0.260, -0.040], [0.86, 0.020, -0.130, 0.055]],
+    neck: [[0, -0.020, 0.040, 0], [0.20, -0.140, -0.220, 0], [0.50, 0.120, 0.140, 0], [0.86, -0.020, 0.040, 0]],
+    head: [[0, -0.010, 0.040, 0], [0.20, -0.110, -0.180, 0], [0.50, 0.100, 0.110, 0], [0.86, -0.010, 0.040, 0]],
+
+    /* Up behind the shoulder, then straight down the middle. Everything that
+       used to carry the head out past the left hip is gone: a two handed
+       hammer swing comes down the line you are looking along, which is the
+       only line anything you are aiming at is standing on. */
+    upperArmR: [
+      [0, 0.820, -0.090, -0.230], [0.20, 1.760, -0.320, -0.560],
+      [0.32, 1.780, -0.140, -0.230], [0.40, 1.640, -0.020, 0.020],
+      [0.48, 1.420, 0.020, 0.060], [0.58, 1.060, 0.040, 0.110],
+      [0.70, 0.700, -0.020, -0.120], [0.86, 0.820, -0.090, -0.230]],
+    lowerArmR: [
+      [0, 1.560, 0.290, 0.130], [0.20, 1.560, 0.240, 0.100],
+      [0.32, 0.820, 0.140, 0.050], [0.40, 0.280, 0.040, 0.010],
+      [0.48, 0.120, 0.010, 0.000], [0.58, 0.300, 0.040, 0.010],
+      [0.70, 1.100, 0.220, 0.090], [0.86, 1.560, 0.290, 0.130]],
+    handR: [[0, -0.050, 0.120, 0], [0.20, -0.240, 0.140, 0], [0.48, 0.080, -0.020, 0], [0.86, -0.050, 0.120, 0]],
+
+    // the left hand stays on the haft the whole way down
+    upperArmL: [
+      [0, 1.060, 0.060, 0.140], [0.20, 1.560, 0.300, 0.520],
+      [0.32, 1.700, 0.140, 0.260], [0.40, 1.420, 0.060, 0.140],
+      [0.48, 1.120, 0.020, 0.090], [0.58, 0.900, 0.020, 0.130],
+      [0.86, 1.060, 0.060, 0.140]],
+    lowerArmL: [
+      [0, 1.300, -0.180, -0.080], [0.20, 1.760, -0.280, -0.130],
+      [0.32, 1.140, -0.180, -0.080], [0.40, 0.640, -0.080, -0.030],
+      [0.48, 0.420, -0.040, -0.010], [0.58, 0.640, -0.080, -0.030],
+      [0.86, 1.300, -0.180, -0.080]],
+    handL: [[0, -0.090, -0.150, 0], [0.20, -0.220, -0.140, 0], [0.48, 0.060, 0.020, 0], [0.86, -0.090, -0.150, 0]],
+    ...fingers('R', [[0, -1.360, 0, 0]], [[0, -1.420, 0, 0]]),
+    ...fingers('L', [[0, -1.300, 0, 0]], [[0, -1.380, 0, 0]]),
+  },
+  /** The window in which the head is actually coming down. */
+  strike: { hand: 'handR', from: 0.34, to: 0.60 },
+};
+
+/* The backswing. Both hands are on the haft, so unlike the machete this one
+   really is the same motion the other way round. */
+const swingL = (() => {
+  const c = mirrorClip(swingR, 'swingL');
+  c.strike = { hand: 'handR', from: 0.34, to: 0.60 };
+  return c;
+})();
+
 /* --------------------------------- get up --------------------------------- */
 /* Pushing up off the floor. rootPitch and rootYAbs drive the whole body. */
 const getUpFront = mirrorSides({
@@ -536,6 +617,7 @@ export const CLIPS = {
   idle, walk, run, crouchIdle, crouchWalk, jump, fall,
   holding, fistGuard, punchR, punchL,
   macheteHold, slashR, slashL,
+  sledgeHold, swingR, swingL,
   getUpFront, getUpBack, stagger,
 };
 

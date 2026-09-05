@@ -159,6 +159,52 @@ check('USE picks the machete up and PRIMARY slashes with it',
   machete.carrying && machete.equipped === 'machete' && /slash/.test(machete.slashing || ''),
   JSON.stringify(machete));
 
+/* ----------------------------- the sledgehammer ---------------------------- */
+await page.tap('#btn-use'); await page.waitForTimeout(400);      // put the blade down
+await page.tap('#btn-pause'); await page.waitForTimeout(300);
+await page.tap('#btn-clear'); await page.waitForTimeout(200);
+await page.tap('#btn-resume'); await page.waitForTimeout(400);
+await page.tap('#btn-hamburger'); await page.waitForTimeout(350);
+await page.tap('.item[data-id="sledge"]'); await page.waitForTimeout(150);
+await page.tap('#btn-close-drawer'); await page.waitForTimeout(250);
+await page.tap('.wslot[data-weapon="rcv2"]'); await page.waitForTimeout(300);
+await page.tap('#btn-spawn'); await page.waitForTimeout(1600);
+await page.evaluate(() => {
+  const g = window.GOREBOX.game;
+  const m = g.spawnedBodies.find((b) => b.tag === 'sledge');
+  if (!m) return;
+  g.player.teleport(m.pos.x, m.pos.z + 0.9, 0);
+  g.camYaw = 0; g.camPitch = -0.15;
+  g.setEquipped('fists');
+});
+await page.waitForTimeout(600);
+await page.tap('#btn-use'); await page.waitForTimeout(700);
+await shot('8-sledge');
+await page.tap('#btn-primary');
+// A two-handed swing is a slow thing to start; watch for it rather than
+// guessing when to look.
+const sledge = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  const a = g.player.animator;
+  let seen = a.actionName;
+  for (let i = 0; i < 90 && !seen; i++) {
+    await new Promise((res) => requestAnimationFrame(res));
+    seen = a.actionName;
+  }
+  return {
+    carrying: g.carried?.kind || null,
+    equipped: g.equipped,
+    swinging: seen,
+    state: g.player.state,
+    cooldown: +g.player.punchCooldown.toFixed(2),
+    label: document.querySelector('#btn-primary').textContent,
+  };
+});
+await shot('9-swing');
+check('USE picks the sledgehammer up and PRIMARY swings it',
+  sledge.carrying === 'sledge' && sledge.equipped === 'sledge' &&
+  /swing/.test(sledge.swinging || '') && sledge.label === 'SWING', JSON.stringify(sledge));
+
 /* -------------------------------- the rest --------------------------------- */
 const state = await page.evaluate(() => ({
   running: window.GOREBOX.game.running,

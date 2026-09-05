@@ -23,6 +23,7 @@ export function spawnCitizen(game, position, opts = {}) {
   c.ai = new CitizenAI(c, game);
   c.onDamage = (info) => game.handleDamage(info);
   c.onStrike = (attacker, side, vel) => game.resolveStrike(attacker, side, vel);
+  c.onInjury = (info) => game.handleInjury(info);
   game.registerCharacter(c);
   c.teleport(position.x, position.z, c.yaw);
   return c;

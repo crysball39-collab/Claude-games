@@ -344,6 +344,8 @@ export class CitizenAI {
       this._updateDown(dt);
       return;
     }
+    // Blinded people do not fight, they get away from where it came from.
+    if (c.blind > 0.85 && this.state === AI_STATE.FIGHT) this._setState(AI_STATE.FLEE);
     if (this.state === AI_STATE.DOWN) this._setState(AI_STATE.IDLE);
 
     this._senseThreat(dt);
@@ -381,13 +383,17 @@ export class CitizenAI {
     const game = this.game;
     const c = this.c;
     let best = null, bestScore = 0;
+    /* Someone who cannot see cannot pick a threat out of a crowd. They know
+       roughly where the last thing that hurt them was, and not much else, so
+       their world shrinks to arm's length. */
+    const range = c.blind > 0.05 ? 22 * (1 - c.blind) + 1.5 : 22;
     const candidates = game.threatCandidates();
     for (let i = 0; i < candidates.length; i++) {
       const t = candidates[i];
       if (t === c || t.dead) continue;
       const d = c.pos.distanceTo(t.pos);
-      if (d > 22) continue;
-      let score = (22 - d) / 22;
+      if (d > range) continue;
+      let score = (range - d) / range;
       if (t === this.threat) score += 0.4;
       if (t.combatReady) score += 0.35;
       if (t.equipped === 'rcv2') score += 0.15;

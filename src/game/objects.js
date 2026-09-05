@@ -1,9 +1,11 @@
 /* =============================================================================
    Things the RCV2 can spawn.
 
-     Crate   - a wooden box that tumbles and stacks
-     Boulder - a rock that rolls properly, because it really is a sphere
-     Citizen - a person (built in citizen.js)
+     Crate       - a wooden box that tumbles and stacks
+     Boulder     - a rock that rolls properly, because it really is a sphere
+     Machete     - a blade you can pick up and swing
+     Sledgehammer- two-handed, heavy enough to break what it lands on
+     Citizen     - a person (built in citizen.js)
    ========================================================================== */
 import {
   Group, Mesh, MeshLambertMaterial, SphereGeometry, BoxGeometry, Vector3,
@@ -337,6 +339,99 @@ export function spawnMachete(game, position, { quat = null, reuse = null } = {})
   // The painter has to be bound to THIS body: it maps a world point into the
   // body's own frame, and a stale one would paint blood in the wrong place.
   body.userData.paintBlood = makeBoxPainter(body, bladeMat, reuse ? reuse.surface : null, 'steel');
+  if (!reuse || !mesh.parent) game.scene.add(mesh);
+  game.world.addBody(body);
+  game.trackSpawn(body);
+  return body;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               sledgehammer                                 */
+/* -------------------------------------------------------------------------- */
+
+/** A long wooden haft with a steel block across the top of it. */
+export const SLEDGE = {
+  haft: 0.68,           // length of the handle
+  headW: 0.235,         // across, the striking span
+  headH: 0.115,
+  headD: 0.115,
+  get length() { return this.haft + this.headH; },
+};
+
+let sledgeParts = null;
+function sledgeGeometry() {
+  if (!sledgeParts) {
+    const S = SLEDGE;
+    sledgeParts = {
+      haft: new BoxGeometry(0.036, S.haft, 0.030),
+      grip: new BoxGeometry(0.042, 0.20, 0.036),
+      head: makeAtlasBoxGeometry(S.headW, S.headH, S.headD),
+      face: new BoxGeometry(0.016, S.headH * 0.92, S.headD * 0.92),
+      collar: new BoxGeometry(0.055, 0.030, 0.048),
+    };
+  }
+  return sledgeParts;
+}
+
+export function createSledgeModel() {
+  const S = SLEDGE;
+  const g = sledgeGeometry();
+  const group = new Group();
+  const steel = new MeshLambertMaterial({ color: 0x767c84 });
+  const worn = new MeshLambertMaterial({ color: 0x9ba3ab });
+  const haft = new MeshLambertMaterial({ color: 0x8a6438 });
+  const grip = new MeshLambertMaterial({ color: 0x241c16 });
+
+  const add = (geo, mat, y, x = 0) => {
+    const m = new Mesh(geo, mat);
+    m.position.set(x, y, 0);
+    m.castShadow = true;
+    group.add(m);
+    return m;
+  };
+  add(g.grip, grip, 0.10);                                  // bound handle end
+  add(g.haft, haft, S.haft / 2);
+  add(g.collar, steel, S.haft - 0.018);
+  const head = add(g.head, steel, S.haft + S.headH / 2);
+  // the two striking faces, worn brighter than the block
+  add(g.face, worn, S.haft + S.headH / 2, S.headW / 2 - 0.008);
+  add(g.face, worn, S.haft + S.headH / 2, -(S.headW / 2 - 0.008));
+
+  group.userData.headMesh = head;
+  group.userData.bladeMat = steel;      // what blood paints onto
+  group.userData.materials = [steel, worn, haft, grip];
+  return group;
+}
+
+/** @param {object} [reuse] see spawnMachete. */
+export function spawnSledge(game, position, { quat = null, reuse = null } = {}) {
+  const S = SLEDGE;
+  const body = new RigidBody({
+    shape: 'box',
+    // one collider around the whole thing, fattest at the head
+    half: new Vector3(S.headW / 2, S.length / 2, S.headD / 2),
+    mass: 7.5,
+    pos: position.clone(),
+    friction: 0.85,
+    restitution: 0.02,
+    linDamp: 0.3,
+    angDamp: 0.7,
+    tag: 'sledge',
+  });
+  if (quat) body.quat.copy(quat);
+  else body.quat.setFromAxisAngle(_v1.set(0, 0, 1), Math.PI / 2 + (rng() - 0.5) * 0.3);
+  body.updateDerived();
+
+  const mesh = reuse ? reuse.model : createSledgeModel();
+  const headMat = reuse ? reuse.material : mesh.userData.bladeMat;
+  mesh.userData.bodyOffset = new Vector3(0, -S.length / 2, 0);
+  mesh.matrixAutoUpdate = false;
+  body.mesh = mesh;
+  body.userData.label = 'Sledgehammer';
+  body.userData.grabbable = true;
+  body.userData.pickup = 'sledge';
+  body.userData.material = headMat;
+  body.userData.paintBlood = makeBoxPainter(body, headMat, reuse ? reuse.surface : null, 'steel');
   if (!reuse || !mesh.parent) game.scene.add(mesh);
   game.world.addBody(body);
   game.trackSpawn(body);

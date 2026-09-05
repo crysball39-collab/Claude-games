@@ -464,6 +464,170 @@ check('holding a blade looks nothing like holding fists',
   r.fistPose === 'fistGuard' && r.bladePose === 'macheteHold',
   JSON.stringify({ fistPose: r.fistPose, bladePose: r.bladePose }));
 
+// ---------- the sledgehammer: heavier, slower, breaks things ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  const V = g.player.pos.constructor;
+  const { spawnCitizen } = await import('/src/game/citizen.js');
+  const frame = () => new Promise((res) => requestAnimationFrame(res));
+  g.clearSpawns();
+  if (g.carried) g.dropCarried();
+  g.clearSpawns();
+  g.player.teleport(0, 3, 0); g.camYaw = 0; g.camPitch = -0.2;
+  g.setEquipped('rcv2'); g.setSelected('sledge');
+  await new Promise((res) => setTimeout(res, 150));
+  const dropped = g.spawnSelected();
+  for (let i = 0; i < 110; i++) await frame();
+  g.player.teleport(dropped.entity.pos.x, dropped.entity.pos.z + 0.9, 0);
+  for (let i = 0; i < 20; i++) await frame();
+  g.setEquipped('fists');
+  g.useAction();
+  const carried = g.carried?.kind === 'sledge' && g.equipped === 'sledge';
+  for (let i = 0; i < 10; i++) await frame();
+  const holdPose = g.player.animator.upper.clip?.name || null;
+
+  const c = spawnCitizen(g, new V(0, 0, 0));
+  await new Promise((res) => setTimeout(res, 400));
+  c.ai.update = () => { c.moveInput.set(0, 0, 0); };
+  const clips = [];
+  let damage = 0;
+  const broken = new Set();
+  for (let i = 0; i < 6; i++) {
+    // A sledgehammer kills in one or two, so heal between swings: this check
+    // is about the weapon working, not about how long anyone survives it.
+    const before = c.health;
+    if (i > 0) damage += before - c.health;
+    for (const b of c.broken) broken.add(b);
+    c.heal();
+    if (c.state !== 'controlled') { c.balance = 1; c.setState('controlled'); }
+    c.teleport(0, 0, Math.PI);
+    // a sledgehammer is swung from further out than a blade
+    g.player.teleport(0, 1.2, 0); g.camYaw = 0; g.camPitch = 0.02;
+    for (let k = 0; k < 6; k++) await frame();
+    g.player.punchCooldown = 0; g.player.animator.cancelAction();
+    if (!g.player.slash()) continue;
+    clips.push(g.player.animator.actionName);
+    const hp = c.health;
+    for (let k = 0; k < 300 && g.player.animator.actionActive; k++) await frame();
+    damage += hp - c.health;
+    for (const b of c.broken) broken.add(b);
+  }
+  g.useAction();
+  return {
+    carried, holdPose, clips,
+    damage: Math.round(damage), broken: [...broken],
+    dropped: !g.carried && g.spawnedBodies.some((b) => b.tag === 'sledge'),
+  };
+});
+check('the sledgehammer is carried, swung both ways and breaks bones',
+  r.carried && r.holdPose === 'sledgeHold' && r.damage > 40 && r.broken.length > 0 &&
+  r.dropped && r.clips.includes('swingR') && r.clips.includes('swingL'), JSON.stringify(r));
+
+// ---------- faces come apart the way they were asked to ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  const V = g.player.pos.constructor;
+  const { spawnCitizen } = await import('/src/game/citizen.js');
+  const frame = () => new Promise((res) => requestAnimationFrame(res));
+  g.clearSpawns();
+  g.player.teleport(0, 6, 0);
+  const c = spawnCitizen(g, new V(0, 0, 0));
+  await new Promise((res) => setTimeout(res, 300));
+  c.ai.update = () => c.moveInput.set(0, 0, 0);
+  const hit = (bone, opts) => {
+    const b = c.rig.byName[bone];
+    c.applyImpact(new V(b.worldPos.x, b.worldPos.y, b.worldPos.z),
+      new V(0, 4, -60), { boneName: bone, ...opts });
+  };
+
+  // fists: bloodshot eyes, a bloody nose and lip, but both eyes still in
+  c.heal(); c.setState('controlled');
+  for (let i = 0; i < 6; i++) { hit('head', { damage: 4, type: 'blunt', severity: 0.25 }); await frame(); }
+  const punched = { ...c.injuries, blind: +c.blind.toFixed(2) };
+
+  // a blade takes eyes out of sockets
+  c.heal(); c.setState('controlled');
+  for (let i = 0; i < 10; i++) {
+    hit('head', { damage: 12, type: 'impact', severity: 0.9 });
+    await frame();
+  }
+  const cut = { ...c.injuries, blind: +c.blind.toFixed(2) };
+  // and losing both of them is losing your sight, whichever way they went
+  c.heal(); c.setState('controlled');
+  c.setInjuries({ eyeR: 'gone', eyeL: 'gone' });
+  const bothGone = +c.blind.toFixed(2);
+
+  // an eye out of its socket is a real object hanging on a cord
+  c.heal(); c.setState('controlled');
+  c.setInjuries({ eyeR: 'hanging' });
+  for (let i = 0; i < 40; i++) await frame();
+  const e = c.body.hangingEyes.R;
+  const head = c.rig.byName.head;
+  const anchor = e ? e.socket.clone().applyQuaternion(head.worldQuat).add(head.worldPos) : null;
+  const hanging = {
+    exists: !!e,
+    inScene: !!(e && e.ball.parent),
+    onCord: !!(e && e.pos.distanceTo(anchor) <= e.cordLen + 0.02 && Number.isFinite(e.pos.y)),
+    blind: +c.blind.toFixed(2),
+  };
+  c.heal();
+  return {
+    punched, cut, hanging, bothGone,
+    healedEyes: c.injuries.eyeR + '/' + c.injuries.eyeL,
+    healedMesh: !!(c.body.hangingEyes.R || c.body.hangingEyes.L),
+  };
+});
+check('faces bruise, bleed and lose eyes',
+  r.punched.eyeR !== 'ok' || r.punched.eyeL !== 'ok', JSON.stringify(r.punched));
+check('a bloodied nose and mouth run',
+  r.punched.noseBleed > 0 && r.punched.mouthBleed > 0, JSON.stringify(r.punched));
+check('an eye can hang out, and taking both blinds you',
+  r.hanging.exists && r.hanging.inScene && r.hanging.onCord && r.hanging.blind >= 0.5 &&
+  r.bothGone === 1 && r.cut.blind >= 0.5 &&
+  r.healedEyes === 'ok/ok' && !r.healedMesh, JSON.stringify(r));
+
+// ---------- a broken bone stops the limb working ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  const V = g.player.pos.constructor;
+  const { spawnCitizen } = await import('/src/game/citizen.js');
+  const frame = () => new Promise((res) => requestAnimationFrame(res));
+  g.clearSpawns();
+  g.player.teleport(0, 6, 0);
+  const c = spawnCitizen(g, new V(0, 0, 0));
+  await new Promise((res) => setTimeout(res, 300));
+  c.ai.update = () => c.moveInput.set(0, 0, 0);
+
+  c.heal(); c.setState('controlled'); c.balance = 1;
+  c.breakBone('upperArmR', c.rig.byName.upperArmR.worldPos.clone());
+  for (let i = 0; i < 4; i++) await frame();
+  const arm = {
+    broken: c.armBroken('R'),
+    bleeding: c.bleeding > 0,
+    slack: c.particles.elbowR.muscle < 0.2 && c.particles.elbowL.muscle > 0.5,
+    bent: !!c.breakBend.upperArmR,
+  };
+  c.equipped = 'machete'; c.punchCooldown = 0; c.animator.cancelAction();
+  arm.cannotSwing = c.slash() === false;
+  c.equipped = 'fists'; c.punchCooldown = 0; c.animator.cancelAction();
+  arm.stillJabs = c.punch() === true && c.punchSide === 'L';
+
+  c.heal(); c.setState('controlled'); c.balance = 1;
+  c.breakBone('lowerLegL', c.rig.byName.lowerLegL.worldPos.clone());
+  await frame();
+  const y0 = c.pos.y;
+  c.wantJump = true;
+  let peak = y0;
+  for (let i = 0; i < 40; i++) { await frame(); peak = Math.max(peak, c.pos.y); }
+  const leg = { broken: c.legBroken('L'), rose: +(peak - y0).toFixed(2) };
+  c.heal();
+  return { arm, leg, healed: c.broken.size === 0 && c.limpScale.upperArmR === 1 };
+});
+check('a broken bone bleeds, goes limp and stops working',
+  r.arm.broken && r.arm.bleeding && r.arm.slack && r.arm.bent &&
+  r.arm.cannotSwing && r.arm.stillJabs &&
+  r.leg.broken && r.leg.rose < 0.15 && r.healed, JSON.stringify(r));
+
 // ---------- boulder actually rolls ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;

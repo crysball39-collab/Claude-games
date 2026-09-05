@@ -12,8 +12,8 @@ import { Character, STATE } from './character.js';
 import { playerAppearance } from './appearance.js';
 import { spawnCitizen } from './citizen.js';
 import {
-  spawnCrate, spawnBoulder, spawnMachete, createMacheteModel, syncBodyMesh,
-  disposeBody, prewarmObjectArt, MACHETE,
+  spawnCrate, spawnBoulder, spawnMachete, spawnSledge, createMacheteModel,
+  syncBodyMesh, disposeBody, prewarmObjectArt, MACHETE, SLEDGE,
 } from './objects.js';
 import { GoreSystem, nearestBone } from './gore.js';
 import { NavGrid } from './ai.js';
@@ -27,7 +27,75 @@ const _e = new Euler(0, 0, 0, 'YXZ');
 const UP = new Vector3(0, 1, 0);
 /* A machete continues the line of the fist, canted out a little so the blade
    sits in view rather than straight down the forearm. */
-const MACHETE_TILT = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -0.30);
+const _tilt = (x) => new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), x);
+
+/**
+ * Everything that differs between one carried weapon and the next. The blade
+ * cuts along an edge and the hammer lands on a block, so each one says where
+ * its own damage comes from and what kind of damage it is.
+ */
+/** Plain words for the bones people care about hearing named. */
+const BREAK_NAME = {
+  upperArmR: 'right arm', lowerArmR: 'right forearm', handR: 'right hand',
+  upperArmL: 'left arm', lowerArmL: 'left forearm', handL: 'left hand',
+  upperLegR: 'right leg', lowerLegR: 'right shin', footR: 'right foot',
+  upperLegL: 'left leg', lowerLegL: 'left shin', footL: 'left foot',
+  lowerTorso: 'back', midTorso: 'ribs', upperTorso: 'ribs',
+  neck: 'neck', head: 'skull',
+};
+
+export const MELEE = {
+  machete: {
+    label: 'Machete',
+    spawn: spawnMachete,
+    tilt: _tilt(-0.30),
+    lift: 0.035,                        // how far up the grip sits in the hand
+    dropAt: MACHETE.length / 2 + 0.04,
+    type: 'impact',
+    dmg: { mul: 3.6, min: 3, max: 42 },
+    sev: { div: 6, min: 0.55 },
+    push: { mul: 6, min: 8, max: 90, lift: 4 },
+    crush: 0,                           // blades cut, they do not shatter bone
+    shake: 0.22,
+    /** Nine points down the cutting edge, guard to tip. */
+    contacts(out, origin, quat, v) {
+      for (let i = 0; i <= 8; i++) {
+        const y = MACHETE.grip + 0.03 + (MACHETE.blade - 0.03) * (i / 8);
+        out.push(v.set(MACHETE.width * 0.42, y + 0.035, 0).applyQuaternion(quat).add(origin).clone());
+      }
+    },
+  },
+  sledge: {
+    label: 'Sledgehammer',
+    spawn: spawnSledge,
+    tilt: _tilt(-0.38),
+    lift: 0.05,
+    dropAt: SLEDGE.length / 2 + 0.05,
+    type: 'blunt',
+    dmg: { mul: 5.0, min: 6, max: 58 },
+    sev: { div: 5, min: 0.7 },
+    push: { mul: 15, min: 20, max: 230, lift: 8 },
+    crush: 0.85,                        // this is what breaks bones
+    shake: 0.5,
+    /** The striking block across the top of the haft. */
+    contacts(out, origin, quat, v) {
+      const y = SLEDGE.haft + SLEDGE.headH / 2 + 0.05;
+      for (const fx of [-0.5, -0.25, 0, 0.25, 0.5]) {
+        out.push(v.set(fx * SLEDGE.headW, y, 0).applyQuaternion(quat).add(origin).clone());
+      }
+      for (const fz of [-0.42, 0.42]) {
+        for (const fx of [-0.35, 0.35]) {
+          out.push(v.set(fx * SLEDGE.headW, y, fz * SLEDGE.headD)
+            .applyQuaternion(quat).add(origin).clone());
+        }
+      }
+      // the top of the haft, so a swing that lands short still connects
+      for (const fy of [0.72, 0.9]) {
+        out.push(v.set(0, SLEDGE.haft * fy, 0).applyQuaternion(quat).add(origin).clone());
+      }
+    },
+  },
+};
 
 export const QUALITY = {
   low: { shadows: false, shadowMap: 512, pixelRatio: 1.0, grassSize: 256, maxObjects: 40, maxCitizens: 10 },
@@ -40,6 +108,7 @@ export const SPAWNABLES = {
     { id: 'crate', name: 'Crate', icon: 'crate', hint: 'Wooden crate' },
     { id: 'boulder', name: 'Boulder', icon: 'boulder', hint: 'Rock boulder' },
     { id: 'machete', name: 'Machete', icon: 'machete', hint: 'Pick it up with USE' },
+    { id: 'sledge', name: 'Sledgehammer', icon: 'sledge', hint: 'Heavy. Breaks bones.' },
   ],
   humans: [
     { id: 'citizen', name: 'Citizen', icon: 'citizen', hint: 'An ordinary person' },
@@ -159,6 +228,7 @@ export class Game {
     });
     this.scene.add(this.player.body.group);
     this.player.onDamage = (info) => this.handleDamage(info);
+    this.player.onInjury = (info) => this.handleInjury(info);
     this.player.onStrike = (a, s, v) => this.resolveStrike(a, s, v);
     this.player.onSlash = (a, s, v) => this.resolveSlash(a, s, v);
     this.registerCharacter(this.player);
@@ -308,10 +378,10 @@ export class Game {
       const b = spawnBoulder(this, _v2);
       return { type: 'body', name: 'Boulder', entity: b };
     }
-    if (id === 'machete') {
+    if (MELEE[id]) {
       _v2.y = Math.max(_v2.y, 0.6);
-      const b = spawnMachete(this, _v2);
-      return { type: 'body', name: 'Machete', entity: b };
+      const b = MELEE[id].spawn(this, _v2);
+      return { type: 'body', name: MELEE[id].label, entity: b };
     }
     _v2.y = Math.max(_v2.y, 0.7);
     const b = spawnCrate(this, _v2);
@@ -355,7 +425,9 @@ export class Game {
 
   pickUp(body) {
     const kind = body.userData.pickup;
-    if (kind !== 'machete') return;
+    const spec = MELEE[kind];
+    if (!spec) return;
+    if (this.player.armBroken('R')) { this.hud?.toast('Your right arm is broken'); return; }
     // The loose item becomes a held one: same model, no longer simulated.
     const model = body.mesh;
     model.userData.bodyOffset = null;
@@ -376,23 +448,24 @@ export class Game {
       material: body.userData.material,
     };
     this.hud?.setCarrying(kind);
-    this.setEquipped('machete');
-    this.hud?.toast('Picked up the Machete');
+    this.setEquipped(kind);
+    this.hud?.toast('Picked up the ' + spec.label);
   }
 
   dropCarried() {
     const c = this.carried;
     if (!c) return;
+    const spec = MELEE[c.kind];
     this.carried = null;
     this.hud?.setCarrying(null);
 
-    // Put it back into the world where the blade actually is, moving the way
+    // Put it back into the world where the weapon actually is, moving the way
     // the hand was moving.
     const hand = this.player.rig.byName.handR;
     boneBoxCenter(hand, _v1);
-    _q1.copy(hand.worldQuat).multiply(MACHETE_TILT);
-    _v2.set(0, MACHETE.length / 2 + 0.04, 0).applyQuaternion(_q1).add(_v1);
-    const body = spawnMachete(this, _v2, {
+    _q1.copy(hand.worldQuat).multiply(spec.tilt);
+    _v2.set(0, spec.dropAt, 0).applyQuaternion(_q1).add(_v1);
+    const body = spec.spawn(this, _v2, {
       quat: _q1,
       reuse: { model: c.model, material: c.material, surface: c.surface },
     });
@@ -402,30 +475,31 @@ export class Game {
     body.wake();
 
     this.setEquipped('fists');
-    this.hud?.toast('Dropped the Machete');
+    this.hud?.toast('Dropped the ' + spec.label);
   }
 
   /** Keeps a carried item in the hand that is holding it. */
   _syncCarried() {
     const c = this.carried;
     if (!c) return;
+    const spec = MELEE[c.kind];
     const hand = this.player.rig.byName.handR;
     boneBoxCenter(hand, _v1);
-    _q1.copy(hand.worldQuat).multiply(MACHETE_TILT);
+    _q1.copy(hand.worldQuat).multiply(spec.tilt);
     c.model.quaternion.copy(_q1);
-    c.model.position.copy(_v2.set(0, 0.035, 0).applyQuaternion(_q1)).add(_v1);
+    c.model.position.copy(_v2.set(0, spec.lift, 0).applyQuaternion(_q1)).add(_v1);
     c.model.updateMatrix();
-    c.model.visible = this.equipped === 'machete';
+    c.model.visible = this.equipped === c.kind;
   }
 
   /* ----------------------------------------------------------------- weapons */
 
   setEquipped(name) {
-    if (name === 'machete' && !this.carried) name = 'fists';
+    if (MELEE[name] && this.carried?.kind !== name) name = 'fists';
     this.equipped = name;
     this.player.setEquipped(name);
     if (this.rcv2) this.rcv2.setVisible(name === 'rcv2');
-    if (this.carried) this.carried.model.visible = name === 'machete';
+    if (this.carried) this.carried.model.visible = name === this.carried.kind;
     this.hud?.setWeapon(name);
   }
 
@@ -434,7 +508,8 @@ export class Game {
     if (this.player.state !== STATE.CONTROLLED) return;
     if (this.equipped === 'fists') {
       this.player.punch();
-    } else if (this.equipped === 'machete') {
+    } else if (MELEE[this.equipped]) {
+      // Every carried weapon swings; only the RCV2 shoots.
       this.player.slash();
     } else {
       this.camera.getWorldDirection(_v1);
@@ -494,6 +569,36 @@ export class Game {
   }
 
   /* --------------------------------------------------------------- damage */
+
+  /**
+   * The visible consequences of an injury: blood where it happened, a word to
+   * the player about their own body, and a weapon on the floor if the arm
+   * holding it has just stopped working.
+   */
+  handleInjury(info) {
+    const { character, kind, boneName, point } = info;
+    if (kind === 'break') {
+      const bone = character.rig.byName[boneName];
+      if (bone) {
+        boneBoxCenter(bone, _v1);
+        const at = point || _v1;
+        character.body.paintHit(boneName, at, { kind: 'impact', severity: 1, allowTear: true });
+        this.gore?.burst(at, _v2.set(0, 1, 0), 14, { speed: 2.4, spread: 0.9, size: 0.03 });
+      }
+      if (character === this.player) {
+        this.hud?.toast(BREAK_NAME[boneName] ? 'Your ' + BREAK_NAME[boneName] + ' is broken' : 'Broken bone');
+        // you cannot hold a sledgehammer with a broken arm
+        if (this.carried && character.armBroken('R')) this.dropCarried();
+      }
+    } else if (kind === 'face') {
+      if (point) this.gore?.burst(point, _v2.set(0, 0.4, -1), 6, { speed: 1.6, spread: 0.9, size: 0.024 });
+      if (character === this.player) {
+        const inj = character.injuries;
+        if (inj.eyeR === 'gone' || inj.eyeL === 'gone') this.hud?.toast('You lost an eye');
+        else if (inj.eyeR === 'hanging' || inj.eyeL === 'hanging') this.hud?.toast('Your eye is hanging out');
+      }
+    }
+  }
 
   handleDamage(info) {
     this.gore?.onCharacterDamage(info);
@@ -555,56 +660,77 @@ export class Game {
    */
   resolveSlash(attacker, side, handVel) {
     if (attacker !== this.player || !this.carried) return;
+    const spec = MELEE[this.carried.kind];
     const hand = attacker.rig.byName.handR;
     boneBoxCenter(hand, _v1);
-    _q1.copy(hand.worldQuat).multiply(MACHETE_TILT);
+    _q1.copy(hand.worldQuat).multiply(spec.tilt);
 
-    // the cutting edge, from just above the guard to the tip
-    const edge = [];
-    for (let i = 0; i <= 8; i++) {
-      const y = MACHETE.grip + 0.03 + (MACHETE.blade - 0.03) * (i / 8);
-      edge.push(_v3.set(MACHETE.width * 0.42, y + 0.035, 0).applyQuaternion(_q1).add(_v1).clone());
+    // where this particular weapon does its damage: an edge, or a block
+    const contacts = [];
+    spec.contacts(contacts, _v1, _q1, _v3);
+    const far = contacts[contacts.length - 1];
+
+    // speed of the business end, which is what a swing actually delivers
+    if (!this._prevTip) { this._prevTip = far.clone(); return; }
+    const speed = Math.max(handVel.length(), far.distanceTo(this._prevTip) * 60);
+
+    /* A hammer head on the end of a metre of haft covers most of a body
+       between one frame and the next, so testing where it IS would let it pass
+       clean through somebody. Test where it HAS BEEN instead: every contact
+       point is swept from its last position to this one. That is still real
+       contact - it is the path the steel actually took - and it is the only
+       way a fast weapon connects honestly. */
+    const prev = this._prevContacts;
+    const samples = contacts.slice();
+    if (prev && prev.length === contacts.length) {
+      for (let i = 0; i < contacts.length; i++) {
+        const gap = contacts[i].distanceTo(prev[i]);
+        // A jump this big is a new swing starting, not a swing travelling.
+        if (gap > 1.6 || gap < 0.02) continue;
+        const steps = Math.min(6, Math.ceil(gap / 0.09));
+        for (let k = 1; k < steps; k++) {
+          samples.push(prev[i].clone().lerp(contacts[i], k / steps));
+        }
+      }
     }
-    const tip = edge[edge.length - 1];
-
-    // speed of the tip, which is what a swing actually delivers
-    if (!this._prevTip) { this._prevTip = tip.clone(); return; }
-    const speed = Math.max(handVel.length(), tip.distanceTo(this._prevTip) * 60);
+    this._prevContacts = contacts.map((p) => p.clone());
 
     for (const target of this.characters) {
       if (target === attacker || target.body.destroyed) continue;
       if (attacker.struck.has(target.id)) continue;
-      if (Math.abs(target.center.x - _v1.x) > 2.0 ||
-          Math.abs(target.center.z - _v1.z) > 2.0 ||
-          Math.abs(target.center.y - _v1.y) > 2.2) continue;
+      if (Math.abs(target.center.x - _v1.x) > 2.4 ||
+          Math.abs(target.center.z - _v1.z) > 2.4 ||
+          Math.abs(target.center.y - _v1.y) > 2.6) continue;
 
       let hitBone = null, hitPoint = null;
       for (const bone of target.rig.bones) {
         if (bone.def.finger) continue;
-        for (let i = 0; i < edge.length; i++) {
-          if (pointInBone(bone, edge[i], 0.01)) { hitBone = bone; hitPoint = edge[i]; break; }
+        for (let i = 0; i < samples.length; i++) {
+          if (pointInBone(bone, samples[i], 0.01)) { hitBone = bone; hitPoint = samples[i]; break; }
         }
         if (hitBone) break;
       }
       if (!hitBone) continue;
       attacker.struck.add(target.id);
 
-      const dmg = clamp((speed - 1.0) * 3.6, 3, 42);
-      const sev = clamp01((speed - 1.0) / 6);
+      const dmg = clamp((speed - 1.0) * spec.dmg.mul, spec.dmg.min, spec.dmg.max);
+      const sev = clamp01((speed - 1.0) / spec.sev.div);
       _v3.copy(handVel).normalize();
-      _v4.copy(_v3).multiplyScalar(clamp(speed * 6, 8, 90));
-      _v4.y += 4;
+      _v4.copy(_v3).multiplyScalar(clamp(speed * spec.push.mul, spec.push.min, spec.push.max));
+      _v4.y += spec.push.lift;
 
-      // A blade opens people up; it does not merely bruise them.
+      // A blade opens people up and a hammer caves them in; neither merely
+      // bruises, and only the hammer breaks what is under the skin.
       target.applyImpact(hitPoint, _v4, {
-        boneName: hitBone.name, damage: dmg, type: 'impact', attacker, severity: Math.max(0.55, sev),
+        boneName: hitBone.name, damage: dmg, type: spec.type, attacker,
+        severity: Math.max(spec.sev.min, sev), crush: spec.crush * clamp01(0.35 + sev),
       });
       if (target.ai) target.ai.onHurt({ amount: dmg * 1.4, attacker });
       this.carried.painter?.(hitPoint, Math.max(0.4, sev), { x: _v3.x, y: _v3.y, z: _v3.z });
       if (!this.carried.surface) this.carried.surface = this.carried.bodyRef?.userData.paintSurface || null;
-      this.shake = Math.min(0.8, this.shake + 0.22);
+      this.shake = Math.min(0.9, this.shake + spec.shake);
     }
-    this._prevTip.copy(tip);
+    this._prevTip.copy(far);
   }
 
   /**
@@ -821,6 +947,7 @@ export class Game {
       this._fpsAcc = 0; this._fpsCount = 0;
     }
     this.hud.setHealth(this.player.health / this.player.maxHealth);
+    this.hud.setBlindness(this.player.blind);
     if (this.equipped === 'rcv2') {
       this._pickTimer = (this._pickTimer || 0) - dt;
       if (this.rcv2.holding) {
@@ -853,12 +980,9 @@ export class Game {
     // covers the whole HUD and swallows every touch, so leaving it to the
     // caller means one missed call silently kills all input.
     this.hud?.hideDeath();
-    p.dead = false;
-    p.health = p.maxHealth;
-    p.balance = 1;
-    for (const k in p.partHealth) p.partHealth[k] = p.rig.byName[k].hp;
+    p.heal();
     p.body.washClean();
-    p.body.setExpression('neutral');
+    this.hud?.setBlindness(0);
     p.teleport(this.map.spawnPoint.x, this.map.spawnPoint.z, this.map.spawnYaw);
     this.camYaw = this.map.spawnYaw;
     this.camPitch = 0;

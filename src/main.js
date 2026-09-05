@@ -153,7 +153,7 @@ async function startGame(mapId) {
     input.enabled = !open;
     if (open) input.reset();
   };
-  input.onWeaponSelect = (i) => game.setEquipped(['fists', 'rcv2', 'machete'][i] || 'fists');
+  input.onWeaponSelect = (i) => game.setEquipped(['fists', 'rcv2', 'machete', 'sledge'][i] || 'fists');
   input.onToggleDrawer = () => app.spawnMenu.toggle();
   input.onPause = () => togglePause();
 
