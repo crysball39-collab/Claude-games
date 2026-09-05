@@ -368,7 +368,7 @@ export class Character {
        which is 1.9 m/s to a 69 kg person but twenty times that to a wrist.
        So: share it out by total mass, then add a local emphasis around the
        point of contact so the struck part still snaps. */
-    const dt = this.world.fixedStep / this.world.substeps;
+    const dt = this.world.substepDt;
     const base = 1 / Math.max(1, this.totalMass);
     const REACH = 0.6;          // metres over which the emphasis fades out
     const EMPHASIS = 2.4;       // how much harder the struck part reacts
@@ -384,9 +384,14 @@ export class Character {
 
     if (damage > 0) this.applyDamage(damage, { boneName, point, type, attacker, force, severity });
 
-    // balance loss scales with how hard, how high and how off-centre the hit is
+    /* Balance loss scales with the speed the hit actually imparts, not with
+       the raw impulse: 130 kg m/s is a knockout to a wrist and a shove to a
+       whole person. Measured against the body's own mass, a solid jab costs
+       about a quarter of the bar, so it takes a run of them - or one properly
+       heavy hit - to put anyone down. */
+    const dv = mag / Math.max(1, this.totalMass);
     const height = clamp01((point.y - (this.pos.y - HIP_HEIGHT)) / 1.8);
-    const loss = (mag / 125) * (0.55 + height * 0.9);
+    const loss = dv * 0.11 * (0.6 + height * 0.7);
     this.balance = clamp01(this.balance - loss);
     this._checkBalance();
   }
@@ -415,7 +420,7 @@ export class Character {
     });
 
     if (this.health <= 0) this.die();
-    else if (dealt > 9) this.balance = clamp01(this.balance - dealt / 40);
+    else if (dealt > 8) this.balance = clamp01(this.balance - (dealt - 8) / 90);
     this._checkBalance();
   }
 
@@ -423,7 +428,7 @@ export class Character {
     if (this.dead) return;
     if (this.state === STATE.CONTROLLED || this.state === STATE.GETUP) {
       if (this.balance < 0.16) { this.animator.cancelFull(); this.setState(STATE.RAGDOLL); }
-      else if (this.balance < 0.55) { this.animator.cancelFull(); this.setState(STATE.STUMBLE); }
+      else if (this.balance < 0.45) { this.animator.cancelFull(); this.setState(STATE.STUMBLE); }
     } else if (this.state === STATE.STUMBLE && this.balance < 0.14) {
       this.setState(STATE.RAGDOLL);
     }
@@ -545,6 +550,9 @@ export class Character {
       /* the jab owns the arms */
     } else if (this.equipped === 'rcv2') {
       this.animator.setUpper('holding');
+    } else if (this.equipped === 'machete') {
+      // A blade is not a fist: it is carried out and up, away from the leg.
+      this.animator.setUpper('macheteHold');
     } else {
       this.animator.setUpper(this.isPlayer || this.combatReady ? 'fistGuard' : null);
     }
@@ -676,18 +684,20 @@ export class Character {
     if (!this.dead) {
       // Alive ragdolls are not sacks of flour: they writhe.
       this.painTimer = Math.max(this.painTimer, 0.05);
+      // Measured against one substep, so a twitch is a twitch and not a launch.
+      const h = this.world.substepDt;
       if (this.rng() < dt * 5.5) {
         const limb = this.particleList[this.rng.int(0, this.particleList.length - 1)];
         const k = (0.5 + this.rng()) * (this.painTimer > 0.3 ? 2.2 : 0.9);
-        limb.addVelocity((this.rng() - 0.5) * 2.6 * k, this.rng() * 1.8 * k, (this.rng() - 0.5) * 2.6 * k, 1 / 90);
+        limb.addVelocity((this.rng() - 0.5) * 2.6 * k, this.rng() * 1.8 * k, (this.rng() - 0.5) * 2.6 * k, h);
       }
       // Deliberate shoving: a body on the floor can still drag itself about.
       const push = _v1.set(this.moveInput.x, 0, this.moveInput.z);
       if (push.lengthSq() > 0.01) {
         push.normalize();
         const k = this.wantsUp ? 3.4 : 2.2;
-        this.particles.hip.addVelocity(push.x * k, 0.45, push.z * k, 1 / 90);
-        this.particles.shoulders.addVelocity(push.x * k * 0.6, 0.25, push.z * k * 0.6, 1 / 90);
+        this.particles.hip.addVelocity(push.x * k, 0.45, push.z * k, h);
+        this.particles.shoulders.addVelocity(push.x * k * 0.6, 0.25, push.z * k * 0.6, h);
       }
       // Asking to jump is asking to get up now.
       if (this.wantJump) {
@@ -869,10 +879,12 @@ export class Character {
         P.hip.addVelocity(wish.x * a, 0, wish.z * a, h);
         P.pelvisTop.addVelocity(wish.x * a * 0.6, 0, wish.z * a * 0.6, h);
       }
-      // the reflex that fights to stay on your feet
+      /* The reflex that fights to stay on your feet. Kept under gravity on
+         purpose: a body already on its back should stay there and go to a
+         ragdoll, not haul its own shoulders off the floor. */
       const upErr = clamp01(0.92 - this._uprightness());
-      P.shoulders.addVelocity(0, upErr * 26 * h, 0, h);
-      P.hip.addVelocity(0, upErr * 10 * h, 0, h);
+      P.shoulders.addVelocity(0, upErr * 15 * h, 0, h);
+      P.hip.addVelocity(0, upErr * 6 * h, 0, h);
     }
   }
 

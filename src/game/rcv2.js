@@ -224,14 +224,25 @@ export class RCV2 {
       boneBoxCenter(this.grab.bone, _v3);
       const pair = c.boneParticles[this.grab.bone.name];
       const parts = pair ? [c.particles[pair[0]], c.particles[pair[1]]] : [c.particles.mt];
-      _v4.copy(hold).sub(_v3).multiplyScalar(9);
+      _v4.copy(hold).sub(_v3).multiplyScalar(7);
       const speed = _v4.length();
-      if (speed > 15) _v4.multiplyScalar(15 / speed);
-      const h = 1 / 90;
-      for (const p of parts) {
-        p.px = p.x - _v4.x * h;
-        p.py = p.y - _v4.y * h;
-        p.pz = p.z - _v4.z * h;
+      if (speed > 9) _v4.multiplyScalar(9 / speed);
+      /* The whole person comes along, not just the joint under the beam.
+         Yanking two particles and leaving the constraint solver to drag the
+         other thirty is what made a held citizen crack like a whip; easing
+         every joint towards the same velocity carries them instead. */
+      const h = this.game.world.substepDt;
+      const FOLLOW = 0.24;                 // how much of the pull the rest gets
+      const DAMP = 0.9;                    // takes the flail out of what is left
+      for (const p of c.particleList) {
+        const grabbed = parts.includes(p);
+        const a = grabbed ? 1 : FOLLOW;
+        const vx = grabbed ? 0 : (p.x - p.px) * DAMP;
+        const vy = grabbed ? 0 : (p.y - p.py) * DAMP;
+        const vz = grabbed ? 0 : (p.z - p.pz) * DAMP;
+        p.px = p.x - (vx * (1 - a) + _v4.x * h * a);
+        p.py = p.y - (vy * (1 - a) + _v4.y * h * a);
+        p.pz = p.z - (vz * (1 - a) + _v4.z * h * a);
       }
       if (!c.dead) { c.wantsUp = false; c.balance = 0; }
       this._drawBeam(_v3, 0.45);

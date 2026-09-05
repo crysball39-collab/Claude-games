@@ -15,12 +15,20 @@ let _pid = 1;
 
 /** How much of a muscle correction is allowed to become velocity. */
 const MUSCLE_VELOCITY_SHARE = 0.28;
-/** Metres per second no joint may exceed. */
-const MAX_PARTICLE_SPEED = 26;
+/** ...and the most speed, in m/s, one substep of muscle may add on top. */
+const MAX_MUSCLE_DV = 2.0;
+/** Metres per second no joint may exceed. Well past a hard fall, well short
+    of anything that reads as a body being launched. */
+const MAX_PARTICLE_SPEED = 13;
 /** How elastic a body-against-flesh contact is. Barely. */
 const BODY_RESTITUTION = 0.85;
-/** Most speed a single contact may hand to one joint, in m/s. */
-const MAX_CONTACT_DV = 16;
+/** Most speed a single contact may hand to one joint, in m/s. A boulder
+    should knock someone flat, not fire an arm across the map. */
+const MAX_CONTACT_DV = 10;
+/** Deepest overlap two people may unwind in one solver pass, in metres.
+    Small on purpose: the solver runs this many times per step, and racing the
+    skeleton's own constraints is what pulls limbs long. */
+const MAX_SEPARATION_STEP = 0.02;
 
 /* -------------------------------------------------------------------------- */
 /*                                  particle                                  */
@@ -46,6 +54,11 @@ export class Particle {
     this.grounded = false;
     this.lastImpactSpeed = 0;
     this.pinned = false;
+    /* How much speed contacts may still hand this particle during the current
+       fixed step. Capping each contact on its own is not enough: a boulder
+       ploughing through a crowd touches the same joint on every solver pass,
+       and a dozen "safe" impulses in a row is still a launch. */
+    this.dvBudget = 0;
   }
 
   get vx() { return this.x - this.px; }
@@ -172,6 +185,14 @@ export class PhysicsWorld {
     this.bodies.length = 0;
   }
 
+  /**
+   * How long one substep is. Anything handing a particle a velocity has to
+   * measure it against THIS, not against the fixed step: a Verlet particle
+   * stores speed as a position offset, so using the wrong slice multiplies
+   * every push by the substep count.
+   */
+  get substepDt() { return this.fixedStep / this.substeps; }
+
   /* --------------------------------- step -------------------------------- */
 
   step(dt) {
@@ -189,6 +210,7 @@ export class PhysicsWorld {
   _fixedStep(dt) {
     const h = dt / this.substeps;
     this._rebuildBroadphase();
+    for (let i = 0; i < this.particles.length; i++) this.particles[i].dvBudget = MAX_CONTACT_DV;
     for (let s = 0; s < this.substeps; s++) {
       for (let i = 0; i < this.characters.length; i++) this.characters[i].preSubstep(h, this);
       this._stepBodies(h);
@@ -367,13 +389,22 @@ export class PhysicsWorld {
         /* Verlet reads any position edit as velocity, so pulling a limb
            towards its animated pose every substep pumps energy in and the
            ragdoll winds itself up until it flies. Move the previous position
-           along with it and only a fixed share of the correction survives as
-           actual speed. */
+           along with it, so only a share of the correction survives as speed,
+           and cap that share: the further the body has been shoved from its
+           animated pose - exactly what a boulder does - the bigger the
+           correction, and an uncapped share of a big correction is a launch.
+           A muscle may pull a limb home; it may not throw it there. */
         const k = p.muscle * p.muscle * 0.45;
-        const keep = 1 - MUSCLE_VELOCITY_SHARE;
         const dx = (p.tx - p.x) * k, dy = (p.ty - p.y) * k, dz = (p.tz - p.z) * k;
         p.x += dx; p.y += dy; p.z += dz;
-        p.px += dx * keep; p.py += dy * keep; p.pz += dz * keep;
+        let sx = dx * MUSCLE_VELOCITY_SHARE, sy = dy * MUSCLE_VELOCITY_SHARE, sz = dz * MUSCLE_VELOCITY_SHARE;
+        const lim = MAX_MUSCLE_DV * dt;
+        const m2 = sx * sx + sy * sy + sz * sz;
+        if (m2 > lim * lim) {
+          const s2 = lim / Math.sqrt(m2);
+          sx *= s2; sy *= s2; sz *= s2;
+        }
+        p.px += dx - sx; p.py += dy - sy; p.pz += dz - sz;
       }
     }
 
@@ -382,6 +413,32 @@ export class PhysicsWorld {
       for (let i = 0; i < cs.length; i++) cs[i].solve();
       const last = it === this.constraintIters - 1;
       this._collideParticles(dt, last, it >= this.constraintIters - 2);
+    }
+
+    /* Two guarantees about what leaves a substep.
+       One: a joint held by a working muscle is where the animation says it is,
+       moving at the speed the animation says. The solver spends six iterations
+       dragging such a joint about to satisfy its neighbours, and every one of
+       those position edits would otherwise read as speed - which is how a body
+       shoved by a boulder while still under animation used to come apart at
+       forty metres a second.
+       Two: nothing at all leaves faster than a person can credibly move. */
+    for (let i = 0; i < ps.length; i++) {
+      const p = ps[i];
+      if (p.pinned) continue;
+      if (p.muscle >= 0.999) {
+        p.x = p.tx; p.y = p.ty; p.z = p.tz;
+        p.px = p.tx - p.tvx * dt;
+        p.py = p.ty - p.tvy * dt;
+        p.pz = p.tz - p.tvz * dt;
+        continue;
+      }
+      const dx = p.x - p.px, dy = p.y - p.py, dz = p.z - p.pz;
+      const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (d > maxStep) {
+        const k = maxStep / d;
+        p.px = p.x - dx * k; p.py = p.y - dy * k; p.pz = p.z - dz * k;
+      }
     }
   }
 
@@ -490,18 +547,22 @@ export class PhysicsWorld {
     if (vn < 0) {
       const eff = p.invMass + body.invMass;
       if (eff > 1e-8) {
-        // Flesh does not bounce, and no single joint may be handed more than
-        // a survivable amount of speed by one contact.
+        // Flesh does not bounce, and no joint may be handed more than a
+        // survivable amount of speed by the contacts of one step.
         let j = (-BODY_RESTITUTION * vn) / eff;
-        const dv = j * p.invMass;
-        if (dv > MAX_CONTACT_DV) j *= MAX_CONTACT_DV / dv;
-        // particle side
-        p.px -= _v3.x * j * p.invMass * dt;
-        p.py -= _v3.y * j * p.invMass * dt;
-        p.pz -= _v3.z * j * p.invMass * dt;
-        if (body.invMass > 0) {
-          _v1.copy(_v3).multiplyScalar(-j * 0.85);
-          body.applyImpulse(_v1, _v2);
+        const want = j * p.invMass;
+        const spend = Math.min(want, p.dvBudget);
+        if (want > 1e-9) j *= spend / want;
+        p.dvBudget -= spend;
+        if (j > 1e-9) {
+          // particle side
+          p.px -= _v3.x * j * p.invMass * dt;
+          p.py -= _v3.y * j * p.invMass * dt;
+          p.pz -= _v3.z * j * p.invMass * dt;
+          if (body.invMass > 0) {
+            _v1.copy(_v3).multiplyScalar(-j * 0.85);
+            body.applyImpulse(_v1, _v2);
+          }
         }
         if (report && -vn > 5.5) this._reportParticleImpact(p, _v3.x, _v3.y, _v3.z, -vn, body);
       }
@@ -558,10 +619,21 @@ export class PhysicsWorld {
             const d = Math.sqrt(d2);
             const wsum = p.invMass + q.invMass;
             if (wsum <= 0) continue;
-            const push = ((rr - d) / d) * 0.6;
+            /* Separation only, never propulsion. This is a position edit, and
+               Verlet reads any position edit as speed, so the previous
+               position travels with it - otherwise two ragdolls dropped into
+               each other trade the whole overlap for velocity and fire apart.
+               The step is capped as well, so a deep spawn overlap unwinds over
+               a few substeps instead of teleporting limbs. */
+            const overlap = Math.min(rr - d, MAX_SEPARATION_STEP);
+            const push = (overlap / d) * 0.4;
             const wp = p.invMass / wsum, wq = q.invMass / wsum;
-            p.x -= dx * push * wp; p.y -= dy * push * wp; p.z -= dz * push * wp;
-            q.x += dx * push * wq; q.y += dy * push * wq; q.z += dz * push * wq;
+            const ax = dx * push * wp, ay = dy * push * wp, az = dz * push * wp;
+            const bx = dx * push * wq, by = dy * push * wq, bz = dz * push * wq;
+            p.x -= ax; p.y -= ay; p.z -= az;
+            p.px -= ax; p.py -= ay; p.pz -= az;
+            q.x += bx; q.y += by; q.z += bz;
+            q.px += bx; q.py += by; q.pz += bz;
           }
         }
       }

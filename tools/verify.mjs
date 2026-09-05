@@ -296,12 +296,15 @@ r = await page.evaluate(async () => {
   const rock = spawnBoulder(g, new V(-7, 0.6, 0.1));
   rock.vel.set(16, 0, 0); rock.wake();
 
+  // A Verlet particle stores speed as a position offset over ONE substep, so
+  // that is what turns it back into metres per second.
+  const inv = 1 / g.world.substepDt;
   let peak = 0, high = 0;
   for (let f = 0; f < 260; f++) {
     await new Promise((res) => requestAnimationFrame(res));
     for (const c of cs) {
       for (const p of c.particleList) {
-        peak = Math.max(peak, Math.hypot(p.x - p.px, p.y - p.py, p.z - p.pz) * 90);
+        peak = Math.max(peak, Math.hypot(p.x - p.px, p.y - p.py, p.z - p.pz) * inv);
         high = Math.max(high, p.y);
       }
     }
@@ -313,6 +316,39 @@ r = await page.evaluate(async () => {
 });
 check('ragdolls take a hit without being launched',
   r.finite && r.peakSpeed < 14 && r.maxHeight < 3, JSON.stringify(r));
+
+// ---------- one punch staggers you, it does not floor you ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  const V = g.player.pos.constructor;
+  g.clearSpawns();
+  g.player.teleport(0, 0, 0);
+  g.player.balance = 1; g.player.health = 100;
+  g.player.setState('controlled');
+  await new Promise((res) => setTimeout(res, 200));
+
+  // exactly what a citizen's hardest jab hands over: 130 kg m/s at chest height
+  const jab = () => {
+    const b = g.player.rig.byName.upperTorso;
+    g.player.applyImpact(new V(b.worldPos.x, b.worldPos.y, b.worldPos.z + 0.15),
+      new V(0, 7, -130), { boneName: 'upperTorso', damage: 9, type: 'blunt' });
+  };
+  jab();
+  await new Promise((res) => requestAnimationFrame(res));
+  const afterOne = { state: g.player.state, balance: +g.player.balance.toFixed(2) };
+
+  // keep going and it should still end with you on the floor
+  let downAfter = 0;
+  for (let i = 2; i <= 8 && g.player.state === 'controlled'; i++) {
+    jab();
+    await new Promise((res) => requestAnimationFrame(res));
+    downAfter = i;
+  }
+  return { afterOne, downAfter, endState: g.player.state };
+});
+check('one punch does not floor you, a beating does',
+  r.afterOne.state === 'controlled' && r.afterOne.balance > 0.6 &&
+  r.downAfter >= 3 && r.endState !== 'controlled', JSON.stringify(r));
 
 // ---------- the machete: pick it up, swing it, put it down ----------
 r = await page.evaluate(async () => {
@@ -333,8 +369,11 @@ r = await page.evaluate(async () => {
   // button turns itself on before pressing it.
   for (let i = 0; i < 20; i++) await new Promise((res) => requestAnimationFrame(res));
   const useOffered = document.querySelector('#btn-use').classList.contains('show');
+  const fistPose = g.player.animator.upper.clip?.name || null;
   g.useAction();                                  // USE picks it up
   const carried = !!g.carried && g.equipped === 'machete';
+  for (let i = 0; i < 10; i++) await new Promise((res) => requestAnimationFrame(res));
+  const bladePose = g.player.animator.upper.clip?.name || null;
 
   const c = spawnCitizen(g, new V(0, 0, 0));
   await new Promise((res) => setTimeout(res, 400));
@@ -358,7 +397,7 @@ r = await page.evaluate(async () => {
   }
   g.useAction();                                  // USE puts it back down
   return {
-    carried, useOffered, clips, damage, bled,
+    carried, useOffered, fistPose, bladePose, clips, damage, bled,
     dropped: !g.carried && g.spawnedBodies.some((b) => b.tag === 'machete'),
     equippedAfter: g.equipped,
   };
@@ -366,6 +405,9 @@ r = await page.evaluate(async () => {
 check('the machete can be picked up, swung and dropped',
   r.carried && r.useOffered && r.damage > 30 && r.bled && r.dropped &&
   r.clips.includes('slashR') && r.clips.includes('slashL'), JSON.stringify(r));
+check('holding a blade looks nothing like holding fists',
+  r.fistPose === 'fistGuard' && r.bladePose === 'macheteHold',
+  JSON.stringify({ fistPose: r.fistPose, bladePose: r.bladePose }));
 
 // ---------- boulder actually rolls ----------
 r = await page.evaluate(async () => {
