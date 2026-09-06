@@ -27,6 +27,10 @@ const BODY_RESTITUTION = 0.85;
 const MAX_CONTACT_DV = 10;
 /** How hard one body's bones push against another body's. */
 const CROSS_BODY_STIFFNESS = 0.45;
+/** How far a muscle can usefully pull: past this the pull stops growing. */
+const MUSCLE_REACH = 0.12;
+/** How much of a sliding contact's speed one solve pass rubs off. */
+const CONTACT_FRICTION = 0.06;
 /** Deepest overlap two bones may unwind in one solver pass, in metres. */
 const MAX_CAPSULE_STEP = 0.03;
 /** Deepest overlap two people may unwind in one solver pass, in metres.
@@ -135,6 +139,25 @@ export class DistanceConstraint {
  * It is a position correction, so the previous positions travel with it: a
  * joint pushed back where it belongs must not be handed speed for the trip.
  */
+/**
+ * Takes the speed out of a correction, along the direction it was made in.
+ *
+ * A limit that pushes a joint back where it belongs carries the previous
+ * position with it, so the push itself is not speed. But the bones pulling
+ * the joint the other way DO produce speed, and against a limit that is
+ * standing its ground that becomes a tug of war: a few millimetres a substep,
+ * every substep, for as long as the body lies there. A real joint stop does
+ * not do that. It stops the joint moving in that direction, and that is all.
+ *
+ * @param {number} sign +1 the particle was pushed along n, -1 against it
+ */
+function stopInto(p, nx, ny, nz, sign) {
+  if (p.invMass <= 0) return;
+  const vn = (p.x - p.px) * nx + (p.y - p.py) * ny + (p.z - p.pz) * nz;
+  if (sign * vn >= 0) return;               // already moving the way it was pushed
+  p.px += nx * vn; p.py += ny * vn; p.pz += nz * vn;
+}
+
 export class HingeGuard {
   /**
    * @param {object} frame particles defining the body: hipR, hipL, hip, top
@@ -182,9 +205,11 @@ export class HingeGuard {
     const kb = fix * 0.62, ke = fix * 0.19;
     b.x += fx * kb; b.y += fy * kb; b.z += fz * kb;
     b.px += fx * kb; b.py += fy * kb; b.pz += fz * kb;
+    stopInto(b, fx, fy, fz, 1);
     for (const p of [a, c]) {
       p.x -= fx * ke; p.y -= fy * ke; p.z -= fz * ke;
       p.px -= fx * ke; p.py -= fy * ke; p.pz -= fz * ke;
+      stopInto(p, fx, fy, fz, -1);
     }
   }
 }
@@ -265,6 +290,24 @@ export function collideCapsules(a0, a1, ra, b0, b1, rb, stiffness = 1) {
     const m = sign * k * w * p.invMass;
     p.x += nx * m; p.y += ny * m; p.z += nz * m;
     p.px += nx * m; p.py += ny * m; p.pz += nz * m;
+    /* And the contact takes the speed out of itself. Separating two limbs is
+       a position fix that carries its own previous position along, but the
+       bone lengths that pull them back together do not - so a limb resting on
+       something ends up in a tug of war, gaining a few millimetres of speed
+       every substep and buzzing in place. A real contact is not springy: it
+       stops the two surfaces closing, and rubs. */
+    const vx = p.x - p.px, vy = p.y - p.py, vz = p.z - p.pz;
+    const vn = vx * nx + vy * ny + vz * nz;
+    /* Moving INTO the other surface is what has to go. n runs from the a
+       side to the b side, so a is closing when vn is positive and b when it
+       is negative - which is sign * vn < 0 either way round. */
+    if (sign * vn < 0) {
+      p.px += nx * vn; p.py += ny * vn; p.pz += nz * vn;
+    }
+    // and what is left slides, with friction
+    p.px += (p.x - p.px) * CONTACT_FRICTION;
+    p.py += (p.y - p.py) * CONTACT_FRICTION;
+    p.pz += (p.z - p.pz) * CONTACT_FRICTION;
   };
   push(a0, wa0, -1); push(a1, wa1, -1);
   push(b0, wb0, 1); push(b1, wb1, 1);
@@ -713,7 +756,20 @@ export class PhysicsWorld {
            correction, and an uncapped share of a big correction is a launch.
            A muscle may pull a limb home; it may not throw it there. */
         const k = p.muscle * p.muscle * 0.45;
-        const dx = (p.tx - p.x) * k, dy = (p.ty - p.y) * k, dz = (p.tz - p.z) * k;
+        /* A muscle pulls with a force it has, not with one proportional to
+           how wrong the pose is. A body on the floor is being animated as if
+           it were standing up, so the target for its head is most of a metre
+           away; without this the weak pull a ragdoll still has works out at
+           millimetres a substep, the floor puts the head back, and the body
+           buzzes for as long as it lies there. Past arm's reach the pull stops
+           growing. */
+        let ex = p.tx - p.x, ey = p.ty - p.y, ez = p.tz - p.z;
+        const e2 = ex * ex + ey * ey + ez * ez;
+        if (e2 > MUSCLE_REACH * MUSCLE_REACH) {
+          const s2 = MUSCLE_REACH / Math.sqrt(e2);
+          ex *= s2; ey *= s2; ez *= s2;
+        }
+        const dx = ex * k, dy = ey * k, dz = ez * k;
         p.x += dx; p.y += dy; p.z += dz;
         let sx = dx * MUSCLE_VELOCITY_SHARE, sy = dy * MUSCLE_VELOCITY_SHARE, sz = dz * MUSCLE_VELOCITY_SHARE;
         const lim = MAX_MUSCLE_DV * dt;

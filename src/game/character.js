@@ -1029,7 +1029,17 @@ export class Character {
   _updateRagdoll(dt) {
     this.animator.setUpper(null);
     this._rootFromPhysics();
-    this.targetStrength = this.dead ? RAGDOLL.deadStrength : RAGDOLL.strength;
+    /* An unconscious body goes limp. While a ragdoll is still trying - which
+       is most of the time, since anyone who can get up does - it keeps the
+       muscle tone that makes it flinch and reach; left down long enough with
+       no intention of getting up, it relaxes to a dead weight. Without that,
+       a body lying on the grass is quietly pulled towards a standing pose
+       for ever, and creeps across the map at a few centimetres a second. */
+    const limp = this.dead || !this.wantsUp
+      ? clamp01((this.stateTime - 1.4) / 2.5) : 0;
+    this.targetStrength = this.dead
+      ? RAGDOLL.deadStrength
+      : lerp(RAGDOLL.strength, RAGDOLL.deadStrength, limp);
     this.getUpDelay -= dt;
 
     if (!this.dead) {

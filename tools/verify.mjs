@@ -1169,6 +1169,58 @@ r = await page.evaluate(async () => {
 check('holding the trigger empties the AK and does nothing to the Glock',
   r.glock === 0 && r.ak47 >= 8 && r.ak47 <= 11, JSON.stringify(r));
 
+// ---------- a body that has stopped moving, stops moving ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  const app = window.GOREBOX;
+  const OX = g.map.openArea.x;
+  const V = g.player.pos.constructor;
+  const { spawnCitizen } = await import('/src/game/citizen.js');
+  g.clearSpawns();
+  g.player.teleport(OX, 9, 0);
+  // four of them, dropped into each other: a pile is where a ragdoll that
+  // buzzes shows it, because every body is leaning on another one
+  const cs = [];
+  for (let i = 0; i < 4; i++) {
+    const c = spawnCitizen(g, new V(OX + (i % 2) * 0.7 - 0.35, 0, (i > 1 ? 0.7 : 0) - 0.35));
+    c.ai.update = () => c.moveInput.set(0, 0, 0);
+    cs.push(c);
+  }
+  await new Promise((res) => setTimeout(res, 600));
+  for (const c of cs) { c.balance = 0; c.wantsUp = false; c.setState('ragdoll'); }
+  // Stepped by hand so this measures the physics, not the frame rate.
+  app.state = 'paused'; g.paused = false;
+  const stub = { consumeLook: () => ({ x: 0, y: 0 }), move: { x: 0, y: 0 },
+    pressed: {}, down: {}, beginFrame() {} };
+  for (let i = 0; i < 900; i++) g.update(1 / 60, stub);      // fifteen seconds
+  let worst = 0, worstName = '';
+  const before = [];
+  for (const c of cs) {
+    for (const n of Object.keys(c.particles)) {
+      const p = c.particles[n];
+      const mm = Math.hypot(p.x - p.px, p.y - p.py, p.z - p.pz) * 1000;
+      if (mm > worst) { worst = mm; worstName = n; }
+      before.push([p.x, p.y, p.z]);
+    }
+  }
+  for (let i = 0; i < 300; i++) g.update(1 / 60, stub);      // five more
+  let k = 0, drift = 0;
+  for (const c of cs) {
+    for (const n of Object.keys(c.particles)) {
+      const p = c.particles[n], b = before[k++];
+      drift = Math.max(drift, Math.hypot(p.x - b[0], p.y - b[1], p.z - b[2]));
+    }
+  }
+  app.state = 'playing';
+  const flat = cs.map((c) => +(c.rig.byName.head.worldPos.y).toFixed(2));
+  g.clearSpawns();
+  g.player.teleport(OX, 6, 0);
+  return { worst: +worst.toFixed(2), worstName, drift: +drift.toFixed(3), heads: flat };
+});
+check('a settled pile of ragdolls lies still instead of buzzing',
+  r.worst < 0.5 && r.drift < 0.25 && r.heads.every((y) => y < 0.6),
+  JSON.stringify(r));
+
 // ---------- boulder actually rolls ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;
