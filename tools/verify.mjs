@@ -1221,6 +1221,77 @@ check('a settled pile of ragdolls lies still instead of buzzing',
   r.worst < 0.5 && r.drift < 0.25 && r.heads.every((y) => y < 0.6),
   JSON.stringify(r));
 
+// ---------- the body that is drawn is the body the physics has ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  const app = window.GOREBOX;
+  const OX = g.map.openArea.x;
+  const V = g.player.pos.constructor;
+  const { spawnCitizen } = await import('/src/game/citizen.js');
+  const stub = { consumeLook: () => ({ x: 0, y: 0 }), move: { x: 0, y: 0 },
+    pressed: {}, down: {}, beginFrame() {} };
+  const D = 180 / Math.PI;
+  const out = {};
+  for (const way of ['collapse', 'punched']) {
+    g.clearSpawns();
+    g.player.teleport(OX, 9, 0);
+    const cs = [];
+    for (let i = 0; i < 3; i++) {
+      const c = spawnCitizen(g, new V(OX + i * 1.5 - 1.5, 0, 0));
+      c.ai.update = () => c.moveInput.set(0, 0, 0);
+      cs.push(c);
+    }
+    await new Promise((res) => setTimeout(res, 500));
+    for (const c of cs) {
+      c.balance = 0; c.wantsUp = false;
+      if (way === 'punched') {
+        c.applyImpact(new V(c.center.x, c.center.y + 0.4, c.center.z), new V(0, 20, -140),
+          { boneName: 'upperTorso', damage: 0, type: 'blunt', severity: 0.8 });
+      }
+      c.setState('ragdoll'); c.wantsUp = false;
+    }
+    app.state = 'paused'; g.paused = false;
+    for (let i = 0; i < 600; i++) { g.update(1 / 60, stub); for (const c of cs) c.wantsUp = false; }
+    /* Every limb is drawn pointing where its own two particles are. A bone
+       whose rest rotation was left out of the physics pose came out pointing
+       the opposite way - which is how a body ended up with its legs inside
+       its chest while the physics of it was perfectly sensible. */
+    let worst = 0, worstName = '';
+    let torso = 0;
+    for (const c of cs) {
+      /* The four limb bones. A wrist, an ankle and a neck have narrow ranges
+         that nothing limits in the physics, so the drawn pose is deliberately
+         pulled back inside what those joints can do - there it is the pose
+         that is wrong, not the drawing of it. An arm or a leg has no such
+         excuse: it is drawn exactly where its own two particles are, or the
+         body being drawn is not the body being simulated. */
+      const LIMB = /^(upper|lower)(Arm|Leg)[RL]$/;
+      for (const [name, pair] of Object.entries(c.boneParticles)) {
+        if (!LIMB.test(name)) continue;
+        const b = c.rig.byName[name];
+        const a = c.particles[pair[0]], z = c.particles[pair[1]];
+        const dir = new V(z.x - a.x, z.y - a.y, z.z - a.z);
+        if (dir.lengthSq() < 1e-8) continue;
+        const drawn = b.worldEnd.clone().sub(b.worldPos);
+        const off = drawn.angleTo(dir) * D;
+        if (off > worst) { worst = off; worstName = name; }
+      }
+      // and a body lying down is its own length, not folded into a ball
+      const head = c.rig.byName.head.worldEnd;
+      torso = Math.max(torso, head.distanceTo(c.rig.byName.footR.worldEnd),
+        head.distanceTo(c.rig.byName.footL.worldEnd));
+    }
+    app.state = 'playing';
+    out[way] = { worst: +worst.toFixed(1), worstName, span: +torso.toFixed(2) };
+  }
+  g.clearSpawns();
+  g.player.teleport(OX, 6, 0);
+  return out;
+});
+check('a ragdoll is drawn where its physics actually is',
+  r.collapse.worst < 12 && r.punched.worst < 12 &&
+  r.collapse.span > 1.1 && r.punched.span > 1.1, JSON.stringify(r));
+
 // ---------- boulder actually rolls ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;

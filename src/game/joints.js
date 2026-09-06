@@ -156,6 +156,11 @@ export function clampBoneEuler(name, euler) {
  * whole leg back into range lifts it off the ground it is lying on.
  */
 export const DRAWN_LIMIT_BONES = new Set([
+  /* Not the shoulders or the hips. Those are ball joints, and the cone that
+     governs them is enforced on the particles themselves - where it belongs,
+     since it is a real limit on where the limb can be. Clamping the drawn
+     bone as well would only measure the same cone with a squarer ruler and
+     move the arm off its own physics to satisfy it. */
   'lowerArmR', 'lowerArmL', 'lowerLegR', 'lowerLegL',
   'handR', 'handL', 'footR', 'footL',
   'neck', 'head', 'lowerTorso', 'midTorso', 'upperTorso',

@@ -41,6 +41,22 @@ const UP = new Vector3(0, 1, 0);
 const EYE_STATE = ['ok', 'bloodshot', 'bleeding', 'hanging', 'gone'];
 const EYE_LEVEL = { ok: 0, bloodshot: 1, bleeding: 2, hanging: 3, gone: 4 };
 const EYE_BLIND = { ok: 0, bloodshot: 0.08, bleeding: 0.3, hanging: 0.5, gone: 0.5 };
+/**
+ * A shoulder and a hip can be turned about the limb's own axis without moving
+ * either joint, so the particles - which are only two points - do not say
+ * which way the elbow or the knee below them is pointing. Left to fall out of
+ * the maths it comes out arbitrary, and a knee drawn bending sideways then
+ * gets clamped to straight, which is a leg that ignores its own physics.
+ *
+ * So the twist is taken from the joint below: the limb is rolled until the
+ * hinge bends in the plane the two bones actually make, the way it bends on
+ * the side it is on. +1 elbows fold forwards, -1 knees fold backwards.
+ */
+const TWIST_FROM_CHILD = {
+  upperArmR: ['lowerArmR', 1], upperArmL: ['lowerArmL', 1],
+  upperLegR: ['lowerLegR', -1], upperLegL: ['lowerLegL', -1],
+};
+
 const LEG_BONES = new Set([
   'upperLegR', 'lowerLegR', 'footR', 'upperLegL', 'lowerLegL', 'footL',
 ]);
@@ -1402,10 +1418,22 @@ export class Character {
         if (!bone.parent) {
           this._physQuat[idx].copy(this._rootPhys);
         } else {
+          /* Turn the bone from where it would hang with no animation onto
+             where its two particles actually are.
+
+             The rest rotation has to be part of that. A bone points along its
+             own +Y, and a limb that hangs downwards has a half turn built into
+             its rest - so leaving the rest out here drew every thigh and every
+             upper arm pointing exactly the wrong way, up through the body
+             instead of down out of it, with the shin and the foot hanging off
+             the wrong end. That is what a ragdoll with its legs inside its
+             chest was: not the physics, which was right all along, but the
+             drawing of it. */
           const pq = this._physQuat[bone.parent.index];
           _v2.copy(bone.restDirInParent).applyQuaternion(pq);
           _q1.setFromUnitVectors(_v2, _v1);
-          this._physQuat[idx].copy(_q1).multiply(pq);
+          this._physQuat[idx].copy(_q1).multiply(pq).multiply(bone.restQuat);
+          this._twistFromChild(bone, idx, _v1);
         }
       } else {
         // fingers and foot tips just follow their parent
@@ -1414,6 +1442,31 @@ export class Character {
         this._physQuat[idx].copy(pq).multiply(bone.restQuat).multiply(bone.animQuat);
       }
     }
+  }
+
+  /**
+   * Rolls a limb about its own axis so the hinge below it bends the way it
+   * really is bent. `dir` is where the limb points, already normalised.
+   */
+  _twistFromChild(bone, idx, dir) {
+    const spec = TWIST_FROM_CHILD[bone.name];
+    if (!spec) return;
+    const pair = this.boneParticles[spec[0]];
+    if (!pair) return;
+    const P = this.particles;
+    const a = P[pair[0]], b = P[pair[1]];
+    _v3.set(b.x - a.x, b.y - a.y, b.z - a.z);
+    if (_v3.lengthSq() < 1e-10) return;
+    _v3.normalize();
+    // sin(bend) * the hinge axis, in world space
+    _v4.crossVectors(dir, _v3);
+    // A straight limb has no plane to speak of; leave it as it came out.
+    if (_v4.lengthSq() < 4e-4) return;
+    _v4.normalize().multiplyScalar(spec[1]);
+    // rebuild the orientation from the two axes the body actually has
+    _v2.crossVectors(_v4, dir);
+    _m4.makeBasis(_v4, dir, _v2);
+    this._physQuat[idx].setFromRotationMatrix(_m4);
   }
 
   /**
