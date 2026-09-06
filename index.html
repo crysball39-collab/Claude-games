@@ -140,6 +140,8 @@
       <button class="wslot" data-weapon="rcv2"><span class="wname">RCV2</span><span class="wkey">2</span></button>
       <button class="wslot hidden" data-weapon="machete" id="slot-machete"><span class="wname">MACHETE</span><span class="wkey">3</span></button>
       <button class="wslot hidden" data-weapon="sledge" id="slot-sledge"><span class="wname">SLEDGE</span><span class="wkey">4</span></button>
+      <button class="wslot hidden" data-weapon="glock" id="slot-glock"><span class="wname">GLOCK-19</span><span class="wkey">5</span></button>
+      <button class="wslot hidden" data-weapon="ak47" id="slot-ak47"><span class="wname">AK-47</span><span class="wkey">6</span></button>
     </div>
 
     <!-- right action cluster -->
@@ -153,11 +155,13 @@
         <button class="hud-btn round med" id="btn-jump">JUMP</button>
       </div>
       <div class="col">
+        <button class="hud-btn round med reload" id="btn-reload">RELOAD</button>
         <button class="hud-btn round med use" id="btn-use">USE</button>
         <button class="hud-btn round big" id="btn-primary">PUNCH</button>
       </div>
     </div>
 
+    <div id="ammo-readout" class="hidden"><b id="ammo-now">0</b><span id="ammo-max">/0</span></div>
     <div id="selected-spawn" class="hidden">Selected: <b id="selected-name">-</b></div>
     <div id="toast"></div>
     <div id="damage-vignette"></div>

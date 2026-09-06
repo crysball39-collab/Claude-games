@@ -205,6 +205,51 @@ check('USE picks the sledgehammer up and PRIMARY swings it',
   sledge.carrying === 'sledge' && sledge.equipped === 'sledge' &&
   /swing/.test(sledge.swinging || '') && sledge.label === 'SWING', JSON.stringify(sledge));
 
+/* --------------------------------- the guns -------------------------------- */
+await page.tap('#btn-use'); await page.waitForTimeout(400);      // put the hammer down
+await page.tap('#btn-pause'); await page.waitForTimeout(300);
+await page.tap('#btn-clear'); await page.waitForTimeout(200);
+await page.tap('#btn-resume'); await page.waitForTimeout(400);
+await page.tap('#btn-hamburger'); await page.waitForTimeout(350);
+await page.tap('.item[data-id="glock"]'); await page.waitForTimeout(150);
+await page.tap('#btn-close-drawer'); await page.waitForTimeout(250);
+await page.tap('.wslot[data-weapon="rcv2"]'); await page.waitForTimeout(300);
+await page.tap('#btn-spawn'); await page.waitForTimeout(1500);
+await page.evaluate(() => {
+  const g = window.GOREBOX.game;
+  const m = g.spawnedBodies.find((b) => b.tag === 'glock');
+  if (!m) return;
+  g.player.teleport(m.pos.x, m.pos.z + 0.9, 0);
+  g.camYaw = 0; g.camPitch = -0.15;
+  g.setEquipped('fists');
+});
+await page.waitForTimeout(600);
+await page.tap('#btn-use'); await page.waitForTimeout(700);
+await shot('10-glock');
+const ammoBefore = await page.evaluate(() => document.querySelector('#ammo-now').textContent);
+await page.tap('#btn-primary'); await page.waitForTimeout(500);
+await shot('11-fired');
+await page.tap('#btn-reload');
+// Reloading takes a second and a half of GAME time, and this renderer is slow
+// enough that that is several seconds of ours.
+await page.waitForFunction(
+  () => document.querySelector('#ammo-now').textContent === '15', { timeout: 20000 },
+).catch(() => {});
+const gun = await page.evaluate(() => ({
+  carrying: window.GOREBOX.game.carried?.kind || null,
+  equipped: window.GOREBOX.game.equipped,
+  label: document.querySelector('#btn-primary').textContent,
+  reloadShown: document.querySelector('#btn-reload').classList.contains('show'),
+  slot: !document.querySelector('#slot-glock').classList.contains('hidden'),
+  ammo: document.querySelector('#ammo-now').textContent,
+  visible: !document.querySelector('#ammo-readout').classList.contains('hidden'),
+}));
+check('USE takes the Glock, PRIMARY fires it and RELOAD fills it',
+  gun.carrying === 'glock' && gun.equipped === 'glock' && gun.label === 'FIRE' &&
+  gun.reloadShown && gun.slot && gun.visible &&
+  ammoBefore === '15' && gun.ammo === '15',
+  JSON.stringify({ ...gun, ammoBefore }));
+
 /* -------------------------------- the rest --------------------------------- */
 const state = await page.evaluate(() => ({
   running: window.GOREBOX.game.running,

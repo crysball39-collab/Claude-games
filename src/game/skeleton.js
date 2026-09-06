@@ -60,15 +60,21 @@ function armBones(side) {
     { name: 'lowerArm' + S, parent: 'upperArm' + S, offset: [0, 0.28, 0], rest: [0, 0, 0],
       length: 0.26, box: { size: [0.09, 0.265, 0.094] }, cloth: 'cuff', hp: 16, atlas: 32, side: s },
 
+    /* A palm is about as thick as two fingers, not as thick as a wrist is
+       wide: a deeper box than this cannot close around anything, which is
+       what a hand is for. */
     { name: 'hand' + S, parent: 'lowerArm' + S, offset: [0, 0.26, 0], rest: [0, 0, 0],
-      length: 0.095, box: { size: [0.088, 0.10, 0.062] }, hp: 10, atlas: 24, side: s, isHand: true },
+      length: 0.095, box: { size: [0.088, 0.10, 0.042] }, hp: 10, atlas: 24, side: s, isHand: true },
   ];
 
-  // Four fingers plus a thumb. Both segments of every finger turn on their own.
+  /* Four fingers plus a thumb. Both segments of every finger turn on their
+     own. The knuckles sit towards the palm side of the hand, where a real
+     knuckle is, so that a closed fist leaves a hole in front of the palm
+     rather than folding into the middle of it. */
   const spread = [-0.030, -0.010, 0.010, 0.030];
   for (let i = 0; i < 4; i++) {
     bones.push({
-      name: `finger${S}${i}A`, parent: 'hand' + S, offset: [spread[i], 0.098, 0.006], rest: [0, 0, 0],
+      name: `finger${S}${i}A`, parent: 'hand' + S, offset: [spread[i], 0.098, -0.008], rest: [0, 0, 0],
       length: 0.040, box: { size: [0.018, 0.042, 0.021] }, hp: 3, atlas: 8, side: s, finger: true,
     });
     bones.push({
@@ -77,7 +83,7 @@ function armBones(side) {
     });
   }
   bones.push({
-    name: `thumb${S}A`, parent: 'hand' + S, offset: [-0.040 * s, 0.030, 0.014], rest: [0, 0, 0.95 * s],
+    name: `thumb${S}A`, parent: 'hand' + S, offset: [-0.040 * s, 0.048, -0.010], rest: [0, 0, 0.95 * s],
     length: 0.038, box: { size: [0.021, 0.040, 0.023] }, hp: 3, atlas: 8, side: s, finger: true,
   });
   bones.push({

@@ -1004,6 +1004,171 @@ check('Plains has a platform you stand on and walls that stop you',
   r.boulderAt < 39 && r.boulderAt > 36 && r.navWall === true && r.navPlatform === false,
   JSON.stringify(r));
 
+// ---------- every weapon is actually held, not floating near the hand ------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;
+  const V = g.player.pos.constructor;
+  const frame = () => new Promise((res) => requestAnimationFrame(res));
+  const { CARRY } = await import('/src/game/game.js');
+  const { FIST, gripWorld } = await import('/src/game/grip.js');
+  const { pointInBone } = await import('/src/game/skeleton.js');
+  const objects = await import('/src/game/objects.js');
+  const guns = await import('/src/game/guns.js');
+  const SPAWN = {
+    machete: objects.spawnMachete, sledge: objects.spawnSledge,
+    glock: guns.spawnGlock, ak47: guns.spawnAk,
+  };
+  const out = {};
+  for (const kind of ['machete', 'sledge', 'glock', 'ak47']) {
+    g.clearSpawns();
+    if (g.carried) g.dropCarried();
+    g.clearSpawns();
+    g.player.teleport(OX, 0, 0);
+    const body = SPAWN[kind](g, new V(OX, 1.0, -1.0));
+    for (let i = 0; i < 20; i++) await frame();
+    g.pickUp(body);
+    for (let i = 0; i < 30; i++) await frame();
+
+    const hand = g.player.rig.byName.handR;
+    const q = new (g.player.rig.rootQuat.constructor)();
+    const origin = new V();
+    gripWorld(hand, CARRY[kind].grip, q, origin);
+    // where the fist closes, and where the weapon says its handle is
+    const fist = FIST.center.clone().applyQuaternion(hand.worldQuat).add(hand.worldPos);
+    const held = new V().fromArray(CARRY[kind].grip.hold).applyQuaternion(q).add(origin);
+    // the nearest fingertip to the handle: a grip has the fingers ON it
+    let near = 9;
+    for (let i = 0; i < 4; i++) {
+      const tip = g.player.rig.byName[`fingerR${i}B`].worldEnd;
+      near = Math.min(near, tip.distanceTo(held));
+    }
+    out[kind] = {
+      onFist: +held.distanceTo(fist).toFixed(4),
+      inPalm: pointInBone(hand, held, 0),
+      finger: +near.toFixed(3),
+      model: +g.carried.model.position.distanceTo(origin).toFixed(4),
+    };
+  }
+  g.dropCarried();
+  g.clearSpawns();
+  return out;
+});
+check('every weapon is gripped: handle in the fist, fingers closed on it',
+  Object.values(r).every((w) => w.onFist < 0.002 && w.inPalm === false
+    && w.finger < 0.075 && w.model < 0.002), JSON.stringify(r));
+
+// ---------- the two firearms ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;
+  const V = g.player.pos.constructor;
+  const frame = () => new Promise((res) => requestAnimationFrame(res));
+  const { spawnCitizen } = await import('/src/game/citizen.js');
+  const guns = await import('/src/game/guns.js');
+  const out = {};
+  for (const [kind, fn] of [['glock', 'spawnGlock'], ['ak47', 'spawnAk']]) {
+    g.clearSpawns();
+    if (g.carried) g.dropCarried();
+    g.clearSpawns();
+    g.player.heal();
+    g.player.teleport(OX, 0, 0);
+    g.camYaw = 0; g.camPitch = 0;
+    const c = spawnCitizen(g, new V(OX, 0, -6));
+    c.ai.update = () => c.moveInput.set(0, 0, 0);
+    const body = guns[fn](g, new V(OX, 1.0, -1.0));
+    for (let i = 0; i < 25; i++) await frame();
+    g.useAction();                                  // USE picks it up
+    for (let i = 0; i < 25; i++) await frame();
+    const o = { carried: g.carried?.kind === kind, equipped: g.equipped,
+      pose: g.player.animator.upper.clip?.name || null, full: g.carried?.ammo };
+
+    // three rounds into a citizen six metres away
+    const pitch0 = g.camPitch;
+    const hp0 = c.health;
+    let fired = 0, kick = 0;
+    for (let i = 0; i < 3; i++) {
+      if (g.fireGun()) fired++;
+      kick = Math.max(kick, g.player.recoil);
+      g.gunCooldown = 0;
+      for (let k = 0; k < 4; k++) await frame();
+    }
+    o.fired = fired;
+    o.spent = o.full - g.carried.ammo;
+    o.damage = Math.round(hp0 - c.health);
+    o.climb = +(g.camPitch - pitch0).toFixed(3);
+    o.armKick = +kick.toFixed(2);
+    o.flash = g.flash.life > 0 || g.flash.group.visible;
+    o.cases = g.cases.cases.filter((x) => x.alive).length;
+
+    // a partial reload, and then an empty one, which is a different clip
+    g.carried.ammo = 4;
+    g.reloadAction();
+    o.reloadClip = g.player.animator.actionName;
+    for (let k = 0; k < 400 && g.reloadTimer > 0; k++) await frame();
+    o.afterReload = g.carried.ammo;
+    g.carried.ammo = 0; g.carried.chambered = false;
+    o.dryFire = g.fireGun();
+    g.reloadAction();
+    o.emptyClip = g.player.animator.actionName;
+    for (let k = 0; k < 500 && g.reloadTimer > 0; k++) await frame();
+    o.afterEmpty = g.carried.ammo;
+    g.dropCarried();
+    o.droppedAmmo = g.spawnedBodies.find((b) => b.tag === kind)?.userData.ammo;
+    out[kind] = o;
+  }
+  g.clearSpawns();
+  g.player.teleport(OX, 6, 0);
+  return out;
+});
+check('the Glock and the AK are picked up, fire, kick and reload',
+  r.glock.carried && r.glock.pose === 'glockHold' && r.glock.full === 15 &&
+  r.glock.fired === 3 && r.glock.spent === 3 && r.glock.damage > 40 &&
+  r.glock.climb > 0.02 && r.glock.armKick > 0.1 && r.glock.cases === 3 &&
+  r.glock.reloadClip === 'reloadPistol' && r.glock.afterReload === 15 &&
+  r.glock.dryFire === false && r.glock.emptyClip === 'reloadPistolEmpty' &&
+  r.glock.afterEmpty === 15 && r.glock.droppedAmmo === 15 &&
+  r.ak47.carried && r.ak47.pose === 'akHold' && r.ak47.full === 30 &&
+  r.ak47.fired === 3 && r.ak47.spent === 3 && r.ak47.damage > 60 &&
+  r.ak47.climb > r.glock.climb && r.ak47.armKick > r.glock.armKick &&
+  r.ak47.reloadClip === 'reloadRifle' && r.ak47.emptyClip === 'reloadRifleEmpty' &&
+  r.ak47.afterEmpty === 30,
+  JSON.stringify(r));
+
+// ---------- one is a pistol, the other empties itself ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  const app = window.GOREBOX;
+  const OX = g.map.openArea.x;
+  const V = g.player.pos.constructor;
+  const guns = await import('/src/game/guns.js');
+  const out = {};
+  const held = {
+    consumeLook: () => ({ x: 0, y: 0 }), move: { x: 0, y: 0 },
+    pressed: {}, down: { primary: true }, beginFrame() {},
+  };
+  for (const [kind, fn] of [['glock', 'spawnGlock'], ['ak47', 'spawnAk']]) {
+    if (g.carried) g.dropCarried();
+    g.clearSpawns();
+    g.player.teleport(OX, 0, 0);
+    const b = guns[fn](g, new V(OX, 1.0, -1.0));
+    await new Promise((res) => setTimeout(res, 400));
+    g.pickUp(b);
+    // Stepped by hand: a trigger held for exactly one second, whatever the
+    // frame rate of the machine running this happens to be.
+    app.state = 'paused'; g.paused = false;
+    const start = g.carried.ammo;
+    for (let i = 0; i < 60; i++) g.update(1 / 60, held);
+    out[kind] = start - g.carried.ammo;
+    app.state = 'playing';
+  }
+  if (g.carried) g.dropCarried();
+  g.clearSpawns();
+  return out;
+});
+check('holding the trigger empties the AK and does nothing to the Glock',
+  r.glock === 0 && r.ak47 >= 8 && r.ak47 <= 11, JSON.stringify(r));
+
 // ---------- boulder actually rolls ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;

@@ -7,7 +7,11 @@ import { $ } from '../core/util.js';
 /** What the big button says for each thing you can hold. */
 const PRIMARY_LABEL = {
   rcv2: 'SHOOT', machete: 'SLASH', sledge: 'SWING', fists: 'PUNCH',
+  glock: 'FIRE', ak47: 'FIRE',
 };
+/** Which slots only exist while that weapon is actually being carried. */
+const CARRY_SLOTS = ['slot-machete', 'slot-sledge', 'slot-glock', 'slot-ak47'];
+const GUN_SLOTS = new Set(['glock', 'ak47']);
 
 export class Hud {
   constructor(input) {
@@ -37,9 +41,15 @@ export class Hud {
     input.bindButton($('#btn-spawn'), 'spawn');
     input.bindButton($('#btn-delete'), 'delete');
     input.bindButton($('#btn-use'), 'use');
+    input.bindButton($('#btn-reload'), 'reload');
     this.useBtn = $('#btn-use');
+    this.reloadBtn = $('#btn-reload');
+    this.ammoEl = $('#ammo-readout');
+    this.ammoNow = $('#ammo-now');
+    this.ammoMax = $('#ammo-max');
+    this._ammo = -1;
     // the slots that only exist while something is being carried
-    this.carrySlots = this.slots.filter((el) => el.id === 'slot-machete' || el.id === 'slot-sledge');
+    this.carrySlots = this.slots.filter((el) => CARRY_SLOTS.includes(el.id));
 
     this.onWeaponSelect = null;
     this.slots.forEach((el) => {
@@ -53,7 +63,23 @@ export class Hud {
   setWeapon(name) {
     this.primary.textContent = PRIMARY_LABEL[name] || 'PUNCH';
     this.extra.classList.toggle('show', name === 'rcv2');
+    this.reloadBtn.classList.toggle('show', GUN_SLOTS.has(name));
     this.slots.forEach((el) => el.classList.toggle('active', el.dataset.weapon === name));
+  }
+
+  /** Rounds left. Pass null when what is in hand does not take any. */
+  setAmmo(now, max = 0, reloading = false) {
+    const key = now == null ? -1 : now + max * 1000 + (reloading ? 1e7 : 0);
+    if (key === this._ammo) return;
+    this._ammo = key;
+    if (now == null) { this.ammoEl.classList.add('hidden'); return; }
+    this.ammoEl.classList.remove('hidden');
+    this.ammoNow.textContent = String(now);
+    this.ammoMax.textContent = '/' + max;
+    this.ammoEl.classList.toggle('low', now > 0 && now <= Math.max(3, max * 0.25));
+    this.ammoEl.classList.toggle('empty', now === 0);
+    this.ammoEl.classList.toggle('reloading', reloading);
+    this.reloadBtn.classList.toggle('busy', reloading);
   }
 
   /** A weapon slot is only there while that weapon is actually in hand. */

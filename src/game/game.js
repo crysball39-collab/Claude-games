@@ -15,19 +15,25 @@ import {
   spawnCrate, spawnBoulder, spawnMachete, spawnSledge, createMacheteModel,
   syncBodyMesh, disposeBody, prewarmObjectArt, MACHETE, SLEDGE,
 } from './objects.js';
+import { gripWorld } from './grip.js';
+import {
+  GLOCK, AK47, spawnGlock, spawnAk, MuzzleFlash, CaseEjector,
+} from './guns.js';
 import { GoreSystem, nearestBone } from './gore.js';
 import { NavGrid } from './ai.js';
 import { RCV2 } from './rcv2.js';
-import { boneCorners, pointInBone, boneBoxCenter, HIP_HEIGHT } from './skeleton.js';
-import { clamp, clamp01, makeRng, yieldToPaint } from '../core/util.js';
+import { boneCorners, pointInBone, boneBoxCenter, rayBone, HIP_HEIGHT } from './skeleton.js';
+import { clamp, clamp01, damp, makeRng, yieldToPaint } from '../core/util.js';
 
 const _v1 = new Vector3(), _v2 = new Vector3(), _v3 = new Vector3(), _v4 = new Vector3();
+/* Firing borrows nothing: the trace it runs writes over every other scratch
+   vector in this file, and the muzzle is still needed afterwards. */
+const _gunPos = new Vector3(), _gunAim = new Vector3(), _gunTmp = new Vector3();
+const _aimAt = new Vector3();
+const _gunQuat = new Quaternion();
 const _q1 = new Quaternion(), _q2 = new Quaternion();
 const _e = new Euler(0, 0, 0, 'YXZ');
 const UP = new Vector3(0, 1, 0);
-/* A machete continues the line of the fist, canted out a little so the blade
-   sits in view rather than straight down the forearm. */
-const _tilt = (x) => new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), x);
 
 /**
  * Everything that differs between one carried weapon and the next. The blade
@@ -48,9 +54,12 @@ export const MELEE = {
   machete: {
     label: 'Machete',
     spawn: spawnMachete,
-    tilt: _tilt(-0.30),
-    lift: 0.035,                        // how far up the grip sits in the hand
-    dropAt: MACHETE.length / 2 + 0.04,
+    /* Held the way a machete is held: the handle through the fist, the blade
+       coming out over the knuckles. `at` is how far up the handle the hand
+       closes - a hand is 90 mm across and the handle is 115 mm long, so the
+       fist sits just under the guard. */
+    grip: { rake: 0.45, roll: 0, hold: [0, 0.062, 0] },
+    center: new Vector3(0, MACHETE.length / 2, 0),
     type: 'impact',
     dmg: { mul: 3.6, min: 3, max: 42 },
     sev: { div: 6, min: 0.55 },
@@ -61,16 +70,17 @@ export const MELEE = {
     contacts(out, origin, quat, v) {
       for (let i = 0; i <= 8; i++) {
         const y = MACHETE.grip + 0.03 + (MACHETE.blade - 0.03) * (i / 8);
-        out.push(v.set(MACHETE.width * 0.42, y + 0.035, 0).applyQuaternion(quat).add(origin).clone());
+        out.push(v.set(MACHETE.width * 0.42, y, 0).applyQuaternion(quat).add(origin).clone());
       }
     },
   },
   sledge: {
     label: 'Sledgehammer',
     spawn: spawnSledge,
-    tilt: _tilt(-0.38),
-    lift: 0.05,
-    dropAt: SLEDGE.length / 2 + 0.05,
+    // The right hand takes the bound end of the haft; the left rides up it.
+    grip: { rake: 0.42, roll: 0, hold: [0, 0.105, 0] },
+    leftAt: 0.40,
+    center: new Vector3(0, SLEDGE.length / 2, 0),
     type: 'blunt',
     dmg: { mul: 5.0, min: 6, max: 58 },
     sev: { div: 5, min: 0.7 },
@@ -79,7 +89,7 @@ export const MELEE = {
     shake: 0.5,
     /** The striking block across the top of the haft. */
     contacts(out, origin, quat, v) {
-      const y = SLEDGE.haft + SLEDGE.headH / 2 + 0.05;
+      const y = SLEDGE.haft + SLEDGE.headH / 2;
       for (const fx of [-0.5, -0.25, 0, 0.25, 0.5]) {
         out.push(v.set(fx * SLEDGE.headW, y, 0).applyQuaternion(quat).add(origin).clone());
       }
@@ -97,6 +107,67 @@ export const MELEE = {
   },
 };
 
+/**
+ * The two firearms. A gun is carried exactly like a blade - the grip through
+ * the fist - and everything that makes it a gun rather than a club is here:
+ * how fast it can be fired, how hard it hits, how much it kicks, and which
+ * pair of reloads it plays depending on whether it ran dry.
+ */
+export const GUNS = {
+  glock: {
+    label: 'Glock-19',
+    spawn: spawnGlock,
+    gun: GLOCK,
+    grip: { rake: 0.34, roll: -Math.PI / 2, hold: [0, -0.034, 0.012] },
+    center: new Vector3(0, -0.034, -0.030),
+    hold: 'glockHold',
+    /** Semi automatic: one press, one round. */
+    auto: false,
+    interval: 0.135,
+    capacity: 15,
+    damage: 30,
+    push: 210,
+    range: 130,
+    /* 9 mm out of a short barrel: a sharp, quick kick that comes straight
+       back down, so a fast string of shots stays roughly on target. */
+    recoil: { pitch: 0.052, yaw: 0.013, recover: 11, arm: 0.30, shake: 0.26 },
+    flash: 0.55,
+    reload: { normal: 'reloadPistol', empty: 'reloadPistolEmpty' },
+    /* Where the magazine is gone, and where the slide is back, as fractions
+       of each reload clip. */
+    parts: {
+      reloadPistol: { magOut: [0.20, 0.80] },
+      reloadPistolEmpty: { magOut: [0.20, 0.80], slide: [1.28, 1.58] },
+    },
+  },
+  ak47: {
+    label: 'AK-47',
+    spawn: spawnAk,
+    gun: AK47,
+    grip: { rake: 0.30, roll: -Math.PI / 2, hold: [0, -0.050, 0.026] },
+    center: new Vector3(0, -0.030, -0.120),
+    hold: 'akHold',
+    /** Full automatic: it fires for as long as the button is held. */
+    auto: true,
+    interval: 0.10,                 // 600 rounds a minute
+    capacity: 30,
+    damage: 42,
+    push: 340,
+    range: 300,
+    // 7.62 climbs, and keeps climbing while you hold it down
+    recoil: { pitch: 0.070, yaw: 0.022, recover: 7.5, arm: 0.42, shake: 0.42 },
+    flash: 0.85,
+    reload: { normal: 'reloadRifle', empty: 'reloadRifleEmpty' },
+    parts: {
+      reloadRifle: { magOut: [0.62, 1.62], rock: [0.30, 1.95] },
+      reloadRifleEmpty: { magOut: [0.62, 1.62], rock: [0.30, 1.95], bolt: [1.92, 2.28] },
+    },
+  },
+};
+
+/** Everything that can be picked up and held, however it is used. */
+export const CARRY = { ...MELEE, ...GUNS };
+
 export const QUALITY = {
   low: { shadows: false, shadowMap: 512, pixelRatio: 1.0, grassSize: 256, maxObjects: 40, maxCitizens: 10 },
   medium: { shadows: true, shadowMap: 1024, pixelRatio: 1.35, grassSize: 512, maxObjects: 70, maxCitizens: 16 },
@@ -109,6 +180,8 @@ export const SPAWNABLES = {
     { id: 'boulder', name: 'Boulder', icon: 'boulder', hint: 'Rock boulder' },
     { id: 'machete', name: 'Machete', icon: 'machete', hint: 'Pick it up with USE' },
     { id: 'sledge', name: 'Sledgehammer', icon: 'sledge', hint: 'Heavy. Breaks bones.' },
+    { id: 'glock', name: 'Glock-19', icon: 'glock', hint: '15 rounds. Semi automatic.' },
+    { id: 'ak47', name: 'AK-47', icon: 'ak47', hint: '30 rounds. Full automatic.' },
   ],
   humans: [
     { id: 'citizen', name: 'Citizen', icon: 'citizen', hint: 'An ordinary person' },
@@ -147,7 +220,17 @@ export class Game {
     this.navTimer = 0;
 
     this.selected = { id: 'crate', name: 'Crate' };
-    this.carried = null;         // { kind, model } while something is in hand
+    this.carried = null;         // { kind, model, ammo } while something is held
+    /* Firearms: how long until the next round can go off, how far through a
+       reload we are, and the kick that is still working its way out of the
+       camera and the arms. */
+    this.gunCooldown = 0;
+    this.reloadTimer = 0;
+    this.gunKick = 0;
+    this.recoilPitch = 0;
+    this.recoilYaw = 0;
+    this.flash = null;
+    this.cases = null;
     this.paused = false;
     this.running = false;
     this.time = 0;
@@ -235,6 +318,8 @@ export class Game {
     this.camYaw = this.player.yaw;
 
     this.rcv2 = new RCV2(this, this.player);
+    this.flash = new MuzzleFlash(this.scene);
+    this.cases = new CaseEjector(this.scene);
     this.player.setEquipped('fists');
     this.setEquipped('fists');
 
@@ -297,9 +382,11 @@ export class Game {
     if (this.carried) {
       this.scene.remove(this.carried.model);
       this.carried = null;
+      this.reloadTimer = 0;
       this.hud?.setCarrying(null);
       this.setEquipped('fists');
     }
+    this.cases?.clear();
     for (const b of [...this.spawnedBodies]) this.removeBody(b);
     for (const c of [...this.characters]) if (c !== this.player) this.removeCharacter(c);
     this.nav.dirty = true;
@@ -390,10 +477,10 @@ export class Game {
       const b = spawnBoulder(this, _v2);
       return { type: 'body', name: 'Boulder', entity: b };
     }
-    if (MELEE[id]) {
+    if (CARRY[id]) {
       _v2.y = Math.max(_v2.y, groundAt + 0.6);
-      const b = MELEE[id].spawn(this, _v2);
-      return { type: 'body', name: MELEE[id].label, entity: b };
+      const b = CARRY[id].spawn(this, _v2);
+      return { type: 'body', name: CARRY[id].label, entity: b };
     }
     _v2.y = Math.max(_v2.y, groundAt + 0.7);
     const b = spawnCrate(this, _v2);
@@ -447,7 +534,7 @@ export class Game {
 
   pickUp(body) {
     const kind = body.userData.pickup;
-    const spec = MELEE[kind];
+    const spec = CARRY[kind];
     if (!spec) return;
     if (this.player.armBroken('R')) { this.hud?.toast('Your right arm is broken'); return; }
     // The loose item becomes a held one: same model, no longer simulated.
@@ -468,7 +555,12 @@ export class Game {
       painter: body.userData.paintBlood,
       surface: body.userData.paintSurface || null,
       material: body.userData.material,
+      // a gun remembers what is left in it, and whether one is up the spout
+      ammo: body.userData.ammo ?? 0,
+      chambered: (body.userData.ammo ?? 0) > 0,
     };
+    this.reloadTimer = 0;
+    this.gunCooldown = 0;
     this.hud?.setCarrying(kind);
     this.setEquipped(kind);
     this.hud?.toast('Picked up the ' + spec.label);
@@ -477,19 +569,20 @@ export class Game {
   dropCarried() {
     const c = this.carried;
     if (!c) return;
-    const spec = MELEE[c.kind];
+    const spec = CARRY[c.kind];
     this.carried = null;
+    this.reloadTimer = 0;
+    this.player.animator.cancelAction();
     this.hud?.setCarrying(null);
 
     // Put it back into the world where the weapon actually is, moving the way
     // the hand was moving.
     const hand = this.player.rig.byName.handR;
-    boneBoxCenter(hand, _v1);
-    _q1.copy(hand.worldQuat).multiply(spec.tilt);
-    _v2.set(0, spec.dropAt, 0).applyQuaternion(_q1).add(_v1);
+    gripWorld(hand, spec.grip, _q1, _v1);
+    _v2.copy(spec.center).applyQuaternion(_q1).add(_v1);
     const body = spec.spawn(this, _v2, {
       quat: _q1,
-      reuse: { model: c.model, material: c.material, surface: c.surface },
+      reuse: { model: c.model, material: c.material, surface: c.surface, ammo: c.ammo },
     });
     _v3.copy(this.player.handVel.R).clampLength(0, 9);
     body.vel.copy(_v3).addScaledVector(_v1.set(0, 1, 0), 0.6);
@@ -504,20 +597,51 @@ export class Game {
   _syncCarried() {
     const c = this.carried;
     if (!c) return;
-    const spec = MELEE[c.kind];
+    const spec = CARRY[c.kind];
     const hand = this.player.rig.byName.handR;
-    boneBoxCenter(hand, _v1);
-    _q1.copy(hand.worldQuat).multiply(spec.tilt);
+    gripWorld(hand, spec.grip, _q1, _v1);
     c.model.quaternion.copy(_q1);
-    c.model.position.copy(_v2.set(0, spec.lift, 0).applyQuaternion(_q1)).add(_v1);
+    c.model.position.copy(_v1);
     c.model.updateMatrix();
     c.model.visible = this.equipped === c.kind;
+    if (spec.gun) this._syncGunParts(c, spec);
+  }
+
+  /**
+   * The moving parts of a gun: the magazine that leaves it during a reload,
+   * the slide that goes back on an empty one, the bolt that gets pulled. All
+   * of it is driven off where the reload animation has got to, so the hands
+   * and the hardware are never out of step.
+   */
+  _syncGunParts(c, spec) {
+    const u = c.model.userData;
+    const a = this.player.animator;
+    const clip = a.actionName;
+    const win = clip ? spec.parts?.[clip] : null;
+    const t = clip ? a.actionTime : 0;
+    const inside = (w) => w && t >= w[0] && t <= w[1];
+    if (u.magazine) {
+      u.magazine.visible = !inside(win?.magOut);
+      // an AK magazine rocks in and out rather than dropping straight
+      if (u.magazine.visible && inside(win?.rock)) {
+        const k = inside(win?.magOut) ? 0 : 1;
+        u.magazine.rotation.x = -0.34 * k;
+      } else {
+        u.magazine.rotation.x = 0;
+      }
+    }
+    const back = inside(win?.slide) || inside(win?.bolt);
+    if (u.slide) u.slide.position.z = back ? 0.030 : 0;
+    if (u.dustCover) u.dustCover.position.z = back ? 0.020 : 0;
+    // and the kick of firing, which moves the same parts
+    const k = this.gunKick || 0;
+    if (k > 0.01 && u.slide) u.slide.position.z = Math.max(u.slide.position.z, k * 0.028);
   }
 
   /* ----------------------------------------------------------------- weapons */
 
   setEquipped(name) {
-    if (MELEE[name] && this.carried?.kind !== name) name = 'fists';
+    if (CARRY[name] && this.carried?.kind !== name) name = 'fists';
     this.equipped = name;
     this.player.setEquipped(name);
     if (this.rcv2) this.rcv2.setVisible(name === 'rcv2');
@@ -530,8 +654,10 @@ export class Game {
     if (this.player.state !== STATE.CONTROLLED) return;
     if (this.equipped === 'fists') {
       this.player.punch();
+    } else if (GUNS[this.equipped]) {
+      this.fireGun();
     } else if (MELEE[this.equipped]) {
-      // Every carried weapon swings; only the RCV2 shoots.
+      // Every carried blade swings; the guns and the RCV2 shoot.
       this.player.slash();
     } else {
       this.camera.getWorldDirection(_v1);
@@ -540,6 +666,186 @@ export class Game {
       else if (res === 'released') this.hud?.setGrabbing(false);
       else this.hud?.toast('Nothing there');
       this.alertNearby(2.0);
+    }
+  }
+
+  /* ------------------------------------------------------------------ guns */
+
+  /**
+   * One round. The shot leaves the muzzle where the muzzle actually is, and
+   * goes where the crosshair is looking - the same rule the fists and the
+   * blades follow, which is that the weapon's own geometry decides.
+   */
+  fireGun() {
+    const c = this.carried;
+    if (!c) return false;
+    const spec = GUNS[c.kind];
+    if (!spec) return false;
+    if (this.reloadTimer > 0 || this.gunCooldown > 0) return false;
+    if (this.player.state !== STATE.CONTROLLED || this.player.dead) return false;
+    if (this.player.armBroken('R')) return false;
+    if (c.ammo <= 0) {
+      // the dead click of an empty chamber
+      this.gunCooldown = 0.28;
+      this.hud?.toast('Empty - press RELOAD');
+      return false;
+    }
+    c.ammo--;
+    c.chambered = c.ammo > 0;
+    this.gunCooldown = spec.interval;
+
+    const hand = this.player.rig.byName.handR;
+    gripWorld(hand, spec.grip, _gunQuat, _gunPos);
+    const muzzle = _gunTmp.copy(spec.gun.muzzle).applyQuaternion(_gunQuat).add(_gunPos);
+    /* The round leaves the muzzle, but it goes where you are AIMING: find
+       what the crosshair is on first, then shoot from the barrel at that.
+       Firing parallel to the sight line instead would put every shot a hand's
+       width low, because that is where the gun is held. */
+    this.camera.getWorldDirection(_gunAim);
+    this._aimPoint(this.camera.position, _gunAim, spec.range, _aimAt);
+    _gunAim.copy(_aimAt).sub(muzzle);
+    if (_gunAim.lengthSq() < 1e-8) return false;
+    _gunAim.normalize();
+    this._traceShot(muzzle, _gunAim, spec);
+
+    this.flash.fire(muzzle, _gunQuat, spec.flash);
+    // the case comes out of the port, up and to the right of the gun
+    const at = _gunTmp.copy(spec.gun.ejectAt).applyQuaternion(_gunQuat).add(_gunPos);
+    this.cases.eject(at, _gunAim.set(0.92, 0.36, 0.14).applyQuaternion(_gunQuat).normalize());
+
+    // recoil: some of it moves your aim for good, the rest settles back
+    const r = spec.recoil;
+    const spread = (this.rng() - 0.5) * 2;
+    this.camPitch = clamp(this.camPitch + r.pitch * 0.38, -1.42, 1.42);
+    this.recoilPitch += r.pitch * 0.62;
+    this.recoilYaw += r.yaw * spread;
+    this.gunKick = 1;
+    this.player.kick(r.arm);
+    this.shake = Math.min(1, this.shake + r.shake);
+    this.player.squareTimer = 0.8;
+    this.player.combatReady = true;
+    this.player.combatTimer = 3.5;
+    this.alertNearby(2.4);
+    this.hud?.setAmmo(c.ammo, spec.capacity);
+    return true;
+  }
+
+  /**
+   * What the crosshair is on: the nearest thing down the sight line, or a
+   * point out at the weapon's range if there is nothing there at all.
+   */
+  _aimPoint(origin, dir, range, out) {
+    let best = range;
+    const hit = this.world.raycastBodies(origin, dir, range);
+    if (hit) best = hit.distance;
+    for (const c of this.characters) {
+      if (c === this.player || c.body.destroyed) continue;
+      _v1.copy(c.center).sub(origin);
+      const along = _v1.dot(dir);
+      if (along < 0 || along > best + 2) continue;
+      if (_v1.addScaledVector(dir, -along).lengthSq() > 2.6) continue;
+      for (const bone of c.rig.bones) {
+        if (bone.def.finger) continue;
+        const t = rayBone(origin, dir, bone);
+        if (t != null && t > 0 && t < best) best = t;
+      }
+    }
+    // and the ground, so shooting at your own feet lands where you pointed
+    if (dir.y < -1e-4 && this.world.hasGround) {
+      const t = (this.world.groundY - origin.y) / dir.y;
+      if (t > 0 && t < best) best = t;
+    }
+    return out.copy(dir).multiplyScalar(best).add(origin);
+  }
+
+  /** Where the round goes, and what it does when it gets there. */
+  _traceShot(origin, dir, spec) {
+    let best = null;
+    const bodyHit = this.world.raycastBodies(origin, dir, spec.range);
+    if (bodyHit) best = { type: 'body', body: bodyHit.body, distance: bodyHit.distance };
+
+    for (const c of this.characters) {
+      if (c === this.player || c.body.destroyed) continue;
+      _v1.copy(c.center).sub(origin);
+      const along = _v1.dot(dir);
+      if (along < -1.5 || along > spec.range + 2) continue;
+      if (_v1.addScaledVector(dir, -along).lengthSq() > 2.6) continue;
+      for (const bone of c.rig.bones) {
+        if (bone.def.finger) continue;
+        const t = rayBone(origin, dir, bone);
+        if (t == null || t < 0 || t > spec.range) continue;
+        if (!best || t < best.distance) best = { type: 'character', character: c, bone, distance: t };
+      }
+    }
+    if (!best) return;
+    const point = _v1.copy(dir).multiplyScalar(best.distance).add(origin).clone();
+
+    if (best.type === 'body') {
+      best.body.wake();
+      _v4.copy(dir).multiplyScalar(spec.push * 0.5);
+      best.body.applyImpulse(_v4, point);
+      return;
+    }
+
+    /* A bullet is a small thing moving very fast: it does a lot of damage to
+       one part and shoves the person about far less than a sledgehammer does.
+       The head is the head. */
+    const bone = best.bone;
+    const head = bone.name === 'head' || bone.name === 'neck';
+    const dmg = spec.damage * (head ? 2.6 : 1) * (bone.def.finger ? 0.3 : 1);
+    _v4.copy(dir).multiplyScalar(spec.push);
+    _v4.y += spec.push * 0.06;
+    best.character.applyImpact(point, _v4, {
+      boneName: bone.name, damage: dmg, type: 'impact', attacker: this.player,
+      severity: head ? 1 : 0.85, crush: 0.35,
+    });
+    best.character.ai?.onHurt({ amount: dmg * 1.6, attacker: this.player });
+    this.gore?.burst(point, _v2.copy(dir).negate(), head ? 26 : 14,
+      { speed: 3.4, spread: 0.8, size: 0.028 });
+    this.gore?.impactSplatter(point, _v2.copy(dir).negate(), 14);
+  }
+
+  /** RELOAD: a fresh magazine, and a longer one if the gun ran dry. */
+  reloadAction() {
+    const c = this.carried;
+    const spec = c ? GUNS[c.kind] : null;
+    if (!spec) { this.hud?.toast('Nothing to reload'); return; }
+    if (this.reloadTimer > 0) return;
+    if (c.ammo >= spec.capacity) { this.hud?.toast('Already full'); return; }
+    if (this.player.armBroken('L')) { this.hud?.toast('Your left arm is broken'); return; }
+    /* An empty gun needs the action worked as well as a magazine, which is a
+       different job and a slower one. */
+    const empty = !c.chambered;
+    const clip = empty ? spec.reload.empty : spec.reload.normal;
+    if (!this.player.playReload(clip)) return;
+    this.reloadTimer = this.player.animator.action.clip.duration;
+    this._reloadInto = spec.capacity;
+    this.hud?.toast(empty ? 'Reloading (empty)' : 'Reloading');
+  }
+
+  _updateGuns(dt, input) {
+    this.gunCooldown = Math.max(0, this.gunCooldown - dt);
+    this.gunKick = Math.max(0, this.gunKick - dt * 9);
+    const rec = GUNS[this.equipped]?.recoil;
+    const back = rec ? rec.recover : 9;
+    this.recoilPitch = damp(this.recoilPitch, 0, back, dt);
+    this.recoilYaw = damp(this.recoilYaw, 0, back, dt);
+    this.flash?.update(dt);
+    this.cases?.update(dt, this.world.groundY || 0);
+
+    if (this.reloadTimer > 0) {
+      this.reloadTimer -= dt;
+      if (this.reloadTimer <= 0 && this.carried) {
+        this.carried.ammo = this._reloadInto;
+        this.carried.chambered = true;
+        this.hud?.setAmmo(this.carried.ammo, GUNS[this.carried.kind]?.capacity || 0);
+      }
+      return;
+    }
+    // Held down, a full automatic keeps going; a pistol needs a press a shot.
+    const spec = GUNS[this.equipped];
+    if (spec?.auto && input?.down?.primary && this.player.state === STATE.CONTROLLED) {
+      this.fireGun();
     }
   }
 
@@ -684,8 +990,7 @@ export class Game {
     if (attacker !== this.player || !this.carried) return;
     const spec = MELEE[this.carried.kind];
     const hand = attacker.rig.byName.handR;
-    boneBoxCenter(hand, _v1);
-    _q1.copy(hand.worldQuat).multiply(spec.tilt);
+    gripWorld(hand, spec.grip, _q1, _v1);
 
     // where this particular weapon does its damage: an edge, or a block
     const contacts = [];
@@ -851,6 +1156,7 @@ export class Game {
       this.rcv2.attachToHand(this.player);
       this.rcv2.update(dt, this.camera);
     }
+    this._updateGuns(dt, input);
     this._syncCarried();
 
     // --- gore ---
@@ -909,6 +1215,7 @@ export class Game {
     if (input.pressed.jump) p.wantJump = true;
     if (input.pressed.crouch) p.crouchWant = !p.crouchWant;
     if (input.pressed.primary) this.primaryAction();
+    if (input.pressed.reload) this.reloadAction();
     if (input.pressed.spawn) this.spawnAction();
     if (input.pressed.delete) this.deleteAction();
     if (input.pressed.use) this.useAction();
@@ -930,7 +1237,9 @@ export class Game {
 
     if (p.state === STATE.CONTROLLED && !p.dead) {
       this.camPos.copy(_v1);
-      _e.set(this.camPitch, this.camYaw, 0, 'YXZ');
+      // Recoil rides on top of where you are looking, and settles back out.
+      _e.set(clamp(this.camPitch + this.recoilPitch, -1.5, 1.5),
+        this.camYaw + this.recoilYaw, 0, 'YXZ');
       this.camQuat.setFromEuler(_e);
     } else {
       // Ragdolled: ride the head, but keep the roll gentle enough to watch.
@@ -973,6 +1282,12 @@ export class Game {
     }
     this.hud.setHealth(this.player.health / this.player.maxHealth);
     this.hud.setBlindness(this.player.blind);
+    const gun = GUNS[this.equipped];
+    if (gun && this.carried) {
+      this.hud.setAmmo(this.carried.ammo, gun.capacity, this.reloadTimer > 0);
+    } else {
+      this.hud.setAmmo(null);
+    }
     if (this.equipped === 'rcv2') {
       this._pickTimer = (this._pickTimer || 0) - dt;
       if (this.rcv2.holding) {
@@ -1024,6 +1339,8 @@ export class Game {
     for (const b of [...this.spawnedBodies]) disposeBody(this, b);
     this.spawnedBodies.length = 0;
     this.rcv2?.dispose();
+    this.flash?.dispose();
+    this.cases?.dispose();
     this.gore?.dispose();
     this.map?.dispose();
     this.renderer.dispose();

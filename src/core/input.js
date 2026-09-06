@@ -5,7 +5,7 @@
    ========================================================================== */
 import { clamp, IS_TOUCH } from './util.js';
 
-const BUTTONS = ['jump', 'crouch', 'primary', 'spawn', 'delete', 'use'];
+const BUTTONS = ['jump', 'crouch', 'primary', 'spawn', 'delete', 'use', 'reload'];
 
 export class InputManager {
   constructor() {

@@ -50,9 +50,14 @@ export const MELEE_CLIPS = {
   machete: ['slashR', 'slashL'],
   sledge: ['swingR', 'swingL'],
 };
-/** Which held pose each one stands in. */
-export const MELEE_HOLD = { machete: 'macheteHold', sledge: 'sledgeHold' };
+/** Which held pose each one stands in - guns included. */
+export const MELEE_HOLD = {
+  machete: 'macheteHold', sledge: 'sledgeHold',
+  glock: 'glockHold', ak47: 'akHold',
+};
 const MELEE_ACTIONS = new Set(Object.values(MELEE_CLIPS).flat());
+/** Reload clips: they own the arms while they run, but nothing strikes. */
+const RELOADS = new Set(['reloadPistol', 'reloadPistolEmpty', 'reloadRifle', 'reloadRifleEmpty']);
 
 export const STATE = {
   CONTROLLED: 'controlled',
@@ -165,6 +170,7 @@ export class Character {
     this.punchSide = 'R';
     this.slashSide = 'L';       // so the first swing is the forehand
     this.punchCooldown = 0;
+    this.recoil = 0;            // how much of a gun's kick is still in the arms
     /* Fighting, you turn to face what you are hitting rather than swinging
        across your own body. Anything that wants the hips brought round now
        instead of eventually sets this. */
@@ -781,7 +787,9 @@ export class Character {
     this.selfCollide = this.state !== STATE.CONTROLLED || this.broken.size > 0;
 
     this.animator.update(dt);
+    this.recoil = Math.max(0, (this.recoil || 0) - dt * 7.5);
     this._applyLookOffsets();
+    this._applyRecoil();
     this._applyBreakBends();
     this.rig.updateFK();
     this._writeMuscleTargets(dt);
@@ -1217,6 +1225,25 @@ export class Character {
   }
 
   /**
+   * Recoil, added on top of whatever the hands are already doing. A gun going
+   * off rotates about the wrist first, then folds the elbow, then moves the
+   * shoulder - which is why the muzzle climbs rather than the whole arm
+   * travelling backwards. The support arm comes with it, because it is holding
+   * the same gun.
+   */
+  _applyRecoil() {
+    const k = this.recoil || 0;
+    if (k < 0.001) return;
+    const rig = this.rig;
+    rig.byName.handR.anim.x += k * 0.42;
+    rig.byName.lowerArmR.anim.x += k * 0.30;
+    rig.byName.upperArmR.anim.x -= k * 0.12;
+    rig.byName.handL.anim.x += k * 0.34;
+    rig.byName.lowerArmL.anim.x += k * 0.24;
+    rig.byName.upperTorso.anim.x += k * 0.05;
+  }
+
+  /**
    * Puts as much of `demand` into one joint's axis as that joint is allowed to
    * spend, and reports how much it took.
    */
@@ -1448,6 +1475,23 @@ export class Character {
     return true;
   }
 
+  /**
+   * Starts a reload. It is an ordinary one shot upper body clip, so the legs
+   * keep walking and a hit still interrupts it, both of which are true.
+   */
+  playReload(clip) {
+    if (this.state !== STATE.CONTROLLED) return false;
+    if (this.armBroken('R') || this.armBroken('L')) return false;
+    if (this.animator.actionActive) return false;
+    this.animator.playAction(clip);
+    return true;
+  }
+
+  get reloading() { return RELOADS.has(this.animator.actionName); }
+
+  /** A round going off shoves the gun, and the gun is in your hands. */
+  kick(amount) { this.recoil = Math.min(1.6, (this.recoil || 0) + amount); }
+
   /** Swings whatever is in hand. One way, then back the other. */
   slash(force = false) {
     if (this.state !== STATE.CONTROLLED) return false;
@@ -1483,7 +1527,7 @@ export class Character {
     const clip = a.actionName;
     const isPunch = clip === 'punchR' || clip === 'punchL';
     const isSlash = MELEE_ACTIONS.has(clip);
-    if (!isPunch && !isSlash) return;
+    if (!isPunch && !isSlash) return;      // a reload hits nothing
     const strike = a.action.clip.strike;
     const t = a.actionTime;
     if (t < strike.from || t > strike.to) return;

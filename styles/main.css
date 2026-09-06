@@ -190,7 +190,23 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
 #action-cluster #btn-use{display:none;font-size:.68rem}
 #action-cluster #btn-use.show{display:flex}
 #btn-use{border-color:rgba(255,208,120,.55);color:#ffd98a}
+#action-cluster #btn-reload{display:none;font-size:.62rem}
+#action-cluster #btn-reload.show{display:flex}
+#btn-reload{border-color:rgba(120,190,255,.55);color:#9fd0ff}
+#btn-reload.busy{opacity:.5}
 #btn-spawn{font-size:1.7rem;font-weight:400;line-height:1}
+
+/* rounds left, under the crosshair on the right of the cluster */
+#ammo-readout{position:absolute;right:calc(var(--safe-r) + 12px);bottom:calc(var(--safe-b) + 150px);
+  font-size:1.1rem;letter-spacing:.06em;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.9);
+  pointer-events:none;font-variant-numeric:tabular-nums}
+#ammo-readout.hidden{display:none}
+#ammo-readout b{font-size:1.5rem;font-weight:700}
+#ammo-readout.low b{color:#ff8b78}
+#ammo-readout.empty b{color:#ff4b3a}
+#ammo-readout span{opacity:.6;font-size:.9rem}
+#ammo-readout.reloading::after{content:' RELOADING';font-size:.6rem;letter-spacing:.12em;
+  color:#9fd0ff;display:block;text-align:right}
 #btn-delete{font-size:1.2rem}
 
 #selected-spawn{position:absolute;top:calc(var(--safe-t) + 64px);left:calc(var(--safe-l) + 10px);
@@ -251,6 +267,17 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
 .ico.sledge{background:
   linear-gradient(90deg, transparent 0 40%, #8a6438 40% 58%, transparent 58%),
   linear-gradient(0deg, transparent 0 62%, #767c84 62% 88%, transparent 88%),
+  #14181c}
+/* a pistol: slide across the top, grip raked back under it */
+.ico.glock{background:
+  linear-gradient(0deg, transparent 0 30%, #1b1c20 30% 46%, transparent 46%),
+  linear-gradient(74deg, transparent 0 40%, #27282c 40% 60%, transparent 60%),
+  #14181c}
+/* a rifle: long barrel, wood furniture, curved magazine below */
+.ico.ak47{background:
+  linear-gradient(0deg, transparent 0 52%, #2a2c30 52% 62%, transparent 62%),
+  linear-gradient(0deg, transparent 0 40%, #2f3a2c 40% 52%, transparent 52%),
+  linear-gradient(90deg, transparent 0 58%, #6a4526 58% 86%, transparent 86%),
   #14181c}
 .drawer-foot{margin-top:10px;font-size:.68rem;color:var(--muted);letter-spacing:.06em}
 .drawer-foot b{color:#ffcf7a}
