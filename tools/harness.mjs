@@ -31,7 +31,7 @@ function serve() {
 }
 
 /**
- * Boots the game all the way into the Test Baseplate and returns the page
+ * Boots the game all the way into Plains and returns the page
  * plus a few conveniences. `port` defaults to 0 so the OS picks a free one,
  * which stops a stale run from blocking a new one.
  */

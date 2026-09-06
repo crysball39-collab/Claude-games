@@ -13,6 +13,7 @@
    swings a limb forwards.
    ========================================================================== */
 import { BoxGeometry, Quaternion, Euler, Vector3 } from 'three';
+import { clampBoneEuler } from './joints.js';
 
 const PI = Math.PI;
 
@@ -241,12 +242,34 @@ export class SkeletonRig {
     this.order = [];
     const walk = (b) => { this.order.push(b); b.children.forEach(walk); };
     walk(this.root);
+    /** Bones allowed out of their joint limits - a broken one can go any way. */
+    this.limitExempt = null;
+    /** How many bones the last pose had to be pulled back into range... */
+    this.limitHits = 0;
+    /** ...and which ones. */
+    this.limitClamped = [];
   }
 
-  /** Forward kinematics from the current pose. */
+  /**
+   * Forward kinematics from the current pose.
+   *
+   * Every bone is held inside the range its real joint has before the pose is
+   * built, so nothing downstream - animation, look offsets, the bend a break
+   * leaves behind - can put an elbow through the back of an arm. Bones listed
+   * in `limitExempt` are let through: that is what a broken bone is.
+   */
   updateFK() {
+    this.limitHits = 0;
+    this.limitClamped.length = 0;
+    const exempt = this.limitExempt;
     for (let i = 0; i < this.order.length; i++) {
       const b = this.order[i];
+      if (!(exempt && exempt.has(b.name)) && clampBoneEuler(b.name, b.anim)) {
+        this.limitHits++;
+        // Names of what had to be pulled back, so a clip that asks for
+        // something anatomically impossible can be found and fixed.
+        this.limitClamped.push(b.name);
+      }
       b.animQuat.setFromEuler(_e.set(b.anim.x, b.anim.y, b.anim.z, 'XYZ'));
       if (b.parent) {
         b.worldPos.copy(b.offset).applyQuaternion(b.parent.worldQuat).add(b.parent.worldPos);

@@ -26,7 +26,8 @@ const check = (name, ok, extra='') => { console.log((ok?'PASS':'FAIL')+'  '+name
 // ---------- jump ----------
 let r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;
-  g.player.teleport(0, 6, 0);
+  const OX = g.map.openArea.x;   // clear of the platform in the middle
+  g.player.teleport(OX, 6, 0);
   await window.settle(() => g.player.grounded);
   const y0 = g.player.pos.y;
   g.player.wantJump = true;
@@ -39,6 +40,7 @@ check('jump lifts the player', r.rise > 0.8, JSON.stringify(r));
 // ---------- crouch ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;   // clear of the platform in the middle
   const eye = new (g.camera.position.constructor)();
   g.player.eyePosition(eye); const before = eye.y;
   g.player.crouchWant = true;
@@ -52,30 +54,32 @@ check('crouch lowers the eyes', r.before - r.after > 0.20, JSON.stringify(r));
 // ---------- pathfinding around a wall of crates ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;   // clear of the platform in the middle
   g.clearSpawns();
-  g.player.teleport(16, 16, 0);          // out of the way of the test subject
+  g.player.teleport(OX + 10, 16, 0);          // out of the way of the test subject
   const V = g.player.pos.constructor;
   const { spawnCrate } = await import('/src/game/objects.js');
   for (let i = -3; i <= 3; i++) {
-    spawnCrate(g, new V(i * 0.72, 0.4, 0), { size: 0.72 });
-    spawnCrate(g, new V(i * 0.72, 1.1, 0), { size: 0.72 });
+    spawnCrate(g, new V(OX + i * 0.72, 0.4, 0), { size: 0.72 });
+    spawnCrate(g, new V(OX + i * 0.72, 1.1, 0), { size: 0.72 });
   }
   g.nav.rebuild(g.world, { groundY: 0 });
   const { spawnCitizen } = await import('/src/game/citizen.js');
-  const c = spawnCitizen(g, new V(0, 0, 5));
-  c.ai._setState('wander'); c.ai.hasGoal = true; c.ai.goal.set(0, 0, -5); c.ai.repathTimer = 0;
+  const c = spawnCitizen(g, new V(OX, 0, 5));
+  c.ai._setState('wander'); c.ai.hasGoal = true; c.ai.goal.set(OX, 0, -5); c.ai.repathTimer = 0;
   const start = c.pos.z;
   let best = start;
   for (let i=0;i<420;i++){ await new Promise(r=>requestAnimationFrame(r)); best = Math.min(best, c.pos.z); }
-  return { start:+start.toFixed(1), end:+best.toFixed(1), x:+c.pos.x.toFixed(1), pathLen: c.ai.path.length, state:c.ai.state };
+  return { start:+start.toFixed(1), end:+best.toFixed(1), x:+(c.pos.x - OX).toFixed(1), pathLen: c.ai.path.length, state:c.ai.state };
 });
 check('citizen paths around a crate wall', r.end < 1.0, JSON.stringify(r));
 
 // ---------- RCV2 grab and carry ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;   // clear of the platform in the middle
   g.clearSpawns();
-  g.player.teleport(0, 4, 0); g.camYaw = 0; g.camPitch = 0;
+  g.player.teleport(OX, 4, 0); g.camYaw = 0; g.camPitch = 0;
   g.setEquipped('rcv2'); g.setSelected('crate');
   await window.frames(3);
   g.spawnSelected();
@@ -100,8 +104,9 @@ check('RCV2 grabs and lifts a crate', r.held && r.lifted > 0.5 && r.released, JS
 // ---------- RCV2 on a citizen ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;   // clear of the platform in the middle
   g.clearSpawns();
-  g.player.teleport(0, 4, 0); g.camYaw = 0; g.camPitch = 0;
+  g.player.teleport(OX, 4, 0); g.camYaw = 0; g.camPitch = 0;
   g.setSelected('citizen'); g.spawnSelected();
   const c = g.characters.find(x=>x!==g.player);
   await window.settle(() => c.grounded && c.state === 'controlled');
@@ -122,8 +127,9 @@ check('RCV2 picks up a citizen', r.held && r.state === 'ragdoll' && r.lifted > 0
 // ---------- delete ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;   // clear of the platform in the middle
   g.clearSpawns();
-  g.setSelected('boulder'); g.player.teleport(0, 4, 0); g.camYaw = 0; g.camPitch = 0;
+  g.setSelected('boulder'); g.player.teleport(OX, 4, 0); g.camYaw = 0; g.camPitch = 0;
   await window.frames(2);
   g.spawnSelected();
   const b = g.spawnedBodies[0];
@@ -139,6 +145,7 @@ check('delete removes the target', r.n1 === r.n0 - 1, JSON.stringify(r));
 // ---------- player death and respawn ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;   // clear of the platform in the middle
   g.clearSpawns();
   g.player.applyDamage(999, { boneName: 'head', point: g.player.pos.clone(), type: 'impact', severity: 1 });
   await window.settle(() => g.player.dead && g.player.state === 'dead');
@@ -153,16 +160,17 @@ check('player dies and respawns', r.dead && r.overlay && r.hp === 100 && r.state
 // ---------- people are solid ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;   // clear of the platform in the middle
   g.clearSpawns();
   const V = g.player.pos.constructor;
   const { spawnCitizen } = await import('/src/game/citizen.js');
-  const c = spawnCitizen(g, new V(0, 0, 0));
+  const c = spawnCitizen(g, new V(OX, 0, 0));
   await window.settle(() => c.grounded);
   g.setEquipped('fists');
   c.ai.update = () => { c.moveInput.set(0, 0, 0); };
   c.health = 100; c.balance = 1; c.setState('controlled');
-  c.teleport(0, 0, Math.PI);
-  g.player.teleport(0, 3, 0); g.camYaw = 0; g.camPitch = 0;
+  c.teleport(OX, 0, Math.PI);
+  g.player.teleport(OX, 3, 0); g.camYaw = 0; g.camPitch = 0;
   // stand in for a player leaning on the stick, walking straight into them
   const orig = g._readInput.bind(g);
   g._readInput = (dt, input) => { orig(dt, input); g.player.moveInput.set(0, 0, -1); g.player.wantRun = false; };
@@ -178,11 +186,12 @@ check('you cannot walk through people', r.standoff > 0.4 && r.standoff < 0.75, J
 // ---------- a citizen can actually be killed ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;   // clear of the platform in the middle
   // Its own subject, so this check does not inherit whatever the last one did.
   g.clearSpawns();
   const V = g.player.pos.constructor;
   const { spawnCitizen } = await import('/src/game/citizen.js');
-  const c = spawnCitizen(g, new V(0, 0, 0));
+  const c = spawnCitizen(g, new V(OX, 0, 0));
   await window.settle(() => c.grounded);
   g.setEquipped('fists');
   c.ai.update = () => { c.moveInput.set(0, 0, 0); };
@@ -192,8 +201,8 @@ r = await page.evaluate(async () => {
     // Put the target back on its feet each round: this is a damage test, not
     // a test of what happens to a body already on the floor.
     if (c.state !== 'controlled') { c.balance = 1; c.setState('controlled'); }
-    c.teleport(0, 0, Math.PI);
-    g.player.teleport(0, 0.62, 0); g.camYaw = 0; g.camPitch = 0.02;
+    c.teleport(OX, 0, Math.PI);
+    g.player.teleport(OX, 0.62, 0); g.camYaw = 0; g.camPitch = 0.02;
     await window.frames(6);
 
     const before = c.health;
@@ -219,13 +228,14 @@ check('jabs land at walking-in range and can kill',
 // ---------- citizens can hurt you back ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;   // clear of the platform in the middle
   g.clearSpawns();
   const V = g.player.pos.constructor;
   const { spawnCitizen } = await import('/src/game/citizen.js');
-  const c = spawnCitizen(g, new V(0, 0, 0));
+  const c = spawnCitizen(g, new V(OX, 0, 0));
   await window.settle(() => c.grounded);
   g.respawnPlayer();
-  g.player.teleport(0, 0.7, 0);
+  g.player.teleport(OX, 0.7, 0);
   g.camYaw = 0; g.camPitch = 0;
   // wind the citizen up: angry, brave, and looking straight at us
   c.ai.anger = 1; c.ai.fear = 0; c.ai.bravery = 1; c.ai.aggression = 1;
@@ -246,10 +256,11 @@ check('a citizen fights back and can hurt you', r.playerHurt > 0, JSON.stringify
   // into whoever the last check left standing in front of us.
   await ev(() => {
     const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;   // clear of the platform in the middle
     g.clearSpawns();
     g.player.balance = 1;
     g.player.setState('controlled');
-    g.player.teleport(0, 0, 0);
+    g.player.teleport(OX, 0, 0);
     g.camYaw = 0; g.camPitch = 0;
   });
   await page.waitForTimeout(400);
@@ -276,24 +287,31 @@ check('a citizen fights back and can hurt you', r.playerHurt > 0, JSON.stringify
 // ---------- nothing gets launched into orbit ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;   // clear of the platform in the middle
   const V = g.player.pos.constructor;
   const { spawnCitizen } = await import('/src/game/citizen.js');
   const { spawnBoulder } = await import('/src/game/objects.js');
   g.clearSpawns();
   const cs = [];
-  for (let i = 0; i < 3; i++) cs.push(spawnCitizen(g, new V(i * 1.5 - 1.5, 0, 0)));
+  for (let i = 0; i < 3; i++) cs.push(spawnCitizen(g, new V(OX + i * 1.5 - 1.5, 0, 0)));
   await new Promise((res) => setTimeout(res, 500));
   cs.forEach((c, i) => { c.ai.update = () => { c.moveInput.set(0, 0, 0); }; c.teleport(i * 1.5 - 1.5, 0, Math.PI); });
-  g.player.teleport(0, 8, 0);
+  g.player.teleport(OX, 8, 0);
   await new Promise((res) => setTimeout(res, 300));
 
   // a hard jab each, then a boulder straight through them
   cs.forEach((c) => {
     const b = c.rig.byName.upperTorso;
-    c.applyImpact(new V(b.worldPos.x, b.worldPos.y, b.worldPos.z + 0.1), new V(0, 7, -130),
+    c.applyImpact(new V(b.worldPos.x, b.worldPos.y, b.worldPos.z + 0.1), new V(OX, 7, -130),
       { boneName: b.name, damage: 12, type: 'blunt' });
   });
-  const rock = spawnBoulder(g, new V(-7, 0.6, 0.1));
+  /* Put them on the floor first. A jab alone no longer floors anyone, and a
+     citizen still on their feet is pinned to their animation, which would make
+     this measure the walk cycle rather than the ragdoll it is about. */
+  for (const c of cs) { c.balance = 0; c._checkBalance(); c.wantsUp = false; }
+  for (let i = 0; i < 40; i++) await new Promise((res) => requestAnimationFrame(res));
+
+  const rock = spawnBoulder(g, new V(OX - 7, 0.6, 0.1));
   rock.vel.set(16, 0, 0); rock.wake();
 
   // A Verlet particle stores speed as a position offset over ONE substep, so
@@ -315,16 +333,17 @@ r = await page.evaluate(async () => {
   };
 });
 check('ragdolls take a hit without being launched',
-  r.finite && r.peakSpeed < 14 && r.maxHeight < 3, JSON.stringify(r));
+  r.finite && r.peakSpeed > 1 && r.peakSpeed < 14 && r.maxHeight < 3, JSON.stringify(r));
 
 // ---------- a ragdoll is carried by the RCV2, not flung by it ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;   // clear of the platform in the middle
   const V = g.player.pos.constructor;
   const { spawnCitizen } = await import('/src/game/citizen.js');
   g.clearSpawns();
-  g.player.teleport(0, 3, 0); g.camYaw = 0; g.camPitch = 0;
-  const c = spawnCitizen(g, new V(0, 0, -2));
+  g.player.teleport(OX, 3, 0); g.camYaw = 0; g.camPitch = 0;
+  const c = spawnCitizen(g, new V(OX, 0, -2));
   c.ai.update = () => c.moveInput.set(0, 0, 0);
   await new Promise((res) => setTimeout(res, 400));
   g.setEquipped('rcv2');
@@ -375,9 +394,10 @@ check('the RCV2 carries a ragdoll instead of flinging it',
 // ---------- one punch staggers you, it does not floor you ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;   // clear of the platform in the middle
   const V = g.player.pos.constructor;
   g.clearSpawns();
-  g.player.teleport(0, 0, 0);
+  g.player.teleport(OX, 0, 0);
   g.player.balance = 1; g.player.health = 100;
   g.player.setState('controlled');
   await new Promise((res) => setTimeout(res, 200));
@@ -386,7 +406,7 @@ r = await page.evaluate(async () => {
   const jab = () => {
     const b = g.player.rig.byName.upperTorso;
     g.player.applyImpact(new V(b.worldPos.x, b.worldPos.y, b.worldPos.z + 0.15),
-      new V(0, 7, -130), { boneName: 'upperTorso', damage: 9, type: 'blunt' });
+      new V(OX, 7, -130), { boneName: 'upperTorso', damage: 9, type: 'blunt' });
   };
   jab();
   await new Promise((res) => requestAnimationFrame(res));
@@ -408,10 +428,11 @@ check('one punch does not floor you, a beating does',
 // ---------- the machete: pick it up, swing it, put it down ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;   // clear of the platform in the middle
   const V = g.player.pos.constructor;
   const { spawnCitizen } = await import('/src/game/citizen.js');
   g.clearSpawns();
-  g.player.teleport(0, 3, 0); g.camYaw = 0; g.camPitch = -0.2;
+  g.player.teleport(OX, 3, 0); g.camYaw = 0; g.camPitch = -0.2;
   g.setEquipped('rcv2'); g.setSelected('machete');
   await new Promise((res) => setTimeout(res, 150));
   const dropped = g.spawnSelected();
@@ -430,7 +451,7 @@ r = await page.evaluate(async () => {
   for (let i = 0; i < 10; i++) await new Promise((res) => requestAnimationFrame(res));
   const bladePose = g.player.animator.upper.clip?.name || null;
 
-  const c = spawnCitizen(g, new V(0, 0, 0));
+  const c = spawnCitizen(g, new V(OX, 0, 0));
   await new Promise((res) => setTimeout(res, 400));
   c.ai.update = () => { c.moveInput.set(0, 0, 0); };
   const clips = []; let bled = false;
@@ -438,8 +459,8 @@ r = await page.evaluate(async () => {
   const frame = () => new Promise((res) => requestAnimationFrame(res));
   for (let i = 0; i < 5 && !c.dead; i++) {
     if (c.state !== 'controlled') { c.balance = 1; c.setState('controlled'); }
-    c.teleport(0, 0, Math.PI);
-    g.player.teleport(0, 0.85, 0); g.camYaw = 0; g.camPitch = 0.02;
+    c.teleport(OX, 0, Math.PI);
+    g.player.teleport(OX, 0.85, 0); g.camYaw = 0; g.camPitch = 0.02;
     for (let k = 0; k < 6; k++) await frame();
     g.player.punchCooldown = 0; g.player.animator.cancelAction();
     if (!g.player.slash()) continue;
@@ -467,13 +488,14 @@ check('holding a blade looks nothing like holding fists',
 // ---------- the sledgehammer: heavier, slower, breaks things ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;   // clear of the platform in the middle
   const V = g.player.pos.constructor;
   const { spawnCitizen } = await import('/src/game/citizen.js');
   const frame = () => new Promise((res) => requestAnimationFrame(res));
   g.clearSpawns();
   if (g.carried) g.dropCarried();
   g.clearSpawns();
-  g.player.teleport(0, 3, 0); g.camYaw = 0; g.camPitch = -0.2;
+  g.player.teleport(OX, 3, 0); g.camYaw = 0; g.camPitch = -0.2;
   g.setEquipped('rcv2'); g.setSelected('sledge');
   await new Promise((res) => setTimeout(res, 150));
   const dropped = g.spawnSelected();
@@ -486,7 +508,7 @@ r = await page.evaluate(async () => {
   for (let i = 0; i < 10; i++) await frame();
   const holdPose = g.player.animator.upper.clip?.name || null;
 
-  const c = spawnCitizen(g, new V(0, 0, 0));
+  const c = spawnCitizen(g, new V(OX, 0, 0));
   await new Promise((res) => setTimeout(res, 400));
   c.ai.update = () => { c.moveInput.set(0, 0, 0); };
   const clips = [];
@@ -500,9 +522,9 @@ r = await page.evaluate(async () => {
     for (const b of c.broken) broken.add(b);
     c.heal();
     if (c.state !== 'controlled') { c.balance = 1; c.setState('controlled'); }
-    c.teleport(0, 0, Math.PI);
+    c.teleport(OX, 0, Math.PI);
     // a sledgehammer is swung from further out than a blade
-    g.player.teleport(0, 1.2, 0); g.camYaw = 0; g.camPitch = 0.02;
+    g.player.teleport(OX, 1.2, 0); g.camYaw = 0; g.camPitch = 0.02;
     for (let k = 0; k < 6; k++) await frame();
     g.player.punchCooldown = 0; g.player.animator.cancelAction();
     if (!g.player.slash()) continue;
@@ -526,18 +548,19 @@ check('the sledgehammer is carried, swung both ways and breaks bones',
 // ---------- faces come apart the way they were asked to ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;   // clear of the platform in the middle
   const V = g.player.pos.constructor;
   const { spawnCitizen } = await import('/src/game/citizen.js');
   const frame = () => new Promise((res) => requestAnimationFrame(res));
   g.clearSpawns();
-  g.player.teleport(0, 6, 0);
-  const c = spawnCitizen(g, new V(0, 0, 0));
+  g.player.teleport(OX, 6, 0);
+  const c = spawnCitizen(g, new V(OX, 0, 0));
   await new Promise((res) => setTimeout(res, 300));
   c.ai.update = () => c.moveInput.set(0, 0, 0);
   const hit = (bone, opts) => {
     const b = c.rig.byName[bone];
     c.applyImpact(new V(b.worldPos.x, b.worldPos.y, b.worldPos.z),
-      new V(0, 4, -60), { boneName: bone, ...opts });
+      new V(OX, 4, -60), { boneName: bone, ...opts });
   };
 
   // fists: bloodshot eyes, a bloody nose and lip, but both eyes still in
@@ -589,12 +612,13 @@ check('an eye can hang out, and taking both blinds you',
 // ---------- a broken bone stops the limb working ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;   // clear of the platform in the middle
   const V = g.player.pos.constructor;
   const { spawnCitizen } = await import('/src/game/citizen.js');
   const frame = () => new Promise((res) => requestAnimationFrame(res));
   g.clearSpawns();
-  g.player.teleport(0, 6, 0);
-  const c = spawnCitizen(g, new V(0, 0, 0));
+  g.player.teleport(OX, 6, 0);
+  const c = spawnCitizen(g, new V(OX, 0, 0));
   await new Promise((res) => setTimeout(res, 300));
   c.ai.update = () => c.moveInput.set(0, 0, 0);
 
@@ -628,22 +652,284 @@ check('a broken bone bleeds, goes limp and stops working',
   r.arm.cannotSwing && r.arm.stillJabs &&
   r.leg.broken && r.leg.rose < 0.15 && r.healed, JSON.stringify(r));
 
+// ---------- the skeleton is a hierarchy, not a pile of parts ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;
+  const V = g.player.pos.constructor;
+  const { spawnCitizen } = await import('/src/game/citizen.js');
+  const frame = () => new Promise((res) => requestAnimationFrame(res));
+  g.clearSpawns();
+  g.player.teleport(OX, 10, 0);
+  const c = spawnCitizen(g, new V(OX, 0, 0));
+  await new Promise((res) => setTimeout(res, 350));
+  const rig = c.rig;
+
+  const parentOf = (n) => rig.byName[n].parent?.name || null;
+  const chain = {
+    lowerTorso: parentOf('lowerTorso'), midTorso: parentOf('midTorso'),
+    upperTorso: parentOf('upperTorso'), neck: parentOf('neck'), head: parentOf('head'),
+    upperArmL: parentOf('upperArmL'), lowerArmL: parentOf('lowerArmL'),
+    handL: parentOf('handL'), fingerL0A: parentOf('fingerL0A'), fingerL0B: parentOf('fingerL0B'),
+    upperArmR: parentOf('upperArmR'), lowerArmR: parentOf('lowerArmR'), handR: parentOf('handR'),
+    upperLegR: parentOf('upperLegR'), lowerLegR: parentOf('lowerLegR'), footR: parentOf('footR'),
+    upperLegL: parentOf('upperLegL'), lowerLegL: parentOf('lowerLegL'), footL: parentOf('footL'),
+  };
+  const orphans = rig.bones.filter((b) => b.name !== 'pelvis' && !b.parent).map((b) => b.name);
+
+  // every part is drawn from its own bone, and moves when that bone moves
+  const before = c.body.entries.get('lowerArmR').skin.mesh.position.clone();
+  rig.byName.upperArmR.anim.x = 1.2;
+  rig.updateFK();
+  c.body.sync();
+  const after = c.body.entries.get('lowerArmR').skin.mesh.position.clone();
+  const drivenByParent = before.distanceTo(after) > 0.15;
+
+  /* What the limits actually catch while a body is moving normally. Walking
+     and running should touch nothing - the clips were authored inside the
+     ranges - and the one thing a punch does touch is the elbow, where the
+     interpolation overshoots a hair past straight at full extension and is
+     stopped at straight, which is the whole point of having limits. */
+  rig.byName.upperArmR.anim.x = 0;
+  const caught = {};
+  const watchClamps = () => {
+    for (const n of rig.limitClamped) caught[n] = (caught[n] || 0) + 1;
+  };
+  c.ai.update = () => { c.moveInput.set(0, 0, -1); c.wantRun = false; };
+  for (let i = 0; i < 80; i++) { await frame(); watchClamps(); }
+  c.ai.update = () => { c.moveInput.set(0, 0, -1); c.wantRun = true; };
+  for (let i = 0; i < 80; i++) { await frame(); watchClamps(); }
+  const inLocomotion = Object.keys(caught).length;
+  c.ai.update = () => c.moveInput.set(0, 0, 0);
+  for (let i = 0; i < 6; i++) {
+    c.punchCooldown = 0; c.animator.cancelAction(); c.punch(true);
+    for (let k = 0; k < 40 && c.animator.actionActive; k++) { await frame(); watchClamps(); }
+  }
+  const elbowsOnly = Object.keys(caught).every((n) => /^lowerArm[RL]$/.test(n));
+  const elbowStraight = rig.byName.lowerArmR.anim.x >= 0 && rig.byName.lowerArmL.anim.x >= 0;
+  return {
+    chain, orphans, drivenByParent, bones: rig.bones.length,
+    caught, inLocomotion, elbowsOnly, elbowStraight,
+  };
+});
+check('every bone hangs off its parent and drives its own body part',
+  r.orphans.length === 0 && r.drivenByParent &&
+  r.chain.lowerTorso === 'pelvis' && r.chain.midTorso === 'lowerTorso' &&
+  r.chain.upperTorso === 'midTorso' && r.chain.neck === 'upperTorso' &&
+  r.chain.head === 'neck' &&
+  r.chain.upperArmL === 'upperTorso' && r.chain.lowerArmL === 'upperArmL' &&
+  r.chain.handL === 'lowerArmL' && r.chain.fingerL0A === 'handL' &&
+  r.chain.fingerL0B === 'fingerL0A' &&
+  r.chain.upperArmR === 'upperTorso' && r.chain.lowerArmR === 'upperArmR' &&
+  r.chain.handR === 'lowerArmR' &&
+  r.chain.upperLegR === 'pelvis' && r.chain.lowerLegR === 'upperLegR' &&
+  r.chain.footR === 'lowerLegR' &&
+  r.chain.upperLegL === 'pelvis' && r.chain.lowerLegL === 'upperLegL' &&
+  r.chain.footL === 'lowerLegL',
+  JSON.stringify({ bones: r.bones, orphans: r.orphans, drivenByParent: r.drivenByParent }));
+check('walking and running never ask a joint for the impossible',
+  r.inLocomotion === 0, JSON.stringify({ caughtWhileMoving: r.inLocomotion }));
+check('and a punch never hyperextends the elbow it throws',
+  r.elbowsOnly && r.elbowStraight, JSON.stringify(r.caught));
+
+// ---------- joints refuse what a joint cannot do ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  const c = g.characters.find((x) => x !== g.player) || g.player;
+  const rig = c.rig;
+  const put = (bone, axis, value) => {
+    rig.byName[bone].anim[axis] = value;
+    rig.updateFK();
+    return +rig.byName[bone].anim[axis].toFixed(3);
+  };
+  const deg = (v) => +(v * 180 / Math.PI).toFixed(0);
+  return {
+    kneeBack: deg(put('lowerLegR', 'x', 1.4)),        // knees bend negative only
+    kneeFlex: deg(put('lowerLegR', 'x', -1.2)),       // ...this one is legal
+    elbowBack: deg(put('lowerArmR', 'x', -1.4)),      // elbows bend positive only
+    elbowFlex: deg(put('lowerArmR', 'x', 1.9)),       // ...legal
+    fingerBack: deg(put('fingerR0A', 'x', 1.2)),
+    fingerCurl: deg(put('fingerR0A', 'x', -1.5)),
+    neckSpin: deg(put('neck', 'y', 3.0)),
+    headSpin: deg(put('head', 'y', 3.0)),
+    hipThroughPelvis: deg(put('upperLegR', 'z', -2.6)),
+    ankleTwist: deg(put('footR', 'y', 1.6)),
+    spineTwist: deg(put('lowerTorso', 'y', 1.5)),
+    footTip: deg(put('footTipR', 'x', 1.0)),
+  };
+});
+check('a joint cannot do what the joint it copies cannot do',
+  r.kneeBack === 0 && r.kneeFlex === -69 &&
+  r.elbowBack === 0 && r.elbowFlex === 109 &&
+  r.fingerBack <= 9 && r.fingerCurl === -86 &&
+  Math.abs(r.neckSpin) <= 42 && Math.abs(r.headSpin) <= 42 &&
+  r.hipThroughPelvis >= -47 && Math.abs(r.ankleTwist) <= 22 &&
+  Math.abs(r.spineTwist) <= 13 && r.footTip === 0, JSON.stringify(r));
+
+// ---------- a hit travels along the bones, not through the air ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;
+  const V = g.player.pos.constructor;
+  const { spawnCitizen } = await import('/src/game/citizen.js');
+  const frame = () => new Promise((res) => requestAnimationFrame(res));
+  g.clearSpawns();
+  g.player.teleport(OX, 10, 0);
+  const c = spawnCitizen(g, new V(OX, 0, 0));
+  await new Promise((res) => setTimeout(res, 350));
+  c.ai.update = () => c.moveInput.set(0, 0, 0);
+  const speed = (n) => {
+    const p = c.particles[n];
+    return Math.hypot(p.x - p.px, p.y - p.py, p.z - p.pz) / g.world.substepDt;
+  };
+  const watch = ['headTop', 'neckTop', 'shoulders', 'mt', 'hip', 'kneeR', 'toeR'];
+  const hit = async (boneName) => {
+    c.heal(); c.setState('controlled'); c.teleport(OX, 0, 0);
+    for (let i = 0; i < 20; i++) await frame();
+    c.setState('ragdoll'); c.wantsUp = false;
+    for (let i = 0; i < 240; i++) {
+      await frame();
+      if (i > 70 && speed('hip') < 0.25 && speed('headTop') < 0.25) break;
+    }
+    c.health = c.maxHealth; c.dead = false;
+    const before = {};
+    for (const n of watch) before[n] = speed(n);
+    const b = c.rig.byName[boneName];
+    c.applyImpact(new V(b.worldPos.x, b.worldPos.y, b.worldPos.z), new V(0, 8, -90),
+      { boneName, damage: 0, type: 'blunt', severity: 0.6 });
+    const out = {};
+    for (const n of watch) out[n] = +(speed(n) - before[n]).toFixed(2);
+    return out;
+  };
+  return { head: await hit('head'), foot: await hit('footR') };
+});
+check('a hit moves what it landed on, then fades along the skeleton',
+  r.head.headTop > r.head.shoulders && r.head.shoulders > r.head.mt &&
+  r.head.mt > r.head.kneeR && r.head.headTop > 2 &&
+  r.foot.toeR > r.foot.kneeR && r.foot.kneeR > r.foot.headTop && r.foot.toeR > 2,
+  JSON.stringify(r));
+
+// ---------- the ragdoll will not fold a knee backwards ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;
+  const c = g.characters.find((x) => x !== g.player);
+  const frame = () => new Promise((res) => requestAnimationFrame(res));
+  const P = c.particles;
+  c.heal(); c.setState('controlled'); c.teleport(OX, 0, 0);
+  for (let i = 0; i < 20; i++) await frame();
+  c.setState('ragdoll'); c.wantsUp = false;
+  for (let i = 0; i < 140; i++) await frame();
+
+  const forward = () => {
+    const rx = P.hipR.x - P.hipL.x, ry = P.hipR.y - P.hipL.y, rz = P.hipR.z - P.hipL.z;
+    const ux = P.shoulders.x - P.hip.x, uy = P.shoulders.y - P.hip.y, uz = P.shoulders.z - P.hip.z;
+    let fx = uy * rz - uz * ry, fy = uz * rx - ux * rz, fz = ux * ry - uy * rx;
+    const l = Math.hypot(fx, fy, fz) || 1;
+    return { x: fx / l, y: fy / l, z: fz / l };
+  };
+  const side = (k, a, b) => {
+    const f = forward();
+    const mx = (P[a].x + P[b].x) / 2, my = (P[a].y + P[b].y) / 2, mz = (P[a].z + P[b].z) / 2;
+    return (P[k].x - mx) * f.x + (P[k].y - my) * f.y + (P[k].z - mz) * f.z;
+  };
+  // shove the knee right through to the wrong side and let physics answer
+  for (let i = 0; i < 4; i++) {
+    const f = forward();
+    P.kneeR.x -= f.x * 0.25; P.kneeR.y -= f.y * 0.25; P.kneeR.z -= f.z * 0.25;
+    P.kneeR.px = P.kneeR.x; P.kneeR.py = P.kneeR.y; P.kneeR.pz = P.kneeR.z;
+  }
+  const wrong = +side('kneeR', 'hipR', 'ankleR').toFixed(3);
+  for (let i = 0; i < 30; i++) await frame();
+  return { wrong, fixed: +side('kneeR', 'hipR', 'ankleR').toFixed(3) };
+});
+check('a ragdoll will not keep a knee bent the wrong way',
+  r.wrong < -0.2 && r.fixed >= -0.01, JSON.stringify(r));
+
+// ---------- a break turns any way, and still cannot be inside the ribs ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;
+  const c = g.characters.find((x) => x !== g.player);
+  const frame = () => new Promise((res) => requestAnimationFrame(res));
+  c.heal(); c.setState('controlled'); c.teleport(OX, 0, 0);
+  for (let i = 0; i < 20; i++) await frame();
+  c.breakBone('lowerArmR', c.rig.byName.lowerArmR.worldPos.clone());
+  c.rig.byName.lowerArmR.anim.x = -2.4;      // an elbow bent completely backwards
+  c.rig.byName.lowerArmL.anim.x = -2.4;      // ...and the same on the good arm
+  c.rig.updateFK();
+  const out = {
+    broken: +c.rig.byName.lowerArmR.anim.x.toFixed(2),
+    intact: +c.rig.byName.lowerArmL.anim.x.toFixed(2),
+  };
+  // now bury the broken hand in the chest every frame and see it pushed out
+  c.setState('ragdoll'); c.wantsUp = false;
+  const P = c.particles;
+  for (let i = 0; i < 40; i++) {
+    P.wristR.x = P.mt.x; P.wristR.y = P.mt.y; P.wristR.z = P.mt.z;
+    await frame();
+  }
+  out.outOfChest = +Math.hypot(P.wristR.x - P.mt.x, P.wristR.y - P.mt.y, P.wristR.z - P.mt.z).toFixed(3);
+  c.heal();
+  return out;
+});
+check('a broken bone turns any way but still cannot be inside the chest',
+  r.broken === -2.4 && r.intact === 0 && r.outOfChest > 0.18, JSON.stringify(r));
+
+// ---------- Plains: the platform and the walls are real ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  const V = g.player.pos.constructor;
+  const { spawnBoulder } = await import('/src/game/objects.js');
+  const frame = () => new Promise((res) => requestAnimationFrame(res));
+  g.clearSpawns();
+  const out = {
+    name: g.map.name,
+    solids: g.map.solids.length,
+    middle: +g._surfaceHeight(0, 0).toFixed(2),
+    grass: +g._surfaceHeight(g.map.openArea.x, 0).toFixed(2),
+  };
+  // dropped over the middle of the map, you land on the platform
+  g.player.teleport(0, 0, 0, 4);
+  for (let i = 0; i < 90; i++) await frame();
+  out.standing = +g.player.pos.y.toFixed(2);
+  out.grounded = g.player.grounded;
+  // a boulder rolled at a wall is stopped by it
+  const b = spawnBoulder(g, new V(g.map.openArea.x, 0.7, 30));
+  b.vel.set(0, 0, 14); b.wake();
+  for (let i = 0; i < 200; i++) await frame();
+  out.boulderAt = +b.pos.z.toFixed(1);
+  // and the citizens' map knows about both
+  g.nav.rebuild(g.world, { groundY: 0 });
+  out.navWall = g.nav.isBlockedWorld(0, -39.5);
+  out.navPlatform = g.nav.isBlockedWorld(0, 0);
+  g.clearSpawns();
+  g.player.teleport(g.map.openArea.x, 6, 0);
+  return out;
+});
+check('Plains has a platform you stand on and walls that stop you',
+  r.name === 'Plains' && r.solids >= 6 && r.middle > 0.5 && r.grass === 0 &&
+  r.grounded && Math.abs(r.standing - (r.middle + 0.945)) < 0.12 &&
+  r.boulderAt < 39 && r.boulderAt > 36 && r.navWall === true && r.navPlatform === false,
+  JSON.stringify(r));
+
 // ---------- boulder actually rolls ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;   // clear of the platform in the middle
   g.clearSpawns();
   const V = g.player.pos.constructor;
   const { spawnBoulder } = await import('/src/game/objects.js');
-  const b = spawnBoulder(g, new V(0, 0.6, 0));
+  const b = spawnBoulder(g, new V(OX, 0.6, 0));
   b.vel.set(6, 0, 0); b.angVel.set(0,0,0); b.wake();
   let spin = 0;
   for (let i=0;i<120;i++){ await new Promise(r=>requestAnimationFrame(r)); spin = Math.max(spin, b.angVel.length()); }
-  return { spin:+spin.toFixed(2), moved:+b.pos.x.toFixed(2) };
+  return { spin:+spin.toFixed(2), moved:+(b.pos.x - OX).toFixed(2) };
 });
 check('boulder rolls rather than slides', r.spin > 3 && r.moved > 2, JSON.stringify(r));
 
 await h.showHud();
-await ev(() => { const g=window.GOREBOX.game; g.clearSpawns(); g.debugCam=null; g.setEquipped('fists'); g.player.teleport(0,6,0); });
+await ev(() => { const g=window.GOREBOX.game; g.clearSpawns(); g.debugCam=null; g.setEquipped('fists'); g.player.teleport(g.map.openArea.x, 6, 0); });
 await page.waitForTimeout(800);
 await shot('gameplay');
 console.log('\n=== LOGS ==='); console.log(logs.slice(0,15).join('\n')||'(none)');

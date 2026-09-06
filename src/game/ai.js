@@ -41,8 +41,15 @@ export class NavGrid {
   worldZ(cz) { return cz * this.cell - this.half + this.cell / 2; }
   inside(cx, cz) { return cx >= 0 && cz >= 0 && cx < this.w && cz < this.h; }
 
-  /** Marks every cell covered by an obstacle too tall to simply walk over. */
-  rebuild(world, { stepHeight = 0.42, radius = 0.34, groundY = 0 } = {}) {
+  /**
+   * Marks every cell covered by an obstacle too tall to simply walk over.
+   *
+   * Something with a flat top low enough to climb - the platform in the middle
+   * of Plains - is not an obstacle, it is scenery you get up onto, so it is
+   * left walkable and merely made expensive. Citizens will cross it, and their
+   * jump reflex takes them up the step.
+   */
+  rebuild(world, { stepHeight = 0.42, radius = 0.34, groundY = 0, climbHeight = 1.0 } = {}) {
     this.blocked.fill(0);
     this.cost.fill(0);
     const margin = 2;   // keep citizens off the very lip of the plate
@@ -57,6 +64,7 @@ export class NavGrid {
 
     const mark = (b) => {
       if (b.aabbMax.y <= groundY + stepHeight) return;      // step straight over it
+      const climbable = b.isStatic && b.aabbMax.y <= groundY + climbHeight;
       const pad = radius;
       const x0 = this.cellX(b.aabbMin.x - pad), x1 = this.cellX(b.aabbMax.x + pad);
       const z0 = this.cellZ(b.aabbMin.z - pad), z1 = this.cellZ(b.aabbMax.z + pad);
@@ -64,6 +72,7 @@ export class NavGrid {
         for (let cx = x0; cx <= x1; cx++) {
           if (!this.inside(cx, cz)) continue;
           const i = this.idx(cx, cz);
+          if (climbable) { this.cost[i] = Math.max(this.cost[i], 2.4); continue; }
           this.blocked[i] = 1;
           // a ring of extra cost so paths do not scrape past crates
           for (let dz = -1; dz <= 1; dz++) {
@@ -351,6 +360,9 @@ export class CitizenAI {
     this._senseThreat(dt);
     this._decide();
 
+    // Squared up while there is something to face, loose otherwise.
+    c.squareUp = this.state === AI_STATE.FIGHT || this.state === AI_STATE.ALERT;
+
     switch (this.state) {
       case AI_STATE.IDLE: this._idle(dt); break;
       case AI_STATE.WANDER: this._wander(dt); break;
@@ -437,8 +449,9 @@ export class CitizenAI {
     c.crouchWant = false;
     this.idleTimer -= dt;
     // idle glancing about
+    // Idling, a person glances about with their head, not their hips.
     if (this.rng() < dt * 0.4) this.lookYaw = c.yaw + (this.rng() - 0.5) * 1.6;
-    if (this.lookYaw != null) c.yaw = dampAngle(c.yaw, this.lookYaw, 2.2, dt);
+    if (this.lookYaw != null) c.gazeYaw = dampAngle(c.gazeYaw, this.lookYaw, 2.2, dt);
     if (this.idleTimer <= 0) {
       this.idleTimer = 3 + this.rng() * 6;
       this._setState(AI_STATE.WANDER);
@@ -555,7 +568,7 @@ export class CitizenAI {
     if (d < 0.95 && this.punchTimer <= 0) {
       _v1.copy(t.pos).sub(c.pos); _v1.y = 0;
       const want = Math.atan2(-_v1.x, -_v1.z);
-      if (Math.abs(angleDelta(c.yaw, want)) < 0.55) {
+      if (Math.abs(angleDelta(c.gazeYaw, want)) < 0.55) {
         if (c.punch(true)) this.punchTimer = 0.42 + this.rng() * 0.5;
       }
     }
@@ -646,7 +659,9 @@ export class CitizenAI {
     const c = this.c;
     if (c.moveInput.lengthSq() < 1e-4) return;
     const want = Math.atan2(-c.moveInput.x, -c.moveInput.z);
-    c.yaw = dampAngle(c.yaw, want, this.state === AI_STATE.FLEE ? 10 : 7, dt);
+    // Walking, you face where you are going; the gaze leads and the hips
+    // follow it inside the character itself.
+    c.gazeYaw = dampAngle(c.gazeYaw, want, this.state === AI_STATE.FLEE ? 10 : 7, dt);
   }
 
   _facePoint(p, dt, rate = 8) {
@@ -654,7 +669,7 @@ export class CitizenAI {
     _v1.set(p.x - c.pos.x, 0, p.z - c.pos.z);
     if (_v1.lengthSq() < 1e-6) return;
     const want = Math.atan2(-_v1.x, -_v1.z);
-    c.yaw = dampAngle(c.yaw, want, rate, dt);
+    c.gazeYaw = dampAngle(c.gazeYaw, want, rate, dt);
     c.pitch = lerp(c.pitch, clamp((p.y - (c.pos.y + 0.6)) * 0.4, -0.5, 0.5), clamp01(dt * 6));
   }
 
@@ -670,8 +685,9 @@ export class CitizenAI {
     const feet = c.pos.y - 0.945;
     const ahead = _v2.set(c.pos.x + _v1.x * 0.75, feet + 0.25, c.pos.z + _v1.z * 0.75);
     const bodies = this.game.world.bodies;
-    for (let i = 0; i < bodies.length; i++) {
-      const b = bodies[i];
+    const statics = this.game.world.staticBodies;
+    for (let i = 0; i < bodies.length + statics.length; i++) {
+      const b = i < bodies.length ? bodies[i] : statics[i - bodies.length];
       if (b.aabbMax.y < feet + 0.12) continue;
       if (b.aabbMax.y > feet + 1.05) continue;      // too tall to hop, go round
       if (ahead.x < b.aabbMin.x - 0.25 || ahead.x > b.aabbMax.x + 0.25) continue;

@@ -341,9 +341,18 @@ export class Game {
     // along the aim, then spiral, until there is genuinely room.
     for (let attempt = 0; attempt < 14; attempt++) {
       let clash = false;
-      for (const b of this.spawnedBodies) {
-        const r = (b.shape === 'sphere' ? b.radius : b.half.length()) + 0.85;
-        if (b.pos.distanceToSquared(_v2) < r * r) { clash = true; break; }
+      // The map itself is in the way too: nothing is spawned inside a wall or
+      // buried in the platform.
+      for (const b of this.world.staticBodies) {
+        if (_v2.x > b.aabbMin.x - 0.4 && _v2.x < b.aabbMax.x + 0.4 &&
+            _v2.y > b.aabbMin.y - 0.4 && _v2.y < b.aabbMax.y + 0.4 &&
+            _v2.z > b.aabbMin.z - 0.4 && _v2.z < b.aabbMax.z + 0.4) { clash = true; break; }
+      }
+      if (!clash) {
+        for (const b of this.spawnedBodies) {
+          const r = (b.shape === 'sphere' ? b.radius : b.half.length()) + 0.85;
+          if (b.pos.distanceToSquared(_v2) < r * r) { clash = true; break; }
+        }
       }
       if (!clash) {
         for (const c of this.characters) {
@@ -363,29 +372,42 @@ export class Game {
       _v2.z = clamp(_v2.z, -half, half);
     }
 
+    /* Whatever it is, it belongs on top of what is underneath it - the grass,
+       or the platform if that is what is being aimed at. */
+    const groundAt = this._surfaceHeight(_v2.x, _v2.z);
     const id = this.selected.id;
     if (id === 'citizen') {
       if (this.characters.length - 1 >= this.quality.maxCitizens) {
         const oldest = this.characters.find((c) => c !== this.player);
         if (oldest) this.removeCharacter(oldest);
       }
-      _v2.y = 0;
+      _v2.y = groundAt;
       const c = spawnCitizen(this, _v2, { yaw: this.camYaw + Math.PI });
       return { type: 'citizen', name: 'Citizen', entity: c };
     }
     if (id === 'boulder') {
-      _v2.y = Math.max(_v2.y, 0.9);
+      _v2.y = Math.max(_v2.y, groundAt + 0.9);
       const b = spawnBoulder(this, _v2);
       return { type: 'body', name: 'Boulder', entity: b };
     }
     if (MELEE[id]) {
-      _v2.y = Math.max(_v2.y, 0.6);
+      _v2.y = Math.max(_v2.y, groundAt + 0.6);
       const b = MELEE[id].spawn(this, _v2);
       return { type: 'body', name: MELEE[id].label, entity: b };
     }
-    _v2.y = Math.max(_v2.y, 0.7);
+    _v2.y = Math.max(_v2.y, groundAt + 0.7);
     const b = spawnCrate(this, _v2);
     return { type: 'body', name: 'Crate', entity: b };
+  }
+
+  /** Height of whatever a thing dropped here would land on. */
+  _surfaceHeight(x, z) {
+    let best = this.world.hasGround ? this.world.groundY : 0;
+    for (const b of this.world.staticBodies) {
+      if (x < b.aabbMin.x || x > b.aabbMax.x || z < b.aabbMin.z || z > b.aabbMax.z) continue;
+      if (b.aabbMax.y > best) best = b.aabbMax.y;
+    }
+    return best;
   }
 
   /* ---------------------------------------------------------------- carrying */
@@ -859,7 +881,10 @@ export class Game {
     if (p.state === STATE.CONTROLLED && !p.dead) {
       this.camYaw -= look.x;
       this.camPitch = clamp(this.camPitch - look.y, -1.42, 1.42);
-      p.yaw = this.camYaw;
+      /* The camera is the gaze, not the hips. The body turns its head first
+         and brings the shoulders and then the hips round after it, which the
+         character does for itself. */
+      p.gazeYaw = this.camYaw;
       p.pitch = this.camPitch;
     }
 

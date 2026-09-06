@@ -6,6 +6,7 @@
 import { $, IS_TOUCH } from './core/util.js';
 import { bootScreen, mapScreen } from './core/loading.js';
 import { input } from './core/input.js';
+import { getMap as getMapDef } from './game/map.js';
 import { Menu } from './ui/menu.js';
 import { Hud } from './ui/hud.js';
 import { SpawnMenu } from './ui/spawnMenu.js';
@@ -133,7 +134,7 @@ async function startGame(mapId) {
   gameScreen.classList.add('active');
   app.hud.setVisible(false);
 
-  const mapName = (mapId === 'baseplate' ? 'TEST BASEPLATE' : mapId.toUpperCase());
+  const mapName = (getMapDef(mapId)?.name || mapId).toUpperCase();
   $('#map-loading-title').textContent = mapName;
   mapScreen.show('Preparing...');
 

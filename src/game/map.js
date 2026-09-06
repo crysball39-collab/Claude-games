@@ -1,23 +1,25 @@
 /* =============================================================================
-   Maps. There is one for now: the Test Baseplate, a grass plate.
+   Maps. There is one for now: Plains - a grass plate with a raised platform in
+   the middle of it and a grey wall down each side.
    ========================================================================== */
 import {
   Group, Mesh, BoxGeometry, PlaneGeometry, MeshLambertMaterial, MeshBasicMaterial,
   DirectionalLight, HemisphereLight, AmbientLight, Fog, Color, BackSide, Vector3,
   SphereGeometry, DoubleSide, Float32BufferAttribute,
 } from 'three';
+import { RigidBody } from '../physics/rigid.js';
 import { makeGrassTexture, makeSkyTexture } from './textures.js';
 import { valueNoise2D, fbm, clamp01, lerp } from '../core/util.js';
 
 export const MAPS = [
   {
     id: 'baseplate',
-    name: 'Test Baseplate',
-    subtitle: 'Grass plate &middot; 80 x 80 m',
+    name: 'Plains',
+    subtitle: 'Grass, a platform and four walls &middot; 80 x 80 m',
     description:
-      'A flat green plate with nothing on it and nothing to stop you. ' +
-      'Spawn crates, boulders and citizens, then find out what happens to them.',
-    build: buildBaseplate,
+      'Green flats walled in on every side, with a low grey platform in the ' +
+      'middle to fight on, fall off and throw people from.',
+    build: buildPlains,
   },
 ];
 
@@ -25,7 +27,7 @@ export function getMap(id) { return MAPS.find((m) => m.id === id) || MAPS[0]; }
 
 /* -------------------------------------------------------------------------- */
 
-function buildBaseplate(ctx) {
+function buildPlains(ctx) {
   const { scene, world, quality } = ctx;
   const group = new Group();
   const HALF = 40;
@@ -109,6 +111,56 @@ function buildBaseplate(ctx) {
   group.add(side);
   disposables.push(side.geometry, sideMat);
 
+  /* --------------------- the platform and the walls ----------------------- */
+  /* Solid, static and known to the physics world, so people stand on the
+     platform, walk into the walls, and the citizens' pathfinder routes round
+     both of them. Grey concrete, because the point of them is that they are
+     not grass. */
+  const greyMat = new MeshLambertMaterial({ color: 0x9a9a97 });
+  const greyDark = new MeshLambertMaterial({ color: 0x7c7c79 });
+  disposables.push(greyMat, greyDark);
+
+  const solids = [];
+  const addSolid = (w, h, d, x, y, z, mat = greyMat) => {
+    const mesh = new Mesh(new BoxGeometry(w, h, d), mat);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = quality.shadows;
+    mesh.receiveShadow = quality.shadows;
+    group.add(mesh);
+    disposables.push(mesh.geometry);
+
+    const body = new RigidBody({
+      shape: 'box',
+      half: new Vector3(w / 2, h / 2, d / 2),
+      pos: new Vector3(x, y, z),
+      isStatic: true,
+      friction: 0.9,
+      restitution: 0.02,
+    });
+    body.updateDerived();
+    world.addBody(body);
+    solids.push(body);
+    return mesh;
+  };
+
+  // The platform: sixteen metres square, a step and a half up, sitting on the
+  // ground rather than floating over it.
+  const PLAT = { size: 16, height: 0.9 };
+  addSolid(PLAT.size, PLAT.height, PLAT.size, 0, PLAT.height / 2, 0);
+  /* A darker skirt around the base, a hand's width shorter than the platform
+     itself so the two never fight over the same pixels, which doubles as a
+     step up onto it. */
+  addSolid(PLAT.size + 0.6, 0.16, PLAT.size + 0.6, 0, PLAT.height - 0.09, 0, greyDark);
+
+  // Four walls, one down each side, standing on the ground at the edge.
+  const WALL = { height: 4.5, thick: 1.0 };
+  const wy = WALL.height / 2;
+  const span = HALF * 2;
+  addSolid(span, WALL.height, WALL.thick, 0, wy, -HALF + WALL.thick / 2);
+  addSolid(span, WALL.height, WALL.thick, 0, wy, HALF - WALL.thick / 2);
+  addSolid(WALL.thick, WALL.height, span, -HALF + WALL.thick / 2, wy, 0);
+  addSolid(WALL.thick, WALL.height, span, HALF - WALL.thick / 2, wy, 0);
+
   /* ------------------------------ blood decals ---------------------------- */
   // filled in by the gore system; the sheet lives one centimetre above the grass
   const decalGeo = new PlaneGeometry(HALF * 2, HALF * 2);
@@ -132,14 +184,23 @@ function buildBaseplate(ctx) {
 
   return {
     id: 'baseplate',
+    name: 'Plains',
     group,
     half: HALF,
+    platform: { size: PLAT.size, height: PLAT.height },
+    /* A patch of flat, empty grass clear of the platform and the walls. The
+       test suite works here so that adding scenery to the middle of a map
+       never quietly invalidates it. */
+    openArea: new Vector3(24, 0, 0),
+    solids,
     decalMesh: decal,
     sun,
-    spawnPoint: new Vector3(0, 0, 6),
+    spawnPoint: new Vector3(0, 0, 12),
     spawnYaw: 0,
     attachDecalTexture(tex) { decalMat.map = tex; decalMat.needsUpdate = true; },
     dispose() {
+      for (const b of solids) world.removeBody(b);
+      solids.length = 0;
       scene.remove(group);
       scene.remove(hemi); scene.remove(sun); scene.remove(sun.target); scene.remove(amb);
       scene.fog = null;

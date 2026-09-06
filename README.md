@@ -38,9 +38,9 @@ npm run build          # -> dist/gorebox.html
 
 ## Playing it
 
-**Main menu → MAPS → pick a map → PLAY.** There is one map for now, the *Test
-Baseplate*: a flat grass plate, 80 × 80 metres, with nothing on it until you put
-something there.
+**Main menu → MAPS → pick a map → PLAY.** There is one map for now, *Plains*: 80 ×
+80 metres of grass walled in on all four sides, with a low grey platform in the
+middle to fight on and throw people off.
 
 You spawn holding two things:
 
@@ -97,6 +97,72 @@ is having a bad time.
 Citizens are randomised — skin (white, light brown, brown, dark brown), hair colour
 and style, shirt, trousers, shoes, eye colour, build, and a temperament that decides
 whether they swing back or run.
+
+### The skeleton is a real hierarchy, and it has joints
+
+Every part hangs off its parent bone and is drawn from it. Nothing is positioned
+independently, so nothing can come off:
+
+```
+pelvis (root)
+├── lower torso → middle torso → upper torso
+│                                ├── neck → head
+│                                ├── upper arm L → lower arm L → hand L → finger L 1 → finger L 2
+│                                └── upper arm R → lower arm R → hand R → finger R 1 → finger R 2
+├── upper leg L → lower leg L → foot L → toe L
+└── upper leg R → lower leg R → foot R → toe R
+```
+
+Each joint is limited to what the joint it copies can actually do. The numbers all
+live in **`src/game/joints.js`** and nowhere else — rotation ranges, bone masses,
+ragdoll damping, the hinge guards, how far an impact carries — so a joint can be
+loosened or a limb made heavier by editing one line:
+
+| Joint | Range |
+| ----- | ----- |
+| Neck and head | ±42° of yaw each (±84° together), ±24° of pitch each, ±21° of tilt each |
+| Spine | split the way a real one is — the chest twists ±46°, the middle ±26°, the lower back ±13°; about 90° of forward fold shared between them |
+| Shoulder | −62° to 178° of swing, ±90° of rotation, 152° out to the side and only 34° across the chest |
+| Elbow | 0° to 148°, and never past straight |
+| Wrist | −72° to 78°, with a little deviation and less rotation |
+| Fingers | curl to 101° and 113°, with 9° and 5° of give the other way |
+| Hip | −27° to 126°, 47° out and 22° across, ±42° of rotation |
+| Knee | 0° to −148°, and never past straight |
+| Ankle | −46° to 26°, ±22° of twist |
+
+The limits are enforced where the pose is built, so they hold for everything that
+poses a bone: animation, the look chain, the bend a broken bone keeps. Measured over
+walking, running and punching, the clips never touch a limit — they were authored
+inside them — so nothing gets clipped in normal play.
+
+Masses are not uniform: the hips and chest are 7 kg each, the head 4.5, a hand 0.9,
+a foot 1.1, about 70 kg all told. A ragdoll built from equal masses swings like a
+rack of coat hangers.
+
+**Looking** is spread down that chain rather than turning the whole person. The head
+goes first, the neck takes what is left, then the chest and the middle back — each
+inside its own limit — and the hips only come round once the gaze has gone further
+than a spine can follow, or once you start walking, or once you start swinging at
+someone. Citizens use the same chain, so they glance at things with their heads.
+
+**In the ragdoll**, the same skeleton is the physics. A bone is a line between two
+joints, so it cannot corkscrew along its own length at all; what it *can* do is fold
+the wrong way, so knees and elbows carry a guard that keeps the middle joint on its
+own side of the line between its neighbours, measured against the body's own forward
+axis so it works whichever way the body is lying. Limbs, chest, head and hands
+collide with each other, which is what stops an arm being folded through the ribs —
+and it is the only thing holding a broken bone to anything, since a break is
+deliberately let out of its joint limits and may turn any way it likes.
+
+**A hit travels along the bones**, not through the air. It moves the part it landed
+on hardest, then its neighbours with less, fading by a fixed fraction per joint, and
+the harder the hit the further it carries. A punch to the head snaps the head, rocks
+the neck, and barely troubles the hips:
+
+```
+head hit  →  head 4.1 m/s   neck 4.1   chest 2.1   belly 1.3   hips 0.7   knee 0.1
+foot hit  →  toe  5.8       shin 5.3   thigh 1.1   hips 0.9    head 0.7
+```
 
 ### One number decides whether you are watching an animation or a ragdoll
 
@@ -230,7 +296,8 @@ src/
     objects.js        crate, boulder and machete
     citizen.js        citizen spawner
     rcv2.js           the Reality Crusher V2
-    map.js            maps, currently the Test Baseplate
+    joints.js         every joint limit, bone mass and ragdoll number, in one file
+    map.js            maps, currently Plains
     game.js           scene, camera, player, spawning, damage routing
   ui/                 menu, HUD, spawn drawer
 tools/build-single-file.mjs  folds the whole game into dist/gorebox.html
@@ -264,6 +331,15 @@ this project is actually about still work:
   both of them blinds you
 - a broken bone bleeds, goes limp, sits at the wrong angle, and stops working:
   no swinging with a broken arm, no jumping on a broken leg
+- every bone hangs off its parent and drives its own body part, with nothing loose
+- walking and running never ask a joint for something it cannot do, and a punch
+  never hyperextends the elbow that throws it
+- knees, elbows, fingers, necks, hips and ankles refuse what the joints they copy
+  refuse
+- a hit moves the part it landed on and fades along the skeleton from there
+- a ragdoll will not keep a knee bent the wrong way
+- a broken bone turns any way it likes and still cannot be inside the ribs
+- Plains has a platform you stand on and walls that stop you
 - a boulder rolls rather than slides
 
 ```

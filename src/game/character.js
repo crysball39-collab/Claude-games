@@ -18,8 +18,14 @@ import { Vector3, Quaternion, Matrix4 } from 'three';
 import { SkeletonRig, HIP_HEIGHT, boneBoxCenter } from './skeleton.js';
 import { Body } from './body.js';
 import { Animator } from './animator.js';
-import { Particle, DistanceConstraint } from '../physics/world.js';
-import { clamp, clamp01, lerp, damp, makeRng, smoothstep } from '../core/util.js';
+import {
+  BONE_MASS, HINGE_GUARDS, SELF_COLLISION, RAGDOLL, IMPACT, JOINT_LIMITS,
+  LOOK_CHAIN, BODY_TURN_THRESHOLD, AIM_ARM_FOLLOW,
+} from './joints.js';
+import { Particle, DistanceConstraint, HingeGuard, SelfCollision } from '../physics/world.js';
+import {
+  clamp, clamp01, lerp, damp, dampAngle, angleDelta, makeRng, smoothstep,
+} from '../core/util.js';
 
 const _v1 = new Vector3(), _v2 = new Vector3(), _v3 = new Vector3(), _v4 = new Vector3();
 const _q1 = new Quaternion(), _q2 = new Quaternion();
@@ -51,30 +57,9 @@ export const STATE = {
   DEAD: 'dead',
 };
 
-/* Particle layout: name -> { mass, radius, joint } where joint says which bone
-   end the muscle target comes from. */
-function particleLayout() {
-  const L = [
-    ['hip', 7.0, 0.13, 'pelvis', 'pos'],
-    ['pelvisTop', 5.0, 0.12, 'pelvis', 'end'],
-    ['lt', 5.0, 0.12, 'lowerTorso', 'end'],
-    ['mt', 6.0, 0.13, 'midTorso', 'end'],
-    ['shoulders', 7.0, 0.13, 'upperTorso', 'end'],
-    ['neckTop', 2.5, 0.07, 'neck', 'end'],
-    ['headTop', 4.5, 0.11, 'head', 'end'],
-  ];
-  for (const S of ['R', 'L']) {
-    L.push([`shoulder${S}`, 2.2, 0.09, 'upperArm' + S, 'pos']);
-    L.push([`elbow${S}`, 2.0, 0.07, 'upperArm' + S, 'end']);
-    L.push([`wrist${S}`, 1.4, 0.06, 'lowerArm' + S, 'end']);
-    L.push([`handEnd${S}`, 0.9, 0.06, 'hand' + S, 'end']);
-    L.push([`hip${S}`, 3.5, 0.10, 'upperLeg' + S, 'pos']);
-    L.push([`knee${S}`, 3.5, 0.08, 'upperLeg' + S, 'end']);
-    L.push([`ankle${S}`, 2.2, 0.07, 'lowerLeg' + S, 'end']);
-    L.push([`toe${S}`, 1.1, 0.06, 'foot' + S, 'end']);
-  }
-  return L;
-}
+/* Which physical joint hangs off which bone, and what it weighs. The numbers
+   themselves live in joints.js so they can be tuned in one place. */
+function particleLayout() { return BONE_MASS; }
 
 /* bone -> [proximal particle, distal particle] */
 function boneParticleMap() {
@@ -119,7 +104,8 @@ export class Character {
     this.targetStrength = 1;
     this.pos = new Vector3(opts.x || 0, HIP_HEIGHT, opts.z || 0);
     this.vel = new Vector3();
-    this.yaw = opts.yaw || 0;
+    this.yaw = opts.yaw || 0;          // where the hips face
+    this.gazeYaw = this.yaw;           // where the eyes are pointed
     this.pitch = 0;
     this.grounded = true;
     this.groundHeight = 0;
@@ -174,6 +160,11 @@ export class Character {
     this.punchSide = 'R';
     this.slashSide = 'L';       // so the first swing is the forehand
     this.punchCooldown = 0;
+    /* Fighting, you turn to face what you are hitting rather than swinging
+       across your own body. Anything that wants the hips brought round now
+       instead of eventually sets this. */
+    this.squareUp = false;
+    this.squareTimer = 0;
     this.struck = new Set();
     this.prevHand = { R: new Vector3(), L: new Vector3() };
     this.handVel = { R: new Vector3(), L: new Vector3() };
@@ -187,7 +178,23 @@ export class Character {
     this.constraints = [];
     this.collisionParticles = [];
     this.boneParticles = boneParticleMap();
+    this.guards = [];
     this._buildPhysics();
+
+    /* A broken bone is allowed out of its joint limits - that is what broken
+       means - so the rig is told to let those through. Self collision still
+       stops it going through the ribs. */
+    this.rig.limitExempt = this.broken;
+
+    /* Who each bone touches, so an impact can travel along the body rather
+       than through the air. */
+    this.boneNeighbours = Object.create(null);
+    for (const b of this.rig.bones) {
+      const n = [];
+      if (b.parent) n.push(b.parent.name);
+      for (const c of b.children) n.push(c.name);
+      this.boneNeighbours[b.name] = n;
+    }
 
     this._physPos = this.rig.bones.map(() => new Vector3());
     this._physQuat = this.rig.bones.map(() => new Quaternion());
@@ -267,6 +274,24 @@ export class Character {
       link(`shoulder${S}`, `elbow${S === 'R' ? 'L' : 'R'}`, 'min', 0.25, 0.30);
     }
 
+    // ---- joint guards ----
+    /* The distance constraints above hold the body together; these keep it
+       anatomical. A frame taken from the pelvis tells each hinge which way its
+       own joint is supposed to fold, whichever way the body happens to be
+       lying. */
+    const frame = { right: P.hipR, left: P.hipL, base: P.hip, top: P.shoulders };
+    for (const g of HINGE_GUARDS) {
+      const guard = new HingeGuard(P[g.a], P[g.b], P[g.c], frame, g.sign, g.margin);
+      this.guards.push(guard);
+      this.world.addConstraint(guard);
+    }
+    for (const [a, b, min] of SELF_COLLISION) {
+      if (!P[a] || !P[b]) continue;
+      const sc = new SelfCollision(P[a], P[b], min);
+      this.guards.push(sc);
+      this.world.addConstraint(sc);
+    }
+
     // ---- segments, so limbs do not sink into the floor ----
     for (const boneName of ['upperArmR', 'lowerArmR', 'upperArmL', 'lowerArmL',
       'upperLegR', 'lowerLegR', 'upperLegL', 'lowerLegL',
@@ -292,6 +317,7 @@ export class Character {
   /* ---------------------------------------------------------------- helpers */
 
   teleport(x, z, yaw = this.yaw, y = null) {
+    this.gazeYaw = yaw;
     this.pos.set(x, y != null ? y : this._groundHeight(x, z, 1e9) + HIP_HEIGHT, z);
     this.vel.set(0, 0, 0);
     this.yaw = yaw;
@@ -378,7 +404,7 @@ export class Character {
     } else if (s === STATE.RAGDOLL) {
       this.animator.cancelAction();
       this.animator.playBase('fall', { fade: 0.2 });
-      this.targetStrength = this.dead ? 0.012 : 0.075;
+      this.targetStrength = this.dead ? RAGDOLL.deadStrength : RAGDOLL.strength;
       this.getUpDelay = 0.55 + this.rng() * 1.1;
     } else if (s === STATE.GETUP) {
       this.targetStrength = 0.14;
@@ -386,7 +412,7 @@ export class Character {
       this.targetStrength = 1;
       this.balance = Math.max(this.balance, 0.75);
     } else if (s === STATE.DEAD) {
-      this.targetStrength = 0.012;
+      this.targetStrength = RAGDOLL.deadStrength;
       this.dead = true;
       this.body.setExpression('frown');
     }
@@ -397,23 +423,39 @@ export class Character {
     if (this.dead && damage <= 0) return;
     const mag = force.length();
 
-    /* An impulse acts on the whole body, not on whichever joint happens to be
-       nearest. Dividing it by one particle's mass instead of the body's is
-       what used to launch people across the map: a hard jab is 130 kg m/s,
-       which is 1.9 m/s to a 69 kg person but twenty times that to a wrist.
-       So: share it out by total mass, then add a local emphasis around the
-       point of contact so the struck part still snaps. */
+    /* A hit belongs to the part it landed on, and travels from there ALONG
+       THE SKELETON: head, then neck, then a little of the chest. Straight line
+       distance would put a punch to the jaw into the shoulder it happens to be
+       near, which is not how a body works.
+
+       Two shares go out. The body share moves the whole person, spread by mass
+       so a hard jab is 1.9 m/s to a seventy kilo adult rather than forty to a
+       wrist. The local share is dealt out by how many joints away each bone is
+       from the one that was hit, and the harder the hit the further it
+       reaches. */
     const dt = this.world.substepDt;
-    const base = 1 / Math.max(1, this.totalMass);
-    const REACH = 0.6;          // metres over which the emphasis fades out
-    const EMPHASIS = 2.4;       // how much harder the struck part reacts
-    const MAX_DV = 11;          // m/s, so nothing ever becomes a projectile
+    const hops = clamp(Math.round(IMPACT.hopsPerSeverity * clamp01(severity ?? 0.5)) + 1,
+      1, IMPACT.maxHops);
+    const weights = this._impactWeights(boneName, hops);
+
+    const bodyK = IMPACT.bodyShare / Math.max(1, this.totalMass);
+    const cap = IMPACT.maxJointSpeed / Math.max(mag, 1e-6);
+
+    // Normalise the local share by the mass it is actually moving, so the
+    // momentum handed out is the momentum the hit had.
+    let effMass = 0;
+    for (let i = 0; i < this.particleList.length; i++) {
+      const p = this.particleList[i];
+      const w = weights[p.name] || 0;
+      if (w > 0) effMass += p.mass * w;
+    }
+    const localShare = 1 - IMPACT.bodyShare;
 
     for (let i = 0; i < this.particleList.length; i++) {
       const p = this.particleList[i];
-      const d = Math.sqrt((p.x - point.x) ** 2 + (p.y - point.y) ** 2 + (p.z - point.z) ** 2);
-      const near = d < REACH ? (1 - d / REACH) : 0;
-      const k = clamp(base * (1 + EMPHASIS * near * near), 0, MAX_DV / Math.max(mag, 1e-6));
+      const w = weights[p.name] || 0;
+      const local = effMass > 1e-6 ? (localShare * w) / effMass : 0;
+      const k = clamp(bodyK + local, 0, cap);
       p.addVelocity(force.x * k, force.y * k, force.z * k, dt);
     }
 
@@ -463,6 +505,40 @@ export class Character {
     if (this.health <= 0) this.die();
     else if (dealt > 8) this.balance = clamp01(this.balance - (dealt - 8) / 90);
     this._checkBalance();
+  }
+
+  /**
+   * How much of a hit each JOINT sees, walking out from the bone that was
+   * struck. Every step along the skeleton keeps a fraction of what the last
+   * one had, so the reaction fades through the body instead of stopping dead
+   * at the part or spreading evenly across all of it.
+   */
+  _impactWeights(boneName, hops) {
+    const out = Object.create(null);
+    const start = boneName && this.rig.byName[boneName] ? boneName : 'midTorso';
+    let front = [start];
+    const seen = new Set(front);
+    let w = 1;
+    for (let hop = 0; hop <= hops && front.length; hop++) {
+      for (const name of front) {
+        const pair = this.boneParticles[name];
+        if (pair) {
+          out[pair[0]] = Math.max(out[pair[0]] || 0, w);
+          out[pair[1]] = Math.max(out[pair[1]] || 0, w);
+        }
+      }
+      const next = [];
+      for (const name of front) {
+        for (const n of this.boneNeighbours[name] || []) {
+          if (seen.has(n)) continue;
+          seen.add(n);
+          next.push(n);
+        }
+      }
+      front = next;
+      w *= IMPACT.falloff;
+    }
+    return out;
   }
 
   /* ------------------------------------------------------------ injuries */
@@ -633,6 +709,7 @@ export class Character {
   update(dt) {
     this.stateTime += dt;
     this.punchCooldown = Math.max(0, this.punchCooldown - dt);
+    this.squareTimer = Math.max(0, this.squareTimer - dt);
     this.painTimer = Math.max(0, this.painTimer - dt);
     this.bleeding = Math.max(0, this.bleeding - dt * 0.35);
     if (!this.dead) this.balance = clamp01(this.balance + dt * 0.36);
@@ -679,6 +756,18 @@ export class Character {
     const targetVX = wish.x * speed, targetVZ = wish.z * speed;
     this.vel.x = damp(this.vel.x, targetVX, accel, dt);
     this.vel.z = damp(this.vel.z, targetVZ, accel, dt);
+
+    /* The hips follow the gaze, but not instantly and not always. Standing
+       still you look over your shoulder and the body catches up only once the
+       spine has run out of turn; walking, the hips come round to where you are
+       going, because that is what legs do. */
+    const off = angleDelta(this.yaw, this.gazeYaw);
+    if (wishLen > 0.1 || this.squareUp || this.squareTimer > 0) {
+      this.yaw = dampAngle(this.yaw, this.gazeYaw, 13, dt);
+    } else if (Math.abs(off) > BODY_TURN_THRESHOLD) {
+      const keep = BODY_TURN_THRESHOLD * 0.8 * Math.sign(off);
+      this.yaw = dampAngle(this.yaw, this.gazeYaw - keep, 7, dt);
+    }
 
     // --- jump ---
     if (this.wantJump) { this.jumpBuffer = 0.16; this.wantJump = false; }
@@ -845,7 +934,8 @@ export class Character {
     const P = this.particles;
     this.animator.playBase('stagger', { fade: 0.2 });
     this.animator.setUpper(null);
-    this.targetStrength = lerp(0.22, 0.46, clamp01(this.balance / 0.55));
+    this.targetStrength = lerp(RAGDOLL.stumbleStrength[0], RAGDOLL.stumbleStrength[1],
+      clamp01(this.balance / 0.55));
 
     // Root comes from the ragdoll, so the pose is relative to where the body is.
     this._rootFromPhysics();
@@ -875,7 +965,7 @@ export class Character {
   _updateRagdoll(dt) {
     this.animator.setUpper(null);
     this._rootFromPhysics();
-    this.targetStrength = this.dead ? 0.012 : 0.075;
+    this.targetStrength = this.dead ? RAGDOLL.deadStrength : RAGDOLL.strength;
     this.getUpDelay -= dt;
 
     if (!this.dead) {
@@ -912,7 +1002,7 @@ export class Character {
 
   _updateDead() {
     this._rootFromPhysics();
-    this.targetStrength = 0.012;
+    this.targetStrength = RAGDOLL.deadStrength;
   }
 
   get wantsUp() { return this._wantsUp !== false; }
@@ -1012,26 +1102,64 @@ export class Character {
   /* ------------------------------------------------------------ look offsets */
 
   /** Adds head/neck aim on top of whatever the animator produced. */
+  /**
+   * Where the character is looking, spread down the neck and spine.
+   *
+   * A person does not swivel like a turret. The head goes first and takes what
+   * it can, the neck picks up what is left, and only then does the chest start
+   * to come round - each within its own limit, so nothing has to be clamped
+   * afterwards. The hips only turn when the gaze has gone further round than a
+   * spine can follow, which is what BODY_TURN_THRESHOLD is.
+   */
   _applyLookOffsets() {
     if (this.state !== STATE.CONTROLLED) return;
-    const neck = this.rig.byName.neck;
-    const head = this.rig.byName.head;
-    const p = clamp(this.pitch, -1.15, 1.15);
-    neck.anim.x += p * 0.34;
-    head.anim.x += p * 0.42;
+    const rig = this.rig;
 
-    // Aim the arms with the head, so a jab lands where you are looking.
+    /* Pitch, down the same chain, head first. Looking up leans the head back,
+       which is the same +X the spine uses, so the sign carries straight over. */
+    const want = clamp(this.pitch, -1.15, 1.15);
+    let left = want;
+    for (const link of LOOK_CHAIN.pitch) {
+      if (Math.abs(left) < 1e-4) break;
+      left -= this._spend(rig.byName[link.bone], 'x', left, link.share);
+    }
+
+    /* Yaw: how far the gaze has gone past where the hips point. Turning the
+       right shoulder forward with +Y turns the body the same way a bigger root
+       yaw does, so this too carries straight over. */
+    let yawLeft = angleDelta(this.yaw, this.gazeYaw);
+    for (const link of LOOK_CHAIN.yaw) {
+      if (Math.abs(yawLeft) < 1e-4) break;
+      yawLeft -= this._spend(rig.byName[link.bone], 'y', yawLeft, link.share);
+    }
+
+    /* Aiming: the arms come round with the gaze rather than being left behind
+       by it, so what is in your hands ends up pointed at what you are looking
+       at and the hands stay on the weapon. */
     const a = this.animator;
     const aim = Math.max(a.upperWeight, a.actionWeight);
     if (aim > 0.01) {
-      const k = p * 0.62 * aim;
-      this.rig.byName.upperArmR.anim.x += k;
-      this.rig.byName.upperArmL.anim.x += k;
+      const k = want * AIM_ARM_FOLLOW * aim;
+      rig.byName.upperArmR.anim.x += k;
+      rig.byName.upperArmL.anim.x += k;
     }
-    if (this.aimYawOffset) {
-      neck.anim.y += this.aimYawOffset * 0.4;
-      head.anim.y += this.aimYawOffset * 0.5;
-    }
+  }
+
+  /**
+   * Puts as much of `demand` into one joint's axis as that joint is allowed to
+   * spend, and reports how much it took.
+   */
+  _spend(bone, axis, demand, share) {
+    if (!bone) return 0;
+    const lim = JOINT_LIMITS[bone.name];
+    if (!lim) { bone.anim[axis] += demand; return demand; }
+    const range = lim[axis];
+    const room = demand > 0
+      ? Math.max(0, range[1] * share - bone.anim[axis])
+      : Math.min(0, range[0] * share - bone.anim[axis]);
+    const take = demand > 0 ? Math.min(demand, room) : Math.max(demand, room);
+    bone.anim[axis] += take;
+    return take;
   }
 
   /* ----------------------------------------------------------- muscle target */
@@ -1068,6 +1196,19 @@ export class Character {
   /* ------------------------------------------------------------ physics hook */
 
   preSubstep(h) {
+    /* A body nobody is driving any more still has to settle. Without this the
+       constraint solver and the last of the muscle tone trade energy back and
+       forth and the limbs ring like springs; with it they swing, slow, and
+       stop, which is what a fallen body does. */
+    if (this.state !== STATE.CONTROLLED) {
+      const k = Math.exp(-RAGDOLL.damping * h);
+      for (let i = 0; i < this.particleList.length; i++) {
+        const p = this.particleList[i];
+        p.px = p.x - (p.x - p.px) * k;
+        p.py = p.y - (p.y - p.py) * k;
+        p.pz = p.z - (p.z - p.pz) * k;
+      }
+    }
     if (this.state === STATE.STUMBLE) {
       // The stumbling body can still be steered: nudge the hips and let the
       // legs sort themselves out.
@@ -1172,6 +1313,7 @@ export class Character {
     const clip = this.punchSide === 'R' ? 'punchR' : 'punchL';
     this.animator.playAction(clip);
     this.punchCooldown = 0.30;
+    this.squareTimer = 0.7;
     this.struck.clear();
     this.combatReady = true;
     this.combatTimer = 3.5;
@@ -1189,6 +1331,7 @@ export class Character {
     this.slashSide = this.slashSide === 'R' ? 'L' : 'R';
     this.animator.playAction(this.slashSide === 'R' ? pair[0] : pair[1]);
     this.punchCooldown = pair === MELEE_CLIPS.sledge ? 0.52 : 0.34;
+    this.squareTimer = 0.9;
     this.struck.clear();
     this.combatReady = true;
     this.combatTimer = 3.5;

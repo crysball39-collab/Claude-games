@@ -118,6 +118,97 @@ export class DistanceConstraint {
   }
 }
 
+/**
+ * Stops a hinge folding the wrong way once physics has the body.
+ *
+ * A knee is only a knee because it bends one way. The particle rig has no twist
+ * to constrain - a bone is a line between two points, so it cannot corkscrew in
+ * the first place - but nothing stops the middle joint of a limb crossing to
+ * the wrong side of the line between its neighbours, which is exactly what a
+ * backwards knee is. This keeps it on its own side, measured along the body's
+ * own forward axis so it works whichever way the body is lying.
+ *
+ * It is a position correction, so the previous positions travel with it: a
+ * joint pushed back where it belongs must not be handed speed for the trip.
+ */
+export class HingeGuard {
+  /**
+   * @param {object} frame particles defining the body: hipR, hipL, hip, top
+   * @param {number} sign +1 the middle joint stays in front of the line
+   *                      -1 it stays behind
+   */
+  constructor(a, b, c, frame, sign, margin = 0.03) {
+    this.a = a; this.b = b; this.c = c;
+    this.frame = frame; this.sign = sign; this.margin = margin;
+    this.enabled = true;
+  }
+
+  solve() {
+    if (!this.enabled) return;
+    const f = this.frame;
+    // right = across the hips, up = along the spine, forward = up x right
+    const rx = f.right.x - f.left.x, ry = f.right.y - f.left.y, rz = f.right.z - f.left.z;
+    const ux = f.top.x - f.base.x, uy = f.top.y - f.base.y, uz = f.top.z - f.base.z;
+    let fx = uy * rz - uz * ry, fy = uz * rx - ux * rz, fz = ux * ry - uy * rx;
+    const fl = Math.sqrt(fx * fx + fy * fy + fz * fz);
+    if (fl < 1e-6) return;
+    fx /= fl; fy /= fl; fz /= fl;
+    if (this.sign < 0) { fx = -fx; fy = -fy; fz = -fz; }
+
+    const a = this.a, b = this.b, c = this.c;
+    const mx = (a.x + c.x) * 0.5, my = (a.y + c.y) * 0.5, mz = (a.z + c.z) * 0.5;
+    const d = (b.x - mx) * fx + (b.y - my) * fy + (b.z - mz) * fz;
+    if (d >= this.margin) return;
+
+    // Push the joint back onto its own side, and the ends a little the other
+    // way, so the limb folds rather than the whole body sliding.
+    const need = this.margin - d;
+    const kb = need * 0.62, ke = need * 0.19;
+    b.x += fx * kb; b.y += fy * kb; b.z += fz * kb;
+    b.px += fx * kb; b.py += fy * kb; b.pz += fz * kb;
+    for (const p of [a, c]) {
+      p.x -= fx * ke; p.y -= fy * ke; p.z -= fz * ke;
+      p.px -= fx * ke; p.py -= fy * ke; p.pz -= fz * ke;
+    }
+  }
+}
+
+/**
+ * Keeps two parts of the same body out of each other.
+ *
+ * This is what stops an arm being folded through the chest, and it is the only
+ * thing keeping a broken bone honest: a break is allowed to turn any way it
+ * likes, but it still cannot occupy the same space as the ribs.
+ */
+export class SelfCollision {
+  constructor(a, b, minDist) {
+    this.a = a; this.b = b; this.min = minDist;
+    this.enabled = true;
+  }
+
+  solve() {
+    if (!this.enabled) return;
+    const a = this.a, b = this.b;
+    let dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+    const d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 >= this.min * this.min) return;
+    let d = Math.sqrt(d2);
+    if (d < 1e-6) { dx = 0; dy = 1; dz = 0; d = 1e-6; }
+    const wsum = a.invMass + b.invMass;
+    if (wsum <= 0) return;
+    // Separation only: the previous positions come along, so pushing two parts
+    // apart never hands either of them speed.
+    const push = ((this.min - d) / d) * 0.5;
+    const wa = a.invMass / wsum, wb = b.invMass / wsum;
+    const ax = dx * push * wa, ay = dy * push * wa, az = dz * push * wa;
+    const bx = dx * push * wb, by = dy * push * wb, bz = dz * push * wb;
+    a.x -= ax; a.y -= ay; a.z -= az;
+    a.px -= ax; a.py -= ay; a.pz -= az;
+    b.x += bx; b.y += by; b.z += bz;
+    b.px += bx; b.py += by; b.pz += bz;
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /*                                   world                                    */
 /* -------------------------------------------------------------------------- */
