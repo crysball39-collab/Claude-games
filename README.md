@@ -149,9 +149,27 @@ someone. Citizens use the same chain, so they glance at things with their heads.
 joints, so it cannot corkscrew along its own length at all; what it *can* do is fold
 the wrong way, so knees and elbows carry a guard that keeps the middle joint on its
 own side of the line between its neighbours, measured against the body's own forward
-axis so it works whichever way the body is lying. Limbs, chest, head and hands
-collide with each other, which is what stops an arm being folded through the ribs —
-and it is the only thing holding a broken bone to anything, since a break is
+axis so it works whichever way the body is lying.
+
+**Bones are solid.** Every one of the eighteen that matter is a capsule — the bone
+between its two joints, with the thickness of the box drawn over it — and every pair
+that could genuinely meet is tested against every other, within one body and between
+two of them. That is 118 pairs per person. Bones meeting at a joint are skipped,
+because two bones sharing a joint are always touching, and so are the dozen or so
+that lie against each other by the shape of a body: the spine's own segments, a
+thigh against the pelvis it hangs from, an upper arm against the chest. Those were
+found by measuring, not guessing — every pair's closest approach was recorded through
+idling, walking, running, crouching and punching, and the only ones that ever overlap
+are those. Everything else clears by at least a centimetre, so nothing spends the
+game fighting the animation.
+
+Separation solves *before* the bones' own lengths do, so the skeleton always has the
+last word and a body pushed out of itself does not end the frame with its arms pulled
+long. And it only runs where it can achieve something: a body under full muscle
+control is pinned to an animation that does not intersect itself, and its particles
+are put back at the end of every substep anyway.
+
+This is also the only thing holding a broken bone to anything, since a break is
 deliberately let out of its joint limits and may turn any way it likes.
 
 **A hit travels along the bones**, not through the air. It moves the part it landed
@@ -339,6 +357,8 @@ this project is actually about still work:
 - a hit moves the part it landed on and fades along the skeleton from there
 - a ragdoll will not keep a knee bent the wrong way
 - a broken bone turns any way it likes and still cannot be inside the ribs
+- every bone is solid: an arm driven into its own chest, or into somebody else's,
+  is stopped at the surface, and no pair of bones overlaps during ordinary movement
 - Plains has a platform you stand on and walls that stop you
 - a boulder rolls rather than slides
 

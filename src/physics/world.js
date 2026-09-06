@@ -25,6 +25,10 @@ const BODY_RESTITUTION = 0.85;
 /** Most speed a single contact may hand to one joint, in m/s. A boulder
     should knock someone flat, not fire an arm across the map. */
 const MAX_CONTACT_DV = 10;
+/** How hard one body's bones push against another body's. */
+const CROSS_BODY_STIFFNESS = 0.45;
+/** Deepest overlap two bones may unwind in one solver pass, in metres. */
+const MAX_CAPSULE_STEP = 0.03;
 /** Deepest overlap two people may unwind in one solver pass, in metres.
     Small on purpose: the solver runs this many times per step, and racing the
     skeleton's own constraints is what pulls limbs long. */
@@ -174,13 +178,127 @@ export class HingeGuard {
 }
 
 /**
+ * Closest approach between two line segments, as the parameters along each.
+ *
+ * The standard clamped solve. Everything about limbs not passing through each
+ * other comes down to this: a bone is a segment with a thickness, and two of
+ * them are apart if the nearest points on their centre lines are further apart
+ * than the two thicknesses added together.
+ */
+function segmentClosest(a0, a1, b0, b1, out) {
+  const dax = a1.x - a0.x, day = a1.y - a0.y, daz = a1.z - a0.z;
+  const dbx = b1.x - b0.x, dby = b1.y - b0.y, dbz = b1.z - b0.z;
+  const rx = a0.x - b0.x, ry = a0.y - b0.y, rz = a0.z - b0.z;
+  const A = dax * dax + day * day + daz * daz;
+  const E = dbx * dbx + dby * dby + dbz * dbz;
+  const F = dbx * rx + dby * ry + dbz * rz;
+  let s = 0, t = 0;
+  if (A < 1e-9 && E < 1e-9) { out.s = 0; out.t = 0; return out; }
+  if (A < 1e-9) {
+    t = F / E;
+  } else {
+    const C = dax * rx + day * ry + daz * rz;
+    if (E < 1e-9) {
+      s = -C / A;
+    } else {
+      const B = dax * dbx + day * dby + daz * dbz;
+      const denom = A * E - B * B;
+      s = denom > 1e-9 ? (B * F - C * E) / denom : 0;
+      s = s < 0 ? 0 : s > 1 ? 1 : s;
+      t = (B * s + F) / E;
+      if (t < 0) { t = 0; s = -C / A; } else if (t > 1) { t = 1; s = (B - C) / A; }
+    }
+  }
+  out.s = s < 0 ? 0 : s > 1 ? 1 : s;
+  out.t = t < 0 ? 0 : t > 1 ? 1 : t;
+  return out;
+}
+
+const _seg = { s: 0, t: 0 };
+
+/**
+ * Pushes two thick bones apart along the line of their closest approach.
+ *
+ * The correction is shared between each bone's two ends in proportion to where
+ * along the bone the contact happened, and weighted by mass, so a forearm
+ * caught against a chest moves mostly the forearm. Previous positions travel
+ * with it: separating two things that overlap is a position fix, and Verlet
+ * would otherwise read it as a shove.
+ */
+export function collideCapsules(a0, a1, ra, b0, b1, rb, stiffness = 1) {
+  segmentClosest(a0, a1, b0, b1, _seg);
+  const s = _seg.s, t = _seg.t;
+  const ax = a0.x + (a1.x - a0.x) * s, ay = a0.y + (a1.y - a0.y) * s, az = a0.z + (a1.z - a0.z) * s;
+  const bx = b0.x + (b1.x - b0.x) * t, by = b0.y + (b1.y - b0.y) * t, bz = b0.z + (b1.z - b0.z) * t;
+  let nx = bx - ax, ny = by - ay, nz = bz - az;
+  const min = ra + rb;
+  let d2 = nx * nx + ny * ny + nz * nz;
+  if (d2 >= min * min) return false;
+  let d = Math.sqrt(d2);
+  if (d < 1e-6) { nx = 0; ny = 1; nz = 0; d = 1e-6; } else { nx /= d; ny /= d; nz /= d; }
+
+  const wa0 = 1 - s, wa1 = s, wb0 = 1 - t, wb1 = t;
+  const inv = wa0 * wa0 * a0.invMass + wa1 * wa1 * a1.invMass
+            + wb0 * wb0 * b0.invMass + wb1 * wb1 * b1.invMass;
+  if (inv <= 1e-9) return false;
+  /* Only so far in one pass. Bodies dropped into each other overlap deeply,
+     and yanking them apart in a single solve pulls the bones themselves long -
+     the separation and the skeleton end up fighting. Unwound a little at a
+     time, over the several passes and substeps of a frame, both are satisfied. */
+  const pen = Math.min(min - d, MAX_CAPSULE_STEP);
+  const k = (pen / inv) * stiffness;
+
+  const push = (p, w, sign) => {
+    if (p.invMass <= 0) return;
+    const m = sign * k * w * p.invMass;
+    p.x += nx * m; p.y += ny * m; p.z += nz * m;
+    p.px += nx * m; p.py += ny * m; p.pz += nz * m;
+  };
+  push(a0, wa0, -1); push(a1, wa1, -1);
+  push(b0, wb0, 1); push(b1, wb1, 1);
+  return true;
+}
+
+/**
+ * Every bone of one body against every other bone of the same body.
+ *
+ * The pairs are worked out once, at build time: anything sharing a joint is
+ * skipped, because two bones meeting at a joint are always touching, and so are
+ * the handful of pairs that sit against each other by construction - an upper
+ * arm lies on the chest whatever anyone does. What is left is every way a limb
+ * can genuinely be put somewhere it does not belong.
+ *
+ * It only runs when it can achieve anything. A body under full muscle control
+ * is pinned to an animation that does not intersect itself, and its particles
+ * are put back at the end of every substep regardless, so solving this for one
+ * would be work thrown away.
+ */
+export class SelfCollision {
+  constructor(owner, pairs) {
+    this.owner = owner;
+    this.pairs = pairs;
+    this.enabled = true;
+    this.hits = 0;
+  }
+
+  solve() {
+    if (!this.enabled || !this.owner.selfCollide) return;
+    const pairs = this.pairs;
+    for (let i = 0; i < pairs.length; i++) {
+      const p = pairs[i];
+      if (collideCapsules(p.a0, p.a1, p.ra, p.b0, p.b1, p.rb, p.stiffness)) this.hits++;
+    }
+  }
+}
+
+/**
  * Keeps two parts of the same body out of each other.
  *
  * This is what stops an arm being folded through the chest, and it is the only
  * thing keeping a broken bone honest: a break is allowed to turn any way it
  * likes, but it still cannot occupy the same space as the ribs.
  */
-export class SelfCollision {
+export class JointSpacing {
   constructor(a, b, minDist) {
     this.a = a; this.b = b; this.min = minDist;
     this.enabled = true;
@@ -252,7 +370,18 @@ export class PhysicsWorld {
 
   addParticle(p) { this.particles.push(p); return p; }
   removeParticle(p) { const i = this.particles.indexOf(p); if (i >= 0) this.particles.splice(i, 1); }
-  addConstraint(c) { this.constraints.push(c); return c; }
+  /**
+   * @param {boolean} [first] solve this one BEFORE the rest each pass.
+   *
+   * Order matters inside a pass: whatever solves last has the final word. The
+   * bones' own lengths have to be last, or a body pushed out of itself ends the
+   * pass with its limbs pulled long, so anything that separates parts - joint
+   * guards, self collision - goes to the front and lets the skeleton answer.
+   */
+  addConstraint(c, first = false) {
+    if (first) this.constraints.unshift(c); else this.constraints.push(c);
+    return c;
+  }
   addSegment(s) { this.segments.push(s); return s; }
 
   addBody(b) {
@@ -268,7 +397,12 @@ export class PhysicsWorld {
   removeCharacter(c) {
     const i = this.characters.indexOf(c); if (i >= 0) this.characters.splice(i, 1);
     this.particles = this.particles.filter((p) => p.owner !== c);
-    this.constraints = this.constraints.filter((k) => k.a.owner !== c && k.b.owner !== c);
+    /* Constraints come in two shapes: most name the particles they act on,
+       while the self collision solver owns a whole body's worth of pairs and
+       names the body instead. Both have to go when their owner does. */
+    this.constraints = this.constraints.filter((k) => (k.owner
+      ? k.owner !== c
+      : !(k.a && k.a.owner === c) && !(k.b && k.b.owner === c)));
     this.segments = this.segments.filter((s) => s.a.owner !== c);
   }
 
@@ -698,6 +832,23 @@ export class PhysicsWorld {
         if (!B.collidable) continue;
         if (Math.abs(A.center.x - B.center.x) > 2.4 || Math.abs(A.center.z - B.center.z) > 2.4 ||
             Math.abs(A.center.y - B.center.y) > 2.6) continue;
+        /* Bone against bone, so an arm cannot be put through someone else's
+           chest either. The joint spheres below still run: they catch the
+           head-on cases the capsules resolve slowly. */
+        /* Skip only when neither body can move: two people both pinned to
+           their animations have their particles put back anyway, and the
+           capsule around each body keeps them apart at that range. */
+        if (A.solids && B.solids && (A.selfCollide || B.selfCollide ||
+            A.strength < 0.999 || B.strength < 0.999)) {
+          for (let m = 0; m < A.solids.length; m++) {
+            const ca = A.solids[m];
+            for (let n = 0; n < B.solids.length; n++) {
+              const cb = B.solids[n];
+              collideCapsules(ca.a, ca.b, ca.r, cb.a, cb.b, cb.r, CROSS_BODY_STIFFNESS);
+            }
+          }
+        }
+
         const pa = A.collisionParticles, pb = B.collisionParticles;
         for (let m = 0; m < pa.length; m++) {
           const p = pa[m];

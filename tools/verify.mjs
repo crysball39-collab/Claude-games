@@ -876,6 +876,85 @@ r = await page.evaluate(async () => {
 check('a broken bone turns any way but still cannot be inside the chest',
   r.broken === -2.4 && r.intact === 0 && r.outOfChest > 0.18, JSON.stringify(r));
 
+// ---------- bones are solid, and stay out of each other ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;
+  const V = g.player.pos.constructor;
+  const { spawnCitizen } = await import('/src/game/citizen.js');
+  const frame = () => new Promise((res) => requestAnimationFrame(res));
+  g.clearSpawns();
+  g.player.teleport(OX, 14, 0);
+  const c = spawnCitizen(g, new V(OX, 0, 0));
+  await new Promise((res) => setTimeout(res, 350));
+
+  // how much clearance is there between two bones, at their closest?
+  const clearance = (A, B) => {
+    let best = 1e9;
+    for (let i = 0; i <= 10; i++) {
+      for (let j = 0; j <= 10; j++) {
+        const s = i / 10, t = j / 10;
+        const ax = A.a.x + (A.b.x - A.a.x) * s, ay = A.a.y + (A.b.y - A.a.y) * s,
+              az = A.a.z + (A.b.z - A.a.z) * s;
+        const bx = B.a.x + (B.b.x - B.a.x) * t, by = B.a.y + (B.b.y - B.a.y) * t,
+              bz = B.a.z + (B.b.z - B.a.z) * t;
+        best = Math.min(best, Math.hypot(ax - bx, ay - by, az - bz) - (A.r + B.r));
+      }
+    }
+    return best;
+  };
+
+  /* Nothing may overlap during ordinary movement - a pair that fires while
+     someone is walking would fight the animation every frame. */
+  let worst = 1e9, worstPair = '';
+  const sample = () => {
+    for (const p of c.selfCollisionPairs) {
+      const d = clearance({ a: p.a0, b: p.a1, r: p.ra }, { a: p.b0, b: p.b1, r: p.rb });
+      if (d < worst) { worst = d; worstPair = p.names; }
+    }
+  };
+  c.ai.update = () => c.moveInput.set(0, 0, 0);
+  for (let i = 0; i < 60; i++) { await frame(); sample(); }
+  c.ai.update = () => { c.moveInput.set(0, 0, -1); c.wantRun = true; };
+  for (let i = 0; i < 90; i++) { await frame(); sample(); }
+  c.ai.update = () => c.moveInput.set(0, 0, 0);
+  for (let i = 0; i < 5; i++) {
+    c.punchCooldown = 0; c.animator.cancelAction(); c.punch(true);
+    for (let k = 0; k < 40 && c.animator.actionActive; k++) { await frame(); sample(); }
+  }
+  const quiet = { worst: +worst.toFixed(3), pair: worstPair, pairs: c.selfCollisionPairs.length };
+
+  /* ...but a limb driven into the body really is stopped. */
+  c.heal(); c.setState('controlled'); c.teleport(OX, 0, 0);
+  for (let i = 0; i < 20; i++) await frame();
+  c.setState('ragdoll'); c.wantsUp = false;
+  for (let i = 0; i < 60; i++) await frame();
+  const P = c.particles;
+  for (let i = 0; i < 45; i++) {
+    P.elbowR.x = P.mt.x; P.elbowR.y = P.mt.y; P.elbowR.z = P.mt.z;
+    P.wristR.x = P.lt.x; P.wristR.y = P.lt.y; P.wristR.z = P.lt.z;
+    await frame();
+  }
+  const insideSelf = +clearance(c.solidByName.lowerArmR, c.solidByName.midTorso).toFixed(3);
+
+  // and so is one person's arm driven into someone else's chest
+  const d2 = spawnCitizen(g, new V(OX + 1.1, 0, 0));
+  await new Promise((res) => setTimeout(res, 300));
+  d2.ai.update = () => d2.moveInput.set(0, 0, 0);
+  d2.setState('ragdoll'); d2.wantsUp = false;
+  for (let i = 0; i < 50; i++) {
+    d2.particles.elbowR.x = P.mt.x;
+    d2.particles.elbowR.y = P.mt.y;
+    d2.particles.elbowR.z = P.mt.z;
+    await frame();
+  }
+  const insideOther = +clearance(d2.solidByName.lowerArmR, c.solidByName.midTorso).toFixed(3);
+  return { quiet, insideSelf, insideOther };
+});
+check('every bone is solid: nothing passes through anything',
+  r.quiet.pairs > 100 && r.quiet.worst >= 0 &&
+  r.insideSelf > -0.02 && r.insideOther > -0.02, JSON.stringify(r));
+
 // ---------- Plains: the platform and the walls are real ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;

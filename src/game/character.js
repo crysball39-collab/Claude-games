@@ -21,8 +21,11 @@ import { Animator } from './animator.js';
 import {
   BONE_MASS, HINGE_GUARDS, SELF_COLLISION, RAGDOLL, IMPACT, JOINT_LIMITS,
   LOOK_CHAIN, BODY_TURN_THRESHOLD, AIM_ARM_FOLLOW,
+  SOLID_PARTS, SOLID_IGNORE, SOLID_STIFFNESS,
 } from './joints.js';
-import { Particle, DistanceConstraint, HingeGuard, SelfCollision } from '../physics/world.js';
+import {
+  Particle, DistanceConstraint, HingeGuard, JointSpacing, SelfCollision,
+} from '../physics/world.js';
 import {
   clamp, clamp01, lerp, damp, dampAngle, angleDelta, makeRng, smoothstep,
 } from '../core/util.js';
@@ -283,14 +286,48 @@ export class Character {
     for (const g of HINGE_GUARDS) {
       const guard = new HingeGuard(P[g.a], P[g.b], P[g.c], frame, g.sign, g.margin);
       this.guards.push(guard);
-      this.world.addConstraint(guard);
+      this.world.addConstraint(guard, true);
     }
     for (const [a, b, min] of SELF_COLLISION) {
       if (!P[a] || !P[b]) continue;
-      const sc = new SelfCollision(P[a], P[b], min);
+      const sc = new JointSpacing(P[a], P[b], min);
       this.guards.push(sc);
-      this.world.addConstraint(sc);
+      this.world.addConstraint(sc, true);
     }
+
+    /* ---- every bone as a solid volume ----
+       A joint is a point; a bone is not. Testing only the joints let a whole
+       forearm swing through a chest between them, so each bone is a capsule
+       now and every pair that could genuinely meet is tested. */
+    this.solids = SOLID_PARTS
+      .filter((d) => P[d.a] && P[d.b])
+      .map((d) => ({ name: d.name, a: P[d.a], b: P[d.b], r: d.r }));
+    this.solidByName = Object.create(null);
+    for (const c of this.solids) this.solidByName[c.name] = c;
+
+    const ignore = new Set();
+    for (const [a, b] of SOLID_IGNORE) { ignore.add(a + '|' + b); ignore.add(b + '|' + a); }
+    const pairs = [];
+    for (let i = 0; i < this.solids.length; i++) {
+      for (let j = i + 1; j < this.solids.length; j++) {
+        const A = this.solids[i], B = this.solids[j];
+        // bones that meet at a joint are always touching, by definition
+        if (A.a === B.a || A.a === B.b || A.b === B.a || A.b === B.b) continue;
+        if (ignore.has(A.name + '|' + B.name)) continue;
+        pairs.push({
+          a0: A.a, a1: A.b, ra: A.r, b0: B.a, b1: B.b, rb: B.r,
+          stiffness: SOLID_STIFFNESS, names: A.name + '|' + B.name,
+        });
+      }
+    }
+    this.selfCollisionPairs = pairs;
+    /* Solved only when it can achieve something: a body pinned to an animation
+       has its particles put back at the end of every substep anyway. */
+    this.selfCollide = false;
+    const self = new SelfCollision(this, pairs);
+    this.selfSolver = self;
+    this.guards.push(self);
+    this.world.addConstraint(self, true);
 
     // ---- segments, so limbs do not sink into the floor ----
     for (const boneName of ['upperArmR', 'lowerArmR', 'upperArmL', 'lowerArmL',
@@ -723,6 +760,11 @@ export class Character {
       case STATE.DEAD: this._updateDead(); break;
       default: break;
     }
+
+    /* Bones are solid whenever the animation is not the only thing posing
+       them - a ragdoll, a stumble, a get-up - and whenever something is broken,
+       since a break is free to turn into places an animation never would. */
+    this.selfCollide = this.state !== STATE.CONTROLLED || this.broken.size > 0;
 
     this.animator.update(dt);
     this._applyLookOffsets();

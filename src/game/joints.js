@@ -212,8 +212,10 @@ export const HINGE_GUARDS = [
 ];
 
 /**
- * Body parts that are solid against each other, so a limb cannot be folded
- * through the chest and a broken arm cannot be swung through the ribs.
+ * Extra spacing between particular joints, on top of the capsules above.
+ *
+ * The capsules do the work; these are the few spots where joint centres can
+ * still be crushed together without the bones themselves overlapping.
  *
  * Kept deliberately short: these run every solver pass, and the pairs below are
  * the ones that actually go wrong. Each is [particle, particle, metres apart],
@@ -222,6 +224,70 @@ export const HINGE_GUARDS = [
  * passing through each other, not to enforce personal space, and one that fires
  * during a normal walk would spend the whole time fighting the animation.
  */
+/**
+ * The parts of a body that are solid against each other, as capsules: a bone
+ * between two joints with a thickness. Everything not listed - fingers, toes -
+ * is too small to be worth the arithmetic.
+ *
+ * `scale` trims a capsule's radius where the box it represents is not really
+ * that fat, or where the pose naturally brings it close to a neighbour.
+ */
+export const SOLID_PARTS = [
+  { name: 'pelvis', a: 'hip', b: 'pelvisTop', r: 0.15 },
+  { name: 'lowerTorso', a: 'pelvisTop', b: 'lt', r: 0.14 },
+  { name: 'midTorso', a: 'lt', b: 'mt', r: 0.145 },
+  { name: 'upperTorso', a: 'mt', b: 'shoulders', r: 0.155 },
+  { name: 'neck', a: 'shoulders', b: 'neckTop', r: 0.06 },
+  { name: 'head', a: 'neckTop', b: 'headTop', r: 0.105 },
+  { name: 'upperArmR', a: 'shoulderR', b: 'elbowR', r: 0.052 },
+  { name: 'lowerArmR', a: 'elbowR', b: 'wristR', r: 0.046 },
+  { name: 'handR', a: 'wristR', b: 'handEndR', r: 0.042 },
+  { name: 'upperArmL', a: 'shoulderL', b: 'elbowL', r: 0.052 },
+  { name: 'lowerArmL', a: 'elbowL', b: 'wristL', r: 0.046 },
+  { name: 'handL', a: 'wristL', b: 'handEndL', r: 0.042 },
+  { name: 'upperLegR', a: 'hipR', b: 'kneeR', r: 0.072 },
+  { name: 'lowerLegR', a: 'kneeR', b: 'ankleR', r: 0.060 },
+  { name: 'footR', a: 'ankleR', b: 'toeR', r: 0.048 },
+  { name: 'upperLegL', a: 'hipL', b: 'kneeL', r: 0.072 },
+  { name: 'lowerLegL', a: 'kneeL', b: 'ankleL', r: 0.060 },
+  { name: 'footL', a: 'ankleL', b: 'toeL', r: 0.048 },
+];
+
+/**
+ * Pairs that are always in contact and must never be pushed apart. Two bones
+ * meeting at a joint are excluded automatically - they share a particle - but
+ * these lie against each other by the shape of a body rather than by a joint,
+ * and a solver told to separate them would spend every frame fighting the
+ * animation.
+ */
+export const SOLID_IGNORE = [
+  /* The spine is one stack of meat. Segments that skip a link - the pelvis and
+     the middle torso, with the lower torso between them - overlap by the shape
+     of a torso, not by anything going wrong, and the same is true of a thigh
+     against the pelvis it hangs from. Measured, not assumed: these are exactly
+     the pairs found overlapping through idling, walking, running, crouching and
+     punching, and no others. */
+  ['pelvis', 'midTorso'], ['pelvis', 'upperTorso'], ['pelvis', 'neck'],
+  ['lowerTorso', 'upperTorso'], ['lowerTorso', 'neck'], ['midTorso', 'neck'],
+  ['pelvis', 'upperLegR'], ['pelvis', 'upperLegL'],
+
+  ['upperArmR', 'upperTorso'], ['upperArmL', 'upperTorso'],
+  ['upperArmR', 'neck'], ['upperArmL', 'neck'],
+  ['upperArmR', 'midTorso'], ['upperArmL', 'midTorso'],
+  ['upperLegR', 'lowerTorso'], ['upperLegL', 'lowerTorso'],
+  ['upperLegR', 'upperLegL'],
+  ['neck', 'upperTorso'], ['head', 'upperTorso'],
+  ['footR', 'upperLegR'], ['footL', 'upperLegL'],
+  ['handR', 'upperArmR'], ['handL', 'upperArmL'],
+];
+
+/** How hard a self collision pushes. Enough to separate, gently enough to look
+    like flesh rather than a spring. */
+export const SOLID_STIFFNESS = 0.35;
+
+/** ...and how hard one body pushes against a different body. */
+export const CROSS_STIFFNESS = 0.45;
+
 export const SELF_COLLISION = [
   // arms against the chest and belly
   ['elbowR', 'mt', 0.20], ['elbowL', 'mt', 0.20],
