@@ -162,12 +162,24 @@ export class HingeGuard {
     const a = this.a, b = this.b, c = this.c;
     const mx = (a.x + c.x) * 0.5, my = (a.y + c.y) * 0.5, mz = (a.z + c.z) * 0.5;
     const d = (b.x - mx) * fx + (b.y - my) * fy + (b.z - mz) * fz;
-    if (d >= this.margin) return;
+
+    /* A STRAIGHT limb has no wrong side. Only a bent one does, and only then is
+       there anything to protect: demanding clearance from a straight leg means
+       demanding it constantly, and on a body lying face down - where forward
+       points into the ground - that levers the legs into the air and holds them
+       there. Which is exactly what it did. So what is required scales with how
+       bent the joint actually is. */
+    const lab = Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+    const lcb = Math.hypot(c.x - b.x, c.y - b.y, c.z - b.z);
+    const lac = Math.hypot(a.x - c.x, a.y - c.y, a.z - c.z);
+    const bend = (lab + lcb) - lac;             // zero straight, grows bent
+    const need = this.margin * Math.min(1, bend / 0.06);
+    if (d >= need) return;
 
     // Push the joint back onto its own side, and the ends a little the other
     // way, so the limb folds rather than the whole body sliding.
-    const need = this.margin - d;
-    const kb = need * 0.62, ke = need * 0.19;
+    const fix = need - d;
+    const kb = fix * 0.62, ke = fix * 0.19;
     b.x += fx * kb; b.y += fy * kb; b.z += fz * kb;
     b.px += fx * kb; b.py += fy * kb; b.pz += fz * kb;
     for (const p of [a, c]) {
@@ -257,6 +269,87 @@ export function collideCapsules(a0, a1, ra, b0, b1, rb, stiffness = 1) {
   push(a0, wa0, -1); push(a1, wa1, -1);
   push(b0, wb0, 1); push(b1, wb1, 1);
   return true;
+}
+
+/**
+ * Keeps a limb inside the cone its ball joint allows.
+ *
+ * A hinge can be guarded by which side of a line it sits on; a shoulder or a
+ * hip cannot, because it moves in every direction - it just cannot move very
+ * far in some of them. So the limb's direction is measured against the body's
+ * own frame and, if it has left the cone, turned back to the nearest point on
+ * it. The cone is elliptical: how far the joint may go depends on which way it
+ * is going, which is what makes a hip a hip rather than a socket.
+ *
+ * This works on the particles, so the drawn pose follows for free. Guarding
+ * only the drawing would move the picture away from where the weight is.
+ */
+export class ConeLimit {
+  /**
+   * @param {object} frame  particles giving the body's axes
+   * @param {object} spec   {fwd, back, out, across} half angles, radians
+   */
+  constructor(root, tip, frame, spec, side) {
+    this.root = root; this.tip = tip;
+    this.frame = frame; this.spec = spec; this.side = side;
+    this.rest = Math.hypot(tip.x - root.x, tip.y - root.y, tip.z - root.z);
+    this.enabled = true;
+  }
+
+  solve() {
+    if (!this.enabled) return;
+    const f = this.frame;
+    // body axes: right across the hips, up the spine, forward out of the chest
+    let rx = f.right.x - f.left.x, ry = f.right.y - f.left.y, rz = f.right.z - f.left.z;
+    let ux = f.top.x - f.base.x, uy = f.top.y - f.base.y, uz = f.top.z - f.base.z;
+    const rl = Math.hypot(rx, ry, rz), ul = Math.hypot(ux, uy, uz);
+    if (rl < 1e-6 || ul < 1e-6) return;
+    rx /= rl; ry /= rl; rz /= rl; ux /= ul; uy /= ul; uz /= ul;
+    const fx = uy * rz - uz * ry, fy = uz * rx - ux * rz, fz = ux * ry - uy * rx;
+
+    // where the limb points, and how far that is from hanging straight down
+    let dx = this.tip.x - this.root.x, dy = this.tip.y - this.root.y, dz = this.tip.z - this.root.z;
+    const dl = Math.hypot(dx, dy, dz);
+    if (dl < 1e-6) return;
+    dx /= dl; dy /= dl; dz /= dl;
+
+    // components in the body's frame, with -up as the resting direction
+    const cd = -(dx * ux + dy * uy + dz * uz);          // along the limb's rest
+    const cf = dx * fx + dy * fy + dz * fz;             // forward
+    const cr = (dx * rx + dy * ry + dz * rz) * this.side; // out to its own side
+    const theta = Math.acos(Math.max(-1, Math.min(1, cd)));
+    if (theta < 1e-4) return;
+
+    // the ellipse: which half-angle applies depends on the direction of travel
+    const a = cf >= 0 ? this.spec.fwd : this.spec.back;
+    const b = cr >= 0 ? this.spec.out : this.spec.across;
+    const side = Math.hypot(cf, cr) || 1e-6;
+    const cosA = cf / side, sinA = cr / side;
+    const max = 1 / Math.sqrt((cosA / a) ** 2 + (sinA / b) ** 2);
+    if (theta <= max) return;
+
+    /* Outside: turn the limb back to the edge of the cone about the axis that
+       gets there fastest, and move the previous position with it so nothing is
+       handed speed for being put back where it belongs. */
+    const restX = -ux, restY = -uy, restZ = -uz;
+    let ax = restY * dz - restZ * dy, ay = restZ * dx - restX * dz, az = restX * dy - restY * dx;
+    const al = Math.hypot(ax, ay, az);
+    if (al < 1e-6) return;
+    ax /= al; ay /= al; az /= al;
+    const turn = -(theta - max) * 0.5;                  // half now, half next pass
+    const s = Math.sin(turn), co = Math.cos(turn);
+    // Rodrigues
+    const kx = ay * dz - az * dy, ky = az * dx - ax * dz, kz = ax * dy - ay * dx;
+    const kd = ax * dx + ay * dy + az * dz;
+    const nx = dx * co + kx * s + ax * kd * (1 - co);
+    const ny = dy * co + ky * s + ay * kd * (1 - co);
+    const nz = dz * co + kz * s + az * kd * (1 - co);
+
+    const tx = this.root.x + nx * dl, ty = this.root.y + ny * dl, tz = this.root.z + nz * dl;
+    const mx = (tx - this.tip.x) * 0.6, my = (ty - this.tip.y) * 0.6, mz = (tz - this.tip.z) * 0.6;
+    this.tip.x += mx; this.tip.y += my; this.tip.z += mz;
+    this.tip.px += mx; this.tip.py += my; this.tip.pz += mz;
+  }
 }
 
 /**
@@ -815,8 +908,14 @@ export class PhysicsWorld {
       if (pen > 0) {
         const wa = (1 - t), wb = t;
         const norm = wa * wa + wb * wb;
-        a.y += ny * pen * (wa / norm) * 0.5;
-        b.y += ny * pen * (wb / norm) * 0.5;
+        const ka = ny * pen * (wa / norm) * 0.5;
+        const kb = ny * pen * (wb / norm) * 0.5;
+        /* The previous positions come too. Lifting a limb out of the floor is
+           a position fix; leaving py behind hands it upward speed instead, and
+           a forearm resting on the ground then pops, falls, and pops again -
+           which is precisely what a twitching ragdoll is made of. */
+        a.y += ka; a.py += ka;
+        b.y += kb; b.py += kb;
         a.grounded = true; b.grounded = true;
       }
     }

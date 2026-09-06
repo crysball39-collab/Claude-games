@@ -143,6 +143,24 @@ export function clampBoneEuler(name, euler) {
   return touched;
 }
 
+/**
+ * Which joints are held to their limits in the DRAWN pose of a ragdoll.
+ *
+ * Not all of them, and the reason is worth writing down. The physics is free to
+ * put a body somewhere a body cannot quite go; correcting that in the drawing
+ * only moves the picture away from where the weight actually is. For a hinge
+ * the correction is small and the error is glaring - a knee bent backwards is
+ * the single thing that makes a ragdoll look broken - so hinges, the neck and
+ * the spine are held. Shoulders and hips are left alone: their cones are wide,
+ * a body lying on its side genuinely reaches the edge of one, and pulling a
+ * whole leg back into range lifts it off the ground it is lying on.
+ */
+export const DRAWN_LIMIT_BONES = new Set([
+  'lowerArmR', 'lowerArmL', 'lowerLegR', 'lowerLegL',
+  'handR', 'handL', 'footR', 'footL',
+  'neck', 'head', 'lowerTorso', 'midTorso', 'upperTorso',
+]);
+
 /* -------------------------------------------------------------------------- */
 /*                          how much each bone weighs                         */
 /* -------------------------------------------------------------------------- */
@@ -204,6 +222,22 @@ export const RAGDOLL = {
  *   sign +1  the middle joint must stay in FRONT of the line (knees)
  *   sign -1  it must stay BEHIND it (elbows)
  */
+/**
+ * The cones a ball joint may move in, as half angles in degrees.
+ *
+ * Measured from the limb hanging at rest, and read against the body's own
+ * frame, so they hold whichever way up the body is. These are what stop a leg
+ * folding through the pelvis it hangs off once physics has the body.
+ */
+export const CONE_LIMITS = [
+  // the same numbers the hip and shoulder rows of LIMITS_DEG use, so the
+  // physics and the drawing agree about what a joint can do
+  { root: 'hipR', tip: 'kneeR', side: 1, fwd: 126, back: 27, out: 47, across: 22 },
+  { root: 'hipL', tip: 'kneeL', side: -1, fwd: 126, back: 27, out: 47, across: 22 },
+  { root: 'shoulderR', tip: 'elbowR', side: 1, fwd: 178, back: 62, out: 152, across: 34 },
+  { root: 'shoulderL', tip: 'elbowL', side: -1, fwd: 178, back: 62, out: 152, across: 34 },
+];
+
 export const HINGE_GUARDS = [
   { a: 'hipR', b: 'kneeR', c: 'ankleR', sign: 1, margin: 0.035 },
   { a: 'hipL', b: 'kneeL', c: 'ankleL', sign: 1, margin: 0.035 },

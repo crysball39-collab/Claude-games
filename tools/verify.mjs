@@ -782,6 +782,15 @@ r = await page.evaluate(async () => {
     const p = c.particles[n];
     return Math.hypot(p.x - p.px, p.y - p.py, p.z - p.pz) / g.world.substepDt;
   };
+  // The velocity a particle has right now, as a vector: what a hit ADDS is the
+  // change in that vector, not the change in its length. A body still drifting
+  // as it settles would otherwise report a hit that slowed it down as no hit
+  // at all.
+  const vel = (n) => {
+    const p = c.particles[n];
+    return [(p.x - p.px) / g.world.substepDt, (p.y - p.py) / g.world.substepDt,
+            (p.z - p.pz) / g.world.substepDt];
+  };
   const watch = ['headTop', 'neckTop', 'shoulders', 'mt', 'hip', 'kneeR', 'toeR'];
   const hit = async (boneName) => {
     c.heal(); c.setState('controlled'); c.teleport(OX, 0, 0);
@@ -793,12 +802,15 @@ r = await page.evaluate(async () => {
     }
     c.health = c.maxHealth; c.dead = false;
     const before = {};
-    for (const n of watch) before[n] = speed(n);
+    for (const n of watch) before[n] = vel(n);
     const b = c.rig.byName[boneName];
     c.applyImpact(new V(b.worldPos.x, b.worldPos.y, b.worldPos.z), new V(0, 8, -90),
       { boneName, damage: 0, type: 'blunt', severity: 0.6 });
     const out = {};
-    for (const n of watch) out[n] = +(speed(n) - before[n]).toFixed(2);
+    for (const n of watch) {
+      const a = before[n], d = vel(n);
+      out[n] = +Math.hypot(d[0] - a[0], d[1] - a[1], d[2] - a[2]).toFixed(2);
+    }
     return out;
   };
   return { head: await hit('head'), foot: await hit('footR') };

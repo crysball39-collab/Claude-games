@@ -14,17 +14,18 @@
    Getting up ramps that number back to one over the length of the get-up clip,
    so the ragdoll melts into the animation instead of snapping to it.
    ========================================================================== */
-import { Vector3, Quaternion, Matrix4 } from 'three';
+import { Vector3, Quaternion, Matrix4, Euler } from 'three';
 import { SkeletonRig, HIP_HEIGHT, boneBoxCenter } from './skeleton.js';
 import { Body } from './body.js';
 import { Animator } from './animator.js';
 import {
-  BONE_MASS, HINGE_GUARDS, SELF_COLLISION, RAGDOLL, IMPACT, JOINT_LIMITS,
-  LOOK_CHAIN, BODY_TURN_THRESHOLD, AIM_ARM_FOLLOW,
+  BONE_MASS, HINGE_GUARDS, CONE_LIMITS, SELF_COLLISION, RAGDOLL, IMPACT, JOINT_LIMITS,
+  clampBoneEuler,
+  LOOK_CHAIN, BODY_TURN_THRESHOLD, AIM_ARM_FOLLOW, DRAWN_LIMIT_BONES,
   SOLID_PARTS, SOLID_IGNORE, SOLID_STIFFNESS,
 } from './joints.js';
 import {
-  Particle, DistanceConstraint, HingeGuard, JointSpacing, SelfCollision,
+  Particle, DistanceConstraint, HingeGuard, ConeLimit, JointSpacing, SelfCollision,
 } from '../physics/world.js';
 import {
   clamp, clamp01, lerp, damp, dampAngle, angleDelta, makeRng, smoothstep,
@@ -32,6 +33,7 @@ import {
 
 const _v1 = new Vector3(), _v2 = new Vector3(), _v3 = new Vector3(), _v4 = new Vector3();
 const _q1 = new Quaternion(), _q2 = new Quaternion();
+const _e = new Euler();
 const _m4 = new Matrix4();
 const UP = new Vector3(0, 1, 0);
 
@@ -288,6 +290,18 @@ export class Character {
       this.guards.push(guard);
       this.world.addConstraint(guard, true);
     }
+    /* A hip and a shoulder need a cone rather than a side: they move every
+       way, they simply cannot move far in some of them. */
+    const D = Math.PI / 180;
+    for (const cl of CONE_LIMITS) {
+      if (!P[cl.root] || !P[cl.tip]) continue;
+      const cone = new ConeLimit(P[cl.root], P[cl.tip], frame, {
+        fwd: cl.fwd * D, back: cl.back * D, out: cl.out * D, across: cl.across * D,
+      }, cl.side);
+      this.guards.push(cone);
+      this.world.addConstraint(cone, true);
+    }
+
     for (const [a, b, min] of SELF_COLLISION) {
       if (!P[a] || !P[b]) continue;
       const sc = new JointSpacing(P[a], P[b], min);
@@ -1011,14 +1025,29 @@ export class Character {
     this.getUpDelay -= dt;
 
     if (!this.dead) {
-      // Alive ragdolls are not sacks of flour: they writhe.
-      this.painTimer = Math.max(this.painTimer, 0.05);
-      // Measured against one substep, so a twitch is a twitch and not a launch.
+      /* Alive ragdolls are not sacks of flour - but they are not electrified
+         either. This used to fire a random four-metre-a-second kick into a
+         random joint several times a second, which is not writhing, it is
+         vibrating. What a body on the floor actually does is push against the
+         ground in slow waves, so that is what this is: a low frequency effort
+         through the hips and shoulders that fades as the pain does, plus the
+         occasional weak shove from a limb. */
       const h = this.world.substepDt;
-      if (this.rng() < dt * 5.5) {
+      /* Effort is pain and nothing else, so a body that has stopped hurting
+         stops moving. A permanent floor here is the difference between a
+         person lying still and a person buzzing. */
+      const effort = this._noWrithe ? 0 : clamp01(this.painTimer / 1.2);
+      const t = this.stateTime;
+      const w = effort > 0.001
+        ? Math.sin(t * 2.1 + this.id) * Math.sin(t * 0.73 + this.id * 2.3) : 0;
+      this.particles.hip.addVelocity(
+        w * 0.9 * effort, Math.max(0, w) * 0.5 * effort, w * 0.6 * effort, h * dt * 60);
+      this.particles.shoulders.addVelocity(
+        -w * 0.7 * effort, Math.max(0, -w) * 0.4 * effort, -w * 0.5 * effort, h * dt * 60);
+      if (effort > 0.2 && this.rng() < dt * 1.4) {
         const limb = this.particleList[this.rng.int(0, this.particleList.length - 1)];
-        const k = (0.5 + this.rng()) * (this.painTimer > 0.3 ? 2.2 : 0.9);
-        limb.addVelocity((this.rng() - 0.5) * 2.6 * k, this.rng() * 1.8 * k, (this.rng() - 0.5) * 2.6 * k, h);
+        limb.addVelocity((this.rng() - 0.5) * 1.1 * effort, this.rng() * 0.7 * effort,
+          (this.rng() - 0.5) * 1.1 * effort, h);
       }
       // Deliberate shoving: a body on the floor can still drag itself about.
       const push = _v1.set(this.moveInput.x, 0, this.moveInput.z);
@@ -1295,7 +1324,17 @@ export class Character {
       for (let i = 0; i < order.length; i++) {
         const b = order[i];
         b.worldQuat.slerp(this._physQuat[b.index], blend);
+        /* And then held to the same joint limits the animation is.
+           The particles describe where the body has ended up; a pair of them is
+           only a direction, and nothing about a direction says a knee may not
+           point backwards. Measured on a body that had simply fallen over, the
+           drawn pose had knees a hundred and seventy degrees past straight and
+           a spine folded double - which is exactly what a ragdoll looking
+           wrong looks like. Clamped here, after the blend, because this is the
+           pose that actually gets drawn: two valid rotations slerped together
+           are not necessarily a valid rotation. */
         if (b.parent) {
+          this._limitDrawnBone(b);
           b.worldPos.copy(b.offset).applyQuaternion(b.parent.worldQuat).add(b.parent.worldPos);
         }
         b.worldEnd.copy(_v1.set(0, b.length, 0).applyQuaternion(b.worldQuat)).add(b.worldPos);
@@ -1338,6 +1377,53 @@ export class Character {
         this._physQuat[idx].copy(pq).multiply(bone.restQuat).multiply(bone.animQuat);
       }
     }
+  }
+
+  /**
+   * Pulls one drawn bone back inside its joint's range.
+   *
+   * Works on the DIRECTION the bone points, not on its euler angles. Taking a
+   * rotation apart into three angles and clamping them is fine near the middle
+   * of the range and disastrous away from it: a leg lying flat behind a body
+   * reads as a large turn about one axis, and clamping the other two then
+   * swings the whole limb somewhere else entirely - which is how a settled
+   * ragdoll ended up with one leg standing straight up in the air.
+   *
+   * A direction cannot gimbal. The bone's own axis is taken into the parent's
+   * frame, checked against the cone the joint allows, and - only if it is
+   * outside - turned by the smallest rotation that brings it back. Twist along
+   * the bone is left exactly as it was, since a box limb barely shows it and
+   * nothing here can judge it safely.
+   *
+   * Broken bones are let through: that is what broken means, and the solid
+   * capsules are what keep those honest instead.
+   */
+  _limitDrawnBone(bone) {
+    if (!DRAWN_LIMIT_BONES.has(bone.name) || this._skipDrawnLimits) return;
+    const lim = JOINT_LIMITS[bone.name];
+    if (!lim) return;
+    if (this.broken.size && this.broken.has(bone.name)) return;
+
+    // the bone's direction, in the frame its joint limits are written in
+    _q1.copy(bone.parent.worldQuat).invert().multiply(bone.worldQuat);
+    _q2.copy(bone.restQuat).invert().multiply(_q1);
+    _v3.set(0, 1, 0).applyQuaternion(_q2);
+
+    /* Where a rotation of Rx(a)*Ry(b)*Rz(c) puts +Y is (-sin c, cos a cos c,
+       sin a cos c), which inverts exactly - and without ever consulting the
+       twist b. */
+    const a = Math.atan2(_v3.z, _v3.y);
+    const c = Math.asin(clamp(-_v3.x, -1, 1));
+    const a2 = clamp(a, lim.x[0], lim.x[1]);
+    const c2 = clamp(c, lim.z[0], lim.z[1]);
+    if (a2 === a && c2 === c) return;
+
+    const cc = Math.cos(c2), sc = Math.sin(c2);
+    _v4.set(-sc, Math.cos(a2) * cc, Math.sin(a2) * cc);
+    if (_v4.lengthSq() < 1e-9) return;
+    _q1.setFromUnitVectors(_v3.normalize(), _v4.normalize());
+    _q2.premultiply(_q1);
+    bone.worldQuat.copy(bone.parent.worldQuat).multiply(bone.restQuat).multiply(_q2);
   }
 
   /* ---------------------------------------------------------------- punching */
