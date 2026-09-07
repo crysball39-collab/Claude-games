@@ -23,7 +23,7 @@ node tools/build-single-file.js
 `M` to mute.
 
 **Touch** — an on-screen D-pad appears automatically on touch devices, with
-START, PAUSE and SOUND beside it. Keys are at least 54 px on the smallest
+START, PAUSE and SOUND beside it, plus SHOOT once a mod arms him. Keys are at least 54 px on the smallest
 phone, and you can slide a thumb across the pad to re-latch direction without
 lifting. Swiping anywhere on the maze works too. The layout moves the pad
 alongside the maze in landscape, and the page never scrolls or zooms.
@@ -90,6 +90,39 @@ a character at 100 % speed advances exactly 1.25 pixels per frame — the
 documented 75.76 px/s. This is decoupled from the display: at 60, 90, 120 and
 144 Hz Pac-Man covers the same 60 px per second on level 1.
 
+## Mods
+
+`MODS` on the title screen opens an arcade-styled browser with three sections:
+**installed** mods you can enable and disable, **downloadable** ones that
+install with a progress bar, and **show needed storage**, which breaks down
+what the enabled set costs against the cartridge's 512K. Choices persist.
+
+| Mod | Size | What it does |
+|---|---|---|
+| Rampage Pac | 128K | The story mod, below |
+| Turbo Maze | 48K | Everything runs 25 % faster |
+| Ghost Rush | 64K | All four ghosts start outside the house |
+| Neon Night | 96K | The maze cycles through eight wall colours |
+
+### Rampage Pac
+
+Level 1 plays exactly as normal. On level 2 Pac-Man picks up a heavy brow. On
+level 3, while `READY!` is still on screen, he stops waiting:
+
+> **PAC-MAN:** I HAD ENOUGH!
+> **BLINKY:** P-PACMAN? WHAT ARE YOU DOIN-
+
+He racks a shotgun, and the round starts with the roles reversed — the ghosts
+run from him instead of hunting him, and a `SHOOT` button appears (`X`, `Z` or
+`SPACE` on a keyboard). Shooting is hit-scan down the corridor he faces and
+takes the first ghost in it, scoring the usual 200/400/800/1600 chain. Clearing
+that level ends the demo and drops you back in the mod menu.
+
+### Dev menu
+
+Clicking Blinky ten times in the mod menu opens it. Set the starting level,
+scale the game speed from 0.25× to 3×, and turn on godmode.
+
 ## Arcade rules that are actually implemented
 
 Behaviour follows the original board as documented in *The Pac-Man Dossier*:
@@ -128,6 +161,7 @@ js/font.js          5x7 bitmap font
 js/sprites.js       Pac-Man, ghosts and fruit
 js/audio.js         Namco WSG emulation + the sound PROM wavetables
 js/game.js          rules, ghost AI, level flow, input, HUD
+js/mods.js          mod browser, Rampage Pac, dev menu
 test/run-tests.js   behavioural tests
 ```
 
@@ -141,6 +175,6 @@ npm install playwright
 node test/run-tests.js          # CHROMIUM_PATH=... to reuse a local browser
 ```
 
-37 assertions covering the maze checksums (244 dots, left-right symmetry, every
+60 assertions covering the maze checksums (244 dots, left-right symmetry, every
 dot reachable), ghost targeting including both quirks, phase timings, house
 release limits, the tunnel, scoring, and the per-level speed table.

@@ -79,6 +79,56 @@
     }
   }
 
+  /* Angry brows for the Rampage Pac mod: a V across the forehead, rotated
+     to whichever way he is facing. */
+  function drawBrows(ctx, dir) {
+    ctx.save();
+    // Clip inside the head, leaving a rim so the brow never notches his outline.
+    ctx.beginPath();
+    ctx.arc(0, 0, PAC_R - 1.2, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.rotate(DIR_ANGLE[dir] || 0);
+    // One heavy brow on the upper-back of the head, clear of the mouth wedge
+    // and slanting down towards it.
+    ctx.translate(-1.2, -4.1);
+    ctx.rotate(0.62);
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(-2.9, -1.1, 5.8, 2.2);
+    ctx.restore();
+  }
+
+  /* The shotgun he pulls out, held along the direction of travel. */
+  function drawShotgun(ctx, dir, recoil) {
+    ctx.save();
+    ctx.rotate(DIR_ANGLE[dir] || 0);
+    ctx.translate(-(recoil || 0) * 2, 0);
+    ctx.fillStyle = '#5a3a1a';                 // stock
+    ctx.fillRect(-1, 1.5, 6, 3);
+    ctx.fillStyle = '#8a5a2a';
+    ctx.fillRect(3, 1, 4, 2.5);
+    ctx.fillStyle = '#9a9aae';                 // barrel
+    ctx.fillRect(4, -1.5, 11, 2.4);
+    ctx.fillStyle = '#5a5a6e';                 // pump
+    ctx.fillRect(8, 1, 4, 1.6);
+    ctx.restore();
+  }
+
+  /** Muzzle flash, drawn separately so it can outlive a single frame. */
+  function drawMuzzleFlash(ctx, dir, t) {
+    ctx.save();
+    ctx.rotate(DIR_ANGLE[dir] || 0);
+    var k = 1 - t;
+    ctx.fillStyle = t < 0.5 ? '#ffffff' : '#ffff00';
+    ctx.beginPath();
+    ctx.moveTo(15, 0);
+    ctx.lineTo(15 + 7 * k, -4 * k);
+    ctx.lineTo(15 + 4 * k, 0);
+    ctx.lineTo(15 + 7 * k, 4 * k);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
   /* ------------------------------------------------------------------ */
   /* Ghosts                                                              */
   /* ------------------------------------------------------------------ */
@@ -280,6 +330,9 @@
 
   global.Sprites = {
     GHOST_COLORS: GHOST_COLORS,
+    drawBrows: drawBrows,
+    drawShotgun: drawShotgun,
+    drawMuzzleFlash: drawMuzzleFlash,
     drawPacman: drawPacman,
     drawPacmanDeath: drawPacmanDeath,
     drawGhost: drawGhost,
@@ -304,7 +357,9 @@
     [0, 0, 0], [33, 33, 255], [255, 184, 174], [222, 222, 255], [255, 255, 0],
     [255, 0, 0], [255, 184, 255], [0, 255, 255], [255, 184, 81], [222, 151, 81],
     [255, 255, 255], [0, 208, 0], [0, 160, 0], [140, 232, 0], [255, 229, 0],
-    [160, 80, 0]
+    [160, 80, 0],
+    // gunmetal and wood, for the Rampage Pac shotgun
+    [154, 154, 174], [90, 90, 110], [90, 58, 26], [138, 90, 42]
   ];
 
   var SPRITE = 16;            // every character fits inside a 16x16 cell
@@ -350,12 +405,27 @@
   /* Mouth is quantised to the arcade's animation steps. */
   var MOUTH_STEPS = [0, 0.34, 0.67, 1];
 
-  function pacman(dir, mouth) {
+  /**
+   * @param {object} [opts] { angry, armed } - the Rampage Pac variants
+   */
+  function pacman(dir, mouth, opts) {
+    var angry = opts && opts.angry, armed = opts && opts.armed;
     var step = Math.max(0, Math.min(3, Math.round(mouth * 3)));
-    var d = step === 0 ? 'x' : dir;             // a closed mouth has no facing
-    return get('pac:' + d + step, function (ctx) {
+    // A closed mouth has no facing, unless a brow or gun gives him one.
+    var d = (step === 0 && !angry && !armed) ? 'x' : dir;
+    var key = 'pac:' + d + step + (angry ? 'a' : '') + (armed ? 'g' : '');
+    return get(key, function (ctx) {
+      if (armed) S.drawShotgun(ctx, dir, 0);
       S.drawPacman(ctx, dir, MOUTH_STEPS[step]);
-    });
+      if (angry) S.drawBrows(ctx, dir);
+    }, armed ? 40 : SPRITE);
+  }
+
+  function muzzleFlash(dir, t) {
+    var f = Math.max(0, Math.min(3, Math.round(t * 3)));
+    return get('flash:' + dir + f, function (ctx) {
+      S.drawMuzzleFlash(ctx, dir, f / 3);
+    }, 48);
   }
 
   function lifeIcon() {
@@ -392,6 +462,7 @@
 
   S.Pixel = {
     pacman: pacman, ghost: ghost, fruit: fruit, death: death,
+    muzzleFlash: muzzleFlash,
     lifeIcon: lifeIcon, blit: blit, rasterize: rasterize
   };
 })(window);

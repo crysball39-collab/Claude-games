@@ -289,6 +289,45 @@
     play('intro', introProgram, 1);
   }
 
+  /* ---- mod sounds -------------------------------------------------- */
+
+  /* The WSG has no noise channel, so the blast is waveform 3 - the jagged
+     one - dropped fast through the register range. */
+  function shotgun() {
+    play('shotgun', function () {
+      return [
+        [{ d: 0.16, w: 3, f: 1400, f1: 70, v: 15 },
+         { d: 0.20, w: 3, f: 260, f1: 40, v: 9 }],
+        [{ d: 0.10, w: 4, f: 900, f1: 120, v: 12 }]
+      ];
+    }, 1);
+  }
+
+  function pump() {
+    play('pump', function () {
+      return [[
+        { d: 0.045, w: 4, f: 420, f1: 240, v: 11 },
+        { d: 0.05, w: 4, f: 0, v: 0 },
+        { d: 0.045, w: 4, f: 300, f1: 520, v: 11 }
+      ]];
+    }, 0.8);
+  }
+
+  function blip() {
+    play('blip', function () {
+      return [[{ d: 0.035, w: 6, f: 880, v: 10 }]];
+    }, 0.6);
+  }
+
+  function accept() {
+    play('accept', function () {
+      return [[
+        { d: 0.05, w: 6, f: 700, v: 12 },
+        { d: 0.09, w: 6, f: 1180, v: 12 }
+      ]];
+    }, 0.7);
+  }
+
   function toggleMute() {
     muted = !muted;
     if (muted) stopBackground();
@@ -306,6 +345,10 @@
     extraLife: extraLife,
     death: death,
     intro: intro,
+    shotgun: shotgun,
+    pump: pump,
+    blip: blip,
+    accept: accept,
     toggleMute: toggleMute,
     isMuted: function () { return muted; },
     INTRO_LENGTH: INTRO_LENGTH,

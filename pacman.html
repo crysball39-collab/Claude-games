@@ -146,6 +146,11 @@ body.touch #pad {
 }
 
 .btn.is-down { background: #23234a; color: #fff; }
+
+/* The SHOOT button only exists once Rampage Pac arms him. */
+.btn.shoot { display: none; color: #ff5a5a; border-color: #7a2020; }
+body.armed .btn.shoot { display: block; }
+body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
 .btn.is-off  { color: #4a4a66; border-color: #16162e; }
 
 /* Landscape phones: put the pad beside the screen so the maze stays tall.
@@ -189,6 +194,7 @@ body.touch #pad {
         <button class="key down"  data-dir="down"  aria-label="Down">&#9660;</button>
       </div>
       <div id="aux">
+        <button class="btn shoot" data-act="shoot" aria-label="Shoot">SHOOT</button>
         <button class="btn" data-act="start" aria-label="Start">START</button>
         <button class="btn" data-act="pause" aria-label="Pause">PAUSE</button>
         <button class="btn" data-act="mute"  aria-label="Sound">SOUND</button>
@@ -253,7 +259,13 @@ body.touch #pad {
     ')': [0x08, 0x04, 0x02, 0x02, 0x02, 0x04, 0x08],
     '@': [0x0E, 0x11, 0x17, 0x15, 0x17, 0x10, 0x0E],
     '=': [0x00, 0x00, 0x1F, 0x00, 0x1F, 0x00, 0x00],
-    '?': [0x0E, 0x11, 0x01, 0x02, 0x04, 0x00, 0x04]
+    '?': [0x0E, 0x11, 0x01, 0x02, 0x04, 0x00, 0x04],
+    '<': [0x02, 0x04, 0x08, 0x10, 0x08, 0x04, 0x02],
+    '>': [0x08, 0x04, 0x02, 0x01, 0x02, 0x04, 0x08],
+    '*': [0x00, 0x15, 0x0E, 0x1F, 0x0E, 0x15, 0x00],
+    '%': [0x18, 0x19, 0x02, 0x04, 0x08, 0x13, 0x03],
+    '+': [0x00, 0x04, 0x04, 0x1F, 0x04, 0x04, 0x00],
+    '#': [0x0A, 0x1F, 0x0A, 0x0A, 0x1F, 0x0A, 0x00]
   };
 
   /* Copyright bogey used on the arcade attract screen. */
@@ -892,6 +904,45 @@ body.touch #pad {
     play('intro', introProgram, 1);
   }
 
+  /* ---- mod sounds -------------------------------------------------- */
+
+  /* The WSG has no noise channel, so the blast is waveform 3 - the jagged
+     one - dropped fast through the register range. */
+  function shotgun() {
+    play('shotgun', function () {
+      return [
+        [{ d: 0.16, w: 3, f: 1400, f1: 70, v: 15 },
+         { d: 0.20, w: 3, f: 260, f1: 40, v: 9 }],
+        [{ d: 0.10, w: 4, f: 900, f1: 120, v: 12 }]
+      ];
+    }, 1);
+  }
+
+  function pump() {
+    play('pump', function () {
+      return [[
+        { d: 0.045, w: 4, f: 420, f1: 240, v: 11 },
+        { d: 0.05, w: 4, f: 0, v: 0 },
+        { d: 0.045, w: 4, f: 300, f1: 520, v: 11 }
+      ]];
+    }, 0.8);
+  }
+
+  function blip() {
+    play('blip', function () {
+      return [[{ d: 0.035, w: 6, f: 880, v: 10 }]];
+    }, 0.6);
+  }
+
+  function accept() {
+    play('accept', function () {
+      return [[
+        { d: 0.05, w: 6, f: 700, v: 12 },
+        { d: 0.09, w: 6, f: 1180, v: 12 }
+      ]];
+    }, 0.7);
+  }
+
   function toggleMute() {
     muted = !muted;
     if (muted) stopBackground();
@@ -909,6 +960,10 @@ body.touch #pad {
     extraLife: extraLife,
     death: death,
     intro: intro,
+    shotgun: shotgun,
+    pump: pump,
+    blip: blip,
+    accept: accept,
     toggleMute: toggleMute,
     isMuted: function () { return muted; },
     INTRO_LENGTH: INTRO_LENGTH,
@@ -996,6 +1051,56 @@ body.touch #pad {
         ctx.stroke();
       }
     }
+  }
+
+  /* Angry brows for the Rampage Pac mod: a V across the forehead, rotated
+     to whichever way he is facing. */
+  function drawBrows(ctx, dir) {
+    ctx.save();
+    // Clip inside the head, leaving a rim so the brow never notches his outline.
+    ctx.beginPath();
+    ctx.arc(0, 0, PAC_R - 1.2, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.rotate(DIR_ANGLE[dir] || 0);
+    // One heavy brow on the upper-back of the head, clear of the mouth wedge
+    // and slanting down towards it.
+    ctx.translate(-1.2, -4.1);
+    ctx.rotate(0.62);
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(-2.9, -1.1, 5.8, 2.2);
+    ctx.restore();
+  }
+
+  /* The shotgun he pulls out, held along the direction of travel. */
+  function drawShotgun(ctx, dir, recoil) {
+    ctx.save();
+    ctx.rotate(DIR_ANGLE[dir] || 0);
+    ctx.translate(-(recoil || 0) * 2, 0);
+    ctx.fillStyle = '#5a3a1a';                 // stock
+    ctx.fillRect(-1, 1.5, 6, 3);
+    ctx.fillStyle = '#8a5a2a';
+    ctx.fillRect(3, 1, 4, 2.5);
+    ctx.fillStyle = '#9a9aae';                 // barrel
+    ctx.fillRect(4, -1.5, 11, 2.4);
+    ctx.fillStyle = '#5a5a6e';                 // pump
+    ctx.fillRect(8, 1, 4, 1.6);
+    ctx.restore();
+  }
+
+  /** Muzzle flash, drawn separately so it can outlive a single frame. */
+  function drawMuzzleFlash(ctx, dir, t) {
+    ctx.save();
+    ctx.rotate(DIR_ANGLE[dir] || 0);
+    var k = 1 - t;
+    ctx.fillStyle = t < 0.5 ? '#ffffff' : '#ffff00';
+    ctx.beginPath();
+    ctx.moveTo(15, 0);
+    ctx.lineTo(15 + 7 * k, -4 * k);
+    ctx.lineTo(15 + 4 * k, 0);
+    ctx.lineTo(15 + 7 * k, 4 * k);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
   }
 
   /* ------------------------------------------------------------------ */
@@ -1199,6 +1304,9 @@ body.touch #pad {
 
   global.Sprites = {
     GHOST_COLORS: GHOST_COLORS,
+    drawBrows: drawBrows,
+    drawShotgun: drawShotgun,
+    drawMuzzleFlash: drawMuzzleFlash,
     drawPacman: drawPacman,
     drawPacmanDeath: drawPacmanDeath,
     drawGhost: drawGhost,
@@ -1223,7 +1331,9 @@ body.touch #pad {
     [0, 0, 0], [33, 33, 255], [255, 184, 174], [222, 222, 255], [255, 255, 0],
     [255, 0, 0], [255, 184, 255], [0, 255, 255], [255, 184, 81], [222, 151, 81],
     [255, 255, 255], [0, 208, 0], [0, 160, 0], [140, 232, 0], [255, 229, 0],
-    [160, 80, 0]
+    [160, 80, 0],
+    // gunmetal and wood, for the Rampage Pac shotgun
+    [154, 154, 174], [90, 90, 110], [90, 58, 26], [138, 90, 42]
   ];
 
   var SPRITE = 16;            // every character fits inside a 16x16 cell
@@ -1269,12 +1379,27 @@ body.touch #pad {
   /* Mouth is quantised to the arcade's animation steps. */
   var MOUTH_STEPS = [0, 0.34, 0.67, 1];
 
-  function pacman(dir, mouth) {
+  /**
+   * @param {object} [opts] { angry, armed } - the Rampage Pac variants
+   */
+  function pacman(dir, mouth, opts) {
+    var angry = opts && opts.angry, armed = opts && opts.armed;
     var step = Math.max(0, Math.min(3, Math.round(mouth * 3)));
-    var d = step === 0 ? 'x' : dir;             // a closed mouth has no facing
-    return get('pac:' + d + step, function (ctx) {
+    // A closed mouth has no facing, unless a brow or gun gives him one.
+    var d = (step === 0 && !angry && !armed) ? 'x' : dir;
+    var key = 'pac:' + d + step + (angry ? 'a' : '') + (armed ? 'g' : '');
+    return get(key, function (ctx) {
+      if (armed) S.drawShotgun(ctx, dir, 0);
       S.drawPacman(ctx, dir, MOUTH_STEPS[step]);
-    });
+      if (angry) S.drawBrows(ctx, dir);
+    }, armed ? 40 : SPRITE);
+  }
+
+  function muzzleFlash(dir, t) {
+    var f = Math.max(0, Math.min(3, Math.round(t * 3)));
+    return get('flash:' + dir + f, function (ctx) {
+      S.drawMuzzleFlash(ctx, dir, f / 3);
+    }, 48);
   }
 
   function lifeIcon() {
@@ -1311,7 +1436,537 @@ body.touch #pad {
 
   S.Pixel = {
     pacman: pacman, ghost: ghost, fruit: fruit, death: death,
+    muzzleFlash: muzzleFlash,
     lifeIcon: lifeIcon, blit: blit, rasterize: rasterize
+  };
+})(window);
+  </script>
+  <script>
+/* Mods: an in-game mod browser, the Rampage Pac demo, and a hidden dev menu.
+ *
+ * Everything here hangs off flags the game reads (ghostsFlee, speedScale,
+ * wallColor, godmode, pacAngry, pacArmed) so the core rules stay untouched
+ * when no mod is enabled.
+ */
+(function (global) {
+  'use strict';
+
+  var STORE_KEY = 'pacman.mods.v1';
+  var DISK_FREE = 512;                   // kilobytes of pretend cartridge space
+
+  var CATALOG = [
+    { id: 'rampage', name: 'RAMPAGE PAC', size: 128, stock: true,
+      blurb: 'PAC-MAN FINALLY SNAPS' },
+    { id: 'turbo', name: 'TURBO MAZE', size: 48, stock: false,
+      blurb: 'EVERYTHING RUNS 25% FASTER' },
+    { id: 'rush', name: 'GHOST RUSH', size: 64, stock: false,
+      blurb: 'ALL FOUR GHOSTS START OUTSIDE' },
+    { id: 'neon', name: 'NEON NIGHT', size: 96, stock: false,
+      blurb: 'THE MAZE CYCLES COLOUR' }
+  ];
+
+  var NEON = ['#2121ff', '#8021ff', '#ff21d0', '#ff2160',
+              '#ff8021', '#c0ff21', '#21ff80', '#21d0ff'];
+
+  var VERSION = '1.0';
+  var TILE = 8;
+  var DIRV = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+
+  var state = { enabled: {}, installed: {}, showStorage: false };
+
+  /* ---- persistence -------------------------------------------------- */
+
+  function loadState() {
+    CATALOG.forEach(function (m) {
+      state.installed[m.id] = m.stock;
+      state.enabled[m.id] = false;
+    });
+    try {
+      var raw = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+      CATALOG.forEach(function (m) {
+        if (raw.installed && m.id in raw.installed) state.installed[m.id] = !!raw.installed[m.id];
+        if (raw.enabled && m.id in raw.enabled) state.enabled[m.id] = !!raw.enabled[m.id];
+      });
+      if ('showStorage' in raw) state.showStorage = !!raw.showStorage;
+      state.installed.rampage = true;      // the bundled mod is never removed
+    } catch (e) { /* first run, or storage blocked */ }
+  }
+
+  function saveState() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+    catch (e) { /* private mode */ }
+  }
+
+  function byId(id) {
+    for (var i = 0; i < CATALOG.length; i++) if (CATALOG[i].id === id) return CATALOG[i];
+    return null;
+  }
+
+  function isOn(id) { return !!(state.installed[id] && state.enabled[id]); }
+
+  function storageUsed() {
+    var total = 0;
+    CATALOG.forEach(function (m) { if (isOn(m.id)) total += m.size; });
+    return total;
+  }
+
+  /* ---- menu model ---------------------------------------------------- */
+
+  var menu = { rows: [], index: 0, download: null, blinkyHits: 0, blinkyShake: 0 };
+  var dev = { index: 0, level: 1, speed: 1, god: false, unlocked: false };
+
+  var BLINKY_TILE = { c: 24, r: 34 };   // clear of the footer hint
+
+  function layout() {
+    var rows = [], y = 5;
+    rows.push({ kind: 'head', text: 'INSTALLED', row: y }); y += 2;
+    CATALOG.forEach(function (m) {
+      if (state.installed[m.id]) { rows.push({ kind: 'mod', id: m.id, row: y }); y += 2; }
+    });
+    var pending = CATALOG.filter(function (m) { return !state.installed[m.id]; });
+    if (pending.length) {
+      y += 1;
+      rows.push({ kind: 'head', text: 'DOWNLOADABLE', row: y }); y += 2;
+      pending.forEach(function (m) { rows.push({ kind: 'dl', id: m.id, row: y }); y += 2; });
+    }
+    y += 1;
+    rows.push({ kind: 'storage', row: y }); y += 2;
+    rows.push({ kind: 'back', row: y }); y += 2;
+    menu.rows = rows;
+    menu.endRow = y;
+    if (!selectable(menu.index)) menu.index = firstSelectable();
+    return rows;
+  }
+
+  function selectable(i) { return menu.rows[i] && menu.rows[i].kind !== 'head'; }
+  function firstSelectable() {
+    for (var i = 0; i < menu.rows.length; i++) if (selectable(i)) return i;
+    return 0;
+  }
+
+  function move(step) {
+    var i = menu.index;
+    for (var n = 0; n < menu.rows.length; n++) {
+      i = (i + step + menu.rows.length) % menu.rows.length;
+      if (selectable(i)) { menu.index = i; return; }
+    }
+  }
+
+  function openMenu(game) {
+    layout();
+    menu.index = firstSelectable();
+    menu.blinkyHits = 0;
+    menu.download = null;
+    game.state = 'mods';
+    game.stateTime = 0;
+  }
+
+  function activate(game) {
+    var row = menu.rows[menu.index];
+    if (!row) return;
+    if (row.kind === 'mod') {
+      state.enabled[row.id] = !state.enabled[row.id];
+      saveState();
+      global.Sound.accept();
+    } else if (row.kind === 'dl') {
+      if (menu.download) return;
+      menu.download = { id: row.id, t: 0, dur: 1.6 };
+      global.Sound.blip();
+    } else if (row.kind === 'storage') {
+      state.showStorage = !state.showStorage;
+      saveState();
+      global.Sound.blip();
+    } else if (row.kind === 'back') {
+      game.state = 'title';
+      game.stateTime = 0;
+      global.Sound.blip();
+    }
+  }
+
+  function updateMenu(game, dt) {
+    menu.blinkyShake = Math.max(0, menu.blinkyShake - dt * 4);
+    if (menu.download) {
+      menu.download.t += dt;
+      if (menu.download.t >= menu.download.dur) {
+        state.installed[menu.download.id] = true;
+        state.enabled[menu.download.id] = true;
+        saveState();
+        menu.download = null;
+        layout();
+        global.Sound.accept();
+      }
+    }
+  }
+
+  /* ---- menu rendering ------------------------------------------------ */
+
+  function drawBar(ctx, col, row, widthTiles, frac, color) {
+    var x = col * TILE, y = row * TILE + 2, w = widthTiles * TILE;
+    ctx.fillStyle = '#333355';
+    ctx.fillRect(x, y, w, 4);
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, Math.round(w * Math.max(0, Math.min(1, frac))), 4);
+  }
+
+  function drawMenu(game, ctx) {
+    var F = global.Font, P = global.Sprites.Pixel;
+    F.drawCentered(ctx, 'MODS', 3, '#ffff00');
+
+    for (var i = 0; i < menu.rows.length; i++) {
+      var row = menu.rows[i], y = row.row, sel = i === menu.index;
+      if (row.kind === 'head') { F.draw(ctx, row.text, 2, y, '#00ffff'); continue; }
+
+      if (sel) {
+        var bite = (Math.sin(game.animTime * 12) + 1) / 2;
+        P.blit(ctx, P.pacman('right', bite), 2 * TILE + 4, y * TILE + 3);
+      }
+
+      if (row.kind === 'mod') {
+        var m = byId(row.id), on = state.enabled[row.id];
+        F.draw(ctx, m.name, 4, y, sel ? '#ffffff' : '#c0c0d0');
+        F.drawRight(ctx, m.size + 'K', 21, y, '#8080a0');
+        F.draw(ctx, on ? 'ON' : 'OFF', 23, y, on ? '#00ff00' : '#806060');
+      } else if (row.kind === 'dl') {
+        var d = byId(row.id);
+        F.draw(ctx, d.name, 4, y, sel ? '#ffffff' : '#c0c0d0');
+        F.drawRight(ctx, d.size + 'K', 21, y, '#8080a0');
+        if (menu.download && menu.download.id === row.id) {
+          drawBar(ctx, 23, y, 4, menu.download.t / menu.download.dur, '#00ffff');
+        } else {
+          F.draw(ctx, 'GET', 23, y, '#ffb851');
+        }
+      } else if (row.kind === 'storage') {
+        F.draw(ctx, 'SHOW NEEDED STORAGE', 4, y, sel ? '#ffffff' : '#c0c0d0');
+        F.draw(ctx, state.showStorage ? 'ON' : 'OFF', 24, y,
+               state.showStorage ? '#00ff00' : '#806060');
+      } else if (row.kind === 'back') {
+        F.draw(ctx, 'BACK', 4, y, sel ? '#ffffff' : '#c0c0d0');
+      }
+    }
+
+    var y2 = menu.endRow;
+
+    var cur = menu.rows[menu.index];
+    if (cur && (cur.kind === 'mod' || cur.kind === 'dl')) {
+      F.drawCentered(ctx, byId(cur.id).blurb, y2, '#ffb8ae');
+    }
+    y2 += 2;
+
+    if (state.showStorage) {
+      F.draw(ctx, 'NEEDED STORAGE', 2, y2, '#00ffff');
+      y2 += 2;
+      var used = storageUsed();
+      CATALOG.forEach(function (m) {
+        if (!isOn(m.id)) return;
+        F.draw(ctx, m.name, 4, y2, '#c0c0d0');
+        F.drawRight(ctx, m.size + 'K', 24, y2, '#ffb851');
+        y2 += 1;
+      });
+      if (used === 0) { F.draw(ctx, 'NOTHING ENABLED', 4, y2, '#806060'); y2 += 1; }
+      y2 += 1;
+      F.draw(ctx, 'TOTAL', 4, y2, '#ffffff');
+      F.drawRight(ctx, used + 'K OF ' + DISK_FREE + 'K', 24, y2,
+                  used > DISK_FREE ? '#ff0000' : '#ffffff');
+      y2 += 1;
+      drawBar(ctx, 4, y2, 20, used / DISK_FREE, used > DISK_FREE ? '#ff0000' : '#00ff00');
+    }
+
+    F.drawCentered(ctx, 'SPACE SELECT   P BACK', 33, '#6060a0');
+
+    // Blinky loiters in the corner. He is also the way into the dev menu.
+    var shake = menu.blinkyShake > 0 ? Math.sin(menu.blinkyShake * 40) * 2 : 0;
+    var frame = Math.floor(game.animTime * 9) % 2;
+    P.blit(ctx, P.ghost('blinky', 'left', frame, 'normal', false),
+           BLINKY_TILE.c * TILE + 4 + shake, BLINKY_TILE.r * TILE + 4);
+    if (menu.blinkyHits >= 7 && menu.blinkyHits < 10) {
+      F.draw(ctx, '?', BLINKY_TILE.c - 2, BLINKY_TILE.r, '#ff0000');
+    }
+    F.draw(ctx, 'V' + VERSION, 1, 33, '#303050');
+  }
+
+  /* ---- dev menu ------------------------------------------------------ */
+
+  var DEV_ROWS = ['level', 'speed', 'god', 'start', 'back'];
+
+  function openDev(game) {
+    dev.index = 0;
+    dev.unlocked = true;
+    game.state = 'dev';
+    game.stateTime = 0;
+    global.Sound.accept();
+  }
+
+  function devAdjust(step) {
+    var k = DEV_ROWS[dev.index];
+    if (k === 'level') dev.level = Math.max(1, Math.min(21, dev.level + step));
+    else if (k === 'speed') dev.speed = Math.max(0.25, Math.min(3, +(dev.speed + step * 0.25).toFixed(2)));
+    else if (k === 'god') dev.god = !dev.god;
+    else return false;
+    global.Sound.blip();
+    return true;
+  }
+
+  function devActivate(game) {
+    var k = DEV_ROWS[dev.index];
+    if (k === 'start') {
+      global.Sound.accept();
+      game.startModdedGame(dev.level);
+    } else if (k === 'back') {
+      global.Sound.blip();
+      openMenu(game);
+    } else {
+      devAdjust(1);
+    }
+  }
+
+  function drawDev(game, ctx) {
+    var F = global.Font, P = global.Sprites.Pixel;
+    F.drawCentered(ctx, 'DEV MENU', 4, '#ff0000');
+    F.drawCentered(ctx, 'NOT FOR PLAYERS', 6, '#806060');
+
+    var labels = {
+      level: ['SET LEVEL', String(dev.level)],
+      speed: ['SET SPEED', dev.speed.toFixed(2) + 'X'],
+      god: ['GODMODE', dev.god ? 'ON' : 'OFF'],
+      start: ['START GAME', ''],
+      back: ['BACK', '']
+    };
+    for (var i = 0; i < DEV_ROWS.length; i++) {
+      var k = DEV_ROWS[i], y = 10 + i * 3, sel = i === dev.index;
+      if (sel) {
+        var bite = (Math.sin(game.animTime * 12) + 1) / 2;
+        P.blit(ctx, P.pacman('right', bite), 3 * TILE + 4, y * TILE + 3);
+      }
+      F.draw(ctx, labels[k][0], 5, y, sel ? '#ffffff' : '#c0c0d0');
+      if (labels[k][1]) {
+        F.draw(ctx, '<', 18, y, sel ? '#ffff00' : '#505070');
+        F.draw(ctx, labels[k][1], 20, y, '#00ffff');
+        F.draw(ctx, '>', 25, y, sel ? '#ffff00' : '#505070');
+      }
+    }
+    F.drawCentered(ctx, 'LEFT/RIGHT CHANGE', 28, '#6060a0');
+    F.drawCentered(ctx, 'SPACE SELECT   P BACK', 30, '#6060a0');
+  }
+
+  /* ---- Rampage Pac --------------------------------------------------- */
+
+  /* Beats are [start time, speaker, lines]; the READY! phase is held open
+     until the script finishes. */
+  var SCRIPT = [
+    { t: 0.9, who: 'PAC-MAN', color: '#ffff00', lines: ['I HAD ENOUGH!'] },
+    { t: 3.1, who: 'BLINKY', color: '#ff0000', lines: ['P-PACMAN? WHAT ARE', 'YOU DOIN-'] },
+    { t: 5.9, who: null, color: '#ffffff', lines: ['*CH-CHK*'], arm: true },
+    { t: 7.4, who: null, lines: null, end: true }
+  ];
+
+  function beginCutscene(game) {
+    game.cutscene = { t: 0, beat: -1 };
+  }
+
+  /** @return {boolean} true while the cutscene is still holding READY! */
+  function updateCutscene(game, dt) {
+    var cs = game.cutscene;
+    if (!cs) return false;
+    cs.t += dt;
+    for (var i = SCRIPT.length - 1; i >= 0; i--) {
+      if (cs.t >= SCRIPT[i].t) {
+        if (cs.beat !== i) {
+          cs.beat = i;
+          if (SCRIPT[i].arm) { game.pacArmed = true; global.Sound.pump(); }
+          if (SCRIPT[i].end) {
+            game.cutscene = null;
+            game.ghostsFlee = true;
+            return false;
+          }
+        }
+        break;
+      }
+    }
+    return true;
+  }
+
+  function drawCutscene(game, ctx) {
+    var cs = game.cutscene;
+    if (!cs || cs.beat < 0) return;
+    var beat = SCRIPT[cs.beat];
+    if (!beat.lines) return;
+    var F = global.Font;
+    var top = 19, height = beat.lines.length + 2;
+
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(1 * TILE, top * TILE, 26 * TILE, height * TILE);
+    ctx.strokeStyle = beat.color;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(1 * TILE + 0.5, top * TILE + 0.5, 26 * TILE - 1, height * TILE - 1);
+
+    if (beat.who) {
+      // Seat the speaker on the frame, clearing the border behind it.
+      var label = beat.who + ':';
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(3 * TILE - 2, top * TILE, label.length * TILE + 4, TILE);
+      F.draw(ctx, label, 3, top, beat.color);
+    }
+    for (var i = 0; i < beat.lines.length; i++) {
+      F.drawCentered(ctx, beat.lines[i], top + 1 + i, beat.color);
+    }
+  }
+
+  /** Hit-scan down the corridor Pac-Man faces; the first ghost in it drops. */
+  function shoot(game) {
+    if (!game.ghostsFlee || !game.pacArmed) return;
+    if (game.shootCooldown > 0 || game.state !== 'playing') return;
+    game.shootCooldown = 0.42;
+    game.muzzle = 0.18;
+    global.Sound.shotgun();
+
+    var Maze = global.Maze;
+    var v = DIRV[game.pac.dir];
+    var c = Math.floor(game.pac.x / TILE), r = Math.floor(game.pac.y / TILE);
+    for (var i = 1; i <= 24; i++) {
+      var nc = ((c + v[0] * i) % Maze.COLS + Maze.COLS) % Maze.COLS;
+      var nr = r + v[1] * i;
+      if (Maze.isWall(nc, nr)) break;
+      for (var g = 0; g < game.ghosts.length; g++) {
+        var gh = game.ghosts[g];
+        if (gh.state !== 'normal') continue;
+        var gc = ((Math.floor(gh.x / TILE) % Maze.COLS) + Maze.COLS) % Maze.COLS;
+        if (gc === nc && Math.floor(gh.y / TILE) === nr) {
+          var down = game.ghosts.filter(function (o) { return o.state !== 'normal'; }).length;
+          var pts = 200 * Math.pow(2, Math.min(down, 3));
+          game.addScore(pts);
+          game.popup = { x: gh.x, y: gh.y, text: String(pts), t: 0.9, color: '#00ffff' };
+          gh.state = 'eaten';
+          gh.frightened = false;
+          return;
+        }
+      }
+    }
+  }
+
+  /* ---- integration hooks --------------------------------------------- */
+
+  /** Apply enabled mods to a level that is about to start. */
+  function onLevelStart(game) {
+    game.speedScale = (dev.unlocked ? dev.speed : 1) * (isOn('turbo') ? 1.25 : 1);
+    game.godmode = dev.unlocked && dev.god;
+    game.wallColor = null;
+    game.pacAngry = false;
+    game.pacArmed = false;
+    game.ghostsFlee = false;
+    game.cutscene = null;
+    game.shootCooldown = 0;
+    game.muzzle = 0;
+
+    if (isOn('rush')) {
+      game.ghosts.forEach(function (g) {
+        g.dotLimit = 0;
+        if (g.state === 'house') game.leaveHouse(g);
+      });
+    }
+    if (isOn('rampage')) {
+      // Level 1 is untouched; the brows arrive on 2 and he snaps on 3.
+      game.pacAngry = game.level >= 2;
+      if (game.level === 3) beginCutscene(game);
+    }
+  }
+
+  function onFrame(game, dt) {
+    if (isOn('neon')) {
+      game.wallColor = NEON[Math.floor(game.globalTime * 2) % NEON.length];
+    }
+    if (game.shootCooldown > 0) game.shootCooldown -= dt;
+    if (game.muzzle > 0) game.muzzle -= dt;
+  }
+
+  /** @return {boolean} true if the mod handled the level ending. */
+  function onLevelCleared(game) {
+    if (isOn('rampage') && game.level === 3) {
+      game.state = 'moddemoend';
+      game.stateTime = 0;
+      global.Sound.stopBackground();
+      return true;
+    }
+    return false;
+  }
+
+  function drawDemoEnd(game, ctx) {
+    var F = global.Font;
+    F.drawCentered(ctx, 'MOD DEMO END', 14, '#ffff00');
+    F.drawCentered(ctx, 'RAMPAGE PAC', 17, '#ff0000');
+    F.drawCentered(ctx, 'THANKS FOR PLAYING', 20, '#ffffff');
+    if (Math.floor(game.stateTime * 1.6) % 2 === 0) {
+      F.drawCentered(ctx, 'SPACE FOR MENU', 24, '#00ffff');
+    }
+  }
+
+  /* ---- input --------------------------------------------------------- */
+
+  function handleInput(game, action) {
+    if (game.state === 'mods') {
+      if (action === 'up') { move(-1); global.Sound.blip(); }
+      else if (action === 'down') { move(1); global.Sound.blip(); }
+      else if (action === 'select') activate(game);
+      else if (action === 'back') { game.state = 'title'; game.stateTime = 0; }
+      return true;
+    }
+    if (game.state === 'dev') {
+      if (action === 'up') { dev.index = (dev.index + DEV_ROWS.length - 1) % DEV_ROWS.length; global.Sound.blip(); }
+      else if (action === 'down') { dev.index = (dev.index + 1) % DEV_ROWS.length; global.Sound.blip(); }
+      else if (action === 'left') devAdjust(-1);
+      else if (action === 'right') devAdjust(1);
+      else if (action === 'select') devActivate(game);
+      else if (action === 'back') openMenu(game);
+      return true;
+    }
+    if (game.state === 'moddemoend') {
+      if (action === 'select' || action === 'back') openMenu(game);
+      return true;
+    }
+    return false;
+  }
+
+  /** Taps land on tile coordinates so menu rows and Blinky can be hit. */
+  function handleTap(game, col, row) {
+    if (game.state !== 'mods') return false;
+    if (Math.abs(col - BLINKY_TILE.c) <= 1 && Math.abs(row - BLINKY_TILE.r) <= 1) {
+      menu.blinkyHits++;
+      menu.blinkyShake = 1;
+      global.Sound.blip();
+      if (menu.blinkyHits >= 10) { menu.blinkyHits = 0; openDev(game); }
+      return true;
+    }
+    for (var i = 0; i < menu.rows.length; i++) {
+      if (!selectable(i)) continue;
+      if (Math.abs(row - menu.rows[i].row) <= 0) { menu.index = i; activate(game); return true; }
+    }
+    return false;
+  }
+
+  loadState();
+
+  global.Mods = {
+    CATALOG: CATALOG,
+    BLINKY_TILE: BLINKY_TILE,
+    state: state,
+    dev: dev,
+    menu: menu,
+    isOn: isOn,
+    storageUsed: storageUsed,
+    openMenu: openMenu,
+    openDev: openDev,
+    updateMenu: updateMenu,
+    drawMenu: drawMenu,
+    drawDev: drawDev,
+    updateCutscene: updateCutscene,
+    drawCutscene: drawCutscene,
+    drawDemoEnd: drawDemoEnd,
+    onLevelStart: onLevelStart,
+    onFrame: onFrame,
+    onLevelCleared: onLevelCleared,
+    shoot: shoot,
+    handleInput: handleInput,
+    handleTap: handleTap,
+    layout: layout
   };
 })(window);
   </script>
@@ -1322,7 +1977,7 @@ body.touch #pad {
   'use strict';
 
   var Maze = global.Maze, Font = global.Font,
-      Sprites = global.Sprites, Sound = global.Sound;
+      Sprites = global.Sprites, Sound = global.Sound, Mods = global.Mods;
 
   var TILE = Maze.TILE;
   var COLS = Maze.COLS;
@@ -1418,6 +2073,8 @@ body.touch #pad {
     this.frame.height = Maze.SCREEN_H;
     this.ctx = this.frame.getContext('2d');
     this.accumulator = 0;
+    this.titleIndex = 0;
+    this.speedScale = 1;
     this.highScore = Number(load('pacman.highscore') || 0);
     this.state = 'title';
     this.stateTime = 0;
@@ -1455,6 +2112,7 @@ body.touch #pad {
     this.freezeTimer = 0;
     this.animTime = 0;
     this.placeActors();
+    Mods.onLevelStart(this);
   };
 
   Game.prototype.placeActors = function () {
@@ -1489,15 +2147,20 @@ body.touch #pad {
     };
     global.addEventListener('keydown', function (e) {
       var dir = KEYMAP[e.code];
+      Sound.resume();
       if (dir) {
         e.preventDefault();
-        self.pac.want = dir;
-        Sound.resume();
+        if (!self.menuAction(dir)) self.pac.want = dir;
       } else if (e.code === 'Space' || e.code === 'Enter') {
         e.preventDefault();
-        Sound.resume();
+        if (self.menuAction('select')) return;
+        if (self.tryShoot()) return;
         self.onStartKey();
-      } else if (e.code === 'KeyP') {
+      } else if (e.code === 'KeyX' || e.code === 'KeyZ') {
+        e.preventDefault();
+        self.tryShoot();
+      } else if (e.code === 'KeyP' || e.code === 'Escape') {
+        if (self.menuAction('back')) return;
         if (self.state === 'playing') self.state = 'paused';
         else if (self.state === 'paused') self.state = 'playing';
       } else if (e.code === 'KeyM') {
@@ -1530,7 +2193,8 @@ body.touch #pad {
 
     function press(dir) {
       Sound.resume();
-      if (self.state === 'title' || self.state === 'gameover') self.onStartKey();
+      if (self.menuAction(dir)) return;
+      if (self.state === 'gameover') { self.onStartKey(); return; }
       self.pac.want = dir;
     }
 
@@ -1541,9 +2205,16 @@ body.touch #pad {
 
     function act(name) {
       Sound.resume();
-      if (name === 'start') self.onStartKey();
-      else if (name === 'pause') togglePause();
-      else if (name === 'mute') self.syncMuteButton(Sound.toggleMute());
+      if (name === 'shoot') { self.tryShoot(); return; }
+      if (name === 'start') {
+        if (self.menuAction('select')) return;
+        self.onStartKey();
+      } else if (name === 'pause') {
+        if (self.menuAction('back')) return;
+        togglePause();
+      } else if (name === 'mute') {
+        self.syncMuteButton(Sound.toggleMute());
+      }
     }
 
     if (pad) {
@@ -1598,7 +2269,20 @@ body.touch #pad {
     this.canvas.addEventListener('pointerdown', function (e) {
       sx = e.clientX; sy = e.clientY; swiping = true;
       Sound.resume();
-      if (self.state === 'title' || self.state === 'gameover') self.onStartKey();
+      var tile = self.tileAt(e.clientX, e.clientY);
+      if (Mods.handleTap(self, tile.col, tile.row)) return;
+      if (self.state === 'title') {
+        // Tapping one of the two title entries picks it directly.
+        if (tile.row >= 28 && tile.row <= 32) self.titleIndex = tile.row >= 31 ? 1 : 0;
+        self.menuAction('select');
+        return;
+      }
+      if (self.state === 'gameover' || self.state === 'moddemoend') {
+        self.menuAction('select');
+        self.onStartKey();
+        return;
+      }
+      if (self.pacArmed && self.state === 'playing') self.tryShoot();
     });
     this.canvas.addEventListener('pointermove', function (e) {
       if (!swiping) return;
@@ -1614,16 +2298,53 @@ body.touch #pad {
     this.canvas.addEventListener('pointercancel', endSwipe);
   };
 
+  /** Map a client point onto the 28 x 36 tile grid of the arcade screen. */
+  Game.prototype.tileAt = function (clientX, clientY) {
+    var r = this.canvas.getBoundingClientRect();
+    return {
+      col: Math.floor((clientX - r.left) / r.width * Maze.COLS),
+      row: Math.floor((clientY - r.top) / r.height * 36)
+    };
+  };
+
   /** Grey out the SOUND button while muted. */
   Game.prototype.syncMuteButton = function (muted) {
     var b = document.querySelector('[data-act="mute"]');
     if (b) b.classList.toggle('is-off', !!muted);
   };
 
+  /**
+   * Route a direction / select / back to whichever menu is open.
+   * @return {boolean} true when a menu consumed the input.
+   */
+  Game.prototype.menuAction = function (action) {
+    if (Mods.handleInput(this, action)) return true;
+    if (this.state !== 'title') return false;
+    if (action === 'up' || action === 'down') {
+      this.titleIndex = this.titleIndex === 0 ? 1 : 0;   // only two entries
+      Sound.blip();
+      return true;
+    }
+    if (action === 'select') {
+      if (this.titleIndex === 1) { Mods.openMenu(this); Sound.accept(); }
+      else { this.reset(1, true); this.startReady(true); }
+      return true;
+    }
+    return false;
+  };
+
+  Game.prototype.tryShoot = function () {
+    if (!this.pacArmed || this.state !== 'playing') return false;
+    Mods.shoot(this);
+    return true;
+  };
+
   Game.prototype.onStartKey = function () {
-    if (this.state === 'title' || this.state === 'gameover') {
+    if (this.state === 'gameover') {
       this.reset(1, true);
       this.startReady(true);
+    } else if (this.state === 'title') {
+      this.menuAction('select');
     }
   };
 
@@ -1632,6 +2353,13 @@ body.touch #pad {
      characters appear and PLAYER ONE clear. Restarting after a life lost
      skips straight to the shorter READY! with the characters in place. */
   var PLAYER_ONE_TIME = 2.2;
+
+  /** Used by the dev menu: begin a fresh game already at `level`. */
+  Game.prototype.startModdedGame = function (level) {
+    this.reset(1, true);
+    if (level > 1) this.reset(level, false);
+    this.startReady(true);
+  };
 
   Game.prototype.startReady = function (withTune) {
     this.state = 'ready';
@@ -1659,6 +2387,8 @@ body.touch #pad {
 
     switch (this.state) {
       case 'ready':
+        // A mod cutscene can hold READY! open past its normal length.
+        if (Mods.updateCutscene(this, dt)) break;
         if (this.stateTime >= this.readyDuration) {
           this.state = 'playing';
           this.stateTime = 0;
@@ -1672,14 +2402,26 @@ body.touch #pad {
         break;
       case 'levelclear':
         if (this.stateTime >= 3.1) {
+          if (Mods.onLevelCleared(this)) break;
           this.reset(this.level + 1, false);
           this.startReady(false);
         }
         break;
+      case 'mods':
+        Mods.updateMenu(this, dt);
+        break;
       case 'gameover':
       case 'title':
+      case 'dev':
+      case 'moddemoend':
       case 'paused':
         break;
+    }
+    Mods.onFrame(this, dt);
+
+    if (this.armedClass !== !!this.pacArmed) {
+      this.armedClass = !!this.pacArmed;
+      document.body.classList.toggle('armed', this.armedClass);
     }
   };
 
@@ -1692,7 +2434,7 @@ body.touch #pad {
     }
     // A fixed timestep, so the game runs at arcade pace on any display -
     // a 120 Hz phone would otherwise play at double speed.
-    this.accumulator += dt;
+    this.accumulator += dt * (this.speedScale || 1);
     if (this.accumulator > 0.25) this.accumulator = 0.25;   // no spiral after a stall
     while (this.accumulator >= TICK) {
       this.tick();
@@ -2056,12 +2798,16 @@ body.touch #pad {
       return;
     }
 
-    var target = this.ghostTarget(g);
-    var best = options[0], bestDist = Infinity;
+    // Fleeing ghosts run for whichever exit puts the most distance between
+    // them and Pac-Man, rather than closing on a target.
+    var flee = this.ghostsFlee && g.state === 'normal';
+    var target = flee ? { c: wrapCol(tileOf(this.pac.x)), r: tileOf(this.pac.y) }
+                      : this.ghostTarget(g);
+    var best = options[0], bestDist = flee ? -Infinity : Infinity;
     for (var j = 0; j < options.length; j++) {
       var vv = DIRV[options[j]];
       var dd = dist2(c + vv[0], r + vv[1], target.c, target.r);
-      if (dd < bestDist) { bestDist = dd; best = options[j]; }
+      if (flee ? dd > bestDist : dd < bestDist) { bestDist = dd; best = options[j]; }
     }
     g.dir = best;
   };
@@ -2091,7 +2837,7 @@ body.touch #pad {
         g.state = 'eaten';
         this.freezeTimer = 0.9;
         Sound.eatGhost();
-      } else {
+      } else if (!this.ghostsFlee && !this.godmode) {
         this.die();
         return;
       }
@@ -2152,7 +2898,7 @@ body.touch #pad {
       var phase = Math.floor((this.stateTime - 1.0) / 0.24);
       Maze.drawWalls(ctx, phase < 8 && phase % 2 === 0 ? '#ffffff' : Maze.WALL_COLOR);
     } else {
-      Maze.drawWalls(ctx);
+      Maze.drawWalls(ctx, this.wallColor || undefined);
       Maze.drawDoor(ctx);
     }
 
@@ -2162,6 +2908,7 @@ body.touch #pad {
       this.drawGhosts(ctx);
       this.drawPac(ctx);
       this.drawOverlayText(ctx);
+      Mods.drawCutscene(this, ctx);
     }
     ctx.restore();
 
@@ -2169,6 +2916,14 @@ body.touch #pad {
 
     if (this.state === 'title') this.drawTitle();
     if (this.state === 'paused') this.drawPaused();
+    if (this.state === 'mods' || this.state === 'dev') {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, Maze.SCREEN_W, Maze.SCREEN_H);
+      this.drawHud();
+      if (this.state === 'mods') Mods.drawMenu(this, ctx);
+      else Mods.drawDev(this, ctx);
+    }
+    if (this.state === 'moddemoend') Mods.drawDemoEnd(this, ctx);
 
     this.out.imageSmoothingEnabled = false;
     this.out.drawImage(this.frame, 0, 0, this.canvas.width, this.canvas.height);
@@ -2224,8 +2979,11 @@ body.touch #pad {
     if (this.freezeTimer > 0) return;      // hidden while a ghost score shows
     // He waits as a closed circle during READY!, as on the arcade.
     var mouth = this.state === 'ready' ? 0 : pac.mouth;
+    var opts = { angry: this.pacAngry, armed: this.pacArmed };
+    var muzzle = this.muzzle;
     this.withWrap(ctx, pac.x, pac.y, function (x, y) {
-      P.blit(ctx, P.pacman(pac.dir, mouth), x, y);
+      P.blit(ctx, P.pacman(pac.dir, mouth, opts), x, y);
+      if (muzzle > 0) P.blit(ctx, P.muzzleFlash(pac.dir, 1 - muzzle / 0.18), x, y);
     });
   };
 
@@ -2310,10 +3068,20 @@ body.touch #pad {
     Maze.drawEnergizerAt(ctx, 10 * TILE, 26 * TILE);
     Font.draw(ctx, '50 PTS', 12, 26, '#ffffff');
 
-    if (Math.floor(this.animTime * 1.6) % 2 === 0) {
-      Font.draw(ctx, 'PRESS SPACE TO START', 4, 30, '#ffff00');
+    var items = ['PLAY', 'MODS'];
+    for (var t = 0; t < items.length; t++) {
+      var ty = 29 + t * 2, on = this.titleIndex === t;
+      if (on) {
+        var bite = (Math.sin(this.animTime * 12) + 1) / 2;
+        Sprites.Pixel.blit(ctx, Sprites.Pixel.pacman('right', bite), 9 * TILE + 4, ty * TILE + 3);
+      }
+      Font.draw(ctx, items[t], 12, ty, on ? '#ffff00' : '#8080a0');
     }
-    Font.draw(ctx, '© 1980 NAMCO', 8, 33, '#ffb8ae');
+    if (Mods.isOn('rampage') || Mods.storageUsed() > 0) {
+      Font.drawCentered(ctx, 'MODS ACTIVE', 33, '#00ff00');
+    } else {
+      Font.draw(ctx, '© 1980 NAMCO', 8, 33, '#ffb8ae');
+    }
   };
 
   Game.prototype.drawPaused = function () {

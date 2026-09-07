@@ -4,7 +4,7 @@
   'use strict';
 
   var Maze = global.Maze, Font = global.Font,
-      Sprites = global.Sprites, Sound = global.Sound;
+      Sprites = global.Sprites, Sound = global.Sound, Mods = global.Mods;
 
   var TILE = Maze.TILE;
   var COLS = Maze.COLS;
@@ -100,6 +100,8 @@
     this.frame.height = Maze.SCREEN_H;
     this.ctx = this.frame.getContext('2d');
     this.accumulator = 0;
+    this.titleIndex = 0;
+    this.speedScale = 1;
     this.highScore = Number(load('pacman.highscore') || 0);
     this.state = 'title';
     this.stateTime = 0;
@@ -137,6 +139,7 @@
     this.freezeTimer = 0;
     this.animTime = 0;
     this.placeActors();
+    Mods.onLevelStart(this);
   };
 
   Game.prototype.placeActors = function () {
@@ -171,15 +174,20 @@
     };
     global.addEventListener('keydown', function (e) {
       var dir = KEYMAP[e.code];
+      Sound.resume();
       if (dir) {
         e.preventDefault();
-        self.pac.want = dir;
-        Sound.resume();
+        if (!self.menuAction(dir)) self.pac.want = dir;
       } else if (e.code === 'Space' || e.code === 'Enter') {
         e.preventDefault();
-        Sound.resume();
+        if (self.menuAction('select')) return;
+        if (self.tryShoot()) return;
         self.onStartKey();
-      } else if (e.code === 'KeyP') {
+      } else if (e.code === 'KeyX' || e.code === 'KeyZ') {
+        e.preventDefault();
+        self.tryShoot();
+      } else if (e.code === 'KeyP' || e.code === 'Escape') {
+        if (self.menuAction('back')) return;
         if (self.state === 'playing') self.state = 'paused';
         else if (self.state === 'paused') self.state = 'playing';
       } else if (e.code === 'KeyM') {
@@ -212,7 +220,8 @@
 
     function press(dir) {
       Sound.resume();
-      if (self.state === 'title' || self.state === 'gameover') self.onStartKey();
+      if (self.menuAction(dir)) return;
+      if (self.state === 'gameover') { self.onStartKey(); return; }
       self.pac.want = dir;
     }
 
@@ -223,9 +232,16 @@
 
     function act(name) {
       Sound.resume();
-      if (name === 'start') self.onStartKey();
-      else if (name === 'pause') togglePause();
-      else if (name === 'mute') self.syncMuteButton(Sound.toggleMute());
+      if (name === 'shoot') { self.tryShoot(); return; }
+      if (name === 'start') {
+        if (self.menuAction('select')) return;
+        self.onStartKey();
+      } else if (name === 'pause') {
+        if (self.menuAction('back')) return;
+        togglePause();
+      } else if (name === 'mute') {
+        self.syncMuteButton(Sound.toggleMute());
+      }
     }
 
     if (pad) {
@@ -280,7 +296,20 @@
     this.canvas.addEventListener('pointerdown', function (e) {
       sx = e.clientX; sy = e.clientY; swiping = true;
       Sound.resume();
-      if (self.state === 'title' || self.state === 'gameover') self.onStartKey();
+      var tile = self.tileAt(e.clientX, e.clientY);
+      if (Mods.handleTap(self, tile.col, tile.row)) return;
+      if (self.state === 'title') {
+        // Tapping one of the two title entries picks it directly.
+        if (tile.row >= 28 && tile.row <= 32) self.titleIndex = tile.row >= 31 ? 1 : 0;
+        self.menuAction('select');
+        return;
+      }
+      if (self.state === 'gameover' || self.state === 'moddemoend') {
+        self.menuAction('select');
+        self.onStartKey();
+        return;
+      }
+      if (self.pacArmed && self.state === 'playing') self.tryShoot();
     });
     this.canvas.addEventListener('pointermove', function (e) {
       if (!swiping) return;
@@ -296,16 +325,53 @@
     this.canvas.addEventListener('pointercancel', endSwipe);
   };
 
+  /** Map a client point onto the 28 x 36 tile grid of the arcade screen. */
+  Game.prototype.tileAt = function (clientX, clientY) {
+    var r = this.canvas.getBoundingClientRect();
+    return {
+      col: Math.floor((clientX - r.left) / r.width * Maze.COLS),
+      row: Math.floor((clientY - r.top) / r.height * 36)
+    };
+  };
+
   /** Grey out the SOUND button while muted. */
   Game.prototype.syncMuteButton = function (muted) {
     var b = document.querySelector('[data-act="mute"]');
     if (b) b.classList.toggle('is-off', !!muted);
   };
 
+  /**
+   * Route a direction / select / back to whichever menu is open.
+   * @return {boolean} true when a menu consumed the input.
+   */
+  Game.prototype.menuAction = function (action) {
+    if (Mods.handleInput(this, action)) return true;
+    if (this.state !== 'title') return false;
+    if (action === 'up' || action === 'down') {
+      this.titleIndex = this.titleIndex === 0 ? 1 : 0;   // only two entries
+      Sound.blip();
+      return true;
+    }
+    if (action === 'select') {
+      if (this.titleIndex === 1) { Mods.openMenu(this); Sound.accept(); }
+      else { this.reset(1, true); this.startReady(true); }
+      return true;
+    }
+    return false;
+  };
+
+  Game.prototype.tryShoot = function () {
+    if (!this.pacArmed || this.state !== 'playing') return false;
+    Mods.shoot(this);
+    return true;
+  };
+
   Game.prototype.onStartKey = function () {
-    if (this.state === 'title' || this.state === 'gameover') {
+    if (this.state === 'gameover') {
       this.reset(1, true);
       this.startReady(true);
+    } else if (this.state === 'title') {
+      this.menuAction('select');
     }
   };
 
@@ -314,6 +380,13 @@
      characters appear and PLAYER ONE clear. Restarting after a life lost
      skips straight to the shorter READY! with the characters in place. */
   var PLAYER_ONE_TIME = 2.2;
+
+  /** Used by the dev menu: begin a fresh game already at `level`. */
+  Game.prototype.startModdedGame = function (level) {
+    this.reset(1, true);
+    if (level > 1) this.reset(level, false);
+    this.startReady(true);
+  };
 
   Game.prototype.startReady = function (withTune) {
     this.state = 'ready';
@@ -341,6 +414,8 @@
 
     switch (this.state) {
       case 'ready':
+        // A mod cutscene can hold READY! open past its normal length.
+        if (Mods.updateCutscene(this, dt)) break;
         if (this.stateTime >= this.readyDuration) {
           this.state = 'playing';
           this.stateTime = 0;
@@ -354,14 +429,26 @@
         break;
       case 'levelclear':
         if (this.stateTime >= 3.1) {
+          if (Mods.onLevelCleared(this)) break;
           this.reset(this.level + 1, false);
           this.startReady(false);
         }
         break;
+      case 'mods':
+        Mods.updateMenu(this, dt);
+        break;
       case 'gameover':
       case 'title':
+      case 'dev':
+      case 'moddemoend':
       case 'paused':
         break;
+    }
+    Mods.onFrame(this, dt);
+
+    if (this.armedClass !== !!this.pacArmed) {
+      this.armedClass = !!this.pacArmed;
+      document.body.classList.toggle('armed', this.armedClass);
     }
   };
 
@@ -374,7 +461,7 @@
     }
     // A fixed timestep, so the game runs at arcade pace on any display -
     // a 120 Hz phone would otherwise play at double speed.
-    this.accumulator += dt;
+    this.accumulator += dt * (this.speedScale || 1);
     if (this.accumulator > 0.25) this.accumulator = 0.25;   // no spiral after a stall
     while (this.accumulator >= TICK) {
       this.tick();
@@ -738,12 +825,16 @@
       return;
     }
 
-    var target = this.ghostTarget(g);
-    var best = options[0], bestDist = Infinity;
+    // Fleeing ghosts run for whichever exit puts the most distance between
+    // them and Pac-Man, rather than closing on a target.
+    var flee = this.ghostsFlee && g.state === 'normal';
+    var target = flee ? { c: wrapCol(tileOf(this.pac.x)), r: tileOf(this.pac.y) }
+                      : this.ghostTarget(g);
+    var best = options[0], bestDist = flee ? -Infinity : Infinity;
     for (var j = 0; j < options.length; j++) {
       var vv = DIRV[options[j]];
       var dd = dist2(c + vv[0], r + vv[1], target.c, target.r);
-      if (dd < bestDist) { bestDist = dd; best = options[j]; }
+      if (flee ? dd > bestDist : dd < bestDist) { bestDist = dd; best = options[j]; }
     }
     g.dir = best;
   };
@@ -773,7 +864,7 @@
         g.state = 'eaten';
         this.freezeTimer = 0.9;
         Sound.eatGhost();
-      } else {
+      } else if (!this.ghostsFlee && !this.godmode) {
         this.die();
         return;
       }
@@ -834,7 +925,7 @@
       var phase = Math.floor((this.stateTime - 1.0) / 0.24);
       Maze.drawWalls(ctx, phase < 8 && phase % 2 === 0 ? '#ffffff' : Maze.WALL_COLOR);
     } else {
-      Maze.drawWalls(ctx);
+      Maze.drawWalls(ctx, this.wallColor || undefined);
       Maze.drawDoor(ctx);
     }
 
@@ -844,6 +935,7 @@
       this.drawGhosts(ctx);
       this.drawPac(ctx);
       this.drawOverlayText(ctx);
+      Mods.drawCutscene(this, ctx);
     }
     ctx.restore();
 
@@ -851,6 +943,14 @@
 
     if (this.state === 'title') this.drawTitle();
     if (this.state === 'paused') this.drawPaused();
+    if (this.state === 'mods' || this.state === 'dev') {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, Maze.SCREEN_W, Maze.SCREEN_H);
+      this.drawHud();
+      if (this.state === 'mods') Mods.drawMenu(this, ctx);
+      else Mods.drawDev(this, ctx);
+    }
+    if (this.state === 'moddemoend') Mods.drawDemoEnd(this, ctx);
 
     this.out.imageSmoothingEnabled = false;
     this.out.drawImage(this.frame, 0, 0, this.canvas.width, this.canvas.height);
@@ -906,8 +1006,11 @@
     if (this.freezeTimer > 0) return;      // hidden while a ghost score shows
     // He waits as a closed circle during READY!, as on the arcade.
     var mouth = this.state === 'ready' ? 0 : pac.mouth;
+    var opts = { angry: this.pacAngry, armed: this.pacArmed };
+    var muzzle = this.muzzle;
     this.withWrap(ctx, pac.x, pac.y, function (x, y) {
-      P.blit(ctx, P.pacman(pac.dir, mouth), x, y);
+      P.blit(ctx, P.pacman(pac.dir, mouth, opts), x, y);
+      if (muzzle > 0) P.blit(ctx, P.muzzleFlash(pac.dir, 1 - muzzle / 0.18), x, y);
     });
   };
 
@@ -992,10 +1095,20 @@
     Maze.drawEnergizerAt(ctx, 10 * TILE, 26 * TILE);
     Font.draw(ctx, '50 PTS', 12, 26, '#ffffff');
 
-    if (Math.floor(this.animTime * 1.6) % 2 === 0) {
-      Font.draw(ctx, 'PRESS SPACE TO START', 4, 30, '#ffff00');
+    var items = ['PLAY', 'MODS'];
+    for (var t = 0; t < items.length; t++) {
+      var ty = 29 + t * 2, on = this.titleIndex === t;
+      if (on) {
+        var bite = (Math.sin(this.animTime * 12) + 1) / 2;
+        Sprites.Pixel.blit(ctx, Sprites.Pixel.pacman('right', bite), 9 * TILE + 4, ty * TILE + 3);
+      }
+      Font.draw(ctx, items[t], 12, ty, on ? '#ffff00' : '#8080a0');
     }
-    Font.draw(ctx, '© 1980 NAMCO', 8, 33, '#ffb8ae');
+    if (Mods.isOn('rampage') || Mods.storageUsed() > 0) {
+      Font.drawCentered(ctx, 'MODS ACTIVE', 33, '#00ff00');
+    } else {
+      Font.draw(ctx, '© 1980 NAMCO', 8, 33, '#ffb8ae');
+    }
   };
 
   Game.prototype.drawPaused = function () {

@@ -131,6 +131,11 @@ body.touch #pad {
 }
 
 .btn.is-down { background: #23234a; color: #fff; }
+
+/* The SHOOT button only exists once Rampage Pac arms him. */
+.btn.shoot { display: none; color: #ff5a5a; border-color: #7a2020; }
+body.armed .btn.shoot { display: block; }
+body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
 .btn.is-off  { color: #4a4a66; border-color: #16162e; }
 
 /* Landscape phones: put the pad beside the screen so the maze stays tall.

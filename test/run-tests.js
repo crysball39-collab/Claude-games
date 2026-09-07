@@ -9,12 +9,38 @@
  * Set CHROMIUM_PATH to use a browser that is already on the machine.
  */
 const { chromium } = require('playwright');
+/* A glyph the font lacks renders as nothing at all, silently. Scan the source
+   for every string that reaches the bitmap font and check coverage first. */
+function auditFont() {
+  const fs = require('fs'), path = require('path');
+  const root = path.resolve(__dirname, '..');
+  const font = fs.readFileSync(path.join(root, 'js/font.js'), 'utf8');
+  const glyphs = new Set();
+  for (const m of font.matchAll(/^\s*'(.)':\s*\[/gm)) glyphs.add(m[1]);
+  for (const m of font.matchAll(/GLYPHS\['(.)'\]/g)) glyphs.add(m[1]);
+
+  const src = ['js/game.js', 'js/mods.js']
+    .map(f => fs.readFileSync(path.join(root, f), 'utf8')).join('\n');
+  const lits = new Set();
+  for (const m of src.matchAll(/\b(?:Font|F)\.(?:draw|drawRight|drawCentered)\(\s*ctx\s*,\s*'([^']*)'/g)) lits.add(m[1]);
+  for (const m of src.matchAll(/lines:\s*\[([^\]]*)\]/g))
+    for (const q of m[1].matchAll(/'([^']*)'/g)) lits.add(q[1]);
+  for (const m of src.matchAll(/(?:blurb|name|who|text):\s*'([^']*)'/g)) lits.add(m[1]);
+
+  const missing = new Set();
+  for (const s of lits) for (const ch of s.toUpperCase()) if (!glyphs.has(ch)) missing.add(ch);
+  return { count: lits.size, missing: [...missing] };
+}
+
 (async () => {
+  const fontAudit = auditFont();
   const b = await chromium.launch(process.env.CHROMIUM_PATH
     ? { executablePath: process.env.CHROMIUM_PATH } : {});
   const p = await b.newPage();
   const errs=[]; p.on('pageerror', e=>errs.push(e.message));
   await p.goto('file://' + require('path').resolve(__dirname, '..', 'index.html'));
+  await p.evaluate(() => { try { localStorage.clear(); } catch (e) { /* blocked */ } });
+  await p.reload();
   await p.waitForTimeout(300);
   const out = await p.evaluate(() => {
     const g=window.pacmanGame, M=window.Maze;
@@ -156,8 +182,88 @@ const { chromium } = require('playwright');
     ok('level 1 fruit is cherry', g.spec.fruit==='cherry');
     g.reset(3,false); ok('level 3 fruit is orange', g.spec.fruit==='orange');
     g.reset(13,false); ok('level 13 fruit is key', g.spec.fruit==='key');
+
+    /* ---------------- mods ---------------- */
+    const MO = window.Mods;
+
+    // title screen menu
+    g.state='title'; g.titleIndex=0;
+    g.menuAction('down');
+    ok('title menu moves to MODS', g.titleIndex===1);
+    g.menuAction('select');
+    ok('MODS opens the mod menu', g.state==='mods', 'state='+g.state);
+    ok('menu lists installed and downloadable',
+       MO.menu.rows.some(r=>r.kind==='mod') && MO.menu.rows.some(r=>r.kind==='dl'));
+
+    // enable / disable
+    MO.state.enabled.rampage = false;
+    MO.menu.index = MO.menu.rows.findIndex(r=>r.kind==='mod' && r.id==='rampage');
+    MO.handleInput(g,'select');
+    ok('mod can be enabled', MO.isOn('rampage'));
+    MO.handleInput(g,'select');
+    ok('mod can be disabled', !MO.isOn('rampage'));
+    MO.state.enabled.rampage = true;
+
+    // storage accounting
+    ok('storage totals enabled mods', MO.storageUsed()===128, MO.storageUsed()+'K');
+
+    // Rampage Pac progression
+    g.startModdedGame(1);
+    ok('level 1 is untouched', !g.pacAngry && !g.pacArmed && !g.ghostsFlee);
+    g.startModdedGame(2);
+    ok('level 2 gives him brows', g.pacAngry && !g.pacArmed);
+    g.startModdedGame(3);
+    ok('level 3 starts a cutscene', !!g.cutscene && g.state==='ready');
+    run(60*7);
+    ok('cutscene arms him before it ends', g.pacArmed, 'armed='+g.pacArmed);
+    run(60*3);
+    ok('cutscene ends with the ghosts fleeing', g.ghostsFlee);
+    ok('play begins after the cutscene', g.state==='playing', 'state='+g.state);
+
+    // shooting
+    const gh = g.ghosts[0];
+    gh.state='normal'; gh.frightened=false;
+    g.pac.dir='right'; gh.x=g.pac.x+24; gh.y=g.pac.y;
+    g.shootCooldown=0;
+    const s0=g.score;
+    MO.shoot(g);
+    ok('shotgun downs a ghost in line', gh.state==='eaten', 'ghost='+gh.state);
+    ok('shooting scores', g.score>s0, s0+' -> '+g.score);
+    const s1=g.score;
+    MO.shoot(g);
+    ok('shotgun has a cooldown', g.score===s1);
+
+    // fleeing ghosts cannot kill him
+    const g2=g.ghosts[1]; g2.state='normal'; g2.frightened=false;
+    g2.x=g.pac.x; g2.y=g.pac.y;
+    const lives=g.lives; g.collisionCheck();
+    ok('fleeing ghosts are harmless', g.lives===lives && g.state==='playing');
+
+    // level 3 clear ends the demo
+    g.state='levelclear'; g.stateTime=3.2; g.update(1/60);
+    ok('level 3 ends the mod demo', g.state==='moddemoend', 'state='+g.state);
+    MO.handleInput(g,'select');
+    ok('demo end returns to the mod menu', g.state==='mods', 'state='+g.state);
+
+    // dev menu
+    MO.dev.unlocked=true; MO.dev.level=5; MO.dev.speed=2; MO.dev.god=true;
+    g.startModdedGame(MO.dev.level);
+    ok('dev sets the level', g.level===5, 'level='+g.level);
+    ok('dev sets the speed scale', g.speedScale===2, 'scale='+g.speedScale);
+    ok('dev godmode is applied', g.godmode===true);
+    g.state='playing'; g.ghostsFlee=false;
+    const g3=g.ghosts[2]; g3.state='normal'; g3.frightened=false;
+    g3.x=g.pac.x; g3.y=g.pac.y;
+    const lives2=g.lives; g.collisionCheck();
+    ok('godmode survives a ghost', g.lives===lives2 && g.state==='playing');
+    MO.dev.unlocked=false; MO.dev.god=false; MO.dev.speed=1;
+    MO.state.enabled.rampage=false;
+
     return R;
   });
+  out.unshift((fontAudit.missing.length ? 'FAIL' : 'PASS') +
+    '  font covers every displayed string   ' + fontAudit.count + ' literals' +
+    (fontAudit.missing.length ? ', missing ' + JSON.stringify(fontAudit.missing) : ''));
   out.forEach(l=>console.log(l));
   const fails = out.filter(l=>l.startsWith('FAIL'));
   console.log('\n'+(out.length-fails.length)+'/'+out.length+' passed');
