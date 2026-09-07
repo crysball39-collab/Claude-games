@@ -6,24 +6,40 @@ html, body {
   color: #fff;
   font-family: "Courier New", Courier, monospace;
   overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #cabinet {
-  height: 100%;
+  height: 100vh;
+  height: 100dvh;                    /* survives the mobile URL bar */
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  gap: 12px;
+  padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
 }
 
+#stage {
+  flex: 1 1 auto;
+  min-height: 0;                     /* lets the canvas shrink inside flex */
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* The canvas is 672x864, so max-width/height alone keeps the 7:9 arcade aspect. */
 #screen {
   display: block;
   background: #000;
-  /* Arcade aspect is 224x288 (7:9). Fit the viewport, never overflow. */
-  height: min(96vh, calc(96vw * 9 / 7));
+  max-width: 100%;
+  max-height: 100%;
   width: auto;
-  image-rendering: auto;
+  height: auto;
+  touch-action: none;
 }
 
 #hint {
@@ -35,8 +51,105 @@ html, body {
   text-transform: uppercase;
   flex-wrap: wrap;
   justify-content: center;
+  flex: 0 0 auto;
 }
 
 #hint b { color: #ffd24a; font-weight: 700; }
 
-@media (max-height: 560px) { #hint { display: none; } }
+/* ------------------------------------------------------------------ */
+/* Touch controls - shown only once a touch device is detected.        */
+/* ------------------------------------------------------------------ */
+
+#pad { display: none; }
+
+body.touch #hint { display: none; }
+
+body.touch #pad {
+  --key: clamp(52px, 17vw, 82px);
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(14px, 6vw, 40px);
+  width: 100%;
+  touch-action: none;
+}
+
+#dpad {
+  display: grid;
+  grid-template-columns: repeat(3, var(--key));
+  grid-template-rows: repeat(3, var(--key));
+  gap: 4px;
+}
+
+.key {
+  grid-area: 2 / 2;                  /* overridden per direction below */
+  font: inherit;
+  font-size: calc(var(--key) * 0.36);
+  line-height: 1;
+  color: #ffd24a;
+  background: #06061c;
+  border: 2px solid #2121ff;
+  border-radius: 12px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.key.up    { grid-area: 1 / 2; }
+.key.left  { grid-area: 2 / 1; }
+.key.right { grid-area: 2 / 3; }
+.key.down  { grid-area: 3 / 2; }
+
+.key.is-down { background: #2121ff; color: #fff; }
+
+#aux {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.btn {
+  font: inherit;
+  font-size: clamp(10px, 2.6vw, 13px);
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  color: #9a9ab8;
+  background: #06061c;
+  border: 2px solid #23234a;
+  border-radius: 10px;
+  padding: 10px 12px;
+  min-width: clamp(64px, 20vw, 92px);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+}
+
+.btn.is-down { background: #23234a; color: #fff; }
+.btn.is-off  { color: #4a4a66; border-color: #16162e; }
+
+/* Landscape phones: put the pad beside the screen so the maze stays tall.
+   The row layout has to stretch, or the canvas has no height to measure
+   its max-height against and overflows the viewport. */
+@media (orientation: landscape) and (max-height: 560px) {
+  body.touch #cabinet { flex-direction: row; align-items: stretch; gap: 10px; }
+  body.touch #stage { flex: 1 1 auto; min-width: 0; height: 100%; }
+  body.touch #pad {
+    width: auto;
+    height: 100%;
+    flex-direction: column;
+    gap: 10px;
+    --key: clamp(38px, 10.5vh, 60px);
+  }
+  body.touch #aux { flex-direction: row; }
+  body.touch .btn { min-width: 0; padding: 7px 9px; }
+}
+
+@media (hover: hover) and (pointer: fine) and (max-height: 560px) {
+  #hint { display: none; }
+}

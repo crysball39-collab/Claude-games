@@ -8,8 +8,25 @@ git clone https://github.com/crysball39-collab/Claude-games
 cd Claude-games && open index.html      # or: python3 -m http.server
 ```
 
-**Controls** — arrow keys or WASD to move, `SPACE` to start, `P` to pause,
-`M` to mute. Touch devices can swipe.
+**`pacman.html` is a single self-contained file** — the whole game inlined into
+one 69 KB HTML file with no external references. Download it, open it from your
+phone's Files app or a browser, and it plays offline. Rebuild it after changing
+anything under `js/` or `css/`:
+
+```
+node tools/build-single-file.js
+```
+
+## Controls
+
+**Keyboard** — arrow keys or WASD to move, `SPACE` to start, `P` to pause,
+`M` to mute.
+
+**Touch** — an on-screen D-pad appears automatically on touch devices, with
+START, PAUSE and SOUND beside it. Keys are at least 54 px on the smallest
+phone, and you can slide a thumb across the pad to re-latch direction without
+lifting. Swiping anywhere on the maze works too. The layout moves the pad
+alongside the maze in landscape, and the page never scrolls or zooms.
 
 ## How close is it to the arcade?
 
@@ -60,13 +77,15 @@ Behaviour follows the original board as documented in *The Pac-Man Dossier*:
 
 ```
 index.html          markup and script order
-css/style.css       page chrome; the canvas keeps the 7:9 arcade aspect
+pacman.html         generated single-file build - do not edit by hand
+css/style.css       page chrome, touch controls, responsive layout
+tools/build-single-file.js   inlines everything into pacman.html
 js/maze-tiles.js    wall glyphs + tilemap traced from the arcade capture
 js/maze.js          maze data, collision queries, dot and wall rendering
 js/font.js          5x7 bitmap font
 js/sprites.js       Pac-Man, ghosts and fruit
 js/audio.js         Web Audio synthesis - siren, waka, jingle, death
-js/game.js          rules, ghost AI, level flow, HUD
+js/game.js          rules, ghost AI, level flow, input, HUD
 test/run-tests.js   behavioural tests
 ```
 

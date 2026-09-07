@@ -2,18 +2,40 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <title>PAC-MAN</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <div id="cabinet">
-    <canvas id="screen" width="672" height="864"></canvas>
-    <div id="hint">
+    <div id="stage">
+      <canvas id="screen" width="672" height="864"></canvas>
+    </div>
+
+    <p id="hint">
       <span><b>&#8592; &#8593; &#8595; &#8594;</b> / <b>WASD</b> move</span>
       <span><b>SPACE</b> start &middot; <b>P</b> pause &middot; <b>M</b> mute</span>
+    </p>
+
+    <div id="pad">
+      <div id="dpad">
+        <button class="key up"    data-dir="up"    aria-label="Up">&#9650;</button>
+        <button class="key left"  data-dir="left"  aria-label="Left">&#9664;</button>
+        <button class="key right" data-dir="right" aria-label="Right">&#9654;</button>
+        <button class="key down"  data-dir="down"  aria-label="Down">&#9660;</button>
+      </div>
+      <div id="aux">
+        <button class="btn" data-act="start" aria-label="Start">START</button>
+        <button class="btn" data-act="pause" aria-label="Pause">PAUSE</button>
+        <button class="btn" data-act="mute"  aria-label="Sound">SOUND</button>
+      </div>
     </div>
   </div>
+
   <script src="js/font.js"></script>
   <script src="js/maze-tiles.js"></script>
   <script src="js/maze.js"></script>

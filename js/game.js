@@ -175,29 +175,123 @@
         if (self.state === 'playing') self.state = 'paused';
         else if (self.state === 'paused') self.state = 'playing';
       } else if (e.code === 'KeyM') {
-        Sound.toggleMute();
+        self.syncMuteButton(Sound.toggleMute());
       }
     });
 
-    // Touch / swipe support.
-    var sx = 0, sy = 0;
-    this.canvas.addEventListener('touchstart', function (e) {
-      sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+    this.bindTouch();
+  };
+
+  /* ------------------------------------------------------------------ */
+  /* Touch controls                                                      */
+  /*                                                                      */
+  /* Pac-Man only ever needs a latched direction, so a tap is enough - no */
+  /* press-and-hold. Dragging across the pad re-latches as you cross each */
+  /* key, and a swipe anywhere on the maze works as well.                 */
+  /* ------------------------------------------------------------------ */
+
+  Game.prototype.bindTouch = function () {
+    var self = this;
+    var pad = document.getElementById('pad');
+
+    function revealPad() {
+      if (!document.body.classList.contains('touch')) {
+        document.body.classList.add('touch');
+      }
+    }
+    if (navigator.maxTouchPoints > 0 || 'ontouchstart' in global) revealPad();
+    global.addEventListener('touchstart', revealPad, { once: true, passive: true });
+
+    function press(dir) {
       Sound.resume();
       if (self.state === 'title' || self.state === 'gameover') self.onStartKey();
-    }, { passive: true });
-    this.canvas.addEventListener('touchmove', function (e) {
-      var dx = e.touches[0].clientX - sx, dy = e.touches[0].clientY - sy;
-      if (Math.abs(dx) < 18 && Math.abs(dy) < 18) return;
-      self.pac.want = Math.abs(dx) > Math.abs(dy)
-        ? (dx > 0 ? 'right' : 'left')
-        : (dy > 0 ? 'down' : 'up');
-      sx = e.touches[0].clientX; sy = e.touches[0].clientY;
-    }, { passive: true });
-    this.canvas.addEventListener('mousedown', function () {
+      self.pac.want = dir;
+    }
+
+    function togglePause() {
+      if (self.state === 'playing') self.state = 'paused';
+      else if (self.state === 'paused') self.state = 'playing';
+    }
+
+    function act(name) {
+      Sound.resume();
+      if (name === 'start') self.onStartKey();
+      else if (name === 'pause') togglePause();
+      else if (name === 'mute') self.syncMuteButton(Sound.toggleMute());
+    }
+
+    if (pad) {
+      var held = null;
+
+      // Which key is under this point? Lets a drag slide between directions.
+      function keyAt(x, y) {
+        var el = document.elementFromPoint(x, y);
+        return el && el.dataset && el.dataset.dir ? el : null;
+      }
+      function highlight(el) {
+        if (held === el) return;
+        if (held) held.classList.remove('is-down');
+        held = el;
+        if (held) held.classList.add('is-down');
+      }
+
+      pad.addEventListener('pointerdown', function (e) {
+        var t = e.target.closest ? e.target.closest('[data-dir],[data-act]') : null;
+        if (!t) return;
+        e.preventDefault();          // no scrolling, no synthetic mouse events
+        if (t.dataset.dir) {
+          highlight(t);
+          press(t.dataset.dir);
+        } else {
+          t.classList.add('is-down');
+          act(t.dataset.act);
+        }
+      });
+
+      pad.addEventListener('pointermove', function (e) {
+        if (e.buttons === 0 && e.pointerType === 'mouse') return;
+        if (!held) return;
+        e.preventDefault();
+        var k = keyAt(e.clientX, e.clientY);
+        if (k && k !== held) { highlight(k); press(k.dataset.dir); }
+      });
+
+      function release() {
+        highlight(null);
+        var down = pad.querySelectorAll('.is-down');
+        for (var i = 0; i < down.length; i++) down[i].classList.remove('is-down');
+      }
+      pad.addEventListener('pointerup', release);
+      pad.addEventListener('pointercancel', release);
+      pad.addEventListener('pointerleave', release);
+      pad.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    }
+
+    // Swipe anywhere on the maze, as an alternative to the pad.
+    var sx = 0, sy = 0, swiping = false;
+    this.canvas.addEventListener('pointerdown', function (e) {
+      sx = e.clientX; sy = e.clientY; swiping = true;
       Sound.resume();
       if (self.state === 'title' || self.state === 'gameover') self.onStartKey();
     });
+    this.canvas.addEventListener('pointermove', function (e) {
+      if (!swiping) return;
+      var dx = e.clientX - sx, dy = e.clientY - sy;
+      if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
+      self.pac.want = Math.abs(dx) > Math.abs(dy)
+        ? (dx > 0 ? 'right' : 'left')
+        : (dy > 0 ? 'down' : 'up');
+      sx = e.clientX; sy = e.clientY;
+    });
+    function endSwipe() { swiping = false; }
+    this.canvas.addEventListener('pointerup', endSwipe);
+    this.canvas.addEventListener('pointercancel', endSwipe);
+  };
+
+  /** Grey out the SOUND button while muted. */
+  Game.prototype.syncMuteButton = function (muted) {
+    var b = document.querySelector('[data-act="mute"]');
+    if (b) b.classList.toggle('is-off', !!muted);
   };
 
   Game.prototype.onStartKey = function () {
