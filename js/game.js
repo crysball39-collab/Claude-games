@@ -5,7 +5,7 @@
 
   var Maze = global.Maze, Font = global.Font,
       Sprites = global.Sprites, Sound = global.Sound, Mods = global.Mods,
-      Extra = global.ExtraGhosts;
+      Extra = global.ExtraGhosts, Auto = global.Autopilot, MP = global.Multiplayer;
 
   var TILE = Maze.TILE;
   var COLS = Maze.COLS;
@@ -21,9 +21,12 @@
   /* Start positions, in pixels. Tile t has its centre at t * 8 + 4, so the
      half-tile column the characters sit in is x = 13.5 * 8 + 4 = 112. */
   var PAC_START = { x: 112, y: 23 * TILE + 4 };
+  var PAC2_START = { x: 112, y: 29 * TILE + 4 };   // bottom corridor, same column
   var HOUSE_MID = { x: 112, y: 14 * TILE + 4 };
   var HOUSE_EXIT = { x: 112, y: 11 * TILE + 4 };
   var FRUIT_POS = { x: 112, y: 17 * TILE + 4 };
+
+  var TITLE_ITEMS = ['1 PLAYER', '2 PLAYER', 'AI MODE', 'MODS'];
 
   var GHOST_DEFS = [
     { name: 'blinky', home: { x: 112, y: 11 * TILE + 4 }, scatter: { c: 25, r: -4 }, startDir: 'left', inHouse: false },
@@ -103,6 +106,9 @@
     this.accumulator = 0;
     this.titleIndex = 0;
     this.speedScale = 1;
+    this.playerCount = 1;
+    this.autoPlay = false;
+    this.botSkill = 0.82;
     this.highScore = Number(load('pacman.highscore') || 0);
     this.state = 'title';
     this.stateTime = 0;
@@ -121,6 +127,9 @@
     if (fullGame) {
       this.score = 0;
       this.lives = 3;
+      this.score2 = 0;
+      this.lives2 = 3;
+      this.extraAwarded2 = false;
       this.extraAwarded = false;
       this.globalDotCounter = -1;   // -1 = inactive, personal counters in use
     }
@@ -143,11 +152,23 @@
     Mods.onLevelStart(this);
   };
 
-  Game.prototype.placeActors = function () {
-    this.pac = {
-      x: PAC_START.x, y: PAC_START.y, dir: 'left', want: 'left',
-      mouth: 0, moving: false, dead: false
+  /** A player. Player 0 is always the local human unless AI mode is on. */
+  function makePlayer(id, start, opts) {
+    return {
+      id: id,
+      x: start.x, y: start.y, dir: 'left', want: 'left',
+      mouth: 0, moving: false, dead: false, deadTimer: 0, out: false,
+      auto: !!(opts && opts.auto), skill: (opts && opts.skill) || 1,
+      bow: id === 1,
+      armedOwner: false
     };
+  }
+
+  Game.prototype.placeActors = function () {
+    var two = this.playerCount === 2;
+    this.players = [makePlayer(0, PAC_START, { auto: this.autoPlay, skill: 1 })];
+    if (two) this.players.push(makePlayer(1, PAC2_START, { auto: true, skill: this.botSkill }));
+    this.pac = this.players[0];
     this.ghosts = GHOST_DEFS.map(function (def, i) {
       return {
         name: def.name, index: i,
@@ -182,7 +203,7 @@
       Sound.resume();
       if (dir) {
         e.preventDefault();
-        if (!self.menuAction(dir)) self.pac.want = dir;
+        if (!self.menuAction(dir) && !self.autoPlay) self.pac.want = dir;
       } else if (e.code === 'Space' || e.code === 'Enter') {
         e.preventDefault();
         if (self.menuAction('select')) return;
@@ -197,6 +218,9 @@
         else if (self.state === 'paused') self.state = 'playing';
       } else if (e.code === 'KeyM') {
         self.syncMuteButton(Sound.toggleMute());
+      } else if (e.code === 'KeyT' && self.playerCount === 2) {
+        e.preventDefault();
+        MP.setOpen(true);
       }
     });
 
@@ -227,7 +251,7 @@
       Sound.resume();
       if (self.menuAction(dir)) return;
       if (self.state === 'gameover') { self.onStartKey(); return; }
-      self.pac.want = dir;
+      if (!self.autoPlay) self.pac.want = dir;
     }
 
     function togglePause() {
@@ -238,6 +262,7 @@
     function act(name) {
       Sound.resume();
       if (name === 'shoot') { self.tryShoot(); return; }
+      if (name === 'chat') { MP.toggle(); return; }
       if (name === 'start') {
         if (self.menuAction('select')) return;
         self.onStartKey();
@@ -304,8 +329,11 @@
       var tile = self.tileAt(e.clientX, e.clientY);
       if (Mods.handleTap(self, tile.col, tile.row)) return;
       if (self.state === 'title') {
-        // Tapping one of the two title entries picks it directly.
-        if (tile.row >= 28 && tile.row <= 32) self.titleIndex = tile.row >= 31 ? 1 : 0;
+        // Tapping a title entry picks it directly.
+        var slot = Math.round((tile.row - 27) / 2);
+        if (slot >= 0 && slot < 4 && Math.abs(tile.row - (27 + slot * 2)) <= 1) {
+          self.titleIndex = slot;
+        }
         self.menuAction('select');
         return;
       }
@@ -353,13 +381,17 @@
     if (Mods.handleInput(this, action)) return true;
     if (this.state !== 'title') return false;
     if (action === 'up' || action === 'down') {
-      this.titleIndex = this.titleIndex === 0 ? 1 : 0;   // only two entries
+      var n = TITLE_ITEMS.length;
+      this.titleIndex = (this.titleIndex + (action === 'down' ? 1 : n - 1)) % n;
       Sound.blip();
       return true;
     }
     if (action === 'select') {
-      if (this.titleIndex === 1) { Mods.openMenu(this); Sound.accept(); }
-      else { this.reset(1, true); this.startReady(true); }
+      Sound.accept();
+      if (this.titleIndex === 0) this.startOnePlayer();
+      else if (this.titleIndex === 1) MP.startTwoPlayer(this);
+      else if (this.titleIndex === 2) this.startAiGame();
+      else Mods.openMenu(this);
       return true;
     }
     return false;
@@ -385,6 +417,27 @@
      characters appear and PLAYER ONE clear. Restarting after a life lost
      skips straight to the shorter READY! with the characters in place. */
   var PLAYER_ONE_TIME = 2.2;
+
+  Game.prototype.startOnePlayer = function () {
+    this.playerCount = 1; this.autoPlay = false;
+    if (MP) MP.stop(this);
+    this.reset(1, true);
+    this.startReady(true);
+  };
+
+  /** Hands the controls to the search agent and lets it play the whole run. */
+  Game.prototype.startAiGame = function () {
+    this.playerCount = 1; this.autoPlay = true;
+    if (MP) MP.stop(this);
+    this.reset(1, true);
+    this.startReady(true);
+  };
+
+  Game.prototype.startTwoPlayerGame = function () {
+    this.playerCount = 2; this.autoPlay = false;
+    this.reset(1, true);
+    this.startReady(true);
+  };
 
   /** Used by the dev menu: begin a fresh game already at `level`. */
   Game.prototype.startModdedGame = function (level) {
@@ -442,6 +495,8 @@
       case 'mods':
         Mods.updateMenu(this, dt);
         break;
+      case 'matching':
+        break;
       case 'gameover':
       case 'title':
       case 'dev':
@@ -450,6 +505,7 @@
         break;
     }
     Mods.onFrame(this, dt);
+    if (MP) MP.update(this, dt);
 
     if (this.armedClass !== !!this.pacArmed) {
       this.armedClass = !!this.pacArmed;
@@ -478,8 +534,18 @@
 
   Game.prototype.tick = function () {
     this.updateModeTimers();
-    this.movePacman();
-    this.eatCheck();
+    for (var pi = 0; pi < this.players.length; pi++) {
+      var pl = this.players[pi];
+      if (pl.deadTimer > 0) {
+        pl.deadTimer -= TICK;
+        if (pl.deadTimer <= 0) this.respawn(pl);
+        continue;
+      }
+      if (pl.out) continue;
+      if (pl.auto && Auto) Auto.drive(this, pl, pl.skill);
+      this.movePacman(pl);
+      this.eatCheck(pl);
+    }
     for (var i = 0; i < this.ghosts.length; i++) this.moveGhost(this.ghosts[i]);
     this.collisionCheck();
     if (this.fruit) {
@@ -528,27 +594,28 @@
 
   /* ---- Pac-Man ----------------------------------------------------- */
 
-  Game.prototype.pacSpeed = function () {
-    var c = tileOf(this.pac.x), r = tileOf(this.pac.y);
+  Game.prototype.pacSpeed = function (pac) {
+    pac = pac || this.pac;
+    var c = tileOf(pac.x), r = tileOf(pac.y);
     var onDot = this.dots[r] && this.dots[r][wrapCol(c)] > 0;
     var pct = this.frightTimer > 0 ? this.spec.pacFright
             : (onDot ? this.spec.pacDotSpeed : this.spec.pacSpeed);
     return pct * BASE_SPEED;
   };
 
-  Game.prototype.movePacman = function () {
-    var pac = this.pac;
-    var dist = this.pacSpeed();
+  Game.prototype.movePacman = function (pac) {
+    pac = pac || this.pac;
+    var dist = this.pacSpeed(pac);
     var steps = Math.ceil(dist);
     var per = dist / steps;
     var movedAny = false;
-    for (var i = 0; i < steps; i++) movedAny = this.pacSubStep(per) || movedAny;
+    for (var i = 0; i < steps; i++) movedAny = this.pacSubStep(per, pac) || movedAny;
     pac.moving = movedAny;
     if (movedAny) pac.mouth = (Math.sin(this.animTime * 22) + 1) / 2;
   };
 
-  Game.prototype.pacSubStep = function (d) {
-    var pac = this.pac;
+  Game.prototype.pacSubStep = function (d, pac) {
+    pac = pac || this.pac;
     var c = tileOf(pac.x), r = tileOf(pac.y);
     var cx = centerOf(c), cy = centerOf(r);
 
@@ -578,8 +645,9 @@
     return moved;
   };
 
-  Game.prototype.eatCheck = function () {
-    var c = wrapCol(tileOf(this.pac.x)), r = tileOf(this.pac.y);
+  Game.prototype.eatCheck = function (pac) {
+    pac = pac || this.pac;
+    var c = wrapCol(tileOf(pac.x)), r = tileOf(pac.y);
     if (r < 0 || r >= Maze.ROWS) return;
     var d = this.dots[r][c];
     if (!d) return;
@@ -587,8 +655,8 @@
     this.dotsRemaining--;
     this.dotsEaten++;
     this.forceExitTimer = 0;
-    this.addScore(d === 2 ? 50 : 10);
-    Sound.waka();
+    this.addScore(d === 2 ? 50 : 10, pac.id);
+    if (pac.id === 0) Sound.waka();
     this.countDotForHouse();
 
     if (d === 2) {
@@ -606,6 +674,7 @@
       } else {
         this.reverseGhosts();
       }
+      if (MP) MP.notify(pac.id === 0 ? 'energiser' : 'energiser');
     }
 
     Extra.releaseWaiting(this, false);
@@ -626,7 +695,15 @@
     }
   };
 
-  Game.prototype.addScore = function (n) {
+  Game.prototype.addScore = function (n, id) {
+    if (id === 1) {
+      this.score2 += n;
+      if (!this.extraAwarded2 && this.score2 >= 10000) {
+        this.extraAwarded2 = true;
+        this.lives2++;
+      }
+      return;
+    }
     this.score += n;
     if (!this.extraAwarded && this.score >= 10000) {
       this.extraAwarded = true;
@@ -783,9 +860,33 @@
     }
   };
 
+  /**
+   * Which player this ghost is hunting. With one player it is always him;
+   * with two it is the nearer, with hysteresis so ghosts do not flip between
+   * them every frame. A player under Rampage Pac is never hunted.
+   */
+  Game.prototype.focusPac = function (g) {
+    var live = this.players.filter(function (p) { return !p.out && !p.dead; });
+    if (!live.length) return this.pac;
+    if (this.ghostsFlee) {
+      var others = live.filter(function (p) { return !p.armedOwner; });
+      if (others.length) live = others;
+    }
+    if (live.length === 1) return live[0];
+    var best = live[0], bestD = Infinity;
+    for (var i = 0; i < live.length; i++) {
+      var d = dist2(g.x, g.y, live[i].x, live[i].y);
+      if (live[i].id === g.focusId) d *= 0.6;      // stick with the current mark
+      if (d < bestD) { bestD = d; best = live[i]; }
+    }
+    g.focusId = best.id;
+    return best;
+  };
+
   Game.prototype.ghostTarget = function (g) {
-    var pc = wrapCol(tileOf(this.pac.x)), pr = tileOf(this.pac.y);
-    var pv = DIRV[this.pac.dir];
+    var focus = this.focusPac(g);
+    var pc = wrapCol(tileOf(focus.x)), pr = tileOf(focus.y);
+    var pv = DIRV[focus.dir];
 
     if (g.state === 'eaten') return { c: 13, r: 11 };
 
@@ -794,7 +895,8 @@
                      !(g.name === 'blinky' && this.elroyStage > 0);
     // Extras bring their own chase rule and their own scatter patrol.
     if (g.ai) {
-      return scattering ? Extra.scatterTarget(this, g) : Extra.chaseTarget(this, g);
+      return scattering ? Extra.scatterTarget(this, g, focus)
+                        : Extra.chaseTarget(this, g, focus);
     }
     if (scattering) return { c: g.scatter.c, r: g.scatter.r };
 
@@ -804,12 +906,12 @@
       case 'pinky': {
         // Four tiles ahead - reproducing the original's up-direction overflow.
         var tc = pc + pv[0] * 4, tr = pr + pv[1] * 4;
-        if (this.pac.dir === 'up') tc -= 4;
+        if (focus.dir === 'up') tc -= 4;
         return { c: tc, r: tr };
       }
       case 'inky': {
         var ic = pc + pv[0] * 2, ir = pr + pv[1] * 2;
-        if (this.pac.dir === 'up') ic -= 2;
+        if (focus.dir === 'up') ic -= 2;
         var b = this.ghosts[0];
         var bc = wrapCol(tileOf(b.x)), br = tileOf(b.y);
         return { c: ic * 2 - bc, r: ir * 2 - br };
@@ -847,7 +949,8 @@
     // Fleeing ghosts run for whichever exit puts the most distance between
     // them and Pac-Man, rather than closing on a target.
     var flee = this.ghostsFlee && g.state === 'normal';
-    var target = flee ? { c: wrapCol(tileOf(this.pac.x)), r: tileOf(this.pac.y) }
+    var fleeFrom = this.focusPac(g);
+    var target = flee ? { c: wrapCol(tileOf(fleeFrom.x)), r: tileOf(fleeFrom.y) }
                       : this.ghostTarget(g);
     Extra.noteTile(g, c, r);
     var best = options[0], bestDist = flee ? -Infinity : Infinity;
@@ -863,10 +966,15 @@
   /* ---- collisions -------------------------------------------------- */
 
   Game.prototype.collisionCheck = function () {
-    if (this.fruit && Math.abs(this.pac.x - FRUIT_POS.x) < 7 &&
-        Math.abs(this.pac.y - FRUIT_POS.y) < 7) {
+    for (var q = 0; q < this.players.length; q++) this.playerCollisions(this.players[q]);
+  };
+
+  Game.prototype.playerCollisions = function (pac) {
+    if (pac.out || pac.deadTimer > 0) return;
+    if (this.fruit && Math.abs(pac.x - FRUIT_POS.x) < 7 &&
+        Math.abs(pac.y - FRUIT_POS.y) < 7) {
       var pts = FRUIT_POINTS[this.fruit];
-      this.addScore(pts);
+      this.addScore(pts, pac.id);
       this.popup = { x: FRUIT_POS.x, y: FRUIT_POS.y, text: String(pts), t: 2, color: '#ffb8ff' };
       this.fruit = null;
       Sound.eatFruit();
@@ -875,29 +983,62 @@
     for (var i = 0; i < this.ghosts.length; i++) {
       var g = this.ghosts[i];
       if (g.state === 'eaten' || g.state === 'entering' || g.state === 'waiting') continue;
-      if (Math.abs(this.pac.x - g.x) > 6 || Math.abs(this.pac.y - g.y) > 6) continue;
+      if (Math.abs(pac.x - g.x) > 6 || Math.abs(pac.y - g.y) > 6) continue;
       if (g.frightened) {
         this.ghostsEaten++;
         var pts = 200 * Math.pow(2, Math.min(this.ghostsEaten, 4) - 1);
-        this.addScore(pts);
+        this.addScore(pts, pac.id);
         this.popup = { x: g.x, y: g.y, text: String(pts), t: 0.9, color: '#00ffff' };
         g.frightened = false;
         g.state = 'eaten';
         this.freezeTimer = 0.9;
         Sound.eatGhost();
-      } else if (!this.ghostsFlee && !this.godmode) {
-        this.die();
+        if (MP) MP.notify(pac.id === 0 ? 'playerAte' : 'botAte');
+      } else if (!this.godmode && !(this.ghostsFlee && pac.armedOwner)) {
+        this.die(pac);
         return;
       }
     }
   };
 
-  Game.prototype.die = function () {
-    this.state = 'dying';
-    this.stateTime = 0;
-    this.pac.dead = true;
-    this.lives--;
+  Game.prototype.die = function (pac) {
+    pac = pac || this.pac;
+    if (MP) MP.notify(pac.id === 0 ? 'playerDied' : 'botDied');
+
+    if (this.players.length < 2) {
+      this.state = 'dying';
+      this.stateTime = 0;
+      this.pac.dead = true;
+      this.lives--;
+      Sound.death();
+      return;
+    }
+
+    // Two players: only the one caught drops out, the round carries on.
+    pac.dead = true;
+    pac.deadTimer = 2.2;
+    if (pac.id === 1) this.lives2--; else this.lives--;
     Sound.death();
+  };
+
+  /** Put a player back at their start, or bench them if they are out. */
+  Game.prototype.respawn = function (pac) {
+    pac.dead = false;
+    pac.deadTimer = 0;
+    var lives = pac.id === 1 ? this.lives2 : this.lives;
+    if (lives <= 0) {
+      pac.out = true;
+      if (this.players.every(function (p) { return p.out; })) {
+        this.state = 'gameover';
+        this.stateTime = 0;
+        Sound.stopBackground();
+      }
+      return;
+    }
+    var start = pac.id === 1 ? PAC2_START : PAC_START;
+    pac.x = start.x; pac.y = start.y;
+    pac.dir = 'left'; pac.want = 'left';
+    pac.autoTile = null;
   };
 
   Game.prototype.afterDeath = function () {
@@ -972,6 +1113,12 @@
       else Mods.drawDev(this, ctx);
     }
     if (this.state === 'moddemoend') Mods.drawDemoEnd(this, ctx);
+    if (this.state === 'matching') {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, Maze.SCREEN_W, Maze.SCREEN_H);
+      this.drawHud();
+      MP.drawMatching(this, ctx);
+    }
 
     this.out.imageSmoothingEnabled = false;
     this.out.drawImage(this.frame, 0, 0, this.canvas.width, this.canvas.height);
@@ -988,6 +1135,11 @@
     Font.drawRight(ctx, s, 6, 1, '#ffffff', 1);
     var hs = this.highScore === 0 ? '' : String(this.highScore);
     Font.drawRight(ctx, hs, 16, 1, '#ffffff', 1);
+    if (this.playerCount === 2) {
+      if (blinkOn) Font.draw(ctx, '2UP', 22, 0, '#ffffff');
+      Font.drawRight(ctx, this.score2 === 0 ? '00' : String(this.score2), 25, 1, '#ffffff', 1);
+    }
+    if (this.autoPlay) Font.draw(ctx, 'AI', 25, 0, '#7cff3c');
   };
 
   Game.prototype.drawBottomBar = function () {
@@ -995,6 +1147,14 @@
     // Reserve lives only - the one in play is not shown - and they face left.
     var reserves = Math.max(0, Math.min(this.lives - 1, 5));
     for (var i = 0; i < reserves; i++) P.blit(ctx, P.lifeIcon(), 23 + i * 16, y);
+    if (this.playerCount === 2) {
+      // The fruit strip gives way to player two's lives.
+      var r2 = Math.max(0, Math.min(this.lives2 - 1, 5));
+      for (var j = 0; j < r2; j++) {
+        P.blit(ctx, P.pacman('left', 0.75, { bow: true }), 200 - j * 16, y);
+      }
+      return;
+    }
     // The last seven levels' fruit, newest at the right edge.
     var first = Math.max(1, this.level - 6);
     for (var lv = first; lv <= this.level; lv++) {
@@ -1009,8 +1169,25 @@
   };
 
   Game.prototype.drawPac = function (ctx) {
-    var pac = this.pac, P = Sprites.Pixel;
-    if (this.state === 'dying') {
+    for (var i = 0; i < this.players.length; i++) this.drawPlayer(ctx, this.players[i]);
+  };
+
+  Game.prototype.drawPlayer = function (ctx, pac) {
+    var P = Sprites.Pixel;
+    if (pac.out) return;
+
+    // Two-player death is per player; the round does not stop for it.
+    if (pac.deadTimer > 0) {
+      var pt = 1 - pac.deadTimer / 2.2;
+      var self = this;
+      this.withWrap(ctx, pac.x, pac.y, function (x, y) {
+        if (pt < 0.25) P.blit(ctx, P.pacman(pac.dir, 0.8, { bow: pac.bow }), x, y);
+        else if (pt < 0.95) P.blit(ctx, P.death(Math.floor((pt - 0.25) / 0.7 * 11)), x, y);
+      });
+      return;
+    }
+
+    if (this.state === 'dying' && pac.id === 0) {
       if (this.stateTime < 0.55) {
         this.withWrap(ctx, pac.x, pac.y, function (x, y) {
           P.blit(ctx, P.pacman(pac.dir, 0.8), x, y);
@@ -1027,7 +1204,10 @@
     if (this.freezeTimer > 0) return;      // hidden while a ghost score shows
     // He waits as a closed circle during READY!, as on the arcade.
     var mouth = this.state === 'ready' ? 0 : pac.mouth;
-    var opts = { angry: this.pacAngry, armed: this.pacArmed };
+    // Rampage only ever dresses the player who switched the mod on.
+    var opts = { angry: this.pacAngry && pac.armedOwner,
+                 armed: this.pacArmed && pac.armedOwner,
+                 bow: pac.bow };
     var muzzle = this.muzzle;
     this.withWrap(ctx, pac.x, pac.y, function (x, y) {
       P.blit(ctx, P.pacman(pac.dir, mouth, opts), x, y);
@@ -1113,22 +1293,23 @@
       Font.draw(ctx, row[2], 17, y, row[3]);
     }
 
-    Maze.drawEnergizerAt(ctx, 10 * TILE, 26 * TILE);
-    Font.draw(ctx, '50 PTS', 12, 26, '#ffffff');
+    Maze.drawEnergizerAt(ctx, 10 * TILE, 25 * TILE);
+    Font.draw(ctx, '50 PTS', 12, 25, '#ffffff');
 
-    var items = ['PLAY', 'MODS'];
+    var items = TITLE_ITEMS;
     for (var t = 0; t < items.length; t++) {
-      var ty = 29 + t * 2, on = this.titleIndex === t;
+      var ty = 27 + t * 2, on = this.titleIndex === t;
       if (on) {
         var bite = (Math.sin(this.animTime * 12) + 1) / 2;
-        Sprites.Pixel.blit(ctx, Sprites.Pixel.pacman('right', bite), 9 * TILE + 4, ty * TILE + 3);
+        var cx = (14 - items[t].length / 2) * TILE - 10;
+        Sprites.Pixel.blit(ctx, Sprites.Pixel.pacman('right', bite), cx, ty * TILE + 3);
       }
-      Font.draw(ctx, items[t], 12, ty, on ? '#ffff00' : '#8080a0');
+      Font.drawCentered(ctx, items[t], ty, on ? '#ffff00' : '#8080a0');
     }
     if (Mods.isOn('rampage') || Mods.storageUsed() > 0) {
-      Font.drawCentered(ctx, 'MODS ACTIVE', 33, '#00ff00');
+      Font.drawCentered(ctx, 'MODS ACTIVE', 35, '#00ff00');
     } else {
-      Font.draw(ctx, '© 1980 NAMCO', 8, 33, '#ffb8ae');
+      Font.draw(ctx, '© 1980 NAMCO', 8, 35, '#ffb8ae');
     }
   };
 
@@ -1145,6 +1326,7 @@
   function boot() {
     var canvas = document.getElementById('screen');
     var game = new Game(canvas);
+    if (global.Multiplayer) global.Multiplayer.bindPanel();
     global.pacmanGame = game;      // handy for tests and screenshots
 
     var last = performance.now();

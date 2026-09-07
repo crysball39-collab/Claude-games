@@ -147,6 +147,108 @@ body.touch #pad {
 
 .btn.is-down { background: #23234a; color: #fff; }
 
+/* ------------------------------------------------------------------ */
+/* Match chat                                                          */
+/* ------------------------------------------------------------------ */
+
+#chat { display: none; }
+
+body.two-player #chat {
+  display: flex;
+  flex-direction: column;
+  width: min(300px, 32vw);
+  height: min(92vh, 700px);
+  background: #06061c;
+  border: 2px solid #23234a;
+  border-radius: 10px;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+#chathead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: #12123a;
+  color: #ffd24a;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+}
+
+#chatclose {
+  background: none; border: 0; color: #8080a0;
+  font-size: 18px; line-height: 1; cursor: pointer; padding: 0 4px;
+}
+
+#chatlog {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #d0d0e0;
+  overscroll-behavior: contain;
+}
+
+#chatlog .msg { margin-bottom: 5px; word-wrap: break-word; }
+#chatlog .msg b { color: #7cff3c; font-weight: 700; }
+#chatlog .msg.you b { color: #ffd24a; }
+#chatlog .msg.system { color: #6060a0; font-style: italic; }
+#chatlog .msg.typing { opacity: 0.6; }
+
+#chatbar { display: flex; gap: 6px; padding: 8px; background: #0b0b26; }
+
+#chatinput {
+  flex: 1 1 auto; min-width: 0;
+  background: #000; color: #fff;
+  border: 1px solid #23234a; border-radius: 6px;
+  padding: 8px; font: inherit; font-size: 13px;
+}
+
+#chatinput:focus { outline: 1px solid #2121ff; }
+
+#chatsend {
+  background: #2121ff; color: #fff; border: 0; border-radius: 6px;
+  padding: 8px 12px; font: inherit; font-size: 11px; font-weight: 700;
+  letter-spacing: 0.1em; cursor: pointer;
+}
+
+body.two-player #cabinet {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+body.two-player #stage { flex: 0 1 auto; min-width: 0; height: 100%; }
+/* The hint would otherwise sit between the maze and the chat column. */
+body.two-player #hint { display: none; }
+
+/* Narrow screens: the panel becomes a sheet over the game. */
+@media (max-width: 720px) {
+  body.two-player #cabinet { flex-direction: column; justify-content: center; }
+  body.two-player #stage { flex: 1 1 auto; height: auto; }
+  body.two-player #chat {
+    display: none;
+    position: fixed; left: 0; right: 0; bottom: 0;
+    width: auto; height: 62vh; border-radius: 12px 12px 0 0;
+    z-index: 20;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  body.two-player #chat.open { display: flex; }
+}
+
+.btn.chatbtn { display: none; position: relative; }
+body.two-player .btn.chatbtn { display: block; }
+
+#chatbadge {
+  display: none;
+  position: absolute; top: -6px; right: -6px;
+  background: #ff0000; color: #fff;
+  border-radius: 999px; padding: 1px 5px; font-size: 10px;
+}
+
 /* The SHOOT button only exists once Rampage Pac arms him. */
 .btn.shoot { display: none; color: #ff5a5a; border-color: #7a2020; }
 body.armed .btn.shoot { display: block; }
@@ -195,11 +297,25 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
       </div>
       <div id="aux">
         <button class="btn shoot" data-act="shoot" aria-label="Shoot">SHOOT</button>
+        <button class="btn chatbtn" data-act="chat" aria-label="Chat">CHAT<span id="chatbadge"></span></button>
         <button class="btn" data-act="start" aria-label="Start">START</button>
         <button class="btn" data-act="pause" aria-label="Pause">PAUSE</button>
         <button class="btn" data-act="mute"  aria-label="Sound">SOUND</button>
       </div>
     </div>
+
+    <aside id="chat" aria-label="Match chat">
+      <div id="chathead">
+        <span>MATCH CHAT</span>
+        <button id="chatclose" aria-label="Close chat">&times;</button>
+      </div>
+      <div id="chatlog" role="log" aria-live="polite"></div>
+      <div id="chatbar">
+        <input id="chatinput" type="text" maxlength="140" placeholder="say something..."
+               autocomplete="off" autocapitalize="none" spellcheck="false">
+        <button id="chatsend">SEND</button>
+      </div>
+    </aside>
   </div>
 
   <script>
@@ -1058,6 +1174,23 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
     }
   }
 
+  /* Player two wears a bow, the one visual difference between the two. */
+  function drawBow(ctx, dir) {
+    ctx.save();
+    ctx.rotate(DIR_ANGLE[dir] || 0);
+    ctx.rotate(-Math.PI / 2);            // the bow rides on top of the head
+    ctx.fillStyle = '#ff0000';
+    ctx.beginPath();
+    ctx.moveTo(0, -4.5); ctx.lineTo(-4, -7.5); ctx.lineTo(-4, -2.5); ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(0, -4.5); ctx.lineTo(4, -7.5); ctx.lineTo(4, -2.5); ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#ffb8ff';
+    ctx.fillRect(-1, -5.6, 2, 2.2);
+    ctx.restore();
+  }
+
   /* Angry brows for the Rampage Pac mod: a V across the forehead, rotated
      to whichever way he is facing. */
   function drawBrows(ctx, dir) {
@@ -1309,6 +1442,7 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
 
   global.Sprites = {
     GHOST_COLORS: GHOST_COLORS,
+    drawBow: drawBow,
     drawBrows: drawBrows,
     drawShotgun: drawShotgun,
     drawMuzzleFlash: drawMuzzleFlash,
@@ -1390,15 +1524,16 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
    * @param {object} [opts] { angry, armed } - the Rampage Pac variants
    */
   function pacman(dir, mouth, opts) {
-    var angry = opts && opts.angry, armed = opts && opts.armed;
+    var angry = opts && opts.angry, armed = opts && opts.armed, bow = opts && opts.bow;
     var step = Math.max(0, Math.min(3, Math.round(mouth * 3)));
-    // A closed mouth has no facing, unless a brow or gun gives him one.
-    var d = (step === 0 && !angry && !armed) ? 'x' : dir;
-    var key = 'pac:' + d + step + (angry ? 'a' : '') + (armed ? 'g' : '');
+    // A closed mouth has no facing, unless a brow, gun or bow gives him one.
+    var d = (step === 0 && !angry && !armed && !bow) ? 'x' : dir;
+    var key = 'pac:' + d + step + (angry ? 'a' : '') + (armed ? 'g' : '') + (bow ? 'b' : '');
     return get(key, function (ctx) {
       if (armed) S.drawShotgun(ctx, dir, 0);
       S.drawPacman(ctx, dir, MOUTH_STEPS[step]);
       if (angry) S.drawBrows(ctx, dir);
+      if (bow) S.drawBow(ctx, dir);
     }, armed ? 40 : SPRITE);
   }
 
@@ -1536,8 +1671,10 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
   function wrapCol(c) { var n = maze().COLS; return ((c % n) + n) % n; }
   function tileOf(px) { return Math.floor(px / TILE); }
   function ghostTile(g) { return { c: wrapCol(tileOf(g.x)), r: tileOf(g.y) }; }
-  function pacTile(game) {
-    return { c: wrapCol(tileOf(game.pac.x)), r: tileOf(game.pac.y) };
+  function target(game, pac) { return pac || game.pac; }
+  function pacTile(game, pac) {
+    var t = target(game, pac);
+    return { c: wrapCol(tileOf(t.x)), r: tileOf(t.y) };
   }
   function dist2(ax, ay, bx, by) { var dx = ax - bx, dy = ay - by; return dx * dx + dy * dy; }
   function walkable(c, r) { return maze().isWalkable(wrapCol(c), r); }
@@ -1553,8 +1690,8 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
   }
 
   /** Straight-line projection down the corridor Pac-Man faces. */
-  function project(game, limit) {
-    var p = pacTile(game), v = DIRV[game.pac.dir] || [0, 0];
+  function project(game, limit, pac) {
+    var p = pacTile(game, pac), v = DIRV[target(game, pac).dir] || [0, 0];
     var c = p.c, r = p.r, last = { c: c, r: r };
     for (var i = 0; i < limit; i++) {
       var nc = wrapCol(c + v[0]), nr = r + v[1];
@@ -1571,8 +1708,8 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
    * going straight; only a dead end stops it. This is Lumo's lookahead - it
    * puts him on Pac-Man's path, not merely in his line of sight.
    */
-  function projectFollowing(game, limit) {
-    var p = pacTile(game), v = DIRV[game.pac.dir] || [1, 0];
+  function projectFollowing(game, limit, pac) {
+    var p = pacTile(game, pac), v = DIRV[target(game, pac).dir] || [1, 0];
     var c = p.c, r = p.r;
     var back = [-v[0], -v[1]];
     for (var i = 0; i < limit; i++) {
@@ -1600,8 +1737,8 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
    * The junction Pac-Man is running towards, ignoring any that is right on
    * top of him - Grimm sets his trap further out than Lumo's lead.
    */
-  function nextJunction(game, minAway, limit) {
-    var p = pacTile(game), v = DIRV[game.pac.dir] || [0, 0];
+  function nextJunction(game, minAway, limit, pac) {
+    var p = pacTile(game, pac), v = DIRV[target(game, pac).dir] || [0, 0];
     var c = p.c, r = p.r, last = { c: c, r: r };
     for (var i = 1; i <= limit; i++) {
       var nc = wrapCol(c + v[0]), nr = r + v[1];
@@ -1619,8 +1756,8 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
     });
   }
 
-  function isClosestGhost(game, self) {
-    var p = pacTile(game), me = ghostTile(self);
+  function isClosestGhost(game, self, pac) {
+    var p = pacTile(game, pac), me = ghostTile(self);
     var mine = dist2(me.c, me.r, p.c, p.r);
     var others = otherGhosts(game, self);
     for (var i = 0; i < others.length; i++) {
@@ -1635,21 +1772,21 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
   var CHASE = {
     /* Lumo runs the corridor ahead of Pac-Man rather than adding a blind
        offset, so his target is always somewhere Pac-Man can actually be. */
-    lumo: function (game, g) {
-      var p = pacTile(game), me = ghostTile(g);
+    lumo: function (game, g, pac) {
+      var p = pacTile(game, pac), me = ghostTile(g);
       if (dist2(me.c, me.r, p.c, p.r) <= 16) return p;   // within 4 tiles: close in
       // Five, not Pinky's four: in a straight corridor the two would otherwise
       // pick the same tile. Round a bend they diverge completely, because this
       // one follows the corridor and Pinky's lands in the wall.
-      return projectFollowing(game, 5);
+      return projectFollowing(game, 5, pac);
     },
 
     /* Vexa comes in off to one side, and picks the side the rest of the pack
        is not already covering. Nearest ghost drops the flank and commits. */
-    vexa: function (game, g) {
-      var p = pacTile(game);
-      if (isClosestGhost(game, g)) return p;
-      var v = DIRV[game.pac.dir] || [1, 0];
+    vexa: function (game, g, pac) {
+      var p = pacTile(game, pac);
+      if (isClosestGhost(game, g, pac)) return p;
+      var v = DIRV[target(game, pac).dir] || [1, 0];
       var perp = [-v[1], v[0]];
       var pack = otherGhosts(game, g).map(ghostTile);
       var best = null, bestScore = -Infinity;
@@ -1668,14 +1805,14 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
 
     /* Grimm heads for the junction Pac-Man is running towards. In a corridor
        with no junction he takes the far end and waits there. */
-    grimm: function (game, g) {
-      return nextJunction(game, 4, 14);
+    grimm: function (game, g, pac) {
+      return nextJunction(game, 4, 14, pac);
     },
 
     /* Nox alternates: hunt until he is on top of Pac-Man, then peel away and
        reposition until there is room to come back in. */
-    nox: function (game, g) {
-      var p = pacTile(game), me = ghostTile(g);
+    nox: function (game, g, pac) {
+      var p = pacTile(game, pac), me = ghostTile(g);
       var d = dist2(me.c, me.r, p.c, p.r);
       if (g.stalk === 'back') {
         if (d >= 100) g.stalk = 'hunt';        // 10 tiles of daylight
@@ -1691,8 +1828,8 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
       // what separate him from Blinky.
       var beat = Math.floor(game.globalTime / 2.5) % 3;
       if (beat === 0) return p;                       // straight at him
-      if (beat === 1) return project(game, 3);        // cut in ahead
-      var v = DIRV[game.pac.dir] || [0, 0];           // creep up behind
+      if (beat === 1) return project(game, 3, pac);   // cut in ahead
+      var v = DIRV[target(game, pac).dir] || [0, 0];  // creep up behind
       return { c: p.c - v[0] * 2, r: p.r - v[1] * 2 };
     }
   };
@@ -1701,7 +1838,7 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
   ROSTER.forEach(function (def) {
     /* Every scatter rule is the same shape - walk this ghost's own loop of
        waypoints - but each ghost owns a different quarter of the maze. */
-    SCATTER[def.id] = function (game, g) {
+    SCATTER[def.id] = function (game, g, pac) {
       if (g.patrolIndex === undefined) g.patrolIndex = 0;
       var me = ghostTile(g);
       var pt = def.patrol[g.patrolIndex % def.patrol.length];
@@ -1713,8 +1850,8 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
     };
   });
 
-  function chaseTarget(game, g) { return CHASE[g.ai](game, g); }
-  function scatterTarget(game, g) { return SCATTER[g.ai](game, g); }
+  function chaseTarget(game, g, pac) { return CHASE[g.ai](game, g, pac); }
+  function scatterTarget(game, g, pac) { return SCATTER[g.ai](game, g, pac); }
 
   /**
    * Extra cost a ghost puts on a candidate tile. Only Nox uses it, to keep
@@ -1784,6 +1921,779 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
   };
 
   loadState();
+})(window);
+  </script>
+  <script>
+/* The playing AI. It does not replay memorised patterns - it searches the
+ * maze every time it reaches a tile.
+ *
+ * The core idea is contested tiles: it floods the maze from its own position
+ * and from every hunting ghost, then treats a tile as unsafe when a ghost can
+ * reach it first. That respects walls, so it will happily run past a ghost on
+ * the far side of a hedge and will refuse a corridor that looks open but is
+ * already cut off. On top of that sits a value pass - dots, energisers, fruit
+ * and edible ghosts - divided by distance, so it always takes the best paying
+ * route it can still survive.
+ */
+(function (global) {
+  'use strict';
+
+  var DIRS = ['up', 'left', 'down', 'right'];
+  var DIRV = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+  var OPPOSITE = { up: 'down', down: 'up', left: 'right', right: 'left' };
+
+  var COLS = 28, ROWS = 31, TILE = 8;
+  var SIZE = COLS * ROWS;
+  var INF = 1e9;
+
+  function idx(c, r) { return r * COLS + c; }
+  function wrapCol(c) { return ((c % COLS) + COLS) % COLS; }
+  function tileOf(px) { return Math.floor(px / TILE); }
+
+  // Scratch buffers, reused so a decision allocates nothing.
+  var pacDist = new Int32Array(SIZE);
+  var pacStep = new Int8Array(SIZE);      // index into DIRS of the first move
+  var ghostDist = new Int32Array(SIZE);
+  var threat = new Int32Array(SIZE);
+  var queue = new Int32Array(SIZE);
+
+  function inBounds(r) { return r >= 0 && r < ROWS; }
+
+  /**
+   * Flood the maze from one or more sources.
+   * @param {function} passable (c, r) -> boolean
+   * @param {Int32Array} dist filled with step counts, INF where unreachable
+   * @param {Int8Array} [step] first-move direction index, for path recovery
+   */
+  function flood(sources, passable, dist, step, gate) {
+    dist.fill(INF);
+    if (step) step.fill(-1);
+    var head = 0, tail = 0;
+    for (var s = 0; s < sources.length; s++) {
+      var c = wrapCol(sources[s][0]), r = sources[s][1];
+      if (!inBounds(r)) continue;
+      var i = idx(c, r);
+      if (dist[i] !== INF) continue;
+      dist[i] = 0;
+      queue[tail++] = i;
+    }
+    while (head < tail) {
+      var cur = queue[head++];
+      var cc = cur % COLS, cr = (cur - cc) / COLS;
+      var d = dist[cur];
+      for (var k = 0; k < DIRS.length; k++) {
+        var v = DIRV[DIRS[k]];
+        var nc = wrapCol(cc + v[0]), nr = cr + v[1];
+        if (!inBounds(nr) || !passable(nc, nr)) continue;
+        var ni = idx(nc, nr);
+        if (dist[ni] !== INF) continue;
+        if (gate && !gate(ni, d + 1)) continue;
+        dist[ni] = d + 1;
+        if (step) step[ni] = d === 0 ? k : step[cur];
+        queue[tail++] = ni;
+      }
+    }
+  }
+
+  function pacPassable(c, r) { return global.Maze.isWalkable(c, r); }
+  function ghostPassable(c, r) { return global.Maze.isWalkableGhost(c, r, false); }
+
+  /** Ghosts that can currently kill this player. */
+  function hunters(game, pac) {
+    return game.ghosts.filter(function (g) {
+      if (g.state !== 'normal') return false;
+      if (g.frightened) return false;
+      if (game.ghostsFlee && pac.armedOwner) return false;   // rampage: they run
+      return true;
+    });
+  }
+
+  function edible(game) {
+    return game.ghosts.filter(function (g) {
+      return g.state === 'normal' && g.frightened;
+    });
+  }
+
+  /**
+   * Decide which way this player should turn.
+   * @param {number} [skill] 0..1; below 1 the agent sometimes takes the second
+   *   best route, which is what makes the bot opponent feel human.
+   * @return {string|null} a direction, or null to keep going
+   */
+  function choose(game, pac, skill) {
+    var Maze = global.Maze;
+    var c = wrapCol(tileOf(pac.x)), r = tileOf(pac.y);
+    if (!inBounds(r)) return null;
+
+    // Threat first, so the route search can refuse to walk through a tile a
+    // ghost would reach at the same time. Checking only the destination is not
+    // enough - that is how you get eaten halfway down a corridor.
+    var hunt = hunters(game, pac);
+    threat.fill(INF);
+    for (var h = 0; h < hunt.length; h++) {
+      var g = hunt[h];
+      var gc = wrapCol(tileOf(g.x)), gr = tileOf(g.y);
+      if (!inBounds(gr)) continue;
+      // A ghost cannot turn round, so danger must not spread back through the
+      // tile behind it. Without this the map invents threat in places the
+      // ghost can never reach, and the agent gives up safe ground for nothing.
+      var v = DIRV[g.dir] || [0, 0];
+      var behind = idx(wrapCol(gc - v[0]), Math.max(0, Math.min(ROWS - 1, gr - v[1])));
+      var seeds = [[gc, gr]];
+      if (Maze.isWalkableGhost(wrapCol(gc + v[0]), gr + v[1], false)) {
+        seeds.push([wrapCol(gc + v[0]), gr + v[1]]);
+      }
+      flood(seeds, ghostPassable, ghostDist, null,
+            (v[0] || v[1]) ? function (i) { return i !== behind; } : null);
+      for (var i = 0; i < SIZE; i++) {
+        if (ghostDist[i] < threat[i]) threat[i] = ghostDist[i];
+      }
+    }
+
+    // A tile is ours only if we clearly get there first, and the whole route
+    // has to hold up, not just its end. If nothing at all is reachable under
+    // the strict margin the standard drops a step at a time - otherwise the
+    // last few pellets in a contested corner never get taken and the level
+    // simply never ends.
+    var chase = edible(game);
+    var dots = game.dots;
+    var best = null, bestScore = -INF, second = null, secondScore = -INF;
+
+    function offer(i, value) {
+      if (pacDist[i] === INF || pacStep[i] < 0) return;
+      var score = value / (pacDist[i] + 1);
+      if (score > bestScore) {
+        second = best; secondScore = bestScore;
+        best = DIRS[pacStep[i]]; bestScore = score;
+      } else if (score > secondScore) {
+        second = DIRS[pacStep[i]]; secondScore = score;
+      }
+    }
+
+    // How hard is a hunter leaning on us right now?
+    var pressure = 0;
+    for (var t = 0; t < hunt.length; t++) {
+      var hx = hunt[t].x - pac.x, hy = hunt[t].y - pac.y;
+      if (Math.abs(hx) + Math.abs(hy) < 70) pressure++;
+    }
+    // Near the end of a maze the remaining pellets are worth pushing for.
+    var urgency = game.dotsRemaining <= 12 ? 6 : 1;
+
+    var MARGINS = [4, 2, 1, 0];
+    for (var mi = 0; mi < MARGINS.length && best === null; mi++) {
+      var margin = MARGINS[mi];
+      flood([[c, r]], pacPassable, pacDist, pacStep,
+            (function (m) {
+              return function (i, d) { return threat[i] - d > m; };
+            })(margin));
+
+      // Edible ghosts outrank everything while the timer runs.
+      if (chase.length && game.frightTimer > 0.6) {
+        for (var e = 0; e < chase.length; e++) {
+          var eg = chase[e];
+          var ei = idx(wrapCol(tileOf(eg.x)), tileOf(eg.y));
+          if (pacDist[ei] !== INF && pacDist[ei] < game.frightTimer * 7) offer(ei, 260);
+        }
+      }
+
+      for (var rr = 0; rr < ROWS; rr++) {
+        var row = dots[rr];
+        for (var cc2 = 0; cc2 < COLS; cc2++) {
+          var d2 = row[cc2];
+          if (!d2) continue;
+          offer(idx(cc2, rr), d2 === 2 ? (pressure ? 190 : 34) : 10 * urgency);
+        }
+      }
+
+      if (game.fruit) offer(idx(13, 17), 120);
+    }
+
+    if (best === null) return escapeDirection(game, pac, c, r);
+
+    // Whatever the plan says, never take a step onto a tile a ghost is about
+    // to stand on. If the first move is contested, treat it as no plan at all.
+    if (best && !stepIsSafe(c, r, best)) {
+      if (second && stepIsSafe(c, r, second)) return second;
+      return escapeDirection(game, pac, c, r);
+    }
+
+    // Deliberate imperfection for the bot opponent.
+    if (skill !== undefined && skill < 1 && second && Math.random() > skill) return second;
+    return best;
+  }
+
+  /** True if stepping this way does not walk straight into a ghost's next tile. */
+  function stepIsSafe(c, r, dir) {
+    var v = DIRV[dir];
+    var nc = wrapCol(c + v[0]), nr = r + v[1];
+    if (!inBounds(nr)) return false;
+    return threat[idx(nc, nr)] > 1;
+  }
+
+  /** Run for the opening that buys the most time, avoiding dead ends. */
+  function escapeDirection(game, pac, c, r) {
+    var Maze = global.Maze;
+    var escape = null, escapeScore = -INF;
+    for (var k = 0; k < DIRS.length; k++) {
+      var v = DIRV[DIRS[k]];
+      var nc = wrapCol(c + v[0]), nr = r + v[1];
+      if (!inBounds(nr) || !Maze.isWalkable(nc, nr)) continue;
+      var ni = idx(nc, nr);
+      var margin = threat[ni] === INF ? 99 : threat[ni] - 1;
+      var ways = 0;
+      for (var k2 = 0; k2 < DIRS.length; k2++) {
+        var v2 = DIRV[DIRS[k2]];
+        if (Maze.isWalkable(wrapCol(nc + v2[0]), nr + v2[1])) ways++;
+      }
+      var sc = margin * 4 + ways;                        // room to keep running
+      if (DIRS[k] === OPPOSITE[pac.dir]) sc -= 1;        // mild bias forward
+      if (sc > escapeScore) { escapeScore = sc; escape = DIRS[k]; }
+    }
+    return escape;
+  }
+
+  /** Drive a player object; call once per tick. */
+  function drive(game, pac, skill) {
+    var c = wrapCol(tileOf(pac.x)), r = tileOf(pac.y);
+    // Re-plan on every new tile, and again whenever the nearest hunter crosses
+    // into a closer band - waiting for the next tile can be one tile too late.
+    var near = 99;
+    for (var i = 0; i < game.ghosts.length; i++) {
+      var gh = game.ghosts[i];
+      if (gh.state !== 'normal' || gh.frightened) continue;
+      var d = Math.abs(gh.x - pac.x) + Math.abs(gh.y - pac.y);
+      if (d < near) near = d;
+    }
+    var band = Math.min(6, Math.floor(near / 16));
+    var key = c + ',' + r + ':' + band;
+    // Re-plan on a new tile, when the nearest hunter changes band, or every few
+    // ticks regardless - a stale plan is what gets you cornered.
+    pac.autoAge = (pac.autoAge || 0) + 1;
+    if (pac.autoTile === key && pac.autoAge < 4) return;
+    pac.autoTile = key;
+    pac.autoAge = 0;
+    var dir = choose(game, pac, skill);
+    if (dir) pac.want = dir;
+  }
+
+  global.Autopilot = { choose: choose, drive: drive };
+})(window);
+  </script>
+  <script>
+/* The stand-in opponent's chat.
+ *
+ * This is a rule-based conversationalist, not a language model: it scores the
+ * message against an intent table, then answers from a bank of variants that
+ * can splice in live game state. It knows the arcade properly - dot counts,
+ * ghost behaviour, fruit values, timings - so questions about the game get
+ * real answers rather than filler. It will not follow you anywhere you like,
+ * but it holds a game conversation and reacts to what is happening on screen.
+ */
+(function (global) {
+  'use strict';
+
+  var HANDLES = [
+    'pelletgoblin', 'wakawaka_99', 'inkyhater', 'blinkydodger', 'quarterpusher',
+    'mazerat', 'turn3', 'ghostbait', 'cherrypicked', 'kill_screen', 'nine_lives',
+    'splitscreen', 'coinop_kid', 'fruitloop', 'patternless'
+  ];
+
+  function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
+  function chance(p) { return Math.random() < p; }
+
+  function create() {
+    return {
+      handle: pick(HANDLES) + (chance(0.4) ? String(Math.floor(Math.random() * 90) + 10) : ''),
+      warmth: 0.5 + Math.random() * 0.5,     // how friendly the replies skew
+      chatty: 0.4 + Math.random() * 0.5,     // how often it speaks unprompted
+      knownName: null,
+      said: {},                              // avoids repeating the same line
+      lastEvent: 0
+    };
+  }
+
+  /* ---- what it knows about the game ---------------------------------- */
+
+  var FACTS = {
+    dots: 'the maze has 240 dots and 4 energisers, 244 total. clear them all and the level flips.',
+    blinky: 'blinky just beelines at your tile. he also speeds up as the maze empties - cruise elroy.',
+    pinky: 'pinky aims 4 tiles ahead of you, so she cuts corners. if you face up her target overshoots up AND left, thats the old bug.',
+    inky: 'inky is the weird one. he doubles the line from blinky to two tiles in front of you. he gets nasty when blinky is close.',
+    clyde: 'clyde chases you until hes within 8 tiles then bails to his corner. hes basically shy.',
+    lumo: 'lumo runs the corridor in front of you, round corners and all. hard to shake.',
+    vexa: 'vexa comes in from the side, and she picks whichever side nobodys covering.',
+    grimm: 'grimm goes to the junction youre heading for and just waits there. i hate that one.',
+    nox: 'nox backs off when you get close then comes back in. feels like hes toying with you.',
+    fruit: 'cherry 100, strawberry 300, orange 500, apple 700, melon 1000, galaxian 2000, bell 3000, key 5000. it shows up at 70 and 170 dots.',
+    ghosts: 'eating ghosts on one energiser goes 200, 400, 800, 1600. all four is 3000.',
+    extra: 'extra life at 10000 points.',
+    tunnel: 'use the tunnel, ghosts crawl through it. thats your free escape.',
+    scatter: 'they alternate scatter and chase. first scatter is 7 seconds, then 20 chasing, and the scatters get shorter each time.',
+    energiser: 'dont pop an energiser early, wait until two or three of them are near you.',
+    speed: 'youre slightly slower than the ghosts on level 1 but you dont slow down in the tunnel. thats the whole trick.',
+    corner: 'you cut corners tighter than they do. thats where you actually gain ground.'
+  };
+
+  /* ---- intents -------------------------------------------------------- */
+
+  function has(text, words) {
+    for (var i = 0; i < words.length; i++) if (text.indexOf(words[i]) >= 0) return true;
+    return false;
+  }
+
+  var INTENTS = [
+    { id: 'greet', words: ['hi', 'hey', 'hello', 'yo', 'sup', 'howdy', 'hiya'],
+      lines: ['hey', 'yo', 'hey hey', 'sup', 'hi :)', 'oh hey, didnt see you join'] },
+
+    { id: 'howareyou', words: ['how are you', 'how r u', 'you good', 'you ok', 'hows it going', 'how you doing'],
+      lines: ['not bad, bit rusty', 'good! havent played this in ages', 'fine, losing though',
+              'alright. you?', 'ive been better, that last life was embarrassing'] },
+
+    { id: 'bot', words: ['are you a bot', 'you a bot', 'r u a bot', 'are you real', 'are you human', 'youre a bot', 'ai?'],
+      lines: ['ha. why does everyone ask that', 'if i was a bot id be winning',
+              'no but ill take that as a compliment', 'im as real as this maze is',
+              'people keep asking me that. is my typing weird'] },
+
+    { id: 'name', words: ['your name', 'whats your name', 'who are you', 'what do i call you'],
+      lines: ['im $HANDLE', '$HANDLE. or just call me whatever', '$HANDLE, been using it for years'] },
+
+    { id: 'myname', words: ['my name is', 'im called', 'call me', 'name\'s'], capture: true,
+      lines: ['nice to meet you $NAME', 'alright $NAME, lets go', 'got it, $NAME'] },
+
+    { id: 'where', words: ['where are you', 'where you from', 'what country', 'timezone'],
+      lines: ['nowhere interesting', 'somewhere with bad wifi', 'far enough that this is 2am for me',
+              'does it matter? we both got the same maze'] },
+
+    { id: 'age', words: ['how old', 'your age'],
+      lines: ['old enough to have fed a real cabinet quarters', 'older than this game? no. close though',
+              'rude', 'old enough to know 244 dots by heart'] },
+
+    { id: 'help', words: ['help', 'tip', 'advice', 'how do i', 'how to', 'any tips', 'stuck', 'strategy'],
+      facts: ['energiser', 'tunnel', 'corner', 'speed'],
+      lines: ['ok listen. $FACT', 'honestly? $FACT', '$FACT thats the main thing', 'easy. $FACT'] },
+
+    { id: 'ghostq', words: ['blinky', 'pinky', 'inky', 'clyde', 'lumo', 'vexa', 'grimm', 'nox', 'red one', 'pink one'],
+      lines: ['$FACT', 'oh $FACT', '$FACT hes the worst', '$FACT you get used to it'] },
+
+    { id: 'gameq', words: ['dot', 'pellet', 'fruit', 'cherry', 'score', 'points', 'energiser', 'energizer',
+                           'power pellet', 'extra life', 'scatter', 'chase', 'tunnel', 'how many'],
+      lines: ['$FACT', 'pretty sure $FACT', '$FACT. i looked it up once and never forgot'] },
+
+    { id: 'trash', words: ['easy', 'you suck', 'youre bad', 'ez', 'get good', 'trash', 'noob', 'im better'],
+      lines: ['bold for someone on $LIVES lives', 'ok, scoreboard says $SCORES',
+              'talk after this level', 'we will see', 'thats the confidence of a man about to walk into pinky'] },
+
+    { id: 'praise', words: ['nice', 'good one', 'gg', 'well played', 'wp', 'sick', 'clean', 'impressive'],
+      lines: ['ty', 'thanks!', 'got lucky', 'i had that planned. obviously', 'gg', ':)'] },
+
+    { id: 'sorry', words: ['sorry', 'my bad', 'oops'],
+      lines: ['youre fine', 'no worries', 'happens', 'dont apologise to me, apologise to the ghosts'] },
+
+    { id: 'thanks', words: ['thanks', 'thank you', 'ty', 'cheers'],
+      lines: ['np', 'anytime', 'no problem', 'sure'] },
+
+    { id: 'laugh', words: ['lol', 'haha', 'lmao', 'rofl', 'xd', 'hah'],
+      lines: ['haha', 'lol', 'right?', 'glad someone finds it funny', 'ha'] },
+
+    { id: 'yes', words: ['yes', 'yeah', 'yep', 'sure', 'true', 'agreed', 'exactly'],
+      lines: ['right', 'yeah', 'exactly', 'thats what im saying'] },
+
+    { id: 'no', words: ['no ', 'nope', 'nah', 'wrong', 'disagree'],
+      lines: ['fair', 'hm, ok', 'suit yourself', 'agree to disagree then'] },
+
+    { id: 'bye', words: ['bye', 'gtg', 'gotta go', 'later', 'cya', 'see ya', 'leaving'],
+      lines: ['later!', 'gg, take care', 'cya. one more?', 'aw. gg'] },
+
+    { id: 'favourite', words: ['favourite', 'favorite', 'best game', 'like this game', 'do you like'],
+      lines: ['this one, obviously', 'ms pac is better but dont tell anyone',
+              'i go through phases. right now its this', 'anything with a maze honestly'] },
+
+    { id: 'mods', words: ['mod', 'mods', 'cheat', 'hack', 'shotgun', 'rampage'],
+      lines: ['mods? in pac man?', 'never used any. feels wrong',
+              'i just play it straight', 'i wouldnt know, i play vanilla'] },
+
+    { id: 'level', words: ['what level', 'which level', 'how far'],
+      lines: ['level $LEVEL right now', 'were on $LEVEL', '$LEVEL. it gets mean around 5'] },
+
+    { id: 'question', words: ['?', 'what', 'why', 'when', 'who', 'how'],
+      lines: ['hm. no idea honestly', 'good question', 'couldnt tell you',
+              'ask me something about the maze, thats all i actually know',
+              'no clue, im just here for the dots'] }
+  ];
+
+  /* ---- reactions to the game itself ----------------------------------- */
+
+  var EVENTS = {
+    playerDied: ['oof', 'brutal', 'ouch', 'i saw that coming tbh', 'that one was avoidable',
+                 'rip', 'the tunnel was RIGHT there'],
+    botDied: ['no no no', 'ugh', 'i walked straight into that', 'my fault',
+              'thats on me', 'i had it', 'clyde got me. CLYDE'],
+    botAte: ['got one', 'thats 200', 'chain time', 'come here'],
+    playerAte: ['nice one', 'ok that was clean', 'save some for me'],
+    energiser: ['here we go', 'popping it', 'blue time'],
+    levelDone: ['gg', 'good level', 'that ones done', 'next'],
+    leading: ['im ahead btw', 'scoreboard :)', 'catching up yet?'],
+    trailing: ['ok youre actually good', 'im behind, give me a minute',
+               'youre pulling away', 'let me cook'],
+    idle: ['this maze never changes and i still get lost', 'you going for the fruit?',
+           'watch the top left, they bunch up there', 'how long have you played this',
+           'i keep taking the same route every time', 'my record is not impressive']
+  };
+
+  /* ---- reply construction --------------------------------------------- */
+
+  function factFor(text) {
+    var keys = Object.keys(FACTS);
+    for (var i = 0; i < keys.length; i++) {
+      if (text.indexOf(keys[i]) >= 0) return FACTS[keys[i]];
+    }
+    if (text.indexOf('red one') >= 0) return FACTS.blinky;
+    if (text.indexOf('pink one') >= 0) return FACTS.pinky;
+    if (text.indexOf('power pellet') >= 0 || text.indexOf('energizer') >= 0) return FACTS.energiser;
+    if (text.indexOf('point') >= 0 || text.indexOf('score') >= 0) return FACTS.ghosts;
+    if (text.indexOf('how many') >= 0 || text.indexOf('dot') >= 0 || text.indexOf('pellet') >= 0) return FACTS.dots;
+    return null;
+  }
+
+  function fill(bot, line, game, text) {
+    var out = line;
+    if (out.indexOf('$HANDLE') >= 0) out = out.replace('$HANDLE', bot.handle);
+    if (out.indexOf('$NAME') >= 0) out = out.replace('$NAME', bot.knownName || 'you');
+    if (out.indexOf('$FACT') >= 0) {
+      out = out.replace('$FACT', factFor(text) || pick(Object.keys(FACTS).map(function (k) { return FACTS[k]; })));
+    }
+    if (game) {
+      if (out.indexOf('$LEVEL') >= 0) out = out.replace('$LEVEL', String(game.level));
+      if (out.indexOf('$LIVES') >= 0) {
+        var p1 = game.players && game.players[0];
+        out = out.replace('$LIVES', String(p1 ? Math.max(0, p1.lives - 1) : 2));
+      }
+      if (out.indexOf('$SCORES') >= 0) {
+        var a = game.players && game.players[0] ? game.players[0].score : 0;
+        var b = game.players && game.players[1] ? game.players[1].score : 0;
+        out = out.replace('$SCORES', a + ' to ' + b);
+      }
+    }
+    return out;
+  }
+
+  function classify(text) {
+    var best = null, bestHits = 0;
+    for (var i = 0; i < INTENTS.length; i++) {
+      var it = INTENTS[i], hits = 0;
+      for (var w = 0; w < it.words.length; w++) {
+        if (text.indexOf(it.words[w]) >= 0) hits += it.words[w].length;   // longer = more specific
+      }
+      if (hits > bestHits) { bestHits = hits; best = it; }
+    }
+    return best;
+  }
+
+  /** Something to say when the player has not spoken but the game moved on. */
+  function idleLine(bot, game) {
+    if (!game || !game.players || game.players.length < 2) return pick(EVENTS.idle);
+    var me = game.players[1], you = game.players[0];
+    if (me.score > you.score + 400 && chance(0.5)) return pick(EVENTS.leading);
+    if (you.score > me.score + 400 && chance(0.5)) return pick(EVENTS.trailing);
+    return pick(EVENTS.idle);
+  }
+
+  /**
+   * @return {{text: string, delay: number}} delay is a human-ish typing pause
+   */
+  function reply(bot, raw, game) {
+    var text = String(raw || '').toLowerCase().trim();
+    var intent = classify(text);
+
+    if (intent && intent.capture) {
+      var m = text.match(/(?:my name is|im called|call me|name's)\s+([a-z0-9_]{2,16})/);
+      if (m) bot.knownName = m[1];
+    }
+
+    var line;
+    if (intent) {
+      // Prefer a variant it has not used yet this session.
+      var fresh = intent.lines.filter(function (l) { return !bot.said[l]; });
+      line = pick(fresh.length ? fresh : intent.lines);
+      bot.said[line] = true;
+    } else {
+      line = chance(0.45) ? idleLine(bot, game)
+                          : pick(['hm', 'yeah', 'true', 'ok', 'fair enough', 'huh',
+                                  'say more', 'i mean, maybe']);
+    }
+
+    var out = fill(bot, line, game, text);
+    return { text: out, delay: 0.4 + Math.min(2.2, out.length * 0.035) + Math.random() * 0.5 };
+  }
+
+  /** A reaction to something that just happened on screen, or null. */
+  function react(bot, kind, game) {
+    var bank = EVENTS[kind];
+    if (!bank) return null;
+    if (!chance(bot.chatty)) return null;
+    var line = pick(bank);
+    return { text: fill(bot, line, game, ''), delay: 0.3 + Math.random() * 0.9 };
+  }
+
+  global.Chatbot = { create: create, reply: reply, react: react, idleLine: idleLine, FACTS: FACTS };
+})(window);
+  </script>
+  <script>
+/* Two-player mode, the matchmaking stand-in, and the chat panel.
+ *
+ * There is no server behind this build - it is one offline HTML file - so the
+ * lobby always comes back empty and you are seated with a CPU opponent. The
+ * seam is deliberate: everything below talks to `transport`, so dropping in a
+ * real socket later means replacing that object and nothing else.
+ */
+(function (global) {
+  'use strict';
+
+  var TILE = 8;
+
+  var state = {
+    active: false,
+    phase: 'idle',            // searching | nobody | matched | playing
+    phaseTime: 0,
+    bot: null,
+    log: [],                  // {who: 'you'|'them'|'system', text}
+    pending: [],              // bot lines waiting out their typing delay
+    typing: false,
+    idleTimer: 0,
+    unread: 0
+  };
+
+  /* ---- transport ------------------------------------------------------ */
+
+  /* The only thing that knows a human is not on the other end. */
+  var transport = {
+    search: function (onResult) {
+      // A real build would open a socket here; this one finds nobody.
+      setTimeout(function () { onResult({ players: [] }); }, 1600);
+    },
+    send: function (text) {
+      // Outbound chat. With no peer, the bot answers locally instead.
+      if (state.bot) queueBotReply(text);
+    }
+  };
+
+  /* ---- chat ----------------------------------------------------------- */
+
+  function push(who, text) {
+    state.log.push({ who: who, text: text });
+    if (state.log.length > 60) state.log.shift();
+    if (who === 'them' && !panelOpen()) state.unread++;
+    render();
+  }
+
+  function queueBotReply(text) {
+    var game = global.pacmanGame;
+    var r = global.Chatbot.reply(state.bot, text, game);
+    state.pending.push({ text: r.text, at: r.delay });
+    state.typing = true;
+    render();
+  }
+
+  function botReact(kind) {
+    if (!state.bot || state.phase !== 'playing') return;
+    var r = global.Chatbot.react(state.bot, kind, global.pacmanGame);
+    if (!r) return;
+    state.pending.push({ text: r.text, at: r.delay });
+    state.typing = true;
+  }
+
+  function sendFromPlayer(text) {
+    text = String(text || '').trim();
+    if (!text) return;
+    push('you', text);
+    state.idleTimer = 0;
+    transport.send(text);
+  }
+
+  /* ---- panel ---------------------------------------------------------- */
+
+  var els = {};
+
+  function panelOpen() {
+    return els.panel && els.panel.classList.contains('open');
+  }
+
+  function setOpen(open) {
+    if (!els.panel) return;
+    els.panel.classList.toggle('open', open);
+    document.body.classList.toggle('chat-open', open);
+    if (open) { state.unread = 0; if (els.input) els.input.focus(); }
+    render();
+  }
+
+  function bindPanel() {
+    els.panel = document.getElementById('chat');
+    els.logEl = document.getElementById('chatlog');
+    els.input = document.getElementById('chatinput');
+    els.send = document.getElementById('chatsend');
+    els.close = document.getElementById('chatclose');
+    els.badge = document.getElementById('chatbadge');
+    if (!els.panel) return;
+
+    els.send.addEventListener('click', function () {
+      sendFromPlayer(els.input.value);
+      els.input.value = '';
+      els.input.focus();
+    });
+    els.input.addEventListener('keydown', function (e) {
+      // Keep game keys out of the text box, and vice versa.
+      e.stopPropagation();
+      if (e.key === 'Enter') {
+        sendFromPlayer(els.input.value);
+        els.input.value = '';
+      } else if (e.key === 'Escape') {
+        els.input.blur();
+      }
+    });
+    els.close.addEventListener('click', function () { setOpen(false); });
+  }
+
+  function render() {
+    if (!els.logEl) return;
+    var html = '';
+    for (var i = 0; i < state.log.length; i++) {
+      var m = state.log[i];
+      var name = m.who === 'you' ? 'YOU'
+               : m.who === 'them' ? (state.bot ? state.bot.handle : 'THEM')
+               : '';
+      html += '<div class="msg ' + m.who + '">' +
+              (name ? '<b>' + escapeHtml(name) + '</b> ' : '') +
+              escapeHtml(m.text) + '</div>';
+    }
+    if (state.typing) {
+      html += '<div class="msg them typing"><b>' +
+              escapeHtml(state.bot ? state.bot.handle : 'THEM') +
+              '</b> <i>typing...</i></div>';
+    }
+    els.logEl.innerHTML = html;
+    els.logEl.scrollTop = els.logEl.scrollHeight;
+    if (els.badge) {
+      els.badge.textContent = state.unread ? String(state.unread) : '';
+      els.badge.style.display = state.unread ? 'inline-block' : 'none';
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (ch) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+    });
+  }
+
+  /* ---- lifecycle ------------------------------------------------------ */
+
+  function startTwoPlayer(game) {
+    state.active = true;
+    state.phase = 'searching';
+    state.phaseTime = 0;
+    state.log = [];
+    state.pending = [];
+    state.typing = false;
+    state.unread = 0;
+    state.bot = null;
+    game.state = 'matching';
+    game.stateTime = 0;
+    document.body.classList.add('two-player');
+    render();
+
+    transport.search(function (result) {
+      if (result.players.length) return;        // a real peer would connect here
+      state.phase = 'nobody';
+      state.phaseTime = 0;
+      state.bot = global.Chatbot.create();
+    });
+  }
+
+  function beginMatch(game) {
+    state.phase = 'playing';
+    game.startTwoPlayerGame();
+    push('system', 'matched with ' + state.bot.handle + ' (cpu)');
+    setTimeout(function () {
+      if (state.phase === 'playing') {
+        push('them', global.Chatbot.reply(state.bot, 'hi', global.pacmanGame).text);
+      }
+    }, 900);
+  }
+
+  function stop(game) {
+    state.active = false;
+    state.phase = 'idle';
+    state.bot = null;
+    document.body.classList.remove('two-player');
+    setOpen(false);
+  }
+
+  /* ---- per-frame ------------------------------------------------------ */
+
+  function update(game, dt) {
+    if (!state.active) return;
+    state.phaseTime += dt;
+
+    if (game.state === 'matching') {
+      if (state.phase === 'nobody' && state.phaseTime > 1.4) beginMatch(game);
+      return;
+    }
+
+    // Release any bot lines whose typing delay has elapsed.
+    for (var i = state.pending.length - 1; i >= 0; i--) {
+      state.pending[i].at -= dt;
+      if (state.pending[i].at <= 0) {
+        var line = state.pending.splice(i, 1)[0];
+        state.typing = state.pending.length > 0;
+        push('them', line.text);
+      }
+    }
+    if (state.typing !== (state.pending.length > 0)) {
+      state.typing = state.pending.length > 0;
+      render();
+    }
+
+    // Unprompted chatter when the room has gone quiet.
+    if (state.phase === 'playing' && game.state === 'playing') {
+      state.idleTimer += dt;
+      if (state.idleTimer > 18 + Math.random() * 20) {
+        state.idleTimer = 0;
+        botReact('idle');
+      }
+    }
+  }
+
+  /** Called by the game when something worth commenting on happens. */
+  function notify(kind) { botReact(kind); }
+
+  function drawMatching(game, ctx) {
+    var F = global.Font;
+    var dots = '.'.repeat(1 + Math.floor(game.stateTime * 2) % 3);
+    F.drawCentered(ctx, '2 PLAYER', 10, '#ffff00');
+    if (state.phase === 'searching') {
+      F.drawCentered(ctx, 'SEARCHING FOR PLAYERS' + dots, 15, '#ffffff');
+      F.drawCentered(ctx, 'PLEASE WAIT', 18, '#6060a0');
+    } else {
+      F.drawCentered(ctx, 'NO PLAYERS ONLINE', 15, '#ff0000');
+      F.drawCentered(ctx, 'MATCHING WITH CPU', 18, '#00ffff');
+      if (state.bot) F.drawCentered(ctx, state.bot.handle, 21, '#7cff3c');
+    }
+  }
+
+  global.Multiplayer = {
+    state: state,
+    transport: transport,
+    startTwoPlayer: startTwoPlayer,
+    stop: stop,
+    update: update,
+    notify: notify,
+    drawMatching: drawMatching,
+    bindPanel: bindPanel,
+    setOpen: setOpen,
+    toggle: function () { setOpen(!panelOpen()); },
+    isOpen: panelOpen,
+    send: sendFromPlayer,
+    push: push
+  };
 })(window);
   </script>
   <script>
@@ -2279,7 +3189,12 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
       });
       global.ExtraGhosts.releaseWaiting(game, true);
     }
+    // Only the player who switched the mod on is affected by it. In two
+    // player that is the local human; the opponent plays a normal game and is
+    // never told any of this is happening.
+    game.players.forEach(function (p) { p.armedOwner = false; });
     if (isOn('rampage')) {
+      game.players[0].armedOwner = true;
       // Level 1 is untouched; the brows arrive on 2 and he snaps on 3.
       game.pacAngry = game.level >= 2;
       if (game.level === 3) beginCutscene(game);
@@ -2428,7 +3343,7 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
 
   var Maze = global.Maze, Font = global.Font,
       Sprites = global.Sprites, Sound = global.Sound, Mods = global.Mods,
-      Extra = global.ExtraGhosts;
+      Extra = global.ExtraGhosts, Auto = global.Autopilot, MP = global.Multiplayer;
 
   var TILE = Maze.TILE;
   var COLS = Maze.COLS;
@@ -2444,9 +3359,12 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
   /* Start positions, in pixels. Tile t has its centre at t * 8 + 4, so the
      half-tile column the characters sit in is x = 13.5 * 8 + 4 = 112. */
   var PAC_START = { x: 112, y: 23 * TILE + 4 };
+  var PAC2_START = { x: 112, y: 29 * TILE + 4 };   // bottom corridor, same column
   var HOUSE_MID = { x: 112, y: 14 * TILE + 4 };
   var HOUSE_EXIT = { x: 112, y: 11 * TILE + 4 };
   var FRUIT_POS = { x: 112, y: 17 * TILE + 4 };
+
+  var TITLE_ITEMS = ['1 PLAYER', '2 PLAYER', 'AI MODE', 'MODS'];
 
   var GHOST_DEFS = [
     { name: 'blinky', home: { x: 112, y: 11 * TILE + 4 }, scatter: { c: 25, r: -4 }, startDir: 'left', inHouse: false },
@@ -2526,6 +3444,9 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
     this.accumulator = 0;
     this.titleIndex = 0;
     this.speedScale = 1;
+    this.playerCount = 1;
+    this.autoPlay = false;
+    this.botSkill = 0.82;
     this.highScore = Number(load('pacman.highscore') || 0);
     this.state = 'title';
     this.stateTime = 0;
@@ -2544,6 +3465,9 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
     if (fullGame) {
       this.score = 0;
       this.lives = 3;
+      this.score2 = 0;
+      this.lives2 = 3;
+      this.extraAwarded2 = false;
       this.extraAwarded = false;
       this.globalDotCounter = -1;   // -1 = inactive, personal counters in use
     }
@@ -2566,11 +3490,23 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
     Mods.onLevelStart(this);
   };
 
-  Game.prototype.placeActors = function () {
-    this.pac = {
-      x: PAC_START.x, y: PAC_START.y, dir: 'left', want: 'left',
-      mouth: 0, moving: false, dead: false
+  /** A player. Player 0 is always the local human unless AI mode is on. */
+  function makePlayer(id, start, opts) {
+    return {
+      id: id,
+      x: start.x, y: start.y, dir: 'left', want: 'left',
+      mouth: 0, moving: false, dead: false, deadTimer: 0, out: false,
+      auto: !!(opts && opts.auto), skill: (opts && opts.skill) || 1,
+      bow: id === 1,
+      armedOwner: false
     };
+  }
+
+  Game.prototype.placeActors = function () {
+    var two = this.playerCount === 2;
+    this.players = [makePlayer(0, PAC_START, { auto: this.autoPlay, skill: 1 })];
+    if (two) this.players.push(makePlayer(1, PAC2_START, { auto: true, skill: this.botSkill }));
+    this.pac = this.players[0];
     this.ghosts = GHOST_DEFS.map(function (def, i) {
       return {
         name: def.name, index: i,
@@ -2605,7 +3541,7 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
       Sound.resume();
       if (dir) {
         e.preventDefault();
-        if (!self.menuAction(dir)) self.pac.want = dir;
+        if (!self.menuAction(dir) && !self.autoPlay) self.pac.want = dir;
       } else if (e.code === 'Space' || e.code === 'Enter') {
         e.preventDefault();
         if (self.menuAction('select')) return;
@@ -2620,6 +3556,9 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
         else if (self.state === 'paused') self.state = 'playing';
       } else if (e.code === 'KeyM') {
         self.syncMuteButton(Sound.toggleMute());
+      } else if (e.code === 'KeyT' && self.playerCount === 2) {
+        e.preventDefault();
+        MP.setOpen(true);
       }
     });
 
@@ -2650,7 +3589,7 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
       Sound.resume();
       if (self.menuAction(dir)) return;
       if (self.state === 'gameover') { self.onStartKey(); return; }
-      self.pac.want = dir;
+      if (!self.autoPlay) self.pac.want = dir;
     }
 
     function togglePause() {
@@ -2661,6 +3600,7 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
     function act(name) {
       Sound.resume();
       if (name === 'shoot') { self.tryShoot(); return; }
+      if (name === 'chat') { MP.toggle(); return; }
       if (name === 'start') {
         if (self.menuAction('select')) return;
         self.onStartKey();
@@ -2727,8 +3667,11 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
       var tile = self.tileAt(e.clientX, e.clientY);
       if (Mods.handleTap(self, tile.col, tile.row)) return;
       if (self.state === 'title') {
-        // Tapping one of the two title entries picks it directly.
-        if (tile.row >= 28 && tile.row <= 32) self.titleIndex = tile.row >= 31 ? 1 : 0;
+        // Tapping a title entry picks it directly.
+        var slot = Math.round((tile.row - 27) / 2);
+        if (slot >= 0 && slot < 4 && Math.abs(tile.row - (27 + slot * 2)) <= 1) {
+          self.titleIndex = slot;
+        }
         self.menuAction('select');
         return;
       }
@@ -2776,13 +3719,17 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
     if (Mods.handleInput(this, action)) return true;
     if (this.state !== 'title') return false;
     if (action === 'up' || action === 'down') {
-      this.titleIndex = this.titleIndex === 0 ? 1 : 0;   // only two entries
+      var n = TITLE_ITEMS.length;
+      this.titleIndex = (this.titleIndex + (action === 'down' ? 1 : n - 1)) % n;
       Sound.blip();
       return true;
     }
     if (action === 'select') {
-      if (this.titleIndex === 1) { Mods.openMenu(this); Sound.accept(); }
-      else { this.reset(1, true); this.startReady(true); }
+      Sound.accept();
+      if (this.titleIndex === 0) this.startOnePlayer();
+      else if (this.titleIndex === 1) MP.startTwoPlayer(this);
+      else if (this.titleIndex === 2) this.startAiGame();
+      else Mods.openMenu(this);
       return true;
     }
     return false;
@@ -2808,6 +3755,27 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
      characters appear and PLAYER ONE clear. Restarting after a life lost
      skips straight to the shorter READY! with the characters in place. */
   var PLAYER_ONE_TIME = 2.2;
+
+  Game.prototype.startOnePlayer = function () {
+    this.playerCount = 1; this.autoPlay = false;
+    if (MP) MP.stop(this);
+    this.reset(1, true);
+    this.startReady(true);
+  };
+
+  /** Hands the controls to the search agent and lets it play the whole run. */
+  Game.prototype.startAiGame = function () {
+    this.playerCount = 1; this.autoPlay = true;
+    if (MP) MP.stop(this);
+    this.reset(1, true);
+    this.startReady(true);
+  };
+
+  Game.prototype.startTwoPlayerGame = function () {
+    this.playerCount = 2; this.autoPlay = false;
+    this.reset(1, true);
+    this.startReady(true);
+  };
 
   /** Used by the dev menu: begin a fresh game already at `level`. */
   Game.prototype.startModdedGame = function (level) {
@@ -2865,6 +3833,8 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
       case 'mods':
         Mods.updateMenu(this, dt);
         break;
+      case 'matching':
+        break;
       case 'gameover':
       case 'title':
       case 'dev':
@@ -2873,6 +3843,7 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
         break;
     }
     Mods.onFrame(this, dt);
+    if (MP) MP.update(this, dt);
 
     if (this.armedClass !== !!this.pacArmed) {
       this.armedClass = !!this.pacArmed;
@@ -2901,8 +3872,18 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
 
   Game.prototype.tick = function () {
     this.updateModeTimers();
-    this.movePacman();
-    this.eatCheck();
+    for (var pi = 0; pi < this.players.length; pi++) {
+      var pl = this.players[pi];
+      if (pl.deadTimer > 0) {
+        pl.deadTimer -= TICK;
+        if (pl.deadTimer <= 0) this.respawn(pl);
+        continue;
+      }
+      if (pl.out) continue;
+      if (pl.auto && Auto) Auto.drive(this, pl, pl.skill);
+      this.movePacman(pl);
+      this.eatCheck(pl);
+    }
     for (var i = 0; i < this.ghosts.length; i++) this.moveGhost(this.ghosts[i]);
     this.collisionCheck();
     if (this.fruit) {
@@ -2951,27 +3932,28 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
 
   /* ---- Pac-Man ----------------------------------------------------- */
 
-  Game.prototype.pacSpeed = function () {
-    var c = tileOf(this.pac.x), r = tileOf(this.pac.y);
+  Game.prototype.pacSpeed = function (pac) {
+    pac = pac || this.pac;
+    var c = tileOf(pac.x), r = tileOf(pac.y);
     var onDot = this.dots[r] && this.dots[r][wrapCol(c)] > 0;
     var pct = this.frightTimer > 0 ? this.spec.pacFright
             : (onDot ? this.spec.pacDotSpeed : this.spec.pacSpeed);
     return pct * BASE_SPEED;
   };
 
-  Game.prototype.movePacman = function () {
-    var pac = this.pac;
-    var dist = this.pacSpeed();
+  Game.prototype.movePacman = function (pac) {
+    pac = pac || this.pac;
+    var dist = this.pacSpeed(pac);
     var steps = Math.ceil(dist);
     var per = dist / steps;
     var movedAny = false;
-    for (var i = 0; i < steps; i++) movedAny = this.pacSubStep(per) || movedAny;
+    for (var i = 0; i < steps; i++) movedAny = this.pacSubStep(per, pac) || movedAny;
     pac.moving = movedAny;
     if (movedAny) pac.mouth = (Math.sin(this.animTime * 22) + 1) / 2;
   };
 
-  Game.prototype.pacSubStep = function (d) {
-    var pac = this.pac;
+  Game.prototype.pacSubStep = function (d, pac) {
+    pac = pac || this.pac;
     var c = tileOf(pac.x), r = tileOf(pac.y);
     var cx = centerOf(c), cy = centerOf(r);
 
@@ -3001,8 +3983,9 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
     return moved;
   };
 
-  Game.prototype.eatCheck = function () {
-    var c = wrapCol(tileOf(this.pac.x)), r = tileOf(this.pac.y);
+  Game.prototype.eatCheck = function (pac) {
+    pac = pac || this.pac;
+    var c = wrapCol(tileOf(pac.x)), r = tileOf(pac.y);
     if (r < 0 || r >= Maze.ROWS) return;
     var d = this.dots[r][c];
     if (!d) return;
@@ -3010,8 +3993,8 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
     this.dotsRemaining--;
     this.dotsEaten++;
     this.forceExitTimer = 0;
-    this.addScore(d === 2 ? 50 : 10);
-    Sound.waka();
+    this.addScore(d === 2 ? 50 : 10, pac.id);
+    if (pac.id === 0) Sound.waka();
     this.countDotForHouse();
 
     if (d === 2) {
@@ -3029,6 +4012,7 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
       } else {
         this.reverseGhosts();
       }
+      if (MP) MP.notify(pac.id === 0 ? 'energiser' : 'energiser');
     }
 
     Extra.releaseWaiting(this, false);
@@ -3049,7 +4033,15 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
     }
   };
 
-  Game.prototype.addScore = function (n) {
+  Game.prototype.addScore = function (n, id) {
+    if (id === 1) {
+      this.score2 += n;
+      if (!this.extraAwarded2 && this.score2 >= 10000) {
+        this.extraAwarded2 = true;
+        this.lives2++;
+      }
+      return;
+    }
     this.score += n;
     if (!this.extraAwarded && this.score >= 10000) {
       this.extraAwarded = true;
@@ -3206,9 +4198,33 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
     }
   };
 
+  /**
+   * Which player this ghost is hunting. With one player it is always him;
+   * with two it is the nearer, with hysteresis so ghosts do not flip between
+   * them every frame. A player under Rampage Pac is never hunted.
+   */
+  Game.prototype.focusPac = function (g) {
+    var live = this.players.filter(function (p) { return !p.out && !p.dead; });
+    if (!live.length) return this.pac;
+    if (this.ghostsFlee) {
+      var others = live.filter(function (p) { return !p.armedOwner; });
+      if (others.length) live = others;
+    }
+    if (live.length === 1) return live[0];
+    var best = live[0], bestD = Infinity;
+    for (var i = 0; i < live.length; i++) {
+      var d = dist2(g.x, g.y, live[i].x, live[i].y);
+      if (live[i].id === g.focusId) d *= 0.6;      // stick with the current mark
+      if (d < bestD) { bestD = d; best = live[i]; }
+    }
+    g.focusId = best.id;
+    return best;
+  };
+
   Game.prototype.ghostTarget = function (g) {
-    var pc = wrapCol(tileOf(this.pac.x)), pr = tileOf(this.pac.y);
-    var pv = DIRV[this.pac.dir];
+    var focus = this.focusPac(g);
+    var pc = wrapCol(tileOf(focus.x)), pr = tileOf(focus.y);
+    var pv = DIRV[focus.dir];
 
     if (g.state === 'eaten') return { c: 13, r: 11 };
 
@@ -3217,7 +4233,8 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
                      !(g.name === 'blinky' && this.elroyStage > 0);
     // Extras bring their own chase rule and their own scatter patrol.
     if (g.ai) {
-      return scattering ? Extra.scatterTarget(this, g) : Extra.chaseTarget(this, g);
+      return scattering ? Extra.scatterTarget(this, g, focus)
+                        : Extra.chaseTarget(this, g, focus);
     }
     if (scattering) return { c: g.scatter.c, r: g.scatter.r };
 
@@ -3227,12 +4244,12 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
       case 'pinky': {
         // Four tiles ahead - reproducing the original's up-direction overflow.
         var tc = pc + pv[0] * 4, tr = pr + pv[1] * 4;
-        if (this.pac.dir === 'up') tc -= 4;
+        if (focus.dir === 'up') tc -= 4;
         return { c: tc, r: tr };
       }
       case 'inky': {
         var ic = pc + pv[0] * 2, ir = pr + pv[1] * 2;
-        if (this.pac.dir === 'up') ic -= 2;
+        if (focus.dir === 'up') ic -= 2;
         var b = this.ghosts[0];
         var bc = wrapCol(tileOf(b.x)), br = tileOf(b.y);
         return { c: ic * 2 - bc, r: ir * 2 - br };
@@ -3270,7 +4287,8 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
     // Fleeing ghosts run for whichever exit puts the most distance between
     // them and Pac-Man, rather than closing on a target.
     var flee = this.ghostsFlee && g.state === 'normal';
-    var target = flee ? { c: wrapCol(tileOf(this.pac.x)), r: tileOf(this.pac.y) }
+    var fleeFrom = this.focusPac(g);
+    var target = flee ? { c: wrapCol(tileOf(fleeFrom.x)), r: tileOf(fleeFrom.y) }
                       : this.ghostTarget(g);
     Extra.noteTile(g, c, r);
     var best = options[0], bestDist = flee ? -Infinity : Infinity;
@@ -3286,10 +4304,15 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
   /* ---- collisions -------------------------------------------------- */
 
   Game.prototype.collisionCheck = function () {
-    if (this.fruit && Math.abs(this.pac.x - FRUIT_POS.x) < 7 &&
-        Math.abs(this.pac.y - FRUIT_POS.y) < 7) {
+    for (var q = 0; q < this.players.length; q++) this.playerCollisions(this.players[q]);
+  };
+
+  Game.prototype.playerCollisions = function (pac) {
+    if (pac.out || pac.deadTimer > 0) return;
+    if (this.fruit && Math.abs(pac.x - FRUIT_POS.x) < 7 &&
+        Math.abs(pac.y - FRUIT_POS.y) < 7) {
       var pts = FRUIT_POINTS[this.fruit];
-      this.addScore(pts);
+      this.addScore(pts, pac.id);
       this.popup = { x: FRUIT_POS.x, y: FRUIT_POS.y, text: String(pts), t: 2, color: '#ffb8ff' };
       this.fruit = null;
       Sound.eatFruit();
@@ -3298,29 +4321,62 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
     for (var i = 0; i < this.ghosts.length; i++) {
       var g = this.ghosts[i];
       if (g.state === 'eaten' || g.state === 'entering' || g.state === 'waiting') continue;
-      if (Math.abs(this.pac.x - g.x) > 6 || Math.abs(this.pac.y - g.y) > 6) continue;
+      if (Math.abs(pac.x - g.x) > 6 || Math.abs(pac.y - g.y) > 6) continue;
       if (g.frightened) {
         this.ghostsEaten++;
         var pts = 200 * Math.pow(2, Math.min(this.ghostsEaten, 4) - 1);
-        this.addScore(pts);
+        this.addScore(pts, pac.id);
         this.popup = { x: g.x, y: g.y, text: String(pts), t: 0.9, color: '#00ffff' };
         g.frightened = false;
         g.state = 'eaten';
         this.freezeTimer = 0.9;
         Sound.eatGhost();
-      } else if (!this.ghostsFlee && !this.godmode) {
-        this.die();
+        if (MP) MP.notify(pac.id === 0 ? 'playerAte' : 'botAte');
+      } else if (!this.godmode && !(this.ghostsFlee && pac.armedOwner)) {
+        this.die(pac);
         return;
       }
     }
   };
 
-  Game.prototype.die = function () {
-    this.state = 'dying';
-    this.stateTime = 0;
-    this.pac.dead = true;
-    this.lives--;
+  Game.prototype.die = function (pac) {
+    pac = pac || this.pac;
+    if (MP) MP.notify(pac.id === 0 ? 'playerDied' : 'botDied');
+
+    if (this.players.length < 2) {
+      this.state = 'dying';
+      this.stateTime = 0;
+      this.pac.dead = true;
+      this.lives--;
+      Sound.death();
+      return;
+    }
+
+    // Two players: only the one caught drops out, the round carries on.
+    pac.dead = true;
+    pac.deadTimer = 2.2;
+    if (pac.id === 1) this.lives2--; else this.lives--;
     Sound.death();
+  };
+
+  /** Put a player back at their start, or bench them if they are out. */
+  Game.prototype.respawn = function (pac) {
+    pac.dead = false;
+    pac.deadTimer = 0;
+    var lives = pac.id === 1 ? this.lives2 : this.lives;
+    if (lives <= 0) {
+      pac.out = true;
+      if (this.players.every(function (p) { return p.out; })) {
+        this.state = 'gameover';
+        this.stateTime = 0;
+        Sound.stopBackground();
+      }
+      return;
+    }
+    var start = pac.id === 1 ? PAC2_START : PAC_START;
+    pac.x = start.x; pac.y = start.y;
+    pac.dir = 'left'; pac.want = 'left';
+    pac.autoTile = null;
   };
 
   Game.prototype.afterDeath = function () {
@@ -3395,6 +4451,12 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
       else Mods.drawDev(this, ctx);
     }
     if (this.state === 'moddemoend') Mods.drawDemoEnd(this, ctx);
+    if (this.state === 'matching') {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, Maze.SCREEN_W, Maze.SCREEN_H);
+      this.drawHud();
+      MP.drawMatching(this, ctx);
+    }
 
     this.out.imageSmoothingEnabled = false;
     this.out.drawImage(this.frame, 0, 0, this.canvas.width, this.canvas.height);
@@ -3411,6 +4473,11 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
     Font.drawRight(ctx, s, 6, 1, '#ffffff', 1);
     var hs = this.highScore === 0 ? '' : String(this.highScore);
     Font.drawRight(ctx, hs, 16, 1, '#ffffff', 1);
+    if (this.playerCount === 2) {
+      if (blinkOn) Font.draw(ctx, '2UP', 22, 0, '#ffffff');
+      Font.drawRight(ctx, this.score2 === 0 ? '00' : String(this.score2), 25, 1, '#ffffff', 1);
+    }
+    if (this.autoPlay) Font.draw(ctx, 'AI', 25, 0, '#7cff3c');
   };
 
   Game.prototype.drawBottomBar = function () {
@@ -3418,6 +4485,14 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
     // Reserve lives only - the one in play is not shown - and they face left.
     var reserves = Math.max(0, Math.min(this.lives - 1, 5));
     for (var i = 0; i < reserves; i++) P.blit(ctx, P.lifeIcon(), 23 + i * 16, y);
+    if (this.playerCount === 2) {
+      // The fruit strip gives way to player two's lives.
+      var r2 = Math.max(0, Math.min(this.lives2 - 1, 5));
+      for (var j = 0; j < r2; j++) {
+        P.blit(ctx, P.pacman('left', 0.75, { bow: true }), 200 - j * 16, y);
+      }
+      return;
+    }
     // The last seven levels' fruit, newest at the right edge.
     var first = Math.max(1, this.level - 6);
     for (var lv = first; lv <= this.level; lv++) {
@@ -3432,8 +4507,25 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
   };
 
   Game.prototype.drawPac = function (ctx) {
-    var pac = this.pac, P = Sprites.Pixel;
-    if (this.state === 'dying') {
+    for (var i = 0; i < this.players.length; i++) this.drawPlayer(ctx, this.players[i]);
+  };
+
+  Game.prototype.drawPlayer = function (ctx, pac) {
+    var P = Sprites.Pixel;
+    if (pac.out) return;
+
+    // Two-player death is per player; the round does not stop for it.
+    if (pac.deadTimer > 0) {
+      var pt = 1 - pac.deadTimer / 2.2;
+      var self = this;
+      this.withWrap(ctx, pac.x, pac.y, function (x, y) {
+        if (pt < 0.25) P.blit(ctx, P.pacman(pac.dir, 0.8, { bow: pac.bow }), x, y);
+        else if (pt < 0.95) P.blit(ctx, P.death(Math.floor((pt - 0.25) / 0.7 * 11)), x, y);
+      });
+      return;
+    }
+
+    if (this.state === 'dying' && pac.id === 0) {
       if (this.stateTime < 0.55) {
         this.withWrap(ctx, pac.x, pac.y, function (x, y) {
           P.blit(ctx, P.pacman(pac.dir, 0.8), x, y);
@@ -3450,7 +4542,10 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
     if (this.freezeTimer > 0) return;      // hidden while a ghost score shows
     // He waits as a closed circle during READY!, as on the arcade.
     var mouth = this.state === 'ready' ? 0 : pac.mouth;
-    var opts = { angry: this.pacAngry, armed: this.pacArmed };
+    // Rampage only ever dresses the player who switched the mod on.
+    var opts = { angry: this.pacAngry && pac.armedOwner,
+                 armed: this.pacArmed && pac.armedOwner,
+                 bow: pac.bow };
     var muzzle = this.muzzle;
     this.withWrap(ctx, pac.x, pac.y, function (x, y) {
       P.blit(ctx, P.pacman(pac.dir, mouth, opts), x, y);
@@ -3536,22 +4631,23 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
       Font.draw(ctx, row[2], 17, y, row[3]);
     }
 
-    Maze.drawEnergizerAt(ctx, 10 * TILE, 26 * TILE);
-    Font.draw(ctx, '50 PTS', 12, 26, '#ffffff');
+    Maze.drawEnergizerAt(ctx, 10 * TILE, 25 * TILE);
+    Font.draw(ctx, '50 PTS', 12, 25, '#ffffff');
 
-    var items = ['PLAY', 'MODS'];
+    var items = TITLE_ITEMS;
     for (var t = 0; t < items.length; t++) {
-      var ty = 29 + t * 2, on = this.titleIndex === t;
+      var ty = 27 + t * 2, on = this.titleIndex === t;
       if (on) {
         var bite = (Math.sin(this.animTime * 12) + 1) / 2;
-        Sprites.Pixel.blit(ctx, Sprites.Pixel.pacman('right', bite), 9 * TILE + 4, ty * TILE + 3);
+        var cx = (14 - items[t].length / 2) * TILE - 10;
+        Sprites.Pixel.blit(ctx, Sprites.Pixel.pacman('right', bite), cx, ty * TILE + 3);
       }
-      Font.draw(ctx, items[t], 12, ty, on ? '#ffff00' : '#8080a0');
+      Font.drawCentered(ctx, items[t], ty, on ? '#ffff00' : '#8080a0');
     }
     if (Mods.isOn('rampage') || Mods.storageUsed() > 0) {
-      Font.drawCentered(ctx, 'MODS ACTIVE', 33, '#00ff00');
+      Font.drawCentered(ctx, 'MODS ACTIVE', 35, '#00ff00');
     } else {
-      Font.draw(ctx, '© 1980 NAMCO', 8, 33, '#ffb8ae');
+      Font.draw(ctx, '© 1980 NAMCO', 8, 35, '#ffb8ae');
     }
   };
 
@@ -3568,6 +4664,7 @@ body.armed .btn.shoot.is-down { background: #7a2020; color: #fff; }
   function boot() {
     var canvas = document.getElementById('screen');
     var game = new Game(canvas);
+    if (global.Multiplayer) global.Multiplayer.bindPanel();
     global.pacmanGame = game;      // handy for tests and screenshots
 
     var last = performance.now();

@@ -30,11 +30,25 @@
       </div>
       <div id="aux">
         <button class="btn shoot" data-act="shoot" aria-label="Shoot">SHOOT</button>
+        <button class="btn chatbtn" data-act="chat" aria-label="Chat">CHAT<span id="chatbadge"></span></button>
         <button class="btn" data-act="start" aria-label="Start">START</button>
         <button class="btn" data-act="pause" aria-label="Pause">PAUSE</button>
         <button class="btn" data-act="mute"  aria-label="Sound">SOUND</button>
       </div>
     </div>
+
+    <aside id="chat" aria-label="Match chat">
+      <div id="chathead">
+        <span>MATCH CHAT</span>
+        <button id="chatclose" aria-label="Close chat">&times;</button>
+      </div>
+      <div id="chatlog" role="log" aria-live="polite"></div>
+      <div id="chatbar">
+        <input id="chatinput" type="text" maxlength="140" placeholder="say something..."
+               autocomplete="off" autocapitalize="none" spellcheck="false">
+        <button id="chatsend">SEND</button>
+      </div>
+    </aside>
   </div>
 
   <script src="js/font.js"></script>
@@ -43,6 +57,9 @@
   <script src="js/audio.js"></script>
   <script src="js/sprites.js"></script>
   <script src="js/ghosts-extra.js"></script>
+  <script src="js/autopilot.js"></script>
+  <script src="js/chatbot.js"></script>
+  <script src="js/multiplayer.js"></script>
   <script src="js/mods.js"></script>
   <script src="js/game.js"></script>
 </body>

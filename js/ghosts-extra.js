@@ -85,8 +85,10 @@
   function wrapCol(c) { var n = maze().COLS; return ((c % n) + n) % n; }
   function tileOf(px) { return Math.floor(px / TILE); }
   function ghostTile(g) { return { c: wrapCol(tileOf(g.x)), r: tileOf(g.y) }; }
-  function pacTile(game) {
-    return { c: wrapCol(tileOf(game.pac.x)), r: tileOf(game.pac.y) };
+  function target(game, pac) { return pac || game.pac; }
+  function pacTile(game, pac) {
+    var t = target(game, pac);
+    return { c: wrapCol(tileOf(t.x)), r: tileOf(t.y) };
   }
   function dist2(ax, ay, bx, by) { var dx = ax - bx, dy = ay - by; return dx * dx + dy * dy; }
   function walkable(c, r) { return maze().isWalkable(wrapCol(c), r); }
@@ -102,8 +104,8 @@
   }
 
   /** Straight-line projection down the corridor Pac-Man faces. */
-  function project(game, limit) {
-    var p = pacTile(game), v = DIRV[game.pac.dir] || [0, 0];
+  function project(game, limit, pac) {
+    var p = pacTile(game, pac), v = DIRV[target(game, pac).dir] || [0, 0];
     var c = p.c, r = p.r, last = { c: c, r: r };
     for (var i = 0; i < limit; i++) {
       var nc = wrapCol(c + v[0]), nr = r + v[1];
@@ -120,8 +122,8 @@
    * going straight; only a dead end stops it. This is Lumo's lookahead - it
    * puts him on Pac-Man's path, not merely in his line of sight.
    */
-  function projectFollowing(game, limit) {
-    var p = pacTile(game), v = DIRV[game.pac.dir] || [1, 0];
+  function projectFollowing(game, limit, pac) {
+    var p = pacTile(game, pac), v = DIRV[target(game, pac).dir] || [1, 0];
     var c = p.c, r = p.r;
     var back = [-v[0], -v[1]];
     for (var i = 0; i < limit; i++) {
@@ -149,8 +151,8 @@
    * The junction Pac-Man is running towards, ignoring any that is right on
    * top of him - Grimm sets his trap further out than Lumo's lead.
    */
-  function nextJunction(game, minAway, limit) {
-    var p = pacTile(game), v = DIRV[game.pac.dir] || [0, 0];
+  function nextJunction(game, minAway, limit, pac) {
+    var p = pacTile(game, pac), v = DIRV[target(game, pac).dir] || [0, 0];
     var c = p.c, r = p.r, last = { c: c, r: r };
     for (var i = 1; i <= limit; i++) {
       var nc = wrapCol(c + v[0]), nr = r + v[1];
@@ -168,8 +170,8 @@
     });
   }
 
-  function isClosestGhost(game, self) {
-    var p = pacTile(game), me = ghostTile(self);
+  function isClosestGhost(game, self, pac) {
+    var p = pacTile(game, pac), me = ghostTile(self);
     var mine = dist2(me.c, me.r, p.c, p.r);
     var others = otherGhosts(game, self);
     for (var i = 0; i < others.length; i++) {
@@ -184,21 +186,21 @@
   var CHASE = {
     /* Lumo runs the corridor ahead of Pac-Man rather than adding a blind
        offset, so his target is always somewhere Pac-Man can actually be. */
-    lumo: function (game, g) {
-      var p = pacTile(game), me = ghostTile(g);
+    lumo: function (game, g, pac) {
+      var p = pacTile(game, pac), me = ghostTile(g);
       if (dist2(me.c, me.r, p.c, p.r) <= 16) return p;   // within 4 tiles: close in
       // Five, not Pinky's four: in a straight corridor the two would otherwise
       // pick the same tile. Round a bend they diverge completely, because this
       // one follows the corridor and Pinky's lands in the wall.
-      return projectFollowing(game, 5);
+      return projectFollowing(game, 5, pac);
     },
 
     /* Vexa comes in off to one side, and picks the side the rest of the pack
        is not already covering. Nearest ghost drops the flank and commits. */
-    vexa: function (game, g) {
-      var p = pacTile(game);
-      if (isClosestGhost(game, g)) return p;
-      var v = DIRV[game.pac.dir] || [1, 0];
+    vexa: function (game, g, pac) {
+      var p = pacTile(game, pac);
+      if (isClosestGhost(game, g, pac)) return p;
+      var v = DIRV[target(game, pac).dir] || [1, 0];
       var perp = [-v[1], v[0]];
       var pack = otherGhosts(game, g).map(ghostTile);
       var best = null, bestScore = -Infinity;
@@ -217,14 +219,14 @@
 
     /* Grimm heads for the junction Pac-Man is running towards. In a corridor
        with no junction he takes the far end and waits there. */
-    grimm: function (game, g) {
-      return nextJunction(game, 4, 14);
+    grimm: function (game, g, pac) {
+      return nextJunction(game, 4, 14, pac);
     },
 
     /* Nox alternates: hunt until he is on top of Pac-Man, then peel away and
        reposition until there is room to come back in. */
-    nox: function (game, g) {
-      var p = pacTile(game), me = ghostTile(g);
+    nox: function (game, g, pac) {
+      var p = pacTile(game, pac), me = ghostTile(g);
       var d = dist2(me.c, me.r, p.c, p.r);
       if (g.stalk === 'back') {
         if (d >= 100) g.stalk = 'hunt';        // 10 tiles of daylight
@@ -240,8 +242,8 @@
       // what separate him from Blinky.
       var beat = Math.floor(game.globalTime / 2.5) % 3;
       if (beat === 0) return p;                       // straight at him
-      if (beat === 1) return project(game, 3);        // cut in ahead
-      var v = DIRV[game.pac.dir] || [0, 0];           // creep up behind
+      if (beat === 1) return project(game, 3, pac);   // cut in ahead
+      var v = DIRV[target(game, pac).dir] || [0, 0];  // creep up behind
       return { c: p.c - v[0] * 2, r: p.r - v[1] * 2 };
     }
   };
@@ -250,7 +252,7 @@
   ROSTER.forEach(function (def) {
     /* Every scatter rule is the same shape - walk this ghost's own loop of
        waypoints - but each ghost owns a different quarter of the maze. */
-    SCATTER[def.id] = function (game, g) {
+    SCATTER[def.id] = function (game, g, pac) {
       if (g.patrolIndex === undefined) g.patrolIndex = 0;
       var me = ghostTile(g);
       var pt = def.patrol[g.patrolIndex % def.patrol.length];
@@ -262,8 +264,8 @@
     };
   });
 
-  function chaseTarget(game, g) { return CHASE[g.ai](game, g); }
-  function scatterTarget(game, g) { return SCATTER[g.ai](game, g); }
+  function chaseTarget(game, g, pac) { return CHASE[g.ai](game, g, pac); }
+  function scatterTarget(game, g, pac) { return SCATTER[g.ai](game, g, pac); }
 
   /**
    * Extra cost a ghost puts on a candidate tile. Only Nox uses it, to keep

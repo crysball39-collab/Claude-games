@@ -90,6 +90,68 @@ a character at 100 % speed advances exactly 1.25 pixels per frame — the
 documented 75.76 px/s. This is decoupled from the display: at 60, 90, 120 and
 144 Hz Pac-Man covers the same 60 px per second on level 1.
 
+## Modes
+
+The title screen offers **1 PLAYER**, **2 PLAYER**, **AI MODE** and **MODS**.
+
+### AI mode
+
+Hands the controls to a search agent. It is not replaying memorised patterns —
+it re-plans continuously. Each decision floods the maze from Pac-Man's tile and
+from every hunting ghost, then treats a tile as contested if a ghost can reach
+it first, which is what lets it walk confidently past a ghost on the far side
+of a wall and refuse a corridor that only *looks* open. The route search itself
+is gated on that map, so it will not path *through* a contested tile, only to
+one. On top sits a value pass — pellets, energisers, fruit and edible ghosts,
+divided by distance.
+
+Two details matter more than anything else in there. Ghosts cannot reverse, so
+danger must not spread backwards through the tile behind them; without that the
+map invents threat and the agent gives up safe ground for nothing. And when
+nothing at all is reachable under the strict safety margin the standard drops a
+step at a time, otherwise the last few pellets in a contested corner never get
+taken and the level simply never ends.
+
+Measured over eight full runs it averages **level 3.0 and 16,000 points**, with
+its best runs reaching level 5. That is a strong agent, not a perfect one — a
+genuinely unbeatable Pac-Man would need the arcade's exact frame-level
+determinism, which this does not reproduce.
+
+### 2 player and chat
+
+**This build has no server.** It is one offline HTML file, so the lobby search
+always comes back empty and you are seated with a CPU opponent every time. The
+screen says so. The seam is deliberate: everything goes through a `transport`
+object in `js/multiplayer.js`, so a real socket can replace it without touching
+the rest.
+
+Both players share one maze and race for the same dots. Player two wears a bow,
+scores on the `2UP` counter and keeps their own lives on the right of the
+status bar. Ghosts hunt whichever player is nearer, with hysteresis so they do
+not flip between you every frame. A caught player drops out alone for a couple
+of seconds and respawns at their own start — the round does not stop — and the
+game ends when both have run out.
+
+The opponent plays with the same agent as AI mode, dialled slightly below
+perfect so it feels human, and talks in the chat panel (`T` to open, or the
+CHAT button on touch). It answers questions about the game from a real
+knowledge base — dot counts, each ghost's rule, fruit values, the 200/400/800/
+1600 chain, scatter timings — and reacts to what is happening on screen.
+
+**It is a rule-based conversationalist, not a language model.** It matches your
+message against an intent table and answers from a bank of variants that splice
+in live game state. It holds a game conversation and will surprise you more
+often than you would expect, but it cannot follow you anywhere you like the way
+a person would. Shipping something that could would mean a network call, and
+this file works offline.
+
+### Mods in 2 player
+
+Mods are yours alone. Rampage Pac only ever arms the player who switched it on:
+you get the brows and the shotgun, ghosts refuse to hunt you and cannot catch
+you, while your opponent plays a completely ordinary game against the same four
+ghosts. The opponent is never told any of it is happening and never mentions it.
+
 ## Mods
 
 `MODS` on the title screen opens an arcade-styled browser with three sections:
@@ -183,6 +245,9 @@ js/font.js          5x7 bitmap font
 js/sprites.js       Pac-Man, ghosts and fruit
 js/audio.js         Namco WSG emulation + the sound PROM wavetables
 js/game.js          rules, ghost AI, level flow, input, HUD
+js/autopilot.js     the search agent that plays for you
+js/chatbot.js       the opponent's chat persona and game knowledge
+js/multiplayer.js   two-player mode, matchmaking seam, chat panel
 js/mods.js          mod browser, Rampage Pac, dev menu
 js/ghosts-extra.js  the four extra ghosts and their AI
 test/run-tests.js   behavioural tests
@@ -198,6 +263,6 @@ npm install playwright
 node test/run-tests.js          # CHROMIUM_PATH=... to reuse a local browser
 ```
 
-91 assertions covering the maze checksums (244 dots, left-right symmetry, every
+121 assertions covering the maze checksums (244 dots, left-right symmetry, every
 dot reachable), ghost targeting including both quirks, phase timings, house
 release limits, the tunnel, scoring, and the per-level speed table.

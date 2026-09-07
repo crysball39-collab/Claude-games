@@ -189,7 +189,8 @@ function auditFont() {
     // title screen menu
     g.state='title'; g.titleIndex=0;
     g.menuAction('down');
-    ok('title menu moves to MODS', g.titleIndex===1);
+    ok('title menu moves down', g.titleIndex===1);
+    g.titleIndex=3;                              // 1 PLAYER / 2 PLAYER / AI MODE / MODS
     g.menuAction('select');
     ok('MODS opens the mod menu', g.state==='mods', 'state='+g.state);
     ok('menu lists installed and downloadable',
@@ -456,6 +457,142 @@ function auditFont() {
 
     return R;
   });
+
+  /* ---- modes, chat and two-player: a second pass, because matchmaking is
+     asynchronous and the block above is synchronous. ---- */
+  const more = await p.evaluate(async () => {
+    const g=window.pacmanGame, MP=window.Multiplayer, MO=window.Mods, A=window.Autopilot;
+    const R=[]; const ok=(n,c,d)=>R.push((c?'PASS':'FAIL')+'  '+n+(d?'   '+d:''));
+    const run=n=>{for(let i=0;i<n;i++) g.update(1/60);};
+    // ---------- AI mode ----------
+    g.startAiGame();
+    ok('AI mode starts one player under autopilot', g.playerCount===1 && g.autoPlay);
+    g.state='playing'; g.stateTime=0;
+    const startDots=g.dotsRemaining;
+    let deaths=0, prevLives=g.lives, cleared=0;
+    for (let i=0;i<60*90;i++){                 // 90 simulated seconds, played out properly
+      g.update(1/60);
+      if (g.lives<prevLives){ deaths++; }
+      prevLives=g.lives;
+      g.lives=Math.max(g.lives,3);             // keep it alive so the run continues
+      if (g.state==='levelclear') cleared++;
+    }
+    const eaten=startDots-g.dotsRemaining+cleared*244;
+    ok('autopilot actually plays', eaten>150, 'ate '+eaten+' dots, cleared '+cleared+' level(s) in 90s');
+    ok('autopilot survives reasonably', deaths<=6, deaths+' deaths in 90s');
+
+    // it should not steer into a wall
+    ok('autopilot never sits inside a wall',
+       !window.Maze.isWall(((Math.floor(g.pac.x/8)%28)+28)%28, Math.floor(g.pac.y/8)));
+
+    // ---------- two player ----------
+    MP.startTwoPlayer(g);
+    ok('2P opens the matching screen', g.state==='matching', 'state='+g.state);
+    ok('lobby search starts', MP.state.phase==='searching', MP.state.phase);
+    await new Promise(r=>setTimeout(r,2000));
+    ok('empty lobby falls back to a CPU opponent',
+       MP.state.phase==='nobody' || MP.state.phase==='playing', MP.state.phase);
+    ok('opponent has a handle', !!(MP.state.bot && MP.state.bot.handle), MP.state.bot && MP.state.bot.handle);
+    for(let i=0;i<120;i++) g.update(1/60);
+    ok('match begins', MP.state.phase==='playing', MP.state.phase);
+    ok('two players on the board', g.players.length===2, 'n='+g.players.length);
+    ok('player two is the bot', g.players[1].auto===true && g.players[1].bow===true);
+    ok('player one is not on autopilot', g.players[0].auto===false);
+
+    g.state='playing'; g.stateTime=0;
+    const s1=g.score, s2=g.score2;
+    run(60*25);
+    ok('both players score independently',
+       g.score>s1 && g.score2>s2, 'p1 '+s1+'->'+g.score+'  p2 '+s2+'->'+g.score2);
+
+    // per-player death does not stop the round
+    const p2=g.players[1];
+    g.lives2=3; p2.deadTimer=0; p2.out=false;
+    const livesBefore=g.lives2;
+    g.die(p2);
+    ok('a caught player dies alone', g.state==='playing' && p2.deadTimer>0, 'state='+g.state);
+    ok('only that player loses a life', g.lives2===livesBefore-1 && g.lives===g.lives);
+    let respawnY=null;
+    for(let i=0;i<60*4;i++){ g.update(1/60); if(!p2.dead && respawnY===null) respawnY=p2.y; }
+    ok('and respawns at their own start', respawnY!==null && Math.abs(respawnY-(29*8+4))<1,
+       'y='+(respawnY===null?'never':respawnY.toFixed(0)));
+
+    // benching and game over
+    g.lives2=0; g.die(p2); run(60*3);
+    ok('a player out of lives is benched', p2.out===true);
+    g.lives=0; g.die(g.players[0]); run(60*3);
+    ok('game over once both are out', g.state==='gameover', 'state='+g.state);
+
+    // ---------- chat ----------
+    MP.state.log.length=0;
+    MP.send('hey');
+    ok('player message lands in the log',
+       MP.state.log.some(m=>m.who==='you'&&m.text==='hey'));
+    for(let i=0;i<300;i++) g.update(1/60);
+    ok('opponent replies', MP.state.log.some(m=>m.who==='them'),
+       JSON.stringify(MP.state.log.filter(m=>m.who==='them').map(m=>m.text)));
+
+    // it answers game questions with real facts
+    const asked=[];
+    for (const q of ['how many dots are there','tell me about inky','what is the fruit worth','any tips?']) {
+      MP.state.log.length=0; MP.state.pending.length=0;
+      MP.send(q);
+      for(let i=0;i<400;i++) g.update(1/60);
+      const r=MP.state.log.filter(m=>m.who==='them').map(m=>m.text).join(' | ');
+      asked.push(q+' -> '+r);
+    }
+    ok('answers questions about the game',
+       asked.every(a=>a.split('-> ')[1] && a.split('-> ')[1].length>12), asked.join('\n     '));
+
+
+    /* ---- Rampage Pac stays with the player who enabled it ---- */
+    MO.state.enabled.rampage = true;
+    g.playerCount=2; g.autoPlay=false;
+    g.startTwoPlayerGame();
+    ok('2P starts with the mod on', g.players.length===2 && MO.isOn('rampage'));
+    ok('only player one is the mod owner',
+       g.players[0].armedOwner===true && g.players[1].armedOwner===false);
+
+    // level 3 arms player one only
+    g.reset(3,false); g.state='ready'; g.stateTime=0;
+    run(60*11);
+    ok('the cutscene arms the owner', g.pacArmed===true);
+    ok('ghosts flee', g.ghostsFlee===true);
+    ok('owner still flagged, opponent not',
+       g.players[0].armedOwner===true && g.players[1].armedOwner===false);
+
+    // ghosts must ignore the armed player and hunt the other one
+    g.state='playing';
+    const rp1=g.players[0], rp2=g.players[1];
+    rp1.x=6*8+4; rp1.y=5*8+4;
+    rp2.x=21*8+4; rp2.y=5*8+4;
+    const focused=g.ghosts.map(gh=>g.focusPac(gh).id);
+    ok('every ghost hunts the opponent, not the armed player',
+       focused.every(id=>id===1), 'focus ids '+focused.join(','));
+
+    // contact is harmless for the owner, lethal for the opponent
+    const rgh=g.ghosts[0]; rgh.state='normal'; rgh.frightened=false;
+    rgh.x=rp1.x; rgh.y=rp1.y;
+    const rlives1=g.lives; g.playerCollisions(rp1);
+    ok('the armed player cannot be caught', g.lives===rlives1 && !rp1.dead);
+
+    rgh.x=rp2.x; rgh.y=rp2.y;
+    const rlives2=g.lives2; g.playerCollisions(rp2);
+    ok('the opponent still plays a normal game', g.lives2===rlives2-1 && rp2.dead===true,
+       'lives2 '+rlives2+' -> '+g.lives2);
+
+    // the bot never mentions the mod
+    const modLines=[];
+    for (let i=0;i<40;i++) modLines.push(window.Chatbot.reply(MP.state.bot||window.Chatbot.create(),'what is going on', g).text);
+    for (let i=0;i<12;i++) { const r=window.Chatbot.react(MP.state.bot||window.Chatbot.create(),'playerAte',g); if(r) modLines.push(r.text); }
+    const leak=/shotgun|rampage|gun|shoot|mod/i;
+    ok('the opponent never references the mod', !modLines.some(l=>leak.test(l)),
+       modLines.filter(l=>leak.test(l)).join(' | ') || 'clean across '+modLines.length+' lines');
+
+    return R;
+  });
+  out.push(...more);
+
   out.unshift((fontAudit.missing.length ? 'FAIL' : 'PASS') +
     '  font covers every displayed string   ' + fontAudit.count + ' literals' +
     (fontAudit.missing.length ? ', missing ' + JSON.stringify(fontAudit.missing) : ''));

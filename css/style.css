@@ -132,6 +132,108 @@ body.touch #pad {
 
 .btn.is-down { background: #23234a; color: #fff; }
 
+/* ------------------------------------------------------------------ */
+/* Match chat                                                          */
+/* ------------------------------------------------------------------ */
+
+#chat { display: none; }
+
+body.two-player #chat {
+  display: flex;
+  flex-direction: column;
+  width: min(300px, 32vw);
+  height: min(92vh, 700px);
+  background: #06061c;
+  border: 2px solid #23234a;
+  border-radius: 10px;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+#chathead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: #12123a;
+  color: #ffd24a;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  font-weight: 700;
+}
+
+#chatclose {
+  background: none; border: 0; color: #8080a0;
+  font-size: 18px; line-height: 1; cursor: pointer; padding: 0 4px;
+}
+
+#chatlog {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #d0d0e0;
+  overscroll-behavior: contain;
+}
+
+#chatlog .msg { margin-bottom: 5px; word-wrap: break-word; }
+#chatlog .msg b { color: #7cff3c; font-weight: 700; }
+#chatlog .msg.you b { color: #ffd24a; }
+#chatlog .msg.system { color: #6060a0; font-style: italic; }
+#chatlog .msg.typing { opacity: 0.6; }
+
+#chatbar { display: flex; gap: 6px; padding: 8px; background: #0b0b26; }
+
+#chatinput {
+  flex: 1 1 auto; min-width: 0;
+  background: #000; color: #fff;
+  border: 1px solid #23234a; border-radius: 6px;
+  padding: 8px; font: inherit; font-size: 13px;
+}
+
+#chatinput:focus { outline: 1px solid #2121ff; }
+
+#chatsend {
+  background: #2121ff; color: #fff; border: 0; border-radius: 6px;
+  padding: 8px 12px; font: inherit; font-size: 11px; font-weight: 700;
+  letter-spacing: 0.1em; cursor: pointer;
+}
+
+body.two-player #cabinet {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+body.two-player #stage { flex: 0 1 auto; min-width: 0; height: 100%; }
+/* The hint would otherwise sit between the maze and the chat column. */
+body.two-player #hint { display: none; }
+
+/* Narrow screens: the panel becomes a sheet over the game. */
+@media (max-width: 720px) {
+  body.two-player #cabinet { flex-direction: column; justify-content: center; }
+  body.two-player #stage { flex: 1 1 auto; height: auto; }
+  body.two-player #chat {
+    display: none;
+    position: fixed; left: 0; right: 0; bottom: 0;
+    width: auto; height: 62vh; border-radius: 12px 12px 0 0;
+    z-index: 20;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  body.two-player #chat.open { display: flex; }
+}
+
+.btn.chatbtn { display: none; position: relative; }
+body.two-player .btn.chatbtn { display: block; }
+
+#chatbadge {
+  display: none;
+  position: absolute; top: -6px; right: -6px;
+  background: #ff0000; color: #fff;
+  border-radius: 999px; padding: 1px 5px; font-size: 10px;
+}
+
 /* The SHOOT button only exists once Rampage Pac arms him. */
 .btn.shoot { display: none; color: #ff5a5a; border-color: #7a2020; }
 body.armed .btn.shoot { display: block; }

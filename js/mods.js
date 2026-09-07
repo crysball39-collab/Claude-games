@@ -490,7 +490,12 @@
       });
       global.ExtraGhosts.releaseWaiting(game, true);
     }
+    // Only the player who switched the mod on is affected by it. In two
+    // player that is the local human; the opponent plays a normal game and is
+    // never told any of this is happening.
+    game.players.forEach(function (p) { p.armedOwner = false; });
     if (isOn('rampage')) {
+      game.players[0].armedOwner = true;
       // Level 1 is untouched; the brows arrive on 2 and he snaps on 3.
       game.pacAngry = game.level >= 2;
       if (game.level === 3) beginCutscene(game);

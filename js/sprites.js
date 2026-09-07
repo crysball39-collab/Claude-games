@@ -84,6 +84,23 @@
     }
   }
 
+  /* Player two wears a bow, the one visual difference between the two. */
+  function drawBow(ctx, dir) {
+    ctx.save();
+    ctx.rotate(DIR_ANGLE[dir] || 0);
+    ctx.rotate(-Math.PI / 2);            // the bow rides on top of the head
+    ctx.fillStyle = '#ff0000';
+    ctx.beginPath();
+    ctx.moveTo(0, -4.5); ctx.lineTo(-4, -7.5); ctx.lineTo(-4, -2.5); ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(0, -4.5); ctx.lineTo(4, -7.5); ctx.lineTo(4, -2.5); ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#ffb8ff';
+    ctx.fillRect(-1, -5.6, 2, 2.2);
+    ctx.restore();
+  }
+
   /* Angry brows for the Rampage Pac mod: a V across the forehead, rotated
      to whichever way he is facing. */
   function drawBrows(ctx, dir) {
@@ -335,6 +352,7 @@
 
   global.Sprites = {
     GHOST_COLORS: GHOST_COLORS,
+    drawBow: drawBow,
     drawBrows: drawBrows,
     drawShotgun: drawShotgun,
     drawMuzzleFlash: drawMuzzleFlash,
@@ -416,15 +434,16 @@
    * @param {object} [opts] { angry, armed } - the Rampage Pac variants
    */
   function pacman(dir, mouth, opts) {
-    var angry = opts && opts.angry, armed = opts && opts.armed;
+    var angry = opts && opts.angry, armed = opts && opts.armed, bow = opts && opts.bow;
     var step = Math.max(0, Math.min(3, Math.round(mouth * 3)));
-    // A closed mouth has no facing, unless a brow or gun gives him one.
-    var d = (step === 0 && !angry && !armed) ? 'x' : dir;
-    var key = 'pac:' + d + step + (angry ? 'a' : '') + (armed ? 'g' : '');
+    // A closed mouth has no facing, unless a brow, gun or bow gives him one.
+    var d = (step === 0 && !angry && !armed && !bow) ? 'x' : dir;
+    var key = 'pac:' + d + step + (angry ? 'a' : '') + (armed ? 'g' : '') + (bow ? 'b' : '');
     return get(key, function (ctx) {
       if (armed) S.drawShotgun(ctx, dir, 0);
       S.drawPacman(ctx, dir, MOUTH_STEPS[step]);
       if (angry) S.drawBrows(ctx, dir);
+      if (bow) S.drawBow(ctx, dir);
     }, armed ? 40 : SPRITE);
   }
 
