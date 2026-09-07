@@ -118,6 +118,28 @@ run from him instead of hunting him, and a `SHOOT` button appears (`X`, `Z` or
 takes the first ghost in it, scoring the usual 200/400/800/1600 chain. Clearing
 that level ends the demo and drops you back in the mod menu.
 
+### Choose Ghosts
+
+The menu's second tab adds four ghosts alongside the original four. Any
+combination works — none, one, all four, or any mix — and the choice persists.
+Each waits in its own chamber until enough dots are eaten, then enters play.
+
+| Ghost | Colour | Chase | Scatter |
+|---|---|---|---|
+| Lumo "The Ambusher" | Lime | Traces five tiles along the route Pac-Man is actually taking, following the corridor **around bends**, and drops to direct pursuit inside four tiles | Upper-left patrol |
+| Vexa "The Flanker" | Purple | Aims four tiles off to Pac-Man's side, picking whichever flank the rest of the pack is not covering; commits directly when it is the nearest ghost | Upper-right patrol |
+| Grimm "The Trapper" | Grey | Targets the next junction at least four tiles ahead of Pac-Man, or the far end of the corridor if there is none — it gets there first and waits | Lower-left patrol |
+| Nox "The Stalker" | Dark blue | Hunts on a three-beat cycle (straight in / cut ahead / creep up behind), peels away inside four tiles and will not return until ten tiles of daylight open up, and weights against tiles it has just used | Lower-right patrol |
+
+Each scatter route is a loop of five waypoints sampled from the maze itself, so
+every one is a real corridor tile inside that ghost's own quarter, and the four
+routes never overlap. A ghost steps to the next waypoint as it arrives, so it
+circulates through its region rather than parking on a corner.
+
+Frightened and eaten are handled by the core, unchanged: their own AI switches
+off while blue, they take the same random walk as everyone else, and when eaten
+they return to the ghost house, descend to a slot and re-enter play normally.
+
 ### Dev menu
 
 Clicking Blinky ten times in the mod menu opens it. Set the starting level,
@@ -162,6 +184,7 @@ js/sprites.js       Pac-Man, ghosts and fruit
 js/audio.js         Namco WSG emulation + the sound PROM wavetables
 js/game.js          rules, ghost AI, level flow, input, HUD
 js/mods.js          mod browser, Rampage Pac, dev menu
+js/ghosts-extra.js  the four extra ghosts and their AI
 test/run-tests.js   behavioural tests
 ```
 
@@ -175,6 +198,6 @@ npm install playwright
 node test/run-tests.js          # CHROMIUM_PATH=... to reuse a local browser
 ```
 
-60 assertions covering the maze checksums (244 dots, left-right symmetry, every
+91 assertions covering the maze checksums (244 dots, left-right symmetry, every
 dot reachable), ghost targeting including both quirks, phase timings, house
 release limits, the tunnel, scoring, and the per-level speed table.

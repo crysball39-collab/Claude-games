@@ -4,7 +4,8 @@
   'use strict';
 
   var Maze = global.Maze, Font = global.Font,
-      Sprites = global.Sprites, Sound = global.Sound, Mods = global.Mods;
+      Sprites = global.Sprites, Sound = global.Sound, Mods = global.Mods,
+      Extra = global.ExtraGhosts;
 
   var TILE = Maze.TILE;
   var COLS = Maze.COLS;
@@ -162,6 +163,10 @@
     this.ghosts[1].dotLimit = 0;
     this.ghosts[2].dotLimit = this.level === 1 ? 30 : 0;
     this.ghosts[3].dotLimit = this.level === 1 ? 60 : (this.level === 2 ? 50 : 0);
+    // Extras come after the original four so ghosts[0] stays Blinky, which is
+    // what Inky's targeting reads.
+    this.ghosts = this.ghosts.concat(Extra.build());
+    this.ghosts.forEach(function (g, i) { g.index = i; });
   };
 
   /* ---- input ------------------------------------------------------- */
@@ -603,6 +608,8 @@
       }
     }
 
+    Extra.releaseWaiting(this, false);
+
     // Cruise Elroy: Blinky speeds up as the maze empties.
     if (this.dotsRemaining <= Math.floor(this.spec.elroy1Dots / 2)) this.elroyStage = 2;
     else if (this.dotsRemaining <= this.spec.elroy1Dots) this.elroyStage = 1;
@@ -686,6 +693,8 @@
   };
 
   Game.prototype.moveGhost = function (g) {
+    // Extras wait in their own chamber before entering play.
+    if (g.state === 'waiting') { this.bobInHouse(g); return; }
     if (g.state === 'house') { this.bobInHouse(g); return; }
     var dist = this.ghostSpeed(g);
 
@@ -720,20 +729,26 @@
       remaining -= d;
       wrapActor(g);
 
-      if (g.state === 'eaten' && Math.abs(g.x - HOUSE_EXIT.x) < 0.6 &&
-          Math.abs(g.y - HOUSE_EXIT.y) < 0.6) {
-        g.x = HOUSE_EXIT.x; g.y = HOUSE_EXIT.y;
-        g.state = 'entering';
-        g.frightened = false;
-        g.waypoints = [{ x: HOUSE_EXIT.x, y: HOUSE_MID.y }, { x: g.home.x, y: g.home.y }];
-        return;
+      // Arriving anywhere on the two tiles above the door hands over to the
+      // scripted descent. Matching the exact pixel was fragile - a ghost whose
+      // route was perturbed could step straight past it.
+      if (g.state === 'eaten' && tileOf(g.y) === 11) {
+        var hc = wrapCol(tileOf(g.x));
+        if (hc === 13 || hc === 14) {
+          g.x = HOUSE_EXIT.x; g.y = HOUSE_EXIT.y;
+          g.state = 'entering';
+          g.frightened = false;
+          g.waypoints = [{ x: HOUSE_EXIT.x, y: HOUSE_MID.y }, { x: g.home.x, y: g.home.y }];
+          return;
+        }
       }
     }
   };
 
   Game.prototype.bobInHouse = function (g) {
+    if (g.anchorY === undefined) g.anchorY = g.state === 'waiting' ? g.y : g.home.y;
     g.bob += TICK * 3.2;
-    g.y = g.home.y + Math.sin(g.bob) * 3.5;
+    g.y = (g.state === 'waiting' ? g.anchorY : g.home.y) + Math.sin(g.bob) * 3.5;
     g.dir = Math.cos(g.bob) > 0 ? 'down' : 'up';
   };
 
@@ -777,6 +792,10 @@
     // Blinky keeps hunting through scatter once he turns Cruise Elroy.
     var scattering = this.mode === 'scatter' &&
                      !(g.name === 'blinky' && this.elroyStage > 0);
+    // Extras bring their own chase rule and their own scatter patrol.
+    if (g.ai) {
+      return scattering ? Extra.scatterTarget(this, g) : Extra.chaseTarget(this, g);
+    }
     if (scattering) return { c: g.scatter.c, r: g.scatter.r };
 
     switch (g.name) {
@@ -830,10 +849,12 @@
     var flee = this.ghostsFlee && g.state === 'normal';
     var target = flee ? { c: wrapCol(tileOf(this.pac.x)), r: tileOf(this.pac.y) }
                       : this.ghostTarget(g);
+    Extra.noteTile(g, c, r);
     var best = options[0], bestDist = flee ? -Infinity : Infinity;
     for (var j = 0; j < options.length; j++) {
       var vv = DIRV[options[j]];
-      var dd = dist2(c + vv[0], r + vv[1], target.c, target.r);
+      var dd = dist2(c + vv[0], r + vv[1], target.c, target.r) +
+               Extra.pathPenalty(g, c + vv[0], r + vv[1]);
       if (flee ? dd > bestDist : dd < bestDist) { bestDist = dd; best = options[j]; }
     }
     g.dir = best;
@@ -853,7 +874,7 @@
 
     for (var i = 0; i < this.ghosts.length; i++) {
       var g = this.ghosts[i];
-      if (g.state === 'eaten' || g.state === 'entering') continue;
+      if (g.state === 'eaten' || g.state === 'entering' || g.state === 'waiting') continue;
       if (Math.abs(this.pac.x - g.x) > 6 || Math.abs(this.pac.y - g.y) > 6) continue;
       if (g.frightened) {
         this.ghostsEaten++;

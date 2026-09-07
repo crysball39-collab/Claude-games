@@ -7,7 +7,12 @@
     blinky: '#ff0000',
     pinky: '#ffb8ff',
     inky: '#00ffff',
-    clyde: '#ffb851'
+    clyde: '#ffb851',
+    // the four extra ghosts
+    lumo: '#7cff3c',
+    vexa: '#b24bff',
+    grimm: '#9c9cac',
+    nox: '#2e5cc8'
   };
   var FRIGHT_BODY = '#2121ff';
   var FRIGHT_FLASH = '#ffffff';
@@ -359,7 +364,9 @@
     [255, 255, 255], [0, 208, 0], [0, 160, 0], [140, 232, 0], [255, 229, 0],
     [160, 80, 0],
     // gunmetal and wood, for the Rampage Pac shotgun
-    [154, 154, 174], [90, 90, 110], [90, 58, 26], [138, 90, 42]
+    [154, 154, 174], [90, 90, 110], [90, 58, 26], [138, 90, 42],
+    // the extra ghosts - lime, purple, grey, dark blue
+    [124, 255, 60], [178, 75, 255], [156, 156, 172], [46, 92, 200]
   ];
 
   var SPRITE = 16;            // every character fits inside a 16x16 cell

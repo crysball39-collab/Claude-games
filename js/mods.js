@@ -68,7 +68,9 @@
 
   /* ---- menu model ---------------------------------------------------- */
 
-  var menu = { rows: [], index: 0, download: null, blinkyHits: 0, blinkyShake: 0 };
+  var TABS = ['MODS', 'CHOOSE GHOSTS'];
+  var menu = { tab: 0, rows: [], index: 0, ghostIndex: 0,
+               download: null, blinkyHits: 0, blinkyShake: 0 };
   var dev = { index: 0, level: 1, speed: 1, god: false, unlocked: false };
 
   var BLINKY_TILE = { c: 24, r: 34 };   // clear of the footer hint
@@ -110,6 +112,7 @@
 
   function openMenu(game) {
     layout();
+    menu.tab = 0;
     menu.index = firstSelectable();
     menu.blinkyHits = 0;
     menu.download = null;
@@ -164,9 +167,25 @@
     ctx.fillRect(x, y, Math.round(w * Math.max(0, Math.min(1, frac))), 4);
   }
 
+  function drawTabs(ctx) {
+    var F = global.Font;
+    var cols = [4, 11];
+    for (var i = 0; i < TABS.length; i++) {
+      var on = menu.tab === i;
+      F.draw(ctx, TABS[i], cols[i], 3, on ? '#ffff00' : '#606078');
+      if (on) {
+        ctx.fillStyle = '#ffff00';
+        ctx.fillRect(cols[i] * TILE, 3 * TILE + 8, TABS[i].length * TILE - 2, 1);
+      }
+    }
+    F.draw(ctx, '<', 1, 3, '#404060');
+    F.draw(ctx, '>', 26, 3, '#404060');
+  }
+
   function drawMenu(game, ctx) {
     var F = global.Font, P = global.Sprites.Pixel;
-    F.drawCentered(ctx, 'MODS', 3, '#ffff00');
+    drawTabs(ctx);
+    if (menu.tab === 1) { drawGhostTab(game, ctx); return; }
 
     for (var i = 0; i < menu.rows.length; i++) {
       var row = menu.rows[i], y = row.row, sel = i === menu.index;
@@ -238,6 +257,57 @@
       F.draw(ctx, '?', BLINKY_TILE.c - 2, BLINKY_TILE.r, '#ff0000');
     }
     F.draw(ctx, 'V' + VERSION, 1, 33, '#303050');
+  }
+
+  /* ---- CHOOSE GHOSTS tab --------------------------------------------- */
+
+  var CARD_ROWS = [7, 12, 17, 22];
+  var BACK_ROW = 29;
+
+  function ghostRoster() { return global.ExtraGhosts.ROSTER; }
+  function ghostRowCount() { return ghostRoster().length + 1; }   // + BACK
+
+  function drawGhostTab(game, ctx) {
+    var F = global.Font, P = global.Sprites.Pixel, E = global.ExtraGhosts;
+    var roster = ghostRoster();
+    var frame = Math.floor(game.animTime * 9) % 2;
+
+    for (var i = 0; i < roster.length; i++) {
+      var d = roster[i], y = CARD_ROWS[i], sel = menu.ghostIndex === i, on = E.isOn(d.id);
+
+      if (sel) {
+        var bite = (Math.sin(game.animTime * 12) + 1) / 2;
+        P.blit(ctx, P.pacman('right', bite), 4, y * TILE + 7);
+      }
+      // Sprite, in its own colour, facing the reader.
+      P.blit(ctx, P.ghost(d.id, 'right', frame, 'normal', false), 2 * TILE + 4, y * TILE + 7);
+
+      F.draw(ctx, d.name + ' "' + d.nick + '"', 5, y, on ? d.color : '#707086');
+      F.draw(ctx, on ? 'ON' : 'OFF', 25, y, on ? '#00ff00' : '#806060');
+      F.draw(ctx, d.colorName + ' - ' + d.role, 5, y + 1, on ? '#c0c0d0' : '#606078');
+      F.draw(ctx, d.blurb, 5, y + 2, on ? '#ffb8ae' : '#5a5a70');
+    }
+
+    var count = E.activeCount();
+    F.drawCentered(ctx, count + ' EXTRA + 4 ORIGINAL = ' + (count + 4), 26, '#00ffff');
+
+    var backSel = menu.ghostIndex === roster.length;
+    if (backSel) {
+      var b2 = (Math.sin(game.animTime * 12) + 1) / 2;
+      P.blit(ctx, P.pacman('right', b2), 3 * TILE + 4, BACK_ROW * TILE + 3);
+    }
+    F.draw(ctx, 'BACK', 5, BACK_ROW, backSel ? '#ffffff' : '#c0c0d0');
+    F.drawCentered(ctx, 'SPACE TOGGLE   P BACK', 33, '#6060a0');
+  }
+
+  function ghostActivate(game) {
+    var roster = ghostRoster();
+    if (menu.ghostIndex >= roster.length) {
+      game.state = 'title'; game.stateTime = 0; global.Sound.blip();
+      return;
+    }
+    global.ExtraGhosts.toggle(roster[menu.ghostIndex].id);
+    global.Sound.accept();
   }
 
   /* ---- dev menu ------------------------------------------------------ */
@@ -418,6 +488,7 @@
         g.dotLimit = 0;
         if (g.state === 'house') game.leaveHouse(g);
       });
+      global.ExtraGhosts.releaseWaiting(game, true);
     }
     if (isOn('rampage')) {
       // Level 1 is untouched; the brows arrive on 2 and he snaps on 3.
@@ -459,6 +530,19 @@
 
   function handleInput(game, action) {
     if (game.state === 'mods') {
+      if (action === 'left' || action === 'right') {
+        menu.tab = (menu.tab + (action === 'right' ? 1 : TABS.length - 1)) % TABS.length;
+        global.Sound.blip();
+        return true;
+      }
+      if (menu.tab === 1) {
+        var n = ghostRowCount();
+        if (action === 'up') { menu.ghostIndex = (menu.ghostIndex + n - 1) % n; global.Sound.blip(); }
+        else if (action === 'down') { menu.ghostIndex = (menu.ghostIndex + 1) % n; global.Sound.blip(); }
+        else if (action === 'select') ghostActivate(game);
+        else if (action === 'back') { game.state = 'title'; game.stateTime = 0; }
+        return true;
+      }
       if (action === 'up') { move(-1); global.Sound.blip(); }
       else if (action === 'down') { move(1); global.Sound.blip(); }
       else if (action === 'select') activate(game);
@@ -484,6 +568,25 @@
   /** Taps land on tile coordinates so menu rows and Blinky can be hit. */
   function handleTap(game, col, row) {
     if (game.state !== 'mods') return false;
+
+    // The tab strip is tappable.
+    if (row === 3) {
+      menu.tab = col < 10 ? 0 : 1;
+      global.Sound.blip();
+      return true;
+    }
+    if (menu.tab === 1) {
+      var roster = ghostRoster();
+      for (var k = 0; k < roster.length; k++) {
+        if (row >= CARD_ROWS[k] && row <= CARD_ROWS[k] + 2) {
+          menu.ghostIndex = k; ghostActivate(game); return true;
+        }
+      }
+      if (row >= BACK_ROW && row <= BACK_ROW + 1) {
+        menu.ghostIndex = roster.length; ghostActivate(game); return true;
+      }
+      return false;
+    }
     if (Math.abs(col - BLINKY_TILE.c) <= 1 && Math.abs(row - BLINKY_TILE.r) <= 1) {
       menu.blinkyHits++;
       menu.blinkyShake = 1;
@@ -509,6 +612,8 @@
     isOn: isOn,
     storageUsed: storageUsed,
     openMenu: openMenu,
+    TABS: TABS,
+    CARD_ROWS: CARD_ROWS,
     openDev: openDev,
     updateMenu: updateMenu,
     drawMenu: drawMenu,

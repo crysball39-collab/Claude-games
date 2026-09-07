@@ -259,6 +259,201 @@ function auditFont() {
     MO.dev.unlocked=false; MO.dev.god=false; MO.dev.speed=1;
     MO.state.enabled.rampage=false;
 
+
+    /* ---------------- extra ghosts ---------------- */
+    const EG = window.ExtraGhosts;
+    const wrapC = c => ((c % 28) + 28) % 28;
+    // baseline: nothing enabled -> the original four, unchanged
+    EG.ROSTER.forEach(d=>EG.setOn(d.id,false));
+    g.reset(1,true);
+    ok('no extras -> four ghosts', g.ghosts.length===4, 'n='+g.ghosts.length);
+    ok('ghosts[0] is still Blinky', g.ghosts[0].name==='blinky');
+
+    // enable all four
+    EG.ROSTER.forEach(d=>EG.setOn(d.id,true));
+    g.reset(1,true);
+    ok('all extras -> eight ghosts', g.ghosts.length===8, 'n='+g.ghosts.length);
+    ok('originals keep their order and names',
+       ['blinky','pinky','inky','clyde'].every((n,i)=>g.ghosts[i].name===n));
+    ok('extras start outside the house waiting',
+       g.ghosts.slice(4).every(x=>x.state==='waiting'), g.ghosts.slice(4).map(x=>x.state).join(','));
+    ok('extras start on walkable tiles',
+       g.ghosts.slice(4).every(x=>!M.isWall(wrapC(Math.floor(x.x/8)), Math.floor(x.y/8))));
+
+    // arbitrary combinations
+    EG.ROSTER.forEach(d=>EG.setOn(d.id,false));
+    EG.setOn('lumo',true); g.reset(1,true);
+    ok('lumo only -> five ghosts', g.ghosts.length===5 && g.ghosts[4].ai==='lumo');
+    EG.setOn('grimm',true); EG.setOn('lumo',false); EG.setOn('nox',true); g.reset(1,true);
+    ok('grimm + nox -> six ghosts',
+       g.ghosts.length===6 && g.ghosts[4].ai==='grimm' && g.ghosts[5].ai==='nox');
+
+    // ---- chase rules are genuinely different ----
+    EG.ROSTER.forEach(d=>EG.setOn(d.id,true));
+    g.reset(1,true); g.state='playing'; g.mode='chase'; g.phaseIndex=1;
+    g.ghosts.forEach(x=>{ if(x.state==='waiting') x.state='normal'; });
+    g.pac.x=6*8+4; g.pac.y=5*8+4; g.pac.dir='right';      // long open corridor
+    const T={};
+    g.ghosts.forEach(x=>{ T[x.name]=g.ghostTarget(x); });
+    const key=o=>o.c+','+o.r;
+    // Two rules can coincide for one instant; what matters is that they are
+    // different functions. Sample a spread of positions and directions and
+    // require every pair to disagree most of the time.
+    const SPOTS=[[6,5],[13,20],[21,8],[1,29],[26,17],[9,11],[16,26],[6,14]];
+    const DIRS=['left','right','up','down'];
+    const names=['blinky','pinky','inky','clyde','lumo','vexa','grimm','nox'];
+    const samples={}; names.forEach(n=>samples[n]=[]);
+    for (const [pcx,pcy] of SPOTS) for (const d of DIRS) {
+      if (M.isWall(pcx,pcy)) continue;
+      g.pac.x=pcx*8+4; g.pac.y=pcy*8+4; g.pac.dir=d;
+      g.globalTime += 3;                       // moves Nox through his cycle
+      names.forEach(n=>{
+        const gh=g.ghosts.find(x=>x.name===n);
+        samples[n].push(key(g.ghostTarget(gh)));
+      });
+    }
+    const total=samples.lumo.length;
+    // Only pairs involving a new ghost are policed. Blinky and Clyde coincide
+    // by design on the real arcade - Clyde targets Pac-Man directly whenever he
+    // is more than eight tiles away - and that behaviour must not change.
+    const EXTRA_NAMES=['lumo','vexa','grimm','nox'];
+    let worstPair=null, worstAgree=0;
+    for (let i=0;i<names.length;i++) for (let j=i+1;j<names.length;j++) {
+      if (!EXTRA_NAMES.includes(names[i]) && !EXTRA_NAMES.includes(names[j])) continue;
+      let same=0;
+      for (let k=0;k<total;k++) if (samples[names[i]][k]===samples[names[j]][k]) same++;
+      if (same>worstAgree) { worstAgree=same; worstPair=names[i]+'/'+names[j]; }
+    }
+    ok('every new ghost is a distinct rule from all seven others',
+       worstAgree < total*0.5,
+       'closest pair '+worstPair+' agreed on '+worstAgree+' of '+total+' scenarios');
+    // Put Pac-Man back where the per-ghost assertions below expect him.
+    g.pac.x=6*8+4; g.pac.y=5*8+4; g.pac.dir='right';
+    g.ghosts.forEach(x=>{ T[x.name]=g.ghostTarget(x); });
+    const extras=['lumo','vexa','grimm','nox'].map(n=>key(T[n]));
+    // Nox deliberately mixes direct pursuit with a short lead, so he may match
+    // Blinky momentarily; what matters is that he alternates.
+    const noxG=g.ghosts.find(x=>x.ai==='nox');
+    noxG.x=2*8+4; noxG.y=29*8+4; noxG.stalk='hunt';
+    const noxTargets=new Set();
+    const t0=g.globalTime;
+    for (let i=0;i<8;i++){ g.globalTime=t0+i*3; noxTargets.add(key(g.ghostTarget(noxG))); }
+    g.globalTime=t0;
+    ok('nox alternates between pursuit and a lead', noxTargets.size>1,
+       [...noxTargets].join(' '));
+    ok('the three positional extras never sit on pac himself',
+       !['lumo','vexa','grimm'].map(n=>key(T[n])).includes(key(T.blinky)),
+       'blinky='+key(T.blinky));
+    ok('no extra copies pinky (4 ahead)',
+       !extras.includes(key(T.pinky)), 'pinky='+key(T.pinky));
+
+    // lumo projects along the real corridor and closes in when near
+    const lumo=g.ghosts.find(x=>x.ai==='lumo');
+    const lt=g.ghostTarget(lumo);
+    ok('lumo aims down the corridor ahead', lt.r===5 && lt.c>6, JSON.stringify(lt));
+    ok('lumo target is a real corridor tile', !M.isWall(wrapC(lt.c), lt.r));
+    lumo.x=g.pac.x+16; lumo.y=g.pac.y;
+    const lt2=g.ghostTarget(lumo);
+    ok('lumo switches to direct pursuit up close',
+       lt2.c===Math.floor(g.pac.x/8) && lt2.r===5, JSON.stringify(lt2));
+
+    // grimm targets a junction, not pac
+    const grimm=g.ghosts.find(x=>x.ai==='grimm');
+    const gt=g.ghostTarget(grimm);
+    const exits=(c,r)=>[[1,0],[-1,0],[0,1],[0,-1]].filter(([dc,dr])=>M.isWalkable(wrapC(c+dc),r+dr)).length;
+    ok('grimm targets a junction or corridor end',
+       exits(gt.c,gt.r)>=3 || !M.isWalkable(wrapC(gt.c+1),gt.r),
+       JSON.stringify(gt)+' exits='+exits(gt.c,gt.r));
+    ok('grimm does not target pac himself',
+       !(gt.c===Math.floor(g.pac.x/8)&&gt.r===5), JSON.stringify(gt));
+
+    // vexa flanks off the axis
+    const vexa=g.ghosts.find(x=>x.ai==='vexa');
+    vexa.x=200; vexa.y=200;                    // make sure it is not the closest
+    const vt=g.ghostTarget(vexa);
+    ok('vexa aims off the row pac runs along',
+       vt.r!==5, JSON.stringify(vt));
+
+    // nox hysteresis
+    const nox=g.ghosts.find(x=>x.ai==='nox');
+    nox.stalk='hunt'; nox.x=g.pac.x+16; nox.y=g.pac.y;
+    g.ghostTarget(nox);
+    ok('nox breaks off when crowded', nox.stalk==='back', 'stalk='+nox.stalk);
+    const away=g.ghostTarget(nox);
+    ok('nox repositions away from pac', away.c>14, JSON.stringify(away));
+    nox.x=1*8+4; nox.y=29*8+4;                 // far off, and a real corridor
+    g.ghostTarget(nox);
+    ok('nox resumes hunting once clear', nox.stalk==='hunt', 'stalk='+nox.stalk);
+
+    // ---- scatter patrols stay in their quadrant ----
+    g.mode='scatter'; g.phaseIndex=0;
+    const QUAD={lumo:[1,13,1,14],vexa:[14,26,1,14],grimm:[1,13,15,29],nox:[14,26,15,29]};
+    let outside=0, seen={};
+    for (const name of ['lumo','vexa','grimm','nox']) {
+      const gh=g.ghosts.find(x=>x.ai===name); seen[name]=new Set();
+      const q=QUAD[name];
+      for (let i=0;i<40;i++) {
+        gh.patrolIndex=i%5;
+        const t=g.ghostTarget(gh);
+        seen[name].add(t.c+','+t.r);
+        if (t.c<q[0]||t.c>q[1]||t.r<q[2]||t.r>q[3]) outside++;
+        if (M.isWall(wrapC(t.c),t.r)) outside+=100;
+      }
+    }
+    ok('every scatter waypoint is inside its own quadrant and walkable',
+       outside===0, 'violations='+outside);
+    ok('each ghost patrols several points, not one corner',
+       Object.values(seen).every(s=>s.size>=4),
+       Object.entries(seen).map(([k,v])=>k+':'+v.size).join(' '));
+    const allPts=Object.values(seen).flatMap(s=>[...s]);
+    ok('the four patrol routes do not overlap', new Set(allPts).size===allPts.length);
+
+    // patrol advances as the ghost arrives
+    const l2=g.ghosts.find(x=>x.ai==='lumo');
+    l2.patrolIndex=0;
+    const first=g.ghostTarget(l2);
+    l2.x=first.c*8+4; l2.y=first.r*8+4;
+    const second=g.ghostTarget(l2);
+    ok('reaching a waypoint advances the patrol',
+       second.c!==first.c || second.r!==first.r,
+       JSON.stringify(first)+' -> '+JSON.stringify(second));
+
+    // ---- frightened / eaten ----
+    g.mode='chase'; g.phaseIndex=1;
+    const fr=g.ghosts.find(x=>x.ai==='vexa');
+    fr.state='normal'; fr.frightened=true;
+    const dirsSeen=new Set();
+    for (let i=0;i<80;i++){ fr.dir='left'; g.decideGhost(fr); dirsSeen.add(fr.dir); }
+    ok('frightened extras use the core random walk, not their AI', dirsSeen.size>1,
+       'dirs='+[...dirsSeen].join(','));
+    fr.frightened=false;
+    fr.state='eaten';
+    const et=g.ghostTarget(fr);
+    ok('eaten extras head for the ghost house', et.c===13&&et.r===11, JSON.stringify(et));
+
+    // full eaten round trip
+    const rt=g.ghosts.find(x=>x.ai==='nox');
+    // Suspend collisions: a death would rebuild the roster and orphan `rt`.
+    const ghostCollide=g.collisionCheck; g.collisionCheck=function(){};
+    rt.state='eaten'; rt.frightened=false;
+    let sawHouse=false, back=false;
+    for(let i=0;i<60*30;i++){ g.update(1/60);
+      if(rt.state==='entering'||rt.state==='house') sawHouse=true;
+      if(sawHouse && rt.state==='normal') back=true; }
+    ok('eaten extra reaches the house', sawHouse, 'state='+rt.state);
+    ok('eaten extra returns to play', back, 'state='+rt.state);
+    g.collisionCheck=ghostCollide;
+
+    // ---- release schedule ----
+    g.reset(1,true); g.state='playing';
+    ok('extras hold before their dot count',
+       g.ghosts.slice(4).every(x=>x.state==='waiting'));
+    g.dotsEaten=90; EG.releaseWaiting(g,false);
+    ok('extras enter play once enough dots are eaten',
+       g.ghosts.slice(4).every(x=>x.state==='normal'),
+       g.ghosts.slice(4).map(x=>x.state).join(','));
+
+
     return R;
   });
   out.unshift((fontAudit.missing.length ? 'FAIL' : 'PASS') +
