@@ -7,8 +7,22 @@ import {
   MeshBasicMaterial, Vector3, Quaternion, AdditiveBlending, Color, DoubleSide,
 } from 'three';
 import { rayBone, boneBoxCenter } from './skeleton.js';
+import { gripWorld } from './grip.js';
 import { STATE } from './character.js';
 import { clamp, clamp01 } from '../core/util.js';
+
+/** Fastest the beam will ever drag a held body, in m/s. */
+const HOLD_SPEED = 9;
+
+/** Trims a particle back to `max` metres of travel per substep, keeping its
+    direction. Verlet stores speed as a position gap, so this edits the gap. */
+function capSpeed(p, max) {
+  const dx = p.x - p.px, dy = p.y - p.py, dz = p.z - p.pz;
+  const d = Math.hypot(dx, dy, dz);
+  if (d <= max || d === 0) return;
+  const k = max / d;
+  p.px = p.x - dx * k; p.py = p.y - dy * k; p.pz = p.z - dz * k;
+}
 
 const _v1 = new Vector3(), _v2 = new Vector3(), _v3 = new Vector3(), _v4 = new Vector3();
 const _q1 = new Quaternion();
@@ -33,8 +47,14 @@ export function createRCV2Model() {
     return m;
   };
 
-  // grip
-  add(new BoxGeometry(0.045, 0.13, 0.055), dark, 0, -0.075, 0.02, 0.22, 0, 0);
+  /* Grip and foregrip, both sized for a hand to close round: a fist leaves a
+     hole about thirty millimetres across, and anything fatter than that is
+     something the fingers are inside rather than around. */
+  add(new BoxGeometry(0.036, 0.13, 0.044), dark, 0, -0.075, 0.02, 0.22, 0, 0);
+  add(new BoxGeometry(0.038, 0.014, 0.048), mid, 0, -0.139, 0.034, 0.22, 0, 0);
+  // the front grip, under the shroud, which is what the other hand holds
+  add(new BoxGeometry(0.034, 0.088, 0.038), dark, 0, -0.052, -0.145, -0.10, 0, 0);
+  add(new BoxGeometry(0.038, 0.012, 0.042), mid, 0, -0.096, -0.150, -0.10, 0, 0);
   // receiver
   add(new BoxGeometry(0.075, 0.085, 0.235), mid, 0, 0.005, -0.03);
   // top rail
@@ -166,6 +186,13 @@ export class RCV2 {
     if (!this.grab) return;
     if (this.grab.type === 'character') {
       const c = this.grab.character;
+      /* Distal joints spend the carry lagging behind the one under the beam,
+         and the solver drags them along by moving them rather than by giving
+         them speed. Let go without this and all of that comes out at once: the
+         feet leave at three times the speed the body was ever carried at. You
+         cannot throw something faster than you were holding it. */
+      const cap = HOLD_SPEED * this.game.world.substepDt;
+      for (const p of c.particleList) capSpeed(p, cap);
       c.wantsUp = true;
       c.getUpDelay = 0.35 + Math.random() * 0.5;
     } else if (this.grab.type === 'body') {
@@ -226,7 +253,7 @@ export class RCV2 {
       const parts = pair ? [c.particles[pair[0]], c.particles[pair[1]]] : [c.particles.mt];
       _v4.copy(hold).sub(_v3).multiplyScalar(7);
       const speed = _v4.length();
-      if (speed > 9) _v4.multiplyScalar(9 / speed);
+      if (speed > HOLD_SPEED) _v4.multiplyScalar(HOLD_SPEED / speed);
       /* The whole person comes along, not just the joint under the beam.
          Yanking two particles and leaving the constraint solver to drag the
          other thirty is what made a held citizen crack like a whip; easing
@@ -243,6 +270,7 @@ export class RCV2 {
         p.px = p.x - (vx * (1 - a) + _v4.x * h * a);
         p.py = p.y - (vy * (1 - a) + _v4.y * h * a);
         p.pz = p.z - (vz * (1 - a) + _v4.z * h * a);
+        capSpeed(p, HOLD_SPEED * h);
       }
       if (!c.dead) { c.wantsUp = false; c.balance = 0; }
       this._drawBeam(_v3, 0.45);
@@ -272,13 +300,14 @@ export class RCV2 {
 
   /** Sticks the gun into the owner's right hand. */
   attachToHand(character) {
+    /* Held the way everything else is held: the grip through the fist, in the
+       hole the closed fingers leave. It used to be stuck to the outside of the
+       hand box with a fudged quarter turn, which is why the hand never looked
+       like it had hold of anything. */
     const hand = character.rig.byName.handR;
-    boneBoxCenter(hand, _v1);
-    _q1.copy(hand.worldQuat);
-    // the grip runs down the palm, so rotate the model into the hand's frame
-    _v2.set(0.0, 0.060, 0.0).applyQuaternion(_q1);
-    this.model.position.copy(_v1).add(_v2);
-    this.model.quaternion.copy(_q1).multiply(HAND_FIX);
+    gripWorld(hand, RCV2_GRIP, _q1, _v1);
+    this.model.position.copy(_v1);
+    this.model.quaternion.copy(_q1);
     const kick = this.recoil * 0.06;
     if (kick > 0) {
       this.model.getWorldDirection(_v3);
@@ -295,7 +324,8 @@ export class RCV2 {
   }
 }
 
-/* The hand's local +Y runs out along the fingers and its -Z faces the palm.
-   Splitting the difference points the barrel where the fist is aiming. */
-const HAND_FIX = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), Math.PI / 4);
+/** Where the fist closes on it, and which way it points once it is there. */
+export const RCV2_GRIP = { rake: 0.32, roll: -Math.PI / 2, hold: [0, -0.062, 0.018] };
+/** And where the other hand goes: the front grip, in the weapon's own space. */
+export const RCV2_FOREGRIP = [0, -0.050, -0.146];
 

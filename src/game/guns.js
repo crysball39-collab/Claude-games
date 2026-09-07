@@ -45,6 +45,15 @@ function gunMaterials() {
     blued: new MeshLambertMaterial({ color: 0x24252a }),
     mag: new MeshLambertMaterial({ color: 0x2f3a2c }),
     brass: new MeshLambertMaterial({ color: 0xb08a3a }),
+    /* M16: anodised aluminium and glass filled polymer, not steel and wood.
+       Lifted a long way off true matte black, because a rifle that is all one
+       value in shadow is a silhouette rather than a gun. */
+    alloy: new MeshLambertMaterial({ color: 0x53565c }),
+    alloyDark: new MeshLambertMaterial({ color: 0x3a3d42 }),
+    m16Polymer: new MeshLambertMaterial({ color: 0x3e4038 }),
+    m16PolymerDark: new MeshLambertMaterial({ color: 0x2c2e29 }),
+    magAlloy: new MeshLambertMaterial({ color: 0x5b5f63 }),
+    black: new MeshLambertMaterial({ color: 0x1a1c1f }),
   };
   return mats;
 }
@@ -195,19 +204,41 @@ export function createAkModel() {
   }
   // the big safety selector paddle, on the right
   box(g, M.blued, 0.005, 0.052, 0.014, 0.017, 0.014, 0.020, 0, 0, 0.35);
-  // charging handle sticking out of the right of the bolt carrier
+  // charging handle sticking out of the right of the bolt carrier, with the
+  // knurled knob on the end that a hand actually pulls
   box(g, M.brightSteel, 0.026, 0.008, 0.008, 0.020, 0.038, -0.020);
+  box(g, M.slideWear, 0.010, 0.014, 0.014, 0.032, 0.038, -0.020);
+
+  /* ---------------------------- trigger group ---------------------------- */
+  /* Front to back along the bottom of an AK: the magazine, then the trigger
+     guard with the trigger in it, then the pistol grip. It had none of the
+     middle one, which is what made the underside read as two loose lumps. */
+  // the well the magazine goes up into, and the catch that holds it there
+  box(g, M.receiver, 0.030, 0.016, 0.046, 0, -0.026, -0.055);
+  box(g, M.blued, 0.026, 0.009, 0.010, 0, -0.030, -0.029);
+  // trigger guard: front bar, the loop under it, and the rear post
+  box(g, M.blued, 0.024, 0.030, 0.007, 0, -0.038, -0.031);
+  box(g, M.blued, 0.024, 0.007, 0.048, 0, -0.051, -0.008);
+  box(g, M.blued, 0.024, 0.028, 0.008, 0, -0.036, 0.013);
+  // the trigger itself, hooked forward the way a trigger is
+  box(g, M.brightSteel, 0.006, 0.024, 0.007, 0, -0.032, -0.012, 0.20);
+  box(g, M.brightSteel, 0.006, 0.009, 0.010, 0, -0.043, -0.016, 0.55);
 
   /* ------------------------------- furniture ----------------------------- */
-  // pistol grip
-  box(g, M.wood, 0.026, 0.084, 0.030, 0, -0.052, 0.024, 0.28);
-  box(g, M.woodDark, 0.027, 0.008, 0.031, 0, -0.092, 0.036, 0.28);
+  // pistol grip: raked back, with a palm swell and a capped bottom
+  box(g, M.wood, 0.026, 0.092, 0.030, 0, -0.056, 0.026, 0.30);
+  box(g, M.wood, 0.030, 0.044, 0.028, 0, -0.048, 0.022, 0.30);
+  box(g, M.woodDark, 0.029, 0.010, 0.033, 0, -0.100, 0.040, 0.30);
+  box(g, M.blued, 0.010, 0.006, 0.010, 0, -0.101, 0.038, 0.30);
   // buttstock: wrist then comb
   box(g, M.wood, 0.028, 0.040, 0.090, 0, 0.000, 0.108, -0.10);
   box(g, M.wood, 0.030, 0.056, 0.130, 0, 0.010, 0.200, -0.06);
   box(g, M.woodDark, 0.032, 0.062, 0.012, 0, 0.014, 0.266, -0.06);   // butt plate
-  // lower handguard and the upper one over the gas tube
-  box(g, M.wood, 0.038, 0.032, 0.130, 0, -0.006, -0.170);
+  /* Lower handguard and the upper one over the gas tube. The lower one is
+     what the other hand closes round, so it is sized to fit the hole a fist
+     actually leaves rather than to the width of the real thing. */
+  box(g, M.wood, 0.034, 0.030, 0.130, 0, -0.008, -0.170);
+  box(g, M.woodDark, 0.036, 0.008, 0.028, 0, -0.021, -0.112);   // the retainer
   box(g, M.wood, 0.034, 0.026, 0.120, 0, 0.038, -0.165);
   // the vent slots in the upper handguard
   for (let i = 0; i < 3; i++) {
@@ -242,21 +273,171 @@ export function createAkModel() {
   box(g, M.blued, 0.020, 0.008, 0.008, 0, 0.058, -0.100);
 
   /* ------------------------------ magazine ------------------------------- */
-  /* The curve is the whole silhouette of this gun, so it is built as five
-     short sections, each leaning a little further back than the last. */
+  /* The curve is the whole silhouette of this gun, and it curves FORWARDS:
+     the floorplate sits ahead of the feed lips, not behind them. It was built
+     leaning the other way, which is why the magazine looked like a staircase
+     going backwards into the trigger. Five short sections, each leaning a
+     little further than the last and overlapping enough that the joins do not
+     read as steps. */
   const mag = new Group();
   mag.name = 'magazine';
-  let mx = 0, my = -0.030, mz = -0.020, ang = 0;
+  let my = -0.030, mz = -0.055, ang = 0.10;
   for (let i = 0; i < 5; i++) {
-    ang += 0.13;
     my -= 0.032 * Math.cos(ang);
-    mz += 0.032 * Math.sin(ang);
-    box(mag, i === 4 ? M.blued : M.mag, 0.026, 0.036, 0.030, mx, my, mz, ang);
+    mz -= 0.032 * Math.sin(ang);
+    const w = 0.026 - i * 0.001;
+    box(mag, M.mag, w, 0.044, 0.031 - i * 0.001, 0, my, mz, ang);
+    // the pressed ribs down each side of a steel magazine
+    for (const sx of [-1, 1]) {
+      box(mag, M.blued, 0.002, 0.030, 0.005, sx * (w / 2), my, mz - 0.005, ang);
+    }
+    ang += 0.13;
   }
+  // floorplate, a little wider than the body it caps
+  box(mag, M.blued, 0.028, 0.008, 0.034, 0, my - 0.023 * Math.cos(ang),
+    mz - 0.023 * Math.sin(ang), ang);
   g.add(mag);
 
   g.userData.magazine = mag;
   g.userData.dustCover = cover;
+  g.userData.materials = Object.values(M);
+  return g;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                    M16                                     */
+/* -------------------------------------------------------------------------- */
+
+export const M16 = {
+  id: 'm16',
+  label: 'M16',
+  capacity: 30,
+  length: 0.79,
+  mass: 3.6,
+  half: new Vector3(0.028, 0.095, 0.380),
+  center: new Vector3(0, -0.020, -0.130),
+  muzzle: new Vector3(0, 0.020, -0.500),
+  ejectAt: new Vector3(0.020, 0.048, -0.030),
+};
+
+/**
+ * Everything an AK is not: aluminium instead of stamped steel, the stock in
+ * line with the bore instead of dropped below it, the sight up on a carry
+ * handle, and a magazine that hangs almost straight down.
+ */
+export function createM16Model() {
+  const M = gunMaterials();
+  const g = new Group();
+
+  /* ----------------------------- receivers ------------------------------- */
+  // lower, with the magwell built into the front of it
+  box(g, M.alloy, 0.028, 0.052, 0.170, 0, 0.004, -0.028);
+  box(g, M.alloy, 0.032, 0.056, 0.050, 0, -0.020, -0.050);        // magwell
+  box(g, M.alloyDark, 0.033, 0.010, 0.052, 0, -0.046, -0.050);    // magwell lip
+  // upper, flat topped, with the ejection port and its cover on the right
+  box(g, M.alloy, 0.030, 0.042, 0.190, 0, 0.046, -0.034);
+  box(g, M.alloyDark, 0.004, 0.020, 0.044, 0.016, 0.044, -0.026);
+  box(g, M.alloyDark, 0.005, 0.014, 0.014, 0.017, 0.056, -0.004); // brass deflector
+  box(g, M.alloyDark, 0.008, 0.014, 0.014, 0.016, 0.042, 0.004);  // forward assist
+  // the takedown pins, which are the two circles on the side of every AR
+  for (const sz of [0.040, -0.086]) {
+    for (const sx of [-1, 1]) {
+      box(g, M.alloyDark, 0.003, 0.010, 0.010, sx * 0.015, 0.010, sz);
+    }
+  }
+
+  /* ---------------------------- carry handle ----------------------------- */
+  // two walls and a bridge over the top, with the rear sight down inside it
+  for (const sx of [-1, 1]) {
+    box(g, M.alloy, 0.005, 0.030, 0.110, sx * 0.012, 0.082, -0.010);
+  }
+  box(g, M.alloy, 0.029, 0.012, 0.110, 0, 0.101, -0.010);
+  box(g, M.alloyDark, 0.020, 0.014, 0.016, 0, 0.084, 0.036);      // aperture block
+  box(g, M.sightDot, 0.005, 0.005, 0.003, 0, 0.086, 0.043);       // the hole itself
+  box(g, M.alloyDark, 0.010, 0.008, 0.010, 0.011, 0.076, 0.030);  // windage drum
+  // charging handle: the T that sticks out the back under the handle
+  box(g, M.alloyDark, 0.024, 0.010, 0.030, 0, 0.066, 0.060);
+  box(g, M.alloyDark, 0.044, 0.008, 0.008, 0, 0.066, 0.076);
+
+  /* ---------------------------- trigger group ---------------------------- */
+  box(g, M.alloyDark, 0.024, 0.028, 0.008, 0, -0.034, -0.026);    // guard, front
+  box(g, M.alloyDark, 0.024, 0.007, 0.044, 0, -0.046, -0.006);    // guard, bottom
+  box(g, M.alloyDark, 0.024, 0.026, 0.008, 0, -0.032, 0.014);     // guard, rear post
+  box(g, M.brightSteel, 0.006, 0.022, 0.007, 0, -0.028, -0.008, 0.20);
+  box(g, M.brightSteel, 0.006, 0.008, 0.010, 0, -0.038, -0.012, 0.55);
+  // magazine release on the right, bolt catch on the left, selector above them
+  box(g, M.alloyDark, 0.008, 0.012, 0.012, 0.017, 0.000, -0.044);
+  box(g, M.alloyDark, 0.006, 0.020, 0.030, -0.016, 0.006, -0.020);
+  box(g, M.alloyDark, 0.008, 0.010, 0.024, -0.017, 0.016, 0.006, 0, 0, 0.4);
+
+  /* ------------------------------- furniture ----------------------------- */
+  // A2 pistol grip, with the finger swell at the front
+  box(g, M.m16Polymer, 0.026, 0.094, 0.030, 0, -0.054, 0.030, 0.28);
+  box(g, M.m16Polymer, 0.028, 0.026, 0.016, 0, -0.038, 0.012, 0.28);
+  box(g, M.m16PolymerDark, 0.028, 0.010, 0.032, 0, -0.098, 0.044, 0.28);
+  // buttstock, in line with the bore the way an AR is
+  box(g, M.m16Polymer, 0.036, 0.062, 0.150, 0, 0.026, 0.145, -0.02);
+  box(g, M.m16PolymerDark, 0.038, 0.070, 0.014, 0, 0.026, 0.222, -0.02);
+  box(g, M.alloyDark, 0.020, 0.014, 0.024, 0, 0.058, 0.196);      // sling swivel plate
+  box(g, M.m16PolymerDark, 0.030, 0.008, 0.100, 0, -0.005, 0.150, -0.02);
+
+  /* ------------------------- handguard and barrel ------------------------ */
+  /* Round and ribbed, and no fatter than a hand can close round. */
+  const guard = new Mesh(new CylinderGeometry(0.026, 0.028, 0.150, 10), M.m16Polymer);
+  guard.rotation.x = Math.PI / 2;
+  guard.position.set(0, 0.014, -0.200);
+  guard.castShadow = true;
+  g.add(guard);
+  for (let i = 0; i < 5; i++) {
+    const rib = new Mesh(new CylinderGeometry(0.029, 0.029, 0.006, 10), M.m16PolymerDark);
+    rib.rotation.x = Math.PI / 2;
+    rib.position.set(0, 0.014, -0.140 - i * 0.030);
+    g.add(rib);
+  }
+  box(g, M.alloyDark, 0.036, 0.036, 0.014, 0, 0.014, -0.128);     // delta ring
+  const barrel = new Mesh(new CylinderGeometry(0.008, 0.008, 0.230, 10), M.blued);
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.set(0, 0.020, -0.360);
+  g.add(barrel);
+  // front sight base: the triangle, its post, and the sling loop under it
+  box(g, M.blued, 0.020, 0.030, 0.026, 0, 0.034, -0.300);
+  for (const sx of [-1, 1]) box(g, M.blued, 0.004, 0.024, 0.012, sx * 0.008, 0.054, -0.300);
+  box(g, M.brightSteel, 0.003, 0.014, 0.003, 0, 0.056, -0.300);
+  box(g, M.blued, 0.014, 0.018, 0.008, 0, 0.004, -0.302);
+  // gas tube running back from the sight base to the upper
+  const gas = new Mesh(new CylinderGeometry(0.004, 0.004, 0.170, 6), M.blued);
+  gas.rotation.x = Math.PI / 2;
+  gas.position.set(0, 0.036, -0.212);
+  g.add(gas);
+  // birdcage flash hider, slotted
+  const cage = new Mesh(new CylinderGeometry(0.013, 0.011, 0.048, 8), M.blued);
+  cage.rotation.x = Math.PI / 2;
+  cage.position.set(0, 0.020, -0.478);
+  g.add(cage);
+  for (let i = 0; i < 4; i++) {
+    box(g, M.black, 0.004, 0.028, 0.020, 0, 0.020, -0.482, 0, 0, (i * Math.PI) / 4);
+  }
+
+  /* ------------------------------ magazine ------------------------------- */
+  /* A STANAG hangs almost straight down - only a slight curve, which is the
+     other half of telling this apart from the AK at a glance. */
+  const mag = new Group();
+  mag.name = 'magazine';
+  let my = -0.052, mz = -0.050, ang = 0.05;
+  for (let i = 0; i < 4; i++) {
+    my -= 0.038 * Math.cos(ang);
+    mz -= 0.038 * Math.sin(ang);
+    box(mag, M.magAlloy, 0.026, 0.048, 0.030, 0, my, mz, ang);
+    for (const sx of [-1, 1]) {
+      box(mag, M.alloyDark, 0.002, 0.034, 0.004, sx * 0.013, my, mz - 0.005, ang);
+    }
+    ang += 0.05;
+  }
+  box(mag, M.m16PolymerDark, 0.028, 0.010, 0.034, 0, my - 0.026 * Math.cos(ang),
+    mz - 0.026 * Math.sin(ang), ang);
+  g.add(mag);
+
+  g.userData.magazine = mag;
   g.userData.materials = Object.values(M);
   return g;
 }
@@ -301,6 +482,9 @@ export function spawnGlock(game, position, opts = {}) {
 }
 export function spawnAk(game, position, opts = {}) {
   return spawnGun(game, position, AK47, createAkModel, opts);
+}
+export function spawnM16(game, position, opts = {}) {
+  return spawnGun(game, position, M16, createM16Model, opts);
 }
 
 /* -------------------------------------------------------------------------- */

@@ -19,16 +19,38 @@ const MUSCLE_VELOCITY_SHARE = 0.28;
 const MAX_MUSCLE_DV = 2.0;
 /** Metres per second no joint may exceed. Well past a hard fall, well short
     of anything that reads as a body being launched. */
-const MAX_PARTICLE_SPEED = 13;
+/* A person can fall faster than they can move under their own power, and the
+   cap is here to stop an explosion posting a limb into orbit, not to slow a
+   body down: a four metre drop already ends at thirteen metres a second. */
+const MAX_PARTICLE_SPEED = 20;
 /** How elastic a body-against-flesh contact is. Barely. */
 const BODY_RESTITUTION = 0.85;
 /** Most speed a single contact may hand to one joint, in m/s. A boulder
     should knock someone flat, not fire an arm across the map. */
 const MAX_CONTACT_DV = 10;
+
+/** Most speed one substep of constraint solving may add to a joint, in m/s.
+
+    A body landing at nine metres a second stops one foot dead on the ground
+    while the other thirty joints are still coming down. That is a real
+    violation and the solver is right to fix it - but fixing five centimetres
+    of it inside a 1/270 second substep reads back as fifteen metres a second,
+    and a toe leaves at the speed cap. Spreading the same correction over a
+    handful of substeps lands the body just as hard and keeps it in one piece.
+    Contacts and muscles are applied before the solver runs, so this limits
+    what the joints do to each other, not what the world does to them. */
+const MAX_SOLVE_DV = 3.2;
 /** How hard one body's bones push against another body's. */
 const CROSS_BODY_STIFFNESS = 0.45;
-/** How far a muscle can usefully pull: past this the pull stops growing. */
-const MUSCLE_REACH = 0.12;
+/**
+ * How far a muscle can usefully pull: past this the pull stops growing.
+ *
+ * It also decides how much a weak muscle can fight gravity, which is why it
+ * is small. At the tone a ragdoll keeps, a reach of twelve centimetres works
+ * out at exactly one gravity - so a falling body could hold itself up, and
+ * did, coming down at a third of the rate everything else falls at.
+ */
+const MUSCLE_REACH = 0.045;
 /** How much of a sliding contact's speed one solve pass rubs off. */
 const CONTACT_FRICTION = 0.06;
 /** Deepest overlap two bones may unwind in one solver pass, in metres. */
@@ -732,7 +754,20 @@ export class PhysicsWorld {
       p.grounded = false;
     }
 
-    // muscles pull the ragdoll towards the animated pose
+    /* Muscles pull the ragdoll towards the animated pose.
+       
+       A muscle is INTERNAL. It can fold a body up; it cannot lift one. Each
+       pull moves a particle towards its target and nothing pushes back, so a
+       pose that is wrong in one direction - and a limp body's pose is always
+       wrong, that is what limp means - adds up to a force on the whole body.
+       It pointed upwards, because a standing pose holds everything up, and it
+       was worth about a third of gravity: a falling body slowed to a drift.
+       So the average is worked out and taken back off, which leaves the shape
+       of the pull and none of its momentum. */
+    for (let i = 0; i < this.characters.length; i++) {
+      const c = this.characters[i];
+      c._mAccX = 0; c._mAccY = 0; c._mAccZ = 0; c._mAccM = 0;
+    }
     for (let i = 0; i < ps.length; i++) {
       const p = ps[i];
       if (p.muscle <= 0) continue;
@@ -763,23 +798,69 @@ export class PhysicsWorld {
            millimetres a substep, the floor puts the head back, and the body
            buzzes for as long as it lies there. Past arm's reach the pull stops
            growing. */
-        let ex = p.tx - p.x, ey = p.ty - p.y, ez = p.tz - p.z;
+        /* A muscle holds a POSE. Where the body is in the world is the
+           physics' business, and the two have to be told apart: the targets
+           are written once a frame from where the body was at the top of it,
+           so a body that is moving has left them behind, and pulling towards
+           them is a pull backwards proportional to speed. That is air
+           resistance, and it held a falling body to seven metres a second
+           when the world's gravity says twenty two.
+
+           So the whole target pose is carried to where the body is now - the
+           owner works out the shift - and what is left of the error is the
+           pose being wrong, which is the only thing a muscle should answer
+           for. */
+        const o = p.owner;
+        const shx = o ? o.muscleShiftX : 0;
+        const shy = o ? o.muscleShiftY : 0;
+        const shz = o ? o.muscleShiftZ : 0;
+        let ex = p.tx + shx - p.x, ey = p.ty + shy - p.y, ez = p.tz + shz - p.z;
         const e2 = ex * ex + ey * ey + ez * ez;
         if (e2 > MUSCLE_REACH * MUSCLE_REACH) {
           const s2 = MUSCLE_REACH / Math.sqrt(e2);
           ex *= s2; ey *= s2; ez *= s2;
         }
-        const dx = ex * k, dy = ey * k, dz = ez * k;
-        p.x += dx; p.y += dy; p.z += dz;
-        let sx = dx * MUSCLE_VELOCITY_SHARE, sy = dy * MUSCLE_VELOCITY_SHARE, sz = dz * MUSCLE_VELOCITY_SHARE;
-        const lim = MAX_MUSCLE_DV * dt;
-        const m2 = sx * sx + sy * sy + sz * sz;
-        if (m2 > lim * lim) {
-          const s2 = lim / Math.sqrt(m2);
-          sx *= s2; sy *= s2; sz *= s2;
+        p.mdx = ex * k; p.mdy = ey * k; p.mdz = ez * k;
+        if (o) {
+          o._mAccX += p.mdx * p.mass; o._mAccY += p.mdy * p.mass;
+          o._mAccZ += p.mdz * p.mass;
+          /* The reaction has to go somewhere, and a part that is resting on
+             the ground puts it into the ground - which is why a body lying
+             down settles rather than shoving itself about. Only the parts in
+             the air share it out between them. */
+          if (!p.grounded) o._mAccM += p.mass;
         }
-        p.px += dx - sx; p.py += dy - sy; p.pz += dz - sz;
       }
+    }
+
+    // ...and now apply it, with the body's own share of it taken back out
+    for (let i = 0; i < ps.length; i++) {
+      const p = ps[i];
+      if (p.muscle <= 0 || p.muscle >= 0.999) continue;
+      const o = p.owner;
+      let dx = p.mdx, dy = p.mdy, dz = p.mdz;
+      if (o && o._mAccM > 1e-6 && !p.grounded) {
+        dx -= o._mAccX / o._mAccM; dy -= o._mAccY / o._mAccM; dz -= o._mAccZ / o._mAccM;
+      }
+      p.x += dx; p.y += dy; p.z += dz;
+      let sx = dx * MUSCLE_VELOCITY_SHARE, sy = dy * MUSCLE_VELOCITY_SHARE, sz = dz * MUSCLE_VELOCITY_SHARE;
+      const lim = MAX_MUSCLE_DV * dt;
+      const m2 = sx * sx + sy * sy + sz * sz;
+      if (m2 > lim * lim) {
+        const s2 = lim / Math.sqrt(m2);
+        sx *= s2; sy *= s2; sz *= s2;
+      }
+      p.px += dx - sx; p.py += dy - sy; p.pz += dz - sz;
+    }
+
+    /* What every joint was doing before its neighbours had their say. */
+    if (!this._preSpeed || this._preSpeed.length < ps.length) {
+      this._preSpeed = new Float64Array(ps.length + 64);
+    }
+    const pre = this._preSpeed;
+    for (let i = 0; i < ps.length; i++) {
+      const p = ps[i];
+      pre[i] = Math.hypot(p.x - p.px, p.y - p.py, p.z - p.pz);
     }
 
     for (let it = 0; it < this.constraintIters; it++) {
@@ -809,8 +890,9 @@ export class PhysicsWorld {
       }
       const dx = p.x - p.px, dy = p.y - p.py, dz = p.z - p.pz;
       const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      if (d > maxStep) {
-        const k = maxStep / d;
+      const cap = Math.min(maxStep, pre[i] + MAX_SOLVE_DV * dt);
+      if (d > cap) {
+        const k = cap / d;
         p.px = p.x - dx * k; p.py = p.y - dy * k; p.pz = p.z - dz * k;
       }
     }

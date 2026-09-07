@@ -279,6 +279,12 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
   linear-gradient(0deg, transparent 0 40%, #2f3a2c 40% 52%, transparent 52%),
   linear-gradient(90deg, transparent 0 58%, #6a4526 58% 86%, transparent 86%),
   #14181c}
+/* an M16: carry handle on top, straight magazine below */
+.ico.m16{background:
+  linear-gradient(0deg, transparent 0 62%, #37393d 62% 74%, transparent 74%),
+  linear-gradient(0deg, transparent 0 40%, #2b2d31 40% 52%, transparent 52%),
+  linear-gradient(90deg, transparent 0 46%, #1d1f22 46% 58%, transparent 58%),
+  #14181c}
 .drawer-foot{margin-top:10px;font-size:.68rem;color:var(--muted);letter-spacing:.06em}
 .drawer-foot b{color:#ffcf7a}
 

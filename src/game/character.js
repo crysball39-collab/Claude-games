@@ -69,11 +69,12 @@ export const MELEE_CLIPS = {
 /** Which held pose each one stands in - guns included. */
 export const MELEE_HOLD = {
   machete: 'macheteHold', sledge: 'sledgeHold',
-  glock: 'glockHold', ak47: 'akHold',
+  glock: 'glockHold', ak47: 'akHold', m16: 'm16Hold',
 };
 const MELEE_ACTIONS = new Set(Object.values(MELEE_CLIPS).flat());
 /** Reload clips: they own the arms while they run, but nothing strikes. */
-const RELOADS = new Set(['reloadPistol', 'reloadPistolEmpty', 'reloadRifle', 'reloadRifleEmpty']);
+const RELOADS = new Set(['reloadPistol', 'reloadPistolEmpty', 'reloadRifle',
+  'reloadRifleEmpty', 'reloadM16', 'reloadM16Empty']);
 
 export const STATE = {
   CONTROLLED: 'controlled',
@@ -187,6 +188,8 @@ export class Character {
     this.slashSide = 'L';       // so the first swing is the forehand
     this.punchCooldown = 0;
     this.recoil = 0;            // how much of a gun's kick is still in the arms
+    // how far the body has moved from the pose the muscles are holding
+    this.muscleShiftX = 0; this.muscleShiftY = 0; this.muscleShiftZ = 0;
     /* Fighting, you turn to face what you are hitting rather than swinging
        across your own body. Anything that wants the hips brought round now
        instead of eventually sets this. */
@@ -786,7 +789,12 @@ export class Character {
     this.painTimer = Math.max(0, this.painTimer - dt);
     this.bleeding = Math.max(0, this.bleeding - dt * 0.35);
     if (!this.dead) this.balance = clamp01(this.balance + dt * 0.36);
-    this.strength = damp(this.strength, this.targetStrength, 9, dt);
+    /* Letting go is faster than taking hold. A body that has just been
+       knocked out does not spend a third of a second on the way to limp - it
+       drops - but a body getting back up tightens gradually, which is what
+       the slower rate the other way is for. */
+    this.strength = damp(this.strength, this.targetStrength,
+      this.targetStrength < this.strength ? 26 : 9, dt);
 
     switch (this.state) {
       case STATE.CONTROLLED: this._updateControlled(dt); break;
@@ -1323,14 +1331,39 @@ export class Character {
     /* A body nobody is driving any more still has to settle. Without this the
        constraint solver and the last of the muscle tone trade energy back and
        forth and the limbs ring like springs; with it they swing, slow, and
-       stop, which is what a fallen body does. */
+       stop, which is what a fallen body does.
+       
+       But only the swinging. Damping every particle's whole velocity damps
+       the body's own fall with it - that is air resistance, and at this rate
+       it held a falling body to gravity divided by the damping, about eight
+       metres a second, which is a corpse coming down like a leaf. So the
+       body's own motion is taken out first, the rest is damped, and the
+       motion is put back: the limbs still stop ringing, and the body falls at
+       the gravity everything else falls at. */
+    /* Carry the whole target pose to where the body actually is, so the
+       muscles answer for the pose being wrong and for nothing else. Measured
+       against the hip, which is the root the pose is built on. */
+    const hip = this.particles.hip;
+    this.muscleShiftX = hip.x - hip.tx;
+    this.muscleShiftY = hip.y - hip.ty;
+    this.muscleShiftZ = hip.z - hip.tz;
+
     if (this.state !== STATE.CONTROLLED) {
       const k = Math.exp(-RAGDOLL.damping * h);
-      for (let i = 0; i < this.particleList.length; i++) {
-        const p = this.particleList[i];
-        p.px = p.x - (p.x - p.px) * k;
-        p.py = p.y - (p.y - p.py) * k;
-        p.pz = p.z - (p.z - p.pz) * k;
+      const list = this.particleList;
+      let mx = 0, my = 0, mz = 0, mass = 0;
+      for (let i = 0; i < list.length; i++) {
+        const p = list[i];
+        const w = p.mass;
+        mx += (p.x - p.px) * w; my += (p.y - p.py) * w; mz += (p.z - p.pz) * w;
+        mass += w;
+      }
+      if (mass > 1e-6) { mx /= mass; my /= mass; mz /= mass; }
+      for (let i = 0; i < list.length; i++) {
+        const p = list[i];
+        p.px = p.x - (mx + (p.x - p.px - mx) * k);
+        p.py = p.y - (my + (p.y - p.py - my) * k);
+        p.pz = p.z - (mz + (p.z - p.pz - mz) * k);
       }
     }
     if (this.state === STATE.STUMBLE) {

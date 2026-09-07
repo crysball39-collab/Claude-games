@@ -365,10 +365,13 @@ r = await page.evaluate(async () => {
     held = Math.max(held, worst());
   }
   g.rcv2.release();
-  let after = 0, high = 0;
+  /* Only the flight and the landing count. Once they start getting up their
+     muscles are moving limbs on purpose and fast, which is not a fling. */
+  let after = 0, high = 0, gotUp = false;
   for (let f = 0; f < 200; f++) {
     await new Promise((res) => requestAnimationFrame(res));
-    after = Math.max(after, worst());
+    if (c.state === 'ragdoll') after = Math.max(after, worst());
+    else gotUp = true;
     for (const p of c.particleList) high = Math.max(high, p.y);
   }
   // and once it is all over it should be lying still, not twitching
@@ -384,12 +387,12 @@ r = await page.evaluate(async () => {
   }
   return {
     held: +held.toFixed(1), after: +after.toFixed(1), high: +high.toFixed(2),
-    settled: +settled.toFixed(2), stretch: +stretch.toFixed(2),
+    settled: +settled.toFixed(2), stretch: +stretch.toFixed(2), gotUp,
   };
 });
 check('the RCV2 carries a ragdoll instead of flinging it',
-  r.held < 13.5 && r.after < 13.5 && r.high < 3.2 && r.settled < 3 && r.stretch < 1.15,
-  JSON.stringify(r));
+  r.held < 10 && r.after < 13.5 && r.high < 3.2 && r.settled < 3 &&
+  r.stretch < 1.15 && r.gotUp, JSON.stringify(r));
 
 // ---------- one punch staggers you, it does not floor you ----------
 r = await page.evaluate(async () => {
@@ -1017,10 +1020,15 @@ r = await page.evaluate(async () => {
   const guns = await import('/src/game/guns.js');
   const SPAWN = {
     machete: objects.spawnMachete, sledge: objects.spawnSledge,
-    glock: guns.spawnGlock, ak47: guns.spawnAk,
+    glock: guns.spawnGlock, ak47: guns.spawnAk, m16: guns.spawnM16,
+  };
+  /** Where the OTHER hand goes on each two handed thing, in weapon space. */
+  const SUPPORT = {
+    sledge: [0, 0.42, 0], glock: [-0.048, -0.050, 0.012],
+    ak47: [0, -0.014, -0.170], m16: [0, 0.004, -0.205],
   };
   const out = {};
-  for (const kind of ['machete', 'sledge', 'glock', 'ak47']) {
+  for (const kind of ['machete', 'sledge', 'glock', 'ak47', 'm16']) {
     g.clearSpawns();
     if (g.carried) g.dropCarried();
     g.clearSpawns();
@@ -1043,20 +1051,80 @@ r = await page.evaluate(async () => {
       const tip = g.player.rig.byName[`fingerR${i}B`].worldEnd;
       near = Math.min(near, tip.distanceTo(held));
     }
+    /* And the other hand, for the things that take two. A support hand that
+       is merely near the weapon is what makes a hold look wrong: it has to be
+       ON the handguard, the haft, the foregrip, with its fingers closed. */
+    let support = null;
+    if (SUPPORT[kind]) {
+      /* The sledgehammer's other hand grips wherever on the haft it can
+         reach, so what is checked there is the distance to the haft ITSELF,
+         not to one chosen spot on it. */
+      const want = new V().fromArray(SUPPORT[kind]).applyQuaternion(q).add(origin);
+      if (kind === 'sledge') {
+        const lh = g.player.rig.byName.handL;
+        const lf0 = FIST.center.clone().applyQuaternion(lh.worldQuat).add(lh.worldPos);
+        const axis = new V(0, 1, 0).applyQuaternion(q);
+        let best = 9, at = 0;
+        for (let t = 0.20; t <= 0.60; t += 0.01) {
+          const d = lf0.distanceTo(origin.clone().addScaledVector(axis, t));
+          if (d < best) { best = d; at = t; }
+        }
+        want.copy(origin).addScaledVector(axis, at);
+      }
+      const lhand = g.player.rig.byName.handL;
+      const lfist = FIST.center.clone().applyQuaternion(lhand.worldQuat).add(lhand.worldPos);
+      let lnear = 9;
+      for (let i = 0; i < 4; i++) {
+        lnear = Math.min(lnear, g.player.rig.byName[`fingerL${i}B`].worldEnd.distanceTo(want));
+      }
+      support = { onIt: +lfist.distanceTo(want).toFixed(3), finger: +lnear.toFixed(3) };
+    }
     out[kind] = {
       onFist: +held.distanceTo(fist).toFixed(4),
       inPalm: pointInBone(hand, held, 0),
       finger: +near.toFixed(3),
       model: +g.carried.model.position.distanceTo(origin).toFixed(4),
+      support,
     };
   }
   g.dropCarried();
   g.clearSpawns();
+
+  /* The RCV2 is not picked up - it is always in hand - but it is held the
+     same way, and the pose that holds it is the one the player sees most. */
+  {
+    const { RCV2_GRIP, RCV2_FOREGRIP } = await import('/src/game/rcv2.js');
+    g.setEquipped('rcv2');
+    for (let i = 0; i < 40; i++) await frame();
+    const hand = g.player.rig.byName.handR;
+    const q = new (g.player.rig.rootQuat.constructor)();
+    const origin = new V();
+    gripWorld(hand, RCV2_GRIP, q, origin);
+    const fist = FIST.center.clone().applyQuaternion(hand.worldQuat).add(hand.worldPos);
+    const held = new V().fromArray(RCV2_GRIP.hold).applyQuaternion(q).add(origin);
+    const want = new V().fromArray(RCV2_FOREGRIP).applyQuaternion(q).add(origin);
+    const lhand = g.player.rig.byName.handL;
+    const lfist = FIST.center.clone().applyQuaternion(lhand.worldQuat).add(lhand.worldPos);
+    let lnear = 9;
+    for (let i = 0; i < 4; i++) {
+      lnear = Math.min(lnear, g.player.rig.byName[`fingerL${i}B`].worldEnd.distanceTo(want));
+    }
+    out.rcv2 = {
+      onFist: +held.distanceTo(fist).toFixed(4),
+      inPalm: pointInBone(hand, held, 0),
+      finger: 0,
+      model: +g.rcv2.model.position.distanceTo(origin).toFixed(4),
+      support: { onIt: +lfist.distanceTo(want).toFixed(3), finger: +lnear.toFixed(3) },
+    };
+    g.setEquipped('fists');
+  }
   return out;
 });
 check('every weapon is gripped: handle in the fist, fingers closed on it',
   Object.values(r).every((w) => w.onFist < 0.002 && w.inPalm === false
-    && w.finger < 0.075 && w.model < 0.002), JSON.stringify(r));
+    && w.finger < 0.075 && w.model < 0.002
+    && (!w.support || (w.support.onIt < 0.05 && w.support.finger < 0.09))),
+  JSON.stringify(r));
 
 // ---------- the two firearms ----------
 r = await page.evaluate(async () => {
@@ -1067,7 +1135,7 @@ r = await page.evaluate(async () => {
   const { spawnCitizen } = await import('/src/game/citizen.js');
   const guns = await import('/src/game/guns.js');
   const out = {};
-  for (const [kind, fn] of [['glock', 'spawnGlock'], ['ak47', 'spawnAk']]) {
+  for (const [kind, fn] of [['glock', 'spawnGlock'], ['ak47', 'spawnAk'], ['m16', 'spawnM16']]) {
     g.clearSpawns();
     if (g.carried) g.dropCarried();
     g.clearSpawns();
@@ -1121,7 +1189,7 @@ r = await page.evaluate(async () => {
   g.player.teleport(OX, 6, 0);
   return out;
 });
-check('the Glock and the AK are picked up, fire, kick and reload',
+check('the Glock, the AK and the M16 are picked up, fire, kick and reload',
   r.glock.carried && r.glock.pose === 'glockHold' && r.glock.full === 15 &&
   r.glock.fired === 3 && r.glock.spent === 3 && r.glock.damage > 40 &&
   r.glock.climb > 0.02 && r.glock.armKick > 0.1 && r.glock.cases === 3 &&
@@ -1132,7 +1200,12 @@ check('the Glock and the AK are picked up, fire, kick and reload',
   r.ak47.fired === 3 && r.ak47.spent === 3 && r.ak47.damage > 60 &&
   r.ak47.climb > r.glock.climb && r.ak47.armKick > r.glock.armKick &&
   r.ak47.reloadClip === 'reloadRifle' && r.ak47.emptyClip === 'reloadRifleEmpty' &&
-  r.ak47.afterEmpty === 30,
+  r.ak47.afterEmpty === 30 &&
+  r.m16.carried && r.m16.pose === 'm16Hold' && r.m16.full === 30 &&
+  r.m16.fired === 3 && r.m16.spent === 3 && r.m16.damage > 60 &&
+  r.m16.climb > 0.01 && r.m16.climb < r.ak47.climb && r.m16.armKick > 0.1 &&
+  r.m16.reloadClip === 'reloadM16' && r.m16.emptyClip === 'reloadM16Empty' &&
+  r.m16.afterEmpty === 30,
   JSON.stringify(r));
 
 // ---------- one is a pistol, the other empties itself ----------
@@ -1147,7 +1220,7 @@ r = await page.evaluate(async () => {
     consumeLook: () => ({ x: 0, y: 0 }), move: { x: 0, y: 0 },
     pressed: {}, down: { primary: true }, beginFrame() {},
   };
-  for (const [kind, fn] of [['glock', 'spawnGlock'], ['ak47', 'spawnAk']]) {
+  for (const [kind, fn] of [['glock', 'spawnGlock'], ['ak47', 'spawnAk'], ['m16', 'spawnM16']]) {
     if (g.carried) g.dropCarried();
     g.clearSpawns();
     g.player.teleport(OX, 0, 0);
@@ -1166,8 +1239,9 @@ r = await page.evaluate(async () => {
   g.clearSpawns();
   return out;
 });
-check('holding the trigger empties the AK and does nothing to the Glock',
-  r.glock === 0 && r.ak47 >= 8 && r.ak47 <= 11, JSON.stringify(r));
+check('holding the trigger empties both rifles and does nothing to the Glock',
+  r.glock === 0 && r.ak47 >= 8 && r.ak47 <= 11 && r.m16 > r.ak47 && r.m16 <= 15,
+  JSON.stringify(r));
 
 // ---------- a body that has stopped moving, stops moving ----------
 r = await page.evaluate(async () => {

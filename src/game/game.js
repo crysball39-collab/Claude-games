@@ -17,7 +17,7 @@ import {
 } from './objects.js';
 import { gripWorld } from './grip.js';
 import {
-  GLOCK, AK47, spawnGlock, spawnAk, MuzzleFlash, CaseEjector,
+  GLOCK, AK47, M16, spawnGlock, spawnAk, spawnM16, MuzzleFlash, CaseEjector,
 } from './guns.js';
 import { GoreSystem, nearestBone } from './gore.js';
 import { NavGrid } from './ai.js';
@@ -163,6 +163,31 @@ export const GUNS = {
       reloadRifleEmpty: { magOut: [0.62, 1.62], rock: [0.30, 1.95], bolt: [1.92, 2.28] },
     },
   },
+  m16: {
+    label: 'M16',
+    spawn: spawnM16,
+    gun: M16,
+    grip: { rake: 0.30, roll: -Math.PI / 2, hold: [0, -0.050, 0.030] },
+    center: new Vector3(0, -0.020, -0.130),
+    hold: 'm16Hold',
+    /** Full automatic, and faster than the AK: this is the M16A1. */
+    auto: true,
+    interval: 0.075,                // 800 rounds a minute
+    capacity: 30,
+    damage: 36,
+    push: 260,
+    range: 320,
+    /* 5.56 out of a stock that is in line with the bore: the recoil goes
+       straight back into the shoulder instead of levering the muzzle up, so
+       it climbs about half as much as the AK and settles faster. */
+    recoil: { pitch: 0.036, yaw: 0.011, recover: 12, arm: 0.24, shake: 0.26 },
+    flash: 0.7,
+    reload: { normal: 'reloadM16', empty: 'reloadM16Empty' },
+    parts: {
+      reloadM16: { magOut: [0.30, 1.30] },
+      reloadM16Empty: { magOut: [0.30, 1.30], bolt: [1.70, 1.86] },
+    },
+  },
 };
 
 /** Everything that can be picked up and held, however it is used. */
@@ -182,6 +207,7 @@ export const SPAWNABLES = {
     { id: 'sledge', name: 'Sledgehammer', icon: 'sledge', hint: 'Heavy. Breaks bones.' },
     { id: 'glock', name: 'Glock-19', icon: 'glock', hint: '15 rounds. Semi automatic.' },
     { id: 'ak47', name: 'AK-47', icon: 'ak47', hint: '30 rounds. Full automatic.' },
+    { id: 'm16', name: 'M16', icon: 'm16', hint: '30 rounds. Faster, flatter.' },
   ],
   humans: [
     { id: 'citizen', name: 'Citizen', icon: 'citizen', hint: 'An ordinary person' },
@@ -813,6 +839,10 @@ export class Game {
     if (this.reloadTimer > 0) return;
     if (c.ammo >= spec.capacity) { this.hud?.toast('Already full'); return; }
     if (this.player.armBroken('L')) { this.hud?.toast('Your left arm is broken'); return; }
+    /* The magazine is in by the time reloadTimer runs out, but the animation
+       still has a tail on it. Without this, a reload asked for during that tail
+       is swallowed: the arms are busy with work that is already finished. */
+    if (this.player.reloading) this.player.animator.cancelAction();
     /* An empty gun needs the action worked as well as a magazine, which is a
        different job and a slower one. */
     const empty = !c.chambered;
