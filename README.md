@@ -48,6 +48,48 @@ The rest is measured off the same capture:
 | Sprites | Pac-Man 13 px across; ghosts 14 × 14 with three-footed skirts |
 | Level-1 cherry | traced pixel-for-pixel from the capture |
 
+Nothing is anti-aliased. The whole screen is composed in a 224 × 288 buffer at
+arcade resolution and blitted up with smoothing off, and the character artwork
+is rasterised once at 1× with its alpha thresholded and its colours snapped to
+the arcade palette — so every sprite pixel is a hard block, as on the original.
+
+## Sound
+
+Audio runs through an emulation of the **Namco WSG**, the custom three-voice
+wave sound generator on the Pac-Man board. The hardware model and the
+wavetables are the real thing:
+
+- the 12 non-silent waveforms of 32 four-bit samples transcribed from the
+  board's two 256-byte sound PROMs (`82s126.1m`, `82s126.3m`)
+- clocked at CPU/32 = 3.072 MHz / 32 = 96 kHz
+- each voice adds a 20-bit frequency to a 20-bit accumulator per clock; the
+  top 5 bits index the waveform and the nibble is scaled by a 4-bit volume
+- register value for a pitch is `V = f × 32 / 96000 × 2¹⁵ = 4096f/375`, which
+  reproduces the documented 4806 for A440
+
+Every effect is rendered offline through that model into a 96 kHz buffer, so
+the stepped quantisation and aliasing of the original survive instead of being
+approximated with clean oscillators. The **waveform choices and register
+sequences per effect are reconstructed by ear** — the game ROM's sound tables
+were not available — so the timbre is the hardware's but the note data is not
+a dump.
+
+## Start sequence
+
+Pressing start reproduces the arcade order: the maze appears with `PLAYER ONE`
+in cyan and `READY!` in yellow and no characters at all, the opening tune
+plays, and part-way through the characters appear and `PLAYER ONE` clears.
+`READY!` sits in the chamber below the ghost house — the same tile the fruit
+spawns on — and Pac-Man waits there as a closed circle. Losing a life skips
+the tune and shows the shorter `READY!` with the characters already in place.
+
+## Timing
+
+The game runs on a fixed timestep at the arcade's 60.606 Hz video rate, where
+a character at 100 % speed advances exactly 1.25 pixels per frame — the
+documented 75.76 px/s. This is decoupled from the display: at 60, 90, 120 and
+144 Hz Pac-Man covers the same 60 px per second on level 1.
+
 ## Arcade rules that are actually implemented
 
 Behaviour follows the original board as documented in *The Pac-Man Dossier*:
@@ -84,7 +126,7 @@ js/maze-tiles.js    wall glyphs + tilemap traced from the arcade capture
 js/maze.js          maze data, collision queries, dot and wall rendering
 js/font.js          5x7 bitmap font
 js/sprites.js       Pac-Man, ghosts and fruit
-js/audio.js         Web Audio synthesis - siren, waka, jingle, death
+js/audio.js         Namco WSG emulation + the sound PROM wavetables
 js/game.js          rules, ghost AI, level flow, input, HUD
 test/run-tests.js   behavioural tests
 ```

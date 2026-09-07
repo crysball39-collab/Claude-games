@@ -66,16 +66,17 @@
 
   /**
    * Draw text with the tile grid as the unit: (col, row) are tile coordinates.
-   * The glyph is centred inside its 8x8 cell, matching the arcade layout.
+   * The arcade seats glyphs at the top of their cell; `dy` nudges the score
+   * values down by the one pixel the original offsets them by.
    */
-  function drawText(ctx, text, col, row, color) {
+  function drawText(ctx, text, col, row, color, dy) {
     ctx.fillStyle = color || '#ffffff';
     var str = String(text).toUpperCase();
     for (var i = 0; i < str.length; i++) {
       var glyph = GLYPHS[str[i]];
       if (!glyph) continue;
       var ox = col * CELL + i * CELL + 1;   // 1px left padding inside the cell
-      var oy = row * CELL + 1;             // 1px top padding inside the cell
+      var oy = row * CELL + (dy || 0);
       for (var r = 0; r < GLYPH_H; r++) {
         var bits = glyph[r];
         if (!bits) continue;
@@ -87,8 +88,8 @@
   }
 
   /** Right-align `text` so its last character sits in tile column `col`. */
-  function drawTextRight(ctx, text, col, row, color) {
-    drawText(ctx, text, col - String(text).length + 1, row, color);
+  function drawTextRight(ctx, text, col, row, color, dy) {
+    drawText(ctx, text, col - String(text).length + 1, row, color, dy);
   }
 
   /** Centre `text` across the full 28-tile screen width. */

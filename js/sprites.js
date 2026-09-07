@@ -286,3 +286,112 @@
     drawFruit: drawFruit
   };
 })(window);
+
+/* ---------------------------------------------------------------------- */
+/* Pixel rasterisation                                                     */
+/*                                                                          */
+/* The arcade has no anti-aliasing: every sprite pixel is one of a handful  */
+/* of palette entries. The vector artwork above is drawn once into a 1x     */
+/* buffer, its alpha is thresholded and its colours snapped to the palette, */
+/* giving hard-edged bitmaps that scale up as crisp blocks.                 */
+/* ---------------------------------------------------------------------- */
+(function (global) {
+  'use strict';
+
+  var S = global.Sprites;
+
+  var PALETTE = [
+    [0, 0, 0], [33, 33, 255], [255, 184, 174], [222, 222, 255], [255, 255, 0],
+    [255, 0, 0], [255, 184, 255], [0, 255, 255], [255, 184, 81], [222, 151, 81],
+    [255, 255, 255], [0, 208, 0], [0, 160, 0], [140, 232, 0], [255, 229, 0],
+    [160, 80, 0]
+  ];
+
+  var SPRITE = 16;            // every character fits inside a 16x16 cell
+  var ALPHA_CUT = 110;        // coverage at which a pixel counts as solid
+  var cache = {};
+
+  function snap(r, g, b) {
+    var best = PALETTE[0], bestD = Infinity;
+    for (var i = 0; i < PALETTE.length; i++) {
+      var p = PALETTE[i];
+      var d = (p[0] - r) * (p[0] - r) + (p[1] - g) * (p[1] - g) + (p[2] - b) * (p[2] - b);
+      if (d < bestD) { bestD = d; best = p; }
+    }
+    return best;
+  }
+
+  /** Draw `fn` centred in a size x size buffer and harden it to pixel art. */
+  function rasterize(size, fn) {
+    var c = document.createElement('canvas');
+    c.width = c.height = size;
+    var x = c.getContext('2d', { willReadFrequently: true });
+    x.save();
+    x.translate(size / 2, size / 2);
+    fn(x);
+    x.restore();
+
+    var img = x.getImageData(0, 0, size, size);
+    var d = img.data;
+    for (var i = 0; i < d.length; i += 4) {
+      if (d[i + 3] < ALPHA_CUT) { d[i + 3] = 0; continue; }
+      var p = snap(d[i], d[i + 1], d[i + 2]);
+      d[i] = p[0]; d[i + 1] = p[1]; d[i + 2] = p[2]; d[i + 3] = 255;
+    }
+    x.putImageData(img, 0, 0);
+    return c;
+  }
+
+  function get(key, fn, size) {
+    if (!cache[key]) cache[key] = rasterize(size || SPRITE, fn);
+    return cache[key];
+  }
+
+  /* Mouth is quantised to the arcade's animation steps. */
+  var MOUTH_STEPS = [0, 0.34, 0.67, 1];
+
+  function pacman(dir, mouth) {
+    var step = Math.max(0, Math.min(3, Math.round(mouth * 3)));
+    var d = step === 0 ? 'x' : dir;             // a closed mouth has no facing
+    return get('pac:' + d + step, function (ctx) {
+      S.drawPacman(ctx, dir, MOUTH_STEPS[step]);
+    });
+  }
+
+  function lifeIcon() {
+    return get('life', function (ctx) {
+      ctx.scale(0.85, 0.85);
+      S.drawPacman(ctx, 'left', 0.75);
+    });
+  }
+
+  function death(step) {
+    var t = Math.max(0, Math.min(1, step / 11));
+    return get('death:' + Math.round(t * 11), function (ctx) {
+      S.drawPacmanDeath(ctx, t);
+    }, 22);
+  }
+
+  function ghost(name, dir, frame, mode, flashing) {
+    var key = mode === 'normal' ? 'g:' + name + dir + frame
+            : mode === 'eaten' ? 'g:eyes' + dir
+            : 'g:fr' + (flashing ? 1 : 0) + frame;
+    return get(key, function (ctx) {
+      S.drawGhost(ctx, name, dir, frame, mode, flashing);
+    });
+  }
+
+  function fruit(name) {
+    return get('fruit:' + name, function (ctx) { S.drawFruit(ctx, name); });
+  }
+
+  /** Blit a cached bitmap centred on (x, y), snapped to whole pixels. */
+  function blit(ctx, bmp, x, y) {
+    ctx.drawImage(bmp, Math.round(x - bmp.width / 2), Math.round(y - bmp.height / 2));
+  }
+
+  S.Pixel = {
+    pacman: pacman, ghost: ghost, fruit: fruit, death: death,
+    lifeIcon: lifeIcon, blit: blit, rasterize: rasterize
+  };
+})(window);

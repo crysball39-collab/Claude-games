@@ -265,16 +265,17 @@ body.touch #pad {
 
   /**
    * Draw text with the tile grid as the unit: (col, row) are tile coordinates.
-   * The glyph is centred inside its 8x8 cell, matching the arcade layout.
+   * The arcade seats glyphs at the top of their cell; `dy` nudges the score
+   * values down by the one pixel the original offsets them by.
    */
-  function drawText(ctx, text, col, row, color) {
+  function drawText(ctx, text, col, row, color, dy) {
     ctx.fillStyle = color || '#ffffff';
     var str = String(text).toUpperCase();
     for (var i = 0; i < str.length; i++) {
       var glyph = GLYPHS[str[i]];
       if (!glyph) continue;
       var ox = col * CELL + i * CELL + 1;   // 1px left padding inside the cell
-      var oy = row * CELL + 1;             // 1px top padding inside the cell
+      var oy = row * CELL + (dy || 0);
       for (var r = 0; r < GLYPH_H; r++) {
         var bits = glyph[r];
         if (!bits) continue;
@@ -286,8 +287,8 @@ body.touch #pad {
   }
 
   /** Right-align `text` so its last character sits in tile column `col`. */
-  function drawTextRight(ctx, text, col, row, color) {
-    drawText(ctx, text, col - String(text).length + 1, row, color);
+  function drawTextRight(ctx, text, col, row, color, dy) {
+    drawText(ctx, text, col - String(text).length + 1, row, color, dy);
   }
 
   /** Centre `text` across the full 28-tile screen width. */
@@ -540,7 +541,22 @@ body.touch #pad {
     ctx.restore();
   }
 
-  /** Dots are 2x2 px; energizers are 8px discs that blink with the global timer. */
+  /* The energizer is an 8x8 disc; these are its exact rows on the arcade,
+     as x-ranges within the tile. */
+  var ENERGIZER_ROWS = [[2, 5], [1, 6], [0, 7], [0, 7], [0, 7], [0, 7], [1, 6], [2, 5]];
+
+  /** Paint one energizer disc with its top-left corner at (x, y). */
+  function drawEnergizerAt(ctx, x, y) {
+    ctx.save();
+    ctx.fillStyle = DOT_COLOR;
+    for (var i = 0; i < 8; i++) {
+      var span = ENERGIZER_ROWS[i];
+      ctx.fillRect(x + span[0], y + i, span[1] - span[0] + 1, 1);
+    }
+    ctx.restore();
+  }
+
+  /** Dots are 2x2 px; energizers blink with the global timer. */
   function drawDots(ctx, state, energizerVisible) {
     ctx.save();
     ctx.fillStyle = DOT_COLOR;
@@ -550,9 +566,10 @@ body.touch #pad {
         if (d === 1) {
           ctx.fillRect(c * TILE + 3, r * TILE + 3, 2, 2);
         } else if (d === 2 && energizerVisible) {
-          ctx.beginPath();
-          ctx.arc(c * TILE + 4, r * TILE + 4, 4, 0, Math.PI * 2);
-          ctx.fill();
+          for (var y = 0; y < 8; y++) {
+            var span = ENERGIZER_ROWS[y];
+            ctx.fillRect(c * TILE + span[0], r * TILE + y, span[1] - span[0] + 1, 1);
+          }
         }
       }
     }
@@ -578,21 +595,58 @@ body.touch #pad {
     drawWalls: drawWalls,
     drawDoor: drawDoor,
     drawDots: drawDots,
+    drawEnergizerAt: drawEnergizerAt,
     freshDots: freshDots
   };
 })(window);
   </script>
   <script>
-/* Web Audio synthesis of the arcade's square-wave voice. Everything is
-   generated on the fly - no samples, so the page stays self-contained. */
+/* Sound built on an emulation of the Namco WSG - the custom 3-voice wave
+ * sound generator on the Pac-Man board.
+ *
+ * The hardware model and the wavetables are the real thing:
+ *   - 12 non-silent waveforms of 32 four-bit samples, transcribed from the
+ *     board's two 256-byte sound PROMs (82s126.1m and 82s126.3m)
+ *   - clocked at the CPU rate / 32 = 3.072 MHz / 32 = 96 kHz
+ *   - each voice adds its 20-bit frequency to a 20-bit accumulator per clock,
+ *     the top 5 bits index the waveform, the nibble is scaled by a 4-bit volume
+ *   - register value for a pitch f is V = f * 32 / 96000 * 2^15 = 4096f/375
+ *
+ * Every effect is rendered offline through that model into a 96 kHz buffer, so
+ * the stepped quantisation and aliasing of the original are preserved rather
+ * than approximated with clean oscillators.
+ */
 (function (global) {
   'use strict';
 
-  var ctxA = null;
-  var master = null;
-  var muted = false;
-  var loop = null;          // the currently-playing background voice
-  var loopKind = null;
+  var WAVE_HEX = [
+    '79abcddeeeddcba97543211000112345',   // 0  sine
+    '7ceedb9abba9643579ba854334531002',   // 1
+    '7acdedca742101247bdedb7310137e70',   // 2
+    '7db8bd96bec79a627c84572038513631',   // 3
+    '08f718e728d738c748b758a768977887',   // 4
+    '78695a4b3c2d1e0f0f1e2d3c4b5a6978',   // 5
+    '0123456789abcdeffedcba9876543210',   // 6  triangle
+    '0123456789abcdef0123456789abcdef',   // 7  sawtooth
+    'fdfffdfffdfffdfffdfffdfffdfffdff',   // 8
+    'fdfffdfffdfffdfffdfffdfffdfffdff',   // 9
+    '7fedffedffedffedffedfffb7fedffed',   // 10
+    'ffedffedfffb7fedffedffedffedfffb'    // 11
+  ];
+
+  var WAVES = WAVE_HEX.map(function (hex) {
+    var w = new Int8Array(32);
+    for (var i = 0; i < 32; i++) w[i] = parseInt(hex[i], 16);
+    return w;
+  });
+
+  var WSG_RATE = 96000;
+  var FREQ_SCALE = 4096 / 375;          // register value per Hz
+  var ACC_MASK = 0xfffff;               // 20-bit accumulator
+
+  var ctxA = null, master = null, muted = false;
+  var loopNode = null, loopKey = null;
+  var cache = {};
 
   function ensure() {
     if (ctxA) return ctxA;
@@ -600,7 +654,7 @@ body.touch #pad {
     if (!AC) return null;
     ctxA = new AC();
     master = ctxA.createGain();
-    master.gain.value = 0.28;
+    master.gain.value = muted ? 0 : 0.5;
     master.connect(ctxA.destination);
     return ctxA;
   }
@@ -610,180 +664,255 @@ body.touch #pad {
     if (a && a.state === 'suspended') a.resume();
   }
 
-  function now() { return ctxA ? ctxA.currentTime : 0; }
+  /* ------------------------------------------------------------------ */
+  /* Offline WSG rendering                                               */
+  /*                                                                      */
+  /* A program is a list of voices; a voice is a list of steps.           */
+  /* step = { d: seconds, w: waveform, f: Hz, f1: Hz to glide to, v: 0-15 }*/
+  /* ------------------------------------------------------------------ */
 
-  /** One square-wave note. */
-  function note(freq, start, dur, gain, type) {
-    if (!ensure() || muted) return;
-    var osc = ctxA.createOscillator();
-    var g = ctxA.createGain();
-    osc.type = type || 'square';
-    osc.frequency.setValueAtTime(freq, start);
-    g.gain.setValueAtTime(0, start);
-    g.gain.linearRampToValueAtTime(gain, start + 0.008);
-    g.gain.setValueAtTime(gain, start + dur * 0.8);
-    g.gain.linearRampToValueAtTime(0, start + dur);
-    osc.connect(g); g.connect(master);
-    osc.start(start); osc.stop(start + dur + 0.02);
-  }
-
-  /** A note that slides between two pitches - used for waka and sirens. */
-  function sweep(f0, f1, start, dur, gain, type) {
-    if (!ensure() || muted) return;
-    var osc = ctxA.createOscillator();
-    var g = ctxA.createGain();
-    osc.type = type || 'square';
-    osc.frequency.setValueAtTime(f0, start);
-    osc.frequency.linearRampToValueAtTime(f1, start + dur);
-    g.gain.setValueAtTime(0, start);
-    g.gain.linearRampToValueAtTime(gain, start + 0.01);
-    g.gain.linearRampToValueAtTime(0, start + dur);
-    osc.connect(g); g.connect(master);
-    osc.start(start); osc.stop(start + dur + 0.02);
-  }
-
-  var wakaHigh = false;
-  function waka() {
-    if (!ensure() || muted) return;
-    wakaHigh = !wakaHigh;
-    var t = now();
-    if (wakaHigh) sweep(320, 540, t, 0.055, 0.16);
-    else sweep(540, 320, t, 0.055, 0.16);
-  }
-
-  /* ---- background voices ------------------------------------------- */
-
-  function stopLoop() {
-    if (loop) {
-      try { loop.osc.stop(); } catch (e) { /* already stopped */ }
-      try { loop.lfo.stop(); } catch (e) { /* already stopped */ }
-      loop = null;
+  function programLength(program) {
+    var longest = 0;
+    for (var i = 0; i < program.length; i++) {
+      var total = 0;
+      for (var j = 0; j < program[i].length; j++) total += program[i][j].d;
+      if (total > longest) longest = total;
     }
-    loopKind = null;
+    return longest;
+  }
+
+  function renderProgram(program) {
+    var frames = Math.max(1, Math.ceil(programLength(program) * WSG_RATE));
+    var out = new Float32Array(frames);
+
+    for (var v = 0; v < program.length; v++) {
+      var steps = program[v];
+      var acc = 0, cursor = 0;
+      for (var s = 0; s < steps.length; s++) {
+        var st = steps[s];
+        var n = Math.round(st.d * WSG_RATE);
+        var table = WAVES[st.w % WAVES.length];
+        var vol = (st.v === undefined ? 15 : st.v) / 15;
+        var f0 = st.f, f1 = st.f1 === undefined ? st.f : st.f1;
+        for (var i = 0; i < n && cursor < frames; i++, cursor++) {
+          var f = n > 1 ? f0 + (f1 - f0) * (i / (n - 1)) : f0;
+          acc = (acc + Math.round(f * FREQ_SCALE)) & ACC_MASK;
+          if (vol > 0) {
+            // 4-bit sample, centred on the wavetable midpoint, scaled by volume
+            out[cursor] += ((table[acc >>> 15] - 7.5) / 7.5) * vol;
+          }
+        }
+        if (cursor >= frames) break;
+      }
+    }
+
+    // Three voices can sum; keep headroom without clipping.
+    for (var k = 0; k < frames; k++) out[k] /= 3;
+    return out;
+  }
+
+  function toBuffer(data) {
+    if (!ensure()) return null;
+    var buf = ctxA.createBuffer(1, data.length, WSG_RATE);
+    buf.copyToChannel ? buf.copyToChannel(data, 0)
+                      : buf.getChannelData(0).set(data);
+    return buf;
+  }
+
+  function bufferFor(key, build) {
+    if (cache[key]) return cache[key];
+    if (!ensure()) return null;
+    cache[key] = toBuffer(renderProgram(build()));
+    return cache[key];
+  }
+
+  function play(key, build, gain) {
+    if (!ensure() || muted) return;
+    var buf = bufferFor(key, build);
+    if (!buf) return;
+    var src = ctxA.createBufferSource();
+    src.buffer = buf;
+    var g = ctxA.createGain();
+    g.gain.value = gain === undefined ? 1 : gain;
+    src.connect(g); g.connect(master);
+    src.start();
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Effect definitions                                                   */
+  /*                                                                      */
+  /* The waveform choices and register sequences below are reconstructed  */
+  /* by ear from the original; the game ROM's sound tables were not       */
+  /* available. The synthesis path they run through is the real hardware. */
+  /* ------------------------------------------------------------------ */
+
+  var wakaUp = false;
+
+  function wakaProgram(up) {
+    // A single bite: a fast glide, alternating direction each dot.
+    return [[
+      { d: 0.052, w: 6, f: up ? 320 : 1120, f1: up ? 1120 : 320, v: 13 }
+    ]];
+  }
+
+  function waka() {
+    wakaUp = !wakaUp;
+    play(wakaUp ? 'waka1' : 'waka0', function () { return wakaProgram(wakaUp); }, 0.75);
+  }
+
+  /* Background voices loop a single rendered cycle. */
+
+  function sirenProgram(level) {
+    // The siren climbs and snaps back; it tightens as the maze empties.
+    var base = 260 + level * 55;
+    var span = 130 + level * 30;
+    var dur = 0.42 - level * 0.045;
+    return [[
+      { d: dur * 0.55, w: 0, f: base, f1: base + span, v: 10 },
+      { d: dur * 0.45, w: 0, f: base + span, f1: base, v: 10 }
+    ]];
+  }
+
+  function frightProgram() {
+    return [[
+      { d: 0.06, w: 5, f: 180, f1: 420, v: 11 },
+      { d: 0.06, w: 5, f: 420, f1: 180, v: 11 }
+    ]];
+  }
+
+  function eyesProgram() {
+    return [[
+      { d: 0.035, w: 4, f: 1000, f1: 1700, v: 9 },
+      { d: 0.035, w: 4, f: 1700, f1: 1000, v: 9 }
+    ]];
+  }
+
+  function stopBackground() {
+    if (loopNode) {
+      try { loopNode.stop(); } catch (e) { /* already stopped */ }
+      loopNode = null;
+    }
+    loopKey = null;
   }
 
   /**
-   * @param {string} kind siren|fright|eyes
-   * @param {number} intensity 0..1, raises the siren pitch as dots run out
+   * @param {string} kind siren|fright|eyes, or falsy for silence
+   * @param {number} intensity 0..1 - raises the siren as dots run out
    */
   function setBackground(kind, intensity) {
     if (!ensure()) return;
-    var key = kind + ':' + (kind === 'siren' ? Math.round((intensity || 0) * 4) : '');
-    if (loopKind === key) return;
-    stopLoop();
-    loopKind = key;
+    var level = kind === 'siren' ? Math.min(4, Math.round((intensity || 0) * 4)) : 0;
+    var key = kind ? kind + level : '';
+    if (loopKey === key) return;
+    stopBackground();
+    loopKey = key;
     if (!kind || muted) return;
 
-    var osc = ctxA.createOscillator();
+    var buf = bufferFor('bg:' + key, function () {
+      if (kind === 'siren') return sirenProgram(level);
+      if (kind === 'fright') return frightProgram();
+      return eyesProgram();
+    });
+    if (!buf) return;
+    var src = ctxA.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
     var g = ctxA.createGain();
-    var lfo = ctxA.createOscillator();
-    var lfoGain = ctxA.createGain();
-
-    if (kind === 'siren') {
-      var base = 200 + (intensity || 0) * 190;
-      osc.type = 'sawtooth';
-      osc.frequency.value = base;
-      lfo.frequency.value = 5.5 + (intensity || 0) * 4;
-      lfoGain.gain.value = base * 0.42;
-      g.gain.value = 0.055;
-    } else if (kind === 'fright') {
-      osc.type = 'square';
-      osc.frequency.value = 130;
-      lfo.frequency.value = 15;
-      lfoGain.gain.value = 55;
-      g.gain.value = 0.06;
-    } else { // eyes returning home
-      osc.type = 'square';
-      osc.frequency.value = 620;
-      lfo.frequency.value = 22;
-      lfoGain.gain.value = 260;
-      g.gain.value = 0.045;
-    }
-
-    lfo.connect(lfoGain);
-    lfoGain.connect(osc.frequency);
-    osc.connect(g); g.connect(master);
-    osc.start(); lfo.start();
-    loop = { osc: osc, lfo: lfo, gain: g };
+    g.gain.value = 0.55;
+    src.connect(g); g.connect(master);
+    src.start();
+    loopNode = src;
   }
 
-  /* ---- one-shot effects -------------------------------------------- */
-
   function eatGhost() {
-    if (!ensure() || muted) return;
-    var t = now();
-    sweep(180, 1100, t, 0.42, 0.2, 'square');
+    play('eatghost', function () {
+      return [[{ d: 0.42, w: 7, f: 180, f1: 1500, v: 13 }]];
+    }, 0.9);
   }
 
   function eatFruit() {
-    if (!ensure() || muted) return;
-    var t = now();
-    sweep(1000, 1600, t, 0.1, 0.18);
-    sweep(1600, 900, t + 0.1, 0.16, 0.18);
+    play('eatfruit', function () {
+      return [[
+        { d: 0.09, w: 2, f: 900, f1: 1500, v: 13 },
+        { d: 0.09, w: 2, f: 1500, f1: 700, v: 13 },
+        { d: 0.09, w: 2, f: 700, f1: 1300, v: 12 }
+      ]];
+    }, 0.9);
   }
 
   function extraLife() {
-    if (!ensure() || muted) return;
-    var t = now();
-    for (var i = 0; i < 8; i++) note(880 + i * 90, t + i * 0.055, 0.05, 0.14);
+    play('extralife', function () {
+      var steps = [];
+      for (var i = 0; i < 10; i++) steps.push({ d: 0.05, w: 6, f: 700 + i * 110, v: 12 });
+      return [steps];
+    }, 0.8);
   }
 
   function death() {
-    if (!ensure() || muted) return;
-    stopLoop();
-    var t = now();
-    // Descending warble, then the long fall.
-    for (var i = 0; i < 10; i++) {
-      sweep(680 - i * 46, 420 - i * 34, t + i * 0.1, 0.09, 0.18);
-    }
-    sweep(400, 60, t + 1.05, 0.55, 0.2);
+    stopBackground();
+    play('death', function () {
+      var steps = [];
+      // Eight descending swoops, then the long fall.
+      for (var i = 0; i < 8; i++) {
+        var top = 760 - i * 62;
+        steps.push({ d: 0.085, w: 3, f: top, f1: top * 0.55, v: 13 });
+        steps.push({ d: 0.025, w: 3, f: top * 0.55, f1: top * 0.55, v: 0 });
+      }
+      steps.push({ d: 0.5, w: 3, f: 340, f1: 60, v: 13 });
+      return [steps];
+    }, 1);
   }
 
-  /* The opening jingle: two bars of the arcade's start tune. */
-  var INTRO = [
-    [493.9, 0.14], [987.8, 0.14], [740.0, 0.14], [622.3, 0.14],
-    [987.8, 0.07], [740.0, 0.14], [622.3, 0.26],
-    [523.3, 0.14], [1046.5, 0.14], [784.0, 0.14], [659.3, 0.14],
-    [1046.5, 0.07], [784.0, 0.14], [659.3, 0.26],
-    [493.9, 0.14], [987.8, 0.14], [740.0, 0.14], [622.3, 0.14],
-    [987.8, 0.07], [740.0, 0.14], [622.3, 0.26],
-    [622.3, 0.09], [659.3, 0.09], [698.5, 0.16], [698.5, 0.09],
-    [740.0, 0.09], [784.0, 0.16], [784.0, 0.09], [830.6, 0.09],
-    [932.3, 0.16], [987.8, 0.36]
+  /* The opening tune: melody over a bass line, two voices. */
+  var Q = 0.13;                                     // one sixteenth
+  var MELODY = [
+    [493.9, 1], [987.8, 1], [740.0, 1], [622.3, 1], [987.8, 0.5], [740.0, 1], [622.3, 2],
+    [523.3, 1], [1046.5, 1], [784.0, 1], [659.3, 1], [1046.5, 0.5], [784.0, 1], [659.3, 2],
+    [493.9, 1], [987.8, 1], [740.0, 1], [622.3, 1], [987.8, 0.5], [740.0, 1], [622.3, 2],
+    [622.3, 0.5], [659.3, 0.5], [698.5, 1], [698.5, 0.5], [740.0, 0.5], [784.0, 1],
+    [784.0, 0.5], [830.6, 0.5], [932.3, 1], [987.8, 2.5]
   ];
 
-  function intro() {
-    if (!ensure() || muted) return;
-    stopLoop();
-    var t = now() + 0.05;
-    for (var i = 0; i < INTRO.length; i++) {
-      note(INTRO[i][0], t, INTRO[i][1] * 0.92, 0.16);
-      t += INTRO[i][1];
+  function introProgram() {
+    var lead = [], bass = [];
+    for (var i = 0; i < MELODY.length; i++) {
+      var f = MELODY[i][0], beats = MELODY[i][1], d = beats * Q;
+      lead.push({ d: d * 0.86, w: 2, f: f, v: 13 });
+      lead.push({ d: d * 0.14, w: 2, f: f, v: 0 });
+      bass.push({ d: d * 0.86, w: 6, f: f / 4, v: 8 });
+      bass.push({ d: d * 0.14, w: 6, f: f / 4, v: 0 });
     }
+    return [lead, bass];
+  }
+
+  var INTRO_LENGTH = MELODY.reduce(function (s, n) { return s + n[1] * Q; }, 0);
+
+  function intro() {
+    stopBackground();
+    play('intro', introProgram, 1);
   }
 
   function toggleMute() {
     muted = !muted;
-    if (muted) stopLoop();
-    if (master) master.gain.value = muted ? 0 : 0.28;
+    if (muted) stopBackground();
+    if (master) master.gain.value = muted ? 0 : 0.5;
     return muted;
   }
-
-  function isMuted() { return muted; }
 
   global.Sound = {
     resume: resume,
     waka: waka,
     setBackground: setBackground,
-    stopBackground: stopLoop,
+    stopBackground: stopBackground,
     eatGhost: eatGhost,
     eatFruit: eatFruit,
     extraLife: extraLife,
     death: death,
     intro: intro,
     toggleMute: toggleMute,
-    isMuted: isMuted,
-    INTRO_LENGTH: INTRO.reduce(function (s, n) { return s + n[1]; }, 0)
+    isMuted: function () { return muted; },
+    INTRO_LENGTH: INTRO_LENGTH,
+    WAVES: WAVES
   };
 })(window);
   </script>
@@ -1076,6 +1205,115 @@ body.touch #pad {
     drawFruit: drawFruit
   };
 })(window);
+
+/* ---------------------------------------------------------------------- */
+/* Pixel rasterisation                                                     */
+/*                                                                          */
+/* The arcade has no anti-aliasing: every sprite pixel is one of a handful  */
+/* of palette entries. The vector artwork above is drawn once into a 1x     */
+/* buffer, its alpha is thresholded and its colours snapped to the palette, */
+/* giving hard-edged bitmaps that scale up as crisp blocks.                 */
+/* ---------------------------------------------------------------------- */
+(function (global) {
+  'use strict';
+
+  var S = global.Sprites;
+
+  var PALETTE = [
+    [0, 0, 0], [33, 33, 255], [255, 184, 174], [222, 222, 255], [255, 255, 0],
+    [255, 0, 0], [255, 184, 255], [0, 255, 255], [255, 184, 81], [222, 151, 81],
+    [255, 255, 255], [0, 208, 0], [0, 160, 0], [140, 232, 0], [255, 229, 0],
+    [160, 80, 0]
+  ];
+
+  var SPRITE = 16;            // every character fits inside a 16x16 cell
+  var ALPHA_CUT = 110;        // coverage at which a pixel counts as solid
+  var cache = {};
+
+  function snap(r, g, b) {
+    var best = PALETTE[0], bestD = Infinity;
+    for (var i = 0; i < PALETTE.length; i++) {
+      var p = PALETTE[i];
+      var d = (p[0] - r) * (p[0] - r) + (p[1] - g) * (p[1] - g) + (p[2] - b) * (p[2] - b);
+      if (d < bestD) { bestD = d; best = p; }
+    }
+    return best;
+  }
+
+  /** Draw `fn` centred in a size x size buffer and harden it to pixel art. */
+  function rasterize(size, fn) {
+    var c = document.createElement('canvas');
+    c.width = c.height = size;
+    var x = c.getContext('2d', { willReadFrequently: true });
+    x.save();
+    x.translate(size / 2, size / 2);
+    fn(x);
+    x.restore();
+
+    var img = x.getImageData(0, 0, size, size);
+    var d = img.data;
+    for (var i = 0; i < d.length; i += 4) {
+      if (d[i + 3] < ALPHA_CUT) { d[i + 3] = 0; continue; }
+      var p = snap(d[i], d[i + 1], d[i + 2]);
+      d[i] = p[0]; d[i + 1] = p[1]; d[i + 2] = p[2]; d[i + 3] = 255;
+    }
+    x.putImageData(img, 0, 0);
+    return c;
+  }
+
+  function get(key, fn, size) {
+    if (!cache[key]) cache[key] = rasterize(size || SPRITE, fn);
+    return cache[key];
+  }
+
+  /* Mouth is quantised to the arcade's animation steps. */
+  var MOUTH_STEPS = [0, 0.34, 0.67, 1];
+
+  function pacman(dir, mouth) {
+    var step = Math.max(0, Math.min(3, Math.round(mouth * 3)));
+    var d = step === 0 ? 'x' : dir;             // a closed mouth has no facing
+    return get('pac:' + d + step, function (ctx) {
+      S.drawPacman(ctx, dir, MOUTH_STEPS[step]);
+    });
+  }
+
+  function lifeIcon() {
+    return get('life', function (ctx) {
+      ctx.scale(0.85, 0.85);
+      S.drawPacman(ctx, 'left', 0.75);
+    });
+  }
+
+  function death(step) {
+    var t = Math.max(0, Math.min(1, step / 11));
+    return get('death:' + Math.round(t * 11), function (ctx) {
+      S.drawPacmanDeath(ctx, t);
+    }, 22);
+  }
+
+  function ghost(name, dir, frame, mode, flashing) {
+    var key = mode === 'normal' ? 'g:' + name + dir + frame
+            : mode === 'eaten' ? 'g:eyes' + dir
+            : 'g:fr' + (flashing ? 1 : 0) + frame;
+    return get(key, function (ctx) {
+      S.drawGhost(ctx, name, dir, frame, mode, flashing);
+    });
+  }
+
+  function fruit(name) {
+    return get('fruit:' + name, function (ctx) { S.drawFruit(ctx, name); });
+  }
+
+  /** Blit a cached bitmap centred on (x, y), snapped to whole pixels. */
+  function blit(ctx, bmp, x, y) {
+    ctx.drawImage(bmp, Math.round(x - bmp.width / 2), Math.round(y - bmp.height / 2));
+  }
+
+  S.Pixel = {
+    pacman: pacman, ghost: ghost, fruit: fruit, death: death,
+    lifeIcon: lifeIcon, blit: blit, rasterize: rasterize
+  };
+})(window);
   </script>
   <script>
 /* Pac-Man. Timings, speeds, targeting and release rules follow the original
@@ -1088,9 +1326,10 @@ body.touch #pad {
 
   var TILE = Maze.TILE;
   var COLS = Maze.COLS;
-  var SCALE = 3;
-  var TICK = 1 / 60;
-  var BASE_SPEED = 75.75757575 / 60;   // pixels per tick at 100% speed
+  // The arcade's video refresh. At 100% speed a character advances exactly
+  // 1.25 pixels per frame, i.e. the documented 75.7575 pixels per second.
+  var TICK = 1 / 60.606060;
+  var BASE_SPEED = 1.25;
 
   var DIRV = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
   var OPPOSITE = { up: 'down', down: 'up', left: 'right', right: 'left' };
@@ -1171,7 +1410,14 @@ body.touch #pad {
 
   function Game(canvas) {
     this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
+    this.out = canvas.getContext('2d');
+    // Everything is drawn into a 224x288 buffer at arcade resolution, then
+    // blitted up with smoothing off so the result is honest pixel art.
+    this.frame = document.createElement('canvas');
+    this.frame.width = Maze.SCREEN_W;
+    this.frame.height = Maze.SCREEN_H;
+    this.ctx = this.frame.getContext('2d');
+    this.accumulator = 0;
     this.highScore = Number(load('pacman.highscore') || 0);
     this.state = 'title';
     this.stateTime = 0;
@@ -1381,13 +1627,27 @@ body.touch #pad {
     }
   };
 
+  /* The arcade start: the maze appears with PLAYER ONE and READY! but no
+     characters, and only once the opening tune is part-way through do the
+     characters appear and PLAYER ONE clear. Restarting after a life lost
+     skips straight to the shorter READY! with the characters in place. */
+  var PLAYER_ONE_TIME = 2.2;
+
   Game.prototype.startReady = function (withTune) {
     this.state = 'ready';
     this.stateTime = 0;
-    this.readyDuration = withTune ? 4.3 : 2.0;
+    this.accumulator = 0;
+    this.readyDuration = withTune ? Sound.INTRO_LENGTH + 0.2 : 1.9;
     this.showPlayerOne = !!withTune;
     Sound.stopBackground();
     if (withTune) Sound.intro();
+  };
+
+  /** Characters are hidden during the first half of a fresh game's start. */
+  Game.prototype.charactersVisible = function () {
+    if (this.state === 'gameover') return false;
+    return !(this.state === 'ready' && this.showPlayerOne &&
+             this.stateTime < PLAYER_ONE_TIME);
   };
 
   /* ---- main loop --------------------------------------------------- */
@@ -1430,9 +1690,15 @@ body.touch #pad {
       if (this.freezeTimer <= 0) { this.freezeTimer = 0; this.popup = null; }
       return;
     }
-    var steps = Math.max(1, Math.round(dt / TICK));
-    steps = Math.min(steps, 4);
-    for (var i = 0; i < steps; i++) this.tick();
+    // A fixed timestep, so the game runs at arcade pace on any display -
+    // a 120 Hz phone would otherwise play at double speed.
+    this.accumulator += dt;
+    if (this.accumulator > 0.25) this.accumulator = 0.25;   // no spiral after a stall
+    while (this.accumulator >= TICK) {
+      this.tick();
+      this.accumulator -= TICK;
+      if (this.state !== 'playing') break;   // a death or level clear ends the burst
+    }
     this.updateSound();
   };
 
@@ -1874,7 +2140,6 @@ body.touch #pad {
 
   Game.prototype.render = function () {
     var ctx = this.ctx;
-    ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, Maze.SCREEN_W, Maze.SCREEN_H);
 
@@ -1904,6 +2169,9 @@ body.touch #pad {
 
     if (this.state === 'title') this.drawTitle();
     if (this.state === 'paused') this.drawPaused();
+
+    this.out.imageSmoothingEnabled = false;
+    this.out.drawImage(this.frame, 0, 0, this.canvas.width, this.canvas.height);
   };
 
   Game.prototype.drawHud = function () {
@@ -1912,70 +2180,58 @@ body.touch #pad {
                   Math.floor(this.globalTime * 3.7) % 2 === 0;
     if (blinkOn) Font.draw(ctx, '1UP', 3, 0, '#ffffff');
     Font.draw(ctx, 'HIGH SCORE', 9, 0, '#ffffff');
+    // The arcade seats the score values one pixel lower than the labels.
     var s = this.score === 0 ? '00' : String(this.score);
-    Font.drawRight(ctx, s, 6, 1, '#ffffff');
+    Font.drawRight(ctx, s, 6, 1, '#ffffff', 1);
     var hs = this.highScore === 0 ? '' : String(this.highScore);
-    Font.drawRight(ctx, hs, 16, 1, '#ffffff');
+    Font.drawRight(ctx, hs, 16, 1, '#ffffff', 1);
   };
 
   Game.prototype.drawBottomBar = function () {
-    var ctx = this.ctx;
-    var y = 278;
-    ctx.save();
+    var ctx = this.ctx, P = Sprites.Pixel, y = 278;
     // Reserve lives only - the one in play is not shown - and they face left.
     var reserves = Math.max(0, Math.min(this.lives - 1, 5));
-    for (var i = 0; i < reserves; i++) {
-      ctx.save();
-      ctx.translate(23 + i * 16, y);
-      ctx.scale(0.85, 0.85);            // the life counter uses an 11px sprite
-      Sprites.drawPacman(ctx, 'left', 0.75);
-      ctx.restore();
-    }
+    for (var i = 0; i < reserves; i++) P.blit(ctx, P.lifeIcon(), 23 + i * 16, y);
     // The last seven levels' fruit, newest at the right edge.
     var first = Math.max(1, this.level - 6);
     for (var lv = first; lv <= this.level; lv++) {
-      ctx.save();
-      ctx.translate(200 - (this.level - lv) * 16, y);
-      Sprites.drawFruit(ctx, FRUITS[Math.min(lv, FRUITS.length) - 1]);
-      ctx.restore();
+      P.blit(ctx, P.fruit(FRUITS[Math.min(lv, FRUITS.length) - 1]),
+             200 - (this.level - lv) * 16, y);
     }
-    ctx.restore();
   };
 
   Game.prototype.drawFruit = function (ctx) {
     if (!this.fruit) return;
-    ctx.save();
-    ctx.translate(FRUIT_POS.x, FRUIT_POS.y);
-    Sprites.drawFruit(ctx, this.fruit);
-    ctx.restore();
+    Sprites.Pixel.blit(ctx, Sprites.Pixel.fruit(this.fruit), FRUIT_POS.x, FRUIT_POS.y);
   };
 
   Game.prototype.drawPac = function (ctx) {
-    var pac = this.pac;
+    var pac = this.pac, P = Sprites.Pixel;
     if (this.state === 'dying') {
       if (this.stateTime < 0.55) {
-        this.withWrap(ctx, pac.x, pac.y, function () {
-          Sprites.drawPacman(ctx, pac.dir, 0.8);
+        this.withWrap(ctx, pac.x, pac.y, function (x, y) {
+          P.blit(ctx, P.pacman(pac.dir, 0.8), x, y);
         });
       } else if (this.stateTime < 2.1) {
-        var t = (this.stateTime - 0.55) / 1.55;
-        this.withWrap(ctx, pac.x, pac.y, function () {
-          Sprites.drawPacmanDeath(ctx, t);
+        var step = Math.floor((this.stateTime - 0.55) / 1.55 * 11);
+        this.withWrap(ctx, pac.x, pac.y, function (x, y) {
+          P.blit(ctx, P.death(step), x, y);
         });
       }
       return;
     }
-    if (this.state === 'gameover') return;
+    if (!this.charactersVisible()) return;
     if (this.freezeTimer > 0) return;      // hidden while a ghost score shows
-    var mouth = pac.moving || this.state === 'playing' ? pac.mouth : 0.55;
-    if (this.state === 'ready') mouth = 0.55;
-    this.withWrap(ctx, pac.x, pac.y, function () {
-      Sprites.drawPacman(ctx, pac.dir, mouth);
+    // He waits as a closed circle during READY!, as on the arcade.
+    var mouth = this.state === 'ready' ? 0 : pac.mouth;
+    this.withWrap(ctx, pac.x, pac.y, function (x, y) {
+      P.blit(ctx, P.pacman(pac.dir, mouth), x, y);
     });
   };
 
   Game.prototype.drawGhosts = function (ctx) {
-    if (this.state === 'dying') return;
+    if (this.state === 'dying' || !this.charactersVisible()) return;
+    var P = Sprites.Pixel;
     var frame = Math.floor(this.animTime * 9) % 2;
     var flashing = false;
     if (this.frightTimer > 0) {
@@ -1991,8 +2247,8 @@ body.touch #pad {
       if (this.freezeTimer > 0 && g.state === 'eaten' &&
           Math.abs(this.popup.x - g.x) < 1) continue;
       (function (gg, m) {
-        this.withWrap(ctx, gg.x, gg.y, function () {
-          Sprites.drawGhost(ctx, gg.name, gg.dir, frame, m, flashing);
+        this.withWrap(ctx, gg.x, gg.y, function (x, y) {
+          P.blit(ctx, P.ghost(gg.name, gg.dir, frame, m, flashing), x, y);
         });
       }).call(this, g, mode);
     }
@@ -2006,25 +2262,21 @@ body.touch #pad {
   /** Draw a sprite, repeating it across the tunnel seam when near an edge. */
   Game.prototype.withWrap = function (ctx, x, y, fn) {
     var w = COLS * TILE;
-    var offsets = [0];
-    if (x < 12) offsets.push(w);
-    else if (x > w - 12) offsets.push(-w);
-    for (var i = 0; i < offsets.length; i++) {
-      ctx.save();
-      ctx.translate(x + offsets[i], y);
-      fn();
-      ctx.restore();
-    }
+    fn(x, y);
+    if (x < 12) fn(x + w, y);
+    else if (x > w - 12) fn(x - w, y);
   };
 
+  /* READY! sits in the chamber below the ghost house - the same tile the
+     fruit spawns on - and PLAYER ONE in the chamber above it. */
   Game.prototype.drawOverlayText = function (ctx) {
     if (this.state === 'ready') {
-      Font.draw(ctx, 'READY!', 11, 20, '#ffff00');
-      if (this.showPlayerOne && this.stateTime < 2.2) {
-        Font.draw(ctx, 'PLAYER ONE', 9, 14, '#00ffff');
+      Font.draw(ctx, 'READY!', 11, 17, '#ffff00');
+      if (this.showPlayerOne && this.stateTime < PLAYER_ONE_TIME) {
+        Font.draw(ctx, 'PLAYER ONE', 9, 11, '#00ffff');
       }
     } else if (this.state === 'gameover') {
-      Font.draw(ctx, 'GAME OVER', 9, 20, '#ff0000');
+      Font.draw(ctx, 'GAME  OVER', 9, 17, '#ff0000');
       if (Math.floor(this.stateTime * 1.6) % 2 === 0) {
         Font.draw(ctx, 'PRESS SPACE', 8, 23, '#ffffff');
       }
@@ -2049,19 +2301,13 @@ body.touch #pad {
     var frame = Math.floor(this.animTime * 9) % 2;
     for (var i = 0; i < rows.length; i++) {
       var row = rows[i], y = 13 + i * 3;
-      ctx.save();
-      ctx.translate(4 * TILE + 4, y * TILE + 4);
-      Sprites.drawGhost(ctx, row[0], 'right', frame, 'normal', false);
-      ctx.restore();
+      Sprites.Pixel.blit(ctx, Sprites.Pixel.ghost(row[0], 'right', frame, 'normal', false),
+                         4 * TILE + 4, y * TILE + 4);
       Font.draw(ctx, row[1], 6, y, row[3]);
       Font.draw(ctx, row[2], 17, y, row[3]);
     }
 
-    ctx.save();
-    ctx.translate(10 * TILE + 4, 26 * TILE + 4);
-    ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2);
-    ctx.fillStyle = Maze.DOT_COLOR; ctx.fill();
-    ctx.restore();
+    Maze.drawEnergizerAt(ctx, 10 * TILE, 26 * TILE);
     Font.draw(ctx, '50 PTS', 12, 26, '#ffffff');
 
     if (Math.floor(this.animTime * 1.6) % 2 === 0) {

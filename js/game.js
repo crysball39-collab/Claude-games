@@ -8,9 +8,10 @@
 
   var TILE = Maze.TILE;
   var COLS = Maze.COLS;
-  var SCALE = 3;
-  var TICK = 1 / 60;
-  var BASE_SPEED = 75.75757575 / 60;   // pixels per tick at 100% speed
+  // The arcade's video refresh. At 100% speed a character advances exactly
+  // 1.25 pixels per frame, i.e. the documented 75.7575 pixels per second.
+  var TICK = 1 / 60.606060;
+  var BASE_SPEED = 1.25;
 
   var DIRV = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
   var OPPOSITE = { up: 'down', down: 'up', left: 'right', right: 'left' };
@@ -91,7 +92,14 @@
 
   function Game(canvas) {
     this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
+    this.out = canvas.getContext('2d');
+    // Everything is drawn into a 224x288 buffer at arcade resolution, then
+    // blitted up with smoothing off so the result is honest pixel art.
+    this.frame = document.createElement('canvas');
+    this.frame.width = Maze.SCREEN_W;
+    this.frame.height = Maze.SCREEN_H;
+    this.ctx = this.frame.getContext('2d');
+    this.accumulator = 0;
     this.highScore = Number(load('pacman.highscore') || 0);
     this.state = 'title';
     this.stateTime = 0;
@@ -301,13 +309,27 @@
     }
   };
 
+  /* The arcade start: the maze appears with PLAYER ONE and READY! but no
+     characters, and only once the opening tune is part-way through do the
+     characters appear and PLAYER ONE clear. Restarting after a life lost
+     skips straight to the shorter READY! with the characters in place. */
+  var PLAYER_ONE_TIME = 2.2;
+
   Game.prototype.startReady = function (withTune) {
     this.state = 'ready';
     this.stateTime = 0;
-    this.readyDuration = withTune ? 4.3 : 2.0;
+    this.accumulator = 0;
+    this.readyDuration = withTune ? Sound.INTRO_LENGTH + 0.2 : 1.9;
     this.showPlayerOne = !!withTune;
     Sound.stopBackground();
     if (withTune) Sound.intro();
+  };
+
+  /** Characters are hidden during the first half of a fresh game's start. */
+  Game.prototype.charactersVisible = function () {
+    if (this.state === 'gameover') return false;
+    return !(this.state === 'ready' && this.showPlayerOne &&
+             this.stateTime < PLAYER_ONE_TIME);
   };
 
   /* ---- main loop --------------------------------------------------- */
@@ -350,9 +372,15 @@
       if (this.freezeTimer <= 0) { this.freezeTimer = 0; this.popup = null; }
       return;
     }
-    var steps = Math.max(1, Math.round(dt / TICK));
-    steps = Math.min(steps, 4);
-    for (var i = 0; i < steps; i++) this.tick();
+    // A fixed timestep, so the game runs at arcade pace on any display -
+    // a 120 Hz phone would otherwise play at double speed.
+    this.accumulator += dt;
+    if (this.accumulator > 0.25) this.accumulator = 0.25;   // no spiral after a stall
+    while (this.accumulator >= TICK) {
+      this.tick();
+      this.accumulator -= TICK;
+      if (this.state !== 'playing') break;   // a death or level clear ends the burst
+    }
     this.updateSound();
   };
 
@@ -794,7 +822,6 @@
 
   Game.prototype.render = function () {
     var ctx = this.ctx;
-    ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, Maze.SCREEN_W, Maze.SCREEN_H);
 
@@ -824,6 +851,9 @@
 
     if (this.state === 'title') this.drawTitle();
     if (this.state === 'paused') this.drawPaused();
+
+    this.out.imageSmoothingEnabled = false;
+    this.out.drawImage(this.frame, 0, 0, this.canvas.width, this.canvas.height);
   };
 
   Game.prototype.drawHud = function () {
@@ -832,70 +862,58 @@
                   Math.floor(this.globalTime * 3.7) % 2 === 0;
     if (blinkOn) Font.draw(ctx, '1UP', 3, 0, '#ffffff');
     Font.draw(ctx, 'HIGH SCORE', 9, 0, '#ffffff');
+    // The arcade seats the score values one pixel lower than the labels.
     var s = this.score === 0 ? '00' : String(this.score);
-    Font.drawRight(ctx, s, 6, 1, '#ffffff');
+    Font.drawRight(ctx, s, 6, 1, '#ffffff', 1);
     var hs = this.highScore === 0 ? '' : String(this.highScore);
-    Font.drawRight(ctx, hs, 16, 1, '#ffffff');
+    Font.drawRight(ctx, hs, 16, 1, '#ffffff', 1);
   };
 
   Game.prototype.drawBottomBar = function () {
-    var ctx = this.ctx;
-    var y = 278;
-    ctx.save();
+    var ctx = this.ctx, P = Sprites.Pixel, y = 278;
     // Reserve lives only - the one in play is not shown - and they face left.
     var reserves = Math.max(0, Math.min(this.lives - 1, 5));
-    for (var i = 0; i < reserves; i++) {
-      ctx.save();
-      ctx.translate(23 + i * 16, y);
-      ctx.scale(0.85, 0.85);            // the life counter uses an 11px sprite
-      Sprites.drawPacman(ctx, 'left', 0.75);
-      ctx.restore();
-    }
+    for (var i = 0; i < reserves; i++) P.blit(ctx, P.lifeIcon(), 23 + i * 16, y);
     // The last seven levels' fruit, newest at the right edge.
     var first = Math.max(1, this.level - 6);
     for (var lv = first; lv <= this.level; lv++) {
-      ctx.save();
-      ctx.translate(200 - (this.level - lv) * 16, y);
-      Sprites.drawFruit(ctx, FRUITS[Math.min(lv, FRUITS.length) - 1]);
-      ctx.restore();
+      P.blit(ctx, P.fruit(FRUITS[Math.min(lv, FRUITS.length) - 1]),
+             200 - (this.level - lv) * 16, y);
     }
-    ctx.restore();
   };
 
   Game.prototype.drawFruit = function (ctx) {
     if (!this.fruit) return;
-    ctx.save();
-    ctx.translate(FRUIT_POS.x, FRUIT_POS.y);
-    Sprites.drawFruit(ctx, this.fruit);
-    ctx.restore();
+    Sprites.Pixel.blit(ctx, Sprites.Pixel.fruit(this.fruit), FRUIT_POS.x, FRUIT_POS.y);
   };
 
   Game.prototype.drawPac = function (ctx) {
-    var pac = this.pac;
+    var pac = this.pac, P = Sprites.Pixel;
     if (this.state === 'dying') {
       if (this.stateTime < 0.55) {
-        this.withWrap(ctx, pac.x, pac.y, function () {
-          Sprites.drawPacman(ctx, pac.dir, 0.8);
+        this.withWrap(ctx, pac.x, pac.y, function (x, y) {
+          P.blit(ctx, P.pacman(pac.dir, 0.8), x, y);
         });
       } else if (this.stateTime < 2.1) {
-        var t = (this.stateTime - 0.55) / 1.55;
-        this.withWrap(ctx, pac.x, pac.y, function () {
-          Sprites.drawPacmanDeath(ctx, t);
+        var step = Math.floor((this.stateTime - 0.55) / 1.55 * 11);
+        this.withWrap(ctx, pac.x, pac.y, function (x, y) {
+          P.blit(ctx, P.death(step), x, y);
         });
       }
       return;
     }
-    if (this.state === 'gameover') return;
+    if (!this.charactersVisible()) return;
     if (this.freezeTimer > 0) return;      // hidden while a ghost score shows
-    var mouth = pac.moving || this.state === 'playing' ? pac.mouth : 0.55;
-    if (this.state === 'ready') mouth = 0.55;
-    this.withWrap(ctx, pac.x, pac.y, function () {
-      Sprites.drawPacman(ctx, pac.dir, mouth);
+    // He waits as a closed circle during READY!, as on the arcade.
+    var mouth = this.state === 'ready' ? 0 : pac.mouth;
+    this.withWrap(ctx, pac.x, pac.y, function (x, y) {
+      P.blit(ctx, P.pacman(pac.dir, mouth), x, y);
     });
   };
 
   Game.prototype.drawGhosts = function (ctx) {
-    if (this.state === 'dying') return;
+    if (this.state === 'dying' || !this.charactersVisible()) return;
+    var P = Sprites.Pixel;
     var frame = Math.floor(this.animTime * 9) % 2;
     var flashing = false;
     if (this.frightTimer > 0) {
@@ -911,8 +929,8 @@
       if (this.freezeTimer > 0 && g.state === 'eaten' &&
           Math.abs(this.popup.x - g.x) < 1) continue;
       (function (gg, m) {
-        this.withWrap(ctx, gg.x, gg.y, function () {
-          Sprites.drawGhost(ctx, gg.name, gg.dir, frame, m, flashing);
+        this.withWrap(ctx, gg.x, gg.y, function (x, y) {
+          P.blit(ctx, P.ghost(gg.name, gg.dir, frame, m, flashing), x, y);
         });
       }).call(this, g, mode);
     }
@@ -926,25 +944,21 @@
   /** Draw a sprite, repeating it across the tunnel seam when near an edge. */
   Game.prototype.withWrap = function (ctx, x, y, fn) {
     var w = COLS * TILE;
-    var offsets = [0];
-    if (x < 12) offsets.push(w);
-    else if (x > w - 12) offsets.push(-w);
-    for (var i = 0; i < offsets.length; i++) {
-      ctx.save();
-      ctx.translate(x + offsets[i], y);
-      fn();
-      ctx.restore();
-    }
+    fn(x, y);
+    if (x < 12) fn(x + w, y);
+    else if (x > w - 12) fn(x - w, y);
   };
 
+  /* READY! sits in the chamber below the ghost house - the same tile the
+     fruit spawns on - and PLAYER ONE in the chamber above it. */
   Game.prototype.drawOverlayText = function (ctx) {
     if (this.state === 'ready') {
-      Font.draw(ctx, 'READY!', 11, 20, '#ffff00');
-      if (this.showPlayerOne && this.stateTime < 2.2) {
-        Font.draw(ctx, 'PLAYER ONE', 9, 14, '#00ffff');
+      Font.draw(ctx, 'READY!', 11, 17, '#ffff00');
+      if (this.showPlayerOne && this.stateTime < PLAYER_ONE_TIME) {
+        Font.draw(ctx, 'PLAYER ONE', 9, 11, '#00ffff');
       }
     } else if (this.state === 'gameover') {
-      Font.draw(ctx, 'GAME OVER', 9, 20, '#ff0000');
+      Font.draw(ctx, 'GAME  OVER', 9, 17, '#ff0000');
       if (Math.floor(this.stateTime * 1.6) % 2 === 0) {
         Font.draw(ctx, 'PRESS SPACE', 8, 23, '#ffffff');
       }
@@ -969,19 +983,13 @@
     var frame = Math.floor(this.animTime * 9) % 2;
     for (var i = 0; i < rows.length; i++) {
       var row = rows[i], y = 13 + i * 3;
-      ctx.save();
-      ctx.translate(4 * TILE + 4, y * TILE + 4);
-      Sprites.drawGhost(ctx, row[0], 'right', frame, 'normal', false);
-      ctx.restore();
+      Sprites.Pixel.blit(ctx, Sprites.Pixel.ghost(row[0], 'right', frame, 'normal', false),
+                         4 * TILE + 4, y * TILE + 4);
       Font.draw(ctx, row[1], 6, y, row[3]);
       Font.draw(ctx, row[2], 17, y, row[3]);
     }
 
-    ctx.save();
-    ctx.translate(10 * TILE + 4, 26 * TILE + 4);
-    ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2);
-    ctx.fillStyle = Maze.DOT_COLOR; ctx.fill();
-    ctx.restore();
+    Maze.drawEnergizerAt(ctx, 10 * TILE, 26 * TILE);
     Font.draw(ctx, '50 PTS', 12, 26, '#ffffff');
 
     if (Math.floor(this.animTime * 1.6) % 2 === 0) {

@@ -148,7 +148,22 @@
     ctx.restore();
   }
 
-  /** Dots are 2x2 px; energizers are 8px discs that blink with the global timer. */
+  /* The energizer is an 8x8 disc; these are its exact rows on the arcade,
+     as x-ranges within the tile. */
+  var ENERGIZER_ROWS = [[2, 5], [1, 6], [0, 7], [0, 7], [0, 7], [0, 7], [1, 6], [2, 5]];
+
+  /** Paint one energizer disc with its top-left corner at (x, y). */
+  function drawEnergizerAt(ctx, x, y) {
+    ctx.save();
+    ctx.fillStyle = DOT_COLOR;
+    for (var i = 0; i < 8; i++) {
+      var span = ENERGIZER_ROWS[i];
+      ctx.fillRect(x + span[0], y + i, span[1] - span[0] + 1, 1);
+    }
+    ctx.restore();
+  }
+
+  /** Dots are 2x2 px; energizers blink with the global timer. */
   function drawDots(ctx, state, energizerVisible) {
     ctx.save();
     ctx.fillStyle = DOT_COLOR;
@@ -158,9 +173,10 @@
         if (d === 1) {
           ctx.fillRect(c * TILE + 3, r * TILE + 3, 2, 2);
         } else if (d === 2 && energizerVisible) {
-          ctx.beginPath();
-          ctx.arc(c * TILE + 4, r * TILE + 4, 4, 0, Math.PI * 2);
-          ctx.fill();
+          for (var y = 0; y < 8; y++) {
+            var span = ENERGIZER_ROWS[y];
+            ctx.fillRect(c * TILE + span[0], r * TILE + y, span[1] - span[0] + 1, 1);
+          }
         }
       }
     }
@@ -186,6 +202,7 @@
     drawWalls: drawWalls,
     drawDoor: drawDoor,
     drawDots: drawDots,
+    drawEnergizerAt: drawEnergizerAt,
     freshDots: freshDots
   };
 })(window);
