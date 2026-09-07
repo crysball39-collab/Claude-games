@@ -1,0 +1,42 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  background: #000;
+  color: #fff;
+  font-family: "Courier New", Courier, monospace;
+  overflow: hidden;
+}
+
+#cabinet {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+#screen {
+  display: block;
+  background: #000;
+  /* Arcade aspect is 224x288 (7:9). Fit the viewport, never overflow. */
+  height: min(96vh, calc(96vw * 9 / 7));
+  width: auto;
+  image-rendering: auto;
+}
+
+#hint {
+  display: flex;
+  gap: 22px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: #6a6a86;
+  text-transform: uppercase;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+#hint b { color: #ffd24a; font-weight: 700; }
+
+@media (max-height: 560px) { #hint { display: none; } }
