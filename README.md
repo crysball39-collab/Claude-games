@@ -11,15 +11,25 @@ the game is generated procedurally at runtime.
 
 ## Run it
 
-Any static file server works (ES modules will not load from `file://`):
+**Easiest — just open `fortnite.html`.** It is a single self-contained file
+(three.js, every module and the stylesheet inlined, ~1.5 MB) that runs straight
+off disk with no server and no network.
+
+To work on the source instead, serve the folder — ES modules will not load from
+`file://`:
 
 ```bash
 python3 -m http.server 8000
 # then open http://localhost:8000
 ```
 
-`three.js` is vendored at `vendor/three.module.js`, so the game runs completely
-offline.
+`three.js` is vendored at `vendor/three.module.js`, so either way the game runs
+completely offline. After editing anything in `src/`, regenerate the single-file
+build with:
+
+```bash
+node build.mjs
+```
 
 ---
 
@@ -27,9 +37,9 @@ offline.
 
 | Action | Desktop | Touch |
 | --- | --- | --- |
-| Move | `W A S D` | Left-hand joystick |
+| Move | `W A S D` | Joystick, bottom left |
 | Look | Mouse (click to lock the pointer) | Drag anywhere on the right |
-| Sprint | `Shift` | Push the joystick to the edge |
+| Sprint | `Shift` | Push the joystick to the edge (it turns gold) |
 | Jump | `Space` | **JUMP** |
 | Crouch | `C` (toggle) | **CROUCH** |
 | Shoot / swing / drink | Left mouse | **Shoot** (big button) |
@@ -42,6 +52,11 @@ offline.
 | Cycle slots | Mouse wheel | — |
 
 The 6th slot is permanently the pickaxe. Slots 1–5 hold weapons and items.
+
+The joystick sits at the bottom left and is always on screen so you can see
+where it is. Touching anywhere in the lower-left quarter picks it up — it hops
+under your thumb so you always start centred, and drops back to its resting
+spot when you let go.
 
 ---
 
@@ -138,7 +153,9 @@ barrels — with the pickaxe. Every piece is destructible and has its own collis
 ## Code layout
 
 ```
-index.html            importmap + canvas
+fortnite.html         single-file build - open this one to play
+build.mjs             bundles src/ + style.css + three.js into fortnite.html
+index.html            importmap + canvas (the source version)
 style.css             lobby, HUD and overlays
 vendor/three.module.js
 src/

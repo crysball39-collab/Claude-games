@@ -9,6 +9,7 @@
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-l: env(safe-area-inset-left, 0px);
   --safe-r: env(safe-area-inset-right, 0px);
+  --safe-t: env(safe-area-inset-top, 0px);
   font-synthesis: none;
 }
 
@@ -204,15 +205,35 @@ html, body {
 
 /* joystick */
 .stickzone { position: absolute; left: 0; bottom: 0; width: 46%; height: 62%; }
+/* Always on screen so you can see where the stick is; it hops to your thumb
+   while held and slides back to its resting spot on release. */
 .stickbase {
-  position: fixed; width: 128px; height: 128px; margin: -64px 0 0 -64px; border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.24); background: rgba(10, 16, 26, 0.32);
-  opacity: 0; transition: opacity 0.15s; pointer-events: none;
+  position: fixed; width: 132px; height: 132px; margin: -66px 0 0 -66px; border-radius: 50%;
+  left: calc(var(--safe-l) + 118px); bottom: calc(var(--safe-b) + 112px); top: auto;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: radial-gradient(circle at 50% 45%, rgba(24, 34, 52, 0.5), rgba(8, 12, 20, 0.34));
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35), inset 0 0 22px rgba(0, 0, 0, 0.35);
+  opacity: 0.62; pointer-events: none;
+  transition: opacity 0.16s, left 0.18s ease-out, top 0.18s ease-out;
 }
-.stickbase.on { opacity: 1; }
+.stickbase.on { opacity: 1; left: var(--sx); top: var(--sy); bottom: auto; transition: opacity 0.1s; }
+/* subtle crosshair guides on the rim */
+.stickring {
+  position: absolute; inset: 15px; border-radius: 50%;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+}
+.stickbase.sprint { border-color: var(--gold); }
+.stickbase.sprint .stickring { border-color: rgba(255, 198, 60, 0.55); }
 .stickknob {
-  position: absolute; left: 50%; top: 50%; width: 56px; height: 56px; margin: -28px 0 0 -28px;
-  border-radius: 50%; background: rgba(255, 255, 255, 0.55); border: 2px solid rgba(255, 255, 255, 0.8);
+  position: absolute; left: 50%; top: 50%; width: 58px; height: 58px; margin: -29px 0 0 -29px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.92), rgba(190, 208, 226, 0.62));
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+}
+.stickbase.sprint .stickknob {
+  background: radial-gradient(circle at 50% 38%, #fff2c2, rgba(255, 198, 60, 0.75));
+  border-color: var(--gold);
 }
 
 /* action buttons */

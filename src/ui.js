@@ -76,6 +76,7 @@ export class HUD {
     // ---- joystick --------------------------------------------------------
     this.stickZone = el('div', 'stickzone', r);
     this.stickBase = el('div', 'stickbase', this.stickZone);
+    this.stickRing = el('i', 'stickring', this.stickBase);
     this.stickKnob = el('div', 'stickknob', this.stickBase);
 
     // ---- right hand buttons ---------------------------------------------
@@ -132,6 +133,15 @@ export class HUD {
     this.ammoRes = el('span', 'res', this.ammo, '');
   }
 
+  /**
+   * While held the stick sits under the pointer; letting go drops the `on`
+   * class and CSS puts it back at its resting spot, safe areas included.
+   */
+  placeStick(x, y) {
+    this.stickBase.style.setProperty('--sx', x + 'px');
+    this.stickBase.style.setProperty('--sy', y + 'px');
+  }
+
   refreshBuildBar() {
     for (const t of BUILD_TYPES) this.buildBtns[t].classList.toggle('on', this.input.buildType === t);
   }
@@ -183,9 +193,10 @@ export class HUD {
     const stickStart = (e) => {
       if (this.stickId !== null) return;
       this.stickId = e.pointerId;
+      // a touch far from the resting stick picks it up rather than snapping the
+      // knob to the rim, so the thumb always starts centred
       this.stickOrigin = { x: e.clientX, y: e.clientY };
-      this.stickBase.style.left = e.clientX + 'px';
-      this.stickBase.style.top = e.clientY + 'px';
+      this.placeStick(e.clientX, e.clientY);
       this.stickBase.classList.add('on');
       this.stickZone.setPointerCapture(e.pointerId);
       e.preventDefault();
@@ -201,6 +212,7 @@ export class HUD {
       this.input.move.x = kx / max;
       this.input.move.y = -ky / max;
       this.input.sprint = Math.hypot(this.input.move.x, this.input.move.y) > 0.86;
+      this.stickBase.classList.toggle('sprint', this.input.sprint);
     };
     const stickEnd = (e) => {
       if (e.pointerId !== this.stickId) return;
@@ -208,7 +220,7 @@ export class HUD {
       this.input.move.x = 0; this.input.move.y = 0;
       this.input.sprint = false;
       this.stickKnob.style.transform = 'translate(0,0)';
-      this.stickBase.classList.remove('on');
+      this.stickBase.classList.remove('on', 'sprint');
     };
     this.stickZone.addEventListener('pointerdown', stickStart);
     this.stickZone.addEventListener('pointermove', stickMove);

@@ -18,6 +18,15 @@ export function saveCosmetics(c) {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(c)); } catch (e) { /* ignore */ }
 }
 
+// file:// and private windows can throw on any storage access, so both the
+// read and the write are guarded.
+function loadName() {
+  try { return localStorage.getItem('fortnite3d.name') || 'You'; } catch (e) { return 'You'; }
+}
+function saveName(v) {
+  try { localStorage.setItem('fortnite3d.name', v); } catch (e) { /* ignore */ }
+}
+
 export class Lobby {
   constructor(renderer, root) {
     this.renderer = renderer;
@@ -164,9 +173,9 @@ export class Lobby {
     nameWrap.innerHTML = '<span>NAME</span>';
     this.nameInput = document.createElement('input');
     this.nameInput.maxLength = 14;
-    this.nameInput.value = localStorage.getItem('fortnite3d.name') || 'You';
+    this.nameInput.value = loadName();
     this.nameInput.addEventListener('input', () => {
-      localStorage.setItem('fortnite3d.name', this.nameInput.value.trim() || 'You');
+      saveName(this.nameInput.value.trim() || 'You');
     });
     nameWrap.appendChild(this.nameInput);
     foot.appendChild(nameWrap);
