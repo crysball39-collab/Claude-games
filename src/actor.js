@@ -247,8 +247,9 @@ export class Actor {
   }
 
   // --- damage ------------------------------------------------------------
-  takeDamage(amount, from, point, isHead = false) {
+  takeDamage(amount, from, point, isHead = false, cause = 'shot') {
     if (!this.alive) return 0;
+    this.lastCause = cause;
     let dmg = amount;
     let shieldPart = 0;
     if (this.shield > 0) {
@@ -330,8 +331,9 @@ export class Actor {
     const len = inp.length();
     let wishX = 0, wishZ = 0;
     if (len > 0.001) {
+      // forward is +Z at yaw 0, so screen-right is cross(forward, up) = (-cos, sin)
       const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
-      const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
+      const rx = -Math.cos(this.yaw), rz = Math.sin(this.yaw);
       wishX = fx * inp.y + rx * inp.x;
       wishZ = fz * inp.y + rz * inp.x;
       const m = Math.hypot(wishX, wishZ);
@@ -360,7 +362,7 @@ export class Actor {
     if (this.grounded && this.fallSpeed > 21) {
       const dmg = Math.round((this.fallSpeed - 21) * 3.4);
       this.fallSpeed = 0;
-      if (dmg > 0) this.takeDamage(dmg, null, this.pos, false);
+      if (dmg > 0) this.takeDamage(dmg, null, this.pos, false, 'fall');
     }
     if (this.pos.y < -60) this.takeDamage(1000, null, this.pos);
     this.speed2D = Math.hypot(this.vel.x, this.vel.z);

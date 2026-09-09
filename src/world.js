@@ -151,7 +151,43 @@ export function createTerrain() {
   const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
   mesh.receiveShadow = true;
   mesh.name = 'terrain';
-  return mesh;
+  return { mesh, mapCanvas: createMapCanvas(pos, colors) };
+}
+
+/**
+ * Top-down map image, built straight from the terrain's own vertex grid so the
+ * map and the world can never disagree — and so it costs no extra heightAt calls.
+ * Row 0 is z = -half (north), column 0 is x = -half (west).
+ */
+function createMapCanvas(pos, colors) {
+  const n = WORLD.seg + 1;
+  const canvas = document.createElement('canvas');
+  canvas.width = n; canvas.height = n;
+  const ctx = canvas.getContext('2d');
+  const img = ctx.createImageData(n, n);
+  const d = img.data;
+  const hAt = (ix, iy) => pos.getY(clamp(iy, 0, n - 1) * n + clamp(ix, 0, n - 1));
+  for (let iy = 0; iy < n; iy++) {
+    for (let ix = 0; ix < n; ix++) {
+      const vi = iy * n + ix;
+      const h = pos.getY(vi);
+      // cheap hillshade from the height difference to the north-west
+      const shade = clamp(1 + (hAt(ix - 1, iy) + hAt(ix, iy - 1) - h * 2) * 0.05, 0.6, 1.45);
+      const under = h < SEA_LEVEL;
+      const o = vi * 4;
+      if (under) {
+        const deep = clamp((SEA_LEVEL - h) / 14, 0, 1);
+        d[o] = lerp(60, 18, deep); d[o + 1] = lerp(120, 54, deep); d[o + 2] = lerp(165, 104, deep);
+      } else {
+        d[o] = clamp(colors[vi * 3] * 255 * shade, 0, 255);
+        d[o + 1] = clamp(colors[vi * 3 + 1] * 255 * shade, 0, 255);
+        d[o + 2] = clamp(colors[vi * 3 + 2] * 255 * shade, 0, 255);
+      }
+      d[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return canvas;
 }
 
 export function createWater() {

@@ -127,9 +127,45 @@ export class Lobby {
     top.innerHTML = `<div class="logo">FORTNITE</div><div class="sub">Battle Royale &middot; 100 Players</div>`;
     r.appendChild(top);
 
+    // ---- screen tabs: only one panel is on screen at a time ---------------
+    const nav = document.createElement('div');
+    nav.className = 'screentabs';
+    r.appendChild(nav);
+    this.screens = {};
+    this.screenTabs = {};
+    for (const [id, label] of [['lobby', 'LOBBY'], ['locker', 'LOCKER']]) {
+      const b = document.createElement('button');
+      b.className = 'screentab';
+      b.textContent = label;
+      b.addEventListener('click', () => this.showScreen(id));
+      nav.appendChild(b);
+      this.screenTabs[id] = b;
+    }
+
+    // ---- LOBBY panel -------------------------------------------------------
+    const lobbyPanel = document.createElement('div');
+    lobbyPanel.className = 'panel screen lobbypanel';
+    lobbyPanel.innerHTML = `
+      <div class="lockerhead"><h2>BATTLE ROYALE</h2><p>Solo &middot; 100 players &middot; last one standing</p></div>
+      <div class="infogrid">
+        <div class="infocell"><span>ISLAND</span><b>3 biomes</b></div>
+        <div class="infocell"><span>POIs</span><b>3 named</b></div>
+        <div class="infocell"><span>STORM</span><b>Closes every 2 min</b></div>
+        <div class="infocell"><span>LOOT</span><b>3 guns &middot; 5 rarities</b></div>
+      </div>
+      <ul class="tips">
+        <li>Break wooden props with your pickaxe for wood &mdash; 25 per build piece.</li>
+        <li>Tap the minimap to open the full map and drop a waypoint.</li>
+        <li>Stay inside the circle. The storm hurts more every zone.</li>
+      </ul>`;
+    r.appendChild(lobbyPanel);
+    this.screens.lobby = lobbyPanel;
+
+    // ---- LOCKER panel ------------------------------------------------------
     const panel = document.createElement('div');
-    panel.className = 'panel locker';
+    panel.className = 'panel screen locker';
     r.appendChild(panel);
+    this.screens.locker = panel;
     this.panel = panel;
 
     const head = document.createElement('div');
@@ -164,6 +200,7 @@ export class Lobby {
     this.grid = grid;
     this.detail = detail;
     this.renderTabs();
+    this.showScreen('lobby');
 
     const foot = document.createElement('div');
     foot.className = 'lobbyfoot';
@@ -193,13 +230,22 @@ export class Lobby {
     // drag to spin the character
     let dragging = false, lastX = 0;
     const dom = this.renderer.domElement;
-    const down = (e) => { if (e.target.closest && e.target.closest('.panel, .lobbyfoot')) return; dragging = true; lastX = e.clientX; };
+    const down = (e) => { if (e.target.closest && e.target.closest('.panel, .lobbyfoot, .screentabs')) return; dragging = true; lastX = e.clientX; };
     const move = (e) => { if (!dragging) return; this.targetTurn -= (e.clientX - lastX) * 0.01; lastX = e.clientX; };
     const up = () => { dragging = false; };
     dom.addEventListener('pointerdown', down);
     r.addEventListener('pointerdown', down);
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+  }
+
+  /** Only one of the lobby screens is visible at a time. */
+  showScreen(id) {
+    this.activeScreen = id;
+    for (const key of Object.keys(this.screens)) {
+      this.screens[key].style.display = key === id ? 'flex' : 'none';
+      this.screenTabs[key].classList.toggle('on', key === id);
+    }
   }
 
   renderTabs() {

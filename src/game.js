@@ -11,6 +11,8 @@ import { Effects } from './effects.js';
 import { BuildSystem } from './building.js';
 import { Chest, Pickup, floorLoot, itemScore, makeWeapon, makeConsumable } from './loot.js';
 import { RARITY } from './models.js';
+import { Storm } from './storm.js';
+import { GameMap } from './map.js';
 import { makeRng, TAU } from './util.js';
 
 const _v = new THREE.Vector3();
@@ -74,7 +76,9 @@ export class Game {
     this.physics = new Physics(heightAt);
 
     await this.yieldFrame(progress, 'Raising terrain', 0.08);
-    this.terrain = createTerrain();
+    const terrain = createTerrain();
+    this.terrain = terrain.mesh;
+    this.mapCanvas = terrain.mapCanvas;
     scene.add(this.terrain);
     scene.add(createWater());
 
@@ -106,6 +110,9 @@ export class Game {
 
     this.effects = new Effects(scene, this.camera);
     this.build = new BuildSystem(scene, this.physics);
+    this.storm = new Storm(scene, makeRng(this.seed ^ 0x5701));
+    this.gameMap = new GameMap(this.mapCanvas);
+    this.makeWaypointBeam();
 
     await this.yieldFrame(progress, 'Dropping 100 players', 0.9);
     this.spawnActors();
@@ -196,6 +203,42 @@ export class Game {
     region(0, -2, 46, -2.9, 16);         // the lab hallway and rooms
     region(-43, 0, 9, -2.9, 4);          // control room
     region(43, 1, 9, -2.9, 4);           // resting unit
+  }
+
+  makeWaypointBeam() {
+    const g = new THREE.Group();
+    const beam = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.5, 1.5, 260, 12, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0x3ad6ff, transparent: true, opacity: 0.22,
+        side: THREE.DoubleSide, depthWrite: false, fog: false })
+    );
+    beam.position.y = 130;
+    g.add(beam);
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(2.4, 3.4, 20),
+      new THREE.MeshBasicMaterial({ color: 0x3ad6ff, transparent: true, opacity: 0.75,
+        side: THREE.DoubleSide, depthWrite: false })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.4;
+    g.add(ring);
+    g.visible = false;
+    this.scene.add(g);
+    this.waypointBeam = g;
+  }
+
+  setWaypoint(x, z) {
+    const wp = this.gameMap.setWaypoint(x, z);
+    if (!wp) return null;
+    const y = this.physics.floorAt(x, z, 400, 0.4);
+    this.waypointBeam.position.set(x, Math.max(y, -20), z);
+    this.waypointBeam.visible = true;
+    return wp;
+  }
+
+  clearWaypoint() {
+    this.gameMap.clearWaypoint();
+    this.waypointBeam.visible = false;
   }
 
   spawnPickup(item, x, y, z, vx = 0, vy = 0, vz = 0) {
@@ -446,8 +489,13 @@ export class Game {
     this.aliveCount--;
     this.eliminated++;
     if (killer && killer !== actor) killer.kills++;
-    const who = killer ? killer.name : 'the storm of gravity';
-    this.hud.killFeed(`${who} eliminated ${actor.name}`, killer === this.player || actor === this.player);
+    // Storm and fall deaths are constant background noise with 99 bots, so they
+    // only reach the feed when they involve you.
+    const mine = killer === this.player || actor === this.player;
+    if (killer || mine) {
+      const who = killer ? killer.name : (actor.lastCause === 'storm' ? 'The storm' : 'The fall');
+      this.hud.killFeed(`${who} eliminated ${actor.name}`, mine);
+    }
 
     // drop everything they were carrying
     let i = 0;
@@ -496,6 +544,7 @@ export class Game {
       }
     }
 
+    this.storm.update(dt, this.actors);
     for (const c of this.chests) c.update(dt);
     for (const d of this.doors) d.update(dt);
     for (let i = this.pickups.length - 1; i >= 0; i--) {

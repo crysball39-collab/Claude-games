@@ -138,6 +138,27 @@ export class Bot extends Actor {
       if (this.nearestLoot()) threatened = false;
     }
 
+    // The storm outranks everything except someone shooting at you from close
+    // range — a bot that stands still looting in the storm just dies.
+    const storm = g.storm;
+    if (storm) {
+      const safe = storm.safeCircle();
+      const d = Math.hypot(this.pos.x - safe.x, this.pos.z - safe.z);
+      const mustRotate = d > safe.r * 0.82;
+      const cornered = threatened && this.distTo(this.target) < 22;
+      if (mustRotate && !cornered) {
+        if (!this.goal || this.goal.type !== 'storm' || this.goalT > 6) {
+          const a = this.rng() * TAU, rr = safe.r * 0.55 * Math.sqrt(this.rng());
+          this.goal = { x: safe.x + Math.cos(a) * rr, z: safe.z + Math.sin(a) * rr, type: 'storm' };
+          this.goalT = 0;
+        }
+        this.state = 'roam';
+        const bw = this.inv.bestWeapon();
+        if (bw >= 0 && this.inv.selected !== bw) this.select(bw);
+        return;
+      }
+    }
+
     if (threatened) {
       this.state = (hurt && canHeal && this.distTo(this.target) > 34) ? 'heal' : 'fight';
     } else if ((canHeal && this.health < 85) || (canShield && this.shield < 50)) {
@@ -239,6 +260,11 @@ export class Bot extends Actor {
       }
       if (this.goalT > 14) { this.goal = null; this.lootCd = 3.0; return; }
       this.moveTowards(p.pos.x, p.pos.z, dt);
+      return;
+    }
+    if (goal.type === 'storm') {
+      if (d < 8) { this.goal = null; return; }
+      this.moveTowards(goal.x, goal.z, dt, true);
       return;
     }
     if (d < 6) { this.goal = this.pickPoiGoal(); this.goalT = 0; return; }

@@ -69,10 +69,36 @@ html, body {
   backdrop-filter: blur(14px);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
 }
-.locker {
-  position: absolute; right: max(20px, var(--safe-r)); top: 50%; transform: translateY(-50%);
-  width: min(430px, 46vw); max-height: 78vh; padding: 18px; display: flex; flex-direction: column;
+.screentabs {
+  position: absolute; right: max(20px, var(--safe-r));
+  top: calc(20px + env(safe-area-inset-top, 0px));
+  display: flex; gap: 8px; z-index: 2;
 }
+.screentab {
+  padding: 11px 26px; font: inherit; font-size: 13px; font-weight: 800; letter-spacing: 2px;
+  color: #a9bdd4; background: rgba(12, 17, 28, 0.8); border: 1px solid var(--stroke);
+  border-radius: 11px; cursor: pointer; backdrop-filter: blur(10px);
+}
+.screentab.on {
+  background: linear-gradient(180deg, var(--blue), var(--blue-dk));
+  color: #fff; border-color: transparent;
+  box-shadow: 0 6px 20px rgba(58, 160, 255, 0.3);
+}
+
+.screen {
+  position: absolute; right: max(20px, var(--safe-r)); top: 50%; transform: translateY(-50%);
+  width: min(430px, 46vw); max-height: 70vh; padding: 18px; display: flex; flex-direction: column;
+}
+.lobbypanel { gap: 2px; }
+.infogrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+.infocell {
+  background: rgba(255, 255, 255, 0.05); border: 1px solid var(--stroke);
+  border-radius: 10px; padding: 9px 11px;
+}
+.infocell span { display: block; font-size: 9px; letter-spacing: 2px; color: #8fa3ba; }
+.infocell b { font-size: 13px; }
+.tips { margin: 0; padding-left: 17px; color: #9fb4cc; font-size: 12px; line-height: 1.65; }
+.tips li { margin-bottom: 4px; }
 .lockerhead h2 { margin: 0; font-size: 20px; letter-spacing: 3px; }
 .lockerhead p { margin: 4px 0 12px; font-size: 12px; color: #8fa3ba; }
 .tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
@@ -142,8 +168,55 @@ html, body {
   font-size: 11px; font-weight: 800; text-shadow: 0 1px 2px #000;
 }
 
+.rightcol {
+  position: absolute; right: max(12px, var(--safe-r)); top: calc(10px + env(safe-area-inset-top, 0px));
+  display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+  pointer-events: none; max-width: 62vw;
+}
+.rightcol > * { pointer-events: auto; }
+
+.miniwrap { position: relative; }
+.minimap {
+  display: block; width: 148px; height: 148px; border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.34);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.5);
+  background: #0a1018; cursor: pointer;
+}
+.minihint {
+  position: absolute; left: 50%; bottom: 7px; transform: translateX(-50%);
+  font-size: 8px; letter-spacing: 2px; font-weight: 800; color: #0b1220;
+  background: rgba(255, 255, 255, 0.82); padding: 2px 8px; border-radius: 6px;
+  pointer-events: none;
+}
+
+.stormbar {
+  display: flex; align-items: center; gap: 7px; padding: 4px 10px;
+  background: rgba(6, 10, 18, 0.72); border: 1px solid rgba(155, 92, 255, 0.5);
+  border-radius: 7px; pointer-events: none;
+}
+.stormbar .slbl { font-size: 9px; letter-spacing: 1.5px; color: #c9a8ff; }
+.stormbar .stime { font-size: 14px; font-weight: 900; }
+.stormbar.closing {
+  border-color: #d0a8ff;
+  background: rgba(80, 30, 140, 0.68);
+  animation: stormpulse 1.4s ease-in-out infinite;
+}
+@keyframes stormpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.62; } }
+
+.stormfx {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  box-shadow: inset 0 0 150px 40px rgba(150, 70, 240, 0.6);
+  transition: opacity 0.4s;
+}
+.stormfx.on { opacity: 1; }
+.stormwarn {
+  position: absolute; left: 50%; top: 16%; transform: translateX(-50%);
+  font-size: 15px; font-weight: 900; letter-spacing: 3px; color: #e0b4ff;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9); pointer-events: none;
+  animation: stormpulse 1.2s ease-in-out infinite;
+}
+
 .matchinfo {
-  position: absolute; right: max(14px, var(--safe-r)); top: calc(12px + env(safe-area-inset-top, 0px));
   display: flex; flex-direction: column; gap: 3px; align-items: flex-end; pointer-events: none;
 }
 .matchinfo .row {
@@ -155,9 +228,8 @@ html, body {
 .matchinfo .wood .val { color: var(--gold); }
 
 .killfeed {
-  position: absolute; right: max(14px, var(--safe-r)); top: calc(112px + env(safe-area-inset-top, 0px));
-  display: flex; flex-direction: column; gap: 4px; align-items: flex-end; pointer-events: none;
-  max-width: 62vw;
+  display: flex; flex-direction: column; gap: 4px; align-items: flex-end;
+  pointer-events: none; max-width: 62vw;
 }
 .kfline {
   background: rgba(6, 10, 18, 0.66); border-left: 3px solid #6d829a; padding: 4px 9px;
@@ -253,7 +325,7 @@ html, body {
 /* action buttons */
 .buttons {
   position: absolute; right: max(12px, var(--safe-r)); bottom: calc(16px + var(--safe-b));
-  width: 290px; height: 250px;
+  width: 330px; height: 280px; transform-origin: bottom right;
 }
 .btn {
   position: absolute; display: grid; place-items: center; border-radius: 50%;
@@ -264,15 +336,17 @@ html, body {
 .btn span { font-size: 10px; }
 .btn.down { background: rgba(58, 160, 255, 0.55); transform: scale(0.94); }
 .btn.on { border-color: var(--gold); color: var(--gold); }
-.btn.big { width: 94px; height: 94px; right: 6px; bottom: 8px; background: rgba(210, 60, 55, 0.42); border-color: rgba(255, 150, 140, 0.6); }
+.btn.big { width: 94px; height: 94px; right: 8px; bottom: 10px; background: rgba(210, 60, 55, 0.42); border-color: rgba(255, 150, 140, 0.6); }
 .btn.big::after { content: ''; width: 26px; height: 26px; border-radius: 50%; border: 3px solid #fff; }
-.btn.mid { width: 68px; height: 68px; right: 106px; bottom: 18px; }
+.btn.mid { width: 68px; height: 68px; right: 110px; bottom: 24px; }
 .btn.small { width: 56px; height: 56px; }
-.b-jump { right: 12px; bottom: 112px; }
-.b-crouch { right: 82px; bottom: 96px; }
-.b-reload { right: 110px; bottom: 158px; }
-.b-use { right: 176px; bottom: 34px; }
-.b-build { right: 172px; bottom: 104px; }
+.b-use { right: 190px; bottom: 20px; }
+.b-jump { right: 14px; bottom: 116px; }
+.b-sprint { right: 86px; bottom: 104px; }
+.b-crouch { right: 158px; bottom: 96px; }
+.b-reload { right: 100px; bottom: 176px; }
+.b-build { right: 176px; bottom: 160px; }
+.b-sprint.on { background: rgba(255, 198, 60, 0.32); }
 
 /* build bar */
 .buildbar {
@@ -294,6 +368,36 @@ html, body {
   background: none; border: none;
   clip-path: polygon(50% 0, 100% 100%, 0 100%);
   background-color: #c19a6b;
+}
+
+/* full map screen */
+.mapscreen { position: absolute; inset: 0; background: #070b12; z-index: 12; }
+.mapcanvas { position: absolute; inset: 0; touch-action: none; cursor: crosshair; }
+.maptopbar {
+  position: absolute; left: 0; right: 0; top: 0;
+  padding: calc(12px + env(safe-area-inset-top, 0px)) 16px 12px;
+  display: flex; align-items: center; gap: 14px;
+  background: linear-gradient(180deg, rgba(6, 10, 18, 0.9), rgba(6, 10, 18, 0));
+  pointer-events: none;
+}
+.maptopbar > * { pointer-events: auto; }
+.maptitle { font-size: 15px; font-weight: 900; letter-spacing: 4px; color: #cfe0f2; pointer-events: none; }
+.mapbtn {
+  font: inherit; font-size: 12px; font-weight: 800; letter-spacing: 1.5px; color: #eaf3ff;
+  background: rgba(16, 24, 38, 0.86); border: 1px solid var(--stroke); border-radius: 10px;
+  padding: 10px 16px; cursor: pointer;
+}
+.mapbtn:active { background: rgba(58, 160, 255, 0.5); }
+.mapbtn.back { border-color: rgba(255, 255, 255, 0.4); }
+.mapbtn.round { width: 44px; height: 44px; padding: 0; font-size: 20px; border-radius: 50%; }
+.maptools {
+  position: absolute; right: max(16px, var(--safe-r)); bottom: calc(20px + var(--safe-b));
+  display: flex; flex-direction: column; gap: 9px; align-items: flex-end;
+}
+.maphint {
+  position: absolute; left: 50%; bottom: calc(18px + var(--safe-b)); transform: translateX(-50%);
+  font-size: 11px; color: #8fa3ba; pointer-events: none; text-align: center;
+  background: rgba(6, 10, 18, 0.66); padding: 6px 12px; border-radius: 8px; white-space: nowrap;
 }
 
 /* inventory */
@@ -358,14 +462,22 @@ html, body {
 .resultcard .playbtn { margin-top: 22px; width: 100%; }
 
 @media (max-width: 820px) {
-  .locker { width: min(360px, 62vw); padding: 14px; }
+  .screen { width: min(360px, 62vw); padding: 14px; }
   .itemgrid { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
   .slot { width: 58px; height: 40px; }
-  .buttons { width: 250px; height: 220px; }
+  .buttons { transform: scale(0.86); }
+  .minimap { width: 124px; height: 124px; }
+}
+@media (max-height: 460px) {
+  .minimap { width: 104px; height: 104px; }
+  .buttons { transform: scale(0.8); }
+  .stormbar { padding: 3px 8px; }
+  .killfeed { max-width: 40vw; }
 }
 @media (max-width: 560px) {
   .lobbyfoot { bottom: calc(18px + var(--safe-b)); }
-  .locker { top: auto; bottom: calc(120px + var(--safe-b)); transform: none; max-height: 52vh; width: min(320px, 74vw); }
+  .screentabs { top: auto; bottom: calc(96px + var(--safe-b)); right: max(16px, var(--safe-r)); }
+  .screen { top: auto; bottom: calc(150px + var(--safe-b)); transform: none; max-height: 46vh; width: min(320px, 74vw); }
   .slot { width: 50px; height: 36px; }
   .slot .sname { font-size: 8px; }
   .ammo .mag { font-size: 24px; }
@@ -55132,7 +55244,43 @@ function createTerrain() {
   const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
   mesh.receiveShadow = true;
   mesh.name = 'terrain';
-  return mesh;
+  return { mesh, mapCanvas: createMapCanvas(pos, colors) };
+}
+
+/**
+ * Top-down map image, built straight from the terrain's own vertex grid so the
+ * map and the world can never disagree — and so it costs no extra heightAt calls.
+ * Row 0 is z = -half (north), column 0 is x = -half (west).
+ */
+function createMapCanvas(pos, colors) {
+  const n = WORLD.seg + 1;
+  const canvas = document.createElement('canvas');
+  canvas.width = n; canvas.height = n;
+  const ctx = canvas.getContext('2d');
+  const img = ctx.createImageData(n, n);
+  const d = img.data;
+  const hAt = (ix, iy) => pos.getY(clamp(iy, 0, n - 1) * n + clamp(ix, 0, n - 1));
+  for (let iy = 0; iy < n; iy++) {
+    for (let ix = 0; ix < n; ix++) {
+      const vi = iy * n + ix;
+      const h = pos.getY(vi);
+      // cheap hillshade from the height difference to the north-west
+      const shade = clamp(1 + (hAt(ix - 1, iy) + hAt(ix, iy - 1) - h * 2) * 0.05, 0.6, 1.45);
+      const under = h < SEA_LEVEL;
+      const o = vi * 4;
+      if (under) {
+        const deep = clamp((SEA_LEVEL - h) / 14, 0, 1);
+        d[o] = lerp(60, 18, deep); d[o + 1] = lerp(120, 54, deep); d[o + 2] = lerp(165, 104, deep);
+      } else {
+        d[o] = clamp(colors[vi * 3] * 255 * shade, 0, 255);
+        d[o + 1] = clamp(colors[vi * 3 + 1] * 255 * shade, 0, 255);
+        d[o + 2] = clamp(colors[vi * 3 + 2] * 255 * shade, 0, 255);
+      }
+      d[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return canvas;
 }
 
 function createWater() {
@@ -56008,6 +56156,420 @@ class BuildSystem {
 }
 
 return { GRID, BUILD_COST, BUILD_TYPES, PIECE_HP, RAMP_STEPS, BuildPiece, BuildSystem };
+})();
+
+// ===================== src/storm.js =====================
+__m['storm'] = (function () {
+// The storm: a circle that holds for two minutes, then takes one minute to
+// close onto a smaller circle chosen inside it.  Anything caught outside takes
+// damage per second, and the damage climbs with every zone.
+const THREE = __THREE;
+const { clamp, lerp, TAU } = __m['util'];
+const { heightAt, SEA_LEVEL, WORLD } = __m['world'];
+
+const HOLD_TIME = 120;    // seconds the circle sits still
+const CLOSE_TIME = 60;    // seconds it takes to close in
+
+// Radius of each successive safe circle. The first covers the whole island.
+const RADII = [1500, 950, 620, 400, 250, 150, 90, 46, 20];
+// Damage per second to anything left outside, per zone.
+const DPS = [1, 1, 2, 3, 5, 7, 10, 12, 15];
+
+class Storm {
+  constructor(scene, rng) {
+    this.rng = rng;
+    this.zone = 0;
+    this.phase = 'hold';          // 'hold' | 'closing'
+    this.t = HOLD_TIME;
+    this.cx = 0; this.cz = 0;
+    this.radius = RADII[0];
+    this.from = { x: 0, z: 0, r: RADII[0] };
+    this.to = { x: 0, z: 0, r: RADII[0] };
+    this.pickNext();
+
+    const geo = new THREE.CylinderGeometry(1, 1, 1600, 64, 1, true);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x9b5cff, transparent: true, opacity: 0.28,
+      side: THREE.DoubleSide, depthWrite: false, fog: true,
+    });
+    this.mesh = new THREE.Mesh(geo, mat);
+    this.mesh.renderOrder = 5;
+    this.mesh.frustumCulled = false;
+    scene.add(this.mesh);
+
+    // brighter band right at the boundary so the edge reads from a distance
+    const edgeGeo = new THREE.CylinderGeometry(1, 1, 26, 64, 1, true);
+    this.edge = new THREE.Mesh(edgeGeo, new THREE.MeshBasicMaterial({
+      color: 0xd0a8ff, transparent: true, opacity: 0.4,
+      side: THREE.DoubleSide, depthWrite: false, fog: true,
+    }));
+    this.edge.renderOrder = 6;
+    this.edge.frustumCulled = false;
+    scene.add(this.edge);
+    this.syncMesh();
+  }
+
+  get isFinal() { return this.zone >= RADII.length - 1; }
+  get dps() { return DPS[Math.min(this.zone, DPS.length - 1)]; }
+
+  /** The circle players should be standing in: the target while it closes. */
+  safeCircle() {
+    return this.phase === 'closing'
+      ? { x: this.to.x, z: this.to.z, r: this.to.r }
+      : { x: this.cx, z: this.cz, r: this.radius };
+  }
+  /** The circle drawn as "next" on the map during a hold. */
+  nextCircle() {
+    if (this.isFinal) return null;
+    return { x: this.to.x, z: this.to.z, r: this.to.r };
+  }
+  currentCircle() { return { x: this.cx, z: this.cz, r: this.radius }; }
+
+  /** Choose where the next circle will sit — fully inside the current one. */
+  pickNext() {
+    if (this.isFinal) { this.to = { x: this.cx, z: this.cz, r: this.radius }; return; }
+    const nr = RADII[this.zone + 1];
+    const slack = Math.max(0, this.radius - nr);
+    let best = null;
+    for (let i = 0; i < 24; i++) {
+      const a = this.rng() * TAU;
+      const d = Math.sqrt(this.rng()) * slack;
+      const x = this.cx + Math.cos(a) * d, z = this.cz + Math.sin(a) * d;
+      if (Math.abs(x) > WORLD.half - 60 || Math.abs(z) > WORLD.half - 60) continue;
+      // prefer dry land so the last circles are playable
+      if (heightAt(x, z) > SEA_LEVEL + 4) { best = { x, z, r: nr }; break; }
+      if (!best) best = { x, z, r: nr };
+    }
+    this.to = best || { x: this.cx, z: this.cz, r: nr };
+  }
+
+  syncMesh() {
+    this.mesh.position.set(this.cx, 560, this.cz);
+    this.mesh.scale.set(this.radius, 1, this.radius);
+    this.edge.position.set(this.cx, 13, this.cz);
+    this.edge.scale.set(this.radius, 1, this.radius);
+  }
+
+  isInside(x, z, pad = 0) {
+    const dx = x - this.cx, dz = z - this.cz;
+    return dx * dx + dz * dz <= (this.radius + pad) * (this.radius + pad);
+  }
+
+  update(dt, actors) {
+    this.t -= dt;
+    if (this.phase === 'hold') {
+      if (this.t <= 0 && !this.isFinal) {
+        this.phase = 'closing';
+        this.t = CLOSE_TIME;
+        this.from = { x: this.cx, z: this.cz, r: this.radius };
+      } else if (this.isFinal) {
+        this.t = HOLD_TIME;      // final circle never moves again
+      }
+    } else {
+      const p = clamp(1 - this.t / CLOSE_TIME, 0, 1);
+      const e = p * p * (3 - 2 * p);
+      this.cx = lerp(this.from.x, this.to.x, e);
+      this.cz = lerp(this.from.z, this.to.z, e);
+      this.radius = lerp(this.from.r, this.to.r, e);
+      if (this.t <= 0) {
+        this.zone++;
+        this.cx = this.to.x; this.cz = this.to.z; this.radius = this.to.r;
+        this.phase = 'hold';
+        this.t = HOLD_TIME;
+        this.pickNext();
+      }
+    }
+    this.syncMesh();
+
+    // damage everything caught outside
+    const dmg = this.dps * dt;
+    for (const a of actors) {
+      if (!a.alive) continue;
+      if (this.isInside(a.pos.x, a.pos.z)) continue;
+      a.stormTick = (a.stormTick || 0) + dmg;
+      if (a.stormTick >= 1) {
+        const whole = Math.floor(a.stormTick);
+        a.stormTick -= whole;
+        a.takeDamage(whole, null, a.pos, false, 'storm');
+      }
+    }
+  }
+
+  /** "1:23" style countdown for the HUD. */
+  statusText() {
+    const t = Math.max(0, Math.ceil(this.t));
+    const m = Math.floor(t / 60), s = t % 60;
+    const clock = `${m}:${s < 10 ? '0' : ''}${s}`;
+    if (this.isFinal && this.phase === 'hold') return { label: 'FINAL ZONE', time: '', closing: false };
+    return this.phase === 'hold'
+      ? { label: `ZONE ${this.zone + 1} · CLOSES IN`, time: clock, closing: false }
+      : { label: `STORM CLOSING`, time: clock, closing: true };
+  }
+}
+
+return { HOLD_TIME, CLOSE_TIME, Storm };
+})();
+
+// ===================== src/map.js =====================
+__m['map'] = (function () {
+// Minimap and full-screen map.  Both draw from the same island image that the
+// terrain builder produced, so what you see on the map is the world itself.
+const { WORLD, POIS } = __m['world'];
+const { clamp, TAU } = __m['util'];
+
+const POI_SHORT = { summering: 'Summering Falls', pumped: 'Pumped Palms', snowy: 'Snowy Snarks' };
+
+/** World X/Z -> pixel coordinates inside the island image. */
+function worldToImage(x, z, img) {
+  return {
+    x: (x + WORLD.half) / WORLD.size * img.width,
+    y: (z + WORLD.half) / WORLD.size * img.height,
+  };
+}
+
+class GameMap {
+  constructor(image) {
+    this.image = image;              // canvas produced by createTerrain()
+    this.waypoint = null;            // { x, z }
+  }
+
+  setWaypoint(x, z) {
+    // a tap out in the ocean still drops a pin, clamped to the island
+    const h = WORLD.half;
+    this.waypoint = { x: clamp(x, -h, h), z: clamp(z, -h, h) };
+    return this.waypoint;
+  }
+  clearWaypoint() { this.waypoint = null; }
+
+  // ---------------------------------------------------------------- minimap
+  /**
+   * @param ctx     2D context of a square canvas
+   * @param size    canvas size in px (already device-scaled)
+   * @param s       { player, storm, span } — span is metres across the minimap
+   */
+  drawMinimap(ctx, size, s) {
+    const span = s.span || 300;
+    const px = s.player.pos.x, pz = s.player.pos.z;
+    const scale = size / span;                       // px per metre
+    const toScreen = (x, z) => ({ x: (x - px) * scale + size / 2, y: (z - pz) * scale + size / 2 });
+
+    ctx.save();
+    ctx.clearRect(0, 0, size, size);
+    ctx.beginPath();
+    ctx.arc(size / 2, size / 2, size / 2, 0, TAU);
+    ctx.clip();
+
+    // island image, cropped to the window around the player
+    const img = this.image;
+    const ppm = img.width / WORLD.size;              // image px per metre
+    const sw = span * ppm;
+    const c = worldToImage(px, pz, img);
+    ctx.fillStyle = '#0a1018';
+    ctx.fillRect(0, 0, size, size);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(img, c.x - sw / 2, c.y - sw / 2, sw, sw, 0, 0, size, size);
+
+    // POI labels
+    ctx.font = `600 ${Math.round(size * 0.062)}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.shadowColor = 'rgba(0,0,0,0.9)';
+    ctx.shadowBlur = 3;
+    for (const p of POIS) {
+      const q = toScreen(p.x, p.z);
+      if (q.x < -40 || q.x > size + 40 || q.y < -20 || q.y > size + 20) continue;
+      ctx.fillText(POI_SHORT[p.id] || p.name, q.x, q.y);
+    }
+    ctx.shadowBlur = 0;
+
+    this.drawStorm(ctx, toScreen, scale, s.storm, false);
+
+    // waypoint
+    if (this.waypoint) {
+      const q = toScreen(this.waypoint.x, this.waypoint.z);
+      this.drawWaypoint(ctx, q.x, q.y, size * 0.05, true, size);
+    }
+
+    // a white line to the safe circle whenever we are outside it
+    if (s.storm) {
+      const safe = s.storm.safeCircle();
+      const dx = safe.x - px, dz = safe.z - pz;
+      const d = Math.hypot(dx, dz);
+      if (d > safe.r) {
+        const target = toScreen(safe.x, safe.z);
+        ctx.save();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = Math.max(2, size * 0.017);
+        ctx.setLineDash([size * 0.055, size * 0.04]);
+        ctx.lineCap = 'round';
+        ctx.shadowColor = 'rgba(0,0,0,0.8)';
+        ctx.shadowBlur = 4;
+        ctx.beginPath();
+        ctx.moveTo(size / 2, size / 2);
+        ctx.lineTo(target.x, target.y);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // player arrow
+    ctx.save();
+    ctx.translate(size / 2, size / 2);
+    ctx.rotate(-s.player.yaw);           // +Z is down on the map; canvas rotates clockwise
+    const r = size * 0.075;
+    ctx.beginPath();
+    ctx.moveTo(0, r);
+    ctx.lineTo(-r * 0.72, -r * 0.8);
+    ctx.lineTo(0, -r * 0.4);
+    ctx.lineTo(r * 0.72, -r * 0.8);
+    ctx.closePath();
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = 'rgba(0,0,0,0.75)';
+    ctx.lineWidth = 2;
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    ctx.restore();
+  }
+
+  drawStorm(ctx, toScreen, scale, storm, full) {
+    if (!storm) return;
+    const cur = storm.currentCircle();
+    const next = storm.nextCircle();
+    const closing = storm.phase === 'closing';
+
+    // everything outside the current circle is storm
+    const c = toScreen(cur.x, cur.z);
+    ctx.save();
+    ctx.strokeStyle = closing ? '#e0b4ff' : '#b57cff';
+    ctx.lineWidth = full ? 3 : 2.5;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, cur.r * scale, 0, TAU);
+    ctx.stroke();
+    // purple wash beyond the edge
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(120, 60, 200, 0.24)';
+    ctx.beginPath();
+    ctx.rect(-9999, -9999, 99999, 99999);
+    ctx.arc(c.x, c.y, cur.r * scale, 0, TAU, true);
+    ctx.fill('evenodd');
+    ctx.restore();
+
+    // the circle it is closing onto
+    if (next) {
+      const n = toScreen(next.x, next.z);
+      ctx.save();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = full ? 2.5 : 2;
+      ctx.setLineDash(full ? [10, 8] : [5, 4]);
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, next.r * scale, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  drawWaypoint(ctx, x, y, r, small, bound) {
+    ctx.save();
+    if (bound != null) {
+      // pin it to the rim if it is off the edge of the minimap
+      const cx = bound / 2, cy = bound / 2;
+      const dx = x - cx, dy = y - cy;
+      const d = Math.hypot(dx, dy), lim = bound / 2 - r - 2;
+      if (d > lim) { x = cx + dx / d * lim; y = cy + dy / d * lim; }
+    }
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - r * 0.8, y - r * 1.6);
+    ctx.lineTo(x + r * 0.8, y - r * 1.6);
+    ctx.closePath();
+    ctx.fillStyle = '#3ad6ff';
+    ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+    ctx.lineWidth = 2;
+    ctx.fill(); ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(x, y - r * 1.75, r * 0.72, 0, TAU);
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+
+  // --------------------------------------------------------------- full map
+  /**
+   * @param view { cx, cz, zoom }  zoom = px per metre
+   */
+  drawFull(ctx, w, h, s, view) {
+    const scale = view.zoom;
+    const toScreen = (x, z) => ({ x: (x - view.cx) * scale + w / 2, y: (z - view.cz) * scale + h / 2 });
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = '#070b12';
+    ctx.fillRect(0, 0, w, h);
+
+    const img = this.image;
+    const tl = toScreen(-WORLD.half, -WORLD.half);
+    const size = WORLD.size * scale;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(img, tl.x, tl.y, size, size);
+
+    // grid
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+    ctx.lineWidth = 1;
+    for (let g = -WORLD.half; g <= WORLD.half; g += 300) {
+      const a = toScreen(g, -WORLD.half), b = toScreen(g, WORLD.half);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      const c = toScreen(-WORLD.half, g), d = toScreen(WORLD.half, g);
+      ctx.beginPath(); ctx.moveTo(c.x, c.y); ctx.lineTo(d.x, d.y); ctx.stroke();
+    }
+    ctx.restore();
+
+    this.drawStorm(ctx, toScreen, scale, s.storm, true);
+
+    // POIs
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.font = '700 15px system-ui, sans-serif';
+    ctx.shadowColor = 'rgba(0,0,0,0.95)';
+    ctx.shadowBlur = 5;
+    for (const p of POIS) {
+      const q = toScreen(p.x, p.z);
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.beginPath(); ctx.arc(q.x, q.y, 4, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(p.name.toUpperCase(), q.x, q.y - 10);
+    }
+    ctx.restore();
+
+    if (this.waypoint) {
+      const q = toScreen(this.waypoint.x, this.waypoint.z);
+      this.drawWaypoint(ctx, q.x, q.y, 9, false, null);
+    }
+
+    // player
+    const p = toScreen(s.player.pos.x, s.player.pos.z);
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(-s.player.yaw);
+    ctx.beginPath();
+    ctx.moveTo(0, 13);
+    ctx.lineTo(-9, -10);
+    ctx.lineTo(0, -4);
+    ctx.lineTo(9, -10);
+    ctx.closePath();
+    ctx.fillStyle = '#ffe14d';
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+    ctx.lineWidth = 2.5;
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+  }
+
+  /** Screen pixel -> world position, for tapping a waypoint onto the map. */
+  screenToWorld(sx, sy, w, h, view) {
+    return { x: (sx - w / 2) / view.zoom + view.cx, z: (sy - h / 2) / view.zoom + view.cz };
+  }
+}
+
+return { worldToImage, GameMap };
 })();
 
 // ===================== src/poi_summering.js =====================
@@ -56981,8 +57543,9 @@ class Actor {
   }
 
   // --- damage ------------------------------------------------------------
-  takeDamage(amount, from, point, isHead = false) {
+  takeDamage(amount, from, point, isHead = false, cause = 'shot') {
     if (!this.alive) return 0;
+    this.lastCause = cause;
     let dmg = amount;
     let shieldPart = 0;
     if (this.shield > 0) {
@@ -57064,8 +57627,9 @@ class Actor {
     const len = inp.length();
     let wishX = 0, wishZ = 0;
     if (len > 0.001) {
+      // forward is +Z at yaw 0, so screen-right is cross(forward, up) = (-cos, sin)
       const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
-      const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
+      const rx = -Math.cos(this.yaw), rz = Math.sin(this.yaw);
       wishX = fx * inp.y + rx * inp.x;
       wishZ = fz * inp.y + rz * inp.x;
       const m = Math.hypot(wishX, wishZ);
@@ -57094,7 +57658,7 @@ class Actor {
     if (this.grounded && this.fallSpeed > 21) {
       const dmg = Math.round((this.fallSpeed - 21) * 3.4);
       this.fallSpeed = 0;
-      if (dmg > 0) this.takeDamage(dmg, null, this.pos, false);
+      if (dmg > 0) this.takeDamage(dmg, null, this.pos, false, 'fall');
     }
     if (this.pos.y < -60) this.takeDamage(1000, null, this.pos);
     this.speed2D = Math.hypot(this.vel.x, this.vel.z);
@@ -57296,6 +57860,27 @@ class Bot extends Actor {
       if (this.nearestLoot()) threatened = false;
     }
 
+    // The storm outranks everything except someone shooting at you from close
+    // range — a bot that stands still looting in the storm just dies.
+    const storm = g.storm;
+    if (storm) {
+      const safe = storm.safeCircle();
+      const d = Math.hypot(this.pos.x - safe.x, this.pos.z - safe.z);
+      const mustRotate = d > safe.r * 0.82;
+      const cornered = threatened && this.distTo(this.target) < 22;
+      if (mustRotate && !cornered) {
+        if (!this.goal || this.goal.type !== 'storm' || this.goalT > 6) {
+          const a = this.rng() * TAU, rr = safe.r * 0.55 * Math.sqrt(this.rng());
+          this.goal = { x: safe.x + Math.cos(a) * rr, z: safe.z + Math.sin(a) * rr, type: 'storm' };
+          this.goalT = 0;
+        }
+        this.state = 'roam';
+        const bw = this.inv.bestWeapon();
+        if (bw >= 0 && this.inv.selected !== bw) this.select(bw);
+        return;
+      }
+    }
+
     if (threatened) {
       this.state = (hurt && canHeal && this.distTo(this.target) > 34) ? 'heal' : 'fight';
     } else if ((canHeal && this.health < 85) || (canShield && this.shield < 50)) {
@@ -57397,6 +57982,11 @@ class Bot extends Actor {
       }
       if (this.goalT > 14) { this.goal = null; this.lootCd = 3.0; return; }
       this.moveTowards(p.pos.x, p.pos.z, dt);
+      return;
+    }
+    if (goal.type === 'storm') {
+      if (d < 8) { this.goal = null; return; }
+      this.moveTowards(goal.x, goal.z, dt, true);
       return;
     }
     if (d < 6) { this.goal = this.pickPoiGoal(); this.goalT = 0; return; }
@@ -57566,7 +58156,12 @@ class Player extends Actor {
   }
 
   handleInput(input, dt, hud) {
-    if (!this.alive) { input.look.x = 0; input.look.y = 0; return; }
+    if (!this.alive || input.mapOpen) {
+      input.look.x = 0; input.look.y = 0;
+      this.moveInput.set(0, 0);
+      this.sprinting = false;
+      return;
+    }
 
     // look
     this.yaw -= input.look.x * this.sens * (this.aiming ? 0.65 : 1);
@@ -57579,7 +58174,7 @@ class Player extends Actor {
     let mx = input.move.x, my = input.move.y;
     if (Math.abs(kb.x) + Math.abs(kb.y) > 0) { mx = kb.x; my = kb.y; }
     this.moveInput.set(mx, my);
-    this.sprinting = input.sprint || kb.sprint;
+    this.sprinting = input.sprint || input.sprintLock || kb.sprint;
     this.crouching = input.crouch;
 
     if (input.jump) { this.wantJump = true; input.jump = false; }
@@ -57640,7 +58235,7 @@ class Player extends Actor {
     const head = _v.set(this.pos.x, this.pos.y + (this.crouching ? 1.22 : 1.58), this.pos.z);
     const cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
     const fx = Math.sin(this.yaw) * cp, fy = sp, fz = Math.cos(this.yaw) * cp;
-    const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
+    const rx = -Math.cos(this.yaw), rz = Math.sin(this.yaw);   // screen-right
 
     // shoulder offset first — indoors it has to give way to the wall
     let sideNow = side;
@@ -57689,6 +58284,8 @@ __m['ui'] = (function () {
 const { RARITY } = __m['models'];
 const { BUILD_TYPES, BUILD_COST } = __m['building'];
 
+function clampNum(v, a, b) { return v < a ? a : v > b ? b : v; }
+
 function el(tag, cls, parent, text) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -57704,9 +58301,9 @@ class HUD {
     this.input = {
       move: { x: 0, y: 0 },
       look: { x: 0, y: 0 },
-      shoot: false, aim: false, sprint: false,
+      shoot: false, aim: false, sprint: false, sprintLock: false,
       jump: false, use: false, reload: false,
-      crouch: false,
+      crouch: false, mapOpen: false,
       buildMode: false, buildType: 'ramp',
       slotRequest: -1, placeRequest: false,
     };
@@ -57714,6 +58311,7 @@ class HUD {
     this.build();
     this.bindKeyboard();
     this.bindPointer();
+    this.bindMap();
   }
 
   build() {
@@ -57730,8 +58328,21 @@ class HUD {
     this.hpFill = el('i', null, this.hpBar);
     this.hpTxt = el('span', null, this.hpBar, '100');
 
-    // ---- top right: match info -------------------------------------------
-    const info = el('div', 'matchinfo', r);
+    // ---- top right: minimap, storm, match info, kill feed ------------------
+    const col = el('div', 'rightcol', r);
+
+    const miniWrap = el('div', 'miniwrap', col);
+    this.miniCanvas = el('canvas', 'minimap', miniWrap);
+    this.miniCanvas.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      this.openMap();
+    });
+    el('div', 'minihint', miniWrap, 'MAP');
+    this.stormBar = el('div', 'stormbar', col);
+    this.stormLabel = el('span', 'slbl', this.stormBar, '');
+    this.stormTime = el('span', 'stime', this.stormBar, '');
+
+    const info = el('div', 'matchinfo', col);
     const row1 = el('div', 'row', info);
     el('span', 'lbl', row1, 'ALIVE');
     this.aliveTxt = el('span', 'val', row1, '100');
@@ -57741,7 +58352,7 @@ class HUD {
     const row3 = el('div', 'row wood', info);
     el('span', 'lbl', row3, 'WOOD');
     this.woodTxt = el('span', 'val', row3, '0');
-    this.feed = el('div', 'killfeed', r);
+    this.feed = el('div', 'killfeed', col);
 
     // ---- crosshair -------------------------------------------------------
     this.cross = el('div', 'crosshair', r);
@@ -57758,6 +58369,24 @@ class HUD {
     this.castLabel = el('span', null, this.castbar, '');
     this.castbar.style.display = 'none';
     this.damageFx = el('div', 'damagefx', r);
+    this.stormFx = el('div', 'stormfx', r);
+    this.stormWarn = el('div', 'stormwarn', r, 'IN THE STORM');
+    this.stormWarn.style.display = 'none';
+
+    // ---- full map screen --------------------------------------------------
+    this.mapScreen = el('div', 'mapscreen', r);
+    this.mapScreen.style.display = 'none';
+    this.mapCanvas = el('canvas', 'mapcanvas', this.mapScreen);
+    const bar = el('div', 'maptopbar', this.mapScreen);
+    this.mapBack = el('button', 'mapbtn back', bar, '\u2190  BACK');
+    el('div', 'maptitle', bar, 'MAP');
+    const tools = el('div', 'maptools', this.mapScreen);
+    this.mapZoomIn = el('button', 'mapbtn round', tools, '+');
+    this.mapZoomOut = el('button', 'mapbtn round', tools, '\u2212');
+    this.mapClear = el('button', 'mapbtn', tools, 'CLEAR PIN');
+    el('div', 'maphint', this.mapScreen,
+      'Drag to pan \u00b7 pinch or scroll to zoom \u00b7 tap the map to drop a waypoint');
+    this.mapView = { cx: 0, cz: 0, zoom: 0.22 };
 
     // ---- joystick --------------------------------------------------------
     this.stickZone = el('div', 'stickzone', r);
@@ -57778,6 +58407,7 @@ class HUD {
     mk('reload', 'RELOAD', 'small');
     mk('use', 'USE', 'small');
     mk('crouch', 'CROUCH', 'small');
+    mk('sprint', 'SPRINT', 'small');
     mk('jump', 'JUMP', 'small');
     mk('aim', 'AIM', 'mid');
     mk('shoot', '', 'big');
@@ -57849,7 +58479,8 @@ class HUD {
         const map = { z: 'wall', v: 'floor', b: 'ramp', n: 'pyramid' };
         if (map[k]) { this.input.buildType = map[k]; this.refreshBuildBar(); }
       }
-      if (k === 'escape') this.game.togglePause && this.game.togglePause();
+      if (k === 'm' || k === 'tab') { e.preventDefault(); this.input.mapOpen ? this.closeMap() : this.openMap(); }
+      if (k === 'escape' && this.input.mapOpen) this.closeMap();
     };
     const up = (e) => this.keys.delete(e.key.toLowerCase());
     window.addEventListener('keydown', down);
@@ -57877,7 +58508,7 @@ class HUD {
     this.lookLast = { x: 0, y: 0 };
 
     const stickStart = (e) => {
-      if (this.stickId !== null) return;
+      if (this.stickId !== null || this.input.mapOpen) return;
       this.stickId = e.pointerId;
       // a touch far from the resting stick picks it up rather than snapping the
       // knob to the rim, so the thumb always starts centred
@@ -57916,7 +58547,8 @@ class HUD {
     // look: dragging anywhere that is not a control
     const lookStart = (e) => {
       if (this.lookId !== null) return;
-      if (e.target.closest && e.target.closest('.btn, .slot, .stickzone, .bpiece, .panel')) return;
+      if (this.input.mapOpen) return;
+      if (e.target.closest && e.target.closest('.btn, .slot, .stickzone, .bpiece, .panel, .mapscreen, .miniwrap')) return;
       this.lookId = e.pointerId;
       this.lookLast.x = e.clientX; this.lookLast.y = e.clientY;
       this.lookMoved = 0;
@@ -57938,7 +58570,7 @@ class HUD {
     // mouse look with pointer lock on desktop
     const canvas = document.getElementById('game-canvas');
     canvas.addEventListener('mousedown', (e) => {
-      if (this.game.state !== 'match') return;
+      if (this.game.state !== 'match' || this.input.mapOpen) return;
       if (document.pointerLockElement !== canvas) canvas.requestPointerLock();
       if (e.button === 0) this.input.shoot = true;
       if (e.button === 2) this.input.aim = true;
@@ -57964,17 +58596,36 @@ class HUD {
     }, { passive: true });
 
     // buttons
+    // Hold buttons capture their pointer, so the flag only clears when the
+    // finger actually lifts.  Ending on pointerleave (as this used to) meant a
+    // thumb drifting a few pixels silently stopped you shooting.
     const hold = (name, key) => {
       const b = this.btn[name];
-      b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); this.input[key] = true; b.classList.add('down'); });
-      const end = (e) => { e.preventDefault(); this.input[key] = false; b.classList.remove('down'); };
+      let id = null;
+      b.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        id = e.pointerId;
+        try { b.setPointerCapture(e.pointerId); } catch (err) { /* not capturable */ }
+        this.input[key] = true;
+        b.classList.add('down');
+      });
+      const end = (e) => {
+        if (id !== null && e.pointerId !== id) return;
+        id = null;
+        this.input[key] = false;
+        b.classList.remove('down');
+      };
       b.addEventListener('pointerup', end);
       b.addEventListener('pointercancel', end);
-      b.addEventListener('pointerleave', end);
+      b.addEventListener('lostpointercapture', end);
     };
     const tap = (name, fn) => {
       const b = this.btn[name];
-      b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); b.classList.add('down'); fn(); });
+      b.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        b.classList.add('down');
+        fn();
+      });
       const end = () => b.classList.remove('down');
       b.addEventListener('pointerup', end);
       b.addEventListener('pointercancel', end);
@@ -57986,7 +58637,156 @@ class HUD {
     tap('reload', () => { this.input.reload = true; });
     tap('use', () => { this.input.use = true; });
     tap('crouch', () => { this.input.crouch = !this.input.crouch; });
+    tap('sprint', () => { this.input.sprintLock = !this.input.sprintLock; });
     tap('build', () => this.toggleBuild());
+  }
+
+  // ------------------------------------------------------------------- map
+  openMap() {
+    if (!this.game.gameMap || this.input.mapOpen) return;
+    this.input.mapOpen = true;
+    this.input.shoot = false;
+    this.input.aim = false;
+    this.input.move.x = 0; this.input.move.y = 0;
+    this.mapScreen.style.display = 'block';
+    if (document.pointerLockElement) document.exitPointerLock();
+    // open framed on the whole island
+    this.resizeMapCanvas();
+    const w = this.mapScreen.clientWidth, h = this.mapScreen.clientHeight;
+    this.mapView.zoom = Math.min(w, h - 70) / 2600;
+    this.mapView.cx = 0; this.mapView.cz = 0;
+    this.drawMap();
+  }
+
+  closeMap() {
+    this.input.mapOpen = false;
+    this.mapScreen.style.display = 'none';
+  }
+
+  resizeMapCanvas() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = this.mapScreen.clientWidth, h = this.mapScreen.clientHeight;
+    this.mapCanvas.width = Math.round(w * dpr);
+    this.mapCanvas.height = Math.round(h * dpr);
+    this.mapCanvas.style.width = w + 'px';
+    this.mapCanvas.style.height = h + 'px';
+    this._mapDpr = dpr;
+  }
+
+  clampMapView() {
+    const half = 1200;
+    const v = this.mapView;
+    v.zoom = clampNum(v.zoom, 0.09, 2.2);
+    v.cx = clampNum(v.cx, -half * 1.1, half * 1.1);
+    v.cz = clampNum(v.cz, -half * 1.1, half * 1.1);
+  }
+
+  drawMap() {
+    if (!this.input.mapOpen || !this.game.gameMap) return;
+    const dpr = this._mapDpr || 1;
+    const ctx = this.mapCanvas.getContext('2d');
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    const w = this.mapCanvas.width / dpr, h = this.mapCanvas.height / dpr;
+    this.game.gameMap.drawFull(ctx, w, h, { player: this.game.player, storm: this.game.storm }, this.mapView);
+    ctx.restore();
+  }
+
+  bindMap() {
+    const pointers = new Map();
+    let dragged = 0, pinchStart = 0, zoomStart = 0;
+
+    const local = (e) => {
+      const r = this.mapCanvas.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    };
+
+    this.mapCanvas.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.mapCanvas.setPointerCapture(e.pointerId);
+      pointers.set(e.pointerId, local(e));
+      dragged = 0;
+      if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        pinchStart = Math.hypot(a.x - b.x, a.y - b.y);
+        zoomStart = this.mapView.zoom;
+      }
+    });
+
+    this.mapCanvas.addEventListener('pointermove', (e) => {
+      if (!pointers.has(e.pointerId)) return;
+      const prev = pointers.get(e.pointerId);
+      const cur = local(e);
+      pointers.set(e.pointerId, cur);
+      if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (pinchStart > 4) {
+          this.mapView.zoom = zoomStart * (d / pinchStart);
+          this.clampMapView();
+        }
+        dragged += 10;
+      } else {
+        const dx = cur.x - prev.x, dy = cur.y - prev.y;
+        dragged += Math.abs(dx) + Math.abs(dy);
+        this.mapView.cx -= dx / this.mapView.zoom;
+        this.mapView.cz -= dy / this.mapView.zoom;
+        this.clampMapView();
+      }
+      this.drawMap();
+    });
+
+    const up = (e) => {
+      if (!pointers.has(e.pointerId)) return;
+      const pt = pointers.get(e.pointerId);
+      const wasSingle = pointers.size === 1;
+      pointers.delete(e.pointerId);
+      // a tap that did not drag drops a waypoint
+      if (wasSingle && dragged < 7) {
+        const dpr = this._mapDpr || 1;
+        const w = this.mapCanvas.width / dpr, h = this.mapCanvas.height / dpr;
+        const p = this.game.gameMap.screenToWorld(pt.x, pt.y, w, h, this.mapView);
+        if (this.game.setWaypoint(p.x, p.z)) this.drawMap();
+      }
+    };
+    this.mapCanvas.addEventListener('pointerup', up);
+    this.mapCanvas.addEventListener('pointercancel', up);
+
+    this.mapCanvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      this.mapView.zoom *= e.deltaY < 0 ? 1.18 : 1 / 1.18;
+      this.clampMapView();
+      this.drawMap();
+    }, { passive: false });
+
+    this.mapBack.addEventListener('click', (e) => { e.stopPropagation(); this.closeMap(); });
+    this.mapZoomIn.addEventListener('click', (e) => {
+      e.stopPropagation(); this.mapView.zoom *= 1.35; this.clampMapView(); this.drawMap();
+    });
+    this.mapZoomOut.addEventListener('click', (e) => {
+      e.stopPropagation(); this.mapView.zoom /= 1.35; this.clampMapView(); this.drawMap();
+    });
+    this.mapClear.addEventListener('click', (e) => {
+      e.stopPropagation(); this.game.clearWaypoint(); this.drawMap();
+    });
+    window.addEventListener('resize', () => {
+      if (this.input.mapOpen) { this.resizeMapCanvas(); this.drawMap(); }
+    });
+  }
+
+  /** Minimap redraw, throttled to 20 fps — it is the priciest bit of HUD. */
+  drawMinimap() {
+    const gm = this.game.gameMap;
+    if (!gm) return;
+    const now = performance.now();
+    if (now - (this._miniAt || 0) < 50) return;
+    this._miniAt = now;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const css = this.miniCanvas.clientWidth || 148;
+    const size = Math.round(css * dpr);
+    if (this.miniCanvas.width !== size) { this.miniCanvas.width = size; this.miniCanvas.height = size; }
+    const ctx = this.miniCanvas.getContext('2d');
+    gm.drawMinimap(ctx, size, { player: this.game.player, storm: this.game.storm, span: 320 });
   }
 
   toggleBuild() {
@@ -58087,6 +58887,24 @@ class HUD {
         this.buildBtns[t].classList.toggle('poor', p.inv.wood < BUILD_COST);
       }
     }
+
+    this.btn.sprint.classList.toggle('on', this.input.sprintLock);
+    this.btn.crouch.classList.toggle('on', this.input.crouch);
+
+    // storm readout + "you are outside the circle" warning
+    const storm = game.storm;
+    if (storm) {
+      const st = storm.statusText();
+      this.stormLabel.textContent = st.label;
+      this.stormTime.textContent = st.time;
+      this.stormBar.classList.toggle('closing', st.closing);
+      const outside = !storm.isInside(p.pos.x, p.pos.z);
+      this.stormFx.classList.toggle('on', outside && p.alive);
+      this.stormWarn.style.display = outside && p.alive ? 'block' : 'none';
+    }
+
+    this.drawMinimap();
+    if (this.input.mapOpen) this.drawMap();
   }
 
   setPrompt(text) {
@@ -58114,6 +58932,8 @@ const { Effects } = __m['effects'];
 const { BuildSystem } = __m['building'];
 const { Chest, Pickup, floorLoot, itemScore, makeWeapon, makeConsumable } = __m['loot'];
 const { RARITY } = __m['models'];
+const { Storm } = __m['storm'];
+const { GameMap } = __m['map'];
 const { makeRng, TAU } = __m['util'];
 
 const _v = new THREE.Vector3();
@@ -58177,7 +58997,9 @@ class Game {
     this.physics = new Physics(heightAt);
 
     await this.yieldFrame(progress, 'Raising terrain', 0.08);
-    this.terrain = createTerrain();
+    const terrain = createTerrain();
+    this.terrain = terrain.mesh;
+    this.mapCanvas = terrain.mapCanvas;
     scene.add(this.terrain);
     scene.add(createWater());
 
@@ -58209,6 +59031,9 @@ class Game {
 
     this.effects = new Effects(scene, this.camera);
     this.build = new BuildSystem(scene, this.physics);
+    this.storm = new Storm(scene, makeRng(this.seed ^ 0x5701));
+    this.gameMap = new GameMap(this.mapCanvas);
+    this.makeWaypointBeam();
 
     await this.yieldFrame(progress, 'Dropping 100 players', 0.9);
     this.spawnActors();
@@ -58299,6 +59124,42 @@ class Game {
     region(0, -2, 46, -2.9, 16);         // the lab hallway and rooms
     region(-43, 0, 9, -2.9, 4);          // control room
     region(43, 1, 9, -2.9, 4);           // resting unit
+  }
+
+  makeWaypointBeam() {
+    const g = new THREE.Group();
+    const beam = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.5, 1.5, 260, 12, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0x3ad6ff, transparent: true, opacity: 0.22,
+        side: THREE.DoubleSide, depthWrite: false, fog: false })
+    );
+    beam.position.y = 130;
+    g.add(beam);
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(2.4, 3.4, 20),
+      new THREE.MeshBasicMaterial({ color: 0x3ad6ff, transparent: true, opacity: 0.75,
+        side: THREE.DoubleSide, depthWrite: false })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.4;
+    g.add(ring);
+    g.visible = false;
+    this.scene.add(g);
+    this.waypointBeam = g;
+  }
+
+  setWaypoint(x, z) {
+    const wp = this.gameMap.setWaypoint(x, z);
+    if (!wp) return null;
+    const y = this.physics.floorAt(x, z, 400, 0.4);
+    this.waypointBeam.position.set(x, Math.max(y, -20), z);
+    this.waypointBeam.visible = true;
+    return wp;
+  }
+
+  clearWaypoint() {
+    this.gameMap.clearWaypoint();
+    this.waypointBeam.visible = false;
   }
 
   spawnPickup(item, x, y, z, vx = 0, vy = 0, vz = 0) {
@@ -58549,8 +59410,13 @@ class Game {
     this.aliveCount--;
     this.eliminated++;
     if (killer && killer !== actor) killer.kills++;
-    const who = killer ? killer.name : 'the storm of gravity';
-    this.hud.killFeed(`${who} eliminated ${actor.name}`, killer === this.player || actor === this.player);
+    // Storm and fall deaths are constant background noise with 99 bots, so they
+    // only reach the feed when they involve you.
+    const mine = killer === this.player || actor === this.player;
+    if (killer || mine) {
+      const who = killer ? killer.name : (actor.lastCause === 'storm' ? 'The storm' : 'The fall');
+      this.hud.killFeed(`${who} eliminated ${actor.name}`, mine);
+    }
 
     // drop everything they were carrying
     let i = 0;
@@ -58599,6 +59465,7 @@ class Game {
       }
     }
 
+    this.storm.update(dt, this.actors);
     for (const c of this.chests) c.update(dt);
     for (const d of this.doors) d.update(dt);
     for (let i = this.pickups.length - 1; i >= 0; i--) {
@@ -58787,9 +59654,45 @@ class Lobby {
     top.innerHTML = `<div class="logo">FORTNITE</div><div class="sub">Battle Royale &middot; 100 Players</div>`;
     r.appendChild(top);
 
+    // ---- screen tabs: only one panel is on screen at a time ---------------
+    const nav = document.createElement('div');
+    nav.className = 'screentabs';
+    r.appendChild(nav);
+    this.screens = {};
+    this.screenTabs = {};
+    for (const [id, label] of [['lobby', 'LOBBY'], ['locker', 'LOCKER']]) {
+      const b = document.createElement('button');
+      b.className = 'screentab';
+      b.textContent = label;
+      b.addEventListener('click', () => this.showScreen(id));
+      nav.appendChild(b);
+      this.screenTabs[id] = b;
+    }
+
+    // ---- LOBBY panel -------------------------------------------------------
+    const lobbyPanel = document.createElement('div');
+    lobbyPanel.className = 'panel screen lobbypanel';
+    lobbyPanel.innerHTML = `
+      <div class="lockerhead"><h2>BATTLE ROYALE</h2><p>Solo &middot; 100 players &middot; last one standing</p></div>
+      <div class="infogrid">
+        <div class="infocell"><span>ISLAND</span><b>3 biomes</b></div>
+        <div class="infocell"><span>POIs</span><b>3 named</b></div>
+        <div class="infocell"><span>STORM</span><b>Closes every 2 min</b></div>
+        <div class="infocell"><span>LOOT</span><b>3 guns &middot; 5 rarities</b></div>
+      </div>
+      <ul class="tips">
+        <li>Break wooden props with your pickaxe for wood &mdash; 25 per build piece.</li>
+        <li>Tap the minimap to open the full map and drop a waypoint.</li>
+        <li>Stay inside the circle. The storm hurts more every zone.</li>
+      </ul>`;
+    r.appendChild(lobbyPanel);
+    this.screens.lobby = lobbyPanel;
+
+    // ---- LOCKER panel ------------------------------------------------------
     const panel = document.createElement('div');
-    panel.className = 'panel locker';
+    panel.className = 'panel screen locker';
     r.appendChild(panel);
+    this.screens.locker = panel;
     this.panel = panel;
 
     const head = document.createElement('div');
@@ -58824,6 +59727,7 @@ class Lobby {
     this.grid = grid;
     this.detail = detail;
     this.renderTabs();
+    this.showScreen('lobby');
 
     const foot = document.createElement('div');
     foot.className = 'lobbyfoot';
@@ -58853,13 +59757,22 @@ class Lobby {
     // drag to spin the character
     let dragging = false, lastX = 0;
     const dom = this.renderer.domElement;
-    const down = (e) => { if (e.target.closest && e.target.closest('.panel, .lobbyfoot')) return; dragging = true; lastX = e.clientX; };
+    const down = (e) => { if (e.target.closest && e.target.closest('.panel, .lobbyfoot, .screentabs')) return; dragging = true; lastX = e.clientX; };
     const move = (e) => { if (!dragging) return; this.targetTurn -= (e.clientX - lastX) * 0.01; lastX = e.clientX; };
     const up = () => { dragging = false; };
     dom.addEventListener('pointerdown', down);
     r.addEventListener('pointerdown', down);
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+  }
+
+  /** Only one of the lobby screens is visible at a time. */
+  showScreen(id) {
+    this.activeScreen = id;
+    for (const key of Object.keys(this.screens)) {
+      this.screens[key].style.display = key === id ? 'flex' : 'none';
+      this.screenTabs[key].classList.toggle('on', key === id);
+    }
   }
 
   renderTabs() {

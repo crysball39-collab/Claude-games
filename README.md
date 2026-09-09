@@ -39,7 +39,7 @@ node build.mjs
 | --- | --- | --- |
 | Move | `W A S D` | Joystick, bottom left |
 | Look | Mouse (click to lock the pointer) | Drag anywhere on the right |
-| Sprint | `Shift` | Push the joystick to the edge (it turns gold) |
+| Sprint | `Shift` | **SPRINT** (toggle), or push the joystick to the edge (it turns gold) |
 | Jump | `Space` | **JUMP** |
 | Crouch | `C` (toggle) | **CROUCH** |
 | Shoot / swing / drink | Left mouse | **Shoot** (big button) |
@@ -50,6 +50,8 @@ node build.mjs
 | Pick a build piece | `Z` wall, `V` floor, `B` ramp, `N` pyramid | Build bar |
 | Slots 1–5 / pickaxe | `1`–`5`, `6` or `X` | Tap the slot |
 | Cycle slots | Mouse wheel | — |
+| Open the map | `M` or `Tab` | Tap the minimap |
+| Close the map | `Esc`, `M` | **BACK** |
 
 The 6th slot is permanently the pickaxe. Slots 1–5 hold weapons and items.
 
@@ -59,6 +61,47 @@ under your thumb so you always start centred, and drops back to its resting
 spot when you let go.
 
 ---
+
+## The storm
+
+The circle holds for **two minutes**, then takes **one minute** to close onto a
+smaller circle chosen inside it, and repeats through nine zones down to a final
+20 m circle. Damage outside climbs with every zone, from 1/s at the start to
+15/s at the end.
+
+* The **safe circle for the next close-in** is drawn as a white dashed ring on
+  both the minimap and the map, as soon as it is chosen.
+* Standing outside, a **white line runs from you to the safe circle** on the
+  minimap, the screen edges glow purple and an IN THE STORM warning appears.
+* The readout under the minimap counts down to the next close-in and switches
+  to a pulsing STORM CLOSING while it moves.
+* Bots rotate too. Getting caught out is the most common way they die, which is
+  what finally makes a 100-player match converge on a winner.
+
+## Map and waypoints
+
+The **minimap** sits top right — north-up, with POI names, the storm circles and
+your heading. Tap it (or press `M`) to open the **full map**:
+
+* Drag to pan, pinch or scroll to zoom, or use the +/− buttons.
+* **Tap anywhere to drop a waypoint.** It shows as a pin on both maps and as a
+  cyan beam in the world, so you can see where you were heading. CLEAR PIN
+  removes it.
+* BACK returns to the game. You cannot move or shoot while the map is open.
+
+The map image is generated from the terrain's own vertex data at load, so it is
+the actual island rather than an approximation of it.
+
+---
+
+## Lobby
+
+Your character idles on a lit stage in the background. The two screens sit
+behind tabs, so only one is on show at a time:
+
+* **LOBBY** — match details and a few reminders.
+* **LOCKER** — outfit, back bling and pickaxe (defaults only), each with its own
+  sub-tab. Your picks and your name are remembered.
 
 ## The island
 
@@ -160,7 +203,9 @@ style.css             lobby, HUD and overlays
 vendor/three.module.js
 src/
   main.js             boot, lobby → match → results
-  lobby.js            lobby scene + locker
+  lobby.js            lobby scene, LOBBY/LOCKER tabs and the locker
+  storm.js            closing circle, damage and the storm wall
+  map.js              island image, minimap and full-screen map
   game.js             match runtime: world, actors, bullets, loot, loop
   world.js            heightfield, biomes, terrain mesh, harvestable nature
   physics.js          collider grid, capsule movement, analytic raycasts

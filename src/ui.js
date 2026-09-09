@@ -3,6 +3,8 @@
 import { RARITY } from './models.js';
 import { BUILD_TYPES, BUILD_COST } from './building.js';
 
+function clampNum(v, a, b) { return v < a ? a : v > b ? b : v; }
+
 function el(tag, cls, parent, text) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -18,9 +20,9 @@ export class HUD {
     this.input = {
       move: { x: 0, y: 0 },
       look: { x: 0, y: 0 },
-      shoot: false, aim: false, sprint: false,
+      shoot: false, aim: false, sprint: false, sprintLock: false,
       jump: false, use: false, reload: false,
-      crouch: false,
+      crouch: false, mapOpen: false,
       buildMode: false, buildType: 'ramp',
       slotRequest: -1, placeRequest: false,
     };
@@ -28,6 +30,7 @@ export class HUD {
     this.build();
     this.bindKeyboard();
     this.bindPointer();
+    this.bindMap();
   }
 
   build() {
@@ -44,8 +47,21 @@ export class HUD {
     this.hpFill = el('i', null, this.hpBar);
     this.hpTxt = el('span', null, this.hpBar, '100');
 
-    // ---- top right: match info -------------------------------------------
-    const info = el('div', 'matchinfo', r);
+    // ---- top right: minimap, storm, match info, kill feed ------------------
+    const col = el('div', 'rightcol', r);
+
+    const miniWrap = el('div', 'miniwrap', col);
+    this.miniCanvas = el('canvas', 'minimap', miniWrap);
+    this.miniCanvas.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      this.openMap();
+    });
+    el('div', 'minihint', miniWrap, 'MAP');
+    this.stormBar = el('div', 'stormbar', col);
+    this.stormLabel = el('span', 'slbl', this.stormBar, '');
+    this.stormTime = el('span', 'stime', this.stormBar, '');
+
+    const info = el('div', 'matchinfo', col);
     const row1 = el('div', 'row', info);
     el('span', 'lbl', row1, 'ALIVE');
     this.aliveTxt = el('span', 'val', row1, '100');
@@ -55,7 +71,7 @@ export class HUD {
     const row3 = el('div', 'row wood', info);
     el('span', 'lbl', row3, 'WOOD');
     this.woodTxt = el('span', 'val', row3, '0');
-    this.feed = el('div', 'killfeed', r);
+    this.feed = el('div', 'killfeed', col);
 
     // ---- crosshair -------------------------------------------------------
     this.cross = el('div', 'crosshair', r);
@@ -72,6 +88,24 @@ export class HUD {
     this.castLabel = el('span', null, this.castbar, '');
     this.castbar.style.display = 'none';
     this.damageFx = el('div', 'damagefx', r);
+    this.stormFx = el('div', 'stormfx', r);
+    this.stormWarn = el('div', 'stormwarn', r, 'IN THE STORM');
+    this.stormWarn.style.display = 'none';
+
+    // ---- full map screen --------------------------------------------------
+    this.mapScreen = el('div', 'mapscreen', r);
+    this.mapScreen.style.display = 'none';
+    this.mapCanvas = el('canvas', 'mapcanvas', this.mapScreen);
+    const bar = el('div', 'maptopbar', this.mapScreen);
+    this.mapBack = el('button', 'mapbtn back', bar, '\u2190  BACK');
+    el('div', 'maptitle', bar, 'MAP');
+    const tools = el('div', 'maptools', this.mapScreen);
+    this.mapZoomIn = el('button', 'mapbtn round', tools, '+');
+    this.mapZoomOut = el('button', 'mapbtn round', tools, '\u2212');
+    this.mapClear = el('button', 'mapbtn', tools, 'CLEAR PIN');
+    el('div', 'maphint', this.mapScreen,
+      'Drag to pan \u00b7 pinch or scroll to zoom \u00b7 tap the map to drop a waypoint');
+    this.mapView = { cx: 0, cz: 0, zoom: 0.22 };
 
     // ---- joystick --------------------------------------------------------
     this.stickZone = el('div', 'stickzone', r);
@@ -92,6 +126,7 @@ export class HUD {
     mk('reload', 'RELOAD', 'small');
     mk('use', 'USE', 'small');
     mk('crouch', 'CROUCH', 'small');
+    mk('sprint', 'SPRINT', 'small');
     mk('jump', 'JUMP', 'small');
     mk('aim', 'AIM', 'mid');
     mk('shoot', '', 'big');
@@ -163,7 +198,8 @@ export class HUD {
         const map = { z: 'wall', v: 'floor', b: 'ramp', n: 'pyramid' };
         if (map[k]) { this.input.buildType = map[k]; this.refreshBuildBar(); }
       }
-      if (k === 'escape') this.game.togglePause && this.game.togglePause();
+      if (k === 'm' || k === 'tab') { e.preventDefault(); this.input.mapOpen ? this.closeMap() : this.openMap(); }
+      if (k === 'escape' && this.input.mapOpen) this.closeMap();
     };
     const up = (e) => this.keys.delete(e.key.toLowerCase());
     window.addEventListener('keydown', down);
@@ -191,7 +227,7 @@ export class HUD {
     this.lookLast = { x: 0, y: 0 };
 
     const stickStart = (e) => {
-      if (this.stickId !== null) return;
+      if (this.stickId !== null || this.input.mapOpen) return;
       this.stickId = e.pointerId;
       // a touch far from the resting stick picks it up rather than snapping the
       // knob to the rim, so the thumb always starts centred
@@ -230,7 +266,8 @@ export class HUD {
     // look: dragging anywhere that is not a control
     const lookStart = (e) => {
       if (this.lookId !== null) return;
-      if (e.target.closest && e.target.closest('.btn, .slot, .stickzone, .bpiece, .panel')) return;
+      if (this.input.mapOpen) return;
+      if (e.target.closest && e.target.closest('.btn, .slot, .stickzone, .bpiece, .panel, .mapscreen, .miniwrap')) return;
       this.lookId = e.pointerId;
       this.lookLast.x = e.clientX; this.lookLast.y = e.clientY;
       this.lookMoved = 0;
@@ -252,7 +289,7 @@ export class HUD {
     // mouse look with pointer lock on desktop
     const canvas = document.getElementById('game-canvas');
     canvas.addEventListener('mousedown', (e) => {
-      if (this.game.state !== 'match') return;
+      if (this.game.state !== 'match' || this.input.mapOpen) return;
       if (document.pointerLockElement !== canvas) canvas.requestPointerLock();
       if (e.button === 0) this.input.shoot = true;
       if (e.button === 2) this.input.aim = true;
@@ -278,17 +315,36 @@ export class HUD {
     }, { passive: true });
 
     // buttons
+    // Hold buttons capture their pointer, so the flag only clears when the
+    // finger actually lifts.  Ending on pointerleave (as this used to) meant a
+    // thumb drifting a few pixels silently stopped you shooting.
     const hold = (name, key) => {
       const b = this.btn[name];
-      b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); this.input[key] = true; b.classList.add('down'); });
-      const end = (e) => { e.preventDefault(); this.input[key] = false; b.classList.remove('down'); };
+      let id = null;
+      b.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        id = e.pointerId;
+        try { b.setPointerCapture(e.pointerId); } catch (err) { /* not capturable */ }
+        this.input[key] = true;
+        b.classList.add('down');
+      });
+      const end = (e) => {
+        if (id !== null && e.pointerId !== id) return;
+        id = null;
+        this.input[key] = false;
+        b.classList.remove('down');
+      };
       b.addEventListener('pointerup', end);
       b.addEventListener('pointercancel', end);
-      b.addEventListener('pointerleave', end);
+      b.addEventListener('lostpointercapture', end);
     };
     const tap = (name, fn) => {
       const b = this.btn[name];
-      b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); b.classList.add('down'); fn(); });
+      b.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        b.classList.add('down');
+        fn();
+      });
       const end = () => b.classList.remove('down');
       b.addEventListener('pointerup', end);
       b.addEventListener('pointercancel', end);
@@ -300,7 +356,156 @@ export class HUD {
     tap('reload', () => { this.input.reload = true; });
     tap('use', () => { this.input.use = true; });
     tap('crouch', () => { this.input.crouch = !this.input.crouch; });
+    tap('sprint', () => { this.input.sprintLock = !this.input.sprintLock; });
     tap('build', () => this.toggleBuild());
+  }
+
+  // ------------------------------------------------------------------- map
+  openMap() {
+    if (!this.game.gameMap || this.input.mapOpen) return;
+    this.input.mapOpen = true;
+    this.input.shoot = false;
+    this.input.aim = false;
+    this.input.move.x = 0; this.input.move.y = 0;
+    this.mapScreen.style.display = 'block';
+    if (document.pointerLockElement) document.exitPointerLock();
+    // open framed on the whole island
+    this.resizeMapCanvas();
+    const w = this.mapScreen.clientWidth, h = this.mapScreen.clientHeight;
+    this.mapView.zoom = Math.min(w, h - 70) / 2600;
+    this.mapView.cx = 0; this.mapView.cz = 0;
+    this.drawMap();
+  }
+
+  closeMap() {
+    this.input.mapOpen = false;
+    this.mapScreen.style.display = 'none';
+  }
+
+  resizeMapCanvas() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = this.mapScreen.clientWidth, h = this.mapScreen.clientHeight;
+    this.mapCanvas.width = Math.round(w * dpr);
+    this.mapCanvas.height = Math.round(h * dpr);
+    this.mapCanvas.style.width = w + 'px';
+    this.mapCanvas.style.height = h + 'px';
+    this._mapDpr = dpr;
+  }
+
+  clampMapView() {
+    const half = 1200;
+    const v = this.mapView;
+    v.zoom = clampNum(v.zoom, 0.09, 2.2);
+    v.cx = clampNum(v.cx, -half * 1.1, half * 1.1);
+    v.cz = clampNum(v.cz, -half * 1.1, half * 1.1);
+  }
+
+  drawMap() {
+    if (!this.input.mapOpen || !this.game.gameMap) return;
+    const dpr = this._mapDpr || 1;
+    const ctx = this.mapCanvas.getContext('2d');
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    const w = this.mapCanvas.width / dpr, h = this.mapCanvas.height / dpr;
+    this.game.gameMap.drawFull(ctx, w, h, { player: this.game.player, storm: this.game.storm }, this.mapView);
+    ctx.restore();
+  }
+
+  bindMap() {
+    const pointers = new Map();
+    let dragged = 0, pinchStart = 0, zoomStart = 0;
+
+    const local = (e) => {
+      const r = this.mapCanvas.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    };
+
+    this.mapCanvas.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.mapCanvas.setPointerCapture(e.pointerId);
+      pointers.set(e.pointerId, local(e));
+      dragged = 0;
+      if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        pinchStart = Math.hypot(a.x - b.x, a.y - b.y);
+        zoomStart = this.mapView.zoom;
+      }
+    });
+
+    this.mapCanvas.addEventListener('pointermove', (e) => {
+      if (!pointers.has(e.pointerId)) return;
+      const prev = pointers.get(e.pointerId);
+      const cur = local(e);
+      pointers.set(e.pointerId, cur);
+      if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (pinchStart > 4) {
+          this.mapView.zoom = zoomStart * (d / pinchStart);
+          this.clampMapView();
+        }
+        dragged += 10;
+      } else {
+        const dx = cur.x - prev.x, dy = cur.y - prev.y;
+        dragged += Math.abs(dx) + Math.abs(dy);
+        this.mapView.cx -= dx / this.mapView.zoom;
+        this.mapView.cz -= dy / this.mapView.zoom;
+        this.clampMapView();
+      }
+      this.drawMap();
+    });
+
+    const up = (e) => {
+      if (!pointers.has(e.pointerId)) return;
+      const pt = pointers.get(e.pointerId);
+      const wasSingle = pointers.size === 1;
+      pointers.delete(e.pointerId);
+      // a tap that did not drag drops a waypoint
+      if (wasSingle && dragged < 7) {
+        const dpr = this._mapDpr || 1;
+        const w = this.mapCanvas.width / dpr, h = this.mapCanvas.height / dpr;
+        const p = this.game.gameMap.screenToWorld(pt.x, pt.y, w, h, this.mapView);
+        if (this.game.setWaypoint(p.x, p.z)) this.drawMap();
+      }
+    };
+    this.mapCanvas.addEventListener('pointerup', up);
+    this.mapCanvas.addEventListener('pointercancel', up);
+
+    this.mapCanvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      this.mapView.zoom *= e.deltaY < 0 ? 1.18 : 1 / 1.18;
+      this.clampMapView();
+      this.drawMap();
+    }, { passive: false });
+
+    this.mapBack.addEventListener('click', (e) => { e.stopPropagation(); this.closeMap(); });
+    this.mapZoomIn.addEventListener('click', (e) => {
+      e.stopPropagation(); this.mapView.zoom *= 1.35; this.clampMapView(); this.drawMap();
+    });
+    this.mapZoomOut.addEventListener('click', (e) => {
+      e.stopPropagation(); this.mapView.zoom /= 1.35; this.clampMapView(); this.drawMap();
+    });
+    this.mapClear.addEventListener('click', (e) => {
+      e.stopPropagation(); this.game.clearWaypoint(); this.drawMap();
+    });
+    window.addEventListener('resize', () => {
+      if (this.input.mapOpen) { this.resizeMapCanvas(); this.drawMap(); }
+    });
+  }
+
+  /** Minimap redraw, throttled to 20 fps — it is the priciest bit of HUD. */
+  drawMinimap() {
+    const gm = this.game.gameMap;
+    if (!gm) return;
+    const now = performance.now();
+    if (now - (this._miniAt || 0) < 50) return;
+    this._miniAt = now;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const css = this.miniCanvas.clientWidth || 148;
+    const size = Math.round(css * dpr);
+    if (this.miniCanvas.width !== size) { this.miniCanvas.width = size; this.miniCanvas.height = size; }
+    const ctx = this.miniCanvas.getContext('2d');
+    gm.drawMinimap(ctx, size, { player: this.game.player, storm: this.game.storm, span: 320 });
   }
 
   toggleBuild() {
@@ -401,6 +606,24 @@ export class HUD {
         this.buildBtns[t].classList.toggle('poor', p.inv.wood < BUILD_COST);
       }
     }
+
+    this.btn.sprint.classList.toggle('on', this.input.sprintLock);
+    this.btn.crouch.classList.toggle('on', this.input.crouch);
+
+    // storm readout + "you are outside the circle" warning
+    const storm = game.storm;
+    if (storm) {
+      const st = storm.statusText();
+      this.stormLabel.textContent = st.label;
+      this.stormTime.textContent = st.time;
+      this.stormBar.classList.toggle('closing', st.closing);
+      const outside = !storm.isInside(p.pos.x, p.pos.z);
+      this.stormFx.classList.toggle('on', outside && p.alive);
+      this.stormWarn.style.display = outside && p.alive ? 'block' : 'none';
+    }
+
+    this.drawMinimap();
+    if (this.input.mapOpen) this.drawMap();
   }
 
   setPrompt(text) {

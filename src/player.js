@@ -21,7 +21,12 @@ export class Player extends Actor {
   }
 
   handleInput(input, dt, hud) {
-    if (!this.alive) { input.look.x = 0; input.look.y = 0; return; }
+    if (!this.alive || input.mapOpen) {
+      input.look.x = 0; input.look.y = 0;
+      this.moveInput.set(0, 0);
+      this.sprinting = false;
+      return;
+    }
 
     // look
     this.yaw -= input.look.x * this.sens * (this.aiming ? 0.65 : 1);
@@ -34,7 +39,7 @@ export class Player extends Actor {
     let mx = input.move.x, my = input.move.y;
     if (Math.abs(kb.x) + Math.abs(kb.y) > 0) { mx = kb.x; my = kb.y; }
     this.moveInput.set(mx, my);
-    this.sprinting = input.sprint || kb.sprint;
+    this.sprinting = input.sprint || input.sprintLock || kb.sprint;
     this.crouching = input.crouch;
 
     if (input.jump) { this.wantJump = true; input.jump = false; }
@@ -95,7 +100,7 @@ export class Player extends Actor {
     const head = _v.set(this.pos.x, this.pos.y + (this.crouching ? 1.22 : 1.58), this.pos.z);
     const cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
     const fx = Math.sin(this.yaw) * cp, fy = sp, fz = Math.cos(this.yaw) * cp;
-    const rx = Math.cos(this.yaw), rz = -Math.sin(this.yaw);
+    const rx = -Math.cos(this.yaw), rz = Math.sin(this.yaw);   // screen-right
 
     // shoulder offset first — indoors it has to give way to the wall
     let sideNow = side;
