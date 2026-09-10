@@ -16,7 +16,7 @@ const read = (p) => readFileSync(join(ROOT, p), 'utf8');
 // Dependency order: every module only imports ones already defined above it.
 const MODULES = [
   'util', 'models', 'physics', 'character', 'props', 'world', 'loot',
-  'effects', 'building', 'storm', 'map', 'poi_summering', 'poi_snowy',
+  'effects', 'building', 'storm', 'map', 'bus', 'poi_summering', 'poi_snowy',
   'poi_pumped', 'actor', 'ai', 'player', 'ui', 'game', 'lobby', 'main',
 ];
 

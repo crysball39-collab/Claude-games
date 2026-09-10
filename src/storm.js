@@ -16,6 +16,7 @@ const DPS = [1, 1, 2, 3, 5, 7, 10, 12, 15];
 export class Storm {
   constructor(scene, rng) {
     this.rng = rng;
+    this.active = false;         // dormant until the battle bus has gone
     this.zone = 0;
     this.phase = 'hold';          // 'hold' | 'closing'
     this.t = HOLD_TIME;
@@ -45,6 +46,16 @@ export class Storm {
     this.edge.frustumCulled = false;
     scene.add(this.edge);
     this.syncMesh();
+    this.mesh.visible = false;
+    this.edge.visible = false;
+  }
+
+  /** Called the moment the bus leaves the island. */
+  activate() {
+    this.active = true;
+    this.t = HOLD_TIME;
+    this.mesh.visible = true;
+    this.edge.visible = true;
   }
 
   get isFinal() { return this.zone >= RADII.length - 1; }
@@ -89,11 +100,13 @@ export class Storm {
   }
 
   isInside(x, z, pad = 0) {
+    if (!this.active) return true;
     const dx = x - this.cx, dz = z - this.cz;
     return dx * dx + dz * dz <= (this.radius + pad) * (this.radius + pad);
   }
 
   update(dt, actors) {
+    if (!this.active) return;
     this.t -= dt;
     if (this.phase === 'hold') {
       if (this.t <= 0 && !this.isFinal) {
@@ -135,6 +148,7 @@ export class Storm {
 
   /** "1:23" style countdown for the HUD. */
   statusText() {
+    if (!this.active) return { label: 'STORM', time: '--:--', closing: false };
     const t = Math.max(0, Math.ceil(this.t));
     const m = Math.floor(t / 60), s = t % 60;
     const clock = `${m}:${s < 10 ? '0' : ''}${s}`;

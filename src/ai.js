@@ -44,26 +44,42 @@ export class Bot extends Actor {
     this.lootCd = 0;
     this.aiSpreadMul = lerp(1.9, 0.85, this.skill);
     this.reactT = lerp(0.55, 0.16, this.skill);
-    this.viewRange = lerp(58, 96, this.skill);
+    // --- senses ---
+    this.sightRange = lerp(58, 96, this.skill);   // clear line of sight, standing target
     this.fov = Math.cos(lerp(1.05, 1.35, this.skill));
+    this.hearRange = lerp(48, 88, this.skill);    // scaled per noise by its loudness
+    this.noise = null;                            // last thing heard: { x, z, t, kind }
+    this.investigateT = 0;
     this.desiredRange = lerp(9, 24, this.rng());
     this.wanderAngle = this.rng() * TAU;
     this.lastSawT = -99;
   }
 
   // ---------------------------------------------------------------- senses
+  /**
+   * How far this bot can pick `a` out: crouching hides you, sprinting and
+   * shooting give you away.
+   */
+  spotRange(a) {
+    let r = this.sightRange;
+    if (a.crouching) r *= 0.62;
+    if (a.speed2D > 6) r *= 1.2;
+    if (a.muzzleT > 0 || this.game.time - (a.lastFiredAt || -99) < 1.2) r *= 1.35;
+    return r;
+  }
+
   scanForEnemies() {
     const g = this.game;
-    let best = null, bestD = this.viewRange;
+    let best = null, bestD = Infinity;
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
     const candidates = [];
     for (const a of g.actors) {
       if (a === this || !a.alive) continue;
       const dx = a.pos.x - this.pos.x, dz = a.pos.z - this.pos.z;
       const d = Math.hypot(dx, dz);
-      if (d > this.viewRange) continue;
+      if (d > this.spotRange(a)) continue;
       const dot = (dx * fx + dz * fz) / (d || 1);
-      // wide awareness when close, cone at distance
+      // wide awareness up close, a cone at distance
       if (d > 9 && dot < this.fov) continue;
       candidates.push({ a, d });
     }
@@ -76,6 +92,25 @@ export class Bot extends Actor {
       if (d < bestD) { bestD = d; best = a; }
     }
     return best;
+  }
+
+  /**
+   * Called by the game when something makes a sound nearby.  Loud things carry
+   * further; a bot only keeps the closest recent noise.
+   */
+  hearNoise(x, z, kind, source, dist) {
+    if (!this.alive || source === this) return;
+    const t = this.game.time;
+    // keep whichever is closer, unless the old one has gone stale
+    if (this.noise && t - this.noise.t < 4 && this.noise.dist < dist) return;
+    this.noise = { x, z, kind, dist, t };
+    // gunfire close by snaps you round to look at it
+    if (kind === 'shot' && dist < 45) this.investigateT = Math.max(this.investigateT, 5);
+    else this.investigateT = Math.max(this.investigateT, 3);
+  }
+
+  get heardRecently() {
+    return this.noise && this.game.time - this.noise.t < 6;
   }
 
   nearestLoot() {
@@ -96,7 +131,7 @@ export class Bot extends Actor {
       let want = false;
       if (it.kind === 'weapon') want = wantWeapon || itemScore(it) > myBest + 6;
       else if (it.id === 'bandage') want = this.health < 100 || this.inv.findItem('bandage') < 0;
-      else want = this.shield < 100 || this.inv.findItem('shield') < 0;
+      else want = this.shield < 100 || this.inv.findShield(this.shield) < 0;
       if (this.inv.firstEmpty() < 0 && !want) continue;
       if (!want) continue;
       bestD = d;
@@ -126,9 +161,23 @@ export class Bot extends Actor {
     }
     if (this.target && this.target.alive) this.lastSawT = g.time;
 
+    // Nothing in sight but something was heard: face it and go take a look.
+    if (!enemy && this.heardRecently && this.investigateT > 0) {
+      const n = this.noise;
+      const d = Math.hypot(n.x - this.pos.x, n.z - this.pos.z);
+      if (d > 4) {
+        this.lookAtNoise = { x: n.x, z: n.z };
+        if (n.kind === 'shot' && d < this.hearRange) {
+          this.state = 'investigate';
+          this.goal = { x: n.x, z: n.z, type: 'noise' };
+          return;
+        }
+      }
+    }
+
     const hurt = this.health < 55;
     const canHeal = this.inv.findItem('bandage') >= 0 && this.health < 100;
-    const canShield = this.inv.findItem('shield') >= 0 && this.shield < 100;
+    const canShield = this.inv.findShield(this.shield) >= 0 && this.shield < 100;
     let threatened = this.target && this.target.alive;
 
     // an unarmed bot has nothing to fight with: unless someone is right on top
@@ -193,6 +242,16 @@ export class Bot extends Actor {
       if (lod < 2) this.updateVisual(dt);
       return;
     }
+    // Before the drop there is nothing to fight over: mill about the spawn
+    // island, ride the bus, then steer for the chosen landing spot.
+    if (this.mode === 'bus') { this.updateVisual(dt); return; }
+    if (this.mode === 'dive') {
+      this.updateTimers(dt);
+      this.updatePhysics(dt);
+      if (lod < 2) this.updateVisual(dt);
+      return;
+    }
+    if (this.game.phase !== 'live') { this.spawnIdle(dt, lod); return; }
     this.goalT += dt;
     this.jumpCd -= dt; this.doorCd -= dt;
     if (this.lootCd > 0) this.lootCd -= dt;
@@ -204,6 +263,7 @@ export class Bot extends Actor {
     this.crouching = false;
     this.aiming = false;
 
+    if (this.investigateT > 0) this.investigateT -= dt;
     if (this.state === 'fight' && this.target && this.target.alive) this.doFight(dt);
     else if (this.state === 'heal') this.doHeal(dt);
     else this.doTravel(dt);
@@ -213,6 +273,29 @@ export class Bot extends Actor {
     this.updatePhysics(dt);
     if (lod < 2) this.updateVisual(dt);
     else this.root.position.copy(this.pos);
+  }
+
+  /** Aimless wandering while the lobby waits for the bus. */
+  spawnIdle(dt, lod) {
+    this.moveInput.set(0, 0);
+    this.sprinting = false;
+    this.crouching = false;
+    this.aiming = false;
+    this.idleT = (this.idleT || 0) - dt;
+    if (this.idleT <= 0 || !this.idleGoal) {
+      this.idleT = 2 + this.rng() * 4;
+      const S = this.game.spawnArea;
+      this.idleGoal = {
+        x: S.x + (this.rng() * 2 - 1) * (S.half - 8),
+        z: S.z + (this.rng() * 2 - 1) * (S.half - 8),
+      };
+    }
+    this.moveTowards(this.idleGoal.x, this.idleGoal.z, dt, false);
+    if (this.rng() < 0.004 && this.grounded) this.wantJump = true;
+    this.avoidAndUnstick(dt);
+    this.updateTimers(dt);
+    this.updatePhysics(dt);
+    if (lod < 2) this.updateVisual(dt);
   }
 
   faceTowards(x, z, dt, rate = 7) {
@@ -262,6 +345,11 @@ export class Bot extends Actor {
       this.moveTowards(p.pos.x, p.pos.z, dt);
       return;
     }
+    if (goal.type === 'noise') {
+      if (d < 5 || this.investigateT <= 0) { this.goal = null; return; }
+      this.moveTowards(goal.x, goal.z, dt, d > 25);
+      return;
+    }
     if (goal.type === 'storm') {
       if (d < 8) { this.goal = null; return; }
       this.moveTowards(goal.x, goal.z, dt, true);
@@ -275,7 +363,7 @@ export class Bot extends Actor {
 
   doHeal(dt) {
     const wantSlot = (this.health < 100 && this.inv.findItem('bandage') >= 0)
-      ? this.inv.findItem('bandage') : this.inv.findItem('shield');
+      ? this.inv.findItem('bandage') : this.inv.findShield(this.shield);
     if (wantSlot < 0) { this.state = 'roam'; return; }
     if (this.inv.selected !== wantSlot) { this.select(wantSlot); return; }
     if (this.useT <= 0 && this.equipT <= 0) this.tryUse();

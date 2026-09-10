@@ -2,9 +2,20 @@
 // the local player and all 99 bots run through this class.
 import * as THREE from 'three';
 import { CharacterRig, makeNamePlate } from './character.js';
-import { makeGunMesh, makePickaxe, makeMuzzleFlash, makeBandage, makeShieldPotion, RARITY } from './models.js';
+import { makeGunMesh, makePickaxe, makeMuzzleFlash, makeBandage, makeShieldPotion, makeBigShieldPotion, RARITY } from './models.js';
 import { Inventory } from './loot.js';
 import { clamp, lerp, damp, TAU } from './util.js';
+import { WORLD } from './world.js';
+
+const WORLD_HALF = WORLD.half;
+
+export const DIVE = {
+  terminal: 58,        // free-fall speed
+  steer: 30,           // how fast you can move sideways while diving
+  glideAt: 58,         // metres above the ground the glider opens
+  glideFall: 13,
+  glideSteer: 19,
+};
 
 export const MOVE = {
   walk: 4.4,
@@ -35,6 +46,9 @@ export class Actor {
     this.stepUp = 0.62;
     this.grounded = false;
     this.fallSpeed = 0;
+    this.mode = 'ground';        // 'ground' | 'bus' | 'dive'
+    this.gliding = false;
+    this.diveTarget = null;      // bots steer toward a landing spot
 
     this.yaw = opts.yaw || 0;
     this.pitch = 0;
@@ -133,7 +147,8 @@ export class Actor {
       this.rig.setStowed(makePickaxe(this.rig.cos.pickaxe));
       this.heldMesh = m;
     } else if (cur && cur.kind === 'item') {
-      const mesh = cur.id === 'bandage' ? makeBandage() : makeShieldPotion();
+      const mesh = cur.id === 'bandage' ? makeBandage()
+        : cur.id === 'bigshield' ? makeBigShieldPotion() : makeShieldPotion();
       this.rig.setHeld(mesh);
       this.rig.setStowed(makePickaxe(this.rig.cos.pickaxe));
       this.heldMesh = mesh;
@@ -166,6 +181,8 @@ export class Actor {
     const w = this.weapon;
     w.ammo--;
     this.fireCooldown = 1 / w.def.rps;
+    // Spread: wider while moving, in the air, or hip-firing; tighter crouched
+    // and aiming.  Bots carry an extra multiplier so they are not laser sights.
     const spreadDeg = (this.aiming ? w.adsSpread : w.spread)
       * (this.crouching ? 0.7 : 1)
       * (this.speed2D > 4 ? 1.7 : this.speed2D > 0.5 ? 1.25 : 1)
@@ -173,23 +190,29 @@ export class Actor {
       * (this.aiSpreadMul || 1);
     const origin = this.muzzleWorld(_v) || this.eyePos(_v);
     // the local player aims through the camera's crosshair, bots use their own facing
-    const dir = this.aimTarget
+    const base = this.aimTarget
       ? _v2.copy(this.aimTarget).sub(origin).normalize()
       : this.aimDir(_v2);
     const spread = spreadDeg * Math.PI / 180;
-    const a = Math.random() * TAU, r = Math.sqrt(Math.random()) * spread;
     const up = new THREE.Vector3(0, 1, 0);
-    const right = new THREE.Vector3().crossVectors(dir, up).normalize();
-    const realUp = new THREE.Vector3().crossVectors(right, dir).normalize();
-    dir.addScaledVector(right, Math.tan(r) * Math.cos(a));
-    dir.addScaledVector(realUp, Math.tan(r) * Math.sin(a));
-    dir.normalize();
-
-    this.game.fireBullet(this, origin, dir, w);
+    const right = new THREE.Vector3().crossVectors(base, up).normalize();
+    const realUp = new THREE.Vector3().crossVectors(right, base).normalize();
+    const pellets = w.pellets || 1;
+    for (let i = 0; i < pellets; i++) {
+      const a = Math.random() * TAU;
+      const r = Math.sqrt(Math.random()) * spread;
+      const dir = new THREE.Vector3().copy(base);
+      dir.addScaledVector(right, Math.tan(r) * Math.cos(a));
+      dir.addScaledVector(realUp, Math.tan(r) * Math.sin(a));
+      dir.normalize();
+      this.game.fireBullet(this, origin, dir, w);
+    }
+    this.game.makeNoise(this.pos.x, this.pos.z, 105, this, 'shot');
 
     this.rig.kick(0.30 + w.def.recoil * 0.22);
     this.recoilKick = (this.recoilKick || 0) + w.def.camKick;
     this.muzzleT = 0.05;
+    this.lastFiredAt = this.game.time;
     this.onFired && this.onFired();
   }
 
@@ -218,7 +241,7 @@ export class Actor {
     const cur = this.inv.current;
     if (!cur || cur.kind !== 'item' || this.busy || !this.alive) return false;
     if (cur.id === 'bandage' && this.health >= cur.def.healCap) return false;
-    if (cur.id === 'shield' && this.shield >= cur.def.shieldCap) return false;
+    if (cur.def.shield && this.shield >= cur.def.shieldCap) return false;
     this.useT = cur.def.useTime;
     this.useTotal = this.useT;
     this.useSlot = this.inv.selected;
@@ -232,6 +255,7 @@ export class Actor {
     if (!cur || cur.kind !== 'item') { this.useSlot = -1; return; }
     if (cur.id === 'bandage') this.health = Math.min(cur.def.healCap, this.health + cur.def.heal);
     else this.shield = Math.min(cur.def.shieldCap, this.shield + cur.def.shield);
+    this.game.makeNoise(this.pos.x, this.pos.z, 16, this, 'heal');
     this.inv.consumeOne(this.useSlot);
     this.useSlot = -1;
     this.refreshHeld();
@@ -248,7 +272,7 @@ export class Actor {
 
   // --- damage ------------------------------------------------------------
   takeDamage(amount, from, point, isHead = false, cause = 'shot') {
-    if (!this.alive) return 0;
+    if (!this.alive || !this.game.damageEnabled) return 0;
     this.lastCause = cause;
     let dmg = amount;
     let shieldPart = 0;
@@ -318,7 +342,59 @@ export class Actor {
   }
 
   // --- per-frame ---------------------------------------------------------
+  /** Free-fall out of the bus, then glide the last stretch to the ground. */
+  updateDive(dt) {
+    const phys = this.game.physics;
+    const ground = phys.floorAt(this.pos.x, this.pos.z, this.pos.y, this.radius);
+    const above = this.pos.y - ground;
+    this.gliding = above < DIVE.glideAt;
+
+    const steer = this.gliding ? DIVE.glideSteer : DIVE.steer;
+    let wishX = 0, wishZ = 0;
+    if (this.diveTarget) {
+      const dx = this.diveTarget.x - this.pos.x, dz = this.diveTarget.z - this.pos.z;
+      const d = Math.hypot(dx, dz);
+      if (d > 1) { wishX = dx / d; wishZ = dz / d; }
+      this.yaw = Math.atan2(dx, dz);
+    } else {
+      const inp = this.moveInput;
+      const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
+      const rx = -Math.cos(this.yaw), rz = Math.sin(this.yaw);
+      wishX = fx * inp.y + rx * inp.x;
+      wishZ = fz * inp.y + rz * inp.x;
+      const m = Math.hypot(wishX, wishZ);
+      if (m > 1) { wishX /= m; wishZ /= m; }
+    }
+    const accel = 26;
+    this.vel.x += clamp(wishX * steer - this.vel.x, -accel * dt, accel * dt);
+    this.vel.z += clamp(wishZ * steer - this.vel.z, -accel * dt, accel * dt);
+    const targetFall = this.gliding ? -DIVE.glideFall : -DIVE.terminal;
+    this.vel.y = damp(this.vel.y, targetFall, this.gliding ? 5 : 1.6, dt);
+
+    this.pos.x += this.vel.x * dt;
+    this.pos.z += this.vel.z * dt;
+    this.pos.y += this.vel.y * dt;
+    const h = WORLD_HALF;
+    this.pos.x = clamp(this.pos.x, -h, h);
+    this.pos.z = clamp(this.pos.z, -h, h);
+
+    const land = phys.floorAt(this.pos.x, this.pos.z, this.pos.y, this.radius);
+    if (this.pos.y <= land) {
+      this.pos.y = land;
+      this.vel.set(0, 0, 0);
+      this.mode = 'ground';
+      this.gliding = false;
+      this.grounded = true;
+      this.fallSpeed = 0;
+      this.diveTarget = null;
+      this.onLanded && this.onLanded();
+    }
+    this.speed2D = Math.hypot(this.vel.x, this.vel.z);
+  }
+
   updatePhysics(dt) {
+    if (this.mode === 'bus') { this.speed2D = 0; return; }
+    if (this.mode === 'dive') { this.updateDive(dt); return; }
     const phys = this.game.physics;
     const wantSprint = this.sprinting && !this.crouching && this.moveInput.lengthSq() > 0.05 && !this.aiming;
     let target = wantSprint ? MOVE.sprint : this.crouching ? MOVE.crouch : MOVE.walk;
@@ -395,6 +471,8 @@ export class Actor {
       hasTool: this.inv.holdingPickaxe,
       pitch: this.pitch,
       dead: !this.alive,
+      diving: this.mode === 'dive' && !this.gliding,
+      gliding: this.mode === 'dive' && this.gliding,
     });
 
     // muzzle flash follows the gun's barrel tip
@@ -409,7 +487,11 @@ export class Actor {
     } else {
       this.muzzle.visible = false;
     }
-    if (this.plate) this.plate.visible = this.alive;
+    // plates vanish when someone is right in your face
+    if (this.plate) {
+      const d2 = this.game.camera.position.distanceToSquared(this.root.position);
+      this.plate.visible = this.alive && d2 > 16;
+    }
   }
 
   dispose() {

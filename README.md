@@ -40,10 +40,10 @@ node build.mjs
 | Move | `W A S D` | Joystick, bottom left |
 | Look | Mouse (click to lock the pointer) | Drag anywhere on the right |
 | Sprint | `Shift` | **SPRINT** (toggle), or push the joystick to the edge (it turns gold) |
-| Jump | `Space` | **JUMP** |
+| Jump / leave the bus | `Space` | **JUMP** (reads **DROP** while on the bus) |
 | Crouch | `C` (toggle) | **CROUCH** |
 | Shoot / swing / drink | Left mouse | **Shoot** (big button) |
-| Aim down sights | Right mouse | **AIM** |
+| Aim down sights | Right mouse (hold) | **AIM** (tap to toggle on, tap again to come out) |
 | Reload | `R` | **RELOAD** |
 | Use — doors, chests, pickups | `E` or `F` | **USE** |
 | Build mode | `Q` | **BUILD** |
@@ -61,6 +61,20 @@ under your thumb so you always start centred, and drops back to its resting
 spot when you let go.
 
 ---
+
+## Getting into a match
+
+1. **Spawn island** — the whole lobby of 100 lands on a floating island for a
+   minute. Nobody can be hurt here; run around, climb the crates, get your
+   bearings. The bar under the minimap counts you in.
+2. **Battle bus** — everyone boards a bus that crosses the island on a random
+   line. Press **JUMP / DROP** whenever you like; bots each pick a landing spot
+   (usually a named POI) and leave the bus at the right moment for it. The route
+   and the bus itself show on the map while it flies.
+3. **Skydive** — free-fall at terminal speed, steering with the stick, until the
+   glider opens on its own about 60 m up and carries you down. Landing from a
+   drop never hurts.
+4. **The storm arrives the moment the bus is gone**, and the match is live.
 
 ## The storm
 
@@ -148,18 +162,30 @@ something to fight over.
 
 | Weapon | Magazine | Fire | Notes |
 | --- | --- | --- | --- |
-| M1911 | 7 | Semi-auto | Fast, accurate, low DPS |
+| M1911 | 7 | Semi-auto | Fast and accurate, low damage |
 | Mac-10 | 25 | Full auto | High rate of fire, wide spread, short range |
-| AK-47 | 30 | Full auto | Hardest hitting, heaviest recoil |
+| AK-47 | 30 | Full auto | The best of the three, heaviest recoil |
+| Pump Shotgun | 5 | Pump-action | Nine pellets a shell, brutal up close, almost nothing past 40 m |
+| Bolt-Action Sniper | 1 | Bolt-action | Scoped, near pinpoint aimed, a headshot is a kill. Rarest drop |
 
 Every gun has a muzzle flash, recoil (weapon kick + camera kick), and two
 distinct reload animations — a normal magazine swap and a longer one that racks
 the slide when the chamber is empty.
 
+**Spread** is per-shot and situational: it widens while you are moving, wider
+again in the air, narrows when you crouch and narrows most when you aim. Bots
+carry an extra spread multiplier on top so they cannot beam you.
+
+**Damage.** The M1911, Mac-10 and AK-47 are hard-capped below 50 per hit — even
+a legendary AK headshot lands at 49 — so they stay the sustained-fire weapons.
+The shotgun and the sniper are the only guns that can take half your health at
+once. The shotgun also loses most of its damage past about 11 m.
+
 ### Items
 
 * **Bandages** — 2.0 s use animation, +25 HP, stacks to 15.
 * **Small Shield Potion** — 2.2 s drink animation, +25 shield, stacks to 6.
+* **Big Shield Potion** — 4.0 s drink animation, +50 shield, stacks to 2, epic.
 
 ### Rarity
 
@@ -182,7 +208,8 @@ barrels — with the pickaxe. Every piece is destructible and has its own collis
 99 bots share the player's controller, so anything they do you can do:
 
 * Path to chests and ground loot, open chests and pick items up.
-* Compare what they find and upgrade — better weapons, healing when hurt.
+* Compare what they find and upgrade — better weapons, healing when hurt, and
+  they know a big shield potion is wasted above 50 shield.
 * Fight: strafe, close or back off toward a preferred range, sprint, jump and
   crouch, reload at the right moment and burst-fire rather than beam.
 * **Their aim is deliberately imperfect.** Each bot has a skill value that sets a
@@ -190,6 +217,24 @@ barrels — with the pickaxe. Every piece is destructible and has its own collis
   and with how fast the target is moving, so they miss, lead badly and lose
   tracking — no aimbot.
 * Open doors, steer around obstacles and unstick themselves.
+
+### Senses
+
+Bots do not simply know where everyone is. Each has its own **sight range**
+(58–96 m by skill) and a forward cone that only widens up close, and every
+sighting needs a clear line of sight. What you are doing changes how far off you
+are spotted:
+
+| Your state | Effect on their sight range |
+| --- | --- |
+| Crouching | −38% |
+| Sprinting | +20% |
+| Firing (or just fired) | +35% |
+
+They also **hear**. Gunfire carries about 105 m, sprinting footsteps 26 m, and
+drinking or bandaging 16 m, each checked against that bot's own hearing range. A
+shot nearby snaps them round to look, and they will walk over to investigate
+where it came from — so a fight pulls in whoever is close enough to hear it.
 
 ---
 
@@ -205,6 +250,7 @@ src/
   main.js             boot, lobby → match → results
   lobby.js            lobby scene, LOBBY/LOCKER tabs and the locker
   storm.js            closing circle, damage and the storm wall
+  bus.js              spawn island, battle bus and drop targets
   map.js              island image, minimap and full-screen map
   game.js             match runtime: world, actors, bullets, loot, loop
   world.js            heightfield, biomes, terrain mesh, harvestable nature

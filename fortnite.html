@@ -253,6 +253,13 @@ html, body {
 .crosshair .ch2 { transform: translateX(calc(-1 * var(--gap) - 7px)); }
 .crosshair .ch3 { transform: translateX(var(--gap)); }
 
+/* scope vignette for the sniper */
+.hud.scoped::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, transparent 26%, rgba(0, 0, 0, 0.82) 42%);
+}
+.hud.scoped .crosshair i { background: rgba(255, 60, 60, 0.95); }
+
 .hitmarker {
   position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px;
   opacity: 0; pointer-events: none;
@@ -336,6 +343,12 @@ html, body {
 .btn span { font-size: 10px; }
 .btn.down { background: rgba(58, 160, 255, 0.55); transform: scale(0.94); }
 .btn.on { border-color: var(--gold); color: var(--gold); }
+.btn.hidden { display: none; }
+.btn.drop {
+  background: rgba(255, 198, 60, 0.34); border-color: var(--gold); color: #fff;
+  animation: stormpulse 1.1s ease-in-out infinite;
+}
+.invbar.hidden { display: none; }
 .btn.big { width: 94px; height: 94px; right: 8px; bottom: 10px; background: rgba(210, 60, 55, 0.42); border-color: rgba(255, 150, 140, 0.6); }
 .btn.big::after { content: ''; width: 26px; height: 26px; border-radius: 50%; border: 3px solid #fff; }
 .btn.mid { width: 68px; height: 68px; right: 110px; bottom: 24px; }
@@ -428,6 +441,7 @@ html, body {
 .dropbanner {
   position: absolute; left: 50%; top: 22%; transform: translateX(-50%);
   text-align: center; pointer-events: none; transition: opacity 0.8s;
+  white-space: nowrap;
 }
 .dropbanner b { display: block; font-size: 34px; font-weight: 900; letter-spacing: 4px; text-shadow: 0 4px 18px rgba(0,0,0,0.7); }
 .dropbanner span { font-size: 13px; color: #cfe0f2; letter-spacing: 2px; }
@@ -53737,7 +53751,43 @@ function makeAK47() {
   return g;
 }
 
+function makePumpShotgun() {
+  const g = gunSkeleton();
+  const body = put(g, box(0.085, 0.13, 0.40, 0x5a3a22), 0, 0.05, 0.06);
+  put(g, cyl(0.026, 0.026, 0.52, 0x2b2f34, 8), 0, 0.115, 0.44, Math.PI / 2, 0, 0);
+  const pump = put(g, box(0.075, 0.075, 0.17, 0x6b4526), 0, 0.05, 0.32);   // fore-end
+  put(g, box(0.055, 0.16, 0.085, 0x5a3a22), 0, -0.05, -0.08);              // grip
+  put(g, box(0.055, 0.10, 0.28, 0x5a3a22), 0, 0.02, -0.26);                // stock
+  put(g, box(0.02, 0.035, 0.02, 0x1a1c20), 0, 0.16, 0.62);                 // bead sight
+  const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0.115, 0.70); g.add(muzzle);
+  g.userData.muzzle = muzzle; g.userData.body = body; g.userData.pump = pump;
+  g.userData.mag = pump;             // the pump is what the reload animation works
+  g.userData.gripOffset = new THREE.Vector3(0, -0.02, 0.02);
+  return g;
+}
+
+function makeSniper() {
+  const g = gunSkeleton();
+  const body = put(g, box(0.07, 0.12, 0.52, 0x35404a), 0, 0.06, 0.10);
+  put(g, cyl(0.022, 0.022, 0.62, 0x22282e, 8), 0, 0.11, 0.62, Math.PI / 2, 0, 0);
+  put(g, box(0.055, 0.09, 0.40, 0x4a3524), 0, 0.02, -0.24);                // stock
+  put(g, box(0.05, 0.15, 0.08, 0x4a3524), 0, -0.03, -0.02);                // grip
+  const scope = put(g, cyl(0.05, 0.05, 0.34, 0x15181c, 10), 0, 0.24, 0.14, Math.PI / 2, 0, 0);
+  put(g, cyl(0.058, 0.058, 0.05, 0x2b3037, 10), 0, 0.24, 0.30, Math.PI / 2, 0, 0);
+  put(g, box(0.03, 0.06, 0.03, 0x2b3037), 0, 0.17, 0.02);
+  put(g, box(0.03, 0.06, 0.03, 0x2b3037), 0, 0.17, 0.26);
+  const bolt = put(g, box(0.10, 0.03, 0.03, 0x9aa3ad), 0.06, 0.10, 0.00);
+  const magz = put(g, box(0.045, 0.11, 0.10, 0x53575d), 0, -0.03, 0.14);
+  const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0.11, 0.92); g.add(muzzle);
+  g.userData.muzzle = muzzle; g.userData.body = body;
+  g.userData.mag = magz; g.userData.bolt = bolt; g.userData.scope = scope;
+  g.userData.gripOffset = new THREE.Vector3(0, -0.02, 0.02);
+  return g;
+}
+
 function makeGunMesh(weaponId) {
+  if (weaponId === 'pump') return makePumpShotgun();
+  if (weaponId === 'sniper') return makeSniper();
   if (weaponId === 'm1911') return makeM1911();
   if (weaponId === 'mac10') return makeMac10();
   return makeAK47();
@@ -53768,6 +53818,20 @@ function makeBandage() {
   put(g, box(0.10, 0.028, 0.028, 0xffffff), 0, 0, 0);
   return g;
 }
+function makeBigShieldPotion() {
+  const g = new THREE.Group();
+  const glass = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.10, 0.115, 0.30, 12),
+    new THREE.MeshLambertMaterial({ color: 0x6a4fd8, transparent: true, opacity: 0.85 })
+  );
+  glass.castShadow = true;
+  g.add(glass);
+  put(g, cyl(0.05, 0.05, 0.09, 0x2e2a68, 8), 0, 0.19, 0);
+  put(g, cyl(0.07, 0.07, 0.04, 0xd8d8d8, 8), 0, 0.24, 0);
+  put(g, box(0.13, 0.10, 0.005, 0xe8e8f4), 0, 0.02, 0.116);
+  return g;
+}
+
 function makeShieldPotion() {
   const g = new THREE.Group();
   const glass = new THREE.Mesh(
@@ -53784,6 +53848,7 @@ function makeShieldPotion() {
 function makeItemMesh(item) {
   if (item.kind === 'weapon') { const g = makeGunMesh(item.id); g.scale.setScalar(1.15); return g; }
   if (item.id === 'bandage') return makeBandage();
+  if (item.id === 'bigshield') return makeBigShieldPotion();
   return makeShieldPotion();
 }
 
@@ -53832,7 +53897,7 @@ function makeMuzzleFlash() {
   return g;
 }
 
-return { mat, matUnique, box, cyl, sphere, put, RARITY, RARITY_ORDER, makeM1911, makeMac10, makeAK47, makeGunMesh, makePickaxe, makeBandage, makeShieldPotion, makeItemMesh, makeChestMesh, makeMuzzleFlash };
+return { mat, matUnique, box, cyl, sphere, put, RARITY, RARITY_ORDER, makeM1911, makeMac10, makeAK47, makePumpShotgun, makeSniper, makeGunMesh, makePickaxe, makeBandage, makeBigShieldPotion, makeShieldPotion, makeItemMesh, makeChestMesh, makeMuzzleFlash };
 })();
 
 // ===================== src/physics.js =====================
@@ -54325,6 +54390,7 @@ class CharacterRig {
     this.lookPitch = damp(this.lookPitch, clamp(s.pitch || 0, -0.7, 0.7), 12, dt);
 
     if (s.dead) { this.updateDead(dt); return; }
+    if (s.diving || s.gliding) { this.updateAirborne(dt, s); return; }
 
     const sw = moving ? Math.sin(this.phase) : 0;
     const sw2 = moving ? Math.sin(this.phase * 2) : 0;
@@ -54447,6 +54513,59 @@ class CharacterRig {
     }
   }
 
+  /** Skydiving spread-eagle, then hanging under the glider. */
+  updateAirborne(dt, s) {
+    this.hips.position.y = 0.92;
+    this.hips.rotation.z = 0;
+    if (s.gliding) {
+      this.torso.rotation.x = 0.12;
+      this.armL.rotation.set(-2.5, 0, 0.55);
+      this.armR.rotation.set(-2.5, 0, -0.55);
+      this.foreL.rotation.x = -0.15;
+      this.foreR.rotation.x = -0.15;
+      this.legL.rotation.x = 0.25; this.legR.rotation.x = 0.18;
+      this.shinL.rotation.x = 0.35; this.shinR.rotation.x = 0.45;
+      if (this.glider) this.glider.visible = true;
+    } else {
+      const flap = Math.sin(this.phase * 0.6 + performance.now() * 0.004) * 0.12;
+      this.torso.rotation.x = 0.75;
+      this.armL.rotation.set(-1.15, 0, 1.15 + flap);
+      this.armR.rotation.set(-1.15, 0, -1.15 - flap);
+      this.foreL.rotation.x = -0.5;
+      this.foreR.rotation.x = -0.5;
+      this.legL.rotation.set(0.35, 0, 0.35);
+      this.legR.rotation.set(0.35, 0, -0.35);
+      this.shinL.rotation.x = 0.55; this.shinR.rotation.x = 0.55;
+      if (this.glider) this.glider.visible = false;
+    }
+    this.neck.rotation.x = -this.torso.rotation.x * 0.7;
+  }
+
+  /** Simple delta-wing that appears when the glider opens. */
+  ensureGlider() {
+    if (this.glider) return this.glider;
+    const g = new THREE.Group();
+    const wing = new THREE.Mesh(
+      new THREE.ConeGeometry(2.4, 3.4, 3),
+      new THREE.MeshLambertMaterial({ color: this.tint ?? this.skinDef.shirt, flatShading: true })
+    );
+    wing.rotation.x = -Math.PI / 2;
+    wing.rotation.z = Math.PI;
+    wing.scale.set(1, 1, 0.12);
+    wing.position.y = 1.5;
+    g.add(wing);
+    for (const sx of [-1, 1]) {
+      const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.4, 4),
+        new THREE.MeshLambertMaterial({ color: 0x2a2d33 }));
+      rope.position.set(sx * 0.7, 0.9, 0);
+      g.add(rope);
+    }
+    g.visible = false;
+    this.root.add(g);
+    this.glider = g;
+    return g;
+  }
+
   updateDead(dt) {
     this.deadT = (this.deadT || 0) + dt;
     const p = clamp(this.deadT * 2.4, 0, 1);
@@ -54478,7 +54597,7 @@ function makeNamePlate(text, color = '#ffffff') {
   const tex = new THREE.CanvasTexture(c);
   tex.anisotropy = 2;
   const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: true, transparent: true }));
-  spr.scale.set(1.7, 0.42, 1);
+  spr.scale.set(1.35, 0.34, 1);
   return spr;
 }
 
@@ -55497,23 +55616,44 @@ const { RARITY, RARITY_ORDER, makeItemMesh, makeChestMesh } = __m['models'];
 const { weighted, TAU } = __m['util'];
 
 const WEAPONS = {
+  // `maxHit` hard-caps a single hit after rarity and headshot multipliers.
+  // The three starter guns are capped below 50 so the sniper and the shotgun
+  // stay the only weapons that can take half your health in one shot.
   m1911: {
     id: 'm1911', kind: 'weapon', name: 'M1911', short: 'Pistol',
-    mag: 7, damage: 30, rps: 6.4, auto: false,
+    mag: 7, damage: 22, pellets: 1, rps: 6.4, auto: false,
     reload: 1.55, reloadEmpty: 2.05, spread: 0.85, adsSpread: 0.35,
-    recoil: 0.9, camKick: 0.9, range: 130, ammoPer: 21, moveMul: 0.98,
+    recoil: 0.9, camKick: 0.9, range: 130, headMult: 1.45, maxHit: 49,
+    ammoPer: 21, moveMul: 0.98, w: 26,
   },
   mac10: {
     id: 'mac10', kind: 'weapon', name: 'Mac-10', short: 'SMG',
-    mag: 25, damage: 16, rps: 11.5, auto: true,
+    mag: 25, damage: 13, pellets: 1, rps: 11.5, auto: true,
     reload: 1.95, reloadEmpty: 2.45, spread: 2.5, adsSpread: 1.35,
-    recoil: 0.5, camKick: 0.55, range: 80, ammoPer: 60, moveMul: 0.95,
+    recoil: 0.5, camKick: 0.55, range: 80, headMult: 1.8, maxHit: 49,
+    ammoPer: 60, moveMul: 0.95, w: 24,
   },
   ak47: {
     id: 'ak47', kind: 'weapon', name: 'AK-47', short: 'Assault Rifle',
-    mag: 30, damage: 33, rps: 5.6, auto: true,
+    mag: 30, damage: 24, pellets: 1, rps: 5.6, auto: true,
     reload: 2.35, reloadEmpty: 2.95, spread: 1.45, adsSpread: 0.5,
-    recoil: 1.35, camKick: 1.3, range: 165, ammoPer: 60, moveMul: 0.9,
+    recoil: 1.35, camKick: 1.3, range: 165, headMult: 1.35, maxHit: 49,
+    ammoPer: 60, moveMul: 0.9, w: 22,
+  },
+  pump: {
+    id: 'pump', kind: 'weapon', name: 'Pump Shotgun', short: 'Shotgun',
+    mag: 5, damage: 9, pellets: 9, rps: 0.85, auto: false,
+    reload: 3.3, reloadEmpty: 3.8, spread: 6.2, adsSpread: 4.4,
+    recoil: 2.2, camKick: 2.4, range: 62, headMult: 1.5,
+    falloffStart: 11, falloffEnd: 40, falloffMin: 0.3,
+    ammoPer: 14, moveMul: 0.93, w: 18,
+  },
+  sniper: {
+    id: 'sniper', kind: 'weapon', name: 'Bolt-Action Sniper', short: 'Sniper',
+    mag: 1, damage: 105, pellets: 1, rps: 0.55, auto: false,
+    reload: 2.9, reloadEmpty: 3.2, spread: 2.8, adsSpread: 0.05,
+    recoil: 3.0, camKick: 3.2, range: 320, headMult: 2.5, scope: true,
+    ammoPer: 8, moveMul: 0.82, w: 10,
   },
 };
 
@@ -55528,6 +55668,11 @@ const CONSUMABLES = {
     useTime: 2.2, shield: 25, shieldCap: 100, maxStack: 6, rarity: 'uncommon',
     verb: 'Drinking',
   },
+  bigshield: {
+    id: 'bigshield', kind: 'item', name: 'Big Shield Potion', short: 'Big Shield',
+    useTime: 4.0, shield: 50, shieldCap: 100, maxStack: 2, rarity: 'epic',
+    verb: 'Drinking',
+  },
 };
 
 const ALL_WEAPON_IDS = Object.keys(WEAPONS);
@@ -55539,12 +55684,20 @@ function rollRarity(rng, luck = 0) {
   return weighted(rng, entries).k;
 }
 
+/** Weighted pick so snipers stay rare and pistols stay common. */
+function randomWeaponId(rng) {
+  return weighted(rng, ALL_WEAPON_IDS.map(id => ({ id, w: WEAPONS[id].w }))).id;
+}
+
 function makeWeapon(id, rarity, rng) {
   const def = WEAPONS[id];
   const mult = RARITY[rarity].mult;
   return {
     uid: UID++, kind: 'weapon', id, def, rarity,
     name: def.name,
+    pellets: def.pellets || 1,
+    headMult: def.headMult || 1.5,
+    maxHit: def.maxHit || Infinity,
     damage: Math.round(def.damage * mult),
     reload: def.reload / (1 + (mult - 1) * 0.55),
     reloadEmpty: def.reloadEmpty / (1 + (mult - 1) * 0.55),
@@ -55566,7 +55719,7 @@ function itemScore(it) {
   if (!it) return 0;
   if (it.kind === 'weapon') {
     const r = RARITY_ORDER.indexOf(it.rarity);
-    const dps = it.damage * it.def.rps * (it.def.auto ? 1 : 0.85);
+    const dps = it.damage * (it.pellets || 1) * it.def.rps * (it.def.auto ? 1 : 0.85);
     return 100 + dps * 0.6 + r * 22;
   }
   return 10;
@@ -55576,23 +55729,23 @@ function chestLoot(rng, luck = 0) {
   const out = [];
   const nWeapons = rng() < 0.34 ? 2 : 1;
   for (let i = 0; i < nWeapons; i++) {
-    const id = ALL_WEAPON_IDS[Math.floor(rng() * ALL_WEAPON_IDS.length)];
-    out.push(makeWeapon(id, rollRarity(rng, luck), rng));
+    out.push(makeWeapon(randomWeaponId(rng), rollRarity(rng, luck), rng));
   }
   const nItems = 1 + (rng() < 0.5 ? 1 : 0);
   for (let i = 0; i < nItems; i++) {
-    if (rng() < 0.52) out.push(makeConsumable('bandage', 3 + Math.floor(rng() * 3)));
-    else out.push(makeConsumable('shield', 1 + Math.floor(rng() * 2)));
+    const r = rng();
+    if (r < 0.46) out.push(makeConsumable('bandage', 3 + Math.floor(rng() * 3)));
+    else if (r < 0.84) out.push(makeConsumable('shield', 1 + Math.floor(rng() * 2)));
+    else out.push(makeConsumable('bigshield', 1));
   }
   return out;
 }
 
 function floorLoot(rng) {
-  if (rng() < 0.6) {
-    const id = ALL_WEAPON_IDS[Math.floor(rng() * ALL_WEAPON_IDS.length)];
-    return makeWeapon(id, rollRarity(rng, -0.35), rng);
-  }
-  return rng() < 0.5 ? makeConsumable('bandage', 3) : makeConsumable('shield', 1);
+  if (rng() < 0.6) return makeWeapon(randomWeaponId(rng), rollRarity(rng, -0.35), rng);
+  const r = rng();
+  if (r < 0.45) return makeConsumable('bandage', 3);
+  return r < 0.88 ? makeConsumable('shield', 1) : makeConsumable('bigshield', 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -55655,6 +55808,13 @@ class Inventory {
     return worst;
   }
   findItem(id) { return this.slots.findIndex(s => s && s.kind === 'item' && s.id === id); }
+  /** Best shield item to drink now, preferring the big one when it won't overflow. */
+  findShield(current) {
+    const big = this.findItem('bigshield'), small = this.findItem('shield');
+    if (big >= 0 && current <= 50) return big;
+    if (small >= 0) return small;
+    return big;
+  }
   countWeapons() { return this.slots.filter(s => s && s.kind === 'weapon').length; }
 }
 
@@ -55752,7 +55912,7 @@ class Chest {
   }
 }
 
-return { WEAPONS, CONSUMABLES, ALL_WEAPON_IDS, rollRarity, makeWeapon, makeConsumable, itemScore, chestLoot, floorLoot, Inventory, Pickup, Chest };
+return { WEAPONS, CONSUMABLES, ALL_WEAPON_IDS, rollRarity, randomWeaponId, makeWeapon, makeConsumable, itemScore, chestLoot, floorLoot, Inventory, Pickup, Chest };
 })();
 
 // ===================== src/effects.js =====================
@@ -56178,6 +56338,7 @@ const DPS = [1, 1, 2, 3, 5, 7, 10, 12, 15];
 class Storm {
   constructor(scene, rng) {
     this.rng = rng;
+    this.active = false;         // dormant until the battle bus has gone
     this.zone = 0;
     this.phase = 'hold';          // 'hold' | 'closing'
     this.t = HOLD_TIME;
@@ -56207,6 +56368,16 @@ class Storm {
     this.edge.frustumCulled = false;
     scene.add(this.edge);
     this.syncMesh();
+    this.mesh.visible = false;
+    this.edge.visible = false;
+  }
+
+  /** Called the moment the bus leaves the island. */
+  activate() {
+    this.active = true;
+    this.t = HOLD_TIME;
+    this.mesh.visible = true;
+    this.edge.visible = true;
   }
 
   get isFinal() { return this.zone >= RADII.length - 1; }
@@ -56251,11 +56422,13 @@ class Storm {
   }
 
   isInside(x, z, pad = 0) {
+    if (!this.active) return true;
     const dx = x - this.cx, dz = z - this.cz;
     return dx * dx + dz * dz <= (this.radius + pad) * (this.radius + pad);
   }
 
   update(dt, actors) {
+    if (!this.active) return;
     this.t -= dt;
     if (this.phase === 'hold') {
       if (this.t <= 0 && !this.isFinal) {
@@ -56297,6 +56470,7 @@ class Storm {
 
   /** "1:23" style countdown for the HUD. */
   statusText() {
+    if (!this.active) return { label: 'STORM', time: '--:--', closing: false };
     const t = Math.max(0, Math.ceil(this.t));
     const m = Math.floor(t / 60), s = t % 60;
     const clock = `${m}:${s < 10 ? '0' : ''}${s}`;
@@ -56391,7 +56565,7 @@ class GameMap {
     }
 
     // a white line to the safe circle whenever we are outside it
-    if (s.storm) {
+    if (s.storm && s.storm.active) {
       const safe = s.storm.safeCircle();
       const dx = safe.x - px, dz = safe.z - pz;
       const d = Math.hypot(dx, dz);
@@ -56411,6 +56585,8 @@ class GameMap {
         ctx.restore();
       }
     }
+
+    if (s.bus && !s.bus.done) this.drawBus(ctx, toScreen, s.bus, size * 0.05);
 
     // player arrow
     ctx.save();
@@ -56433,7 +56609,7 @@ class GameMap {
   }
 
   drawStorm(ctx, toScreen, scale, storm, full) {
-    if (!storm) return;
+    if (!storm || !storm.active) return;
     const cur = storm.currentCircle();
     const next = storm.nextCircle();
     const closing = storm.phase === 'closing';
@@ -56467,6 +56643,23 @@ class GameMap {
       ctx.stroke();
       ctx.restore();
     }
+  }
+
+  /** Bus marker plus the line it is flying along. */
+  drawBus(ctx, toScreen, bus, r) {
+    const a = toScreen(bus.start.x, bus.start.z), b = toScreen(bus.end.x, bus.end.z);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(120, 200, 255, 0.75)';
+    ctx.lineWidth = Math.max(1.5, r * 0.22);
+    ctx.setLineDash([r * 1.2, r]);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    ctx.setLineDash([]);
+    const p = toScreen(bus.pos.x, bus.pos.z);
+    ctx.fillStyle = '#8fe0ff';
+    ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r * 0.7, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.restore();
   }
 
   drawWaypoint(ctx, x, y, r, small, bound) {
@@ -56540,6 +56733,8 @@ class GameMap {
     }
     ctx.restore();
 
+    if (s.bus && !s.bus.done) this.drawBus(ctx, toScreen, s.bus, 9);
+
     if (this.waypoint) {
       const q = toScreen(this.waypoint.x, this.waypoint.z);
       this.drawWaypoint(ctx, q.x, q.y, 9, false, null);
@@ -56570,6 +56765,183 @@ class GameMap {
 }
 
 return { worldToImage, GameMap };
+})();
+
+// ===================== src/bus.js =====================
+__m['bus'] = (function () {
+// Pre-match: a floating spawn island everyone warms up on, and the battle bus
+// that carries the lobby over the map so each player can drop where they like.
+const THREE = __THREE;
+const { StructureBuilder } = __m['props'];
+const { WORLD, POIS, heightAt } = __m['world'];
+const { clamp, TAU } = __m['util'];
+
+const SPAWN = { x: 0, y: 300, z: 0, half: 48, radius: 74 };
+const SPAWN_TIME = 60;      // seconds on the spawn island
+const BUS_TIME = 56;        // seconds for the bus to cross the island
+const BUS_ALTITUDE = 330;
+const DROP_FROM = 0.07;     // fraction of the route the doors open
+const DROP_TO = 0.88;       // ...and the point everyone still aboard is pushed
+
+/** A grassy platform in the sky with a fence you cannot walk off. */
+function buildSpawnIsland(scene, physics) {
+  const b = new StructureBuilder(scene, physics, 'spawn-island');
+  const { x: CX, y: Y, z: CZ, half: H } = SPAWN;
+
+  const disc = new THREE.Mesh(
+    new THREE.CylinderGeometry(SPAWN.radius, SPAWN.radius * 0.82, 9, 40),
+    new THREE.MeshLambertMaterial({ color: 0x3f8f3c, flatShading: true })
+  );
+  disc.position.set(CX, Y - 4.5, CZ);
+  disc.receiveShadow = true;
+  b.group.add(disc);
+  const rock = new THREE.Mesh(
+    new THREE.ConeGeometry(SPAWN.radius * 0.8, 34, 20),
+    new THREE.MeshLambertMaterial({ color: 0x6b5a48, flatShading: true })
+  );
+  rock.position.set(CX, Y - 26, CZ);
+  rock.rotation.x = Math.PI;
+  b.group.add(rock);
+  // the walkable surface itself
+  b.solid(CX, Y - 0.4, CZ, H * 2 + 8, 0.8, H * 2 + 8, 0x4aa347);
+
+  // fence: invisible walls plus a visible rail, so nobody falls to their death
+  for (const [ox, oz, sx, sz] of [[0, -1, 1, 0], [0, 1, 1, 0], [-1, 0, 0, 1], [1, 0, 0, 1]]) {
+    physics.addBox(
+      CX + ox * H - (sx ? H + 2 : 1.2), Y, CZ + oz * H - (sz ? H + 2 : 1.2),
+      CX + ox * H + (sx ? H + 2 : 1.2), Y + 12, CZ + oz * H + (sz ? H + 2 : 1.2)
+    );
+    for (let i = -H + 4; i <= H - 4; i += 8) {
+      b.deco(CX + (sx ? i : ox * H), Y + 0.8, CZ + (sz ? i : oz * H), sx ? 0.3 : 0.3, 1.6, 0.3, 0x8a6640);
+    }
+    b.deco(CX + ox * H, Y + 1.5, CZ + oz * H, sx ? H * 2 : 0.24, 0.2, sz ? H * 2 : 0.24, 0x8a6640);
+  }
+
+  // a bit of scenery to run around while you wait
+  b.solid(CX - 18, Y + 1.6, CZ - 16, 12, 3.2, 9, 0xc9b79a);
+  b.solid(CX - 18, Y + 3.4, CZ - 16, 13.5, 0.4, 10.5, 0x7a4a34);
+  b.crate(CX - 9, Y, CZ - 8, 0.3);
+  b.crate(CX - 10.4, Y, CZ - 6.6, -0.4, 0.8);
+  b.barrel(CX - 6, Y, CZ - 11);
+  b.crate(CX + 14, Y, CZ + 12, 0.2);
+  b.crate(CX + 15.6, Y, CZ + 13.4, 0.5, 0.8);
+  b.crate(CX + 14.6, Y, CZ + 11.0, -0.2, 0.7);
+  b.table(CX + 10, Y, CZ - 14, 0.4, 2.0, 1.1);
+  b.solid(CX + 20, Y + 2.4, CZ - 6, 3.0, 4.8, 3.0, 0xb9c6d2);   // a block to climb
+  b.solid(CX + 24, Y + 1.2, CZ - 6, 3.0, 2.4, 3.0, 0xb9c6d2);
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * TAU + 0.3;
+    const r = H - 9;
+    const x = CX + Math.cos(a) * r, z = CZ + Math.sin(a) * r;
+    b.deco(x, Y + 2.6, z, 0.7, 5.2, 0.7, 0x5a3d24);
+    const leaf = new THREE.Mesh(new THREE.ConeGeometry(2.6, 4.6, 7),
+      new THREE.MeshLambertMaterial({ color: 0x2f6d2c, flatShading: true }));
+    leaf.position.set(x, Y + 7.0, z);
+    leaf.castShadow = true;
+    b.group.add(leaf);
+  }
+  b.finalize();
+  return b;
+}
+
+class BattleBus {
+  constructor(scene, rng) {
+    this.t = 0;                      // 0..1 along the route
+    this.done = false;
+    const a = rng() * TAU;
+    const span = WORLD.half * 1.35;
+    this.start = new THREE.Vector3(Math.cos(a) * -span, BUS_ALTITUDE, Math.sin(a) * -span);
+    this.end = new THREE.Vector3(Math.cos(a) * span, BUS_ALTITUDE, Math.sin(a) * span);
+    this.heading = Math.atan2(this.end.x - this.start.x, this.end.z - this.start.z);
+    this.pos = this.start.clone();
+
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(5.2, 4.4, 15),
+      new THREE.MeshLambertMaterial({ color: 0x2f6fd0 }));
+    body.castShadow = true;
+    g.add(body);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(5.4, 0.5, 15.2),
+      new THREE.MeshLambertMaterial({ color: 0x1d4f9c }));
+    roof.position.y = 2.4;
+    g.add(roof);
+    for (let i = -5; i <= 5; i += 2.5) {
+      const win = new THREE.Mesh(new THREE.BoxGeometry(5.3, 1.3, 1.8),
+        new THREE.MeshLambertMaterial({ color: 0x9fd8ec }));
+      win.position.set(0, 0.7, i);
+      g.add(win);
+    }
+    for (const s of [-1, 1]) {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.7, 10),
+        new THREE.MeshLambertMaterial({ color: 0x1a1c20 }));
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(s * 2.6, -2.3, 4.4);
+      g.add(wheel);
+      const wheel2 = wheel.clone();
+      wheel2.position.z = -4.4;
+      g.add(wheel2);
+    }
+    const balloon = new THREE.Mesh(new THREE.SphereGeometry(7.4, 18, 14),
+      new THREE.MeshLambertMaterial({ color: 0x3aa0ff }));
+    balloon.position.y = 15;
+    balloon.scale.set(1, 1.15, 1);
+    g.add(balloon);
+    for (let i = 0; i < 6; i++) {
+      const a2 = (i / 6) * TAU;
+      const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 9, 4),
+        new THREE.MeshLambertMaterial({ color: 0x2a2d33 }));
+      rope.position.set(Math.cos(a2) * 3.4, 7.2, Math.sin(a2) * 3.4);
+      g.add(rope);
+    }
+    g.frustumCulled = false;
+    scene.add(g);
+    this.mesh = g;
+    this.mesh.position.copy(this.pos);
+    this.mesh.rotation.y = this.heading;
+  }
+
+  posAt(t, out = new THREE.Vector3()) {
+    return out.lerpVectors(this.start, this.end, clamp(t, 0, 1));
+  }
+
+  /** Route fraction that passes closest to a world point. */
+  closestT(x, z) {
+    const dx = this.end.x - this.start.x, dz = this.end.z - this.start.z;
+    const len2 = dx * dx + dz * dz;
+    return clamp(((x - this.start.x) * dx + (z - this.start.z) * dz) / len2, 0, 1);
+  }
+
+  update(dt) {
+    if (this.done) return;
+    this.t += dt / BUS_TIME;
+    if (this.t >= 1) { this.t = 1; this.done = true; }
+    this.posAt(this.t, this.pos);
+    this.mesh.position.copy(this.pos);
+    this.mesh.position.y += Math.sin(this.t * 40) * 0.6;
+    this.mesh.rotation.z = Math.sin(this.t * 26) * 0.02;
+  }
+
+  dispose(scene) {
+    scene.remove(this.mesh);
+    this.mesh.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+  }
+}
+
+/** Where a bot wants to land: mostly the named POIs, sometimes open ground. */
+function pickDropTarget(rng) {
+  if (rng() < 0.72) {
+    const p = POIS[Math.floor(rng() * POIS.length)];
+    const a = rng() * TAU, d = rng() * 120;
+    return { x: p.x + Math.cos(a) * d, z: p.z + Math.sin(a) * d };
+  }
+  let x, z, tries = 0;
+  do {
+    x = (rng() * 2 - 1) * (WORLD.half - 150);
+    z = (rng() * 2 - 1) * (WORLD.half - 150);
+  } while (heightAt(x, z) < 6 && tries++ < 20);
+  return { x, z };
+}
+
+return { SPAWN, SPAWN_TIME, BUS_TIME, BUS_ALTITUDE, DROP_FROM, DROP_TO, buildSpawnIsland, BattleBus, pickDropTarget };
 })();
 
 // ===================== src/poi_summering.js =====================
@@ -57298,9 +57670,20 @@ __m['actor'] = (function () {
 // the local player and all 99 bots run through this class.
 const THREE = __THREE;
 const { CharacterRig, makeNamePlate } = __m['character'];
-const { makeGunMesh, makePickaxe, makeMuzzleFlash, makeBandage, makeShieldPotion, RARITY } = __m['models'];
+const { makeGunMesh, makePickaxe, makeMuzzleFlash, makeBandage, makeShieldPotion, makeBigShieldPotion, RARITY } = __m['models'];
 const { Inventory } = __m['loot'];
 const { clamp, lerp, damp, TAU } = __m['util'];
+const { WORLD } = __m['world'];
+
+const WORLD_HALF = WORLD.half;
+
+const DIVE = {
+  terminal: 58,        // free-fall speed
+  steer: 30,           // how fast you can move sideways while diving
+  glideAt: 58,         // metres above the ground the glider opens
+  glideFall: 13,
+  glideSteer: 19,
+};
 
 const MOVE = {
   walk: 4.4,
@@ -57331,6 +57714,9 @@ class Actor {
     this.stepUp = 0.62;
     this.grounded = false;
     this.fallSpeed = 0;
+    this.mode = 'ground';        // 'ground' | 'bus' | 'dive'
+    this.gliding = false;
+    this.diveTarget = null;      // bots steer toward a landing spot
 
     this.yaw = opts.yaw || 0;
     this.pitch = 0;
@@ -57429,7 +57815,8 @@ class Actor {
       this.rig.setStowed(makePickaxe(this.rig.cos.pickaxe));
       this.heldMesh = m;
     } else if (cur && cur.kind === 'item') {
-      const mesh = cur.id === 'bandage' ? makeBandage() : makeShieldPotion();
+      const mesh = cur.id === 'bandage' ? makeBandage()
+        : cur.id === 'bigshield' ? makeBigShieldPotion() : makeShieldPotion();
       this.rig.setHeld(mesh);
       this.rig.setStowed(makePickaxe(this.rig.cos.pickaxe));
       this.heldMesh = mesh;
@@ -57462,6 +57849,8 @@ class Actor {
     const w = this.weapon;
     w.ammo--;
     this.fireCooldown = 1 / w.def.rps;
+    // Spread: wider while moving, in the air, or hip-firing; tighter crouched
+    // and aiming.  Bots carry an extra multiplier so they are not laser sights.
     const spreadDeg = (this.aiming ? w.adsSpread : w.spread)
       * (this.crouching ? 0.7 : 1)
       * (this.speed2D > 4 ? 1.7 : this.speed2D > 0.5 ? 1.25 : 1)
@@ -57469,23 +57858,29 @@ class Actor {
       * (this.aiSpreadMul || 1);
     const origin = this.muzzleWorld(_v) || this.eyePos(_v);
     // the local player aims through the camera's crosshair, bots use their own facing
-    const dir = this.aimTarget
+    const base = this.aimTarget
       ? _v2.copy(this.aimTarget).sub(origin).normalize()
       : this.aimDir(_v2);
     const spread = spreadDeg * Math.PI / 180;
-    const a = Math.random() * TAU, r = Math.sqrt(Math.random()) * spread;
     const up = new THREE.Vector3(0, 1, 0);
-    const right = new THREE.Vector3().crossVectors(dir, up).normalize();
-    const realUp = new THREE.Vector3().crossVectors(right, dir).normalize();
-    dir.addScaledVector(right, Math.tan(r) * Math.cos(a));
-    dir.addScaledVector(realUp, Math.tan(r) * Math.sin(a));
-    dir.normalize();
-
-    this.game.fireBullet(this, origin, dir, w);
+    const right = new THREE.Vector3().crossVectors(base, up).normalize();
+    const realUp = new THREE.Vector3().crossVectors(right, base).normalize();
+    const pellets = w.pellets || 1;
+    for (let i = 0; i < pellets; i++) {
+      const a = Math.random() * TAU;
+      const r = Math.sqrt(Math.random()) * spread;
+      const dir = new THREE.Vector3().copy(base);
+      dir.addScaledVector(right, Math.tan(r) * Math.cos(a));
+      dir.addScaledVector(realUp, Math.tan(r) * Math.sin(a));
+      dir.normalize();
+      this.game.fireBullet(this, origin, dir, w);
+    }
+    this.game.makeNoise(this.pos.x, this.pos.z, 105, this, 'shot');
 
     this.rig.kick(0.30 + w.def.recoil * 0.22);
     this.recoilKick = (this.recoilKick || 0) + w.def.camKick;
     this.muzzleT = 0.05;
+    this.lastFiredAt = this.game.time;
     this.onFired && this.onFired();
   }
 
@@ -57514,7 +57909,7 @@ class Actor {
     const cur = this.inv.current;
     if (!cur || cur.kind !== 'item' || this.busy || !this.alive) return false;
     if (cur.id === 'bandage' && this.health >= cur.def.healCap) return false;
-    if (cur.id === 'shield' && this.shield >= cur.def.shieldCap) return false;
+    if (cur.def.shield && this.shield >= cur.def.shieldCap) return false;
     this.useT = cur.def.useTime;
     this.useTotal = this.useT;
     this.useSlot = this.inv.selected;
@@ -57528,6 +57923,7 @@ class Actor {
     if (!cur || cur.kind !== 'item') { this.useSlot = -1; return; }
     if (cur.id === 'bandage') this.health = Math.min(cur.def.healCap, this.health + cur.def.heal);
     else this.shield = Math.min(cur.def.shieldCap, this.shield + cur.def.shield);
+    this.game.makeNoise(this.pos.x, this.pos.z, 16, this, 'heal');
     this.inv.consumeOne(this.useSlot);
     this.useSlot = -1;
     this.refreshHeld();
@@ -57544,7 +57940,7 @@ class Actor {
 
   // --- damage ------------------------------------------------------------
   takeDamage(amount, from, point, isHead = false, cause = 'shot') {
-    if (!this.alive) return 0;
+    if (!this.alive || !this.game.damageEnabled) return 0;
     this.lastCause = cause;
     let dmg = amount;
     let shieldPart = 0;
@@ -57614,7 +58010,59 @@ class Actor {
   }
 
   // --- per-frame ---------------------------------------------------------
+  /** Free-fall out of the bus, then glide the last stretch to the ground. */
+  updateDive(dt) {
+    const phys = this.game.physics;
+    const ground = phys.floorAt(this.pos.x, this.pos.z, this.pos.y, this.radius);
+    const above = this.pos.y - ground;
+    this.gliding = above < DIVE.glideAt;
+
+    const steer = this.gliding ? DIVE.glideSteer : DIVE.steer;
+    let wishX = 0, wishZ = 0;
+    if (this.diveTarget) {
+      const dx = this.diveTarget.x - this.pos.x, dz = this.diveTarget.z - this.pos.z;
+      const d = Math.hypot(dx, dz);
+      if (d > 1) { wishX = dx / d; wishZ = dz / d; }
+      this.yaw = Math.atan2(dx, dz);
+    } else {
+      const inp = this.moveInput;
+      const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
+      const rx = -Math.cos(this.yaw), rz = Math.sin(this.yaw);
+      wishX = fx * inp.y + rx * inp.x;
+      wishZ = fz * inp.y + rz * inp.x;
+      const m = Math.hypot(wishX, wishZ);
+      if (m > 1) { wishX /= m; wishZ /= m; }
+    }
+    const accel = 26;
+    this.vel.x += clamp(wishX * steer - this.vel.x, -accel * dt, accel * dt);
+    this.vel.z += clamp(wishZ * steer - this.vel.z, -accel * dt, accel * dt);
+    const targetFall = this.gliding ? -DIVE.glideFall : -DIVE.terminal;
+    this.vel.y = damp(this.vel.y, targetFall, this.gliding ? 5 : 1.6, dt);
+
+    this.pos.x += this.vel.x * dt;
+    this.pos.z += this.vel.z * dt;
+    this.pos.y += this.vel.y * dt;
+    const h = WORLD_HALF;
+    this.pos.x = clamp(this.pos.x, -h, h);
+    this.pos.z = clamp(this.pos.z, -h, h);
+
+    const land = phys.floorAt(this.pos.x, this.pos.z, this.pos.y, this.radius);
+    if (this.pos.y <= land) {
+      this.pos.y = land;
+      this.vel.set(0, 0, 0);
+      this.mode = 'ground';
+      this.gliding = false;
+      this.grounded = true;
+      this.fallSpeed = 0;
+      this.diveTarget = null;
+      this.onLanded && this.onLanded();
+    }
+    this.speed2D = Math.hypot(this.vel.x, this.vel.z);
+  }
+
   updatePhysics(dt) {
+    if (this.mode === 'bus') { this.speed2D = 0; return; }
+    if (this.mode === 'dive') { this.updateDive(dt); return; }
     const phys = this.game.physics;
     const wantSprint = this.sprinting && !this.crouching && this.moveInput.lengthSq() > 0.05 && !this.aiming;
     let target = wantSprint ? MOVE.sprint : this.crouching ? MOVE.crouch : MOVE.walk;
@@ -57691,6 +58139,8 @@ class Actor {
       hasTool: this.inv.holdingPickaxe,
       pitch: this.pitch,
       dead: !this.alive,
+      diving: this.mode === 'dive' && !this.gliding,
+      gliding: this.mode === 'dive' && this.gliding,
     });
 
     // muzzle flash follows the gun's barrel tip
@@ -57705,7 +58155,11 @@ class Actor {
     } else {
       this.muzzle.visible = false;
     }
-    if (this.plate) this.plate.visible = this.alive;
+    // plates vanish when someone is right in your face
+    if (this.plate) {
+      const d2 = this.game.camera.position.distanceToSquared(this.root.position);
+      this.plate.visible = this.alive && d2 > 16;
+    }
   }
 
   dispose() {
@@ -57715,7 +58169,7 @@ class Actor {
   }
 }
 
-return { MOVE, Actor };
+return { DIVE, MOVE, Actor };
 })();
 
 // ===================== src/ai.js =====================
@@ -57766,26 +58220,42 @@ class Bot extends Actor {
     this.lootCd = 0;
     this.aiSpreadMul = lerp(1.9, 0.85, this.skill);
     this.reactT = lerp(0.55, 0.16, this.skill);
-    this.viewRange = lerp(58, 96, this.skill);
+    // --- senses ---
+    this.sightRange = lerp(58, 96, this.skill);   // clear line of sight, standing target
     this.fov = Math.cos(lerp(1.05, 1.35, this.skill));
+    this.hearRange = lerp(48, 88, this.skill);    // scaled per noise by its loudness
+    this.noise = null;                            // last thing heard: { x, z, t, kind }
+    this.investigateT = 0;
     this.desiredRange = lerp(9, 24, this.rng());
     this.wanderAngle = this.rng() * TAU;
     this.lastSawT = -99;
   }
 
   // ---------------------------------------------------------------- senses
+  /**
+   * How far this bot can pick `a` out: crouching hides you, sprinting and
+   * shooting give you away.
+   */
+  spotRange(a) {
+    let r = this.sightRange;
+    if (a.crouching) r *= 0.62;
+    if (a.speed2D > 6) r *= 1.2;
+    if (a.muzzleT > 0 || this.game.time - (a.lastFiredAt || -99) < 1.2) r *= 1.35;
+    return r;
+  }
+
   scanForEnemies() {
     const g = this.game;
-    let best = null, bestD = this.viewRange;
+    let best = null, bestD = Infinity;
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
     const candidates = [];
     for (const a of g.actors) {
       if (a === this || !a.alive) continue;
       const dx = a.pos.x - this.pos.x, dz = a.pos.z - this.pos.z;
       const d = Math.hypot(dx, dz);
-      if (d > this.viewRange) continue;
+      if (d > this.spotRange(a)) continue;
       const dot = (dx * fx + dz * fz) / (d || 1);
-      // wide awareness when close, cone at distance
+      // wide awareness up close, a cone at distance
       if (d > 9 && dot < this.fov) continue;
       candidates.push({ a, d });
     }
@@ -57798,6 +58268,25 @@ class Bot extends Actor {
       if (d < bestD) { bestD = d; best = a; }
     }
     return best;
+  }
+
+  /**
+   * Called by the game when something makes a sound nearby.  Loud things carry
+   * further; a bot only keeps the closest recent noise.
+   */
+  hearNoise(x, z, kind, source, dist) {
+    if (!this.alive || source === this) return;
+    const t = this.game.time;
+    // keep whichever is closer, unless the old one has gone stale
+    if (this.noise && t - this.noise.t < 4 && this.noise.dist < dist) return;
+    this.noise = { x, z, kind, dist, t };
+    // gunfire close by snaps you round to look at it
+    if (kind === 'shot' && dist < 45) this.investigateT = Math.max(this.investigateT, 5);
+    else this.investigateT = Math.max(this.investigateT, 3);
+  }
+
+  get heardRecently() {
+    return this.noise && this.game.time - this.noise.t < 6;
   }
 
   nearestLoot() {
@@ -57818,7 +58307,7 @@ class Bot extends Actor {
       let want = false;
       if (it.kind === 'weapon') want = wantWeapon || itemScore(it) > myBest + 6;
       else if (it.id === 'bandage') want = this.health < 100 || this.inv.findItem('bandage') < 0;
-      else want = this.shield < 100 || this.inv.findItem('shield') < 0;
+      else want = this.shield < 100 || this.inv.findShield(this.shield) < 0;
       if (this.inv.firstEmpty() < 0 && !want) continue;
       if (!want) continue;
       bestD = d;
@@ -57848,9 +58337,23 @@ class Bot extends Actor {
     }
     if (this.target && this.target.alive) this.lastSawT = g.time;
 
+    // Nothing in sight but something was heard: face it and go take a look.
+    if (!enemy && this.heardRecently && this.investigateT > 0) {
+      const n = this.noise;
+      const d = Math.hypot(n.x - this.pos.x, n.z - this.pos.z);
+      if (d > 4) {
+        this.lookAtNoise = { x: n.x, z: n.z };
+        if (n.kind === 'shot' && d < this.hearRange) {
+          this.state = 'investigate';
+          this.goal = { x: n.x, z: n.z, type: 'noise' };
+          return;
+        }
+      }
+    }
+
     const hurt = this.health < 55;
     const canHeal = this.inv.findItem('bandage') >= 0 && this.health < 100;
-    const canShield = this.inv.findItem('shield') >= 0 && this.shield < 100;
+    const canShield = this.inv.findShield(this.shield) >= 0 && this.shield < 100;
     let threatened = this.target && this.target.alive;
 
     // an unarmed bot has nothing to fight with: unless someone is right on top
@@ -57915,6 +58418,16 @@ class Bot extends Actor {
       if (lod < 2) this.updateVisual(dt);
       return;
     }
+    // Before the drop there is nothing to fight over: mill about the spawn
+    // island, ride the bus, then steer for the chosen landing spot.
+    if (this.mode === 'bus') { this.updateVisual(dt); return; }
+    if (this.mode === 'dive') {
+      this.updateTimers(dt);
+      this.updatePhysics(dt);
+      if (lod < 2) this.updateVisual(dt);
+      return;
+    }
+    if (this.game.phase !== 'live') { this.spawnIdle(dt, lod); return; }
     this.goalT += dt;
     this.jumpCd -= dt; this.doorCd -= dt;
     if (this.lootCd > 0) this.lootCd -= dt;
@@ -57926,6 +58439,7 @@ class Bot extends Actor {
     this.crouching = false;
     this.aiming = false;
 
+    if (this.investigateT > 0) this.investigateT -= dt;
     if (this.state === 'fight' && this.target && this.target.alive) this.doFight(dt);
     else if (this.state === 'heal') this.doHeal(dt);
     else this.doTravel(dt);
@@ -57935,6 +58449,29 @@ class Bot extends Actor {
     this.updatePhysics(dt);
     if (lod < 2) this.updateVisual(dt);
     else this.root.position.copy(this.pos);
+  }
+
+  /** Aimless wandering while the lobby waits for the bus. */
+  spawnIdle(dt, lod) {
+    this.moveInput.set(0, 0);
+    this.sprinting = false;
+    this.crouching = false;
+    this.aiming = false;
+    this.idleT = (this.idleT || 0) - dt;
+    if (this.idleT <= 0 || !this.idleGoal) {
+      this.idleT = 2 + this.rng() * 4;
+      const S = this.game.spawnArea;
+      this.idleGoal = {
+        x: S.x + (this.rng() * 2 - 1) * (S.half - 8),
+        z: S.z + (this.rng() * 2 - 1) * (S.half - 8),
+      };
+    }
+    this.moveTowards(this.idleGoal.x, this.idleGoal.z, dt, false);
+    if (this.rng() < 0.004 && this.grounded) this.wantJump = true;
+    this.avoidAndUnstick(dt);
+    this.updateTimers(dt);
+    this.updatePhysics(dt);
+    if (lod < 2) this.updateVisual(dt);
   }
 
   faceTowards(x, z, dt, rate = 7) {
@@ -57984,6 +58521,11 @@ class Bot extends Actor {
       this.moveTowards(p.pos.x, p.pos.z, dt);
       return;
     }
+    if (goal.type === 'noise') {
+      if (d < 5 || this.investigateT <= 0) { this.goal = null; return; }
+      this.moveTowards(goal.x, goal.z, dt, d > 25);
+      return;
+    }
     if (goal.type === 'storm') {
       if (d < 8) { this.goal = null; return; }
       this.moveTowards(goal.x, goal.z, dt, true);
@@ -57997,7 +58539,7 @@ class Bot extends Actor {
 
   doHeal(dt) {
     const wantSlot = (this.health < 100 && this.inv.findItem('bandage') >= 0)
-      ? this.inv.findItem('bandage') : this.inv.findItem('shield');
+      ? this.inv.findItem('bandage') : this.inv.findShield(this.shield);
     if (wantSlot < 0) { this.state = 'roam'; return; }
     if (this.inv.selected !== wantSlot) { this.select(wantSlot); return; }
     if (this.useT <= 0 && this.equipT <= 0) this.tryUse();
@@ -58169,6 +58711,26 @@ class Player extends Actor {
     this.pitch = clamp(this.pitch, -1.15, 1.15);
     input.look.x = 0; input.look.y = 0;
 
+    // --- riding the bus: look around, jump to drop ------------------------
+    if (this.mode === 'bus') {
+      this.moveInput.set(0, 0);
+      this.sprinting = false;
+      this.aiming = false;
+      if (input.jump) { input.jump = false; this.game.dropActor(this); }
+      return;
+    }
+    // --- skydiving: the stick steers, everything else is locked out -------
+    if (this.mode === 'dive') {
+      const kbd = hud.readKeyboardMove();
+      let dx = input.move.x, dy = input.move.y;
+      if (Math.abs(kbd.x) + Math.abs(kbd.y) > 0) { dx = kbd.x; dy = kbd.y; }
+      this.moveInput.set(dx, dy);
+      this.sprinting = false;
+      this.aiming = false;
+      input.jump = false;
+      return;
+    }
+
     // move
     const kb = hud.readKeyboardMove();
     let mx = input.move.x, my = input.move.y;
@@ -58181,6 +58743,7 @@ class Player extends Actor {
 
     if (input.slotRequest >= 0) {
       this.select(input.slotRequest);
+      input.aimToggle = false;
       input.slotRequest = -1;
       if (input.buildMode && !this.inv.holdingPickaxe) hud.toggleBuild();
     }
@@ -58200,7 +58763,7 @@ class Player extends Actor {
       } else if (this.inv.holdingPickaxe) {
         if (input.shoot) this.trySwing();
       } else if (cur && cur.kind === 'weapon') {
-        this.aiming = input.aim;
+        this.aiming = input.aim || input.aimToggle;
         if (input.shoot) {
           if (cur.def.auto) this.tryFire();
           else if (!this.semiLatch) { this.tryFire(); this.semiLatch = true; }
@@ -58208,7 +58771,7 @@ class Player extends Actor {
       }
     }
     if (!input.shoot) this.semiLatch = false;
-    if (!this.weapon) this.aiming = false;
+    if (!this.weapon) { this.aiming = false; input.aimToggle = false; }
   }
 
   update(dt, input, hud) {
@@ -58223,8 +58786,9 @@ class Player extends Actor {
   /** Camera + crosshair ray.  Called after the player has moved. */
   updateCamera(camera, dt) {
     const aimingNow = this.aiming;
-    const wantDist = aimingNow ? 2.15 : 4.4;
-    const wantSide = aimingNow ? 0.62 : 0.85;
+    const scopedNow = aimingNow && this.weapon && this.weapon.def.scope;
+    const wantDist = scopedNow ? 0.9 : aimingNow ? 2.15 : 4.4;
+    const wantSide = scopedNow ? 0.34 : aimingNow ? 0.62 : 0.85;
     const wantHigh = aimingNow ? 1.52 : 1.62;
     this.camDist = damp(this.camDist, wantDist, 12, dt);
     const side = damp(this.camSide ?? wantSide, wantSide, 12, dt);
@@ -58257,7 +58821,10 @@ class Player extends Actor {
     const pitchKick = (this.recoilKick || 0) * 0.02;
     camera.lookAt(ox + fx * 40, oy + fy * 40 + pitchKick * 20, oz + fz * 40);
 
-    const fov = aimingNow ? 56 : 72;
+    // scoped weapons zoom much further in
+    const w = this.weapon;
+    const scoped = aimingNow && w && w.def.scope;
+    const fov = scoped ? 24 : aimingNow ? 56 : 72;
     if (Math.abs(camera.fov - fov) > 0.05) {
       camera.fov = damp(camera.fov, fov, 12, dt);
       camera.updateProjectionMatrix();
@@ -58301,7 +58868,7 @@ class HUD {
     this.input = {
       move: { x: 0, y: 0 },
       look: { x: 0, y: 0 },
-      shoot: false, aim: false, sprint: false, sprintLock: false,
+      shoot: false, aim: false, aimToggle: false, sprint: false, sprintLock: false,
       jump: false, use: false, reload: false,
       crouch: false, mapOpen: false,
       buildMode: false, buildType: 'ramp',
@@ -58372,6 +58939,10 @@ class HUD {
     this.stormFx = el('div', 'stormfx', r);
     this.stormWarn = el('div', 'stormwarn', r, 'IN THE STORM');
     this.stormWarn.style.display = 'none';
+    this.bannerEl = el('div', 'dropbanner', r);
+    this.bannerEl.style.display = 'none';
+    this.bannerTitle = el('b', null, this.bannerEl, '');
+    this.bannerSub = el('span', null, this.bannerEl, '');
 
     // ---- full map screen --------------------------------------------------
     this.mapScreen = el('div', 'mapscreen', r);
@@ -58632,7 +59203,8 @@ class HUD {
       b.addEventListener('pointerleave', end);
     };
     hold('shoot', 'shoot');
-    hold('aim', 'aim');
+    // AIM is a toggle: tap once to sight in, tap again to come out of it.
+    tap('aim', () => { this.input.aimToggle = !this.input.aimToggle; });
     tap('jump', () => { this.input.jump = true; });
     tap('reload', () => { this.input.reload = true; });
     tap('use', () => { this.input.use = true; });
@@ -58688,7 +59260,8 @@ class HUD {
     ctx.save();
     ctx.scale(dpr, dpr);
     const w = this.mapCanvas.width / dpr, h = this.mapCanvas.height / dpr;
-    this.game.gameMap.drawFull(ctx, w, h, { player: this.game.player, storm: this.game.storm }, this.mapView);
+    this.game.gameMap.drawFull(ctx, w, h,
+      { player: this.game.player, storm: this.game.storm, bus: this.game.bus }, this.mapView);
     ctx.restore();
   }
 
@@ -58786,7 +59359,8 @@ class HUD {
     const size = Math.round(css * dpr);
     if (this.miniCanvas.width !== size) { this.miniCanvas.width = size; this.miniCanvas.height = size; }
     const ctx = this.miniCanvas.getContext('2d');
-    gm.drawMinimap(ctx, size, { player: this.game.player, storm: this.game.storm, span: 320 });
+    gm.drawMinimap(ctx, size,
+      { player: this.game.player, storm: this.game.storm, bus: this.game.bus, span: 320 });
   }
 
   toggleBuild() {
@@ -58797,6 +59371,17 @@ class HUD {
   }
 
   // ------------------------------------------------------------------ view
+  /** Big centred callout for phase changes. */
+  banner(title, sub, ms = 3400) {
+    this.bannerTitle.textContent = title;
+    this.bannerSub.textContent = sub || '';
+    this.bannerEl.style.display = 'block';
+    this.bannerEl.classList.remove('out');
+    clearTimeout(this._bannerT1); clearTimeout(this._bannerT2);
+    this._bannerT1 = setTimeout(() => this.bannerEl.classList.add('out'), ms);
+    this._bannerT2 = setTimeout(() => { this.bannerEl.style.display = 'none'; }, ms + 900);
+  }
+
   killFeed(text, mine) {
     const line = el('div', 'kfline' + (mine ? ' mine' : ''), this.feed, text);
     setTimeout(() => line.classList.add('fade'), 3200);
@@ -58879,6 +59464,7 @@ class HUD {
     const spread = w ? (p.aiming ? w.adsSpread : w.spread) * (p.speed2D > 4 ? 1.7 : 1) : 2.2;
     this.cross.style.setProperty('--gap', (6 + spread * 4.5) + 'px');
     this.cross.style.opacity = p.inv.holdingPickaxe ? 0.35 : 1;
+    this.root.classList.toggle('scoped', !!(w && w.def.scope && p.aiming));
 
     // build mode
     this.buildBar.style.display = this.input.buildMode ? 'flex' : 'none';
@@ -58889,11 +59475,23 @@ class HUD {
     }
 
     this.btn.sprint.classList.toggle('on', this.input.sprintLock);
+    this.btn.aim.classList.toggle('on', this.input.aimToggle);
     this.btn.crouch.classList.toggle('on', this.input.crouch);
 
-    // storm readout + "you are outside the circle" warning
+    // before the drop the bar counts the lobby down instead of the storm
     const storm = game.storm;
-    if (storm) {
+    if (game.phase === 'spawn') {
+      const t = Math.max(0, Math.ceil(game.phaseT));
+      this.stormLabel.textContent = 'MATCH STARTS IN';
+      this.stormTime.textContent = `0:${t < 10 ? '0' : ''}${t}`;
+      this.stormBar.classList.remove('closing');
+      this.stormFx.classList.remove('on');
+      this.stormWarn.style.display = 'none';
+    } else if (game.phase === 'bus') {
+      this.stormLabel.textContent = p.mode === 'bus' ? 'JUMP WHEN READY' : 'DROPPING';
+      this.stormTime.textContent = '';
+      this.stormBar.classList.remove('closing');
+    } else if (storm) {
       const st = storm.statusText();
       this.stormLabel.textContent = st.label;
       this.stormTime.textContent = st.time;
@@ -58902,6 +59500,16 @@ class HUD {
       this.stormFx.classList.toggle('on', outside && p.alive);
       this.stormWarn.style.display = outside && p.alive ? 'block' : 'none';
     }
+
+    // the jump button doubles as the bus door
+    const onBus = p.mode === 'bus';
+    this.btn.jump.firstChild.textContent = onBus ? 'DROP' : 'JUMP';
+    this.btn.jump.classList.toggle('drop', onBus);
+    const airborne = p.mode !== 'ground';
+    for (const n of ['shoot', 'aim', 'reload', 'use', 'build', 'crouch', 'sprint']) {
+      this.btn[n].classList.toggle('hidden', airborne);
+    }
+    this.invBar.classList.toggle('hidden', airborne);
 
     this.drawMinimap();
     if (this.input.mapOpen) this.drawMap();
@@ -58934,7 +59542,8 @@ const { Chest, Pickup, floorLoot, itemScore, makeWeapon, makeConsumable } = __m[
 const { RARITY } = __m['models'];
 const { Storm } = __m['storm'];
 const { GameMap } = __m['map'];
-const { makeRng, TAU } = __m['util'];
+const { buildSpawnIsland, BattleBus, pickDropTarget, SPAWN, SPAWN_TIME, DROP_FROM, DROP_TO } = __m['bus'];
+const { makeRng, clamp, lerp, TAU } = __m['util'];
 
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
@@ -58963,6 +59572,11 @@ class Game {
     this.doors = [];
     this.poiCenters = POIS.map(p => ({ x: p.x, z: p.z }));
     this.eliminated = 0;
+    this.phase = 'spawn';          // 'spawn' -> 'bus' -> 'live'
+    this.phaseT = SPAWN_TIME;
+    this.damageEnabled = false;    // nobody can be hurt before the drop
+    this.bus = null;
+    this.spawnArea = SPAWN;
   }
 
   // ------------------------------------------------------------ world setup
@@ -59035,7 +59649,12 @@ class Game {
     this.gameMap = new GameMap(this.mapCanvas);
     this.makeWaypointBeam();
 
-    await this.yieldFrame(progress, 'Dropping 100 players', 0.9);
+    await this.yieldFrame(progress, 'Raising the spawn island', 0.88);
+    const before = new Set(this.physics.all);
+    this.spawnIsland = buildSpawnIsland(scene, this.physics);
+    this.spawnColliders = [...this.physics.all].filter(c => !before.has(c));
+
+    await this.yieldFrame(progress, 'Gathering 100 players', 0.94);
     this.spawnActors();
 
     progress('Ready', 1);
@@ -59174,6 +59793,11 @@ class Game {
   // ---------------------------------------------------------------- actors
   spawnActors() {
     const rng = makeRng(this.seed ^ 0x77a1);
+    // Everybody starts on the spawn island; the bus takes them to the map.
+    const islandSpot = () => {
+      const h = SPAWN.half - 6;
+      return { x: SPAWN.x + (rng() * 2 - 1) * h, z: SPAWN.z + (rng() * 2 - 1) * h, y: SPAWN.y };
+    };
     const spot = (i, minD = 34) => {
       // Most of the lobby lands around the three POIs (as if they had dropped
       // there); the rest are spread over the island.
@@ -59192,7 +59816,7 @@ class Game {
       return { x, z, y: this.physics.floorAt(x, z, 400, 0.4) + 0.2 };
     };
 
-    const ps = spot(1, 95);   // the player gets a little breathing room on landing
+    const ps = islandSpot();
     this.player = new Player(this, {
       x: ps.x, y: ps.y, z: ps.z, name: this.playerName,
       cosmetics: this.cosmetics, yaw: rng() * TAU,
@@ -59204,7 +59828,7 @@ class Game {
 
     const tints = [0x2e5aa8, 0x8a3a3a, 0x3f7a45, 0x7a5aa8, 0xa8853f, 0x3a7a8a, 0xa85a3a, 0x555b66];
     for (let i = 0; i < TOTAL_PLAYERS - 1; i++) {
-      const s = spot(i + 2);
+      const s = islandSpot();
       const bot = new Bot(this, {
         x: s.x, y: s.y, z: s.z, seed: i + 3,
         name: botName(i, makeRng(i * 31 + 7)),
@@ -59242,7 +59866,15 @@ class Game {
 
     if (victim) {
       const head = victim.isHead(end.y);
-      const dmg = Math.round(weapon.damage * (head ? 1.85 : 1));
+      const def = weapon.def;
+      // shotguns lose most of their bite past a few metres
+      let dmg = weapon.damage;
+      if (def.falloffStart) {
+        const f = 1 - clamp((bestT - def.falloffStart) / (def.falloffEnd - def.falloffStart), 0, 1);
+        dmg *= lerp(def.falloffMin ?? 0.3, 1, f);
+      }
+      if (head) dmg *= weapon.headMult || 1.5;
+      dmg = Math.min(Math.round(dmg), weapon.maxHit ?? Infinity);
       const before = victim.health + victim.shield;
       victim.takeDamage(dmg, shooter, end, head);
       this.effects.impact(end, 'flesh');
@@ -59326,6 +59958,24 @@ class Game {
       }
       this.effects.impact(end, hit.collider.tag || 'stone');
     } else if (hit) this.effects.impact(end, 'dirt');
+  }
+
+  /**
+   * Something made a sound.  Bots inside the radius get told about it and will
+   * turn toward gunfire, or walk over to investigate it.
+   */
+  makeNoise(x, z, radius, source, kind) {
+    if (!this.bots || this.phase !== 'live') return;
+    const r2 = radius * radius;
+    for (const b of this.bots) {
+      if (!b.alive || b === source) continue;
+      const dx = b.pos.x - x, dz = b.pos.z - z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 > r2) continue;
+      const d = Math.sqrt(d2);
+      if (d > b.hearRange * (kind === 'shot' ? 1.25 : 0.55)) continue;
+      b.hearNoise(x, z, kind, source, d);
+    }
   }
 
   // ------------------------------------------------------------ interaction
@@ -59432,16 +60082,92 @@ class Game {
 
     if (actor === this.player) {
       this.state = 'dead';
-      setTimeout(() => this.onMatchEnd({ won: false, kills: actor.kills, place: this.aliveCount + 1 }), 2600);
+      // capture the placement now — reading it when the timer fires would pick
+      // up every elimination that happened while the death cam was running
+      const place = this.aliveCount + 1, kills = actor.kills;
+      setTimeout(() => this.onMatchEnd({ won: false, kills, place }), 2600);
     } else if (this.aliveCount === 1 && this.player.alive) {
       this.state = 'won';
       setTimeout(() => this.onMatchEnd({ won: true, kills: this.player.kills, place: 1 }), 2200);
     }
   }
 
+  // ----------------------------------------------------------- match phases
+  startBus() {
+    this.phase = 'bus';
+    this.bus = new BattleBus(this.scene, makeRng(this.seed ^ 0x0b05));
+    // the island is no longer needed and must not block anyone's descent
+    this.spawnIsland.group.visible = false;
+    for (const c of this.spawnColliders) this.physics.remove(c);
+    this.spawnColliders.length = 0;
+
+    const rng = makeRng(this.seed ^ 0x0d1e);
+    for (const a of this.actors) {
+      if (!a.alive) continue;
+      a.mode = 'bus';
+      a.vel.set(0, 0, 0);
+      if (a !== this.player) {
+        a.root.visible = false;
+        a.dropTarget = pickDropTarget(rng);
+        // leave the bus a little before its closest pass to the chosen spot
+        const t = this.bus.closestT(a.dropTarget.x, a.dropTarget.z);
+        a.dropT = clamp(t - 0.02 - rng() * 0.02, DROP_FROM, DROP_TO);
+      }
+    }
+    this.hud.banner('DROP WHEN READY', 'Tap JUMP to leave the bus');
+  }
+
+  dropActor(a) {
+    if (a.mode !== 'bus') return;
+    a.mode = 'dive';
+    a.root.visible = true;
+    a.pos.copy(this.bus.pos);
+    a.pos.y -= 9;
+    const fx = Math.sin(this.bus.heading), fz = Math.cos(this.bus.heading);
+    a.vel.set(fx * 14, -3, fz * 14);
+    if (a !== this.player) a.diveTarget = a.dropTarget;
+    else {
+      a.rig.ensureGlider();
+      this.hud.banner('SKYDIVING', 'Steer with the stick — the glider opens on its own');
+    }
+    if (a.rig.ensureGlider) a.rig.ensureGlider();
+  }
+
+  startLive() {
+    this.phase = 'live';
+    this.damageEnabled = true;
+    this.storm.activate();
+    if (this.bus) { this.bus.dispose(this.scene); this.bus = null; }
+    this.hud.banner('THE STORM IS COMING', 'Stay inside the circle');
+  }
+
+  updatePhase(dt) {
+    if (this.phase === 'spawn') {
+      this.phaseT -= dt;
+      if (this.phaseT <= 0) this.startBus();
+      return;
+    }
+    if (this.phase !== 'bus') return;
+    this.bus.update(dt);
+    for (const a of this.actors) {
+      if (a.mode !== 'bus') continue;
+      a.pos.copy(this.bus.pos);
+      a.pos.y -= 9;        // low enough that the chase camera clears the bus
+      a.yaw = this.bus.heading;
+    }
+    for (const b of this.bots) {
+      if (b.mode === 'bus' && b.alive && this.bus.t >= b.dropT) this.dropActor(b);
+    }
+    if (this.bus.t >= DROP_TO) {
+      for (const a of this.actors) if (a.mode === 'bus') this.dropActor(a);
+    }
+    if (this.bus.done) this.startLive();
+  }
+
   // ------------------------------------------------------------------ loop
   update(dt) {
     this.time += dt;
+    this.updatePhase(dt);
     const input = this.hud.input;
     const p = this.player;
 
@@ -59454,6 +60180,7 @@ class Game {
       const b = this.bots[i];
       const d2 = (b.pos.x - px) * (b.pos.x - px) + (b.pos.z - pz) * (b.pos.z - pz);
       const lod = d2 < 90 * 90 ? 0 : d2 < 260 * 260 ? 1 : 2;
+      if (b.mode === 'bus') { b.update(dt, lod); continue; }   // hidden inside the bus
       if (lod === 2) {
         // still simulate, just not every frame and without rig animation
         if ((i + Math.floor(this.time * 60)) % 3 !== 0) continue;
@@ -59466,6 +60193,8 @@ class Game {
     }
 
     this.storm.update(dt, this.actors);
+    // sprinting footsteps and building are quieter giveaways than gunfire
+    if (p.alive && p.grounded && p.speed2D > 6) this.makeNoise(p.pos.x, p.pos.z, 26, p, 'steps');
     for (const c of this.chests) c.update(dt);
     for (const d of this.doors) d.update(dt);
     for (let i = this.pickups.length - 1; i >= 0; i--) {

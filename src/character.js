@@ -176,6 +176,7 @@ export class CharacterRig {
     this.lookPitch = damp(this.lookPitch, clamp(s.pitch || 0, -0.7, 0.7), 12, dt);
 
     if (s.dead) { this.updateDead(dt); return; }
+    if (s.diving || s.gliding) { this.updateAirborne(dt, s); return; }
 
     const sw = moving ? Math.sin(this.phase) : 0;
     const sw2 = moving ? Math.sin(this.phase * 2) : 0;
@@ -298,6 +299,59 @@ export class CharacterRig {
     }
   }
 
+  /** Skydiving spread-eagle, then hanging under the glider. */
+  updateAirborne(dt, s) {
+    this.hips.position.y = 0.92;
+    this.hips.rotation.z = 0;
+    if (s.gliding) {
+      this.torso.rotation.x = 0.12;
+      this.armL.rotation.set(-2.5, 0, 0.55);
+      this.armR.rotation.set(-2.5, 0, -0.55);
+      this.foreL.rotation.x = -0.15;
+      this.foreR.rotation.x = -0.15;
+      this.legL.rotation.x = 0.25; this.legR.rotation.x = 0.18;
+      this.shinL.rotation.x = 0.35; this.shinR.rotation.x = 0.45;
+      if (this.glider) this.glider.visible = true;
+    } else {
+      const flap = Math.sin(this.phase * 0.6 + performance.now() * 0.004) * 0.12;
+      this.torso.rotation.x = 0.75;
+      this.armL.rotation.set(-1.15, 0, 1.15 + flap);
+      this.armR.rotation.set(-1.15, 0, -1.15 - flap);
+      this.foreL.rotation.x = -0.5;
+      this.foreR.rotation.x = -0.5;
+      this.legL.rotation.set(0.35, 0, 0.35);
+      this.legR.rotation.set(0.35, 0, -0.35);
+      this.shinL.rotation.x = 0.55; this.shinR.rotation.x = 0.55;
+      if (this.glider) this.glider.visible = false;
+    }
+    this.neck.rotation.x = -this.torso.rotation.x * 0.7;
+  }
+
+  /** Simple delta-wing that appears when the glider opens. */
+  ensureGlider() {
+    if (this.glider) return this.glider;
+    const g = new THREE.Group();
+    const wing = new THREE.Mesh(
+      new THREE.ConeGeometry(2.4, 3.4, 3),
+      new THREE.MeshLambertMaterial({ color: this.tint ?? this.skinDef.shirt, flatShading: true })
+    );
+    wing.rotation.x = -Math.PI / 2;
+    wing.rotation.z = Math.PI;
+    wing.scale.set(1, 1, 0.12);
+    wing.position.y = 1.5;
+    g.add(wing);
+    for (const sx of [-1, 1]) {
+      const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.4, 4),
+        new THREE.MeshLambertMaterial({ color: 0x2a2d33 }));
+      rope.position.set(sx * 0.7, 0.9, 0);
+      g.add(rope);
+    }
+    g.visible = false;
+    this.root.add(g);
+    this.glider = g;
+    return g;
+  }
+
   updateDead(dt) {
     this.deadT = (this.deadT || 0) + dt;
     const p = clamp(this.deadT * 2.4, 0, 1);
@@ -329,6 +383,6 @@ export function makeNamePlate(text, color = '#ffffff') {
   const tex = new THREE.CanvasTexture(c);
   tex.anisotropy = 2;
   const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: true, transparent: true }));
-  spr.scale.set(1.7, 0.42, 1);
+  spr.scale.set(1.35, 0.34, 1);
   return spr;
 }

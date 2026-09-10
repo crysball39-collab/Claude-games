@@ -77,7 +77,7 @@ export class GameMap {
     }
 
     // a white line to the safe circle whenever we are outside it
-    if (s.storm) {
+    if (s.storm && s.storm.active) {
       const safe = s.storm.safeCircle();
       const dx = safe.x - px, dz = safe.z - pz;
       const d = Math.hypot(dx, dz);
@@ -97,6 +97,8 @@ export class GameMap {
         ctx.restore();
       }
     }
+
+    if (s.bus && !s.bus.done) this.drawBus(ctx, toScreen, s.bus, size * 0.05);
 
     // player arrow
     ctx.save();
@@ -119,7 +121,7 @@ export class GameMap {
   }
 
   drawStorm(ctx, toScreen, scale, storm, full) {
-    if (!storm) return;
+    if (!storm || !storm.active) return;
     const cur = storm.currentCircle();
     const next = storm.nextCircle();
     const closing = storm.phase === 'closing';
@@ -153,6 +155,23 @@ export class GameMap {
       ctx.stroke();
       ctx.restore();
     }
+  }
+
+  /** Bus marker plus the line it is flying along. */
+  drawBus(ctx, toScreen, bus, r) {
+    const a = toScreen(bus.start.x, bus.start.z), b = toScreen(bus.end.x, bus.end.z);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(120, 200, 255, 0.75)';
+    ctx.lineWidth = Math.max(1.5, r * 0.22);
+    ctx.setLineDash([r * 1.2, r]);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    ctx.setLineDash([]);
+    const p = toScreen(bus.pos.x, bus.pos.z);
+    ctx.fillStyle = '#8fe0ff';
+    ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r * 0.7, 0, TAU); ctx.fill(); ctx.stroke();
+    ctx.restore();
   }
 
   drawWaypoint(ctx, x, y, r, small, bound) {
@@ -225,6 +244,8 @@ export class GameMap {
       ctx.fillText(p.name.toUpperCase(), q.x, q.y - 10);
     }
     ctx.restore();
+
+    if (s.bus && !s.bus.done) this.drawBus(ctx, toScreen, s.bus, 9);
 
     if (this.waypoint) {
       const q = toScreen(this.waypoint.x, this.waypoint.z);

@@ -104,7 +104,43 @@ export function makeAK47() {
   return g;
 }
 
+export function makePumpShotgun() {
+  const g = gunSkeleton();
+  const body = put(g, box(0.085, 0.13, 0.40, 0x5a3a22), 0, 0.05, 0.06);
+  put(g, cyl(0.026, 0.026, 0.52, 0x2b2f34, 8), 0, 0.115, 0.44, Math.PI / 2, 0, 0);
+  const pump = put(g, box(0.075, 0.075, 0.17, 0x6b4526), 0, 0.05, 0.32);   // fore-end
+  put(g, box(0.055, 0.16, 0.085, 0x5a3a22), 0, -0.05, -0.08);              // grip
+  put(g, box(0.055, 0.10, 0.28, 0x5a3a22), 0, 0.02, -0.26);                // stock
+  put(g, box(0.02, 0.035, 0.02, 0x1a1c20), 0, 0.16, 0.62);                 // bead sight
+  const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0.115, 0.70); g.add(muzzle);
+  g.userData.muzzle = muzzle; g.userData.body = body; g.userData.pump = pump;
+  g.userData.mag = pump;             // the pump is what the reload animation works
+  g.userData.gripOffset = new THREE.Vector3(0, -0.02, 0.02);
+  return g;
+}
+
+export function makeSniper() {
+  const g = gunSkeleton();
+  const body = put(g, box(0.07, 0.12, 0.52, 0x35404a), 0, 0.06, 0.10);
+  put(g, cyl(0.022, 0.022, 0.62, 0x22282e, 8), 0, 0.11, 0.62, Math.PI / 2, 0, 0);
+  put(g, box(0.055, 0.09, 0.40, 0x4a3524), 0, 0.02, -0.24);                // stock
+  put(g, box(0.05, 0.15, 0.08, 0x4a3524), 0, -0.03, -0.02);                // grip
+  const scope = put(g, cyl(0.05, 0.05, 0.34, 0x15181c, 10), 0, 0.24, 0.14, Math.PI / 2, 0, 0);
+  put(g, cyl(0.058, 0.058, 0.05, 0x2b3037, 10), 0, 0.24, 0.30, Math.PI / 2, 0, 0);
+  put(g, box(0.03, 0.06, 0.03, 0x2b3037), 0, 0.17, 0.02);
+  put(g, box(0.03, 0.06, 0.03, 0x2b3037), 0, 0.17, 0.26);
+  const bolt = put(g, box(0.10, 0.03, 0.03, 0x9aa3ad), 0.06, 0.10, 0.00);
+  const magz = put(g, box(0.045, 0.11, 0.10, 0x53575d), 0, -0.03, 0.14);
+  const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0.11, 0.92); g.add(muzzle);
+  g.userData.muzzle = muzzle; g.userData.body = body;
+  g.userData.mag = magz; g.userData.bolt = bolt; g.userData.scope = scope;
+  g.userData.gripOffset = new THREE.Vector3(0, -0.02, 0.02);
+  return g;
+}
+
 export function makeGunMesh(weaponId) {
+  if (weaponId === 'pump') return makePumpShotgun();
+  if (weaponId === 'sniper') return makeSniper();
   if (weaponId === 'm1911') return makeM1911();
   if (weaponId === 'mac10') return makeMac10();
   return makeAK47();
@@ -135,6 +171,20 @@ export function makeBandage() {
   put(g, box(0.10, 0.028, 0.028, 0xffffff), 0, 0, 0);
   return g;
 }
+export function makeBigShieldPotion() {
+  const g = new THREE.Group();
+  const glass = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.10, 0.115, 0.30, 12),
+    new THREE.MeshLambertMaterial({ color: 0x6a4fd8, transparent: true, opacity: 0.85 })
+  );
+  glass.castShadow = true;
+  g.add(glass);
+  put(g, cyl(0.05, 0.05, 0.09, 0x2e2a68, 8), 0, 0.19, 0);
+  put(g, cyl(0.07, 0.07, 0.04, 0xd8d8d8, 8), 0, 0.24, 0);
+  put(g, box(0.13, 0.10, 0.005, 0xe8e8f4), 0, 0.02, 0.116);
+  return g;
+}
+
 export function makeShieldPotion() {
   const g = new THREE.Group();
   const glass = new THREE.Mesh(
@@ -151,6 +201,7 @@ export function makeShieldPotion() {
 export function makeItemMesh(item) {
   if (item.kind === 'weapon') { const g = makeGunMesh(item.id); g.scale.setScalar(1.15); return g; }
   if (item.id === 'bandage') return makeBandage();
+  if (item.id === 'bigshield') return makeBigShieldPotion();
   return makeShieldPotion();
 }
 

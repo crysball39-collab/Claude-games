@@ -4,23 +4,44 @@ import { RARITY, RARITY_ORDER, makeItemMesh, makeChestMesh } from './models.js';
 import { weighted, TAU } from './util.js';
 
 export const WEAPONS = {
+  // `maxHit` hard-caps a single hit after rarity and headshot multipliers.
+  // The three starter guns are capped below 50 so the sniper and the shotgun
+  // stay the only weapons that can take half your health in one shot.
   m1911: {
     id: 'm1911', kind: 'weapon', name: 'M1911', short: 'Pistol',
-    mag: 7, damage: 30, rps: 6.4, auto: false,
+    mag: 7, damage: 22, pellets: 1, rps: 6.4, auto: false,
     reload: 1.55, reloadEmpty: 2.05, spread: 0.85, adsSpread: 0.35,
-    recoil: 0.9, camKick: 0.9, range: 130, ammoPer: 21, moveMul: 0.98,
+    recoil: 0.9, camKick: 0.9, range: 130, headMult: 1.45, maxHit: 49,
+    ammoPer: 21, moveMul: 0.98, w: 26,
   },
   mac10: {
     id: 'mac10', kind: 'weapon', name: 'Mac-10', short: 'SMG',
-    mag: 25, damage: 16, rps: 11.5, auto: true,
+    mag: 25, damage: 13, pellets: 1, rps: 11.5, auto: true,
     reload: 1.95, reloadEmpty: 2.45, spread: 2.5, adsSpread: 1.35,
-    recoil: 0.5, camKick: 0.55, range: 80, ammoPer: 60, moveMul: 0.95,
+    recoil: 0.5, camKick: 0.55, range: 80, headMult: 1.8, maxHit: 49,
+    ammoPer: 60, moveMul: 0.95, w: 24,
   },
   ak47: {
     id: 'ak47', kind: 'weapon', name: 'AK-47', short: 'Assault Rifle',
-    mag: 30, damage: 33, rps: 5.6, auto: true,
+    mag: 30, damage: 24, pellets: 1, rps: 5.6, auto: true,
     reload: 2.35, reloadEmpty: 2.95, spread: 1.45, adsSpread: 0.5,
-    recoil: 1.35, camKick: 1.3, range: 165, ammoPer: 60, moveMul: 0.9,
+    recoil: 1.35, camKick: 1.3, range: 165, headMult: 1.35, maxHit: 49,
+    ammoPer: 60, moveMul: 0.9, w: 22,
+  },
+  pump: {
+    id: 'pump', kind: 'weapon', name: 'Pump Shotgun', short: 'Shotgun',
+    mag: 5, damage: 9, pellets: 9, rps: 0.85, auto: false,
+    reload: 3.3, reloadEmpty: 3.8, spread: 6.2, adsSpread: 4.4,
+    recoil: 2.2, camKick: 2.4, range: 62, headMult: 1.5,
+    falloffStart: 11, falloffEnd: 40, falloffMin: 0.3,
+    ammoPer: 14, moveMul: 0.93, w: 18,
+  },
+  sniper: {
+    id: 'sniper', kind: 'weapon', name: 'Bolt-Action Sniper', short: 'Sniper',
+    mag: 1, damage: 105, pellets: 1, rps: 0.55, auto: false,
+    reload: 2.9, reloadEmpty: 3.2, spread: 2.8, adsSpread: 0.05,
+    recoil: 3.0, camKick: 3.2, range: 320, headMult: 2.5, scope: true,
+    ammoPer: 8, moveMul: 0.82, w: 10,
   },
 };
 
@@ -35,6 +56,11 @@ export const CONSUMABLES = {
     useTime: 2.2, shield: 25, shieldCap: 100, maxStack: 6, rarity: 'uncommon',
     verb: 'Drinking',
   },
+  bigshield: {
+    id: 'bigshield', kind: 'item', name: 'Big Shield Potion', short: 'Big Shield',
+    useTime: 4.0, shield: 50, shieldCap: 100, maxStack: 2, rarity: 'epic',
+    verb: 'Drinking',
+  },
 };
 
 export const ALL_WEAPON_IDS = Object.keys(WEAPONS);
@@ -46,12 +72,20 @@ export function rollRarity(rng, luck = 0) {
   return weighted(rng, entries).k;
 }
 
+/** Weighted pick so snipers stay rare and pistols stay common. */
+export function randomWeaponId(rng) {
+  return weighted(rng, ALL_WEAPON_IDS.map(id => ({ id, w: WEAPONS[id].w }))).id;
+}
+
 export function makeWeapon(id, rarity, rng) {
   const def = WEAPONS[id];
   const mult = RARITY[rarity].mult;
   return {
     uid: UID++, kind: 'weapon', id, def, rarity,
     name: def.name,
+    pellets: def.pellets || 1,
+    headMult: def.headMult || 1.5,
+    maxHit: def.maxHit || Infinity,
     damage: Math.round(def.damage * mult),
     reload: def.reload / (1 + (mult - 1) * 0.55),
     reloadEmpty: def.reloadEmpty / (1 + (mult - 1) * 0.55),
@@ -73,7 +107,7 @@ export function itemScore(it) {
   if (!it) return 0;
   if (it.kind === 'weapon') {
     const r = RARITY_ORDER.indexOf(it.rarity);
-    const dps = it.damage * it.def.rps * (it.def.auto ? 1 : 0.85);
+    const dps = it.damage * (it.pellets || 1) * it.def.rps * (it.def.auto ? 1 : 0.85);
     return 100 + dps * 0.6 + r * 22;
   }
   return 10;
@@ -83,23 +117,23 @@ export function chestLoot(rng, luck = 0) {
   const out = [];
   const nWeapons = rng() < 0.34 ? 2 : 1;
   for (let i = 0; i < nWeapons; i++) {
-    const id = ALL_WEAPON_IDS[Math.floor(rng() * ALL_WEAPON_IDS.length)];
-    out.push(makeWeapon(id, rollRarity(rng, luck), rng));
+    out.push(makeWeapon(randomWeaponId(rng), rollRarity(rng, luck), rng));
   }
   const nItems = 1 + (rng() < 0.5 ? 1 : 0);
   for (let i = 0; i < nItems; i++) {
-    if (rng() < 0.52) out.push(makeConsumable('bandage', 3 + Math.floor(rng() * 3)));
-    else out.push(makeConsumable('shield', 1 + Math.floor(rng() * 2)));
+    const r = rng();
+    if (r < 0.46) out.push(makeConsumable('bandage', 3 + Math.floor(rng() * 3)));
+    else if (r < 0.84) out.push(makeConsumable('shield', 1 + Math.floor(rng() * 2)));
+    else out.push(makeConsumable('bigshield', 1));
   }
   return out;
 }
 
 export function floorLoot(rng) {
-  if (rng() < 0.6) {
-    const id = ALL_WEAPON_IDS[Math.floor(rng() * ALL_WEAPON_IDS.length)];
-    return makeWeapon(id, rollRarity(rng, -0.35), rng);
-  }
-  return rng() < 0.5 ? makeConsumable('bandage', 3) : makeConsumable('shield', 1);
+  if (rng() < 0.6) return makeWeapon(randomWeaponId(rng), rollRarity(rng, -0.35), rng);
+  const r = rng();
+  if (r < 0.45) return makeConsumable('bandage', 3);
+  return r < 0.88 ? makeConsumable('shield', 1) : makeConsumable('bigshield', 1);
 }
 
 // ---------------------------------------------------------------------------
@@ -162,6 +196,13 @@ export class Inventory {
     return worst;
   }
   findItem(id) { return this.slots.findIndex(s => s && s.kind === 'item' && s.id === id); }
+  /** Best shield item to drink now, preferring the big one when it won't overflow. */
+  findShield(current) {
+    const big = this.findItem('bigshield'), small = this.findItem('shield');
+    if (big >= 0 && current <= 50) return big;
+    if (small >= 0) return small;
+    return big;
+  }
   countWeapons() { return this.slots.filter(s => s && s.kind === 'weapon').length; }
 }
 

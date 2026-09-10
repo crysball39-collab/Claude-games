@@ -34,6 +34,26 @@ export class Player extends Actor {
     this.pitch = clamp(this.pitch, -1.15, 1.15);
     input.look.x = 0; input.look.y = 0;
 
+    // --- riding the bus: look around, jump to drop ------------------------
+    if (this.mode === 'bus') {
+      this.moveInput.set(0, 0);
+      this.sprinting = false;
+      this.aiming = false;
+      if (input.jump) { input.jump = false; this.game.dropActor(this); }
+      return;
+    }
+    // --- skydiving: the stick steers, everything else is locked out -------
+    if (this.mode === 'dive') {
+      const kbd = hud.readKeyboardMove();
+      let dx = input.move.x, dy = input.move.y;
+      if (Math.abs(kbd.x) + Math.abs(kbd.y) > 0) { dx = kbd.x; dy = kbd.y; }
+      this.moveInput.set(dx, dy);
+      this.sprinting = false;
+      this.aiming = false;
+      input.jump = false;
+      return;
+    }
+
     // move
     const kb = hud.readKeyboardMove();
     let mx = input.move.x, my = input.move.y;
@@ -46,6 +66,7 @@ export class Player extends Actor {
 
     if (input.slotRequest >= 0) {
       this.select(input.slotRequest);
+      input.aimToggle = false;
       input.slotRequest = -1;
       if (input.buildMode && !this.inv.holdingPickaxe) hud.toggleBuild();
     }
@@ -65,7 +86,7 @@ export class Player extends Actor {
       } else if (this.inv.holdingPickaxe) {
         if (input.shoot) this.trySwing();
       } else if (cur && cur.kind === 'weapon') {
-        this.aiming = input.aim;
+        this.aiming = input.aim || input.aimToggle;
         if (input.shoot) {
           if (cur.def.auto) this.tryFire();
           else if (!this.semiLatch) { this.tryFire(); this.semiLatch = true; }
@@ -73,7 +94,7 @@ export class Player extends Actor {
       }
     }
     if (!input.shoot) this.semiLatch = false;
-    if (!this.weapon) this.aiming = false;
+    if (!this.weapon) { this.aiming = false; input.aimToggle = false; }
   }
 
   update(dt, input, hud) {
@@ -88,8 +109,9 @@ export class Player extends Actor {
   /** Camera + crosshair ray.  Called after the player has moved. */
   updateCamera(camera, dt) {
     const aimingNow = this.aiming;
-    const wantDist = aimingNow ? 2.15 : 4.4;
-    const wantSide = aimingNow ? 0.62 : 0.85;
+    const scopedNow = aimingNow && this.weapon && this.weapon.def.scope;
+    const wantDist = scopedNow ? 0.9 : aimingNow ? 2.15 : 4.4;
+    const wantSide = scopedNow ? 0.34 : aimingNow ? 0.62 : 0.85;
     const wantHigh = aimingNow ? 1.52 : 1.62;
     this.camDist = damp(this.camDist, wantDist, 12, dt);
     const side = damp(this.camSide ?? wantSide, wantSide, 12, dt);
@@ -122,7 +144,10 @@ export class Player extends Actor {
     const pitchKick = (this.recoilKick || 0) * 0.02;
     camera.lookAt(ox + fx * 40, oy + fy * 40 + pitchKick * 20, oz + fz * 40);
 
-    const fov = aimingNow ? 56 : 72;
+    // scoped weapons zoom much further in
+    const w = this.weapon;
+    const scoped = aimingNow && w && w.def.scope;
+    const fov = scoped ? 24 : aimingNow ? 56 : 72;
     if (Math.abs(camera.fov - fov) > 0.05) {
       camera.fov = damp(camera.fov, fov, 12, dt);
       camera.updateProjectionMatrix();

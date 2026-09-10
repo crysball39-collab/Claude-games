@@ -13,7 +13,8 @@ import { Chest, Pickup, floorLoot, itemScore, makeWeapon, makeConsumable } from 
 import { RARITY } from './models.js';
 import { Storm } from './storm.js';
 import { GameMap } from './map.js';
-import { makeRng, TAU } from './util.js';
+import { buildSpawnIsland, BattleBus, pickDropTarget, SPAWN, SPAWN_TIME, DROP_FROM, DROP_TO } from './bus.js';
+import { makeRng, clamp, lerp, TAU } from './util.js';
 
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
@@ -42,6 +43,11 @@ export class Game {
     this.doors = [];
     this.poiCenters = POIS.map(p => ({ x: p.x, z: p.z }));
     this.eliminated = 0;
+    this.phase = 'spawn';          // 'spawn' -> 'bus' -> 'live'
+    this.phaseT = SPAWN_TIME;
+    this.damageEnabled = false;    // nobody can be hurt before the drop
+    this.bus = null;
+    this.spawnArea = SPAWN;
   }
 
   // ------------------------------------------------------------ world setup
@@ -114,7 +120,12 @@ export class Game {
     this.gameMap = new GameMap(this.mapCanvas);
     this.makeWaypointBeam();
 
-    await this.yieldFrame(progress, 'Dropping 100 players', 0.9);
+    await this.yieldFrame(progress, 'Raising the spawn island', 0.88);
+    const before = new Set(this.physics.all);
+    this.spawnIsland = buildSpawnIsland(scene, this.physics);
+    this.spawnColliders = [...this.physics.all].filter(c => !before.has(c));
+
+    await this.yieldFrame(progress, 'Gathering 100 players', 0.94);
     this.spawnActors();
 
     progress('Ready', 1);
@@ -253,6 +264,11 @@ export class Game {
   // ---------------------------------------------------------------- actors
   spawnActors() {
     const rng = makeRng(this.seed ^ 0x77a1);
+    // Everybody starts on the spawn island; the bus takes them to the map.
+    const islandSpot = () => {
+      const h = SPAWN.half - 6;
+      return { x: SPAWN.x + (rng() * 2 - 1) * h, z: SPAWN.z + (rng() * 2 - 1) * h, y: SPAWN.y };
+    };
     const spot = (i, minD = 34) => {
       // Most of the lobby lands around the three POIs (as if they had dropped
       // there); the rest are spread over the island.
@@ -271,7 +287,7 @@ export class Game {
       return { x, z, y: this.physics.floorAt(x, z, 400, 0.4) + 0.2 };
     };
 
-    const ps = spot(1, 95);   // the player gets a little breathing room on landing
+    const ps = islandSpot();
     this.player = new Player(this, {
       x: ps.x, y: ps.y, z: ps.z, name: this.playerName,
       cosmetics: this.cosmetics, yaw: rng() * TAU,
@@ -283,7 +299,7 @@ export class Game {
 
     const tints = [0x2e5aa8, 0x8a3a3a, 0x3f7a45, 0x7a5aa8, 0xa8853f, 0x3a7a8a, 0xa85a3a, 0x555b66];
     for (let i = 0; i < TOTAL_PLAYERS - 1; i++) {
-      const s = spot(i + 2);
+      const s = islandSpot();
       const bot = new Bot(this, {
         x: s.x, y: s.y, z: s.z, seed: i + 3,
         name: botName(i, makeRng(i * 31 + 7)),
@@ -321,7 +337,15 @@ export class Game {
 
     if (victim) {
       const head = victim.isHead(end.y);
-      const dmg = Math.round(weapon.damage * (head ? 1.85 : 1));
+      const def = weapon.def;
+      // shotguns lose most of their bite past a few metres
+      let dmg = weapon.damage;
+      if (def.falloffStart) {
+        const f = 1 - clamp((bestT - def.falloffStart) / (def.falloffEnd - def.falloffStart), 0, 1);
+        dmg *= lerp(def.falloffMin ?? 0.3, 1, f);
+      }
+      if (head) dmg *= weapon.headMult || 1.5;
+      dmg = Math.min(Math.round(dmg), weapon.maxHit ?? Infinity);
       const before = victim.health + victim.shield;
       victim.takeDamage(dmg, shooter, end, head);
       this.effects.impact(end, 'flesh');
@@ -405,6 +429,24 @@ export class Game {
       }
       this.effects.impact(end, hit.collider.tag || 'stone');
     } else if (hit) this.effects.impact(end, 'dirt');
+  }
+
+  /**
+   * Something made a sound.  Bots inside the radius get told about it and will
+   * turn toward gunfire, or walk over to investigate it.
+   */
+  makeNoise(x, z, radius, source, kind) {
+    if (!this.bots || this.phase !== 'live') return;
+    const r2 = radius * radius;
+    for (const b of this.bots) {
+      if (!b.alive || b === source) continue;
+      const dx = b.pos.x - x, dz = b.pos.z - z;
+      const d2 = dx * dx + dz * dz;
+      if (d2 > r2) continue;
+      const d = Math.sqrt(d2);
+      if (d > b.hearRange * (kind === 'shot' ? 1.25 : 0.55)) continue;
+      b.hearNoise(x, z, kind, source, d);
+    }
   }
 
   // ------------------------------------------------------------ interaction
@@ -511,16 +553,92 @@ export class Game {
 
     if (actor === this.player) {
       this.state = 'dead';
-      setTimeout(() => this.onMatchEnd({ won: false, kills: actor.kills, place: this.aliveCount + 1 }), 2600);
+      // capture the placement now — reading it when the timer fires would pick
+      // up every elimination that happened while the death cam was running
+      const place = this.aliveCount + 1, kills = actor.kills;
+      setTimeout(() => this.onMatchEnd({ won: false, kills, place }), 2600);
     } else if (this.aliveCount === 1 && this.player.alive) {
       this.state = 'won';
       setTimeout(() => this.onMatchEnd({ won: true, kills: this.player.kills, place: 1 }), 2200);
     }
   }
 
+  // ----------------------------------------------------------- match phases
+  startBus() {
+    this.phase = 'bus';
+    this.bus = new BattleBus(this.scene, makeRng(this.seed ^ 0x0b05));
+    // the island is no longer needed and must not block anyone's descent
+    this.spawnIsland.group.visible = false;
+    for (const c of this.spawnColliders) this.physics.remove(c);
+    this.spawnColliders.length = 0;
+
+    const rng = makeRng(this.seed ^ 0x0d1e);
+    for (const a of this.actors) {
+      if (!a.alive) continue;
+      a.mode = 'bus';
+      a.vel.set(0, 0, 0);
+      if (a !== this.player) {
+        a.root.visible = false;
+        a.dropTarget = pickDropTarget(rng);
+        // leave the bus a little before its closest pass to the chosen spot
+        const t = this.bus.closestT(a.dropTarget.x, a.dropTarget.z);
+        a.dropT = clamp(t - 0.02 - rng() * 0.02, DROP_FROM, DROP_TO);
+      }
+    }
+    this.hud.banner('DROP WHEN READY', 'Tap JUMP to leave the bus');
+  }
+
+  dropActor(a) {
+    if (a.mode !== 'bus') return;
+    a.mode = 'dive';
+    a.root.visible = true;
+    a.pos.copy(this.bus.pos);
+    a.pos.y -= 9;
+    const fx = Math.sin(this.bus.heading), fz = Math.cos(this.bus.heading);
+    a.vel.set(fx * 14, -3, fz * 14);
+    if (a !== this.player) a.diveTarget = a.dropTarget;
+    else {
+      a.rig.ensureGlider();
+      this.hud.banner('SKYDIVING', 'Steer with the stick — the glider opens on its own');
+    }
+    if (a.rig.ensureGlider) a.rig.ensureGlider();
+  }
+
+  startLive() {
+    this.phase = 'live';
+    this.damageEnabled = true;
+    this.storm.activate();
+    if (this.bus) { this.bus.dispose(this.scene); this.bus = null; }
+    this.hud.banner('THE STORM IS COMING', 'Stay inside the circle');
+  }
+
+  updatePhase(dt) {
+    if (this.phase === 'spawn') {
+      this.phaseT -= dt;
+      if (this.phaseT <= 0) this.startBus();
+      return;
+    }
+    if (this.phase !== 'bus') return;
+    this.bus.update(dt);
+    for (const a of this.actors) {
+      if (a.mode !== 'bus') continue;
+      a.pos.copy(this.bus.pos);
+      a.pos.y -= 9;        // low enough that the chase camera clears the bus
+      a.yaw = this.bus.heading;
+    }
+    for (const b of this.bots) {
+      if (b.mode === 'bus' && b.alive && this.bus.t >= b.dropT) this.dropActor(b);
+    }
+    if (this.bus.t >= DROP_TO) {
+      for (const a of this.actors) if (a.mode === 'bus') this.dropActor(a);
+    }
+    if (this.bus.done) this.startLive();
+  }
+
   // ------------------------------------------------------------------ loop
   update(dt) {
     this.time += dt;
+    this.updatePhase(dt);
     const input = this.hud.input;
     const p = this.player;
 
@@ -533,6 +651,7 @@ export class Game {
       const b = this.bots[i];
       const d2 = (b.pos.x - px) * (b.pos.x - px) + (b.pos.z - pz) * (b.pos.z - pz);
       const lod = d2 < 90 * 90 ? 0 : d2 < 260 * 260 ? 1 : 2;
+      if (b.mode === 'bus') { b.update(dt, lod); continue; }   // hidden inside the bus
       if (lod === 2) {
         // still simulate, just not every frame and without rig animation
         if ((i + Math.floor(this.time * 60)) % 3 !== 0) continue;
@@ -545,6 +664,8 @@ export class Game {
     }
 
     this.storm.update(dt, this.actors);
+    // sprinting footsteps and building are quieter giveaways than gunfire
+    if (p.alive && p.grounded && p.speed2D > 6) this.makeNoise(p.pos.x, p.pos.z, 26, p, 'steps');
     for (const c of this.chests) c.update(dt);
     for (const d of this.doors) d.update(dt);
     for (let i = this.pickups.length - 1; i >= 0; i--) {

@@ -20,7 +20,7 @@ export class HUD {
     this.input = {
       move: { x: 0, y: 0 },
       look: { x: 0, y: 0 },
-      shoot: false, aim: false, sprint: false, sprintLock: false,
+      shoot: false, aim: false, aimToggle: false, sprint: false, sprintLock: false,
       jump: false, use: false, reload: false,
       crouch: false, mapOpen: false,
       buildMode: false, buildType: 'ramp',
@@ -91,6 +91,10 @@ export class HUD {
     this.stormFx = el('div', 'stormfx', r);
     this.stormWarn = el('div', 'stormwarn', r, 'IN THE STORM');
     this.stormWarn.style.display = 'none';
+    this.bannerEl = el('div', 'dropbanner', r);
+    this.bannerEl.style.display = 'none';
+    this.bannerTitle = el('b', null, this.bannerEl, '');
+    this.bannerSub = el('span', null, this.bannerEl, '');
 
     // ---- full map screen --------------------------------------------------
     this.mapScreen = el('div', 'mapscreen', r);
@@ -351,7 +355,8 @@ export class HUD {
       b.addEventListener('pointerleave', end);
     };
     hold('shoot', 'shoot');
-    hold('aim', 'aim');
+    // AIM is a toggle: tap once to sight in, tap again to come out of it.
+    tap('aim', () => { this.input.aimToggle = !this.input.aimToggle; });
     tap('jump', () => { this.input.jump = true; });
     tap('reload', () => { this.input.reload = true; });
     tap('use', () => { this.input.use = true; });
@@ -407,7 +412,8 @@ export class HUD {
     ctx.save();
     ctx.scale(dpr, dpr);
     const w = this.mapCanvas.width / dpr, h = this.mapCanvas.height / dpr;
-    this.game.gameMap.drawFull(ctx, w, h, { player: this.game.player, storm: this.game.storm }, this.mapView);
+    this.game.gameMap.drawFull(ctx, w, h,
+      { player: this.game.player, storm: this.game.storm, bus: this.game.bus }, this.mapView);
     ctx.restore();
   }
 
@@ -505,7 +511,8 @@ export class HUD {
     const size = Math.round(css * dpr);
     if (this.miniCanvas.width !== size) { this.miniCanvas.width = size; this.miniCanvas.height = size; }
     const ctx = this.miniCanvas.getContext('2d');
-    gm.drawMinimap(ctx, size, { player: this.game.player, storm: this.game.storm, span: 320 });
+    gm.drawMinimap(ctx, size,
+      { player: this.game.player, storm: this.game.storm, bus: this.game.bus, span: 320 });
   }
 
   toggleBuild() {
@@ -516,6 +523,17 @@ export class HUD {
   }
 
   // ------------------------------------------------------------------ view
+  /** Big centred callout for phase changes. */
+  banner(title, sub, ms = 3400) {
+    this.bannerTitle.textContent = title;
+    this.bannerSub.textContent = sub || '';
+    this.bannerEl.style.display = 'block';
+    this.bannerEl.classList.remove('out');
+    clearTimeout(this._bannerT1); clearTimeout(this._bannerT2);
+    this._bannerT1 = setTimeout(() => this.bannerEl.classList.add('out'), ms);
+    this._bannerT2 = setTimeout(() => { this.bannerEl.style.display = 'none'; }, ms + 900);
+  }
+
   killFeed(text, mine) {
     const line = el('div', 'kfline' + (mine ? ' mine' : ''), this.feed, text);
     setTimeout(() => line.classList.add('fade'), 3200);
@@ -598,6 +616,7 @@ export class HUD {
     const spread = w ? (p.aiming ? w.adsSpread : w.spread) * (p.speed2D > 4 ? 1.7 : 1) : 2.2;
     this.cross.style.setProperty('--gap', (6 + spread * 4.5) + 'px');
     this.cross.style.opacity = p.inv.holdingPickaxe ? 0.35 : 1;
+    this.root.classList.toggle('scoped', !!(w && w.def.scope && p.aiming));
 
     // build mode
     this.buildBar.style.display = this.input.buildMode ? 'flex' : 'none';
@@ -608,11 +627,23 @@ export class HUD {
     }
 
     this.btn.sprint.classList.toggle('on', this.input.sprintLock);
+    this.btn.aim.classList.toggle('on', this.input.aimToggle);
     this.btn.crouch.classList.toggle('on', this.input.crouch);
 
-    // storm readout + "you are outside the circle" warning
+    // before the drop the bar counts the lobby down instead of the storm
     const storm = game.storm;
-    if (storm) {
+    if (game.phase === 'spawn') {
+      const t = Math.max(0, Math.ceil(game.phaseT));
+      this.stormLabel.textContent = 'MATCH STARTS IN';
+      this.stormTime.textContent = `0:${t < 10 ? '0' : ''}${t}`;
+      this.stormBar.classList.remove('closing');
+      this.stormFx.classList.remove('on');
+      this.stormWarn.style.display = 'none';
+    } else if (game.phase === 'bus') {
+      this.stormLabel.textContent = p.mode === 'bus' ? 'JUMP WHEN READY' : 'DROPPING';
+      this.stormTime.textContent = '';
+      this.stormBar.classList.remove('closing');
+    } else if (storm) {
       const st = storm.statusText();
       this.stormLabel.textContent = st.label;
       this.stormTime.textContent = st.time;
@@ -621,6 +652,16 @@ export class HUD {
       this.stormFx.classList.toggle('on', outside && p.alive);
       this.stormWarn.style.display = outside && p.alive ? 'block' : 'none';
     }
+
+    // the jump button doubles as the bus door
+    const onBus = p.mode === 'bus';
+    this.btn.jump.firstChild.textContent = onBus ? 'DROP' : 'JUMP';
+    this.btn.jump.classList.toggle('drop', onBus);
+    const airborne = p.mode !== 'ground';
+    for (const n of ['shoot', 'aim', 'reload', 'use', 'build', 'crouch', 'sprint']) {
+      this.btn[n].classList.toggle('hidden', airborne);
+    }
+    this.invBar.classList.toggle('hidden', airborne);
 
     this.drawMinimap();
     if (this.input.mapOpen) this.drawMap();
