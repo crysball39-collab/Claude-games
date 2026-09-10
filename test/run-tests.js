@@ -589,6 +589,57 @@ function auditFont() {
     ok('the opponent never references the mod', !modLines.some(l=>leak.test(l)),
        modLines.filter(l=>leak.test(l)).join(' | ') || 'clean across '+modLines.length+' lines');
 
+
+    /* ---- the agent's planner: it simulates ghosts through the game's own
+       decision function, so it must leave no trace on the real ones ---- */
+    const AP = window.Autopilot, EG = window.ExtraGhosts;
+    EG.ROSTER.forEach(d=>EG.setOn(d.id,true));      // include the extras' AI
+    g.startAiGame(); g.state='playing'; g.stateTime=0;
+    for(let i=0;i<60*20;i++) g.update(1/60);      // get everyone moving
+
+    const snap = () => ({
+      pac: {x:g.pac.x, y:g.pac.y, dir:g.pac.dir, want:g.pac.want},
+      ghosts: g.ghosts.map(x=>({x:x.x,y:x.y,dir:x.dir,state:x.state,
+        frightened:x.frightened, focusId:x.focusId, stalk:x.stalk,
+        patrolIndex:x.patrolIndex, recent:(x.recent||[]).join('|')}))
+    });
+    const before = JSON.stringify(snap());
+    for (let i=0;i<50;i++) AP.choose(g, g.pac, 1);   // plan repeatedly
+    const after = JSON.stringify(snap());
+    ok('planning never disturbs the real ghosts or Pac-Man', before===after,
+       before===after ? '' : 'state drifted');
+
+    // it must still return a legal direction
+    const dirs=new Set();
+    for (let i=0;i<30;i++){ const d=AP.choose(g,g.pac,1); if(d) dirs.add(d); }
+    ok('planner returns legal directions',
+       [...dirs].every(d=>['up','down','left','right'].includes(d)), [...dirs].join(','));
+
+    // energiser policy: leave it alone when nobody is near
+    g.reset(1,true); g.state='playing';
+    g.ghosts.forEach(x=>{ x.state='house'; });     // no hunters at all
+    g.pac.x=1*8+4; g.pac.y=5*8+4; g.pac.dir='down';
+    // clear a lane of dots so the energiser at (1,3) is the obvious prize
+    for(let r=1;r<6;r++) g.dots[r][1]=0;
+    g.dots[3][1]=2;
+    let wentUp=0;
+    for(let i=0;i<20;i++){ if(AP.choose(g,g.pac,1)==='up') wentUp++; }
+    ok('an energiser with no ghosts near is not worth a detour', wentUp===0,
+       wentUp+'/20 planned toward it');
+
+    // ...but it is when two hunters are converging on it
+    g.reset(1,true); g.state='playing';
+    for(let r=1;r<6;r++) g.dots[r][1]=0;
+    g.dots[3][1]=2;
+    g.pac.x=1*8+4; g.pac.y=5*8+4; g.pac.dir='down';
+    g.ghosts.forEach((x,i)=>{ x.state = i<2 ? 'normal':'house'; x.frightened=false; });
+    g.ghosts[0].x=1*8+4; g.ghosts[0].y=8*8+4; g.ghosts[0].dir='up';
+    g.ghosts[1].x=3*8+4; g.ghosts[1].y=5*8+4; g.ghosts[1].dir='left';
+    let toEnerg=0;
+    for(let i=0;i<20;i++){ if(AP.choose(g,g.pac,1)==='up') toEnerg++; }
+    ok('with hunters closing, the energiser becomes the plan', toEnerg>10,
+       toEnerg+'/20 planned toward it');
+
     return R;
   });
   out.push(...more);

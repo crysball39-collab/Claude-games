@@ -97,24 +97,52 @@ The title screen offers **1 PLAYER**, **2 PLAYER**, **AI MODE** and **MODS**.
 ### AI mode
 
 Hands the controls to a search agent. It is not replaying memorised patterns —
-it re-plans continuously. Each decision floods the maze from Pac-Man's tile and
-from every hunting ghost, then treats a tile as contested if a ghost can reach
-it first, which is what lets it walk confidently past a ghost on the far side
-of a wall and refuse a corridor that only *looks* open. The route search itself
-is gated on that map, so it will not path *through* a contested tile, only to
-one. On top sits a value pass — pellets, energisers, fruit and edible ghosts,
-divided by distance.
+it re-plans from scratch every few frames.
 
-Two details matter more than anything else in there. Ghosts cannot reverse, so
-danger must not spread backwards through the tile behind them; without that the
-map invents threat and the agent gives up safe ground for nothing. And when
-nothing at all is reachable under the strict safety margin the standard drops a
-step at a time, otherwise the last few pellets in a contested corner never get
-taken and the level simply never ends.
+**It knows the ghosts' AI.** Each hunting ghost is cloned and rolled forward
+through the game's *own* `decideGhost` — the real targeting rule, the real
+no-reverse and no-turn-up restrictions, the real scatter/chase phase — so the
+agent knows where each ghost is actually going, not merely where it could go.
+That prediction is blended with a reachability envelope, with each ghost's true
+speed folded in, so Cruise Elroy reads as fast and a ghost in the tunnel reads
+as slow. The simulation is pure: everything the game writes during it lands on
+throwaway copies, which is asserted by a test.
 
-Measured over eight full runs it averages **level 3.0 and 16,000 points**, with
-its best runs reaching level 5. That is a strong agent, not a perfect one — a
-genuinely unbeatable Pac-Man would need the arcade's exact frame-level
+**It savours energisers.** They are the one resource worth hoarding, so they
+carry their own policy rather than a pellet's value: worthless while the ghosts
+are already blue, worth a great deal when two or more hunters are loitering
+near one, worth an escape when a single hunter is leaning on you, and worth
+taking anyway once they are all that stands between you and the next level.
+This is the change that measurably paid: over 20 full runs each it converts the
+same number of energisers into **2.21 ghosts apiece, up from 1.95**, worth
+**22 % more points from ghosts**.
+
+**It checks whether a route traps it.** The route search is gated so it never
+paths *through* a tile a ghost reaches first, the same flood tallies how much
+maze stays reachable behind each opening, and two or more hunters converging is
+treated as an emergency — that state holds about a tenth of the time but caused
+most deaths, so the agent stops valuing food and goes wherever leaves the most
+daylight. Finally the chosen move is played out for a few tiles against ghosts
+that *re-target the simulated Pac-Man as he moves*, and overridden if that gets
+him killed almost immediately.
+
+Measured over 50 full runs it averages **level 2.3 and 13,500 points**, with
+best runs reaching level 5.
+
+**What did not work, and why it is worth saying.** Survival is statistically
+unchanged from the previous version — the energiser gain is real, the rest is
+within noise. Two changes that looked obviously right made it measurably worse
+and were removed. Deaths clustered on two-exit corridor tiles (77 %) and on
+ghosts approaching head-on (90 %), so both got avoidance logic; both were base
+rates in disguise. 81 % of play *happens* on two-exit tiles, and a level-1
+ghost is slower than Pac-Man so it can barely catch him from behind at all.
+Only one signal survived that check — two-plus hunters within eight tiles is
+11 % of play and 85 % of deaths — and that is the one the emergency mode acts
+on. Letting the rollout overrule the planner whenever it foresaw any death also
+measured far worse than not having it; its stand-in Pac-Man is too crude to
+trust beyond a couple of tiles, so it only vetoes imminent death.
+
+A genuinely unbeatable Pac-Man would need the arcade's exact frame-level
 determinism, which this does not reproduce.
 
 ### 2 player and chat
@@ -263,6 +291,6 @@ npm install playwright
 node test/run-tests.js          # CHROMIUM_PATH=... to reuse a local browser
 ```
 
-121 assertions covering the maze checksums (244 dots, left-right symmetry, every
+125 assertions covering the maze checksums (244 dots, left-right symmetry, every
 dot reachable), ghost targeting including both quirks, phase timings, house
 release limits, the tunnel, scoring, and the per-level speed table.
