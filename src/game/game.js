@@ -12,14 +12,15 @@ import { Character, STATE } from './character.js';
 import { playerAppearance } from './appearance.js';
 import { spawnCitizen } from './citizen.js';
 import {
-  spawnCrate, spawnBoulder, spawnMachete, spawnSledge, createMacheteModel,
-  syncBodyMesh, disposeBody, prewarmObjectArt, MACHETE, SLEDGE,
+  spawnCrate, spawnBoulder, spawnMachete, spawnSledge, spawnCrowbar, createMacheteModel,
+  syncBodyMesh, disposeBody, prewarmObjectArt, MACHETE, SLEDGE, CROWBAR, crowbarClaw,
 } from './objects.js';
 import { gripWorld } from './grip.js';
 import {
   GLOCK, AK47, M16, spawnGlock, spawnAk, spawnM16, MuzzleFlash, CaseEjector,
 } from './guns.js';
 import { GoreSystem, nearestBone } from './gore.js';
+import { Armour, VEST, spawnVest } from './armour.js';
 import { NavGrid } from './ai.js';
 import { RCV2 } from './rcv2.js';
 import { boneCorners, pointInBone, boneBoxCenter, rayBone, HIP_HEIGHT } from './skeleton.js';
@@ -102,6 +103,41 @@ export const MELEE = {
       // the top of the haft, so a swing that lands short still connects
       for (const fy of [0.72, 0.9]) {
         out.push(v.set(0, SLEDGE.haft * fy, 0).applyQuaternion(quat).add(origin).clone());
+      }
+    },
+  },
+  crowbar: {
+    label: 'Crowbar',
+    spawn: spawnCrowbar,
+    /* One hand, low down the shaft, so the gooseneck swings out at the end of
+       a long lever. That is what a crowbar is for and what makes it hurt. */
+    grip: { rake: 0.45, roll: 0, hold: [0, 0.155, 0] },
+    center: CROWBAR.mid,
+    type: 'blunt',
+    /* Between the two: it has the machete's speed and a lot more of the
+       sledgehammer's weight behind a much smaller face, so it concentrates
+       everything it carries into one place. */
+    dmg: { mul: 4.4, min: 5, max: 50 },
+    sev: { div: 5.5, min: 0.62 },
+    push: { mul: 10, min: 14, max: 150, lift: 6 },
+    crush: 0.62,                        // a steel bar breaks what it lands on
+    shake: 0.34,
+    /** The claw, the neck behind it, and the top of the shaft. */
+    contacts(out, origin, quat, v) {
+      const tip = crowbarClaw();
+      const top = 0.06 + CROWBAR.shaft;
+      for (let i = 0; i <= 5; i++) {
+        const a = (CROWBAR.sweep * i) / 5;
+        out.push(v.set(0,
+          top + CROWBAR.bend * Math.sin(a),
+          -CROWBAR.bend + CROWBAR.bend * Math.cos(a)).applyQuaternion(quat).add(origin).clone());
+      }
+      for (const sx of [-1, 1]) {
+        out.push(v.set(sx * 0.010, tip.y, tip.z).applyQuaternion(quat).add(origin).clone());
+      }
+      // and the last stretch of the shaft, so a short swing still connects
+      for (const fy of [0.62, 0.82]) {
+        out.push(v.set(0, 0.06 + CROWBAR.shaft * fy, 0).applyQuaternion(quat).add(origin).clone());
       }
     },
   },
@@ -205,6 +241,8 @@ export const SPAWNABLES = {
     { id: 'boulder', name: 'Boulder', icon: 'boulder', hint: 'Rock boulder' },
     { id: 'machete', name: 'Machete', icon: 'machete', hint: 'Pick it up with USE' },
     { id: 'sledge', name: 'Sledgehammer', icon: 'sledge', hint: 'Heavy. Breaks bones.' },
+    { id: 'crowbar', name: 'Crowbar', icon: 'crowbar', hint: 'Fast, and it still breaks bones.' },
+    { id: 'vest', name: 'Light Vest', icon: 'vest', hint: 'Wear it with USE. Stops a few hits.' },
     { id: 'glock', name: 'Glock-19', icon: 'glock', hint: '15 rounds. Semi automatic.' },
     { id: 'ak47', name: 'AK-47', icon: 'ak47', hint: '30 rounds. Full automatic.' },
     { id: 'm16', name: 'M16', icon: 'm16', hint: '30 rounds. Faster, flatter.' },
@@ -338,6 +376,7 @@ export class Game {
     this.scene.add(this.player.body.group);
     this.player.onDamage = (info) => this.handleDamage(info);
     this.player.onInjury = (info) => this.handleInjury(info);
+    this.player.onGib = (info) => this.gore?.throwPart(info.mesh, info.vel);
     this.player.onStrike = (a, s, v) => this.resolveStrike(a, s, v);
     this.player.onSlash = (a, s, v) => this.resolveSlash(a, s, v);
     this.registerCharacter(this.player);
@@ -362,7 +401,9 @@ export class Game {
     const firstPerson = !this.player.isRagdolling;
     for (const name of this._hiddenSelf) {
       const e = b.entries.get(name);
-      if (!e) continue;
+      // A head that has come off is nobody's first person problem any more:
+      // it is out in the world and has to stay visible.
+      if (!e || e.detached) continue;
       e.skin.mesh.visible = !firstPerson;
       if (e.cloth) e.cloth.mesh.visible = !firstPerson;
     }
@@ -381,6 +422,9 @@ export class Game {
     const i = this.characters.indexOf(c);
     if (i >= 0) this.characters.splice(i, 1);
     if (this.rcv2?.grab?.character === c) this.rcv2.grab = null;
+    // Their pieces go with them: the materials those meshes draw with belong
+    // to the body that is about to dispose of them.
+    this.gore?.dropPartsOf(c);
     c.dispose();
     this.stats.citizens = this.characters.length - 1;
   }
@@ -413,6 +457,7 @@ export class Game {
       this.setEquipped('fists');
     }
     this.cases?.clear();
+    this.gore?.clearDebris();
     for (const b of [...this.spawnedBodies]) this.removeBody(b);
     for (const c of [...this.characters]) if (c !== this.player) this.removeCharacter(c);
     this.nav.dirty = true;
@@ -508,6 +553,11 @@ export class Game {
       const b = CARRY[id].spawn(this, _v2);
       return { type: 'body', name: CARRY[id].label, entity: b };
     }
+    if (id === 'vest') {
+      _v2.y = Math.max(_v2.y, groundAt + 0.6);
+      const b = spawnVest(this, _v2);
+      return { type: 'body', name: VEST.label, entity: b };
+    }
     _v2.y = Math.max(_v2.y, groundAt + 0.7);
     const b = spawnCrate(this, _v2);
     return { type: 'body', name: 'Crate', entity: b };
@@ -535,7 +585,7 @@ export class Game {
     const feet = this.player.pos.y - HIP_HEIGHT;
     let best = null, bestScore = -Infinity;
     for (const b of this.spawnedBodies) {
-      if (!b.userData.pickup) continue;
+      if (!b.userData.pickup && !b.userData.wear) continue;
       // Measured flat, so something lying at your feet is in reach without
       // having to stare at the ground first.
       const dx = b.pos.x - this.player.pos.x, dz = b.pos.z - this.player.pos.z;
@@ -554,8 +604,53 @@ export class Game {
   useAction() {
     if (this.carried) { this.dropCarried(); return; }
     const body = this.pickupInReach();
-    if (!body) { this.hud?.toast('Nothing to pick up'); return; }
-    this.pickUp(body);
+    if (!body) {
+      // Nothing in reach, so USE takes off what is being worn instead.
+      if (this.player?.armour) { this.dropArmour(); return; }
+      this.hud?.toast('Nothing to pick up');
+      return;
+    }
+    if (body.userData.wear) this.wearItem(body);
+    else this.pickUp(body);
+  }
+
+  /* ---------------------------------------------------------------- armour */
+
+  /** Takes a vest off the ground and puts it on. */
+  wearItem(body) {
+    const p = this.player;
+    if (!p) return;
+    if (p.armour) this.dropArmour();
+    const model = body.mesh;
+    const hp = body.userData.armourHp ?? VEST.hp;
+    const i = this.spawnedBodies.indexOf(body);
+    if (i >= 0) this.spawnedBodies.splice(i, 1);
+    if (this.rcv2?.grab?.body === body) this.rcv2.grab = null;
+    this.world.removeBody(body);
+    this.stats.objects = this.spawnedBodies.length;
+    this.nav.dirty = true;
+    body.mesh = null;                  // the vest belongs to the wearer now
+
+    model.userData.bodyOffset = null;
+    p.wearArmour(new Armour(model, hp), this.scene);
+    this.hud?.setArmour(p.armour.hp, p.armour.maxHp);
+    this.hud?.toast('Wearing the ' + VEST.label);
+  }
+
+  /** Takes it off and drops it where it can be picked up again. */
+  dropArmour() {
+    const p = this.player;
+    const a = p?.stripArmour();
+    if (!a) return;
+    const chest = p.rig.byName.upperTorso;
+    _v1.copy(chest.worldPos).addScaledVector(this.camera.getWorldDirection(_v2), 0.55);
+    _v1.y = Math.max(p.pos.y - HIP_HEIGHT + 0.25, _v1.y - 0.15);
+    const body = spawnVest(this, _v1, { quat: chest.worldQuat, reuse: { model: a.model, hp: a.hp } });
+    body.vel.set(_v2.x * 1.4, 1.2, _v2.z * 1.4);
+    body.angVel.set((this.rng() - 0.5) * 4, (this.rng() - 0.5) * 4, (this.rng() - 0.5) * 4);
+    body.wake();
+    this.hud?.setArmour(null);
+    this.hud?.toast('Took off the ' + VEST.label);
   }
 
   pickUp(body) {
@@ -948,6 +1043,27 @@ export class Game {
         // you cannot hold a sledgehammer with a broken arm
         if (this.carried && character.armBroken('R')) this.dropCarried();
       }
+    } else if (kind === 'gib') {
+      /* A part coming off is the biggest thing that happens to a body, so it
+         gets the biggest mark: a burst out of the wound, a spray the way the
+         hit was going, and blood over whatever is left of the stump. */
+      const at = point || character.center;
+      const dir = info.dir || _v2.set(0, 1, 0);
+      this.gore?.burst(at, dir, 30, { speed: 6.5, spread: 1.5, size: 0.042 });
+      this.gore?.burst(at, _v3.copy(dir).negate(), 14, { speed: 3.2, spread: 1.6, size: 0.034 });
+      const stump = character.rig.byName[boneName]?.parent;
+      if (stump && !character.gone.has(stump.name)) {
+        character.body.paintHit(stump.name, at, { kind: 'impact', severity: 1, allowTear: true });
+      }
+      /* You feel one of these if it happens near you. A citizen coming apart
+         on the far side of the map is not the camera's business. */
+      const away = this.camera.position.distanceTo(at);
+      this.shake = Math.min(1.4, this.shake + 0.55 * clamp01(1 - away / 9));
+      if (character === this.player) {
+        this.hud?.toast(BREAK_NAME[boneName]
+          ? 'Your ' + BREAK_NAME[boneName] + ' came off' : 'You lost a limb');
+        if (this.carried && character.armBroken('R')) this.dropCarried();
+      }
     } else if (kind === 'face') {
       if (point) this.gore?.burst(point, _v2.set(0, 0.4, -1), 6, { speed: 1.6, spread: 0.9, size: 0.024 });
       if (character === this.player) {
@@ -1336,7 +1452,17 @@ export class Game {
     this._useTimer = (this._useTimer || 0) - dt;
     if (this._useTimer <= 0) {
       this._useTimer = 0.12;
-      this.hud.setUseAvailable(!!this.carried || !!this.pickupInReach(), !!this.carried);
+      const reach = this.pickupInReach();
+      /* USE says what it would actually do: put down what is in hand, take
+         off what is being worn, wear what is in reach, or pick it up. */
+      let label = 'USE';
+      if (this.carried) label = 'DROP';
+      else if (reach?.userData.wear) label = 'WEAR';
+      else if (!reach && this.player?.armour) label = 'TAKE OFF';
+      this.hud.setUseAvailable(
+        !!this.carried || !!reach || !!this.player?.armour, label);
+      const a = this.player?.armour;
+      this.hud.setArmour(a ? a.hp : null, a ? a.maxHp : 0);
     }
   }
 

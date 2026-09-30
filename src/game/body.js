@@ -466,6 +466,9 @@ export class Body {
 
   washClean() {
     for (const entry of this.entries.values()) {
+      // A part that has come off is not ours to wash: its meshes are out in
+      // the world now, drawing with these same materials.
+      if (entry.detached) continue;
       for (const e of [entry.skin, entry.cloth]) {
         if (!e || !e.surface) continue;
         e.surface.dispose();
@@ -486,6 +489,7 @@ export class Body {
   /** Copies the rig's world transforms onto the meshes. */
   sync() {
     for (const entry of this.entries.values()) {
+      if (entry.detached) continue;
       const bone = entry.bone;
       _v.copy(bone.boxOffset).applyQuaternion(bone.worldQuat).add(bone.worldPos);
       const s = entry.skin.mesh;
@@ -510,6 +514,60 @@ export class Body {
       }
     }
   }
+
+  /**
+   * Tears a part off. The meshes stop belonging to this body and are handed
+   * back positioned where they were, so whoever asked can throw them.
+   *
+   * @returns {Mesh[]} the skin box, its garment, and any fingers on it
+   */
+  detach(boneName) {
+    const entry = this.entries.get(boneName);
+    if (!entry || entry.detached) return [];
+    entry.detached = true;
+    const out = [];
+    for (const e of [entry.skin, entry.cloth]) {
+      if (!e) continue;
+      const m = e.mesh;
+      // it is about to be thrown, so it has to keep its own transform
+      m.matrixAutoUpdate = true;
+      m.matrix.decompose(m.position, m.quaternion, m.scale);
+      m.removeFromParent();
+      const i = this.meshes.indexOf(m);
+      if (i >= 0) this.meshes.splice(i, 1);
+      const j = this.fingerMeshes.indexOf(m);
+      if (j >= 0) this.fingerMeshes.splice(j, 1);
+      out.push(m);
+    }
+    // the head takes its hair - and anything hanging out of it - with it
+    if (boneName === 'head') {
+      for (const m of this.hairMeshes || []) {
+        m.matrixAutoUpdate = true;
+        m.matrix.decompose(m.position, m.quaternion, m.scale);
+        m.removeFromParent();
+        const i = this.meshes.indexOf(m);
+        if (i >= 0) this.meshes.splice(i, 1);
+        out.push(m);
+      }
+      this.hairMeshes = [];
+      for (const side of ['R', 'L']) {
+        const e = this.hangingEyes[side];
+        if (!e) continue;
+        for (const m of [e.ball, e.cord]) {
+          m.removeFromParent();
+          const i = this.meshes.indexOf(m);
+          if (i >= 0) this.meshes.splice(i, 1);
+        }
+        this.hangingEyes[side] = null;
+      }
+    }
+    /* A shared material cannot be disposed with the piece, and a torn off
+       finger keeping the living body's skin material is exactly right. */
+    return out;
+  }
+
+  /** True once this part has been torn off. */
+  isDetached(boneName) { return !!this.entries.get(boneName)?.detached; }
 
   setVisible(v) { this.group.visible = v; }
 

@@ -24,6 +24,7 @@ export function spawnCitizen(game, position, opts = {}) {
   c.onDamage = (info) => game.handleDamage(info);
   c.onStrike = (attacker, side, vel) => game.resolveStrike(attacker, side, vel);
   c.onInjury = (info) => game.handleInjury(info);
+  c.onGib = (info) => game.gore?.throwPart(info.mesh, info.vel);
   game.registerCharacter(c);
   c.teleport(position.x, position.z, c.yaw);
   return c;

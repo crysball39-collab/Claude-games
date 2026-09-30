@@ -21,6 +21,9 @@ const _v1 = new Vector3(), _v2 = new Vector3(), _v3 = new Vector3();
 const _obj = new Object3D();
 
 const MAX_DROPS = 320;
+/** Loose body parts in the world at once. Each is a draw call, and one arm
+    is a dozen of them, so this is about five people's worth. */
+const MAX_DEBRIS = 72;
 
 /** How freely each eye state runs. */
 const EYE_DRIP = { ok: 0, bloodshot: 0, bleeding: 0.5, hanging: 0.8, gone: 0.7 };
@@ -52,6 +55,10 @@ export class GoreSystem {
     this._hideAll();
 
     this.characters = [];     // filled in by the game each frame
+    /* Pieces of people, in the air. Not particles: these are the real meshes
+       torn off a body, so a forearm that comes off is the forearm that was
+       there a moment ago, still wearing its sleeve and its bruises. */
+    this.debris = [];
     this.stats = { splats: 0, drops: 0 };
   }
 
@@ -66,6 +73,21 @@ export class GoreSystem {
   setEnabled(v) {
     this.enabled = v;
     this.mesh.visible = v;
+    for (const d of this.debris) d.mesh.visible = v;
+  }
+
+  /** Clears every loose piece. Used by CLEAR SPAWNS and when a map unloads. */
+  clearDebris() {
+    for (const d of this.debris) d.mesh.removeFromParent();
+    this.debris.length = 0;
+  }
+
+  /** Drops the pieces that came off one particular person. Their materials
+      belong to that body, so they cannot outlive it. */
+  dropPartsOf(owner) {
+    for (let i = this.debris.length - 1; i >= 0; i--) {
+      if (this.debris[i].mesh.userData.owner === owner) this._dropDebris(i);
+    }
   }
 
   /* ------------------------------- droplets ------------------------------ */
@@ -95,9 +117,97 @@ export class GoreSystem {
     }
   }
 
+  /**
+   * Throws a piece of someone. The mesh is handed over entirely: it is
+   * reparented into the scene and this owns it from here on.
+   *
+   * Pieces stay where they land. This is a sandbox: an arm you took off
+   * someone ten minutes ago should still be lying there. The only thing that
+   * removes one is the cap below, CLEAR SPAWNS, or its owner being deleted.
+   *
+   * @param {Mesh} mesh    already positioned and oriented where it came off
+   * @param {Vector3} vel  how fast, and which way
+   */
+  throwPart(mesh, vel, { life = Infinity, bleed = 1 } = {}) {
+    mesh.matrixAutoUpdate = true;
+    this.scene.add(mesh);
+    const rng = this.rng;
+    this.debris.push({
+      mesh,
+      vel: vel.clone(),
+      spin: new Vector3((rng() - 0.5) * 16, (rng() - 0.5) * 16, (rng() - 0.5) * 16),
+      life,
+      bleed,
+      dripAt: 0,
+      rest: false,
+    });
+    /* A hard cap, because a fight can produce a lot of these and each one is
+       a draw call. The oldest piece goes first. */
+    while (this.debris.length > MAX_DEBRIS) this._dropDebris(0);
+  }
+
+  _dropDebris(i) {
+    const d = this.debris[i];
+    d.mesh.removeFromParent();
+    this.debris.splice(i, 1);
+  }
+
+  /** Everything in the air comes down, and bleeds on the way. */
+  _updateDebris(dt) {
+    const w = this.world;
+    const g = w.gravity.y;
+    for (let i = this.debris.length - 1; i >= 0; i--) {
+      const d = this.debris[i];
+      d.life -= dt;
+      if (d.life <= 0) { this._dropDebris(i); continue; }
+      if (d.rest) continue;
+
+      d.vel.y += g * dt;
+      d.mesh.position.addScaledVector(d.vel, dt);
+      _v1.copy(d.spin).multiplyScalar(dt);
+      d.mesh.rotateX(_v1.x); d.mesh.rotateY(_v1.y); d.mesh.rotateZ(_v1.z);
+
+      // a trail of blood while it is still moving
+      d.dripAt -= dt;
+      if (d.bleed > 0 && d.dripAt <= 0 && d.vel.lengthSq() > 4) {
+        d.dripAt = 0.045;
+        this.burst(d.mesh.position, _v2.copy(d.vel).multiplyScalar(-0.2), 1,
+          { speed: 1.6, spread: 1.2, size: 0.026 });
+      }
+
+      const floor = w.groundY + 0.055;
+      if (d.mesh.position.y <= floor) {
+        d.mesh.position.y = floor;
+        const speed = d.vel.length();
+        if (speed < 1.6) {
+          // settled: lay it flat and leave a pool where it came to rest
+          d.rest = true;
+          d.spin.set(0, 0, 0);
+          d.vel.set(0, 0, 0);
+          if (d.bleed > 0) this._poolUnder(d.mesh.position, 0.12 + d.bleed * 0.1);
+        } else {
+          d.vel.y = Math.abs(d.vel.y) * 0.26;
+          d.vel.x *= 0.62; d.vel.z *= 0.62;
+          d.spin.multiplyScalar(0.55);
+          if (d.bleed > 0) this._poolUnder(d.mesh.position, 0.08);
+        }
+      }
+    }
+  }
+
+  /** A spreading mark on the floor, for things that land wet. */
+  _poolUnder(pos, radius) {
+    const rng = this.rng;
+    this.sheet.paint(pos.x, pos.z, (ctx, px, py, ppm) => {
+      paintSplat(ctx, px, py, Math.max(3, radius * ppm), 0, 0, rng, 0.2);
+    });
+    this.stats.splats++;
+  }
+
   update(dt, characters) {
     if (!this.enabled) return;
     this.characters = characters;
+    this._updateDebris(dt);
     const g = this.world.gravity.y;
     let any = false;
     for (let i = 0; i < MAX_DROPS; i++) {
@@ -201,6 +311,10 @@ export class GoreSystem {
     if (!this.enabled) return;
     const { character, boneName, point, type, severity, force, fatal } = info;
     if (!boneName || !point) return;
+    /* A round the vest stopped did not reach anybody. No bruise under it, and
+       certainly no blood: the plate takes the mark instead, and shows it by
+       going dull. */
+    if (info.absorbed > 0 && !(info.amount > 0)) return;
     const sev = clamp01(severity != null ? severity : 0.4);
 
     const kind = type === 'impact' ? 'impact' : 'blunt';

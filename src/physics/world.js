@@ -146,6 +146,9 @@ export class DistanceConstraint {
     a.x += dx * ka; a.y += dy * ka; a.z += dz * ka;
     b.x -= dx * kb; b.y -= dy * kb; b.z -= dz * kb;
   }
+  /** True if this acts on any particle in `set`. Used when a limb comes off:
+      whatever is holding a joint together has to go with the joint. */
+  touches(set) { return set.has(this.a) || set.has(this.b); }
 }
 
 /**
@@ -191,6 +194,8 @@ export class HingeGuard {
     this.frame = frame; this.sign = sign; this.margin = margin;
     this.enabled = true;
   }
+
+  touches(set) { return set.has(this.a) || set.has(this.b) || set.has(this.c); }
 
   solve() {
     if (!this.enabled) return;
@@ -361,6 +366,8 @@ export class ConeLimit {
     this.enabled = true;
   }
 
+  touches(set) { return set.has(this.root) || set.has(this.tip); }
+
   solve() {
     if (!this.enabled) return;
     const f = this.frame;
@@ -439,6 +446,10 @@ export class SelfCollision {
     this.hits = 0;
   }
 
+  /** Never removed when a limb goes: it owns a whole body's worth of pairs,
+      and the owner prunes the list instead. */
+  touches() { return false; }
+
   solve() {
     if (!this.enabled || !this.owner.selfCollide) return;
     const pairs = this.pairs;
@@ -461,6 +472,8 @@ export class JointSpacing {
     this.a = a; this.b = b; this.min = minDist;
     this.enabled = true;
   }
+
+  touches(set) { return set.has(this.a) || set.has(this.b); }
 
   solve() {
     if (!this.enabled) return;

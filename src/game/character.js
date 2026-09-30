@@ -22,7 +22,7 @@ import {
   BONE_MASS, HINGE_GUARDS, CONE_LIMITS, SELF_COLLISION, RAGDOLL, IMPACT, JOINT_LIMITS,
   clampBoneEuler,
   LOOK_CHAIN, BODY_TURN_THRESHOLD, AIM_ARM_FOLLOW, DRAWN_LIMIT_BONES,
-  SOLID_PARTS, SOLID_IGNORE, SOLID_STIFFNESS,
+  SOLID_PARTS, SOLID_IGNORE, SOLID_STIFFNESS, GIB,
 } from './joints.js';
 import {
   Particle, DistanceConstraint, HingeGuard, ConeLimit, JointSpacing, SelfCollision,
@@ -65,10 +65,13 @@ const LEG_BONES = new Set([
 export const MELEE_CLIPS = {
   machete: ['slashR', 'slashL'],
   sledge: ['swingR', 'swingL'],
+  crowbar: ['crowbarR', 'crowbarL'],
 };
+/** How long you are committed after swinging each one, in seconds. */
+export const MELEE_COOLDOWN = { machete: 0.34, sledge: 0.52, crowbar: 0.42 };
 /** Which held pose each one stands in - guns included. */
 export const MELEE_HOLD = {
-  machete: 'macheteHold', sledge: 'sledgeHold',
+  machete: 'macheteHold', sledge: 'sledgeHold', crowbar: 'crowbarHold',
   glock: 'glockHold', ak47: 'akHold', m16: 'm16Hold',
 };
 const MELEE_ACTIONS = new Set(Object.values(MELEE_CLIPS).flat());
@@ -162,7 +165,13 @@ export class Character {
     this.lastAttacker = null;
     this.bleeding = 0;
     this.partHealth = Object.create(null);
-    for (const b of this.rig.bones) this.partHealth[b.name] = b.hp;
+    /* Damage a part has taken AFTER its health ran out. partHealth stops at
+       zero, so without this there is no difference between a part that is
+       finished and one that has been hit twenty more times since. */
+    this.partOverkill = Object.create(null);
+    for (const b of this.rig.bones) { this.partHealth[b.name] = b.hp; this.partOverkill[b.name] = 0; }
+    /** Parts that are no longer attached. */
+    this.gone = new Set();
 
     /* ----------------------------- injuries ----------------------------- */
     /* What is wrong with this person beyond a health bar. Eyes run
@@ -170,6 +179,8 @@ export class Character {
     this.injuries = { eyeR: 'ok', eyeL: 'ok', noseBleed: 0, mouthBleed: 0 };
     this.blind = 0;              // 0 sees fine, 1 sees nothing
     this.broken = new Set();     // bone names that are broken
+    /** A vest, if one is being worn. It eats damage before the body sees it. */
+    this.armour = null;
     /* Per bone muscle multiplier. A broken bone cannot hold itself up, and
        neither can anything hanging off it. */
     this.limpScale = Object.create(null);
@@ -409,6 +420,7 @@ export class Character {
     this.rig.updateFK();
     this._snapParticlesToRig();
     this.body.sync();
+    this.armour?.sync(this.rig);
   }
 
   _snapParticlesToRig() {
@@ -550,13 +562,50 @@ export class Character {
   }
 
   applyDamage(amount, { boneName = null, point = null, type = 'blunt', attacker = null, force = null, severity = null, crush = 0 } = {}) {
-    if (this.dead) {
-      // corpses still take visible damage
-      this.onDamage?.({ character: this, boneName, point, type, amount, severity: severity ?? clamp01(amount / 14), force, fatal: false });
-      return;
+    /* Armour comes first, because everything after this point - health, bone
+       wear, breaks, bleeding, the face - is about a hit that actually reached
+       the person. What the plate ate never did.
+
+       It stops damage, not momentum: a vest will not let a sledgehammer break
+       your ribs, and it will still put you on the floor. */
+    if (this.armour && !this.armour.spent && this.armour.covers(boneName)) {
+      const through = this.armour.absorb(amount, boneName);
+      const stopped = amount - through;
+      if (stopped > 0) {
+        // Bone only breaks under what reached it, so the crush the weapon
+        // asked for is scaled down by however much the plate kept.
+        crush *= amount > 0 ? through / amount : 0;
+        severity = severity == null ? null : severity * (amount > 0 ? through / amount : 0);
+        this.onArmourHit?.({ character: this, boneName, point, stopped, armour: this.armour });
+      }
+      if (this.armour.spent) this.onArmourBreak?.({ character: this, point });
+      amount = through;
+      if (amount <= 0.01) {
+        /* Nothing reached them - but something certainly happened, and the
+           person it happened to has to know. Being shot in the vest is still
+           being shot: it turns you round, and it starts a fight. */
+        this.lastDamageTime = performance.now() / 1000;
+        if (attacker) this.lastAttacker = attacker;
+        this.onDamage?.({
+          character: this, boneName, point, type, amount: 0, absorbed: stopped,
+          force, severity: 0, fatal: false,
+        });
+        return;
+      }
     }
+    /* Wear on the part itself is kept whether or not the person is alive to
+       feel it: a corpse can still be taken apart, and keeping this above the
+       check for death is the whole reason it can. */
     if (boneName && this.partHealth[boneName] != null) {
-      this.partHealth[boneName] = Math.max(0, this.partHealth[boneName] - amount);
+      const had = this.partHealth[boneName];
+      this.partHealth[boneName] = Math.max(0, had - amount);
+      this.partOverkill[boneName] += Math.max(0, amount - had);
+    }
+    if (this.dead) {
+      // corpses still take visible damage, and can still come apart
+      this.onDamage?.({ character: this, boneName, point, type, amount, severity: severity ?? clamp01(amount / 14), force, fatal: false });
+      if (this._shouldGib(boneName, amount)) this.explodeBone(boneName, point, force);
+      return;
     }
     const headshot = boneName === 'head' || boneName === 'neck';
     const dealt = amount * (headshot ? 1.85 : 1);
@@ -573,7 +622,7 @@ export class Character {
     });
 
     this._injure({
-      boneName, point, type, crush,
+      boneName, point, type, crush, amount, force,
       severity: severity ?? clamp01(amount / 14),
       fatal: this.health <= 0,
     });
@@ -623,7 +672,7 @@ export class Character {
    * What a hit does beyond taking health off. Faces bleed and lose eyes;
    * anything heavy enough breaks what it lands on.
    */
-  _injure({ boneName, point, type, severity, crush = 0, fatal = false }) {
+  _injure({ boneName, point, type, severity, crush = 0, fatal = false, amount = 0, force = null }) {
     if (!boneName) return;
     const rng = this.rng;
     const sev = clamp01(severity);
@@ -655,6 +704,15 @@ export class Character {
         }
       }
       this.setInjuries(next, point);
+    }
+
+    /* Parts coming off. A limb that has been worked well past the point of
+       being any use, or one that takes a single hit far bigger than it is,
+       does not break - it leaves. Checked before breaking, because there is
+       nothing left to break afterwards. */
+    if (this._shouldGib(boneName, amount)) {
+      this.explodeBone(boneName, point, force);
+      return;
     }
 
     // Breaks. The sledgehammer asks for them outright; anything else has to
@@ -715,6 +773,134 @@ export class Character {
     return true;
   }
 
+  /* --------------------------------------------------- parts coming off */
+
+  /** Has this part had enough to come off, from this hit or from all of them? */
+  _shouldGib(boneName, amount) {
+    if (!GIB.parts.has(boneName) || this.gone.has(boneName)) return false;
+    const bone = this.rig.byName[boneName];
+    if (!bone) return false;
+    const hp = bone.hp || 10;
+    if (amount >= hp * GIB.oneShot) return true;
+    return (this.partOverkill[boneName] || 0) >= hp * GIB.overkill;
+  }
+
+  /**
+   * Takes a part off the body for good.
+   *
+   * Three things have to happen together or the result is a body that looks
+   * wrong or behaves wrong: the meshes have to leave (and be thrown, because
+   * a limb that vanishes is not gore), the physics has to stop simulating
+   * joints that are not there any more, and the drawing has to stop asking
+   * particles where a bone is when that bone has no particles left.
+   *
+   * @param {Vector3} [force] which way the hit was going; the pieces follow it
+   * @returns {boolean} whether anything actually came off
+   */
+  explodeBone(boneName, point = null, force = null) {
+    if (!GIB.parts.has(boneName) || this.gone.has(boneName)) return false;
+    const bone = this.rig.byName[boneName];
+    if (!bone) return false;
+
+    /* Everything hanging off it goes too: a hand cannot stay in the air
+       where its forearm used to be. */
+    const gone = [];
+    for (const b of this.rig.bones) {
+      if (b.name === boneName || this.boneAncestry[b.name].includes(boneName)) {
+        if (!this.gone.has(b.name)) gone.push(b);
+      }
+    }
+
+    // ---- where the wound is, and which way everything leaves ----
+    const wound = _v1.copy(point || bone.worldPos);
+    _v2.set(0, 0, 0);
+    if (force && force.lengthSq() > 1e-6) _v2.copy(force).normalize();
+    else _v2.copy(bone.worldEnd).sub(bone.worldPos).normalize();
+
+    // ---- the meshes leave, still where they were, and are thrown ----
+    for (const b of gone) {
+      const parts = this.body.detach(b.name);
+      for (const m of parts) {
+        m.userData.owner = this;
+        _v3.copy(_v2).multiplyScalar(GIB.speed * (0.5 + this.rng() * 0.9));
+        _v3.x += (this.rng() - 0.5) * 2.6;
+        _v3.y += 1.2 + this.rng() * 2.4;
+        _v3.z += (this.rng() - 0.5) * 2.6;
+        this.onGib?.({ character: this, mesh: m, vel: _v3, boneName: b.name, point: wound });
+      }
+      this.gone.add(b.name);
+      this.broken.add(b.name);          // nothing that is gone still works
+      this.limpScale[b.name] = 0.02;
+      this.partHealth[b.name] = 0;
+    }
+
+    /* ---- the physics forgets it ----
+       The joint where the limb WAS stays: that is the stump, and the torso
+       still needs it for its girdle and its bracing. Everything beyond it
+       goes. */
+    const dead = new Set();
+    for (const b of gone) {
+      const pair = this.boneParticles[b.name];
+      if (pair) dead.add(pair[1]);      // the far end, never the near one
+      delete this.boneParticles[b.name];
+    }
+    // ...unless the stump itself belongs to a bone that is also gone
+    for (const b of gone) {
+      const spec = LAYOUT.find((l) => l[3] === b.name && l[4] === 'pos');
+      if (spec && b.parent && this.gone.has(b.parent.name)) dead.add(spec[0]);
+    }
+    if (dead.size) this._forgetParticles(dead);
+
+    // ---- what it costs the person ----
+    const hp = bone.hp || 10;
+    this.bleeding = 4;
+    this.painTimer = Math.max(this.painTimer, 2.5);
+    this.balance = 0;
+    this.onInjury?.({ character: this, kind: 'gib', boneName, point: wound, dir: _v2 });
+    if (GIB.fatal.has(boneName)) {
+      this.health = 0;
+    } else {
+      this.health = Math.max(0, this.health - hp * GIB.cost);
+    }
+    if (this.health <= 0) this.die();
+    else this._checkBalance();
+    return true;
+  }
+
+  /**
+   * Drops particles out of the simulation, along with everything that acts
+   * on them. They stay in the map by name so the rest of the character can
+   * still look them up without checking first; nothing solves them.
+   */
+  _forgetParticles(names) {
+    const dead = new Set();
+    for (const n of names) {
+      const p = this.particles[n];
+      if (!p) continue;
+      p.gone = true;
+      p.muscle = 0;
+      p.radius = 0;
+      dead.add(p);
+    }
+    if (!dead.size) return;
+    const hits = (c) => (c.touches ? c.touches(dead) : false);
+    this.particleList = this.particleList.filter((p) => !dead.has(p));
+    this.constraints = this.constraints.filter((c) => !hits(c));
+    this.guards = this.guards.filter((g) => !hits(g));
+    for (const p of dead) this.world.removeParticle(p);
+    this.world.constraints = this.world.constraints.filter((c) => !hits(c));
+    this.world.segments = this.world.segments.filter((sg) => !dead.has(sg.a) && !dead.has(sg.b));
+    /* The self collision solver stops testing pairs that no longer exist.
+       Its pairs hold the particles themselves, not their names. */
+    this.solids = this.solids.filter((c) => !dead.has(c.a) && !dead.has(c.b));
+    this.solidByName = Object.create(null);
+    for (const c of this.solids) this.solidByName[c.name] = c;
+    this.selfCollisionPairs = this.selfCollisionPairs.filter(
+      (q) => !dead.has(q.a0) && !dead.has(q.a1) && !dead.has(q.b0) && !dead.has(q.b1));
+    if (this.selfSolver) this.selfSolver.pairs = this.selfCollisionPairs;
+    this.totalMass = this.particleList.reduce((sum, p) => sum + p.mass, 0);
+  }
+
   /**
    * A broken limb does not just go slack, it sits wrong. The bend is fixed at
    * the moment of the break and rides on top of whatever the animation is
@@ -732,6 +918,32 @@ export class Character {
     }
   }
 
+  /* ------------------------------------------------------------- armour */
+
+  /**
+   * Puts a vest on. The scene has to be told where to hang the model, since
+   * a character owns its rig but not the world it is drawn in.
+   * @param {Armour} armour
+   * @param {Object3D} parent  where the vest's mesh should live
+   */
+  wearArmour(armour, parent) {
+    if (this.armour) this.stripArmour();
+    this.armour = armour;
+    if (parent) parent.add(armour.model);
+    armour.model.visible = true;
+    armour.sync(this.rig);
+    return armour;
+  }
+
+  /** Takes it off and hands it back, still as worn as it was. */
+  stripArmour() {
+    const a = this.armour;
+    if (!a) return null;
+    this.armour = null;
+    a.model.removeFromParent();
+    return a;
+  }
+
   /** Puts everything back: health, breaks, eyes, all of it. */
   heal() {
     this.health = this.maxHealth;
@@ -743,11 +955,21 @@ export class Character {
     this.breakBend = null;
     for (const b of this.rig.bones) {
       this.partHealth[b.name] = b.hp;
+      this.partOverkill[b.name] = 0;
       this.limpScale[b.name] = 1;
+    }
+    /* Health comes back; limbs do not. A part that has been blown off has no
+       particles, no constraints and no mesh left to restore, so it stays off
+       and stays useless. */
+    for (const name of this.gone) {
+      this.broken.add(name);
+      this.limpScale[name] = 0.02;
+      this.partHealth[name] = 0;
     }
     this.injuries = { eyeR: 'ok', eyeL: 'ok', noseBleed: 0, mouthBleed: 0 };
     this.body.setInjuries(this.injuries);
     this.body.setExpression('neutral');
+    this.armour?.repair();
   }
 
   /** True while any bone in that arm is broken. */
@@ -1429,6 +1651,7 @@ export class Character {
     this._updateStrike(dt);
     this.body._eyeDt = dt;
     this.body.sync();
+    this.armour?.sync(this.rig);
     this.body.flush();
   }
 
@@ -1598,7 +1821,7 @@ export class Character {
     const pair = clips || MELEE_CLIPS.machete;
     this.slashSide = this.slashSide === 'R' ? 'L' : 'R';
     this.animator.playAction(this.slashSide === 'R' ? pair[0] : pair[1]);
-    this.punchCooldown = pair === MELEE_CLIPS.sledge ? 0.52 : 0.34;
+    this.punchCooldown = MELEE_COOLDOWN[this.equipped] ?? 0.34;
     this.squareTimer = 0.9;
     this.struck.clear();
     this.combatReady = true;
@@ -1643,6 +1866,10 @@ export class Character {
 
   dispose() {
     this.world.removeCharacter(this);
+    // Whatever they were wearing goes with them, or it hangs in the air
+    // where they used to be.
+    this.armour?.dispose();
+    this.armour = null;
     this.body.dispose();
   }
 }

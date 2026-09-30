@@ -6,11 +6,12 @@ import { $ } from '../core/util.js';
 
 /** What the big button says for each thing you can hold. */
 const PRIMARY_LABEL = {
-  rcv2: 'SHOOT', machete: 'SLASH', sledge: 'SWING', fists: 'PUNCH',
+  rcv2: 'SHOOT', machete: 'SLASH', sledge: 'SWING', crowbar: 'SWING', fists: 'PUNCH',
   glock: 'FIRE', ak47: 'FIRE', m16: 'FIRE',
 };
 /** Which slots only exist while that weapon is actually being carried. */
-const CARRY_SLOTS = ['slot-machete', 'slot-sledge', 'slot-glock', 'slot-ak47', 'slot-m16'];
+const CARRY_SLOTS = ['slot-machete', 'slot-sledge', 'slot-crowbar',
+  'slot-glock', 'slot-ak47', 'slot-m16'];
 const GUN_SLOTS = new Set(['glock', 'ak47', 'm16']);
 
 export class Hud {
@@ -18,6 +19,9 @@ export class Hud {
     this.input = input;
     this.root = $('#hud');
     this.healthFill = $('#health-fill');
+    this.armourWrap = $('#armour-wrap');
+    this.armourFill = $('#armour-fill');
+    this._armour = -1;
     this.crosshair = $('#crosshair');
     this.grabTag = $('#grab-tag');
     this.primary = $('#btn-primary');
@@ -89,10 +93,22 @@ export class Hud {
     }
   }
 
-  /** USE only appears when it would do something. */
-  setUseAvailable(available, carrying) {
+  /** USE only appears when it would do something, and says what. */
+  setUseAvailable(available, label = 'USE') {
     this.useBtn.classList.toggle('show', !!available);
-    this.useBtn.textContent = carrying ? 'DROP' : 'USE';
+    if (this.useBtn.textContent !== label) this.useBtn.textContent = label;
+  }
+
+  /** The vest's integrity bar. Pass null when nothing is being worn. */
+  setArmour(now, max = 0) {
+    const key = now == null ? -1 : Math.round(now) + max * 1000;
+    if (key === this._armour) return;
+    this._armour = key;
+    if (now == null) { this.armourWrap.classList.add('hidden'); return; }
+    this.armourWrap.classList.remove('hidden');
+    const f = max > 0 ? Math.max(0, Math.min(1, now / max)) : 0;
+    this.armourFill.style.width = (f * 100).toFixed(1) + '%';
+    this.armourWrap.classList.toggle('spent', now <= 0);
   }
 
   /** How much of the view your own eyes have stopped delivering. */

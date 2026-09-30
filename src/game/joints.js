@@ -200,6 +200,41 @@ for (const S of ['R', 'L']) {
 }
 
 /* -------------------------------------------------------------------------- */
+/*                         parts coming off entirely                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * When a body part stops being a body part.
+ *
+ * Breaking a bone and tearing the limb off are the same scale of event told
+ * apart by how much went into it, so both are measured against that part's
+ * own health: a hand gives out long before a thigh does, without either
+ * number being written down twice.
+ */
+export const GIB = {
+  /** Damage past zero that takes a part off, as a multiple of its health. */
+  overkill: 1.1,
+  /** One hit this many times a part's health does it on its own. */
+  oneShot: 1.4,
+  /** What can come off. A torso cannot: there would be no body left. */
+  parts: new Set([
+    'head',
+    'upperArmR', 'lowerArmR', 'handR',
+    'upperArmL', 'lowerArmL', 'handL',
+    'upperLegR', 'lowerLegR', 'footR',
+    'upperLegL', 'lowerLegL', 'footL',
+  ]),
+  /** Losing one of these is not survivable. */
+  fatal: new Set(['head', 'upperLegR', 'upperLegL']),
+  /** Health taken by the injury itself, as a multiple of the part's health. */
+  cost: 2.2,
+  /** How hard the pieces leave, in m/s. */
+  speed: 4.6,
+  /** Loose meat thrown alongside the part itself. */
+  chunks: 6,
+};
+
+/* -------------------------------------------------------------------------- */
 /*                            ragdoll behaviour                               */
 /* -------------------------------------------------------------------------- */
 

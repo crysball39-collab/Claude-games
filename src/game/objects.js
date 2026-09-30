@@ -439,6 +439,139 @@ export function spawnSledge(game, position, { quat = null, reuse = null } = {}) 
 }
 
 /* -------------------------------------------------------------------------- */
+/*                                  crowbar                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A wrecking bar. Octagonal shaft, a chisel and nail slot at the bottom, and
+ * a gooseneck at the top that curves over into a split claw.
+ *
+ * Same convention as the other two: the origin is where the hand closes on
+ * the shaft, the bar runs up +Y, and the neck hooks towards -Z so the claw
+ * comes over the knuckles rather than out of the palm.
+ */
+export const CROWBAR = {
+  shaft: 0.44,          // straight section, chisel end to the start of the neck
+  bend: 0.085,          // radius of the gooseneck
+  sweep: 2.30,          // how far round the neck goes, in radians
+  bar: 0.021,           // across the flats
+  get length() { return 0.62; },
+  /** Middle of the whole shape, which is where its collider is centred. */
+  get mid() { return new Vector3(0, 0.29, -0.055); },
+};
+
+/** The far end of the claw, in the bar's own space. */
+export function crowbarClaw(out = new Vector3()) {
+  const C = CROWBAR;
+  const y0 = 0.06 + C.shaft;
+  return out.set(0, y0 + C.bend * Math.sin(C.sweep), -C.bend + C.bend * Math.cos(C.sweep));
+}
+
+export function createCrowbarModel() {
+  const C = CROWBAR;
+  const group = new Group();
+  // Forged bar that has been used: paint left in the hollows, bare steel on
+  // every surface that has ever been hit or levered with.
+  const paint = new MeshLambertMaterial({ color: 0x8c2b21 });
+  const steel = new MeshLambertMaterial({ color: 0x7c828b });
+  const bright = new MeshLambertMaterial({ color: 0xb9bfc6 });
+  const dark = new MeshLambertMaterial({ color: 0x3b3e43 });
+
+  const add = (mat, w, h, d, x, y, z, rx = 0, ry = 0) => {
+    const m = new Mesh(new BoxGeometry(w, h, d), mat);
+    m.position.set(x, y, z);
+    if (rx || ry) m.rotation.set(rx, ry, 0);
+    m.castShadow = true;
+    group.add(m);
+    return m;
+  };
+
+  /* ------------------------------- the shaft ----------------------------- */
+  // An octagon is two squares crossed at 45 degrees, which is exactly how a
+  // hex bar reads at this size and costs two boxes instead of a lathe.
+  const y0 = 0.06, sy = y0 + C.shaft / 2;
+  add(paint, C.bar, C.shaft, C.bar, 0, sy, 0);
+  add(paint, C.bar * 0.92, C.shaft, C.bar * 0.92, 0, sy, 0, 0, Math.PI / 4);
+  // Worn bare where a hand goes, and where it rests against things.
+  add(steel, C.bar * 1.02, 0.115, C.bar * 1.02, 0, 0.145, 0);
+  add(steel, C.bar * 0.96, 0.115, C.bar * 0.96, 0, 0.145, 0, 0, Math.PI / 4);
+
+  /* ------------------------ chisel end, at the bottom -------------------- */
+  // Flattened, splayed a little forward, and thinned to an edge.
+  add(steel, 0.026, 0.070, C.bar * 0.85, 0, 0.032, -0.008, -0.16);
+  add(steel, 0.030, 0.040, 0.011, 0, -0.008, -0.019, -0.30);
+  add(bright, 0.032, 0.012, 0.006, 0, -0.026, -0.024, -0.30);   // the edge
+  // the nail slot: a V cut back into the blade
+  add(dark, 0.007, 0.024, 0.008, 0, -0.016, -0.026, -0.30);
+
+  /* ----------------------------- the gooseneck --------------------------- */
+  const top = y0 + C.shaft;
+  const seg = 6;
+  for (let i = 0; i < seg; i++) {
+    const a = (C.sweep * (i + 0.5)) / seg;
+    const len = (C.bend * C.sweep) / seg + 0.004;
+    add(steel,
+      C.bar * 0.98, len, C.bar * 1.04,
+      0,
+      top + C.bend * Math.sin(a),
+      -C.bend + C.bend * Math.cos(a),
+      -a);
+  }
+
+  /* ------------------------------- the claw ------------------------------ */
+  // Two prongs with a tapering slot between them: what pulls the nail.
+  const tip = crowbarClaw();
+  const ta = C.sweep;
+  for (const sx of [-1, 1]) {
+    const m = add(steel, 0.0105, 0.062, 0.020,
+      sx * 0.0092, tip.y + 0.021 * Math.cos(ta), tip.z - 0.021 * Math.sin(ta), -ta);
+    m.userData.prong = true;
+  }
+  // the bevelled underside of the claw, which is the face that does the work
+  add(bright, 0.030, 0.010, 0.022,
+    0, tip.y + 0.040 * Math.cos(ta) + 0.006, tip.z - 0.040 * Math.sin(ta), -ta);
+
+  group.userData.headMesh = group.children[group.children.length - 1];
+  group.userData.bladeMat = steel;
+  group.userData.materials = [paint, steel, bright, dark];
+  return group;
+}
+
+/** @param {object} [reuse] see spawnMachete. */
+export function spawnCrowbar(game, position, { quat = null, reuse = null } = {}) {
+  const C = CROWBAR;
+  const body = new RigidBody({
+    shape: 'box',
+    half: new Vector3(0.030, C.length / 2, 0.098),
+    mass: 4.2,
+    pos: position.clone(),
+    friction: 0.8,
+    restitution: 0.04,
+    linDamp: 0.28,
+    angDamp: 0.6,
+    tag: 'crowbar',
+  });
+  if (quat) body.quat.copy(quat);
+  else body.quat.setFromAxisAngle(_v1.set(0, 0, 1), Math.PI / 2 + (rng() - 0.5) * 0.4);
+  body.updateDerived();
+
+  const mesh = reuse ? reuse.model : createCrowbarModel();
+  const steelMat = reuse ? reuse.material : mesh.userData.bladeMat;
+  mesh.userData.bodyOffset = C.mid.clone().negate();
+  mesh.matrixAutoUpdate = false;
+  body.mesh = mesh;
+  body.userData.label = 'Crowbar';
+  body.userData.grabbable = true;
+  body.userData.pickup = 'crowbar';
+  body.userData.material = steelMat;
+  body.userData.paintBlood = makeBoxPainter(body, steelMat, reuse ? reuse.surface : null, 'steel');
+  if (!reuse || !mesh.parent) game.scene.add(mesh);
+  game.world.addBody(body);
+  game.trackSpawn(body);
+  return body;
+}
+
+/* -------------------------------------------------------------------------- */
 
 /** Keeps the visible mesh glued to its rigid body. */
 export function syncBodyMesh(body) {

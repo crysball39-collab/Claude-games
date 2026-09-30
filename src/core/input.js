@@ -248,6 +248,11 @@ export class InputManager {
       case 'Digit2': if (isDown) this.onWeaponSelect?.(1); break;
       case 'Digit3': if (isDown) this.onWeaponSelect?.(2); break;
       case 'Digit4': if (isDown) this.onWeaponSelect?.(3); break;
+      case 'Digit5': if (isDown) this.onWeaponSelect?.(4); break;
+      case 'Digit6': if (isDown) this.onWeaponSelect?.(5); break;
+      case 'Digit7': if (isDown) this.onWeaponSelect?.(6); break;
+      case 'Digit8': if (isDown) this.onWeaponSelect?.(7); break;
+      case 'KeyR': set('reload'); break;
       case 'Tab': if (isDown) this.onToggleDrawer?.(); break;
       case 'Escape': if (isDown) this.onPause?.(); break;
       default: break;

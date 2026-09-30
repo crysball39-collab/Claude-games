@@ -141,7 +141,13 @@ const walk = await page.evaluate(() => {
   g.camYaw = 0; g.camPitch = -0.15;
   return { found: true };
 });
-await page.waitForTimeout(600);
+/* The HUD only re-asks what is in reach every eighth of a second, and a
+   freshly dropped machete is still rolling, so wait for the button rather
+   than for the clock. */
+await page.waitForFunction(
+  () => document.querySelector('#btn-use').classList.contains('show'),
+  null, { timeout: 15000 },
+).catch(() => {});
 const offered = await page.evaluate(
   () => document.querySelector('#btn-use').classList.contains('show'));
 check('USE offers itself when the machete is in reach', walk.found && offered);
@@ -257,6 +263,99 @@ for (const [kind, cap] of [['glock', '15'], ['ak47', '30'], ['m16', '30']]) {
     JSON.stringify({ ...gun, ammoBefore, ammoFired }));
   await page.tap('#btn-use'); await page.waitForTimeout(500);   // put it down again
 }
+
+/* ------------------------------- the crowbar ------------------------------- */
+await page.tap('#btn-pause'); await page.waitForTimeout(300);
+await page.tap('#btn-clear'); await page.waitForTimeout(200);
+await page.tap('#btn-resume'); await page.waitForTimeout(400);
+await page.tap('#btn-hamburger'); await page.waitForTimeout(350);
+await page.tap('.item[data-id="crowbar"]'); await page.waitForTimeout(150);
+await page.tap('#btn-close-drawer'); await page.waitForTimeout(250);
+await page.tap('.wslot[data-weapon="rcv2"]'); await page.waitForTimeout(300);
+await page.tap('#btn-spawn'); await page.waitForTimeout(1500);
+await page.evaluate(() => {
+  const g = window.GOREBOX.game;
+  const m = g.spawnedBodies.find((b) => b.tag === 'crowbar');
+  if (!m) return;
+  g.player.teleport(m.pos.x, m.pos.z + 0.9, 0);
+  g.camYaw = 0; g.camPitch = -0.15;
+  g.setEquipped('fists');
+});
+await page.waitForTimeout(600);
+await page.tap('#btn-use'); await page.waitForTimeout(700);
+await shot('12-crowbar');
+await page.tap('#btn-primary'); await page.waitForTimeout(900);
+const bar = await page.evaluate(() => ({
+  carrying: window.GOREBOX.game.carried?.kind || null,
+  equipped: window.GOREBOX.game.equipped,
+  swinging: window.GOREBOX.game.player.animator.actionName,
+  label: document.querySelector('#btn-primary').textContent,
+  slot: !document.querySelector('#slot-crowbar').classList.contains('hidden'),
+}));
+check('USE picks the crowbar up and PRIMARY swings it',
+  bar.carrying === 'crowbar' && bar.equipped === 'crowbar' && bar.label === 'SWING' &&
+  bar.slot && /crowbar[RL]/.test(bar.swinging || ''), JSON.stringify(bar));
+await page.tap('#btn-use'); await page.waitForTimeout(500);
+
+/* ------------------------------ the light vest ----------------------------- */
+await page.tap('#btn-pause'); await page.waitForTimeout(300);
+await page.tap('#btn-clear'); await page.waitForTimeout(200);
+await page.tap('#btn-resume'); await page.waitForTimeout(400);
+await page.tap('#btn-hamburger'); await page.waitForTimeout(350);
+await page.tap('.item[data-id="vest"]'); await page.waitForTimeout(150);
+await page.tap('#btn-close-drawer'); await page.waitForTimeout(250);
+await page.tap('.wslot[data-weapon="rcv2"]'); await page.waitForTimeout(300);
+await page.tap('#btn-spawn'); await page.waitForTimeout(1500);
+await page.evaluate(() => {
+  const g = window.GOREBOX.game;
+  const m = g.spawnedBodies.find((b) => b.tag === 'vest');
+  if (!m) return;
+  g.player.teleport(m.pos.x, m.pos.z + 0.9, 0);
+  g.camYaw = 0; g.camPitch = -0.2;
+  g.setEquipped('fists');
+});
+/* This renderer runs at a quarter speed, so game time and wall time are not
+   the same thing. Wait for the state to actually change rather than guessing
+   how long it takes. */
+const wornIs = (want) => page.waitForFunction(
+  (w) => !!window.GOREBOX.game.player.armour === w, want, { timeout: 20000 },
+).catch(() => {});
+await page.waitForFunction(
+  () => document.querySelector('#btn-use').textContent === 'WEAR', null, { timeout: 20000 },
+).catch(() => {});
+const vestOffer = await page.evaluate(() => document.querySelector('#btn-use').textContent);
+await page.tap('#btn-use');
+await wornIs(true);
+await page.waitForFunction(
+  () => document.querySelector('#btn-use').textContent === 'TAKE OFF', null, { timeout: 20000 },
+).catch(() => {});
+await shot('13-vest');
+const vest = await page.evaluate(() => ({
+  offer: document.querySelector('#btn-use').textContent,
+  worn: !!window.GOREBOX.game.player.armour,
+  hp: window.GOREBOX.game.player.armour?.hp,
+  bar: !document.querySelector('#armour-wrap').classList.contains('hidden'),
+}));
+await page.tap('#btn-use');                                        // take it off again
+await wornIs(false);
+await page.waitForTimeout(400);
+const vestOff = await page.evaluate(() => ({
+  worn: !!window.GOREBOX.game.player.armour,
+  onGround: window.GOREBOX.game.spawnedBodies.some((b) => b.tag === 'vest'),
+}));
+check('USE wears the light vest and takes it off again',
+  vestOffer === 'WEAR' && vest.worn && vest.hp > 0 && vest.bar &&
+  vest.offer === 'TAKE OFF' && !vestOff.worn && vestOff.onGround,
+  JSON.stringify({ vestOffer, ...vest, ...vestOff }));
+
+/* ------------------------------ full screen -------------------------------- */
+const full = await page.evaluate(() => {
+  const hud = document.querySelector('#btn-fullscreen');
+  const pause = document.querySelector('#btn-fullscreen-pause');
+  return { hud: !!hud, pause: !!pause, hudShown: hud && hud.style.display !== 'none' };
+});
+check('the full screen button is on the HUD and in the pause menu',
+  full.hud && full.pause && full.hudShown, JSON.stringify(full));
 
 /* -------------------------------- the rest --------------------------------- */
 const state = await page.evaluate(() => ({

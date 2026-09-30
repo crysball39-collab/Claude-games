@@ -85,10 +85,13 @@
         <p>Fists equipped &rarr; PUNCH button (alternates left / right jab).</p>
         <p>RCV2 equipped &rarr; SHOOT (grab), + (spawn), and DELETE buttons.</p>
         <p>The three lines in the top left open the spawn menu.</p>
+        <p>USE picks up a weapon, and wears the Light Vest. Press it again to put it down.</p>
+        <p>The button beside PAUSE fills the screen, and fills it back.</p>
       </div>
       <div class="ctl-group"><b>Keyboard &amp; mouse</b>
         <p>WASD move &middot; Mouse look (click to lock) &middot; Space jump &middot; C or Ctrl crouch</p>
-        <p>1 fists &middot; 2 RCV2 &middot; Left click punch / grab &middot; G spawn &middot; X delete &middot; Tab spawn menu</p>
+        <p>1 fists &middot; 2 RCV2 &middot; 3-8 whatever you are carrying &middot; R reload</p>
+        <p>Left click punch / grab &middot; E use &middot; G spawn &middot; X delete &middot; Tab spawn menu</p>
       </div>
     </div>
   </div>
@@ -124,8 +127,13 @@
 
     <!-- top right -->
     <div id="top-right">
+      <button id="btn-fullscreen" class="hud-btn square small" aria-label="Full screen">&#9974;</button>
       <button id="btn-pause" class="hud-btn square small" aria-label="Pause">&#9199;</button>
-      <div class="health-wrap"><div class="health-bar"><div id="health-fill"></div></div><div class="health-label">HEALTH</div></div>
+      <div class="health-wrap">
+        <div class="health-bar"><div id="health-fill"></div></div>
+        <div id="armour-wrap" class="hidden"><div class="armour-bar"><div id="armour-fill"></div></div></div>
+        <div class="health-label">HEALTH</div>
+      </div>
     </div>
 
     <div id="crosshair"><span></span></div>
@@ -140,9 +148,10 @@
       <button class="wslot" data-weapon="rcv2"><span class="wname">RCV2</span><span class="wkey">2</span></button>
       <button class="wslot hidden" data-weapon="machete" id="slot-machete"><span class="wname">MACHETE</span><span class="wkey">3</span></button>
       <button class="wslot hidden" data-weapon="sledge" id="slot-sledge"><span class="wname">SLEDGE</span><span class="wkey">4</span></button>
-      <button class="wslot hidden" data-weapon="glock" id="slot-glock"><span class="wname">GLOCK-19</span><span class="wkey">5</span></button>
-      <button class="wslot hidden" data-weapon="ak47" id="slot-ak47"><span class="wname">AK-47</span><span class="wkey">6</span></button>
-      <button class="wslot hidden" data-weapon="m16" id="slot-m16"><span class="wname">M16</span><span class="wkey">7</span></button>
+      <button class="wslot hidden" data-weapon="crowbar" id="slot-crowbar"><span class="wname">CROWBAR</span><span class="wkey">5</span></button>
+      <button class="wslot hidden" data-weapon="glock" id="slot-glock"><span class="wname">GLOCK-19</span><span class="wkey">6</span></button>
+      <button class="wslot hidden" data-weapon="ak47" id="slot-ak47"><span class="wname">AK-47</span><span class="wkey">7</span></button>
+      <button class="wslot hidden" data-weapon="m16" id="slot-m16"><span class="wname">M16</span><span class="wkey">8</span></button>
     </div>
 
     <!-- right action cluster -->
@@ -202,6 +211,7 @@
       <button class="mbtn primary" id="btn-resume">RESUME</button>
       <button class="mbtn" id="btn-clear">CLEAR SPAWNS</button>
       <button class="mbtn" id="btn-cleangore">WASH THE BLOOD</button>
+      <button class="mbtn" id="btn-fullscreen-pause">FULL SCREEN</button>
       <button class="mbtn danger" id="btn-quit">QUIT TO MENU</button>
       <div class="pause-stats" id="pause-stats"></div>
     </div>

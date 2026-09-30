@@ -6,6 +6,7 @@
 import { $, IS_TOUCH } from './core/util.js';
 import { bootScreen, mapScreen } from './core/loading.js';
 import { input } from './core/input.js';
+import { canFullscreen, isFullscreen, toggleFullscreen, onFullscreenChange } from './core/fullscreen.js';
 import { getMap as getMapDef } from './game/map.js';
 import { Menu } from './ui/menu.js';
 import { Hud } from './ui/hud.js';
@@ -154,7 +155,8 @@ async function startGame(mapId) {
     input.enabled = !open;
     if (open) input.reset();
   };
-  input.onWeaponSelect = (i) => game.setEquipped(['fists', 'rcv2', 'machete', 'sledge'][i] || 'fists');
+  input.onWeaponSelect = (i) => game.setEquipped(
+    ['fists', 'rcv2', 'machete', 'sledge', 'crowbar', 'glock', 'ak47', 'm16'][i] || 'fists');
   input.onToggleDrawer = () => app.spawnMenu.toggle();
   input.onPause = () => togglePause();
 
@@ -218,7 +220,42 @@ function updatePauseStats() {
     `${g.gore ? g.gore.stats.splats : 0} splatters on the map`;
 }
 
+/**
+ * Both full screen buttons: the one in the corner of the HUD and the one in
+ * the pause card. They are the same switch, so whichever way it is thrown the
+ * other has to agree, and the browser's own Escape key has to be heard too.
+ */
+function wireFullscreen() {
+  const hudBtn = $('#btn-fullscreen');
+  const pauseBtn = $('#btn-fullscreen-pause');
+  if (!canFullscreen()) {
+    // iPhone Safari cannot do this for anything but a video. A button that
+    // silently does nothing is worse than no button.
+    hudBtn.style.display = 'none';
+    pauseBtn.style.display = 'none';
+    return;
+  }
+  const paint = (on) => {
+    hudBtn.classList.toggle('on', on);
+    hudBtn.setAttribute('aria-label', on ? 'Leave full screen' : 'Full screen');
+    hudBtn.innerHTML = on ? '&#10066;' : '&#9974;';
+    pauseBtn.textContent = on ? 'LEAVE FULL SCREEN' : 'FULL SCREEN';
+  };
+  const flip = async () => {
+    await toggleFullscreen();
+    /* The change event repaints too, but it does not always arrive - a
+       refused request fires nothing at all - so settle the buttons against
+       what is actually true now. Painting twice costs nothing. */
+    paint(isFullscreen());
+  };
+  hudBtn.addEventListener('click', flip);
+  pauseBtn.addEventListener('click', flip);
+  onFullscreenChange((on) => { paint(on); checkOrientation(); });
+  paint(isFullscreen());
+}
+
 function wireGameButtons() {
+  wireFullscreen();
   $('#btn-pause').addEventListener('click', () => togglePause(true));
   $('#btn-resume').addEventListener('click', () => togglePause(false));
   $('#btn-quit').addEventListener('click', () => quitToMenu());

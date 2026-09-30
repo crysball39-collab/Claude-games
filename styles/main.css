@@ -140,6 +140,8 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
 .hud-btn.round{border-radius:50%}
 .hud-btn.square{border-radius:10px;width:46px;height:46px}
 .hud-btn.square.small{width:38px;height:38px;font-size:1rem}
+/* The full screen switch reads as "on" when the page is filling the screen. */
+#btn-fullscreen.on{border-color:var(--blood-lit);color:#ff8a8a}
 .hud-btn.big{width:88px;height:88px;font-size:.86rem}
 .hud-btn.med{width:62px;height:62px}
 .hud-btn.danger{color:#ffbcbc;border-color:rgba(255,120,120,.45)}
@@ -153,6 +155,11 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
 .health-wrap{text-align:right}
 .health-bar{width:118px;height:10px;border:1.5px solid var(--hud-line);border-radius:99px;overflow:hidden;background:rgba(0,0,0,.42)}
 #health-fill{height:100%;width:100%;background:linear-gradient(90deg,#c4161c,#f0574c);transition:width .18s ease}
+/* The vest sits under the health bar, and only while one is being worn. */
+#armour-wrap{margin-top:3px}
+.armour-bar{width:118px;height:6px;border:1.5px solid var(--hud-line);border-radius:99px;overflow:hidden;background:rgba(0,0,0,.42)}
+#armour-fill{height:100%;width:100%;background:linear-gradient(90deg,#4a5a6e,#9fb4cc);transition:width .18s ease}
+#armour-wrap.spent #armour-fill{background:#4a3030}
 .health-label{font-size:.56rem;letter-spacing:.28em;color:rgba(255,255,255,.68);margin-top:2px}
 
 #crosshair{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none}
@@ -284,6 +291,22 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
   linear-gradient(0deg, transparent 0 62%, #37393d 62% 74%, transparent 74%),
   linear-gradient(0deg, transparent 0 40%, #2b2d31 40% 52%, transparent 52%),
   linear-gradient(90deg, transparent 0 46%, #1d1f22 46% 58%, transparent 58%),
+  #14181c}
+/* a crowbar: the shaft, the gooseneck over the top, and the claw dropping
+   back down the other side. Placed rather than striped, because a stripe
+   runs the whole way across and a hook does not. */
+.ico.crowbar{background:
+  linear-gradient(#8c2b21,#8c2b21) 58% 100% / 13% 66% no-repeat,
+  linear-gradient(#7c828b,#7c828b) 50% 16% / 44% 15% no-repeat,
+  linear-gradient(#7c828b,#7c828b) 30% 46% / 13% 30% no-repeat,
+  #14181c}
+/* a vest: a panel down the chest with a seam, and two shoulder straps over
+   the top with the neck left open between them */
+.ico.vest{background:
+  linear-gradient(#4a515b,#4a515b) 50% 82% / 5% 60% no-repeat,
+  linear-gradient(#1d2025,#1d2025) 50% 82% / 66% 60% no-repeat,
+  linear-gradient(#2f343b,#2f343b) 26% 6% / 13% 36% no-repeat,
+  linear-gradient(#2f343b,#2f343b) 74% 6% / 13% 36% no-repeat,
   #14181c}
 .drawer-foot{margin-top:10px;font-size:.68rem;color:var(--muted);letter-spacing:.06em}
 .drawer-foot b{color:#ffcf7a}

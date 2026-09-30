@@ -275,13 +275,22 @@ check('a citizen fights back and can hurt you', r.playerHurt > 0, JSON.stringify
     return { x: p.pos.x, z: p.pos.z };
   });
   await page.waitForTimeout(1200);
+  /* Distance over WALL time is not a fair measure here: the main loop clamps
+     a long frame to a tenth of a second, so on a slow renderer the game sees
+     less time than the clock does and the player covers less ground. How
+     fast they are actually travelling does not care how many frames it took
+     to get there. */
   r = await ev((f) => {
     const p = window.GOREBOX.game.player;
-    return { moved: +Math.hypot(p.pos.x - f.x, p.pos.z - f.z).toFixed(2) };
+    return {
+      moved: +Math.hypot(p.pos.x - f.x, p.pos.z - f.z).toFixed(2),
+      speed: +Math.hypot(p.vel.x, p.vel.z).toFixed(2),
+    };
   }, from);
   await grip.release();
   r.held = held;
-  check('the joystick moves you', Math.abs(held.z) > 0.5 && r.moved > 1.5, JSON.stringify(r));
+  check('the joystick moves you',
+    Math.abs(held.z) > 0.5 && r.moved > 0.6 && r.speed > 1.6, JSON.stringify(r));
 }
 
 // ---------- nothing gets launched into orbit ----------
@@ -295,7 +304,9 @@ r = await page.evaluate(async () => {
   const cs = [];
   for (let i = 0; i < 3; i++) cs.push(spawnCitizen(g, new V(OX + i * 1.5 - 1.5, 0, 0)));
   await new Promise((res) => setTimeout(res, 500));
-  cs.forEach((c, i) => { c.ai.update = () => { c.moveInput.set(0, 0, 0); }; c.teleport(i * 1.5 - 1.5, 0, Math.PI); });
+  // The OX matters: without it they stand a map away from the boulder below,
+  // and this measures three people lying quietly instead of being hit.
+  cs.forEach((c, i) => { c.ai.update = () => { c.moveInput.set(0, 0, 0); }; c.teleport(OX + i * 1.5 - 1.5, 0, Math.PI); });
   g.player.teleport(OX, 8, 0);
   await new Promise((res) => setTimeout(res, 300));
 
@@ -311,29 +322,58 @@ r = await page.evaluate(async () => {
   for (const c of cs) { c.balance = 0; c._checkBalance(); c.wantsUp = false; }
   for (let i = 0; i < 40; i++) await new Promise((res) => requestAnimationFrame(res));
 
-  const rock = spawnBoulder(g, new V(OX - 7, 0.6, 0.1));
+  /* Aimed at where the middle one actually came to rest, not at where they
+     were standing before they fell over. Fired from seven metres it used to
+     roll past a body lying half a metre to the side, and the check then
+     measured three people lying still. */
+  const mark = cs[1].center;
+  const rock = spawnBoulder(g, new V(mark.x - 4, 0.6, mark.z));
   rock.vel.set(16, 0, 0); rock.wake();
 
-  // A Verlet particle stores speed as a position offset over ONE substep, so
-  // that is what turns it back into metres per second.
+  /* What "launched" means is that the whole person goes, so the whole person
+     is what gets measured: the mass weighted centre of each body. A single
+     toe whipping round at fifteen metres a second while the body slides two
+     metres is a boulder hit, not a launch, and measuring the fastest particle
+     cannot tell those apart.
+
+     A Verlet particle stores speed as a position offset over ONE substep, so
+     that is what turns it back into metres per second. */
   const inv = 1 / g.world.substepDt;
-  let peak = 0, high = 0;
+  const before = cs.map((c) => ({ x: c.center.x, z: c.center.z }));
+  let comPeak = 0, high = 0, capped = 0;
   for (let f = 0; f < 260; f++) {
     await new Promise((res) => requestAnimationFrame(res));
     for (const c of cs) {
+      let mx = 0, my = 0, mz = 0, m = 0;
       for (const p of c.particleList) {
-        peak = Math.max(peak, Math.hypot(p.x - p.px, p.y - p.py, p.z - p.pz) * inv);
+        mx += (p.x - p.px) * p.mass; my += (p.y - p.py) * p.mass; mz += (p.z - p.pz) * p.mass;
+        m += p.mass;
+        const sp = Math.hypot(p.x - p.px, p.y - p.py, p.z - p.pz) * inv;
+        if (sp > 19.5) capped++;            // anything at the hard cap has gone wrong
         high = Math.max(high, p.y);
       }
+      comPeak = Math.max(comPeak, (Math.hypot(mx, my, mz) / m) * inv);
+    }
+  }
+  let stretch = 1, moved = 0;
+  for (let i = 0; i < cs.length; i++) {
+    const c = cs[i];
+    moved = Math.max(moved, Math.hypot(c.center.x - before[i].x, c.center.z - before[i].z));
+    for (const con of c.constraints) {
+      if (con.kind !== 'eq' || !con.rest) continue;
+      stretch = Math.max(stretch,
+        Math.hypot(con.a.x - con.b.x, con.a.y - con.b.y, con.a.z - con.b.z) / con.rest);
     }
   }
   return {
-    peakSpeed: +peak.toFixed(1), maxHeight: +high.toFixed(2),
+    comPeak: +comPeak.toFixed(1), maxHeight: +high.toFixed(2),
+    moved: +moved.toFixed(2), stretch: +stretch.toFixed(2), capped,
     finite: cs.every((c) => Number.isFinite(c.pos.x) && Number.isFinite(c.pos.y)),
   };
 });
-check('ragdolls take a hit without being launched',
-  r.finite && r.peakSpeed > 1 && r.peakSpeed < 14 && r.maxHeight < 3, JSON.stringify(r));
+check('a boulder shoves ragdolls along the ground instead of launching them',
+  r.finite && r.moved > 0.15 && r.moved < 4 && r.comPeak > 0.5 && r.comPeak < 9 &&
+  r.maxHeight < 2.2 && r.stretch < 1.15 && r.capped === 0, JSON.stringify(r));
 
 // ---------- a ragdoll is carried by the RCV2, not flung by it ----------
 r = await page.evaluate(async () => {
@@ -457,10 +497,14 @@ r = await page.evaluate(async () => {
   const c = spawnCitizen(g, new V(OX, 0, 0));
   await new Promise((res) => setTimeout(res, 400));
   c.ai.update = () => { c.moveInput.set(0, 0, 0); };
-  const clips = []; let bled = false;
-  const startHp = c.health;
+  const clips = []; let bled = false; let damage = 0;
   const frame = () => new Promise((res) => requestAnimationFrame(res));
-  for (let i = 0; i < 5 && !c.dead; i++) {
+  /* Healed between swings. A machete can take an arm off in one now, and a
+     limb coming off is enough to finish someone - so without this the second
+     swing has nobody left to land on and only one of the two clips is ever
+     seen. */
+  for (let i = 0; i < 5; i++) {
+    c.heal();
     if (c.state !== 'controlled') { c.balance = 1; c.setState('controlled'); }
     c.teleport(OX, 0, Math.PI);
     g.player.teleport(OX, 0.85, 0); g.camYaw = 0; g.camPitch = 0.02;
@@ -468,9 +512,11 @@ r = await page.evaluate(async () => {
     g.player.punchCooldown = 0; g.player.animator.cancelAction();
     if (!g.player.slash()) continue;
     clips.push(g.player.animator.actionName);
+    const hp = c.health;
     for (let k = 0; k < 240 && g.player.animator.actionActive; k++) await frame();
+    damage += hp - c.health;
   }
-  const damage = Math.round(startHp - c.health);
+  damage = Math.round(damage);
   for (const [, e] of c.body.entries) {
     if (e.skin.surface && e.skin.surface.bloodAmount > 0) bled = true;
   }
@@ -488,65 +534,75 @@ check('holding a blade looks nothing like holding fists',
   r.fistPose === 'fistGuard' && r.bladePose === 'macheteHold',
   JSON.stringify({ fistPose: r.fistPose, bladePose: r.bladePose }));
 
-// ---------- the sledgehammer: heavier, slower, breaks things ----------
+// ---------- the two heavy melee weapons: both break bones ----------
 r = await page.evaluate(async () => {
   const g = window.GOREBOX.game;
   const OX = g.map.openArea.x;   // clear of the platform in the middle
   const V = g.player.pos.constructor;
   const { spawnCitizen } = await import('/src/game/citizen.js');
   const frame = () => new Promise((res) => requestAnimationFrame(res));
-  g.clearSpawns();
-  if (g.carried) g.dropCarried();
-  g.clearSpawns();
-  g.player.teleport(OX, 3, 0); g.camYaw = 0; g.camPitch = -0.2;
-  g.setEquipped('rcv2'); g.setSelected('sledge');
-  await new Promise((res) => setTimeout(res, 150));
-  const dropped = g.spawnSelected();
-  for (let i = 0; i < 110; i++) await frame();
-  g.player.teleport(dropped.entity.pos.x, dropped.entity.pos.z + 0.9, 0);
-  for (let i = 0; i < 20; i++) await frame();
-  g.setEquipped('fists');
-  g.useAction();
-  const carried = g.carried?.kind === 'sledge' && g.equipped === 'sledge';
-  for (let i = 0; i < 10; i++) await frame();
-  const holdPose = g.player.animator.upper.clip?.name || null;
+  const out = {};
+  for (const [kind, standOff] of [['sledge', 1.2], ['crowbar', 1.0]]) {
+    g.clearSpawns();
+    if (g.carried) g.dropCarried();
+    g.clearSpawns();
+    g.player.teleport(OX, 3, 0); g.camYaw = 0; g.camPitch = -0.2;
+    g.setEquipped('rcv2'); g.setSelected(kind);
+    await new Promise((res) => setTimeout(res, 150));
+    const dropped = g.spawnSelected();
+    for (let i = 0; i < 110; i++) await frame();
+    g.player.teleport(dropped.entity.pos.x, dropped.entity.pos.z + 0.9, 0);
+    for (let i = 0; i < 20; i++) await frame();
+    g.setEquipped('fists');
+    g.useAction();
+    const carried = g.carried?.kind === kind && g.equipped === kind;
+    for (let i = 0; i < 10; i++) await frame();
+    const holdPose = g.player.animator.upper.clip?.name || null;
 
-  const c = spawnCitizen(g, new V(OX, 0, 0));
-  await new Promise((res) => setTimeout(res, 400));
-  c.ai.update = () => { c.moveInput.set(0, 0, 0); };
-  const clips = [];
-  let damage = 0;
-  const broken = new Set();
-  for (let i = 0; i < 6; i++) {
-    // A sledgehammer kills in one or two, so heal between swings: this check
-    // is about the weapon working, not about how long anyone survives it.
-    const before = c.health;
-    if (i > 0) damage += before - c.health;
-    for (const b of c.broken) broken.add(b);
-    c.heal();
-    if (c.state !== 'controlled') { c.balance = 1; c.setState('controlled'); }
-    c.teleport(OX, 0, Math.PI);
-    // a sledgehammer is swung from further out than a blade
-    g.player.teleport(OX, 1.2, 0); g.camYaw = 0; g.camPitch = 0.02;
-    for (let k = 0; k < 6; k++) await frame();
-    g.player.punchCooldown = 0; g.player.animator.cancelAction();
-    if (!g.player.slash()) continue;
-    clips.push(g.player.animator.actionName);
-    const hp = c.health;
-    for (let k = 0; k < 300 && g.player.animator.actionActive; k++) await frame();
-    damage += hp - c.health;
-    for (const b of c.broken) broken.add(b);
+    const c = spawnCitizen(g, new V(OX, 0, 0));
+    await new Promise((res) => setTimeout(res, 400));
+    c.ai.update = () => { c.moveInput.set(0, 0, 0); };
+    const clips = [];
+    let damage = 0;
+    const broken = new Set();
+    for (let i = 0; i < 6; i++) {
+      // These kill in one or two, so heal between swings: this check is about
+      // the weapon working, not about how long anyone survives it.
+      const before = c.health;
+      if (i > 0) damage += before - c.health;
+      for (const b of c.broken) broken.add(b);
+      c.heal();
+      if (c.state !== 'controlled') { c.balance = 1; c.setState('controlled'); }
+      c.teleport(OX, 0, Math.PI);
+      g.player.teleport(OX, standOff, 0); g.camYaw = 0; g.camPitch = 0.02;
+      for (let k = 0; k < 6; k++) await frame();
+      g.player.punchCooldown = 0; g.player.animator.cancelAction();
+      if (!g.player.slash()) continue;
+      clips.push(g.player.animator.actionName);
+      const hp = c.health;
+      for (let k = 0; k < 300 && g.player.animator.actionActive; k++) await frame();
+      damage += hp - c.health;
+      for (const b of c.broken) broken.add(b);
+    }
+    g.useAction();
+    out[kind] = {
+      carried, holdPose, clips,
+      damage: Math.round(damage), broken: [...broken],
+      dropped: !g.carried && g.spawnedBodies.some((b) => b.tag === kind),
+    };
   }
-  g.useAction();
-  return {
-    carried, holdPose, clips,
-    damage: Math.round(damage), broken: [...broken],
-    dropped: !g.carried && g.spawnedBodies.some((b) => b.tag === 'sledge'),
-  };
+  return out;
 });
 check('the sledgehammer is carried, swung both ways and breaks bones',
-  r.carried && r.holdPose === 'sledgeHold' && r.damage > 40 && r.broken.length > 0 &&
-  r.dropped && r.clips.includes('swingR') && r.clips.includes('swingL'), JSON.stringify(r));
+  r.sledge.carried && r.sledge.holdPose === 'sledgeHold' && r.sledge.damage > 40 &&
+  r.sledge.broken.length > 0 && r.sledge.dropped &&
+  r.sledge.clips.includes('swingR') && r.sledge.clips.includes('swingL'),
+  JSON.stringify(r.sledge));
+check('the crowbar is carried, swung both ways and breaks bones',
+  r.crowbar.carried && r.crowbar.holdPose === 'crowbarHold' && r.crowbar.damage > 30 &&
+  r.crowbar.broken.length > 0 && r.crowbar.dropped &&
+  r.crowbar.clips.includes('crowbarR') && r.crowbar.clips.includes('crowbarL'),
+  JSON.stringify(r.crowbar));
 
 // ---------- faces come apart the way they were asked to ----------
 r = await page.evaluate(async () => {
@@ -1267,32 +1323,47 @@ r = await page.evaluate(async () => {
   const stub = { consumeLook: () => ({ x: 0, y: 0 }), move: { x: 0, y: 0 },
     pressed: {}, down: {}, beginFrame() {} };
   for (let i = 0; i < 900; i++) g.update(1 / 60, stub);      // fifteen seconds
-  let worst = 0, worstName = '';
-  const before = [];
-  for (const c of cs) {
-    for (const n of Object.keys(c.particles)) {
-      const p = c.particles[n];
-      const mm = Math.hypot(p.x - p.px, p.y - p.py, p.z - p.pz) * 1000;
-      if (mm > worst) { worst = mm; worstName = n; }
-      before.push([p.x, p.y, p.z]);
+
+  /* How far each joint TRAVELS over the next five seconds, not how fast the
+     busiest one happens to be going at one instant. A single substep's speed
+     is a coin toss - catch a hand sliding off a shoulder and it reads ten
+     times what the pile is really doing - whereas path length asks the
+     question the check is named for: does this lie still? A body that buzzes
+     covers a lot of ground without going anywhere, which is the difference
+     between this and the drift below. */
+  const keys = [];
+  for (const c of cs) for (const n of Object.keys(c.particles)) keys.push([c, n]);
+  const last = keys.map(([c, n]) => { const p = c.particles[n]; return [p.x, p.y, p.z]; });
+  const start = last.map((a) => a.slice());
+  const path = new Array(keys.length).fill(0);
+  for (let i = 0; i < 300; i++) {
+    g.update(1 / 60, stub);
+    for (let k = 0; k < keys.length; k++) {
+      const p = keys[k][0].particles[keys[k][1]], L = last[k];
+      path[k] += Math.hypot(p.x - L[0], p.y - L[1], p.z - L[2]);
+      L[0] = p.x; L[1] = p.y; L[2] = p.z;
     }
   }
-  for (let i = 0; i < 300; i++) g.update(1 / 60, stub);      // five more
-  let k = 0, drift = 0;
-  for (const c of cs) {
-    for (const n of Object.keys(c.particles)) {
-      const p = c.particles[n], b = before[k++];
-      drift = Math.max(drift, Math.hypot(p.x - b[0], p.y - b[1], p.z - b[2]));
-    }
+  let worst = 0, worstName = '', drift = 0;
+  for (let k = 0; k < keys.length; k++) {
+    if (path[k] > worst) { worst = path[k]; worstName = keys[k][1]; }
+    const p = keys[k][0].particles[keys[k][1]], S = start[k];
+    drift = Math.max(drift, Math.hypot(p.x - S[0], p.y - S[1], p.z - S[2]));
   }
   app.state = 'playing';
   const flat = cs.map((c) => +(c.rig.byName.head.worldPos.y).toFixed(2));
   g.clearSpawns();
   g.player.teleport(OX, 6, 0);
-  return { worst: +worst.toFixed(2), worstName, drift: +drift.toFixed(3), heads: flat };
+  // path is over five seconds; report it per second, which is readable
+  return { perSec: +(worst / 5).toFixed(3), worstName, drift: +drift.toFixed(3), heads: flat };
 });
+/* Two different faults, measured separately. `perSec` is the buzzing one:
+   metres of travel per second by the busiest joint, and a body that vibrates
+   racks that up without going anywhere. `drift` is the other one - a pile
+   that slowly walks away from where it landed - and four people leaning on
+   each other are entitled to spread a little as they settle. */
 check('a settled pile of ragdolls lies still instead of buzzing',
-  r.worst < 0.5 && r.drift < 0.25 && r.heads.every((y) => y < 0.6),
+  r.perSec < 0.18 && r.drift < 0.4 && r.heads.every((y) => y < 0.6),
   JSON.stringify(r));
 
 // ---------- the body that is drawn is the body the physics has ----------
@@ -1380,6 +1451,154 @@ r = await page.evaluate(async () => {
   return { spin:+spin.toFixed(2), moved:+(b.pos.x - OX).toFixed(2) };
 });
 check('boulder rolls rather than slides', r.spin > 3 && r.moved > 2, JSON.stringify(r));
+
+// ---------- the light vest soaks hits until it gives out ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;
+  const V = g.player.pos.constructor;
+  const frame = () => new Promise((res) => requestAnimationFrame(res));
+  const { spawnVest, VEST } = await import('/src/game/armour.js');
+  g.clearSpawns();
+  if (g.carried) g.dropCarried();
+  if (g.player.armour) g.dropArmour();
+  g.clearSpawns();
+  g.player.teleport(OX, 0, 0); g.camYaw = 0; g.camPitch = 0;
+  g.player.heal();
+  spawnVest(g, new V(OX, 1.0, -1.0));
+  for (let i = 0; i < 25; i++) await frame();
+  const offered = document.querySelector('#btn-use').textContent;
+  g.useAction();
+  for (let i = 0; i < 10; i++) await frame();
+  const worn = {
+    on: !!g.player.armour, hp: g.player.armour?.hp,
+    drawn: g.player.armour?.model.parent === g.scene,
+    bar: !document.querySelector('#armour-wrap').classList.contains('hidden'),
+  };
+  /* Health is topped back up between hits rather than healed, because
+     healing repairs the vest too - which is the point of the last check
+     below, and would quietly ruin every one before it. */
+  const hit = (n, bone) => {
+    const b = g.player.rig.byName[bone];
+    g.player.health = 100; g.player.dead = false;
+    g.player.applyDamage(n, { boneName: bone, point: b.worldPos.clone(), type: 'impact', severity: 0.5 });
+    return +(100 - g.player.health).toFixed(1);
+  };
+  // three at the chest: the vest should take nearly all of it
+  const chest = [hit(24, 'upperTorso'), hit(24, 'upperTorso'), hit(24, 'upperTorso')];
+  const leg = hit(18, 'upperLegR');           // not covered, so it all lands
+  // beaten until it has nothing left, and then it stops helping
+  let swings = 0;
+  while (g.player.armour && !g.player.armour.spent && swings < 40) { hit(24, 'upperTorso'); swings++; }
+  const past = hit(24, 'upperTorso');
+  // ...and a full heal puts a fresh one on
+  g.player.heal();
+  const afterHeal = g.player.armour?.hp;
+  // taking it off puts it back on the ground, as worn as it was
+  g.dropArmour();
+  for (let i = 0; i < 10; i++) await frame();
+  const dropped = g.spawnedBodies.find((b) => b.tag === 'vest');
+  const out = {
+    offered, worn, chest, leg, past, swings,
+    afterHeal, capacity: VEST.hp,
+    off: !g.player.armour,
+    dropped: !!dropped, droppedHp: dropped?.userData.armourHp,
+    barGone: document.querySelector('#armour-wrap').classList.contains('hidden'),
+  };
+  g.clearSpawns();
+  g.player.heal();
+  return out;
+});
+check('the light vest is worn, soaks the chest and then gives out',
+  r.offered === 'WEAR' && r.worn.on && r.worn.drawn && r.worn.bar &&
+  r.worn.hp === r.capacity &&
+  r.chest.every((d) => d < 6) && r.leg > 16 && r.past > 20 &&
+  r.swings >= 1 && r.swings < 40 &&
+  r.afterHeal === r.capacity && r.off && r.dropped && r.barGone,
+  JSON.stringify(r));
+
+// ---------- a part that takes too much comes off ----------
+r = await page.evaluate(async () => {
+  const g = window.GOREBOX.game;
+  const OX = g.map.openArea.x;
+  const V = g.player.pos.constructor;
+  const { spawnCitizen } = await import('/src/game/citizen.js');
+  const frame = () => new Promise((res) => requestAnimationFrame(res));
+  const out = {};
+  for (const [tag, which, blow] of [['arm', 'lowerArmR', 60], ['head', 'head', 70],
+    ['chip', 'lowerLegL', 9]]) {
+    g.clearSpawns();
+    g.player.teleport(OX, 8, 0);
+    const c = spawnCitizen(g, new V(OX, 0, 0));
+    c.ai.update = () => c.moveInput.set(0, 0, 0);
+    await new Promise((res) => setTimeout(res, 400));
+    const before = {
+      particles: g.world.particles.length,
+      constraints: g.world.constraints.length,
+      pairs: c.selfCollisionPairs.length,
+      mass: c.totalMass,
+    };
+    const bone = c.rig.byName[which];
+    const at = bone.worldPos.clone();
+    /* `chip` is the control: small hits, over and over. It has to take a lot
+       more of them than one big one, but it must get there in the end. */
+    const hits = blow >= 40 ? 1 : 14;
+    for (let i = 0; i < hits; i++) {
+      c.applyImpact(at, new V(0, 8, -90), { boneName: which, damage: blow,
+        type: 'impact', severity: 0.9, crush: 0.6 });
+      for (let k = 0; k < 2; k++) await frame();
+    }
+    for (let i = 0; i < 120; i++) await frame();
+    const finite = c.particleList.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+    let worst = 0;
+    for (const p of c.particleList) {
+      worst = Math.max(worst, Math.hypot(p.x - p.px, p.y - p.py, p.z - p.pz) / g.world.substepDt);
+    }
+    out[tag] = {
+      gone: c.gone.has(which),
+      detached: c.body.isDetached(which),
+      stump: bone.parent && !c.gone.has(bone.parent.name),
+      shed: before.particles - g.world.particles.length,
+      cons: before.constraints - g.world.constraints.length,
+      pairs: before.pairs - c.selfCollisionPairs.length,
+      lighter: +(before.mass - c.totalMass).toFixed(1),
+      debris: g.gore.debris.length,
+      dead: c.dead, finite, worst: +worst.toFixed(2),
+      splats: g.gore.stats.splats > 0,
+    };
+    g.clearSpawns();
+  }
+  g.player.heal();
+  return out;
+});
+check('a limb that takes too much comes off, and the body still works',
+  r.arm.gone && r.arm.detached && r.arm.stump && r.arm.shed >= 2 && r.arm.cons > 0 &&
+  r.arm.pairs > 0 && r.arm.lighter > 1 && r.arm.debris > 0 &&
+  r.arm.finite && r.arm.worst < 20 && r.arm.splats,
+  JSON.stringify(r.arm));
+check('taking the head off kills, and enough small hits do it too',
+  r.head.gone && r.head.dead && r.head.finite &&
+  r.chip.gone && r.chip.detached && r.chip.finite && r.chip.worst < 20,
+  JSON.stringify({ head: r.head, chip: r.chip }));
+
+// ---------- the full screen button ----------
+r = await page.evaluate(async () => {
+  const { canFullscreen, isFullscreen } = await import('/src/core/fullscreen.js');
+  const hud = document.querySelector('#btn-fullscreen');
+  const pause = document.querySelector('#btn-fullscreen-pause');
+  return {
+    hud: !!hud, pause: !!pause,
+    supported: canFullscreen(),
+    // headless chromium can do it, so the buttons must not be hidden
+    hudShown: hud && hud.style.display !== 'none',
+    pauseShown: pause && pause.style.display !== 'none',
+    label: pause && pause.textContent,
+    already: isFullscreen(),
+  };
+});
+check('there is a full screen button, and this browser can use it',
+  r.hud && r.pause && r.supported && r.hudShown && r.pauseShown &&
+  r.label === 'FULL SCREEN', JSON.stringify(r));
 
 await h.showHud();
 await ev(() => { const g=window.GOREBOX.game; g.clearSpawns(); g.debugCam=null; g.setEquipped('fists'); g.player.teleport(g.map.openArea.x, 6, 0); });
