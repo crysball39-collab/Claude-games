@@ -427,14 +427,6 @@ export class ConeLimit {
     const mx = (tx - this.tip.x) * 0.6, my = (ty - this.tip.y) * 0.6, mz = (tz - this.tip.z) * 0.6;
     this.tip.x += mx; this.tip.y += my; this.tip.z += mz;
     this.tip.px += mx; this.tip.py += my; this.tip.pz += mz;
-    /* ...and the limb stops going that way. Putting it back without taking
-       away the speed it had going out of the cone leaves that speed to carry
-       it out again next substep, where it is put back again, while everything
-       else the solver does adds to it - a thigh pressed against its limit
-       wound itself up to twenty metres a second like that, and a body put
-       down by the RCV2 kicked a leg out when it landed. */
-    const ml = Math.sqrt(mx * mx + my * my + mz * mz);
-    if (ml > 1e-9) stopInto(this.tip, mx / ml, my / ml, mz / ml, 1);
   }
 }
 
@@ -509,10 +501,6 @@ export class JointSpacing {
     a.px -= ax; a.py -= ay; a.pz -= az;
     b.x += bx; b.y += by; b.z += bz;
     b.px += bx; b.py += by; b.pz += bz;
-    // and neither keeps closing on the other (see ConeLimit)
-    const nx = dx / d, ny = dy / d, nz = dz / d;
-    stopInto(a, nx, ny, nz, -1);
-    stopInto(b, nx, ny, nz, 1);
   }
 }
 
@@ -1196,8 +1184,6 @@ export class PhysicsWorld {
             p.px -= ax; p.py -= ay; p.pz -= az;
             q.x += bx; q.y += by; q.z += bz;
             q.px += bx; q.py += by; q.pz += bz;
-            stopInto(p, dx / d, dy / d, dz / d, -1);
-            stopInto(q, dx / d, dy / d, dz / d, 1);
           }
         }
       }
