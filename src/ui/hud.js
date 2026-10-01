@@ -2,12 +2,12 @@
    In-game HUD. Buttons appear and disappear with the equipped item: the RCV2
    brings its own spawn, shoot and delete controls with it.
    ========================================================================== */
-import { $ } from '../core/util.js';
+import { $, IS_TOUCH } from '../core/util.js';
 
 /** What the big button says for each thing you can hold. */
 const PRIMARY_LABEL = {
   rcv2: 'SHOOT', machete: 'SLASH', sledge: 'SWING', crowbar: 'SWING', fists: 'PUNCH',
-  glock: 'FIRE', ak47: 'FIRE', m16: 'FIRE',
+  glock: 'FIRE', ak47: 'FIRE', m16: 'FIRE', firefist: 'PUNCH',
 };
 /** Which slots only exist while that weapon is actually being carried. */
 const CARRY_SLOTS = ['slot-machete', 'slot-sledge', 'slot-crowbar',
@@ -46,6 +46,23 @@ export class Hud {
     input.bindButton($('#btn-delete'), 'delete');
     input.bindButton($('#btn-use'), 'use');
     input.bindButton($('#btn-reload'), 'reload');
+    input.bindButton($('#btn-fireball'), 'fireball');
+    input.bindButton($('#btn-skip'), 'skip');
+    this.fireExtra = $('#firefist-extra');
+    this.fireSlot = $('#slot-firefist');
+    this.bossBar = $('#boss-bar');
+    this.bossName = $('#boss-name');
+    this.bossFill = $('#boss-fill');
+    this.bossLag = $('#boss-lag');
+    this._boss = -1;
+    this.burnEl = $('#burn-overlay');
+    this._burn = -1;
+    this.cutsceneEl = $('#cutscene');
+    this.csTitle = $('#cs-title');
+    this.csName = $('#cs-name');
+    this.csSub = $('#cs-sub');
+    // on a keyboard the skip button cannot be clicked under pointer lock
+    $('#btn-skip').textContent = IS_TOUCH ? 'SKIP' : 'SKIP  [SPACE]';
     this.useBtn = $('#btn-use');
     this.reloadBtn = $('#btn-reload');
     this.ammoEl = $('#ammo-readout');
@@ -67,6 +84,7 @@ export class Hud {
   setWeapon(name) {
     this.primary.textContent = PRIMARY_LABEL[name] || 'PUNCH';
     this.extra.classList.toggle('show', name === 'rcv2');
+    this.fireExtra.classList.toggle('show', name === 'firefist');
     this.reloadBtn.classList.toggle('show', GUN_SLOTS.has(name));
     this.slots.forEach((el) => el.classList.toggle('active', el.dataset.weapon === name));
   }
@@ -154,6 +172,54 @@ export class Hud {
     this.vignette.style.opacity = String(Math.min(0.95, intensity));
     clearTimeout(this._vigTimer);
     this._vigTimer = setTimeout(() => { this.vignette.style.opacity = '0'; }, 130);
+  }
+
+  /** The Fire Fist's slot is there once it has been earned. */
+  setFireFist(unlocked) {
+    this.fireSlot.classList.toggle('hidden', !unlocked);
+  }
+
+  /** A boss's name and what is left of him. */
+  setBoss(name, hp, max) {
+    this.bossBar.classList.remove('hidden');
+    this.root.classList.add('boss');
+    if (this.bossName.textContent !== name) this.bossName.textContent = name;
+    const f = max > 0 ? Math.max(0, Math.min(1, hp / max)) : 0;
+    const key = Math.round(f * 1000);
+    if (key === this._boss) return;
+    this._boss = key;
+    const w = (f * 100).toFixed(1) + '%';
+    this.bossFill.style.width = w;
+    this.bossLag.style.width = w;
+  }
+
+  hideBoss() {
+    this.bossBar.classList.add('hidden');
+    this.root.classList.remove('boss');
+    this._boss = -1;
+  }
+
+  /** Black bars, nothing else on screen, and a SKIP button. */
+  setCutscene(on) {
+    this.cutsceneEl.classList.toggle('on', !!on);
+    this.root.classList.toggle('cutscene', !!on);
+    if (!on) this.hideTitle();
+  }
+
+  showTitle(name, sub = '') {
+    this.csName.textContent = name;
+    this.csSub.textContent = sub;
+    this.csTitle.classList.add('show');
+  }
+
+  hideTitle() { this.csTitle.classList.remove('show'); }
+
+  /** How much of you is on fire, 0..1. */
+  setBurning(v) {
+    const b = Math.max(0, Math.min(1, v));
+    if (Math.abs(b - this._burn) < 0.03) return;
+    this._burn = b;
+    this.burnEl.style.opacity = b < 0.03 ? '0' : (0.35 + b * 0.65).toFixed(2);
   }
 
   showDeath() { this.death.classList.remove('hidden'); }

@@ -37,7 +37,7 @@ function serve() {
  */
 export async function boot({
   port = 0, width = 900, height = 560, touch = false,
-  shots = path.join(ROOT, '.shots'),
+  shots = path.join(ROOT, '.shots'), map = 'baseplate', init = null,
 } = {}) {
   const server = serve();
   await new Promise((r) => server.listen(port, r));
@@ -55,6 +55,8 @@ export async function boot({
     viewport: { width, height }, deviceScaleFactor: 1,
     hasTouch: touch, isMobile: touch,
   });
+  // runs before any of the game's own scripts: for setting up saved progress
+  if (init) await ctx.addInitScript(init);
   const page = await ctx.newPage();
 
   const logs = [];
@@ -65,7 +67,7 @@ export async function boot({
   await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'load' });
   await page.waitForSelector('#menu-screen.active', { timeout: 30000 });
   await page.click('#btn-maps'); await page.waitForTimeout(120);
-  await page.click('.map-card'); await page.waitForTimeout(120);
+  await page.click(`.map-card[data-id="${map}"]`); await page.waitForTimeout(120);
   await page.click('#btn-play');
   await page.waitForFunction(
     () => !document.querySelector('#map-screen').classList.contains('active'),

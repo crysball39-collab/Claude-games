@@ -175,7 +175,8 @@ export class GoreSystem {
           { speed: 1.6, spread: 1.2, size: 0.026 });
       }
 
-      const floor = w.groundY + 0.055;
+      const floor = w.floorAt(d.mesh.position.x, d.mesh.position.z, d.mesh.position.y + 0.1) + 0.055;
+      if (d.mesh.position.y < w.killY) { this._dropDebris(i); continue; }
       if (d.mesh.position.y <= floor) {
         d.mesh.position.y = floor;
         const speed = d.vel.length();
@@ -195,8 +196,25 @@ export class GoreSystem {
     }
   }
 
+  /** True if what is under this point shows the floor sheet at about this
+      height - the grass, a pit floor, a platform top - rather than, say, a
+      bridge deck, whose footprint is shared with the pit floor below it. */
+  _showsFloorSheet(x, y, z) {
+    const w = this.world;
+    if (w.hasGroundAt(x, z) && Math.abs(y - w.groundY) < 0.25) return true;
+    const st = w.staticBodies;
+    for (let i = 0; i < st.length; i++) {
+      const b = st[i];
+      if (!b.userData?.floorDecal) continue;
+      if (x < b.aabbMin.x || x > b.aabbMax.x || z < b.aabbMin.z || z > b.aabbMax.z) continue;
+      if (Math.abs(y - b.aabbMax.y) < 0.25) return true;
+    }
+    return false;
+  }
+
   /** A spreading mark on the floor, for things that land wet. */
   _poolUnder(pos, radius) {
+    if (!this._showsFloorSheet(pos.x, pos.y - 0.055, pos.z)) return;
     const rng = this.rng;
     this.sheet.paint(pos.x, pos.z, (ctx, px, py, ppm) => {
       paintSplat(ctx, px, py, Math.max(3, radius * ppm), 0, 0, rng, 0.2);
@@ -273,17 +291,23 @@ export class GoreSystem {
     }
 
     // ---- the floor ----
-    if (d.pos.y <= w.groundY + 0.02) {
-      const rng = this.rng;
-      const dx = d.vel.x, dz = d.vel.z;
-      this.sheet.paint(d.pos.x, d.pos.z, (ctx, px, py, ppm) => {
-        const r = Math.max(2.2, d.size * ppm * 3.4);
-        paintSplat(ctx, px, py, r, dx, dz, rng, 0.1);
-      });
-      this.stats.splats++;
+    if (d.pos.y <= w.groundY + 0.02 && w.hasGroundAt(d.pos.x, d.pos.z)) {
+      this._splatFloor(d);
       return true;
     }
+    // falling past everything, into nothing
+    if (d.pos.y < w.killY) return true;
     return false;
+  }
+
+  _splatFloor(d) {
+    const rng = this.rng;
+    const dx = d.vel.x, dz = d.vel.z;
+    this.sheet.paint(d.pos.x, d.pos.z, (ctx, px, py, ppm) => {
+      const r = Math.max(2.2, d.size * ppm * 3.4);
+      paintSplat(ctx, px, py, r, dx, dz, rng, 0.1);
+    });
+    this.stats.splats++;
   }
 
   _paintBody(b, d) {
@@ -293,6 +317,14 @@ export class GoreSystem {
     if (!b.containsPoint(d.pos)) {
       b.closestPoint(d.pos, _v1);
       if (_v1.distanceToSquared(d.pos) > 0.0036) return false;
+    }
+    /* A flat map top - a platform, the floor of a pit - shows the same
+       floor sheet the grass does, drawn at its own height. Its footprint is
+       its own, so painting the sheet where the drop came down puts the mark
+       exactly there. */
+    if (b.userData && b.userData.floorDecal) {
+      this._splatFloor(d);
+      return true;
     }
     const fn = b.userData && b.userData.paintBlood;
     if (!fn) return true;   // absorbed, just nothing to draw on
@@ -317,6 +349,11 @@ export class GoreSystem {
     if (info.absorbed > 0 && !(info.amount > 0)) return;
     const sev = clamp01(severity != null ? severity : 0.4);
 
+    // Fire cauterises: a burn scorches what it touches and draws no blood.
+    if (type === 'burn') {
+      character.body.paintHit(boneName, point, { kind: 'burn', severity: sev, allowTear: true });
+      return;
+    }
     const kind = type === 'impact' ? 'impact' : 'blunt';
     character.body.paintHit(boneName, point, { kind, severity: sev, allowTear: true });
 

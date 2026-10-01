@@ -127,6 +127,37 @@ export function paintBruise(ctx, x, y, radius, severity = 1, rand = rnd) {
   }
 }
 
+/**
+ * A burn. Skin goes red at the edge and black in the middle; cloth chars,
+ * with a brown scorched ring round a darker heart where it caught.
+ */
+export function paintScorch(ctx, x, y, radius, severity = 1, rand = rnd, onCloth = false) {
+  const r = radius * (0.8 + severity * 0.6);
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  if (onCloth) {
+    g.addColorStop(0.00, `rgba(14,10,8,${0.75 + severity * 0.2})`);
+    g.addColorStop(0.45, `rgba(40,24,14,${0.55 + severity * 0.25})`);
+    g.addColorStop(0.80, `rgba(92,58,28,${0.28 + severity * 0.2})`);
+    g.addColorStop(1.00, 'rgba(120,80,40,0)');
+  } else {
+    g.addColorStop(0.00, `rgba(26,14,10,${0.55 + severity * 0.35})`);
+    g.addColorStop(0.40, `rgba(96,28,20,${0.45 + severity * 0.3})`);
+    g.addColorStop(0.78, `rgba(196,76,58,${0.3 + severity * 0.2})`);
+    g.addColorStop(1.00, 'rgba(220,120,90,0)');
+  }
+  ctx.fillStyle = g;
+  blobPath(ctx, x, y, r, 13, 0.65, rand);
+  ctx.fill();
+  // a few blistered or charred spots
+  const n = 2 + ((rand() * 4) | 0);
+  for (let i = 0; i < n; i++) {
+    const a = rand() * Math.PI * 2, d = rand() * r * 0.6;
+    ctx.fillStyle = onCloth ? `rgba(8,6,4,${0.4 + rand() * 0.4})` : `rgba(60,18,12,${0.3 + rand() * 0.3})`;
+    blobPath(ctx, x + Math.cos(a) * d, y + Math.sin(a) * d, r * (0.08 + rand() * 0.16), 7, 0.8, rand);
+    ctx.fill();
+  }
+}
+
 /** Open wound / blood splatter. Only used when the hit is more than a fist. */
 export function paintBlood(ctx, x, y, radius, severity = 1, rand = rnd, dark = 0) {
   ctx.fillStyle = bloodCss(0.9, dark);

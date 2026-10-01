@@ -62,8 +62,36 @@ export class NavGrid {
       }
     }
 
+    /* A hole in the ground is a hole in the map. The grid is flat, so the
+       floor of a pit is not somewhere it can send anyone - it only has to
+       stop them walking off the edge. Whatever spans a hole at ground level,
+       a bridge, is a way across it and is opened back up; its railings are
+       marked as obstacles below like anything else. */
+    const holes = world.groundHoles || [];
+    for (const h of holes) {
+      const x0 = this.cellX(h.minX - radius * 0.5), x1 = this.cellX(h.maxX + radius * 0.5);
+      const z0 = this.cellZ(h.minZ - radius * 0.5), z1 = this.cellZ(h.maxZ + radius * 0.5);
+      for (let cz = z0; cz <= z1; cz++) {
+        for (let cx = x0; cx <= x1; cx++) if (this.inside(cx, cz)) this.blocked[this.idx(cx, cz)] = 1;
+      }
+    }
+    if (holes.length) {
+      for (const b of world.staticBodies) {
+        if (Math.abs(b.aabbMax.y - groundY) > stepHeight) continue;
+        const spans = holes.some((h) => b.aabbMax.x > h.minX && b.aabbMin.x < h.maxX &&
+          b.aabbMax.z > h.minZ && b.aabbMin.z < h.maxZ);
+        if (!spans) continue;
+        const x0 = this.cellX(b.aabbMin.x + radius), x1 = this.cellX(b.aabbMax.x - radius);
+        const z0 = this.cellZ(b.aabbMin.z + radius), z1 = this.cellZ(b.aabbMax.z - radius);
+        for (let cz = z0; cz <= z1; cz++) {
+          for (let cx = x0; cx <= x1; cx++) if (this.inside(cx, cz)) this.blocked[this.idx(cx, cz)] = 0;
+        }
+      }
+    }
+
     const mark = (b) => {
       if (b.aabbMax.y <= groundY + stepHeight) return;      // step straight over it
+      if (b.aabbMax.y < groundY - 0.05) return;             // down in a pit, not in the way
       const climbable = b.isStatic && b.aabbMax.y <= groundY + climbHeight;
       const pad = radius;
       const x0 = this.cellX(b.aabbMin.x - pad), x1 = this.cellX(b.aabbMax.x + pad);
@@ -279,6 +307,9 @@ export class CitizenAI {
     this.hasGoal = false;
     this.fear = 0;
     this.anger = 0;
+    /** While this is running down, nothing but running away is considered:
+        someone on fire does not stop to pick a fight. */
+    this.panic = 0;
     this.threat = null;
     this.threatSeen = 0;
     this.lookTarget = null;
@@ -346,6 +377,7 @@ export class CitizenAI {
     this.threatSeen = Math.max(0, this.threatSeen - dt);
     this.fear = clamp01(this.fear - dt * 0.055);
     this.anger = clamp01(this.anger - dt * 0.04);
+    this.panic = Math.max(0, this.panic - dt);
 
     if (c.dead) { c.moveInput.set(0, 0, 0); return; }
 
@@ -426,6 +458,7 @@ export class CitizenAI {
 
   _decide() {
     const c = this.c;
+    if (this.panic > 0 && this.threat) { this._setState(AI_STATE.FLEE); return; }
     if (!this.threat) {
       if (this.state === AI_STATE.FLEE || this.state === AI_STATE.FIGHT || this.state === AI_STATE.ALERT) {
         if (this.fear < 0.2 && this.anger < 0.2) this._setState(AI_STATE.IDLE);

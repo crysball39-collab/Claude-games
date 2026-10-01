@@ -357,6 +357,91 @@ const full = await page.evaluate(() => {
 check('the full screen button is on the HUD and in the pause menu',
   full.hud && full.pause && full.hudShown, JSON.stringify(full));
 
+/* ---------------- the secret way, the fight, and the prize ------------------ */
+/* Everything a player touches on the way: USE on the red RCV2 in the pit,
+   USE on the fireball, SKIP, TAKE on what Silva leaves, the FIRE FIST slot and
+   its FIREBALL button. Getting to each one is done for the test, and so is
+   killing him - 2500 hit points of tapping is not what this file is checking. */
+const arrive = (id) => page.waitForFunction(
+  (want) => window.GOREBOX.game?.map?.id === want && window.GOREBOX.state === 'playing',
+  id, { timeout: 180000 },
+).then(() => true).catch(() => false);
+const useSays = (label) => page.waitForFunction(
+  (want) => document.querySelector('#btn-use').classList.contains('show')
+    && document.querySelector('#btn-use').textContent === want,
+  label, { timeout: 30000 },
+).then(() => true).catch(() => false);
+
+await page.evaluate(() => window.GOREBOX.game.travel('pitvalley'));
+const inValley = await arrive('pitvalley');
+await page.evaluate(() => {
+  const g = window.GOREBOX.game;
+  const egg = g.map.interactables.find((i) => i.id === 'redRCV2');
+  g.player.teleport(egg.position.x - 1.3, egg.position.z + 1.1, 0);
+  g.camYaw = Math.atan2(-(egg.position.x - g.player.pos.x), -(egg.position.z - g.player.pos.z));
+  g.camPitch = -0.3;
+});
+const touchEgg = await useSays('TOUCH');
+await shot('14-egg');
+await page.tap('#btn-use');
+const inRed = await arrive('redplains');
+await page.evaluate(() => {
+  const g = window.GOREBOX.game;
+  g.player.teleport(0, 1.8, 0); g.camYaw = 0; g.camPitch = 0.1;
+});
+const touchOrb = await useSays('TOUCH');
+await page.tap('#btn-use');
+const playing = await page.waitForFunction(
+  () => document.querySelector('#cutscene').classList.contains('on'), null, { timeout: 20000 },
+).then(() => true).catch(() => false);
+await page.waitForTimeout(600);
+await shot('15-cutscene');
+await page.tap('#btn-skip');
+const fight = await page.waitForFunction(
+  () => window.GOREBOX.game.encounter?.state === 'fight'
+    && !document.querySelector('#boss-bar').classList.contains('hidden'),
+  null, { timeout: 20000 },
+).then(() => true).catch(() => false);
+await page.waitForTimeout(500);
+await shot('16-fight');
+await page.evaluate(() => window.GOREBOX.game.encounter.boss.takeDamage(99999));
+const won = await page.waitForFunction(
+  () => window.GOREBOX.game.encounter?.rewardUse.enabled, null, { timeout: 60000 },
+).then(() => true).catch(() => false);
+await page.evaluate(() => {
+  const g = window.GOREBOX.game, e = g.encounter;
+  g.player.teleport(e.rewardBase.x, e.rewardBase.z + 1.6, 0); g.camYaw = 0; g.camPitch = 0.1;
+});
+const take = await useSays('TAKE');
+await shot('17-reward');
+await page.tap('#btn-use');
+const home = await arrive('pitvalley');
+await page.waitForTimeout(500);
+const slotShown = await page.evaluate(
+  () => !document.querySelector('#slot-firefist').classList.contains('hidden'));
+await page.tap('.wslot[data-weapon="firefist"]'); await page.waitForTimeout(400);
+await page.evaluate(() => {
+  const g = window.GOREBOX.game;
+  g.player.teleport(g.map.openArea.x, g.map.openArea.z, 0); g.camYaw = 0; g.camPitch = 0;
+});
+await page.waitForTimeout(300);
+await page.tap('#btn-fireball');
+const threw = await page.waitForFunction(
+  () => window.GOREBOX.game.fire.balls.length > 0, null, { timeout: 15000 },
+).then(() => true).catch(() => false);
+await shot('18-firefist');
+const ff = await page.evaluate(() => ({
+  equipped: window.GOREBOX.game.equipped,
+  button: document.querySelector('#firefist-extra').classList.contains('show'),
+}));
+check('the red RCV2 in the pit, USE: off to Red Plains', inValley && touchEgg && inRed);
+check('USE on the fireball plays the cutscene, and SKIP goes straight to the fight',
+  touchOrb && playing && fight);
+check('Silva dead, TAKE on his red RCV2: back to Pit Valley with the Fire Fist',
+  won && take && home && slotShown);
+check('the FIRE FIST slot equips it and FIREBALL throws one',
+  ff.equipped === 'firefist' && ff.button && threw, JSON.stringify(ff));
+
 /* -------------------------------- the rest --------------------------------- */
 const state = await page.evaluate(() => ({
   running: window.GOREBOX.game.running,

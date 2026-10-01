@@ -23,6 +23,12 @@ const MAX_MUSCLE_DV = 2.0;
    cap is here to stop an explosion posting a limb into orbit, not to slow a
    body down: a four metre drop already ends at thirteen metres a second. */
 const MAX_PARTICLE_SPEED = 20;
+/** Deepest anything is ever pushed back up through the ground plane, in
+    metres. Nothing falls more than a few centimetres into the ground in one
+    substep, so anything further below it than this is down in a pit - next
+    to a pit wall, say - and lifting it four metres onto the grass because it
+    strayed a centimetre past the edge of the hole would be a teleport. */
+const GROUND_DEEP = 0.6;
 /** How elastic a body-against-flesh contact is. Barely. */
 const BODY_RESTITUTION = 0.85;
 /** Most speed a single contact may hand to one joint, in m/s. A boulder
@@ -516,6 +522,11 @@ export class PhysicsWorld {
     this.groundMin = new Vector3(-40, -1, -40);
     this.groundMax = new Vector3(40, 0, 40);
     this.hasGround = true;
+    /** Rectangles where there is no ground plane: {minX, maxX, minZ, maxZ}.
+        A pit is a hole in the ground with static map parts for its floor
+        and walls, so everything that stood on the plane has to be able to
+        ask whether the plane is actually there. */
+    this.groundHoles = [];
     this.killY = -40;
 
     this.substeps = 3;
@@ -716,6 +727,37 @@ export class PhysicsWorld {
     }
   }
 
+  /** Is there ground plane under this point? Every ground test goes through
+      here, so a hole is a hole for bodies, people, bullets and blood alike. */
+  hasGroundAt(x, z) {
+    if (!this.hasGround) return false;
+    if (x <= this.groundMin.x || x >= this.groundMax.x ||
+        z <= this.groundMin.z || z >= this.groundMax.z) return false;
+    const holes = this.groundHoles;
+    for (let i = 0; i < holes.length; i++) {
+      const h = holes[i];
+      if (x > h.minX && x < h.maxX && z > h.minZ && z < h.maxZ) return false;
+    }
+    return true;
+  }
+
+  /**
+   * The height of whatever something dropped at (x, z) from `fromY` would
+   * land on first: the ground plane where there is one, otherwise the top
+   * of the highest static map part below. -Infinity means a bottomless drop.
+   */
+  floorAt(x, z, fromY = Infinity) {
+    let best = this.hasGroundAt(x, z) && this.groundY <= fromY + 0.05 ? this.groundY : -Infinity;
+    const st = this.staticBodies;
+    for (let i = 0; i < st.length; i++) {
+      const b = st[i];
+      if (x < b.aabbMin.x || x > b.aabbMax.x || z < b.aabbMin.z || z > b.aabbMax.z) continue;
+      const top = b.aabbMax.y;
+      if (top <= fromY + 0.05 && top > best) best = top;
+    }
+    return best;
+  }
+
   _groundContacts(body, out) {
     const gy = this.groundY;
     if (body.aabbMin.y > gy) return;
@@ -724,7 +766,7 @@ export class PhysicsWorld {
 
     if (body.shape === 'sphere') {
       const depth = body.radius - (body.pos.y - gy);
-      if (depth <= 0) return;
+      if (depth <= 0 || depth > GROUND_DEEP || !this.hasGroundAt(body.pos.x, body.pos.z)) return;
       const c = pushContact(out, body, null);
       c.normal.set(0, 1, 0);
       c.depth = depth;
@@ -736,9 +778,8 @@ export class PhysicsWorld {
       const s = CORNER[i];
       _v1.set(s[0] * h.x, s[1] * h.y, s[2] * h.z).applyQuaternion(body.quat).add(body.pos);
       const depth = gy - _v1.y;
-      if (depth <= 0) continue;
-      if (_v1.x < this.groundMin.x || _v1.x > this.groundMax.x ||
-          _v1.z < this.groundMin.z || _v1.z > this.groundMax.z) continue;
+      if (depth <= 0 || depth > GROUND_DEEP) continue;
+      if (!this.hasGroundAt(_v1.x, _v1.z)) continue;
       const c = pushContact(out, body, null);
       c.normal.set(0, 1, 0);
       c.depth = depth;
@@ -919,9 +960,7 @@ export class PhysicsWorld {
       const p = ps[i];
       if (p.pinned) continue;
       // ---- ground ----
-      if (this.hasGround && p.y - p.radius < gy &&
-          p.x > this.groundMin.x && p.x < this.groundMax.x &&
-          p.z > this.groundMin.z && p.z < this.groundMax.z) {
+      if (p.y - p.radius < gy && gy - (p.y - p.radius) < GROUND_DEEP && this.hasGroundAt(p.x, p.z)) {
         const pen = gy - (p.y - p.radius);
         // Move the previous position with it: separating two overlapping
         // things is a position fix, and Verlet would otherwise read it as a
@@ -1005,11 +1044,30 @@ export class PhysicsWorld {
     p.px += _v3.x * pen; p.py += _v3.y * pen; p.pz += _v3.z * pen;
     if (_v3.y > 0.55) p.grounded = true;
 
-    // Relative velocity along the normal for the coupling impulse.
+    /* Relative velocity along the normal for the coupling impulse.
+
+       A joint held by a working muscle is not travelling under its own
+       steam: it is put back where the animation wants it at the end of every
+       substep, whatever happened to it on the way. So when a walk cycle swings
+       a hand into a wall, the wall pushes it out, the skeleton pulls it back
+       in, and that tug of war inside one 1/270 s substep reads back as a hand
+       hitting the wall at twenty eight metres a second - enough to take both
+       arms off someone who walked into a wall. The speed such a joint is
+       really moving at is the animation's, so that is what it hits with. */
     const inv = 1 / dt;
-    _v4.set((p.x - p.px) * inv, (p.y - p.py) * inv, (p.z - p.pz) * inv);
+    const pinned = p.muscle >= 0.999;
+    if (pinned) _v4.set(p.tvx, p.tvy, p.tvz);
+    else _v4.set((p.x - p.px) * inv, (p.y - p.py) * inv, (p.z - p.pz) * inv);
+    /* How fast the THING is coming at the joint, separately from how fast
+       the joint is going at it. For a body that is walking about under its
+       own control only the first is an injury: the animation does not know
+       a step is there and swings a foot straight through its riser, and
+       nobody is hurt walking up stairs. A boulder rolling into their shins
+       is another matter. */
+    let incoming = 0;
     if (body.invMass > 0) {
       body.pointVelocity(_v2, _v1);
+      incoming = Math.max(0, _v1.dot(_v3));
       _v4.sub(_v1);
     }
     const vn = _v4.dot(_v3);
@@ -1033,7 +1091,8 @@ export class PhysicsWorld {
             body.applyImpulse(_v1, _v2);
           }
         }
-        if (report && -vn > 5.5) this._reportParticleImpact(p, _v3.x, _v3.y, _v3.z, -vn, body);
+        const hit = pinned ? incoming : -vn;
+        if (report && hit > 5.5) this._reportParticleImpact(p, _v3.x, _v3.y, _v3.z, hit, body);
       }
     }
     // surface friction
@@ -1052,8 +1111,7 @@ export class PhysicsWorld {
       const t = k / 3;
       const x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t, z = a.z + (b.z - a.z) * t;
       let ny = 0, pen = 0;
-      if (this.hasGround && y - r < this.groundY &&
-          x > this.groundMin.x && x < this.groundMax.x && z > this.groundMin.z && z < this.groundMax.z) {
+      if (y - r < this.groundY && this.groundY - (y - r) < GROUND_DEEP && this.hasGroundAt(x, z)) {
         pen = this.groundY - (y - r); ny = 1;
       }
       if (pen > 0) {
@@ -1183,13 +1241,35 @@ export class PhysicsWorld {
     return best;
   }
 
+  /**
+   * Ray against the map itself: walls, platforms, pillars, the pit. Colliders
+   * with nothing drawn for them (the bridge rails' full-height fences) are
+   * left out unless asked for, so a shot is never stopped by thin air.
+   */
+  raycastStatic(origin, dir, maxDist = 100, { invisible = false } = {}) {
+    let best = null;
+    const all = this.staticBodies;
+    for (let i = 0; i < all.length; i++) {
+      const b = all[i];
+      if (!invisible && b.userData.invisible) continue;
+      const t = b.shape === 'sphere'
+        ? raySphere(origin, dir, b.pos, b.radius)
+        : rayOBB(origin, dir, b);
+      if (t != null && t >= 0 && t < maxDist && (!best || t < best.distance)) {
+        best = { body: b, distance: t };
+      }
+    }
+    if (best) best.point = new Vector3().copy(dir).multiplyScalar(best.distance).add(origin);
+    return best;
+  }
+
   /** Ray against the ground plate. */
   raycastGround(origin, dir, maxDist = 200) {
     if (!this.hasGround || Math.abs(dir.y) < 1e-6) return null;
     const t = (this.groundY - origin.y) / dir.y;
     if (t < 0 || t > maxDist) return null;
     const x = origin.x + dir.x * t, z = origin.z + dir.z * t;
-    if (x < this.groundMin.x || x > this.groundMax.x || z < this.groundMin.z || z > this.groundMax.z) return null;
+    if (!this.hasGroundAt(x, z)) return null;
     return { distance: t, point: new Vector3(x, this.groundY, z), normal: new Vector3(0, 1, 0), ground: true };
   }
 }

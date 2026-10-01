@@ -87,10 +87,12 @@
         <p>The three lines in the top left open the spawn menu.</p>
         <p>USE picks up a weapon, and wears the Light Vest. Press it again to put it down.</p>
         <p>The button beside PAUSE fills the screen, and fills it back.</p>
+        <p>Fire Fist (once you have earned it) &rarr; PUNCH sets people alight, FIREBALL throws fire.</p>
       </div>
       <div class="ctl-group"><b>Keyboard &amp; mouse</b>
         <p>WASD move &middot; Mouse look (click to lock) &middot; Space jump &middot; C or Ctrl crouch</p>
-        <p>1 fists &middot; 2 RCV2 &middot; 3-8 whatever you are carrying &middot; R reload</p>
+        <p>1 fists &middot; 2 RCV2 &middot; 3-8 whatever you are carrying &middot; 9 Fire Fist &middot; R reload</p>
+        <p>Q or right click throws a fireball with the Fire Fist &middot; Space skips a cutscene</p>
         <p>Left click punch / grab &middot; E use &middot; G spawn &middot; X delete &middot; Tab spawn menu</p>
       </div>
     </div>
@@ -136,6 +138,12 @@
       </div>
     </div>
 
+    <!-- the boss, while there is one -->
+    <div id="boss-bar" class="hidden">
+      <div class="boss-name" id="boss-name">SILVA</div>
+      <div class="boss-track"><div id="boss-lag"></div><div id="boss-fill"></div></div>
+    </div>
+
     <div id="crosshair"><span></span></div>
     <div id="grab-tag" class="hidden">HOLDING</div>
 
@@ -152,10 +160,14 @@
       <button class="wslot hidden" data-weapon="glock" id="slot-glock"><span class="wname">GLOCK-19</span><span class="wkey">6</span></button>
       <button class="wslot hidden" data-weapon="ak47" id="slot-ak47"><span class="wname">AK-47</span><span class="wkey">7</span></button>
       <button class="wslot hidden" data-weapon="m16" id="slot-m16"><span class="wname">M16</span><span class="wkey">8</span></button>
+      <button class="wslot hidden" data-weapon="firefist" id="slot-firefist"><span class="wname">FIRE FIST</span><span class="wkey">9</span></button>
     </div>
 
     <!-- right action cluster -->
     <div id="action-cluster">
+      <div class="col extra" id="firefist-extra">
+        <button class="hud-btn round med" id="btn-fireball" aria-label="Fireball">FIRE<br>BALL</button>
+      </div>
       <div class="col extra" id="rcv2-extra">
         <button class="hud-btn round med" id="btn-spawn" aria-label="Spawn">+</button>
         <button class="hud-btn round med danger" id="btn-delete" aria-label="Delete">&#128465;</button>
@@ -175,7 +187,15 @@
     <div id="selected-spawn" class="hidden">Selected: <b id="selected-name">-</b></div>
     <div id="toast"></div>
     <div id="damage-vignette"></div>
+    <div id="burn-overlay"></div>
     <div id="blind-overlay"></div>
+    <!-- cutscenes: black bars, a name, and a way out -->
+    <div id="cutscene">
+      <div class="lb top"></div>
+      <div class="lb bottom"></div>
+      <div id="cs-title"><div class="cs-name" id="cs-name"></div><div class="cs-sub" id="cs-sub"></div></div>
+      <button class="hud-btn" id="btn-skip">SKIP</button>
+    </div>
     <div id="death-overlay" class="hidden">
       <div class="death-text">YOU DIED</div>
       <button class="mbtn primary" id="btn-respawn">RESPAWN</button>

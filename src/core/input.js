@@ -5,7 +5,7 @@
    ========================================================================== */
 import { clamp, IS_TOUCH } from './util.js';
 
-const BUTTONS = ['jump', 'crouch', 'primary', 'spawn', 'delete', 'use', 'reload'];
+const BUTTONS = ['jump', 'crouch', 'primary', 'spawn', 'delete', 'use', 'reload', 'fireball', 'skip'];
 
 export class InputManager {
   constructor() {
@@ -80,9 +80,12 @@ export class InputManager {
       window.addEventListener('mousedown', (e) => {
         if (!this.enabled || !this.pointerLocked) return;
         if (e.button === 0) this._queuedPress.add('primary');
+        // the right button throws a fireball while the Fire Fist is on
+        if (e.button === 2) this._queuedPress.add('fireball');
       });
       window.addEventListener('mouseup', (e) => {
         if (e.button === 0) this._queuedRelease.add('primary');
+        if (e.button === 2) this._queuedRelease.add('fireball');
       });
     }
   }
@@ -252,7 +255,9 @@ export class InputManager {
       case 'Digit6': if (isDown) this.onWeaponSelect?.(5); break;
       case 'Digit7': if (isDown) this.onWeaponSelect?.(6); break;
       case 'Digit8': if (isDown) this.onWeaponSelect?.(7); break;
+      case 'Digit9': if (isDown) this.onWeaponSelect?.(8); break;
       case 'KeyR': set('reload'); break;
+      case 'KeyQ': set('fireball'); break;
       case 'Tab': if (isDown) this.onToggleDrawer?.(); break;
       case 'Escape': if (isDown) this.onPause?.(); break;
       default: break;

@@ -212,10 +212,17 @@ for (const S of ['R', 'L']) {
  * number being written down twice.
  */
 export const GIB = {
-  /** Damage past zero that takes a part off, as a multiple of its health. */
-  overkill: 1.1,
-  /** One hit this many times a part's health does it on its own. */
-  oneShot: 1.4,
+  /** Damage past zero that takes a part off, as a multiple of its health.
+      It was 1.1, which let one pistol round take a forearm or a head off and
+      four punches take an arm. At 5 it is three or four solid rifle rounds
+      into the same forearm, or two from a sledgehammer. */
+  overkill: 5.0,
+  /** One hit this many times a part's health does it on its own. Only a hand
+      is small enough for any weapon here to manage that. */
+  oneShot: 4.0,
+  /** Hits smaller than this never count towards tearing anything off. Fists
+      bruise and break; they do not dismember. */
+  minHit: 15,
   /** What can come off. A torso cannot: there would be no body left. */
   parts: new Set([
     'head',

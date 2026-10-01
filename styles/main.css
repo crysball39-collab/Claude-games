@@ -202,6 +202,56 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
 #btn-reload{border-color:rgba(120,190,255,.55);color:#9fd0ff}
 #btn-reload.busy{opacity:.5}
 #btn-spawn{font-size:1.7rem;font-weight:400;line-height:1}
+/* The Fire Fist brings a button of its own for throwing what is in it. */
+#action-cluster #firefist-extra{display:none}
+#action-cluster #firefist-extra.show{display:flex}
+#btn-fireball{border-color:rgba(255,140,60,.7);color:#ffb070;font-size:.6rem;line-height:1.15;text-align:center;
+  box-shadow:0 0 14px rgba(255,90,20,.35)}
+.wslot[data-weapon=firefist]{border-color:rgba(255,150,80,.55);color:#ffcfa6}
+.wslot[data-weapon=firefist].active{background:rgba(214,74,16,.48);border-color:rgba(255,176,110,.85);
+  box-shadow:0 0 14px rgba(255,90,20,.45)}
+
+/* ------------------------------- the boss bar ---------------------------- */
+#boss-bar{position:absolute;top:calc(var(--safe-t) + 56px);left:50%;transform:translateX(-50%);
+  width:min(50vw,540px);pointer-events:none;text-align:center}
+#boss-bar.hidden{display:none}
+.boss-name{font-size:.76rem;font-weight:900;letter-spacing:.46em;color:#ffb08a;margin-bottom:4px;
+  text-shadow:0 0 10px rgba(255,60,20,.75),0 1px 2px #000}
+.boss-track{position:relative;height:11px;border:1.5px solid rgba(255,140,100,.6);border-radius:3px;
+  background:rgba(0,0,0,.55);overflow:hidden}
+#boss-lag{position:absolute;left:0;top:0;bottom:0;width:100%;background:#ffd2a0;transition:width .6s ease .35s}
+#boss-fill{position:absolute;left:0;top:0;bottom:0;width:100%;
+  background:linear-gradient(90deg,#7a0a04,#e0320e 60%,#ff7a2a);transition:width .12s ease}
+/* the bar takes the space the toast would use, so the toast moves down */
+#hud.boss #toast{top:31%}
+
+/* -------------------------------- on fire -------------------------------- */
+#burn-overlay{position:absolute;inset:0;pointer-events:none;opacity:0;z-index:13;
+  background:
+    radial-gradient(ellipse at 50% 110%, rgba(255,130,20,.6), transparent 55%),
+    radial-gradient(ellipse at center, transparent 48%, rgba(255,80,10,.55) 100%);
+  transition:opacity .2s ease}
+
+/* -------------------------------- cutscenes ------------------------------ */
+#cutscene{position:absolute;inset:0;pointer-events:none;z-index:16;visibility:hidden;
+  transition:visibility 0s linear .5s}
+#cutscene.on{visibility:visible;transition:none}
+#cutscene .lb{position:absolute;left:0;right:0;height:11vh;background:#000;transition:transform .5s ease}
+#cutscene .lb.top{top:0;transform:translateY(-100%)}
+#cutscene .lb.bottom{bottom:0;transform:translateY(100%)}
+#cutscene.on .lb{transform:none}
+#cs-title{position:absolute;left:0;right:0;bottom:17vh;text-align:center;opacity:0;letter-spacing:.18em;
+  transition:opacity .7s ease, letter-spacing 1.6s ease}
+#cs-title.show{opacity:1;letter-spacing:.5em}
+.cs-name{font-size:clamp(2.4rem,9vw,4.8rem);font-weight:900;color:#ff5a2a;padding-left:.5em;
+  text-shadow:0 0 28px rgba(255,70,20,.85),0 2px 4px #000}
+.cs-sub{font-size:.7rem;letter-spacing:.42em;color:#ffcfb0;margin-top:.35rem;padding-left:.42em;
+  text-shadow:0 1px 3px #000}
+#btn-skip{position:absolute;right:calc(var(--safe-r) + 14px);bottom:calc(11vh + 12px);border-radius:8px;
+  padding:.5rem 1rem;font-size:.66rem;pointer-events:auto}
+/* nothing else on the screen while one plays */
+#hud.cutscene > :not(#cutscene):not(#toast):not(#damage-vignette):not(#burn-overlay):not(#death-overlay){
+  display:none !important}
 
 /* rounds left, under the crosshair on the right of the cluster */
 #ammo-readout{position:absolute;right:calc(var(--safe-r) + 12px);bottom:calc(var(--safe-b) + 150px);

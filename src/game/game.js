@@ -3,7 +3,7 @@
    the tick that keeps it all moving.
    ========================================================================== */
 import {
-  Scene, PerspectiveCamera, WebGLRenderer, Vector3, Quaternion, Euler,
+  Scene, PerspectiveCamera, WebGLRenderer, Vector3, Quaternion, Euler, Matrix4,
   PCFSoftShadowMap, SRGBColorSpace, ACESFilmicToneMapping,
 } from 'three';
 import { PhysicsWorld } from '../physics/world.js';
@@ -21,6 +21,10 @@ import {
 } from './guns.js';
 import { GoreSystem, nearestBone } from './gore.js';
 import { Armour, VEST, spawnVest } from './armour.js';
+import { Fx } from './fx.js';
+import { FireSystem } from './fire.js';
+import { SilvaEncounter } from './encounter.js';
+import { isUnlocked } from './progress.js';
 import { NavGrid } from './ai.js';
 import { RCV2 } from './rcv2.js';
 import { boneCorners, pointInBone, boneBoxCenter, rayBone, HIP_HEIGHT } from './skeleton.js';
@@ -34,6 +38,7 @@ const _aimAt = new Vector3();
 const _gunQuat = new Quaternion();
 const _q1 = new Quaternion(), _q2 = new Quaternion();
 const _e = new Euler(0, 0, 0, 'YXZ');
+const _m4 = new Matrix4();
 const UP = new Vector3(0, 1, 0);
 
 /**
@@ -254,6 +259,18 @@ export const SPAWNABLES = {
 
 export class Game {
   constructor(container, settings) {
+    /** Interactables an encounter adds while it runs (the map has its own). */
+    this.interactables = [];
+    this.cutscene = null;
+    this.travelling = false;
+    this.onTravel = null;
+    /** Fireballs and people on fire; and, on Red Plains, the fight. */
+    this.fire = null;
+    this.encounter = null;
+    /* The Fire Fist: how long until it can throw again, and a throw that has
+       been started but whose fist has not come forward yet. */
+    this.fireFistCooldown = 0;
+    this._pendingFireball = null;
     this.container = container;
     this.settings = settings;
     this.quality = QUALITY[settings.quality] || QUALITY.medium;
@@ -339,20 +356,42 @@ export class Game {
           bounds: this.map.half,
         });
         this.map.attachDecalTexture(this.gore.sheet.texture);
+        this.fx = new Fx(this.scene);
+        this.fire = new FireSystem(this);
       }],
       ['Assembling a body', async () => { this._createPlayer(); }],
-      ['Mapping the ground', async () => { this.nav.rebuild(this.world, { groundY: 0 }); }],
+      ['Mapping the ground', async () => {
+        // the citizens' map is as big as the map they are on
+        if (this.nav.half !== this.map.half) this.nav = new NavGrid(this.map.half, 0.7);
+        this.nav.rebuild(this.world, { groundY: 0 });
+      }],
       ['Populating', async () => {
-        // A couple of citizens so the plate is not empty on arrival.
-        for (let i = 0; i < 3; i++) {
-          const a = (i / 3) * Math.PI * 2 + 0.4;
-          const p = _v1.set(Math.cos(a) * 6.5, 0, Math.sin(a) * 6.5 - 3);
-          spawnCitizen(this, p);
+        /* A couple of citizens so the map is not empty on arrival - in a ring
+           round where you arrive, and only where there is ground to stand on,
+           so nobody starts the game at the bottom of a pit. A map with
+           something else in mind (an encounter) can ask for none. */
+        if (this.map.citizens === 0) return;
+        const sp = this.map.spawnPoint;
+        let placed = 0;
+        for (let i = 0; i < 24 && placed < 3; i++) {
+          const a = (i / 3) * Math.PI * 2 + 0.4 + i * 0.37;
+          const r = 6.5 + (i % 3) * 1.5;
+          const x = sp.x + Math.cos(a) * r, z = sp.z - 15 + Math.sin(a) * r;
+          if (!this.world.hasGroundAt(x, z)) continue;
+          if (Math.abs(x) > this.map.half - 3 || Math.abs(z) > this.map.half - 3) continue;
+          spawnCitizen(this, _v1.set(x, 0, z));
+          placed++;
         }
+      }],
+      ['Waking something up', async () => {
+        // only Red Plains has anything waiting on it
+        if (this.map.encounter === 'silva') this.encounter = new SilvaEncounter(this);
       }],
       ['Compiling shaders', async () => {
         this.updateCamera(0);
+        this.encounter?.showForCompile(true);
         this.renderer.compile(this.scene, this.camera);
+        this.encounter?.showForCompile(false);
         this.renderer.render(this.scene, this.camera);
       }],
     ];
@@ -398,7 +437,8 @@ export class Game {
 
   _applySelfVisibility() {
     const b = this.player.body;
-    const firstPerson = !this.player.isRagdolling;
+    // a cutscene camera is somewhere else, looking at you: all of you
+    const firstPerson = !this.player.isRagdolling && !this.cutscene?.cam;
     for (const name of this._hiddenSelf) {
       const e = b.entries.get(name);
       // A head that has come off is nobody's first person problem any more:
@@ -458,6 +498,7 @@ export class Game {
     }
     this.cases?.clear();
     this.gore?.clearDebris();
+    this.fire?.clear();
     for (const b of [...this.spawnedBodies]) this.removeBody(b);
     for (const c of [...this.characters]) if (c !== this.player) this.removeCharacter(c);
     this.nav.dirty = true;
@@ -565,7 +606,7 @@ export class Game {
 
   /** Height of whatever a thing dropped here would land on. */
   _surfaceHeight(x, z) {
-    let best = this.world.hasGround ? this.world.groundY : 0;
+    let best = this.world.hasGroundAt(x, z) ? this.world.groundY : -Infinity;
     for (const b of this.world.staticBodies) {
       if (x < b.aabbMin.x || x > b.aabbMax.x || z < b.aabbMin.z || z > b.aabbMax.z) continue;
       if (b.aabbMax.y > best) best = b.aabbMax.y;
@@ -600,9 +641,49 @@ export class Game {
     return best;
   }
 
+  /**
+   * Things in the world that do something when you USE them - a red RCV2 in
+   * the corner of a pit, a fire burning over a pillar. The map hands some
+   * over, an encounter can add more; each says where it is, how close you
+   * have to be, and what happens.
+   */
+  allInteractables() {
+    const out = this._interactScratch || (this._interactScratch = []);
+    out.length = 0;
+    if (this.map?.interactables) for (const it of this.map.interactables) out.push(it);
+    for (const it of this.interactables) out.push(it);
+    return out;
+  }
+
+  /** The nearest interactable you are close enough to and facing. */
+  interactInReach() {
+    const p = this.player;
+    if (!p || p.state !== STATE.CONTROLLED || this.cutscene) return null;
+    this.camera.getWorldDirection(_v1);
+    let best = null, bestD = Infinity;
+    for (const it of this.allInteractables()) {
+      if (it.enabled === false) continue;
+      const pos = it.position;
+      const dx = pos.x - p.pos.x, dz = pos.z - p.pos.z;
+      const flat = Math.hypot(dx, dz);
+      const dy = pos.y - (p.pos.y - HIP_HEIGHT);
+      if (flat > it.radius || dy < -1.2 || dy > 2.6) continue;
+      // within a step, it counts whichever way you face; further off, look at it
+      if (flat > 0.9) {
+        _v2.set(dx, pos.y - this.camera.position.y, dz).normalize();
+        if (_v2.dot(_v1) < 0.35) continue;
+      }
+      if (flat < bestD) { bestD = flat; best = it; }
+    }
+    return best;
+  }
+
   /** The USE button: take what is in reach, or put down what is in hand. */
   useAction() {
+    if (this.cutscene || this.travelling) return;
     if (this.carried) { this.dropCarried(); return; }
+    const thing = this.interactInReach();
+    if (thing) { thing.use(this); return; }
     const body = this.pickupInReach();
     if (!body) {
       // Nothing in reach, so USE takes off what is being worn instead.
@@ -612,6 +693,59 @@ export class Game {
     }
     if (body.userData.wear) this.wearItem(body);
     else this.pickUp(body);
+  }
+
+  /* ---------------------------------------------------------------- travel */
+
+  /**
+   * Leaves this map for another. The game cannot tear itself down from the
+   * middle of its own frame, so it asks whoever is running it to.
+   */
+  travel(mapId, message = '') {
+    if (this.travelling) return;
+    this.travelling = true;
+    this.hud?.flashDamage(0.9);
+    this.hud?.toast(message || 'Travelling', 2200);
+    // a beat, so the flash and the words land before the loading screen does
+    setTimeout(() => this.onTravel?.(mapId, message), 380);
+  }
+
+  /* ----------------------------------------------------------------- water */
+
+  /**
+   * Pond water. Shin deep: it halves your speed, drags at anything moving
+   * through it, and throws up a splash when something comes in fast.
+   */
+  _updateWater(dt) {
+    const pools = this.map?.water;
+    for (const c of this.characters) c.speedScale = 1;
+    if (!pools || !pools.length) return;
+    for (const pool of pools) {
+      const r2 = pool.r * pool.r;
+      for (const c of this.characters) {
+        const dx = c.pos.x - pool.x, dz = c.pos.z - pool.z;
+        if (dx * dx + dz * dz > r2) continue;
+        const feet = c.pos.y - HIP_HEIGHT;
+        if (feet > pool.y || feet < pool.floor - 0.5) continue;
+        c.speedScale = Math.min(c.speedScale, 0.5);
+        if (c.isRagdolling || c.state === STATE.DEAD) {
+          // a body in water floats a little and stops sliding about
+          const k = Math.exp(-2.4 * dt);
+          for (const p of c.particleList) {
+            if (p.y > pool.y + 0.1) continue;
+            p.px = p.x - (p.x - p.px) * k;
+            p.pz = p.z - (p.z - p.pz) * k;
+            p.py = p.y - (p.y - p.py) * Math.exp(-4 * dt);
+          }
+        }
+        const vy = c.vel.y;
+        if (vy < -5 && !c._splashed) {
+          c._splashed = true;
+          this.fx?.splash(_v1.set(c.pos.x, pool.y, c.pos.z), -vy);
+        }
+        if (vy > -1) c._splashed = false;
+      }
+    }
   }
 
   /* ---------------------------------------------------------------- armour */
@@ -763,6 +897,8 @@ export class Game {
 
   setEquipped(name) {
     if (CARRY[name] && this.carried?.kind !== name) name = 'fists';
+    // the Fire Fist is earned, not found
+    if (name === 'firefist' && !isUnlocked('firefist')) name = 'fists';
     this.equipped = name;
     this.player.setEquipped(name);
     if (this.rcv2) this.rcv2.setVisible(name === 'rcv2');
@@ -775,6 +911,9 @@ export class Game {
     if (this.player.state !== STATE.CONTROLLED) return;
     if (this.equipped === 'fists') {
       this.player.punch();
+    } else if (this.equipped === 'firefist') {
+      // the same jab, with the fist on fire
+      this.player.punch(true);
     } else if (GUNS[this.equipped]) {
       this.fireGun();
     } else if (MELEE[this.equipped]) {
@@ -788,6 +927,70 @@ export class Game {
       else this.hud?.toast('Nothing there');
       this.alertNearby(2.0);
     }
+  }
+
+  /* ------------------------------------------------------------- fire fist */
+
+  /**
+   * FIREBALL: with the Fire Fist on, a jab thrown at nothing lets go of what
+   * is burning in the fist. The ball leaves from the hand at the moment the
+   * jab is at full reach, and goes where you are looking.
+   */
+  fireballAction() {
+    if (this.equipped !== 'firefist') return;
+    const p = this.player;
+    if (!p || p.dead || p.state !== STATE.CONTROLLED) return;
+    if (this.fireFistCooldown > 0 || this._pendingFireball) return;
+    if (!p.punch(true)) return;
+    this.fireFistCooldown = 0.55;
+    this._pendingFireball = { side: p.punchSide, t: 0.11 };
+  }
+
+  _updateFireFist(dt) {
+    this.fireFistCooldown = Math.max(0, this.fireFistCooldown - dt);
+    const p = this.player;
+    if (!p) return;
+    const pf = this._pendingFireball;
+    if (pf) {
+      pf.t -= dt;
+      if (pf.t <= 0) {
+        this._pendingFireball = null;
+        // knocked down mid-throw: it goes nowhere
+        if (p.state === STATE.CONTROLLED && !p.dead && this.equipped === 'firefist') this._throwFireball(pf.side);
+      }
+    }
+    if (this.equipped !== 'firefist' || p.dead || !this.fx) return;
+    /* Both fists alight while it is on: small, tight flames off the
+       knuckles. They are a hand's width from the camera, so anything bigger
+       or longer lived drifts across half the screen. */
+    for (const S of ['R', 'L']) {
+      if (p.gone.has('hand' + S)) continue;
+      const hand = p.rig.byName['hand' + S];
+      boneBoxCenter(hand, _v1).lerp(hand.worldEnd, 0.45);
+      this.fx.fire(_v1, { count: 1, spread: 0.018, up: 0.26, size: 0.055, life: 0.2 });
+      if (this.rng() < 0.3) this.fx.fire(_v1, { count: 1, spread: 0.03, up: 0.38, size: 0.085, life: 0.26 });
+      if (this.rng() < dt * 1.2) this.fx.embers(_v1, { count: 1, spread: 0.02, up: 0.3, life: 0.45 });
+    }
+  }
+
+  _throwFireball(side) {
+    const p = this.player;
+    this.camera.getWorldDirection(_gunAim);
+    this._aimPoint(this.camera.position, _gunAim, 140, _aimAt);
+    boneBoxCenter(p.rig.byName['hand' + side], _gunPos);
+    _gunTmp.copy(_aimAt).sub(_gunPos);
+    if (_gunTmp.lengthSq() < 1e-6) _gunTmp.copy(_gunAim);
+    _gunTmp.normalize();
+    this.fire.shoot({
+      from: _gunPos, dir: _gunTmp, speed: 24, radius: 0.18, damage: 22, splash: 1.6,
+      ignite: 4, owner: p, hitsBoss: true, scale: 0.85, life: 3, color: 0xff7a24,
+    });
+    this.fx?.fire(_gunPos, { count: 6, spread: 0.05, size: 0.18, up: 0.3, life: 0.22,
+      vel: _v2.copy(_gunTmp).multiplyScalar(4) });
+    this.shake = Math.min(0.6, this.shake + 0.1);
+    p.combatReady = true;
+    p.combatTimer = 3.5;
+    this.alertNearby(1.8);
   }
 
   /* ------------------------------------------------------------------ guns */
@@ -859,6 +1062,10 @@ export class Game {
     let best = range;
     const hit = this.world.raycastBodies(origin, dir, range);
     if (hit) best = hit.distance;
+    const wall = this.world.raycastStatic(origin, dir, best);
+    if (wall) best = wall.distance;
+    const boss = this.encounter?.boss?.raycast(origin, dir, best);
+    if (boss) best = boss.distance;
     for (const c of this.characters) {
       if (c === this.player || c.body.destroyed) continue;
       _v1.copy(c.center).sub(origin);
@@ -874,7 +1081,8 @@ export class Game {
     // and the ground, so shooting at your own feet lands where you pointed
     if (dir.y < -1e-4 && this.world.hasGround) {
       const t = (this.world.groundY - origin.y) / dir.y;
-      if (t > 0 && t < best) best = t;
+      if (t > 0 && t < best &&
+          this.world.hasGroundAt(origin.x + dir.x * t, origin.z + dir.z * t)) best = t;
     }
     return out.copy(dir).multiplyScalar(best).add(origin);
   }
@@ -884,6 +1092,12 @@ export class Game {
     let best = null;
     const bodyHit = this.world.raycastBodies(origin, dir, spec.range);
     if (bodyHit) best = { type: 'body', body: bodyHit.body, distance: bodyHit.distance };
+    // a wall stops a round; it used to go straight through the map
+    const wall = this.world.raycastStatic(origin, dir, best ? best.distance : spec.range);
+    if (wall) best = { type: 'wall', distance: wall.distance };
+    const boss = this.encounter?.boss;
+    const bossHit = boss?.raycast(origin, dir, best ? best.distance : spec.range);
+    if (bossHit) best = { type: 'boss', part: bossHit.part, distance: bossHit.distance };
 
     for (const c of this.characters) {
       if (c === this.player || c.body.destroyed) continue;
@@ -900,6 +1114,16 @@ export class Game {
     }
     if (!best) return;
     const point = _v1.copy(dir).multiplyScalar(best.distance).add(origin).clone();
+
+    if (best.type === 'wall') {
+      this.fx?.sparks(point, _v2.copy(dir).negate(), { count: 5, speed: 3.5, life: 0.3 });
+      this.fx?.smoke(point, { count: 1, size: 0.22, up: 0.25, life: 0.8, dark: 0.1 });
+      return;
+    }
+    if (best.type === 'boss') {
+      boss.takeDamage(spec.damage * (best.part.mult || 1), point, 'bullet');
+      return;
+    }
 
     if (best.type === 'body') {
       best.body.wake();
@@ -956,7 +1180,7 @@ export class Game {
     this.recoilPitch = damp(this.recoilPitch, 0, back, dt);
     this.recoilYaw = damp(this.recoilYaw, 0, back, dt);
     this.flash?.update(dt);
-    this.cases?.update(dt, this.world.groundY || 0);
+    this.cases?.update(dt, this.world);
 
     if (this.reloadTimer > 0) {
       this.reloadTimer -= dt;
@@ -1089,6 +1313,10 @@ export class Game {
   }
 
   onWorldImpact(info) {
+    /* The cutscene throws you into a wall at twenty metres a second. It
+       decides for itself what that costs you; the physics does not get a
+       say, or the fight would start with you dead. */
+    if (this.cutscene && info.character === this.player) return;
     // Somebody or something hit hard enough to matter.
     if (info.character) {
       const c = info.character;
@@ -1203,6 +1431,20 @@ export class Game {
       if (!this.carried.surface) this.carried.surface = this.carried.bodyRef?.userData.paintSurface || null;
       this.shake = Math.min(0.9, this.shake + spec.shake);
     }
+
+    // and on Silva, by the same rule: only where the steel actually went
+    const boss = this.encounter?.boss;
+    if (boss && !attacker.struck.has('boss')) {
+      for (let i = 0; i < samples.length; i++) {
+        const part = boss.hitTest(samples[i], 0.02);
+        if (!part) continue;
+        attacker.struck.add('boss');
+        const dmg = clamp((speed - 1.0) * spec.dmg.mul, spec.dmg.min, spec.dmg.max);
+        boss.takeDamage(dmg * (part.mult || 1), samples[i], spec.type);
+        this.shake = Math.min(0.9, this.shake + spec.shake);
+        break;
+      }
+    }
     this._prevTip.copy(far);
   }
 
@@ -1214,6 +1456,8 @@ export class Game {
     const handBone = attacker.rig.byName['hand' + side];
     const speed = handVel.length();
     if (speed < 2.0) return;
+    // a jab thrown with the Fire Fist sets alight whatever it lands on
+    const fiery = attacker === this.player && this.equipped === 'firefist';
 
     const corners = boneCorners(handBone);
     const samples = [_v1.copy(handBone.worldEnd)];
@@ -1251,8 +1495,28 @@ export class Game {
         attacker,
         severity: clamp01((speed - 0.9) / 5.5),
       });
+      if (fiery && !target.body.destroyed) {
+        target.applyDamage(6, { boneName: hitBone.name, point: hitPoint.clone(), type: 'burn',
+          attacker, severity: 0.55 });
+        this.fire?.ignite(target, 4, attacker);
+        this.fx?.fire(hitPoint, { count: 8, spread: 0.08, size: 0.24, up: 0.9, life: 0.4 });
+      }
       if (target.ai) target.ai.onHurt({ amount: dmg, attacker });
       if (attacker === this.player) this.shake = Math.min(0.7, this.shake + 0.18);
+    }
+
+    const boss = attacker === this.player ? this.encounter?.boss : null;
+    if (boss && !attacker.struck.has('boss')) {
+      for (let i = 0; i < samples.length; i++) {
+        const part = boss.hitTest(samples[i], 0.03);
+        if (!part) continue;
+        attacker.struck.add('boss');
+        const dmg = clamp((speed - 0.9) * 3.0, 1.5, 24) * (fiery ? 1.6 : 1);
+        boss.takeDamage(dmg * (part.mult || 1), samples[i], fiery ? 'fire' : 'blunt');
+        if (fiery) this.fx?.fire(samples[i], { count: 8, spread: 0.08, size: 0.24, up: 0.9, life: 0.4 });
+        this.shake = Math.min(0.7, this.shake + 0.18);
+        break;
+      }
     }
 
     // Fists work on crates and boulders too.
@@ -1286,7 +1550,12 @@ export class Game {
       c.update(dt);
     }
 
+    // --- whatever the map has waiting (Silva), before physics: a cutscene
+    // carries the player's body, and the step has to start from there ---
+    this.encounter?.update(dt);
+
     // --- physics ---
+    this._updateWater(dt);
     this.world.step(dt);
 
     // --- resolve visuals ---
@@ -1305,11 +1574,19 @@ export class Game {
     this._updateGuns(dt, input);
     this._syncCarried();
 
+    // --- fire: fireballs in the air, people alight, the Fire Fist ---
+    this.fire?.update(dt);
+    this._updateFireFist(dt);
+
     // --- gore ---
     if (this.gore) {
       this.gore.update(dt, this.characters);
       for (const c of this.characters) this.gore.bleedTick(c, dt);
     }
+
+    // --- the map's own moving parts, and whatever it has started ---
+    this.map?.tick?.(dt, this);
+    this.fx?.update(dt, this.camera, this.renderer.domElement.height);
 
     // --- navigation ---
     this.navTimer -= dt;
@@ -1327,6 +1604,16 @@ export class Game {
   _readInput(dt, input) {
     const p = this.player;
     if (!p) return;
+
+    /* A cutscene has the controls. Looking about is thrown away, nothing
+       moves you, and the only thing a button does is skip it. */
+    if (this.cutscene) {
+      input.consumeLook();
+      p.moveInput.set(0, 0, 0);
+      p.wantRun = false;
+      if (input.pressed.skip || input.pressed.jump) this.cutscene.skip?.();
+      return;
+    }
 
     // ---- look ----
     const look = input.consumeLook();
@@ -1365,6 +1652,7 @@ export class Game {
     if (input.pressed.spawn) this.spawnAction();
     if (input.pressed.delete) this.deleteAction();
     if (input.pressed.use) this.useAction();
+    if (input.pressed.fireball) this.fireballAction();
     void dt;
   }
 
@@ -1381,7 +1669,13 @@ export class Game {
     }
     p.eyePosition(_v1);
 
-    if (p.state === STATE.CONTROLLED && !p.dead) {
+    if (this.cutscene?.cam) {
+      // the cutscene says where the camera is and what it is looking at
+      const c = this.cutscene.cam;
+      this.camPos.copy(c.pos);
+      _m4.lookAt(c.pos, c.look, UP);
+      this.camQuat.setFromRotationMatrix(_m4);
+    } else if (p.state === STATE.CONTROLLED && !p.dead) {
       this.camPos.copy(_v1);
       // Recoil rides on top of where you are looking, and settles back out.
       _e.set(clamp(this.camPitch + this.recoilPitch, -1.5, 1.5),
@@ -1428,6 +1722,7 @@ export class Game {
     }
     this.hud.setHealth(this.player.health / this.player.maxHealth);
     this.hud.setBlindness(this.player.blind);
+    this.hud.setBurning?.(this.fire ? this.fire.playerBurn() : 0);
     const gun = GUNS[this.equipped];
     if (gun && this.carried) {
       this.hud.setAmmo(this.carried.ammo, gun.capacity, this.reloadTimer > 0);
@@ -1453,14 +1748,19 @@ export class Game {
     if (this._useTimer <= 0) {
       this._useTimer = 0.12;
       const reach = this.pickupInReach();
-      /* USE says what it would actually do: put down what is in hand, take
-         off what is being worn, wear what is in reach, or pick it up. */
+      const thing = this.carried ? null : this.interactInReach();
+      /* USE says what it would actually do: put down what is in hand, touch
+         whatever strange thing is in front of you, take off what is being
+         worn, wear what is in reach, or pick it up. */
       let label = 'USE';
       if (this.carried) label = 'DROP';
+      else if (thing) label = thing.label || 'USE';
       else if (reach?.userData.wear) label = 'WEAR';
       else if (!reach && this.player?.armour) label = 'TAKE OFF';
       this.hud.setUseAvailable(
-        !!this.carried || !!reach || !!this.player?.armour, label);
+        !this.cutscene && (!!this.carried || !!thing || !!reach || !!this.player?.armour), label);
+      if (thing && thing !== this._promptedThing && thing.prompt) this.hud.toast(thing.prompt, 1800);
+      this._promptedThing = thing;
       const a = this.player?.armour;
       this.hud.setArmour(a ? a.hp : null, a ? a.maxHp : 0);
     }
@@ -1479,10 +1779,16 @@ export class Game {
     p.heal();
     p.body.washClean();
     this.hud?.setBlindness(0);
-    p.teleport(this.map.spawnPoint.x, this.map.spawnPoint.z, this.map.spawnYaw);
-    this.camYaw = this.map.spawnYaw;
+    this.fire?.extinguish(p);
+    // in the middle of a fight you come back somewhere out of the way
+    const fight = this.encounter?.active;
+    const sp = fight ? this.encounter.respawnPoint : this.map.spawnPoint;
+    const yaw = fight ? this.encounter.respawnYaw : this.map.spawnYaw;
+    p.teleport(sp.x, sp.z, yaw);
+    this.camYaw = yaw;
     this.camPitch = 0;
     this.shake = 0;
+    this.encounter?.onRespawn();
   }
 
   setFov(fov) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
@@ -1490,6 +1796,9 @@ export class Game {
   dispose() {
     this.running = false;
     window.removeEventListener('resize', this._onResize);
+    this.encounter?.dispose();
+    this.encounter = null;
+    this.fire?.dispose();
     for (const c of [...this.characters]) { c.dispose(); }
     this.characters.length = 0;
     for (const b of [...this.spawnedBodies]) disposeBody(this, b);
@@ -1498,6 +1807,7 @@ export class Game {
     this.flash?.dispose();
     this.cases?.dispose();
     this.gore?.dispose();
+    this.fx?.dispose();
     this.map?.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();

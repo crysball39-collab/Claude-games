@@ -31,12 +31,14 @@ const _q1 = new Quaternion();
 /*                                  the model                                 */
 /* -------------------------------------------------------------------------- */
 
-export function createRCV2Model() {
+/** @param {'grey'|'red'} variant  the red one is not from around here */
+export function createRCV2Model({ variant = 'grey' } = {}) {
   const g = new Group();
-  const dark = new MeshLambertMaterial({ color: 0x2b2f36 });
-  const mid = new MeshLambertMaterial({ color: 0x4a515c });
-  const brass = new MeshLambertMaterial({ color: 0x8a6a34 });
-  const glowMat = new MeshBasicMaterial({ color: 0xff5a2a, transparent: true, opacity: 0.95 });
+  const red = variant === 'red';
+  const dark = new MeshLambertMaterial({ color: red ? 0x4a0a0c : 0x2b2f36 });
+  const mid = new MeshLambertMaterial({ color: red ? 0x8e1418 : 0x4a515c });
+  const brass = new MeshLambertMaterial({ color: red ? 0x2a0406 : 0x8a6a34 });
+  const glowMat = new MeshBasicMaterial({ color: red ? 0xff1a10 : 0xff5a2a, transparent: true, opacity: 0.95 });
 
   const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => {
     const m = new Mesh(geo, mat);

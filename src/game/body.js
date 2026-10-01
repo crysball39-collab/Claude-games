@@ -7,7 +7,7 @@ import { Group, Mesh, MeshLambertMaterial, Vector3, DoubleSide, FrontSide } from
 import {
   makeAtlasBoxGeometry, localPointToFaceUV, worldToBoxLocal, FACE_NZ,
 } from './skeleton.js';
-import { PaintSurface, paintBlood, paintBruise, paintTear, drawFace, paintSplat } from './paint.js';
+import { PaintSurface, paintBlood, paintBruise, paintTear, drawFace, paintSplat, paintScorch } from './paint.js';
 import { makeRng, clamp01 } from '../core/util.js';
 
 const _v = new Vector3();
@@ -400,6 +400,30 @@ export class Body {
         else paintBlood(ctx, x, y, r, sev * 0.7, rng, dark);
       });
       surf.bloodAmount += sev;
+      return;
+    }
+
+    // ---- burns: the outside chars, and what is under it reddens ----
+    if (kind === 'burn') {
+      if (cloth) {
+        const surf = this._ensureSurface(cloth);
+        surf.paintFace(clothUV.face, clothUV.u, clothUV.v, (ctx, x, y, cell) => {
+          paintScorch(ctx, x, y, cell * (0.10 + sev * 0.18), sev, rng, true);
+        });
+        // a bad enough burn goes straight through the fabric
+        if (allowTear && sev > 0.45 && rng() < 0.18 * sev) {
+          surf.paintFace(clothUV.face, clothUV.u, clothUV.v, (ctx, x, y, cell) => {
+            paintTear(ctx, x, y, cell * (0.06 + sev * 0.1), rng);
+          });
+          cloth.torn += sev * 0.5;
+        }
+      }
+      if (!cloth || sev > 0.5) {
+        const surf = this._ensureSurface(skin);
+        surf.paintFace(skinUV.face, skinUV.u, skinUV.v, (ctx, x, y, cell) => {
+          paintScorch(ctx, x, y, cell * (0.09 + sev * 0.16), sev, rng, false);
+        });
+      }
       return;
     }
 

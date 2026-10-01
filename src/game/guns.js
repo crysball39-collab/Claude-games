@@ -617,7 +617,10 @@ export class CaseEjector {
     c.rot.identity();
   }
 
-  update(dt, groundY = 0) {
+  /** @param {PhysicsWorld} world  asked where the floor is under each case,
+      so brass lands on a platform or down in a pit rather than at grass
+      height wherever it happens to be. */
+  update(dt, world = null) {
     let live = false;
     for (let i = 0; i < MAX_CASES; i++) {
       const c = this.cases[i];
@@ -626,8 +629,9 @@ export class CaseEjector {
       c.life -= dt;
       c.vel.y -= 20 * dt;
       c.pos.addScaledVector(c.vel, dt);
-      if (c.pos.y < groundY + 0.006) {
-        c.pos.y = groundY + 0.006;
+      const floor = world ? world.floorAt(c.pos.x, c.pos.z, c.pos.y + 0.05) : 0;
+      if (c.pos.y < floor + 0.006) {
+        c.pos.y = floor + 0.006;
         c.vel.y = Math.abs(c.vel.y) * 0.24;
         c.vel.x *= 0.6; c.vel.z *= 0.6;
         c.spin.multiplyScalar(0.5);

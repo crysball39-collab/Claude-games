@@ -8,6 +8,7 @@ import { bootScreen, mapScreen } from './core/loading.js';
 import { input } from './core/input.js';
 import { canFullscreen, isFullscreen, toggleFullscreen, onFullscreenChange } from './core/fullscreen.js';
 import { getMap as getMapDef } from './game/map.js';
+import { isUnlocked } from './game/progress.js';
 import { Menu } from './ui/menu.js';
 import { Hud } from './ui/hud.js';
 import { SpawnMenu } from './ui/spawnMenu.js';
@@ -128,7 +129,7 @@ function hasWebGL() {
 
 /* ------------------------------- game start -------------------------------- */
 
-async function startGame(mapId) {
+async function startGame(mapId, statusMessage = '') {
   if (app.state === 'loading') return;
   app.state = 'loading';
   app.menu.hide();
@@ -137,7 +138,7 @@ async function startGame(mapId) {
 
   const mapName = (getMapDef(mapId)?.name || mapId).toUpperCase();
   $('#map-loading-title').textContent = mapName;
-  mapScreen.show('Preparing...');
+  mapScreen.show(statusMessage || 'Preparing...');
 
   // let the loading screen paint before the heavy lifting starts
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -145,6 +146,7 @@ async function startGame(mapId) {
   const game = new app.Game(viewport, settings);
   app.game = game;
   game.hud = app.hud;
+  game.onTravel = (id, message) => travelTo(id, message);
 
   app.hud.onWeaponSelect = (name) => game.setEquipped(name);
   app.spawnMenu.onSelect = (id) => {
@@ -156,7 +158,7 @@ async function startGame(mapId) {
     if (open) input.reset();
   };
   input.onWeaponSelect = (i) => game.setEquipped(
-    ['fists', 'rcv2', 'machete', 'sledge', 'crowbar', 'glock', 'ak47', 'm16'][i] || 'fists');
+    ['fists', 'rcv2', 'machete', 'sledge', 'crowbar', 'glock', 'ak47', 'm16', 'firefist'][i] || 'fists');
   input.onToggleDrawer = () => app.spawnMenu.toggle();
   input.onPause = () => togglePause();
 
@@ -171,6 +173,7 @@ async function startGame(mapId) {
   game.setSelected(app.spawnMenu.selectedId);
   app.hud.setSelectedItem(game.selected.name);
   app.hud.setWeapon('fists');
+  app.hud.setFireFist(isUnlocked('firefist'));
   app.hud.setVisible(true);
   app.hud.hideDeath();
 
@@ -178,6 +181,25 @@ async function startGame(mapId) {
   app.state = 'playing';
   input.enabled = true;
   app.lastTime = performance.now();
+  // whatever brought you here has something to say about it
+  if (statusMessage) app.hud.toast(statusMessage, 3200);
+}
+
+/**
+ * Straight from one map into another, without going back to the menu: the
+ * red RCV2 in Pit Valley, and the one Silva leaves behind. Everything about
+ * the old map goes; what you have unlocked is kept by the progress store.
+ */
+async function travelTo(mapId, message = '') {
+  if (!app.game || app.state === 'loading') return;
+  input.enabled = false;
+  input.reset();
+  app.game.dispose();
+  app.game = null;
+  pauseOverlay.classList.add('hidden');
+  app.spawnMenu.close();
+  app.state = 'menu';            // startGame refuses to start over a load
+  await startGame(mapId, message);
 }
 
 function quitToMenu() {

@@ -1525,8 +1525,12 @@ r = await page.evaluate(async () => {
   const { spawnCitizen } = await import('/src/game/citizen.js');
   const frame = () => new Promise((res) => requestAnimationFrame(res));
   const out = {};
-  for (const [tag, which, blow] of [['arm', 'lowerArmR', 60], ['head', 'head', 70],
-    ['chip', 'lowerLegL', 9]]) {
+  /* [tag, part, damage per blow, blows]. Limbs are meant to take a sustained
+     beating now, so each of these is several solid blows to the same part -
+     and `jab` is the control, a long run of punch-sized hits that must never
+     tear anything off at all. */
+  for (const [tag, which, blow, blows] of [['arm', 'lowerArmR', 45, 3], ['head', 'head', 60, 2],
+    ['chip', 'lowerLegL', 26, 6], ['jab', 'lowerArmL', 11, 30]]) {
     g.clearSpawns();
     g.player.teleport(OX, 8, 0);
     const c = spawnCitizen(g, new V(OX, 0, 0));
@@ -1540,10 +1544,10 @@ r = await page.evaluate(async () => {
     };
     const bone = c.rig.byName[which];
     const at = bone.worldPos.clone();
-    /* `chip` is the control: small hits, over and over. It has to take a lot
-       more of them than one big one, but it must get there in the end. */
-    const hits = blow >= 40 ? 1 : 14;
-    for (let i = 0; i < hits; i++) {
+    let tookOff = 0;
+    for (let i = 0; i < blows; i++) {
+      if (c.gone.has(which)) break;
+      tookOff++;
       c.applyImpact(at, new V(0, 8, -90), { boneName: which, damage: blow,
         type: 'impact', severity: 0.9, crush: 0.6 });
       for (let k = 0; k < 2; k++) await frame();
@@ -1564,22 +1568,365 @@ r = await page.evaluate(async () => {
       lighter: +(before.mass - c.totalMass).toFixed(1),
       debris: g.gore.debris.length,
       dead: c.dead, finite, worst: +worst.toFixed(2),
-      splats: g.gore.stats.splats > 0,
+      splats: g.gore.stats.splats > 0, blows: tookOff,
     };
     g.clearSpawns();
   }
   g.player.heal();
   return out;
 });
-check('a limb that takes too much comes off, and the body still works',
+check('a limb that takes a beating comes off, and the body still works',
   r.arm.gone && r.arm.detached && r.arm.stump && r.arm.shed >= 2 && r.arm.cons > 0 &&
   r.arm.pairs > 0 && r.arm.lighter > 1 && r.arm.debris > 0 &&
-  r.arm.finite && r.arm.worst < 20 && r.arm.splats,
+  r.arm.finite && r.arm.worst < 20 && r.arm.splats && r.arm.blows >= 2,
   JSON.stringify(r.arm));
-check('taking the head off kills, and enough small hits do it too',
-  r.head.gone && r.head.dead && r.head.finite &&
-  r.chip.gone && r.chip.detached && r.chip.finite && r.chip.worst < 20,
+check('a head takes more than one blow to come off, and kills when it does',
+  r.head.gone && r.head.dead && r.head.finite && r.head.blows >= 2 &&
+  r.chip.gone && r.chip.detached && r.chip.finite && r.chip.worst < 20 && r.chip.blows >= 3,
   JSON.stringify({ head: r.head, chip: r.chip }));
+check('punches bruise and break, but never tear a limb off',
+  !r.jab.gone && !r.jab.detached && r.jab.finite, JSON.stringify(r.jab));
+
+// ---------- walls are walls, not death ----------
+/* From here on the world is stepped by hand, a sixtieth of a second at a time,
+   with a stand-in for the controls: what is being tested is what the game does
+   with an input, so the input has to be exactly the same every run. */
+await page.evaluate(() => {
+  window.stepper = () => {
+    const app = window.GOREBOX, g = app.game;
+    app.state = 'paused'; g.paused = false;
+    window.stub = { consumeLook: () => ({ x: 0, y: 0 }), move: { x: 0, y: 0 }, pressed: {}, down: {}, beginFrame() {} };
+    window.step = (n) => {
+      for (let i = 0; i < n; i++) { g.update(1 / 60, window.stub); window.stub.pressed = {}; }
+      g.render();
+    };
+    return g;
+  };
+  window.arrive = async (id) => {
+    const app = window.GOREBOX;
+    for (let i = 0; i < 3000; i++) {
+      if (app.game?.map?.id === id && app.state === 'playing' && app.game.running) return true;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    return false;
+  };
+});
+r = await page.evaluate(() => {
+  const g = window.stepper(), p = g.player;
+  g.clearSpawns(); p.heal();
+  const out = {};
+  // sprinting straight into the north wall, and on into it for two seconds
+  p.teleport(g.map.openArea.x, -33, 0); g.camYaw = 0; window.step(5);
+  window.stub.move = { x: 0, y: 1 };
+  window.step(240);
+  out.wallZ = +p.pos.z.toFixed(2);
+  out.afterWall = +p.health.toFixed(1);
+  // and sliding along it, at a slant, at a ragged frame rate
+  window.stub.move = { x: 0.7, y: 0.7 };
+  for (let i = 0; i < 40; i++) { g.update(1 / 10, window.stub); }
+  out.afterSlide = +p.health.toFixed(1);
+  out.state = p.state;
+  out.slideZ = +p.pos.z.toFixed(2);
+  // up the step and onto the platform, walking
+  window.stub.move = { x: 0, y: 0 };
+  p.teleport(0, 12.5, 0); g.camYaw = 0; window.step(5);
+  window.stub.move = { x: 0, y: 0.6 };
+  window.step(260);
+  window.stub.move = { x: 0, y: 0 };
+  window.step(20);
+  out.onPlatform = +(p.pos.y - 0.945).toFixed(2);
+  out.afterStep = +p.health.toFixed(1);
+  out.platformZ = +p.pos.z.toFixed(1);
+  return out;
+});
+check('running into a wall stops you and does not hurt',
+  r.wallZ > -39.2 && r.wallZ < -38.2 && r.afterWall === 100 && r.afterSlide === 100 &&
+  r.state === 'controlled' && r.slideZ > -39.2, JSON.stringify(r));
+check('the platform is two steps you walk up',
+  Math.abs(r.onPlatform - 0.9) < 0.1 && r.afterStep === 100 && r.platformZ < 7.5, JSON.stringify(r));
+
+// ---------- Pit Valley ----------
+await page.evaluate(() => { try { localStorage.removeItem('gorebox.progress.v1'); } catch (e) { /* */ } });
+await page.evaluate(() => window.GOREBOX.game.travel('pitvalley'));
+let arrived = await page.evaluate(() => window.arrive('pitvalley'));
+r = await page.evaluate(() => {
+  const g = window.stepper(), p = g.player, w = g.world;
+  const out = {
+    arrived: g.map.name,
+    hole: !w.hasGroundAt(0, 0) && w.hasGroundAt(0, 20) && w.hasGroundAt(-15, 0),
+    pitFloor: +w.floorAt(4, 4, 0).toFixed(2),
+    citizensOnGround: g.characters.filter((c) => c !== p).every((c) => c.pos.y > 0.5),
+  };
+  // over the bridge at a run: the path forward is the bridge, and it holds you
+  p.teleport(0, 13, 0); g.camYaw = 0; window.step(5);
+  window.stub.move = { x: 0, y: 1 };
+  let lowest = Infinity;
+  for (let i = 0; i < 420; i++) { window.step(1); lowest = Math.min(lowest, p.pos.y - 0.945); }
+  window.stub.move = { x: 0, y: 0 };
+  out.acrossZ = +p.pos.z.toFixed(1);
+  out.lowest = +lowest.toFixed(2);
+  out.hpBridge = +p.health.toFixed(1);
+  // the other way round: the arc on the grass, west of the pit
+  p.teleport(-15, 0, 0); window.step(10);
+  out.arcGround = +(p.pos.y - 0.945).toFixed(2);
+  // down in the pit, beside the bridge, wading: the pond slows you
+  p.teleport(2.4, 0.8, 0); window.step(20);
+  out.inPit = +(p.pos.y - 0.945).toFixed(2);
+  out.wading = p.speedScale;
+  // the corner nobody looks in
+  const egg = g.map.interactables.find((i) => i.id === 'redRCV2');
+  p.teleport(egg.position.x - 1.3, egg.position.z + 1.1, 0);
+  g.camYaw = Math.atan2(-(egg.position.x - p.pos.x), -(egg.position.z - p.pos.z));
+  g.camPitch = -0.3;
+  window.step(20);
+  out.reach = g.interactInReach()?.id || null;
+  out.label = document.querySelector('#btn-use').textContent;
+  out.offered = document.querySelector('#btn-use').classList.contains('show');
+  return out;
+});
+check('Pit Valley: a bridge forward over a stone pit, a path round it, a pond at the bottom',
+  arrived && r.arrived === 'Pit Valley' && r.hole && Math.abs(r.pitFloor + 4) < 0.05 &&
+  r.citizensOnGround && r.acrossZ < -10 && r.lowest > -0.1 && r.hpBridge === 100 &&
+  Math.abs(r.arcGround) < 0.05 && Math.abs(r.inPit + 4) < 0.2 && r.wading === 0.5, JSON.stringify(r));
+check('a red RCV2 lies in one corner of the pit, and USE offers to touch it',
+  r.reach === 'redRCV2' && r.label === 'TOUCH' && r.offered, JSON.stringify(r));
+
+// ---------- Red Plains, and what is on the pillar ----------
+await page.evaluate(() => window.GOREBOX.game.useAction());
+arrived = await page.evaluate(() => window.arrive('redplains'));
+r = await page.evaluate(() => {
+  const g = window.stepper(), p = g.player, e = g.encounter;
+  const out = {
+    arrived: g.map.name, citizens: g.characters.length - 1, sky: g.scene.background.getHexString(),
+    encounter: !!e, altar: g.map.altarParts.length, statics0: g.world.staticBodies.length,
+    hp: e?.boss.hp,
+  };
+  p.teleport(0, 1.8, 0); g.camYaw = 0; g.camPitch = 0.1; window.step(10);
+  out.reach = g.interactInReach()?.id || null;
+  out.label = document.querySelector('#btn-use').textContent;
+  g.useAction();
+  window.step(2);
+  out.cutscene = !!g.cutscene && document.querySelector('#hud').classList.contains('cutscene');
+  out.bars = document.querySelector('#cutscene').classList.contains('on');
+  // the controls are the cutscene's now
+  window.stub.move = { x: 1, y: 1 };
+  window.step(60);
+  window.stub.move = { x: 0, y: 0 };
+  out.heldStill = Math.hypot(p.pos.x, p.pos.z - 1.8) < 0.3;
+  window.step(60);                                       // 2 s: it has gone off
+  out.ragdoll = p.state;
+  out.pillarGone = g.world.staticBodies.length === out.statics0 - 3;
+  let farthest = 0, sawBoss = false, sawTitle = false;
+  for (let i = 0; i < 900 && g.cutscene; i++) {
+    window.step(1);
+    farthest = Math.max(farthest, Math.hypot(p.pos.x, p.pos.z));
+    sawBoss = sawBoss || (e.boss.visible && e.boss.state === 'roar');
+    sawTitle = sawTitle || document.querySelector('#cs-title').classList.contains('show');
+  }
+  out.farthest = +farthest.toFixed(1);
+  out.sawRoar = sawBoss;
+  out.sawTitle = sawTitle;
+  out.over = !g.cutscene && e.state === 'fight';
+  out.pstate = p.state;
+  out.php = +p.health.toFixed(1);
+  out.boss = e.boss.state;
+  out.bar = !document.querySelector('#boss-bar').classList.contains('hidden');
+  out.barName = document.querySelector('#boss-name').textContent;
+  out.hudBack = !document.querySelector('#hud').classList.contains('cutscene');
+  return out;
+});
+check('the red RCV2 sends you to a red Plains with a pillar on the platform and nobody on it',
+  arrived && r.arrived === 'Red Plains' && r.citizens === 0 && r.encounter && r.altar === 3 &&
+  r.hp === 2500 && r.reach === 'silvaOrb' && r.label === 'TOUCH', JSON.stringify(r));
+check('touching the fireball plays the cutscene: blast, thrown into the wall, Silva forms and roars',
+  r.cutscene && r.bars && r.heldStill && r.ragdoll === 'ragdoll' && r.pillarGone &&
+  r.farthest > 35 && r.sawRoar && r.sawTitle && r.over && r.pstate === 'controlled' &&
+  r.php >= 60 && r.php < 100 && r.boss !== 'dormant' && r.bar && r.barName === 'SILVA' && r.hudBack,
+  JSON.stringify(r));
+
+// ---------- his three attacks: they hurt, and they can be dodged ----------
+r = await page.evaluate(() => {
+  const g = window.GOREBOX.game, p = g.player, b = g.encounter.boss;
+  const out = {};
+  for (const [name, frames] of [['fireball', 150], ['jump', 150], ['beam', 220]]) {
+    for (const dodge of [false, true]) {
+      p.heal(); g.fire.clear();
+      b.pos.set(0, 0.9, 0); b.vel.set(0, 0, 0); b.yaw = Math.PI; b._plantFeet();
+      p.teleport(0, 10, 0); g.camYaw = 0; g.camPitch = 0.15;
+      window.step(2);
+      b.cooldown = { fireball: 0, jump: 0, beam: 0 };
+      b._startAttack(name);
+      let balls = 0, beam = false, ring = false;
+      for (let i = 0; i < frames; i++) {
+        window.stub.move = dodge && i > 20 ? { x: 1, y: 0 } : { x: 0, y: 0 };
+        window.step(1);
+        balls = Math.max(balls, g.fire.balls.length);
+        beam = beam || b.beamCore.visible;
+        ring = ring || b.marker.visible;
+      }
+      window.stub.move = { x: 0, y: 0 };
+      out[name + (dodge ? 'Dodged' : '')] = { hp: +p.health.toFixed(1), balls, beam, ring };
+    }
+  }
+  p.heal(); g.fire.clear();
+  return out;
+});
+check('Silva\'s fireball burst, jump and chest beam all hurt you',
+  r.fireball.balls === 3 && r.fireball.hp < 100 && r.jump.ring && r.jump.hp < 100 &&
+  r.beam.beam && r.beam.hp < 100, JSON.stringify(r));
+check('and every one of them can be dodged',
+  r.fireballDodged.hp === 100 && r.jumpDodged.hp === 100 && r.beamDodged.hp === 100, JSON.stringify(r));
+
+// ---------- what hurts him ----------
+r = await page.evaluate(() => {
+  const g = window.GOREBOX.game, p = g.player, b = g.encounter.boss;
+  const out = {};
+  const still = () => {
+    b.hp = b.maxHp; b._setState('recover'); b.recoverFor = 999;
+    b.pos.set(0, 0.9, 0); b.vel.set(0, 0, 0); b.yaw = Math.PI; b._plantFeet();
+  };
+  still();
+  p.teleport(0, 10, 0); g.camYaw = 0; g.camPitch = 0.1;
+  window.step(4);
+  const from = g.camera.position.clone();
+  const dir = b.center.clone().sub(from).normalize();
+  g._traceShot(from, dir, { damage: 42, push: 340, range: 300 });
+  out.bullet = b.maxHp - b.hp;
+  still();
+  g.fire.shoot({ from, dir, speed: 24, radius: 0.18, damage: 22, splash: 1.6, ignite: 4, owner: p, hitsBoss: true });
+  window.step(60);
+  out.fireball = b.maxHp - b.hp;
+  // a fist, on a still target: this is about the jab finding him
+  const real = b.update.bind(b);
+  still();
+  p.teleport(0, 30, Math.PI); window.step(12);
+  b.update = () => {};
+  const leg = b.m.legs.find((l) => l.foot.x > 0 && l.foot.z > b.pos.z);
+  const at = leg.foot.clone().lerp(leg.kneePos, 1.3 / Math.max(0.01, leg.kneePos.y - leg.foot.y));
+  p.teleport(at.x, at.z + 0.55, 0); g.camYaw = 0; g.camPitch = 0; window.step(6);
+  for (let i = 0; i < 6; i++) { g.primaryAction(); window.step(26); }
+  out.fists = +(b.maxHp - b.hp).toFixed(1);
+  b.update = real;
+  // a crate thrown at him
+  still();
+  p.teleport(0, 12, 0); window.step(4);
+  g.setSelected('crate');
+  const c = g.spawnSelected().entity;
+  c.pos.set(b.center.x, b.center.y, b.center.z + 3); c.vel.set(0, 0, -14); c.wake();
+  window.step(40);
+  out.crate = +(b.maxHp - b.hp).toFixed(1);
+  g.clearSpawns();
+  // and a wall in the way stops the round before it gets to him
+  still();
+  const behind = new from.constructor(0, 1.5, -12);
+  g._traceShot(behind, new from.constructor(0, 0, 1), { damage: 42, push: 340, range: 300 });
+  out.unblocked = b.maxHp - b.hp;
+  still();
+  g._traceShot(new from.constructor(0, 1.5, -45), new from.constructor(0, 0, 1), { damage: 42, push: 340, range: 300 });
+  out.throughWall = b.maxHp - b.hp;
+  return out;
+});
+check('guns, fireballs, fists and thrown crates all hurt him; walls stop bullets',
+  r.bullet > 30 && r.fireball > 15 && r.fists > 10 && r.crate > 8 && r.unblocked > 30 &&
+  r.throughWall === 0, JSON.stringify(r));
+
+// ---------- dying puts him back; killing him leaves the red RCV2 ----------
+r = await page.evaluate(() => {
+  const g = window.GOREBOX.game, p = g.player, e = g.encounter, b = e.boss;
+  const out = {};
+  b.hp = 900;
+  p.applyDamage(500, { boneName: 'midTorso', type: 'blunt' });
+  window.step(20);
+  out.dead = p.dead;
+  g.respawnPlayer(); window.step(3);
+  out.reset = b.hp === b.maxHp && b.state === 'recover';
+  out.respawnZ = +p.pos.z.toFixed(1);
+  // now kill him
+  b._setState('recover'); b.recoverFor = 999;
+  b.pos.set(5, 0.9, 0); b.vel.set(0, 0, 0); b._plantFeet();
+  p.teleport(5, 10, 0); g.camYaw = 0; window.step(3);
+  b.hp = 30;
+  const from = g.camera.position.clone();
+  g._traceShot(from, b.center.clone().sub(from).normalize(), { damage: 42, push: 340, range: 300 });
+  out.dying = b.state;
+  window.step(120);
+  out.gone = b.state === 'gone' && !b.visible;
+  out.pieces = g.gore.debris.length;
+  out.reward = e.reward.visible && e.rewardUse.enabled;
+  out.floats = +(e.rewardBase.y - g.world.floorAt(e.rewardBase.x, e.rewardBase.z, 5)).toFixed(2);
+  window.step(120);
+  out.barGone = document.querySelector('#boss-bar').classList.contains('hidden');
+  p.teleport(e.rewardBase.x, e.rewardBase.z + 1.6, 0); g.camYaw = 0; g.camPitch = 0.1;
+  window.step(20);
+  out.reach = g.interactInReach()?.id || null;
+  out.label = document.querySelector('#btn-use').textContent;
+  g.useAction();
+  return out;
+});
+check('if you die he heals and starts over; dead, he explodes and leaves a floating red RCV2',
+  r.dead && r.reset && r.respawnZ > 25 && r.dying === 'dying' && r.gone && r.pieces > 10 &&
+  r.reward && r.floats > 0.8 && r.barGone && r.reach === 'silvaRCV2' && r.label === 'TAKE',
+  JSON.stringify(r));
+arrived = await page.evaluate(() => window.arrive('pitvalley'));
+r = await page.evaluate(() => ({
+  map: window.GOREBOX.game.map.name,
+  saved: JSON.parse(localStorage.getItem('gorebox.progress.v1') || '{}').firefist === true,
+  slot: !document.querySelector('#slot-firefist').classList.contains('hidden'),
+  bar: document.querySelector('#boss-bar').classList.contains('hidden'),
+}));
+check('taking it sends you back to Pit Valley with the Fire Fist unlocked',
+  arrived && r.map === 'Pit Valley' && r.saved && r.slot && r.bar, JSON.stringify(r));
+
+// ---------- the Fire Fist ----------
+r = await page.evaluate(() => {
+  const g = window.stepper(), p = g.player;
+  const out = {};
+  g.clearSpawns(); p.heal();
+  const o = g.map.openArea;
+  g.setEquipped('firefist'); window.step(5);
+  out.equipped = g.equipped;
+  out.button = document.querySelector('#firefist-extra').classList.contains('show');
+  // a punch sets someone alight, and they run
+  p.teleport(o.x, o.z, 0); g.camYaw = 0; g.camPitch = 0; window.step(5);
+  g.setSelected('citizen');
+  const a = g.spawnSelected().entity;
+  a.teleport(o.x, o.z - 0.72, Math.PI); a.ai.idleTimer = 99; a.ai._setState('idle');
+  window.step(5);
+  for (let i = 0; i < 8 && !g.fire.isBurning(a); i++) { g.primaryAction(); window.step(24); }
+  out.punchBurns = g.fire.isBurning(a);
+  const hp0 = a.health;
+  window.step(90);
+  out.burnHurts = a.health < hp0;
+  out.runs = a.ai.state === 'flee';
+  g.clearSpawns();
+  // and a fireball does it from across the field
+  p.teleport(o.x, o.z, 0); g.camYaw = 0; g.camPitch = -0.02; window.step(5);
+  const c = g.spawnSelected().entity;
+  c.teleport(o.x, o.z - 9, Math.PI); c.ai.idleTimer = 99; c.ai._setState('idle');
+  window.step(10);
+  const hp1 = c.health;
+  window.stub.pressed = { fireball: true };
+  window.step(14);
+  out.thrown = g.fire.balls.length === 1;
+  window.step(40);
+  out.fireballHits = hp1 - c.health > 10;
+  out.fireballBurns = g.fire.isBurning(c);
+  // locked, it is not there to pick
+  g.clearSpawns();
+  return out;
+});
+check('the Fire Fist punches people alight, and its fireballs set them burning from range',
+  r.equipped === 'firefist' && r.button && r.punchBurns && r.burnHurts && r.runs &&
+  r.thrown && r.fireballHits && r.fireballBurns, JSON.stringify(r));
+
+// back to the ordinary loop for what is left
+await page.evaluate(() => {
+  const app = window.GOREBOX, g = app.game;
+  window.stub.move = { x: 0, y: 0 };
+  g.setEquipped('fists');
+  app.state = 'playing';
+  app.lastTime = performance.now();
+});
 
 // ---------- the full screen button ----------
 r = await page.evaluate(async () => {

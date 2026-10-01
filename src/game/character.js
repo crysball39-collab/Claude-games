@@ -67,6 +67,13 @@ export const MELEE_CLIPS = {
   sledge: ['swingR', 'swingL'],
   crowbar: ['crowbarR', 'crowbarL'],
 };
+/** The tallest thing you walk up without jumping, in metres. The ground scan
+    and the walking capsule have to agree on this exactly: anything the scan
+    will step onto, the capsule must let you walk into, and anything taller
+    the capsule must stop - or you walk into the side of a platform and stand
+    inside it. */
+export const STEP_UP = 0.48;
+
 /** How long you are committed after swinging each one, in seconds. */
 export const MELEE_COOLDOWN = { machete: 0.34, sledge: 0.52, crowbar: 0.42 };
 /** Which held pose each one stands in - guns included. */
@@ -181,6 +188,9 @@ export class Character {
     this.broken = new Set();     // bone names that are broken
     /** A vest, if one is being worn. It eats damage before the body sees it. */
     this.armour = null;
+    /** Multiplies walking speed. The game sets it each frame - water to the
+        shins halves it - and it goes back to 1 the moment that stops. */
+    this.speedScale = 1;
     /* Per bone muscle multiplier. A broken bone cannot hold itself up, and
        neither can anything hanging off it. */
     this.limpScale = Object.create(null);
@@ -458,9 +468,7 @@ export class Character {
   _groundHeight(x, z, fromY) {
     const w = this.world;
     let best = -Infinity;
-    if (w.hasGround && x > w.groundMin.x && x < w.groundMax.x && z > w.groundMin.z && z < w.groundMax.z) {
-      best = w.groundY;
-    }
+    if (w.hasGroundAt(x, z) && w.groundY <= fromY + STEP_UP) best = w.groundY;
     const consider = (b) => {
       if (x < b.aabbMin.x || x > b.aabbMax.x || z < b.aabbMin.z || z > b.aabbMax.z) return;
       let top;
@@ -472,7 +480,7 @@ export class Character {
       } else {
         top = b.aabbMax.y;
       }
-      if (top <= fromY + 0.42 && top > best) best = top;
+      if (top <= fromY + STEP_UP && top > best) best = top;
     };
     for (let i = 0; i < w.staticBodies.length; i++) consider(w.staticBodies[i]);
     for (let i = 0; i < w.bodies.length; i++) consider(w.bodies[i]);
@@ -599,7 +607,7 @@ export class Character {
     if (boneName && this.partHealth[boneName] != null) {
       const had = this.partHealth[boneName];
       this.partHealth[boneName] = Math.max(0, had - amount);
-      this.partOverkill[boneName] += Math.max(0, amount - had);
+      if (amount >= GIB.minHit) this.partOverkill[boneName] += Math.max(0, amount - had);
     }
     if (this.dead) {
       // corpses still take visible damage, and can still come apart
@@ -1054,6 +1062,8 @@ export class Character {
     const running = this.wantRun && wishLen > 0.72 && this.crouch < 0.4 && lame === 0;
     let speed = this.crouch > 0.45 ? this.speedCrouch : (running ? this.speedRun : this.speedWalk);
     speed *= wishLen;
+    // wading, burning legs, whatever else the world is doing to you this frame
+    speed *= this.speedScale;
     speed *= lerp(1, 0.55, clamp01(1 - this.health / this.maxHealth) * 0.9);
     // A broken leg is a limp; two is a crawl, and you will not stay upright.
     if (lame) {
@@ -1172,42 +1182,76 @@ export class Character {
     this._checkBalance();
   }
 
-  /** Keeps the walking capsule out of crates and boulders. */
+  /**
+   * Keeps the walking capsule out of crates, boulders - and walls.
+   *
+   * Walls used to be missing from this. Nothing stopped a person walking
+   * into one except the limbs of their own body hitting it, and those are
+   * pinned to the animation, so the only thing that ever came of it was a
+   * hail of nonsense impacts that killed whoever touched a wall. Static map
+   * parts are tested against their bounding box rather than their centre,
+   * because the centre of an eighty metre wall is never within three metres
+   * of the person leaning on it.
+   */
   _resolveBodyCollisions(dt) {
     const w = this.world;
     const feet = this.pos.y - HIP_HEIGHT;
     const top = feet + lerp(1.72, 1.12, this.crouch);
     const radius = 0.27;
 
-    for (let i = 0; i < w.bodies.length; i++) {
-      const b = w.bodies[i];
-      if (b.aabbMax.y < feet + 0.06 || b.aabbMin.y > top) continue;
-      if (Math.abs(b.pos.x - this.pos.x) > 3 || Math.abs(b.pos.z - this.pos.z) > 3) continue;
-      // Low enough to stand on: the ground scan already handles it.
-      if (b.aabbMax.y <= feet + 0.42) continue;
+    for (let s = 0; s < 2; s++) {
+      const list = s === 0 ? w.staticBodies : w.bodies;
+      for (let i = 0; i < list.length; i++) this._capsuleVsBody(list[i], feet, top, radius, dt);
+    }
+  }
 
-      _v1.set(this.pos.x, clamp(b.pos.y, feet + 0.3, top), this.pos.z);
-      b.closestPoint(_v1, _v2);
-      _v3.set(_v1.x - _v2.x, 0, _v1.z - _v2.z);
-      let d = _v3.length();
-      if (d < 1e-5) {
+  _capsuleVsBody(b, feet, top, radius, dt) {
+    if (b.aabbMax.y < feet + 0.06 || b.aabbMin.y > top) return;
+    if (this.pos.x < b.aabbMin.x - radius - 0.05 || this.pos.x > b.aabbMax.x + radius + 0.05 ||
+        this.pos.z < b.aabbMin.z - radius - 0.05 || this.pos.z > b.aabbMax.z + radius + 0.05) return;
+    // Low enough to step onto: the ground scan already handles it.
+    if (b.aabbMax.y <= feet + STEP_UP) return;
+
+    _v1.set(this.pos.x, clamp(b.pos.y, feet + 0.3, top), this.pos.z);
+    b.closestPoint(_v1, _v2);
+    _v3.set(_v1.x - _v2.x, 0, _v1.z - _v2.z);
+    let d = _v3.length();
+    let pen;
+    if (d < 1e-5) {
+      /* The centre itself is inside: a long frame on a slow phone can carry
+         someone half a metre, which is half of a wall. Out through the
+         nearest side face - never towards the middle of the box, which for
+         an eighty metre wall would mean sliding along it instead. */
+      if (b.shape === 'sphere') {
         _v3.set(this.pos.x - b.pos.x, 0, this.pos.z - b.pos.z);
         if (_v3.lengthSq() < 1e-8) _v3.set(1, 0, 0);
-        d = 0;
+        _v3.normalize();
+        pen = radius + b.radius - Math.hypot(this.pos.x - b.pos.x, this.pos.z - b.pos.z);
+      } else {
+        b.worldToLocal(_v1, _v4);
+        const h = b.half;
+        const px = h.x - Math.abs(_v4.x), pz = h.z - Math.abs(_v4.z);
+        if (px < pz) _v3.set(_v4.x >= 0 ? 1 : -1, 0, 0);
+        else _v3.set(0, 0, _v4.z >= 0 ? 1 : -1);
+        _v3.applyQuaternion(b.quat);
+        _v3.y = 0;
+        _v3.normalize();
+        pen = Math.min(px, pz) + radius;
       }
-      _v3.normalize();
-      if (d >= radius) continue;
-
-      const pen = radius - d;
-      const massRatio = b.invMass > 0 ? clamp(b.mass / (b.mass + 78), 0, 0.6) : 0;
-      this.pos.addScaledVector(_v3, pen * (1 - massRatio));
-      if (b.invMass > 0) {
-        _v4.copy(_v3).multiplyScalar(-pen * 1400 * Math.min(dt, 0.033));
-        b.applyImpulse(_v4, _v2);
-      }
-      const vn = this.vel.x * _v3.x + this.vel.z * _v3.z;
-      if (vn < 0) { this.vel.x -= vn * _v3.x; this.vel.z -= vn * _v3.z; }
+    } else {
+      _v3.multiplyScalar(1 / d);
+      if (d >= radius) return;
+      pen = radius - d;
     }
+
+    const massRatio = b.invMass > 0 ? clamp(b.mass / (b.mass + 78), 0, 0.6) : 0;
+    this.pos.addScaledVector(_v3, pen * (1 - massRatio));
+    if (b.invMass > 0) {
+      _v4.copy(_v3).multiplyScalar(-pen * 1400 * Math.min(dt, 0.033));
+      b.applyImpulse(_v4, _v2);
+    }
+    const vn = this.vel.x * _v3.x + this.vel.z * _v3.z;
+    if (vn < 0) { this.vel.x -= vn * _v3.x; this.vel.z -= vn * _v3.z; }
   }
 
   /**
