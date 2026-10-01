@@ -349,6 +349,57 @@ check('USE wears the light vest and takes it off again',
   vest.offer === 'TAKE OFF' && !vestOff.worn && vestOff.onGround,
   JSON.stringify({ vestOffer, ...vest, ...vestOff }));
 
+/* ---------------------- the medium vest and the helmet ---------------------- */
+await page.tap('#btn-pause'); await page.waitForTimeout(300);
+await page.tap('#btn-clear'); await page.waitForTimeout(200);
+await page.tap('#btn-resume'); await page.waitForTimeout(400);
+for (const kind of ['mvest', 'helmet']) {
+  await page.tap('#btn-hamburger'); await page.waitForTimeout(350);
+  await page.tap(`.item[data-id="${kind}"]`); await page.waitForTimeout(150);
+  await page.tap('#btn-close-drawer'); await page.waitForTimeout(250);
+  await page.tap('.wslot[data-weapon="rcv2"]'); await page.waitForTimeout(300);
+  await page.tap('#btn-spawn'); await page.waitForTimeout(1500);
+  await page.evaluate((k) => {
+    const g = window.GOREBOX.game;
+    const m = g.spawnedBodies.find((b) => b.tag === k);
+    if (!m) return;
+    g.player.teleport(m.pos.x, m.pos.z + 0.9, 0);
+    g.camYaw = 0; g.camPitch = -0.2;
+    g.setEquipped('fists');
+  }, kind);
+  await page.waitForFunction(
+    () => document.querySelector('#btn-use').textContent === 'WEAR', null, { timeout: 20000 },
+  ).catch(() => {});
+  await page.tap('#btn-use');
+  await page.waitForFunction(
+    (k) => Object.values(window.GOREBOX.game.player.worn).some((a) => a.kind === k), kind, { timeout: 20000 },
+  ).catch(() => {});
+}
+const kit = await page.evaluate(() => {
+  const p = window.GOREBOX.game.player;
+  return { torso: p.worn.torso?.kind || null, head: p.worn.head?.kind || null,
+    bar: !document.querySelector('#armour-wrap').classList.contains('hidden') };
+});
+check('USE wears the medium vest and the light helmet together',
+  kit.torso === 'mvest' && kit.head === 'helmet' && kit.bar, JSON.stringify(kit));
+
+/* --------------------------------- an officer -------------------------------- */
+await page.tap('#btn-hamburger'); await page.waitForTimeout(350);
+await page.tap('.item[data-id="officer"]'); await page.waitForTimeout(150);
+await page.tap('#btn-close-drawer'); await page.waitForTimeout(250);
+await page.tap('.wslot[data-weapon="rcv2"]'); await page.waitForTimeout(300);
+await page.tap('#btn-spawn'); await page.waitForTimeout(1500);
+await shot('14-officer');
+const cop = await page.evaluate(() => {
+  const g = window.GOREBOX.game;
+  const o = g.characters.find((c) => c.isOfficer);
+  return o ? { vest: o.armour?.kind, badge: !!o.armour?.model.userData.badge,
+    gun: !!o.ai.gun?.parent, drawn: o.ai.drawn } : null;
+});
+check('the drawer spawns an officer: vest, badge, Glock holstered',
+  cop && cop.vest === 'vest' && cop.badge && cop.gun && !cop.drawn, JSON.stringify(cop));
+await page.evaluate(() => { const g = window.GOREBOX.game; while (g.player.armourPieces.length) g.dropArmour(); });
+
 /* ------------------------------ full screen -------------------------------- */
 const full = await page.evaluate(() => {
   const hud = document.querySelector('#btn-fullscreen');

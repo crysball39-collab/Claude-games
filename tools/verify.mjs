@@ -2113,6 +2113,162 @@ check('fire chars what burns and opens blistered burns; washing and respawning h
   r.charredParts >= 2 && r.burns >= 1 && r.afterWash === 0 && r.uncharred &&
   r.playerHad === 1 && r.playerAfter === 0 && r.pruned, JSON.stringify(r));
 
+// ---------- armour for the whole torso, the neck and the head ----------
+r = await page.evaluate(async () => {
+  const g = window.stepper(), p = g.player;
+  const V = p.pos.constructor;
+  const { spawnArmour, ARMOUR } = await import('/src/game/armour.js');
+  const out = {};
+  g.clearSpawns(); p.heal();
+  while (p.armourPieces.length) g.dropArmour();
+  g.clearSpawns();
+  const o = g.map.openArea;
+  p.teleport(o.x, o.z, 0); g.camYaw = 0; g.camPitch = 0; window.step(5);
+  const wear = (kind) => {
+    const b = spawnArmour(g, kind, new V(o.x, 0.5, o.z - 0.9));
+    window.step(20);
+    g.useAction();
+    window.step(5);
+    return b;
+  };
+  out.hairBefore = !p.body.hairCovered;
+  wear('mvest'); wear('neckguard'); wear('helmet');
+  out.slots = Object.fromEntries(Object.entries(p.worn).map(([k, a]) => [k, a.kind]));
+  out.hairHidden = !!p.body.hairCovered;
+  // in first person your own helmet and collar would be in front of your eyes
+  out.ownHelmetHidden = !p.worn.head.model.visible && !p.worn.neck.model.visible;
+  // every one of them takes the hit on what it covers
+  const took = {};
+  for (const bone of ['upperTorso', 'lowerTorso', 'pelvis', 'neck', 'head', 'upperLegL']) {
+    const h0 = p.health;
+    p.applyDamage(10, { boneName: bone, point: p.rig.byName[bone].worldPos.clone(), type: 'blunt' });
+    took[bone] = +(h0 - p.health).toFixed(2);
+    p.heal();
+  }
+  out.took = took;
+  out.mvestHp = ARMOUR.mvest.hp;
+  out.lightHp = ARMOUR.vest.hp;
+  // a light vest over the medium one swaps them: the medium one goes on the floor
+  wear('vest');
+  out.swapped = p.worn.torso?.kind === 'vest' && g.spawnedBodies.some((b) => b.tag === 'mvest');
+  // USE with nothing in reach takes the last thing put on off first
+  g.clearSpawns();
+  window.step(2);
+  g.useAction(); window.step(3);
+  out.firstOff = g.spawnedBodies.find((b) => b.userData.wear)?.tag;
+  // (what was just taken off is in reach now, and USE would put it back on)
+  g.clearSpawns(); g.useAction(); window.step(3);
+  out.secondOff = g.spawnedBodies.find((b) => b.userData.wear)?.tag;
+  out.hairBack = !p.body.hairCovered;
+  out.looseHelmetShown = g.spawnedBodies.find((b) => b.tag === 'helmet')?.mesh.visible === true;
+  g.clearSpawns(); g.useAction(); window.step(3);
+  out.allOff = p.armourPieces.length === 0;
+  out.barGone = document.querySelector('#armour-wrap').classList.contains('hidden');
+  g.clearSpawns();
+
+  // a citizen whose head comes off leaves the helmet behind, loose
+  const { Armour } = await import('/src/game/armour.js');
+  g.setSelected('citizen');
+  const c = g.spawnSelected().entity;
+  c.teleport(o.x + 2, o.z - 2, 0);
+  c.ai.update = () => c.moveInput.set(0, 0, 0);
+  c.wearArmour(new Armour(ARMOUR.helmet.build(), null, 'helmet'), g.scene);
+  window.step(10);
+  c.explodeBone('head', c.rig.byName.head.worldPos.clone(), new V(0, 30, 0));
+  window.step(30);
+  out.helmetLoose = !c.worn.head && g.spawnedBodies.some((b) => b.tag === 'helmet');
+  g.clearSpawns();
+  return out;
+});
+check('the medium vest, neck armour and helmet each take hits on what they cover',
+  r.slots.torso === 'mvest' && r.slots.neck === 'neckguard' && r.slots.head === 'helmet' &&
+  r.hairBefore && r.hairHidden && r.ownHelmetHidden && r.mvestHp > r.lightHp &&
+  r.took.pelvis < 2 && r.took.lowerTorso < 2 && r.took.upperTorso < 2 &&
+  r.took.neck < 4 && r.took.head < 9 && r.took.upperLegL >= 10, JSON.stringify(r));
+check('a vest replaces a vest, USE takes off the last thing put on, a lost head drops its helmet',
+  r.swapped && r.firstOff === 'vest' && r.secondOff === 'helmet' && r.hairBack && r.looseHelmetShown && r.allOff && r.barGone && r.helmetLoose,
+  JSON.stringify(r));
+
+// ---------- the officer ----------
+r = await page.evaluate(async () => {
+  const g = window.stepper(), p = g.player;
+  const V = p.pos.constructor;
+  const out = {};
+  g.clearSpawns(); p.heal();
+  if (g.carried) g.dropCarried();
+  g.setEquipped('fists');
+  const o = g.map.openArea;
+  p.teleport(o.x, o.z, 0); g.camYaw = 0; g.camPitch = 0; window.step(5);
+  /* So the fight lasts long enough to watch: what lands is counted, not
+     dealt - a few rounds to the head would otherwise take it off. */
+  let taken = 0;
+  const realDamage = p.applyDamage;
+  p.applyDamage = (amount) => { taken += amount; };
+
+  g.setSelected('officer');
+  const off = g.spawnSelected().entity;
+  // eight metres off to one side, looking at where it will happen
+  off.teleport(o.x + 5, o.z - 6, Math.atan2(5, -5.25));
+  off.ai.idleTimer = 99;
+  const bystander = g.spawnSelected().entity;
+  // and one facing the other way, behind the first
+  bystander.teleport(o.x - 6, o.z - 8, Math.atan2(-6, 8) + Math.PI);
+  bystander.ai.idleTimer = 99;
+  window.step(30);
+  out.look = {
+    name: off.name, vest: off.armour?.kind, badge: !!off.armour?.model.userData.badge,
+    shirt: off.look.shirt.getHex(), longSleeves: off.look.longSleeves,
+    holstered: !off.ai.drawn && off.equipped === 'fists' && !!off.ai.gun?.parent,
+  };
+  out.calmAtGun = (() => { g.setEquipped('rcv2'); window.step(60); const h = off.ai.hostile; g.setEquipped('fists'); return h; })();
+
+  // a citizen gets punched in front of the first officer
+  g.setSelected('citizen');
+  const cit = g.spawnSelected().entity;
+  cit.teleport(o.x, o.z - 0.75, Math.PI);
+  cit.ai.update = () => cit.moveInput.set(0, 0, 0);
+  window.step(10);
+  out.sees = off.ai.canSee(cit);
+  out.otherSees = bystander.ai.canSee(cit);
+  for (let i = 0; i < 6 && cit.health > 99.9; i++) { g.primaryAction(); window.step(24); }
+  out.provoked = off.ai.hostile && off.ai.target === p;
+  window.step(300);
+  out.drawn = off.ai.drawn && off.equipped === 'glock';
+  out.pose = off.animator.upper.clip?.name;
+  out.shots = off.ai.shots;
+  out.hits = off.ai.hits;
+  out.playerHurt = Math.round(taken);
+  out.bystanderHostile = bystander.ai.hostile;
+  // they reload when they run dry
+  window.step(900);
+  out.shotsLater = off.ai.shots;
+  out.reloaded = off.ai.shots > 15;
+  // hurting the second officer directly brings them in
+  bystander.applyDamage(4, { boneName: 'upperArmL', point: bystander.rig.byName.upperArmL.worldPos.clone(), type: 'blunt', attacker: p });
+  window.step(2);
+  out.directProvokes = bystander.ai.hostile && bystander.ai.target === p;
+  // dying, or coming back, ends it
+  p.applyDamage = realDamage;
+  g.respawnPlayer();
+  window.step(5);
+  out.stoodDown = !off.ai.hostile && !bystander.ai.hostile;
+  // and a dead officer drops a drawn gun
+  off.ai.provoke(p); window.step(80);
+  const wasDrawn = off.ai.drawn;
+  off.applyDamage(900, { boneName: 'head', point: off.rig.byName.head.worldPos.clone(), type: 'impact', attacker: p });
+  window.step(20);
+  out.drops = wasDrawn && !off.ai.gun && g.spawnedBodies.some((b) => b.tag === 'glock');
+  p.heal();
+  g.clearSpawns();
+  return out;
+});
+check('the officer wears black, a light vest with a badge, and a holstered Glock',
+  r.look.name === 'Officer' && r.look.vest === 'vest' && r.look.badge && r.look.longSleeves &&
+  r.look.shirt < 0x202020 && r.look.holstered && !r.calmAtGun, JSON.stringify(r.look));
+check('hurt someone an officer can see, and they draw and shoot you; they reload, stand down and drop the gun dead',
+  r.sees && r.provoked && r.drawn && r.pose === 'glockHold' && r.shots >= 3 && r.hits >= 1 &&
+  r.playerHurt > 0 && r.reloaded && r.directProvokes && r.stoodDown && r.drops, JSON.stringify(r));
+
 // back to the ordinary loop for what is left
 await page.evaluate(() => {
   const app = window.GOREBOX, g = app.game;

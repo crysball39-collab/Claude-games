@@ -502,6 +502,18 @@ export class Body {
     return k;
   }
 
+  /** Hair goes under a helmet; it comes back when the helmet comes off. */
+  setHairVisible(on) {
+    this.hairCovered = !on;
+    this._applyHair();
+  }
+
+  /** Hair shows unless a helmet is over it or it is your own, seen from inside. */
+  _applyHair() {
+    const on = !this.hairCovered && !this.hairSelfHidden;
+    for (const m of this.hairMeshes || []) m.visible = on;
+  }
+
   /** Blood arriving from a spray, aimed at the closest part. */
   splatterAt(boneName, worldPoint, dirX, dirY, severity) {
     this.paintHit(boneName, worldPoint, { kind: 'blood', severity, dir: { x: dirX, y: dirY }, dark: 0 });

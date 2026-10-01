@@ -366,6 +366,33 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
   linear-gradient(#2f343b,#2f343b) 26% 6% / 13% 36% no-repeat,
   linear-gradient(#2f343b,#2f343b) 74% 6% / 13% 36% no-repeat,
   #14181c}
+/* the medium vest: a longer olive panel with a pouch row and a groin flap */
+.ico.mvest{background:
+  linear-gradient(#59634a,#59634a) 50% 52% / 60% 9% no-repeat,
+  linear-gradient(#3a4232,#3a4232) 50% 100% / 26% 22% no-repeat,
+  linear-gradient(#3a4232,#3a4232) 50% 48% / 70% 64% no-repeat,
+  linear-gradient(#23281e,#23281e) 26% 4% / 14% 30% no-repeat,
+  linear-gradient(#23281e,#23281e) 74% 4% / 14% 30% no-repeat,
+  #14181c}
+/* a collar: a ring seen from the front, with its throat plate */
+.ico.neckguard{background:
+  radial-gradient(ellipse 34% 20% at 50% 46%, #14181c 0 60%, #3e444c 62% 74%, transparent 76%),
+  linear-gradient(#23272d,#23272d) 50% 66% / 22% 22% no-repeat,
+  #14181c}
+/* a helmet: the dome, the brim and the strap */
+.ico.helmet{background:
+  radial-gradient(ellipse 40% 44% at 50% 62%, #8c7b57 0 98%, transparent 100%) 0 -18% / 100% 100% no-repeat,
+  linear-gradient(#5e533b,#5e533b) 50% 58% / 76% 7% no-repeat,
+  linear-gradient(#15171a,#15171a) 26% 84% / 4% 26% no-repeat,
+  linear-gradient(#15171a,#15171a) 74% 84% / 4% 26% no-repeat,
+  #14181c}
+/* an officer: dark uniform, a gold badge on the chest */
+.ico.officer{background:
+  radial-gradient(circle at 38% 58%, #e8c45a 0 6%, transparent 7%),
+  linear-gradient(#e0b48e,#e0b48e) 50% 10% / 26% 24% no-repeat,
+  linear-gradient(#0f1114,#0f1114) 50% 12% / 30% 10% no-repeat,
+  linear-gradient(#1b1d21,#1b1d21) 50% 74% / 56% 52% no-repeat,
+  #14181c}
 .drawer-foot{margin-top:10px;font-size:.68rem;color:var(--muted);letter-spacing:.06em}
 .drawer-foot b{color:#ffcf7a}
 

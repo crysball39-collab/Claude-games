@@ -187,7 +187,8 @@ export class Character {
     this.blind = 0;              // 0 sees fine, 1 sees nothing
     this.broken = new Set();     // bone names that are broken
     /** A vest, if one is being worn. It eats damage before the body sees it. */
-    this.armour = null;
+    /** What is being worn, by slot: torso, neck, head. */
+    this.worn = {};
     /** Multiplies walking speed. The game sets it each frame - water to the
         shins halves it - and it goes back to 1 the moment that stops. */
     this.speedScale = 1;
@@ -440,7 +441,7 @@ export class Character {
     this.rig.updateFK();
     this._snapParticlesToRig();
     this.body.sync();
-    this.armour?.sync(this.rig);
+    this._syncArmour();
   }
 
   _snapParticlesToRig() {
@@ -589,17 +590,18 @@ export class Character {
 
        It stops damage, not momentum: a vest will not let a sledgehammer break
        your ribs, and it will still put you on the floor. */
-    if (this.armour && !this.armour.spent && this.armour.covers(boneName)) {
-      const through = this.armour.absorb(amount, boneName);
+    const armour = this.armourOn(boneName);
+    if (armour) {
+      const through = armour.absorb(amount, boneName);
       const stopped = amount - through;
       if (stopped > 0) {
         // Bone only breaks under what reached it, so the crush the weapon
         // asked for is scaled down by however much the plate kept.
         crush *= amount > 0 ? through / amount : 0;
         severity = severity == null ? null : severity * (amount > 0 ? through / amount : 0);
-        this.onArmourHit?.({ character: this, boneName, point, stopped, armour: this.armour });
+        this.onArmourHit?.({ character: this, boneName, point, stopped, armour });
       }
-      if (this.armour.spent) this.onArmourBreak?.({ character: this, point });
+      if (armour.spent) this.onArmourBreak?.({ character: this, point, armour });
       amount = through;
       if (amount <= 0.01) {
         /* Nothing reached them - but something certainly happened, and the
@@ -609,7 +611,7 @@ export class Character {
         if (attacker) this.lastAttacker = attacker;
         this.onDamage?.({
           character: this, boneName, point, type, amount: 0, absorbed: stopped,
-          force, severity: 0, fatal: false,
+          force, severity: 0, fatal: false, attacker,
         });
         return;
       }
@@ -624,7 +626,7 @@ export class Character {
     }
     if (this.dead) {
       // corpses still take visible damage, and can still come apart
-      this.onDamage?.({ character: this, boneName, point, type, amount, severity: severity ?? clamp01(amount / 14), force, fatal: false, wound });
+      this.onDamage?.({ character: this, boneName, point, type, amount, severity: severity ?? clamp01(amount / 14), force, fatal: false, wound, attacker });
       if (this._shouldGib(boneName, amount)) this.explodeBone(boneName, point, force);
       return;
     }
@@ -639,7 +641,7 @@ export class Character {
     this.onDamage?.({
       character: this, boneName, point, type, amount: dealt, force,
       severity: severity ?? clamp01(amount / 14),
-      fatal: this.health <= 0, wound,
+      fatal: this.health <= 0, wound, attacker,
     });
 
     this._injure({
@@ -875,6 +877,17 @@ export class Character {
     }
     if (dead.size) this._forgetParticles(dead);
 
+    // ---- what was strapped to it falls off ----
+    for (const slot of Object.keys(this.worn)) {
+      const a = this.worn[slot];
+      const bones = a.model.userData.parts
+        ? a.model.userData.parts.map((p) => p.userData.mount.bone) : [a.spec.bone];
+      if (!bones.some((n) => this.gone.has(n))) continue;
+      this.stripArmour(slot);
+      if (this.onArmourLost) this.onArmourLost({ character: this, armour: a, dir: _v2.clone() });
+      else a.dispose();
+    }
+
     // ---- what it costs the person ----
     const hp = bone.hp || 10;
     this.bleeding = 4;
@@ -951,21 +964,49 @@ export class Character {
    * @param {Object3D} parent  where the vest's mesh should live
    */
   wearArmour(armour, parent) {
-    if (this.armour) this.stripArmour();
-    this.armour = armour;
+    const old = this.stripArmour(armour.slot);
+    this.worn[armour.slot] = armour;
     if (parent) parent.add(armour.model);
     armour.model.visible = true;
     armour.sync(this.rig);
-    return armour;
+    this._wornOrder = (this._wornOrder || []).filter((s) => s !== armour.slot);
+    this._wornOrder.push(armour.slot);
+    if (armour.spec.hidesHair) this.body.setHairVisible(false);
+    return old;
   }
 
-  /** Takes it off and hands it back, still as worn as it was. */
-  stripArmour() {
-    const a = this.armour;
+  /**
+   * Takes one piece off - the one in `slot`, or the last one put on - and
+   * hands it back, still as worn as it was.
+   */
+  stripArmour(slot = null) {
+    if (!slot) slot = (this._wornOrder || []).filter((s) => this.worn[s]).pop();
+    const a = slot ? this.worn[slot] : null;
     if (!a) return null;
-    this.armour = null;
+    delete this.worn[slot];
+    if (this._wornOrder) this._wornOrder = this._wornOrder.filter((s) => s !== slot);
     a.model.removeFromParent();
+    if (a.spec.hidesHair) this.body.setHairVisible(true);
     return a;
+  }
+
+  /** The vest, if there is one. */
+  get armour() { return this.worn.torso || null; }
+
+  /** Every piece being worn. */
+  get armourPieces() { return Object.values(this.worn); }
+
+  /** The piece that would take a hit on this bone, if it still can. */
+  armourOn(boneName) {
+    for (const slot in this.worn) {
+      const a = this.worn[slot];
+      if (!a.spent && a.covers(boneName)) return a;
+    }
+    return null;
+  }
+
+  _syncArmour() {
+    for (const slot in this.worn) this.worn[slot].sync(this.rig);
   }
 
   /** Puts everything back: health, breaks, eyes, all of it. */
@@ -993,7 +1034,7 @@ export class Character {
     this.injuries = { eyeR: 'ok', eyeL: 'ok', noseBleed: 0, mouthBleed: 0 };
     this.body.setInjuries(this.injuries);
     this.body.setExpression('neutral');
-    this.armour?.repair();
+    for (const a of this.armourPieces) a.repair();
   }
 
   /** True while any bone in that arm is broken. */
@@ -1886,7 +1927,7 @@ export class Character {
     this._updateStrike(dt);
     this.body._eyeDt = dt;
     this.body.sync();
-    this.armour?.sync(this.rig);
+    this._syncArmour();
     this.body.flush();
   }
 
@@ -2101,10 +2142,11 @@ export class Character {
 
   dispose() {
     this.world.removeCharacter(this);
+    this.ai?.dispose?.();
     // Whatever they were wearing goes with them, or it hangs in the air
     // where they used to be.
-    this.armour?.dispose();
-    this.armour = null;
+    for (const a of this.armourPieces) a.dispose();
+    this.worn = {};
     this.body.dispose();
   }
 }

@@ -21,7 +21,8 @@ import {
 } from './guns.js';
 import { GoreSystem, nearestBone } from './gore.js';
 import { WoundSystem } from './wounds.js';
-import { Armour, VEST, spawnVest } from './armour.js';
+import { spawnOfficer, setOfficerGunSpec } from './officer.js';
+import { Armour, ARMOUR, spawnArmour } from './armour.js';
 import { Fx } from './fx.js';
 import { FireSystem } from './fire.js';
 import { SilvaEncounter } from './encounter.js';
@@ -259,6 +260,8 @@ export const GUNS = {
   },
 };
 
+setOfficerGunSpec(GUNS.glock);
+
 /** Everything that can be picked up and held, however it is used. */
 export const CARRY = { ...MELEE, ...GUNS };
 
@@ -276,6 +279,9 @@ export const SPAWNABLES = {
     { id: 'sledge', name: 'Sledgehammer', icon: 'sledge', hint: 'Heavy. Breaks bones.' },
     { id: 'crowbar', name: 'Crowbar', icon: 'crowbar', hint: 'Fast, and it still breaks bones.' },
     { id: 'vest', name: 'Light Vest', icon: 'vest', hint: 'Wear it with USE. Stops a few hits.' },
+    { id: 'mvest', name: 'Medium Vest', icon: 'mvest', hint: 'The whole torso and the hips. Twice the light vest.' },
+    { id: 'neckguard', name: 'Light Neck Armour', icon: 'neckguard', hint: 'A collar for the throat.' },
+    { id: 'helmet', name: 'Light Helmet', icon: 'helmet', hint: 'Covers the head, not the face.' },
     { id: 'glock', name: 'Glock-19', icon: 'glock', hint: '15 rounds. Semi automatic.' },
     { id: 'ak47', name: 'AK-47', icon: 'ak47', hint: '30 rounds. Full automatic.' },
     { id: 'm16', name: 'M16', icon: 'm16', hint: '30 rounds. Faster, flatter.' },
@@ -283,6 +289,7 @@ export const SPAWNABLES = {
   ],
   humans: [
     { id: 'citizen', name: 'Citizen', icon: 'citizen', hint: 'An ordinary person' },
+    { id: 'officer', name: 'Officer', icon: 'officer', hint: 'Armed. Shoots you if you hurt anyone in sight.' },
   ],
 };
 
@@ -447,6 +454,7 @@ export class Game {
     this.player.onDamage = (info) => this.handleDamage(info);
     this.player.onInjury = (info) => this.handleInjury(info);
     this.player.onGib = (info) => this.gore?.throwPart(info.mesh, info.vel);
+    this.player.onArmourLost = (info) => { this.dropWorn(info.character, info.armour, info.dir); this._showArmour(); };
     this.player.onStrike = (a, s, v) => this.resolveStrike(a, s, v);
     this.player.onSlash = (a, s, v) => this.resolveSlash(a, s, v);
     this.registerCharacter(this.player);
@@ -478,7 +486,12 @@ export class Game {
       e.skin.mesh.visible = !firstPerson;
       if (e.cloth) e.cloth.mesh.visible = !firstPerson;
     }
-    if (b.hairMeshes) for (const m of b.hairMeshes) m.visible = !firstPerson;
+    b.hairSelfHidden = firstPerson;
+    b._applyHair();
+    // a helmet or a collar would sit right in front of the camera
+    for (const a of this.player.armourPieces) {
+      if (a.slot === 'head' || a.slot === 'neck') a.model.visible = !firstPerson;
+    }
   }
 
   /* --------------------------------------------------------------- registry */
@@ -608,14 +621,15 @@ export class Game {
        or the platform if that is what is being aimed at. */
     const groundAt = this._surfaceHeight(_v2.x, _v2.z);
     const id = this.selected.id;
-    if (id === 'citizen') {
+    if (id === 'citizen' || id === 'officer') {
       if (this.characters.length - 1 >= this.quality.maxCitizens) {
         const oldest = this.characters.find((c) => c !== this.player);
         if (oldest) this.removeCharacter(oldest);
       }
       _v2.y = groundAt;
-      const c = spawnCitizen(this, _v2, { yaw: this.camYaw + Math.PI });
-      return { type: 'citizen', name: 'Citizen', entity: c };
+      const spawn = id === 'officer' ? spawnOfficer : spawnCitizen;
+      const c = spawn(this, _v2, { yaw: this.camYaw + Math.PI });
+      return { type: 'citizen', name: id === 'officer' ? 'Officer' : 'Citizen', entity: c };
     }
     if (id === 'boulder') {
       _v2.y = Math.max(_v2.y, groundAt + 0.9);
@@ -627,10 +641,10 @@ export class Game {
       const b = CARRY[id].spawn(this, _v2);
       return { type: 'body', name: CARRY[id].label, entity: b };
     }
-    if (id === 'vest') {
+    if (ARMOUR[id]) {
       _v2.y = Math.max(_v2.y, groundAt + 0.6);
-      const b = spawnVest(this, _v2);
-      return { type: 'body', name: VEST.label, entity: b };
+      const b = spawnArmour(this, id, _v2);
+      return { type: 'body', name: ARMOUR[id].label, entity: b };
     }
     _v2.y = Math.max(_v2.y, groundAt + 0.7);
     const b = spawnCrate(this, _v2);
@@ -720,7 +734,7 @@ export class Game {
     const body = this.pickupInReach();
     if (!body) {
       // Nothing in reach, so USE takes off what is being worn instead.
-      if (this.player?.armour) { this.dropArmour(); return; }
+      if (this.player?.armourPieces.length) { this.dropArmour(); return; }
       this.hud?.toast('Nothing to pick up');
       return;
     }
@@ -783,41 +797,69 @@ export class Game {
 
   /* ---------------------------------------------------------------- armour */
 
-  /** Takes a vest off the ground and puts it on. */
+  /**
+   * Takes a piece of armour off the ground and puts it on. Whatever was in
+   * that slot already comes off and is dropped, so wearing a medium vest over
+   * a light one swaps them.
+   */
   wearItem(body) {
     const p = this.player;
     if (!p) return;
-    if (p.armour) this.dropArmour();
+    const kind = body.userData.wear;
+    const spec = ARMOUR[kind];
+    if (!spec) return;
+    if (p.worn[spec.slot]) this.dropArmour(spec.slot);
     const model = body.mesh;
-    const hp = body.userData.armourHp ?? VEST.hp;
+    const hp = body.userData.armourHp ?? spec.hp;
     const i = this.spawnedBodies.indexOf(body);
     if (i >= 0) this.spawnedBodies.splice(i, 1);
     if (this.rcv2?.grab?.body === body) this.rcv2.grab = null;
     this.world.removeBody(body);
     this.stats.objects = this.spawnedBodies.length;
     this.nav.dirty = true;
-    body.mesh = null;                  // the vest belongs to the wearer now
+    body.mesh = null;                  // it belongs to the wearer now
 
     model.userData.bodyOffset = null;
-    p.wearArmour(new Armour(model, hp), this.scene);
-    this.hud?.setArmour(p.armour.hp, p.armour.maxHp);
-    this.hud?.toast('Wearing the ' + VEST.label);
+    p.wearArmour(new Armour(model, hp, kind), this.scene);
+    this._showArmour();
+    this.hud?.toast('Wearing the ' + spec.label);
   }
 
-  /** Takes it off and drops it where it can be picked up again. */
-  dropArmour() {
+  /** Takes a piece off - that slot's, or the last one put on - and drops it. */
+  dropArmour(slot = null) {
     const p = this.player;
-    const a = p?.stripArmour();
+    const a = p?.stripArmour(slot);
     if (!a) return;
-    const chest = p.rig.byName.upperTorso;
-    _v1.copy(chest.worldPos).addScaledVector(this.camera.getWorldDirection(_v2), 0.55);
-    _v1.y = Math.max(p.pos.y - HIP_HEIGHT + 0.25, _v1.y - 0.15);
-    const body = spawnVest(this, _v1, { quat: chest.worldQuat, reuse: { model: a.model, hp: a.hp } });
-    body.vel.set(_v2.x * 1.4, 1.2, _v2.z * 1.4);
+    this.dropWorn(p, a, this.camera.getWorldDirection(_v2));
+    this._showArmour();
+    this.hud?.toast('Took off the ' + a.label);
+  }
+
+  /**
+   * Puts a piece that has come off someone back in the world as a loose item,
+   * thrown a little the way `dir` points. Used for taking it off, for what
+   * the dead leave behind, and for a helmet whose head has gone.
+   */
+  dropWorn(c, a, dir = null) {
+    const boneName = a.spec.bone || 'upperTorso';
+    const bone = c.rig.byName[boneName];
+    _v1.copy(bone.worldPos);
+    if (dir) _v1.addScaledVector(dir, 0.55);
+    _v1.y = Math.max(c.pos.y - HIP_HEIGHT + 0.25, _v1.y - 0.15);
+    const body = spawnArmour(this, a.kind, _v1, { quat: bone.worldQuat, reuse: { model: a.model, hp: a.hp } });
+    if (dir) body.vel.set(dir.x * 1.4, 1.2, dir.z * 1.4);
     body.angVel.set((this.rng() - 0.5) * 4, (this.rng() - 0.5) * 4, (this.rng() - 0.5) * 4);
     body.wake();
-    this.hud?.setArmour(null);
-    this.hud?.toast('Took off the ' + VEST.label);
+    return body;
+  }
+
+  /** The armour bar: everything being worn, added together. */
+  _showArmour() {
+    const pieces = this.player?.armourPieces || [];
+    if (!pieces.length) { this.hud?.setArmour(null); return; }
+    let hp = 0, max = 0;
+    for (const a of pieces) { hp += a.hp; max += a.maxHp; }
+    this.hud?.setArmour(hp, max);
   }
 
   pickUp(body) {
@@ -1164,8 +1206,12 @@ export class Game {
     return out.copy(dir).multiplyScalar(best).add(origin);
   }
 
-  /** Where the round goes, and what it does when it gets there. */
-  _traceShot(origin, dir, spec) {
+  /**
+   * Where the round goes, and what it does when it gets there. `shooter` is
+   * whoever pulled the trigger - the player unless an officer did - and is
+   * the one person the round can never hit.
+   */
+  _traceShot(origin, dir, spec, shooter = this.player, mult = 1) {
     let best = null;
     const bodyHit = this.world.raycastBodies(origin, dir, spec.range);
     if (bodyHit) best = { type: 'body', body: bodyHit.body, distance: bodyHit.distance };
@@ -1177,7 +1223,7 @@ export class Game {
     if (bossHit) best = { type: 'boss', part: bossHit.part, distance: bossHit.distance };
 
     for (const c of this.characters) {
-      if (c === this.player || c.body.destroyed) continue;
+      if (c === shooter || c.body.destroyed) continue;
       _v1.copy(c.center).sub(origin);
       const along = _v1.dot(dir);
       if (along < -1.5 || along > spec.range + 2) continue;
@@ -1189,24 +1235,24 @@ export class Game {
         if (!best || t < best.distance) best = { type: 'character', character: c, bone, distance: t };
       }
     }
-    if (!best) return;
+    if (!best) return null;
     const point = _v1.copy(dir).multiplyScalar(best.distance).add(origin).clone();
 
     if (best.type === 'wall') {
       this.fx?.sparks(point, _v2.copy(dir).negate(), { count: 5, speed: 3.5, life: 0.3 });
       this.fx?.smoke(point, { count: 1, size: 0.22, up: 0.25, life: 0.8, dark: 0.1 });
-      return;
+      return best;
     }
     if (best.type === 'boss') {
-      boss.takeDamage(spec.damage * (best.part.mult || 1), point, 'bullet');
-      return;
+      boss.takeDamage(spec.damage * mult * (best.part.mult || 1), point, 'bullet');
+      return best;
     }
 
     if (best.type === 'body') {
       best.body.wake();
       _v4.copy(dir).multiplyScalar(spec.push * 0.5);
       best.body.applyImpulse(_v4, point);
-      return;
+      return best;
     }
 
     /* A bullet is a small thing moving very fast: it does a lot of damage to
@@ -1214,17 +1260,18 @@ export class Game {
        The head is the head. */
     const bone = best.bone;
     const head = bone.name === 'head' || bone.name === 'neck';
-    const dmg = spec.damage * (head ? 2.6 : 1) * (bone.def.finger ? 0.3 : 1);
-    _v4.copy(dir).multiplyScalar(spec.push);
-    _v4.y += spec.push * 0.06;
+    const dmg = spec.damage * mult * (head ? 2.6 : 1) * (bone.def.finger ? 0.3 : 1);
+    _v4.copy(dir).multiplyScalar(spec.push * mult);
+    _v4.y += spec.push * mult * 0.06;
     best.character.applyImpact(point, _v4, {
-      boneName: bone.name, damage: dmg, type: 'impact', attacker: this.player,
-      severity: head ? 1 : 0.85, crush: 0.35, wound: 'hole',
+      boneName: bone.name, damage: dmg, type: 'impact', attacker: shooter,
+      severity: head ? 1 : 0.85, crush: 0.35 * mult, wound: 'hole',
     });
-    best.character.ai?.onHurt({ amount: dmg * 1.6, attacker: this.player });
+    best.character.ai?.onHurt({ amount: dmg * 1.6, attacker: shooter });
     this.gore?.burst(point, _v2.copy(dir).negate(), head ? 26 : 14,
       { speed: 3.4, spread: 0.8, size: 0.028 });
     this.gore?.impactSplatter(point, _v2.copy(dir).negate(), 14);
+    return best;
   }
 
   /** RELOAD: a fresh magazine, and a longer one if the gun ran dry. */
@@ -1340,7 +1387,9 @@ export class Game {
         this.gore?.burst(at, _v2.set(0, 1, 0), 14, { speed: 2.4, spread: 0.9, size: 0.03 });
       }
       if (character === this.player) {
-        this.hud?.toast(BREAK_NAME[boneName] ? 'Your ' + BREAK_NAME[boneName] + ' is broken' : 'Broken bone');
+        const part = BREAK_NAME[boneName];
+        // "ribs are", "arm is"
+        this.hud?.toast(part ? 'Your ' + part + (/s$/.test(part) ? ' are' : ' is') + ' broken' : 'Broken bone');
         // you cannot hold a sledgehammer with a broken arm
         if (this.carried && character.armBroken('R')) this.dropCarried();
       }
@@ -1377,6 +1426,12 @@ export class Game {
 
   handleDamage(info) {
     this.gore?.onCharacterDamage(info);
+    /* The police see it. Whoever hurts somebody where an officer can see it
+       - or hurts an officer - is going to be shot at. */
+    const atk = info.attacker;
+    if (atk && atk === this.player && info.character !== atk) {
+      for (const o of this.characters) if (o.ai?.isOfficer) o.ai.witness(info.character, atk);
+    }
     /* The hits that go deeper than paint leave a wound you can see the shape
        of. Only what actually got through: a round the vest stopped does not
        open anybody up. */
@@ -1660,6 +1715,8 @@ export class Game {
     }
     this._updateGuns(dt, input);
     this._syncCarried();
+    // what the officers are holding, wearing and firing follows them too
+    for (let i = 0; i < this.characters.length; i++) this.characters[i].ai?.lateUpdate?.(dt);
 
     // --- fire: fireballs in the air, people alight, the Fire Fist ---
     this.fire?.update(dt);
@@ -1843,13 +1900,12 @@ export class Game {
       if (this.carried) label = 'DROP';
       else if (thing) label = thing.label || 'USE';
       else if (reach?.userData.wear) label = 'WEAR';
-      else if (!reach && this.player?.armour) label = 'TAKE OFF';
+      else if (!reach && this.player?.armourPieces.length) label = 'TAKE OFF';
       this.hud.setUseAvailable(
-        !this.cutscene && (!!this.carried || !!thing || !!reach || !!this.player?.armour), label);
+        !this.cutscene && (!!this.carried || !!thing || !!reach || !!this.player?.armourPieces.length), label);
       if (thing && thing !== this._promptedThing && thing.prompt) this.hud.toast(thing.prompt, 1800);
       this._promptedThing = thing;
-      const a = this.player?.armour;
-      this.hud.setArmour(a ? a.hp : null, a ? a.maxHp : 0);
+      this._showArmour();
     }
   }
 
@@ -1866,6 +1922,7 @@ export class Game {
     p.heal();
     p.body.washClean();
     this.wounds?.clear(p);
+    for (const c of this.characters) if (c.ai?.isOfficer) c.ai.standDown();
     this.hud?.setBlindness(0);
     this.fire?.extinguish(p);
     // in the middle of a fight you come back somewhere out of the way
