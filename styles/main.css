@@ -342,6 +342,14 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
   linear-gradient(0deg, transparent 0 40%, #2b2d31 40% 52%, transparent 52%),
   linear-gradient(90deg, transparent 0 46%, #1d1f22 46% 58%, transparent 58%),
   #14181c}
+/* a flamethrower: a red tank under a long dark wand with a flame off the
+   end of it */
+.ico.flamer{background:
+  radial-gradient(circle at 12% 44%, #ffb43a 0 7%, rgba(255,90,20,.7) 9%, transparent 16%),
+  linear-gradient(#2a2c30,#2a2c30) 50% 44% / 64% 10% no-repeat,
+  linear-gradient(#a8261c,#a8261c) 62% 72% / 22% 30% no-repeat,
+  linear-gradient(#1d1f22,#1d1f22) 86% 52% / 14% 26% no-repeat,
+  #14181c}
 /* a crowbar: the shaft, the gooseneck over the top, and the claw dropping
    back down the other side. Placed rather than striped, because a stripe
    runs the whole way across and a hook does not. */

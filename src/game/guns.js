@@ -12,7 +12,7 @@
    ========================================================================== */
 import {
   Group, Mesh, MeshLambertMaterial, MeshBasicMaterial, BoxGeometry,
-  CylinderGeometry, Vector3, Quaternion, AdditiveBlending, DoubleSide,
+  CylinderGeometry, SphereGeometry, Vector3, Quaternion, AdditiveBlending, DoubleSide,
   PlaneGeometry, InstancedMesh, Object3D, DynamicDrawUsage,
 } from 'three';
 import { RigidBody } from '../physics/rigid.js';
@@ -443,6 +443,138 @@ export function createM16Model() {
 }
 
 /* -------------------------------------------------------------------------- */
+/*                               Flamethrower                                 */
+/* -------------------------------------------------------------------------- */
+
+/* Carried like a rifle and laid out like one on purpose: the pistol grip, the
+   heat shield the other hand closes round, and the fuel tank hanging where a
+   rifle's magazine would be all sit where the AK's do, so the same hands fit
+   it - and the tank comes off and goes on the way a magazine does. */
+export const FLAMER = {
+  id: 'flamethrower',
+  label: 'Flamethrower',
+  capacity: 100,
+  length: 0.86,
+  mass: 5.2,
+  half: new Vector3(0.045, 0.110, 0.400),
+  center: new Vector3(0, -0.030, -0.120),
+  muzzle: new Vector3(0, 0.022, -0.545),
+  ejectAt: new Vector3(0.024, 0.040, -0.040),
+};
+
+export function createFlamerModel() {
+  const M = gunMaterials();
+  if (!M.tankRed) {
+    // a dented red fuel tank, scorched brass fittings, and the pilot flame
+    M.tankRed = new MeshLambertMaterial({ color: 0x8e1d14 });
+    M.tankRedDark = new MeshLambertMaterial({ color: 0x5e130d });
+    M.gasBlue = new MeshLambertMaterial({ color: 0x2c4a73 });
+    M.soot = new MeshLambertMaterial({ color: 0x141210 });
+    M.heat = new MeshLambertMaterial({ color: 0x4b4741 });
+    M.pilot = new MeshBasicMaterial({ color: 0x6ab4ff, transparent: true, opacity: 0.9,
+      blending: AdditiveBlending, depthWrite: false });
+  }
+  const g = new Group();
+  const cyl = (mat, r0, r1, len, x, y, z, segs = 12) => {
+    const m = new Mesh(new CylinderGeometry(r0, r1, len, segs), mat);
+    m.rotation.x = Math.PI / 2;
+    m.position.set(x, y, z);
+    m.castShadow = true;
+    g.add(m);
+    return m;
+  };
+
+  /* ------------------------------ the body ------------------------------ */
+  // the receiver block the grip and the wand come out of
+  box(g, M.steel, 0.040, 0.060, 0.170, 0, 0.010, -0.030);
+  box(g, M.heat, 0.042, 0.012, 0.150, 0, 0.044, -0.030);
+  // the valve wheel on the left, and the pressure gauge on top
+  const wheel = new Mesh(new CylinderGeometry(0.020, 0.020, 0.008, 12), M.tankRed);
+  wheel.rotation.z = Math.PI / 2;
+  wheel.position.set(-0.026, 0.020, -0.010);
+  g.add(wheel);
+  for (let i = 0; i < 3; i++) {
+    box(g, M.tankRedDark, 0.006, 0.036, 0.004, -0.031, 0.020, -0.010, i * Math.PI / 3);
+  }
+  const gauge = new Mesh(new CylinderGeometry(0.016, 0.016, 0.010, 12), M.brightSteel);
+  gauge.position.set(0, 0.058, 0.025);
+  g.add(gauge);
+  box(g, M.sightDot, 0.020, 0.002, 0.020, 0, 0.064, 0.025);
+  box(g, M.tankRed, 0.002, 0.003, 0.012, 0, 0.066, 0.027, 0, 0.6, 0);
+
+  /* ----------------------------- trigger group ---------------------------- */
+  box(g, M.blued, 0.024, 0.007, 0.048, 0, -0.051, -0.008);
+  box(g, M.blued, 0.024, 0.030, 0.007, 0, -0.038, -0.031);
+  box(g, M.blued, 0.024, 0.028, 0.008, 0, -0.036, 0.013);
+  box(g, M.brightSteel, 0.006, 0.024, 0.007, 0, -0.032, -0.012, 0.20);
+  // the pistol grip, where an AK's is
+  box(g, M.black, 0.026, 0.092, 0.030, 0, -0.056, 0.026, 0.30);
+  box(g, M.black, 0.030, 0.044, 0.028, 0, -0.048, 0.022, 0.30);
+  box(g, M.blued, 0.029, 0.010, 0.033, 0, -0.100, 0.040, 0.30);
+  // a short skeleton stock
+  box(g, M.steel, 0.014, 0.016, 0.200, 0, 0.004, 0.150, -0.08);
+  box(g, M.steel, 0.014, 0.016, 0.170, 0, -0.050, 0.150, 0.18);
+  box(g, M.black, 0.034, 0.090, 0.020, 0, -0.018, 0.248, -0.04);
+
+  /* -------------------------------- the wand ------------------------------ */
+  cyl(M.steel, 0.016, 0.016, 0.420, 0, 0.022, -0.320);
+  // the slotted heat shield the other hand holds, sized like an AK handguard
+  box(g, M.heat, 0.036, 0.034, 0.140, 0, 0.012, -0.170);
+  for (let i = 0; i < 4; i++) {
+    for (const sx of [-1, 1]) box(g, M.soot, 0.003, 0.020, 0.012, sx * 0.018, 0.014, -0.120 - i * 0.032);
+  }
+  // the second, thinner line that feeds the pilot light, under the wand
+  cyl(M.brightSteel, 0.004, 0.004, 0.380, 0, -0.004, -0.320, 6);
+  // the nozzle: a collar, a flare, and the blackened lip
+  cyl(M.blued, 0.024, 0.024, 0.040, 0, 0.022, -0.500);
+  cyl(M.blued, 0.030, 0.020, 0.040, 0, 0.022, -0.530);
+  cyl(M.soot, 0.031, 0.031, 0.008, 0, 0.022, -0.551);
+  // the pilot burner under the lip, and its little blue flame
+  box(g, M.brightSteel, 0.010, 0.012, 0.030, 0, -0.008, -0.530);
+  const pilot = new Mesh(new SphereGeometry(0.010, 8, 6), M.pilot);
+  pilot.scale.set(0.8, 0.8, 1.8);
+  pilot.position.set(0, -0.004, -0.552);
+  g.add(pilot);
+
+  /* ------------------------------- fuel tank ------------------------------ */
+  /* Hung under the receiver where a rifle's magazine goes, and treated as one:
+     it is what the reload takes off and puts back. */
+  const tank = new Group();
+  tank.name = 'magazine';
+  const body = new Mesh(new CylinderGeometry(0.036, 0.036, 0.130, 14), M.tankRed);
+  body.position.set(0, -0.105, -0.062);
+  body.rotation.x = 0.12;
+  body.castShadow = true;
+  tank.add(body);
+  for (const y of [-0.055, -0.155]) {
+    const band = new Mesh(new CylinderGeometry(0.038, 0.038, 0.010, 14), M.tankRedDark);
+    band.position.set(0, y, -0.062 + (y + 0.105) * -0.12);
+    band.rotation.x = 0.12;
+    tank.add(band);
+  }
+  const cap = new Mesh(new SphereGeometry(0.036, 12, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), M.tankRed);
+  cap.position.set(0, -0.170, -0.054);
+  tank.add(cap);
+  // the neck it screws on by, with a brass collar
+  const neck = new Mesh(new CylinderGeometry(0.014, 0.014, 0.030, 10), M.brass);
+  neck.position.set(0, -0.032, -0.064);
+  tank.add(neck);
+  // a hazard stripe, so it reads as fuel and not as a can of paint
+  box(tank, M.sightDot, 0.074, 0.010, 0.010, 0, -0.105, -0.097, 0.12);
+  g.add(tank);
+
+  // a small blue propellant bottle strapped along the right of the wand
+  cyl(M.gasBlue, 0.014, 0.014, 0.120, 0.030, 0.018, -0.090, 10);
+  box(g, M.black, 0.008, 0.034, 0.010, 0.030, 0.018, -0.060);
+  box(g, M.black, 0.008, 0.034, 0.010, 0.030, 0.018, -0.120);
+
+  g.userData.magazine = tank;
+  g.userData.pilot = pilot;
+  g.userData.materials = Object.values(M);
+  return g;
+}
+
+/* -------------------------------------------------------------------------- */
 /*                             loose guns on the map                          */
 /* -------------------------------------------------------------------------- */
 
@@ -485,6 +617,9 @@ export function spawnAk(game, position, opts = {}) {
 }
 export function spawnM16(game, position, opts = {}) {
   return spawnGun(game, position, M16, createM16Model, opts);
+}
+export function spawnFlamer(game, position, opts = {}) {
+  return spawnGun(game, position, FLAMER, createFlamerModel, opts);
 }
 
 /* -------------------------------------------------------------------------- */

@@ -14,7 +14,7 @@ import {
 import { RigidBody } from '../physics/rigid.js';
 import { makeAtlasBoxGeometry, localPointToFaceUV, faceRect } from './skeleton.js';
 import { drawWood, drawRock, makeCanvas } from './textures.js';
-import { paintSplat, paintBlood } from './paint.js';
+import { paintSplat, paintBlood, paintScorch } from './paint.js';
 import { makeRng, clamp01 } from '../core/util.js';
 
 const _v1 = new Vector3(), _v2 = new Vector3();
@@ -124,7 +124,7 @@ function makeBoxPainter(body, material, adopt = null, base = 'wood') {
     material.needsUpdate = true;
     body.userData.paintSurface = surface;
   }
-  return function paint(worldPoint, severity, vel) {
+  return function paint(worldPoint, severity, vel, kind = 'blood') {
     if (!surface) {
       const c = makeCanvas(192, 128);
       const ctx = c.getContext('2d');
@@ -151,7 +151,8 @@ function makeBoxPainter(body, material, adopt = null, base = 'wood') {
     ctx.save();
     ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
     const rad = Math.max(2.5, r.w * (0.05 + severity * 0.10));
-    if (vel) paintSplat(ctx, px, py, rad, vel.x, -vel.y, rng, 0.15);
+    if (kind === 'burn') paintScorch(ctx, px, py, rad * 1.3, severity, rng, true);
+    else if (vel) paintSplat(ctx, px, py, rad, vel.x, -vel.y, rng, 0.15);
     else paintBlood(ctx, px, py, rad, severity, rng, 0.15);
     ctx.restore();
     surface.texture.needsUpdate = true;
@@ -216,7 +217,7 @@ export function spawnBoulder(game, position, { radius = 0.55, mass = 130 } = {})
 
 function makeSpherePainter(body, material, radius) {
   let surface = null;
-  return function paint(worldPoint, severity, vel) {
+  return function paint(worldPoint, severity, vel, kind = 'blood') {
     if (!surface) {
       const src = prewarmObjectArt().rockBase;
       const c = makeCanvas(src.width, src.height);
@@ -238,7 +239,8 @@ function makeSpherePainter(body, material, radius) {
     const ctx = surface.ctx;
     const rad = Math.max(2.5, (severity * 0.14 + 0.05) * W / (radius * 4));
     ctx.save();
-    if (vel) paintSplat(ctx, u * W, v * H, rad, vel.x, -vel.y, rng, 0.2);
+    if (kind === 'burn') paintScorch(ctx, u * W, v * H, rad * 1.3, severity, rng, true);
+    else if (vel) paintSplat(ctx, u * W, v * H, rad, vel.x, -vel.y, rng, 0.2);
     else paintBlood(ctx, u * W, v * H, rad, severity, rng, 0.2);
     ctx.restore();
     surface.texture.needsUpdate = true;

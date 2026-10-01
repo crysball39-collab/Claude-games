@@ -79,12 +79,12 @@ export const MELEE_COOLDOWN = { machete: 0.34, sledge: 0.52, crowbar: 0.42 };
 /** Which held pose each one stands in - guns included. */
 export const MELEE_HOLD = {
   machete: 'macheteHold', sledge: 'sledgeHold', crowbar: 'crowbarHold',
-  glock: 'glockHold', ak47: 'akHold', m16: 'm16Hold',
+  glock: 'glockHold', ak47: 'akHold', m16: 'm16Hold', flamethrower: 'flamerHold',
 };
 const MELEE_ACTIONS = new Set(Object.values(MELEE_CLIPS).flat());
 /** Reload clips: they own the arms while they run, but nothing strikes. */
 const RELOADS = new Set(['reloadPistol', 'reloadPistolEmpty', 'reloadRifle',
-  'reloadRifleEmpty', 'reloadM16', 'reloadM16Empty']);
+  'reloadRifleEmpty', 'reloadM16', 'reloadM16Empty', 'reloadFlamer']);
 
 export const STATE = {
   CONTROLLED: 'controlled',
@@ -526,7 +526,7 @@ export class Character {
   }
 
   /** Knocks the character about. `force` is an impulse in kg*m/s. */
-  applyImpact(point, force, { boneName = null, damage = 0, type = 'blunt', attacker = null, severity = null, crush = 0 } = {}) {
+  applyImpact(point, force, { boneName = null, damage = 0, type = 'blunt', attacker = null, severity = null, crush = 0, wound = null } = {}) {
     if (this.dead && damage <= 0) return;
     this.wake();
     const mag = force.length();
@@ -567,7 +567,7 @@ export class Character {
       p.addVelocity(force.x * k, force.y * k, force.z * k, dt);
     }
 
-    if (damage > 0) this.applyDamage(damage, { boneName, point, type, attacker, force, severity, crush });
+    if (damage > 0) this.applyDamage(damage, { boneName, point, type, attacker, force, severity, crush, wound });
 
     /* Balance loss scales with the speed the hit actually imparts, not with
        the raw impulse: 130 kg m/s is a knockout to a wrist and a shove to a
@@ -581,7 +581,7 @@ export class Character {
     this._checkBalance();
   }
 
-  applyDamage(amount, { boneName = null, point = null, type = 'blunt', attacker = null, force = null, severity = null, crush = 0 } = {}) {
+  applyDamage(amount, { boneName = null, point = null, type = 'blunt', attacker = null, force = null, severity = null, crush = 0, wound = null } = {}) {
     this.wake();
     /* Armour comes first, because everything after this point - health, bone
        wear, breaks, bleeding, the face - is about a hit that actually reached
@@ -624,7 +624,7 @@ export class Character {
     }
     if (this.dead) {
       // corpses still take visible damage, and can still come apart
-      this.onDamage?.({ character: this, boneName, point, type, amount, severity: severity ?? clamp01(amount / 14), force, fatal: false });
+      this.onDamage?.({ character: this, boneName, point, type, amount, severity: severity ?? clamp01(amount / 14), force, fatal: false, wound });
       if (this._shouldGib(boneName, amount)) this.explodeBone(boneName, point, force);
       return;
     }
@@ -639,7 +639,7 @@ export class Character {
     this.onDamage?.({
       character: this, boneName, point, type, amount: dealt, force,
       severity: severity ?? clamp01(amount / 14),
-      fatal: this.health <= 0,
+      fatal: this.health <= 0, wound,
     });
 
     this._injure({
@@ -698,6 +698,9 @@ export class Character {
     const rng = this.rng;
     const sev = clamp01(severity);
     const cut = type === 'impact';
+    // Fire chars what it touches; it takes a blast, not a lick of flame, to
+    // do anything to the eyes or the bones underneath.
+    if (type === 'burn' && sev < 0.6) return;
 
     if (boneName === 'head' || boneName === 'neck') {
       const next = {};

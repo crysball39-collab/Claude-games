@@ -17,9 +17,10 @@ import {
 } from './objects.js';
 import { gripWorld } from './grip.js';
 import {
-  GLOCK, AK47, M16, spawnGlock, spawnAk, spawnM16, MuzzleFlash, CaseEjector,
+  GLOCK, AK47, M16, FLAMER, spawnGlock, spawnAk, spawnM16, spawnFlamer, MuzzleFlash, CaseEjector,
 } from './guns.js';
 import { GoreSystem, nearestBone } from './gore.js';
+import { WoundSystem } from './wounds.js';
 import { Armour, VEST, spawnVest } from './armour.js';
 import { Fx } from './fx.js';
 import { FireSystem } from './fire.js';
@@ -67,6 +68,7 @@ export const MELEE = {
     grip: { rake: 0.45, roll: 0, hold: [0, 0.062, 0] },
     center: new Vector3(0, MACHETE.length / 2, 0),
     type: 'impact',
+    wound: 'gash',
     dmg: { mul: 3.6, min: 3, max: 42 },
     sev: { div: 6, min: 0.55 },
     push: { mul: 6, min: 8, max: 90, lift: 4 },
@@ -88,6 +90,7 @@ export const MELEE = {
     leftAt: 0.40,
     center: new Vector3(0, SLEDGE.length / 2, 0),
     type: 'blunt',
+    wound: 'split',
     dmg: { mul: 5.0, min: 6, max: 58 },
     sev: { div: 5, min: 0.7 },
     push: { mul: 15, min: 20, max: 230, lift: 8 },
@@ -119,6 +122,7 @@ export const MELEE = {
     grip: { rake: 0.45, roll: 0, hold: [0, 0.155, 0] },
     center: CROWBAR.mid,
     type: 'blunt',
+    wound: 'split',
     /* Between the two: it has the machete's speed and a lot more of the
        sledgehammer's weight behind a much smaller face, so it concentrates
        everything it carries into one place. */
@@ -229,6 +233,30 @@ export const GUNS = {
       reloadM16Empty: { magOut: [0.30, 1.30], bolt: [1.70, 1.86] },
     },
   },
+  flamethrower: {
+    label: 'Flamethrower',
+    spawn: spawnFlamer,
+    gun: FLAMER,
+    // laid out like an AK on purpose, so it is held exactly like one
+    grip: { rake: 0.30, roll: -Math.PI / 2, hold: [0, -0.050, 0.026] },
+    center: new Vector3(0, -0.030, -0.120),
+    hold: 'flamerHold',
+    /* Not rounds: the tank holds a hundred units of fuel, and holding the
+       trigger lets one go every twentieth of a second as a puff of burning
+       gas. Five seconds of fire, give or take. */
+    auto: true,
+    flame: true,
+    interval: 0.045,
+    capacity: 100,
+    damage: 1.6,
+    push: 0,
+    range: 9,
+    recoil: { pitch: 0.003, yaw: 0.004, recover: 10, arm: 0.03, shake: 0.03 },
+    flash: 0,
+    // a tank is a tank whether or not the last one was empty
+    reload: { normal: 'reloadFlamer', empty: 'reloadFlamer' },
+    parts: { reloadFlamer: { magOut: [1.05, 1.80] } },
+  },
 };
 
 /** Everything that can be picked up and held, however it is used. */
@@ -251,6 +279,7 @@ export const SPAWNABLES = {
     { id: 'glock', name: 'Glock-19', icon: 'glock', hint: '15 rounds. Semi automatic.' },
     { id: 'ak47', name: 'AK-47', icon: 'ak47', hint: '30 rounds. Full automatic.' },
     { id: 'm16', name: 'M16', icon: 'm16', hint: '30 rounds. Faster, flatter.' },
+    { id: 'flamethrower', name: 'Flamethrower', icon: 'flamer', hint: 'Sets anything it reaches on fire.' },
   ],
   humans: [
     { id: 'citizen', name: 'Citizen', icon: 'citizen', hint: 'An ordinary person' },
@@ -297,6 +326,7 @@ export class Game {
     this.map = null;
     this.player = null;
     this.gore = null;
+    this.wounds = null;
     this.nav = new NavGrid(40, 0.7);
     this.navTimer = 0;
 
@@ -358,6 +388,7 @@ export class Game {
         this.map.attachDecalTexture(this.gore.sheet.texture);
         this.fx = new Fx(this.scene);
         this.fire = new FireSystem(this);
+        this.wounds = new WoundSystem(this);
       }],
       ['Assembling a body', async () => { this._createPlayer(); }],
       ['Mapping the ground', async () => {
@@ -466,6 +497,7 @@ export class Game {
     // to the body that is about to dispose of them.
     this.gore?.dropPartsOf(c);
     c.dispose();
+    this.wounds?.prune();
     this.stats.citizens = this.characters.length - 1;
   }
 
@@ -507,6 +539,7 @@ export class Game {
   washGore() {
     this.gore?.wash();
     for (const c of this.characters) c.body.washClean();
+    this.wounds?.clearAll();
     for (const b of this.spawnedBodies) {
       const s = b.userData.paintSurface;
       if (s) {
@@ -891,6 +924,8 @@ export class Game {
     // and the kick of firing, which moves the same parts
     const k = this.gunKick || 0;
     if (k > 0.01 && u.slide) u.slide.position.z = Math.max(u.slide.position.z, k * 0.028);
+    // the pilot light never goes out, it just will not sit still
+    if (u.pilot) u.pilot.scale.setScalar(0.8 + this.rng() * 0.45);
   }
 
   /* ----------------------------------------------------------------- weapons */
@@ -1011,12 +1046,14 @@ export class Game {
     if (c.ammo <= 0) {
       // the dead click of an empty chamber
       this.gunCooldown = 0.28;
-      this.hud?.toast('Empty - press RELOAD');
+      this.hud?.toast(spec.flame ? 'Out of fuel - press RELOAD' : 'Empty - press RELOAD');
       return false;
     }
     c.ammo--;
     c.chambered = c.ammo > 0;
     this.gunCooldown = spec.interval;
+
+    if (spec.flame) { this._sprayFlame(c, spec); return true; }
 
     const hand = this.player.rig.byName.handR;
     gripWorld(hand, spec.grip, _gunQuat, _gunPos);
@@ -1052,6 +1089,46 @@ export class Game {
     this.alertNearby(2.4);
     this.hud?.setAmmo(c.ammo, spec.capacity);
     return true;
+  }
+
+  /**
+   * One puff of the flamethrower's stream. It leaves the nozzle where the
+   * nozzle is and heads for whatever the crosshair is on, like a round does,
+   * but it is gas: it slows, lifts and spreads on the way, and the fire
+   * system decides what it reaches.
+   */
+  _sprayFlame(c, spec) {
+    const p = this.player;
+    gripWorld(p.rig.byName.handR, spec.grip, _gunQuat, _gunPos);
+    const nozzle = _gunTmp.copy(spec.gun.muzzle).applyQuaternion(_gunQuat).add(_gunPos);
+    this.camera.getWorldDirection(_gunAim);
+    this._aimPoint(this.camera.position, _gunAim, spec.range, _aimAt);
+    _v2.copy(_aimAt).sub(nozzle);
+    if (_v2.lengthSq() < 0.04) _v2.copy(_gunAim);
+    _v2.normalize();
+    // gas leaves a hair upward of the line, and the rise does the rest
+    this.fire.spray({
+      from: nozzle, dir: _v2, owner: p, damage: spec.damage, hitsBoss: true,
+      carry: p.vel,
+    });
+    // at the nozzle itself: the blue root of the flame and a hot tongue
+    if (this.fx) {
+      this.fx.fire(nozzle, { count: 1, spread: 0.01, up: 0.1, size: 0.07, life: 0.08,
+        vel: _v3.copy(_v2).multiplyScalar(6) });
+    }
+    if (this.rng() < 0.25) this.fx?.light(_v4.copy(nozzle).addScaledVector(_v2, 1.2),
+      { color: 0xff7a30, intensity: 14, life: 0.12, distance: 7 });
+
+    const r = spec.recoil;
+    this.recoilPitch += r.pitch * (0.5 + this.rng() * 0.5);
+    this.recoilYaw += r.yaw * (this.rng() - 0.5) * 2;
+    this.shake = Math.min(0.25, this.shake + r.shake * 0.3);
+    p.kick(r.arm);
+    p.squareTimer = 0.8;
+    p.combatReady = true;
+    p.combatTimer = 3.5;
+    this.alertNearby(2.2);
+    this.hud?.setAmmo(c.ammo, spec.capacity);
   }
 
   /**
@@ -1142,7 +1219,7 @@ export class Game {
     _v4.y += spec.push * 0.06;
     best.character.applyImpact(point, _v4, {
       boneName: bone.name, damage: dmg, type: 'impact', attacker: this.player,
-      severity: head ? 1 : 0.85, crush: 0.35,
+      severity: head ? 1 : 0.85, crush: 0.35, wound: 'hole',
     });
     best.character.ai?.onHurt({ amount: dmg * 1.6, attacker: this.player });
     this.gore?.burst(point, _v2.copy(dir).negate(), head ? 26 : 14,
@@ -1300,6 +1377,14 @@ export class Game {
 
   handleDamage(info) {
     this.gore?.onCharacterDamage(info);
+    /* The hits that go deeper than paint leave a wound you can see the shape
+       of. Only what actually got through: a round the vest stopped does not
+       open anybody up. */
+    if (info.wound && info.point && info.boneName && (info.amount > 0) && this.gore?.enabled) {
+      this.wounds?.add(info.character, info.boneName, info.point, info.wound, {
+        severity: info.severity, dir: info.force ? _v1.copy(info.force).normalize() : null,
+      });
+    }
     const victim = info.character;
     if (victim.ai) victim.ai.onHurt(info);
     if (victim === this.player) {
@@ -1425,6 +1510,8 @@ export class Game {
       target.applyImpact(hitPoint, _v4, {
         boneName: hitBone.name, damage: dmg, type: spec.type, attacker,
         severity: Math.max(spec.sev.min, sev), crush: spec.crush * clamp01(0.35 + sev),
+        // a blade always opens the skin; a hammer has to land properly to
+        wound: spec.wound === 'split' && sev < 0.55 ? null : spec.wound,
       });
       if (target.ai) target.ai.onHurt({ amount: dmg * 1.4, attacker });
       this.carried.painter?.(hitPoint, Math.max(0.4, sev), { x: _v3.x, y: _v3.y, z: _v3.z });
@@ -1497,7 +1584,7 @@ export class Game {
       });
       if (fiery && !target.body.destroyed) {
         target.applyDamage(6, { boneName: hitBone.name, point: hitPoint.clone(), type: 'burn',
-          attacker, severity: 0.55 });
+          attacker, severity: 0.55, wound: 'burn' });
         this.fire?.ignite(target, 4, attacker);
         this.fx?.fire(hitPoint, { count: 8, spread: 0.08, size: 0.24, up: 0.9, life: 0.4 });
       }
@@ -1778,6 +1865,7 @@ export class Game {
     this.hud?.hideDeath();
     p.heal();
     p.body.washClean();
+    this.wounds?.clear(p);
     this.hud?.setBlindness(0);
     this.fire?.extinguish(p);
     // in the middle of a fight you come back somewhere out of the way

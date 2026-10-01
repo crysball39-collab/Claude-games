@@ -10,13 +10,13 @@
 import {
   Group, Mesh, SphereGeometry, MeshBasicMaterial, AdditiveBlending, Vector3,
 } from 'three';
-import { DAMAGEABLE, pointInBone, boneBoxCenter } from './skeleton.js';
+import { DAMAGEABLE, pointInBone, boneBoxCenter, boxLocalToWorld } from './skeleton.js';
 import { softGlowMaterial } from './fx.js';
 import { paintSplat } from './paint.js';
 import { makeRng, clamp01 } from '../core/util.js';
 
 const _v1 = new Vector3(), _v2 = new Vector3(), _v3 = new Vector3(), _v4 = new Vector3();
-const _force = new Vector3();
+const _force = new Vector3(), _prev = new Vector3();
 
 /** Parts that catch: big enough to see flames on, spread round the body. */
 const FLAME_PARTS = ['upperTorso', 'midTorso', 'upperArmR', 'upperArmL', 'upperLegR',
@@ -65,6 +65,18 @@ class Fireball {
   }
 }
 
+/** A flamethrower's stream is a run of these: puffs of burning gas. */
+const PUFF = {
+  max: 70,
+  life: 0.68,        // seconds a puff burns for
+  drag: 1.7,         // per second, so the stream slows and billows out
+  rise: 3.2,         // m/s^2: hot gas goes up
+  r0: 0.09,          // radius leaving the nozzle
+  r1: 0.62,          // radius at the end of its life
+  bite: 0.22,        // seconds of flame a person soaks before it hurts
+  scorchEvery: 0.09, // seconds between marks one puff leaves where it rolls
+};
+
 export class FireSystem {
   constructor(game) {
     this.game = game;
@@ -72,6 +84,204 @@ export class FireSystem {
     this.balls = [];
     /** character -> { time, dps, acc, parts, source, smoke } */
     this.burning = new Map();
+    this.puffs = [];
+    /** character -> flame soaked since the last bite { acc, t, bone, point, dir, source } */
+    this.soak = new Map();
+  }
+
+  /* ------------------------------ flamethrower ----------------------------- */
+
+  /**
+   * One puff of burning gas from a nozzle. A held trigger lets go of twenty
+   * a second, and together they are the stream: it reaches, slows, swells and
+   * lifts, rolls along whatever it hits, and sets alight whoever it touches.
+   *
+   * @param {object} o  from, dir (unit), owner, damage, hitsBoss, speed, carry
+   *   (the shooter's own velocity, some of which the gas keeps)
+   */
+  spray(o) {
+    const rng = this.rng;
+    const speed = (o.speed ?? 15) * (0.88 + rng() * 0.24);
+    const vel = o.dir.clone().multiplyScalar(speed);
+    vel.x += (rng() - 0.5) * 0.9;
+    vel.y += (rng() - 0.5) * 0.7;
+    vel.z += (rng() - 0.5) * 0.9;
+    if (o.carry) vel.addScaledVector(o.carry, 0.6);
+    if (this.puffs.length >= PUFF.max) this.puffs.shift();
+    this.puffs.push({
+      pos: o.from.clone(), vel, age: 0, life: PUFF.life * (0.85 + rng() * 0.3),
+      owner: o.owner ?? null, damage: o.damage ?? 2.2, hitsBoss: o.hitsBoss ?? true,
+      hit: new Set(), stuck: false, mark: 0, bossHit: false,
+    });
+  }
+
+  _updatePuffs(dt) {
+    const g = this.game, w = g.world, fx = g.fx, rng = this.rng;
+    const drag = Math.exp(-PUFF.drag * dt);
+    for (let i = this.puffs.length - 1; i >= 0; i--) {
+      const p = this.puffs[i];
+      p.age += dt;
+      const k = p.age / p.life;
+      if (k >= 1) {
+        if (rng() < 0.35) fx?.smoke(p.pos, { count: 1, size: 0.5, up: 0.9, life: 1.4, dark: 0.12 });
+        this.puffs.splice(i, 1);
+        continue;
+      }
+      const rad = PUFF.r0 + (PUFF.r1 - PUFF.r0) * Math.sqrt(k);
+      _prev.copy(p.pos);
+      p.vel.multiplyScalar(drag);
+      p.vel.y += PUFF.rise * dt;
+      p.pos.addScaledVector(p.vel, dt);
+      p.mark -= dt;
+
+      // water puts it straight out
+      if (this._puffInWater(p.pos)) {
+        fx?.smoke(p.pos, { count: 2, size: 0.45, up: 1.4, life: 1.1, dark: 0.02 });
+        this.puffs.splice(i, 1);
+        continue;
+      }
+      // the floor: it spreads out along it and leaves it black
+      const floor = w.floorAt(p.pos.x, p.pos.z, p.pos.y + 0.3);
+      const low = rad * 0.45;
+      if (p.pos.y - low < floor) {
+        p.pos.y = floor + low;
+        if (p.vel.y < 0) {
+          const v = -p.vel.y;
+          p.vel.y = 0;
+          // pressed into the floor, it rolls outwards instead
+          const h = Math.hypot(p.vel.x, p.vel.z) || 1;
+          p.vel.x += (p.vel.x / h) * v * 0.6;
+          p.vel.z += (p.vel.z / h) * v * 0.6;
+        }
+        if (p.mark <= 0 && k < 0.85) {
+          p.mark = PUFF.scorchEvery;
+          _v1.set(p.pos.x, floor, p.pos.z);
+          this.scorchFloor(_v1, 0.10 + rad * 0.35, 0.55);
+        }
+      }
+      // walls and anything else solid stop it dead and get scorched
+      if (!p.stuck) this._puffSolids(p, rad * 0.5);
+      // people
+      this._puffPeople(p, rad);
+      // the boss, once a puff
+      if (p.hitsBoss && !p.bossHit && g.encounter?.boss) {
+        const boss = g.encounter.boss;
+        if (boss.hitTest(p.pos, rad * 0.6)) { p.bossHit = true; boss.takeDamage(p.damage * 1.45, p.pos, 'fire'); }
+      }
+
+      if (fx) {
+        /* The stream itself: hot and tight near the nozzle, swelling as it
+           goes. A fresh puff covers half a metre a frame, so it lays flame
+           down all along the way it came rather than in dots. */
+        const hot = 1 - k;
+        const size = 0.14 + rad * 0.85;
+        const travel = _prev.distanceTo(p.pos);
+        const n = Math.min(4, Math.max(k < 0.5 ? 1 : 2, Math.ceil(travel / (size * 0.7))));
+        _v2.copy(p.vel).multiplyScalar(0.35);
+        for (let j = 0; j < n; j++) {
+          _v3.copy(_prev).lerp(p.pos, (j + 1) / n);
+          fx.fire(_v3, { count: 1, spread: rad * 0.45, up: 0.5 + k * 0.9,
+            size, life: 0.2 + hot * 0.12, vel: _v2 });
+        }
+        if (k > 0.55 && rng() < 0.08) fx.smoke(p.pos, { count: 1, size: 0.5, up: 1.1, life: 1.3, dark: 0.1 });
+        if (rng() < 0.04) fx.embers(p.pos, { count: 1, spread: rad * 0.5, up: 0.8, life: 0.8 });
+      }
+    }
+  }
+
+  _puffInWater(pos) {
+    for (const pool of this.game.map?.water || []) {
+      const dx = pos.x - pool.x, dz = pos.z - pool.z;
+      if (dx * dx + dz * dz < pool.r * pool.r && pos.y < pool.y + 0.06) return true;
+    }
+    return false;
+  }
+
+  _puffSolids(p, r) {
+    const w = this.game.world, pos = p.pos;
+    for (const list of [w.staticBodies, w.bodies]) {
+      for (const body of list) {
+        if (pos.x < body.aabbMin.x - r || pos.x > body.aabbMax.x + r ||
+            pos.y < body.aabbMin.y - r || pos.y > body.aabbMax.y + r ||
+            pos.z < body.aabbMin.z - r || pos.z > body.aabbMax.z + r) continue;
+        body.closestPoint(pos, _v1);
+        if (_v1.distanceToSquared(pos) > r * r && !body.containsPoint(pos)) continue;
+        // a map part as wide as the floor it stands on: only its face stops gas
+        const n = _v3.copy(pos).sub(_v1);
+        const d = n.length();
+        if (d > 1e-5) n.multiplyScalar(1 / d); else n.copy(p.vel).normalize().negate();
+        // the top of a map part is floor, and the floor test has that
+        if (body.isStatic && n.y > 0.7) return;
+        // lose what was going into the wall, keep what runs along it
+        const into = p.vel.dot(n);
+        if (into < 0) p.vel.addScaledVector(n, -into * 1.15);
+        p.vel.multiplyScalar(0.55);
+        pos.copy(_v1).addScaledVector(n, r);
+        p.stuck = true;
+        if (p.mark <= 0) {
+          p.mark = PUFF.scorchEvery * 1.6;
+          body.userData?.paintBlood?.(_v1, 0.45 + this.rng() * 0.35, null, 'burn');
+        }
+        if (body.invMass > 0) {
+          body.wake?.();
+          body.applyImpulse(_v4.copy(p.vel).multiplyScalar(0.02), _v1);
+        }
+        return;
+      }
+    }
+  }
+
+  _puffPeople(p, rad) {
+    const g = this.game, pos = p.pos;
+    const reach = rad * 0.7;
+    for (const c of g.characters) {
+      if (c === p.owner || p.hit.has(c) || c.body?.destroyed) continue;
+      if (c.center.distanceToSquared(pos) > (1.4 + reach) * (1.4 + reach)) continue;
+      let best = null, bd = Infinity;
+      for (const name of DAMAGEABLE) {
+        if (c.gone?.has(name)) continue;
+        const bone = c.rig.byName[name];
+        if (!bone || !pointInBone(bone, pos, reach)) continue;
+        const d = boneBoxCenter(bone, _v1).distanceToSquared(pos);
+        if (d < bd) { bd = d; best = name; }
+      }
+      if (!best) continue;
+      p.hit.add(c);
+      // a puff that has reached someone has spent itself on them
+      p.vel.multiplyScalar(0.45);
+      const k = p.age / p.life;
+      let s = this.soak.get(c);
+      if (!s) { s = { acc: 0, t: 0, n: 0, bone: best, point: new Vector3(), dir: new Vector3(), source: null }; this.soak.set(c, s); }
+      s.acc += p.damage * (1 - 0.55 * k);
+      s.n++;
+      s.bone = best;
+      s.point.copy(pos);
+      s.dir.copy(p.vel).normalize();
+      if (p.owner) s.source = p.owner;
+    }
+  }
+
+  /** What the flame has done to each person it touched, in bites. */
+  _updateSoak(dt) {
+    for (const [c, s] of this.soak) {
+      s.t += dt;
+      if (s.t < PUFF.bite) continue;
+      this.soak.delete(c);
+      if (c.body?.destroyed || !this.game.characters.includes(c) || s.acc <= 0) continue;
+      const bone = c.rig.byName[s.bone];
+      if (!bone || c.gone?.has(s.bone)) continue;
+      // the hit lands on the part itself, where the gas met it
+      const at = boneBoxCenter(bone, _v1).lerp(s.point, 0.5).clone();
+      _force.copy(s.dir).multiplyScalar(6 + s.acc * 1.5);
+      c.applyImpact(at, _force, {
+        boneName: s.bone, damage: s.acc, type: 'burn', severity: clamp01(0.22 + s.n * 0.05),
+        attacker: s.source, wound: 'burn',
+      });
+      this.ignite(c, 4.5, s.source);
+      // keep the fire spreading over them while the stream stays on
+      const b = this.burning.get(c);
+      if (b && !b.parts.includes(s.bone) && b.parts.length < 6) b.parts.push(s.bone);
+    }
   }
 
   /* ------------------------------- fireballs ------------------------------ */
@@ -204,26 +414,29 @@ export class FireSystem {
     force.y += 28 * k;
     c.applyImpact(at, force, {
       boneName, damage, type: 'burn', severity: clamp01(0.35 + damage / 40),
-      attacker: b.owner === 'boss' ? null : b.owner,
+      attacker: b.owner === 'boss' ? null : b.owner, wound: k > 0.5 ? 'burn' : null,
     });
     if (b.igniteFor > 0) this.ignite(c, b.igniteFor * (0.5 + 0.5 * k), b.owner === 'boss' ? null : b.owner);
   }
 
-  /** A black mark on the floor sheet. */
-  scorchFloor(at, radius) {
+  /** A black mark on the floor sheet. `strength` below 1 is a lighter one
+      that builds up, which is what a flamethrower's stream leaves. */
+  scorchFloor(at, radius, strength = 1) {
     const gore = this.game.gore;
     if (!gore) return;
     const rng = this.rng;
+    const a = strength;
     gore.sheet.paint(at.x, at.z, (ctx, px, py, ppm) => {
       const r = Math.max(3, radius * ppm);
       const gr = ctx.createRadialGradient(px, py, 0, px, py, r);
-      gr.addColorStop(0, 'rgba(12,8,6,0.85)');
-      gr.addColorStop(0.6, 'rgba(30,20,14,0.45)');
+      gr.addColorStop(0, `rgba(12,8,6,${0.85 * a})`);
+      gr.addColorStop(0.6, `rgba(30,20,14,${0.45 * a})`);
       gr.addColorStop(1, 'rgba(40,28,20,0)');
       ctx.fillStyle = gr;
       ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
       // a few sparks of it thrown further
-      for (let i = 0; i < 6; i++) paintSplat(ctx, px + (rng() - 0.5) * r, py + (rng() - 0.5) * r,
+      const n = a < 1 ? 2 : 6;
+      for (let i = 0; i < n; i++) paintSplat(ctx, px + (rng() - 0.5) * r, py + (rng() - 0.5) * r,
         r * 0.18, rng() - 0.5, rng() - 0.5, rng, 0.85);
     });
   }
@@ -290,6 +503,29 @@ export class FireSystem {
         g.fx?.smoke(_v1, { count: 1, size: 0.45, up: 1.2 });
         g.fx?.embers(_v1, { count: 1, spread: 0.2 });
       }
+      /* And it marks them, more the longer it goes on: the parts that are
+         alight char a little more every few tenths of a second, scorch marks
+         spread across them, and once it has been going a while the skin
+         blisters and splits open. */
+      b.mark = (b.mark ?? 0.15) - dt;
+      if (b.mark <= 0) {
+        b.mark = 0.32 + this.rng() * 0.12;
+        const name = b.parts[(this.rng() * b.parts.length) | 0];
+        const bone = name && !c.gone?.has(name) ? c.rig.byName[name] : null;
+        if (bone && c.body && !c.body.destroyed && this.game.gore?.enabled) {
+          const charred = c.body.char(name, 0.08 + 0.05 * fierce);
+          // somewhere on the part, not always its middle
+          boxLocalToWorld(bone, _v2.set(
+            (this.rng() - 0.5) * bone.boxHalf.x * 2.2,
+            (this.rng() - 0.5) * bone.boxHalf.y * 2.2,
+            (this.rng() - 0.5) * bone.boxHalf.z * 2.2), _v3);
+          const sev = clamp01(0.25 + b.t * 0.07);
+          c.body.paintHit(name, _v3, { kind: 'burn', severity: sev, allowTear: true });
+          if (charred > 0.25 && this.rng() < 0.4) {
+            this.game.wounds?.add(c, name, _v3, 'burn', { severity: sev });
+          }
+        }
+      }
       // it hurts, in steady bites rather than sixty tiny ones a second
       b.acc += b.dps * dt * (c.dead ? 0.4 : 1);
       if (b.acc >= 2.5) {
@@ -333,12 +569,16 @@ export class FireSystem {
 
   update(dt) {
     this._updateBalls(dt);
+    this._updatePuffs(dt);
+    this._updateSoak(dt);
     this._updateBurning(dt);
   }
 
   clear() {
     for (const b of this.balls) b.dispose();
     this.balls.length = 0;
+    this.puffs.length = 0;
+    this.soak.clear();
     this.burning.clear();
   }
 

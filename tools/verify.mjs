@@ -1077,14 +1077,16 @@ r = await page.evaluate(async () => {
   const SPAWN = {
     machete: objects.spawnMachete, sledge: objects.spawnSledge,
     glock: guns.spawnGlock, ak47: guns.spawnAk, m16: guns.spawnM16,
+    flamethrower: guns.spawnFlamer,
   };
   /** Where the OTHER hand goes on each two handed thing, in weapon space. */
   const SUPPORT = {
     sledge: [0, 0.42, 0], glock: [-0.048, -0.050, 0.012],
     ak47: [0, -0.014, -0.170], m16: [0, 0.004, -0.205],
+    flamethrower: [0, -0.014, -0.170],
   };
   const out = {};
-  for (const kind of ['machete', 'sledge', 'glock', 'ak47', 'm16']) {
+  for (const kind of ['machete', 'sledge', 'glock', 'ak47', 'm16', 'flamethrower']) {
     g.clearSpawns();
     if (g.carried) g.dropCarried();
     g.clearSpawns();
@@ -1918,6 +1920,198 @@ r = await page.evaluate(() => {
 check('the Fire Fist punches people alight, and its fireballs set them burning from range',
   r.equipped === 'firefist' && r.button && r.punchBurns && r.burnHurts && r.runs &&
   r.thrown && r.fireballHits && r.fireballBurns, JSON.stringify(r));
+
+// ---------- the flamethrower ----------
+r = await page.evaluate(async () => {
+  const g = window.stepper(), p = g.player;
+  const V = p.pos.constructor;
+  const { spawnFlamer } = await import('/src/game/guns.js');
+  const { spawnCrate } = await import('/src/game/objects.js');
+  const out = {};
+  g.clearSpawns(); p.heal();
+  if (g.carried) g.dropCarried();
+  const o = g.map.openArea;
+  p.teleport(o.x, o.z, 0); g.camYaw = 0; g.camPitch = -0.04; window.step(5);
+  g.pickUp(spawnFlamer(g, new V(o.x, 1, o.z - 1)));
+  window.step(30);
+  out.equipped = g.equipped;
+  out.pose = p.animator.upper.clip?.name;
+  out.full = g.carried.ammo;
+  out.label = document.querySelector('#btn-primary').textContent.trim();
+  out.slot = !document.querySelector('#slot-flamethrower').classList.contains('hidden');
+
+  // a citizen four metres off, and the trigger held for a second
+  g.setSelected('citizen');
+  const a = g.spawnSelected().entity;
+  a.teleport(o.x, o.z - 4, Math.PI);
+  a.ai.update = () => a.moveInput.set(0, 0, 0);
+  window.step(5);
+  let scorches = 0;
+  const scorch = g.fire.scorchFloor.bind(g.fire);
+  g.fire.scorchFloor = (...args) => { scorches++; return scorch(...args); };
+  const hp0 = a.health;
+  window.stub.down = { primary: true };
+  let puffs = 0;
+  for (let i = 0; i < 60; i++) { window.step(1); puffs = Math.max(puffs, g.fire.puffs.length); }
+  window.stub.down = {};
+  out.spent = out.full - g.carried.ammo;
+  out.puffs = puffs;
+  out.burning = g.fire.isBurning(a);
+  out.hurt = Math.round(hp0 - a.health);
+  window.step(40);
+  out.puffsDie = g.fire.puffs.length === 0;
+  // aimed at the ground, it rolls along it and blackens it
+  g.camPitch = -0.5;
+  window.stub.down = { primary: true }; window.step(20); window.stub.down = {};
+  window.step(30);
+  g.camPitch = -0.04;
+  out.floorScorched = scorches;
+  out.burnWounds = g.wounds.countOn(a, 'burn');
+  out.scorched = [...a.body.entries.values()].some((e) => e.cloth?.surface || e.skin.surface);
+  g.removeCharacter(a);
+
+  // a crate takes the scorch on its own surface
+  const crate = spawnCrate(g, new V(o.x, 0.5, o.z - 2.6));
+  window.step(30);
+  g.camPitch = -0.38;
+  window.stub.down = { primary: true };
+  window.step(25);
+  window.stub.down = {};
+  window.step(30);
+  out.crateScorched = !!crate.userData.paintSurface;
+
+  // out of fuel, and a new tank
+  g.carried.ammo = 0; g.carried.chambered = false;
+  g.gunCooldown = 0;
+  window.stub.down = { primary: true }; window.step(2); window.stub.down = {};
+  out.dryToast = document.querySelector('#toast').textContent;
+  g.reloadAction();
+  out.reloadClip = p.animator.actionName;
+  const mag = g.carried.model.userData.magazine;
+  let off = 0, on = 0;
+  /* The hold already sits on the edge of the shoulder and forearm ranges, the
+     way the rifles' does, so the limits brush it; what matters is that the
+     clip never asks a joint for anything it would visibly have to refuse. */
+  const rig = p.rig, fk = rig.updateFK;
+  let over = 0, overAt = null;
+  rig.updateFK = function () {
+    const before = rig.bones.map((b) => [b.anim.x, b.anim.y, b.anim.z]);
+    fk.call(rig);
+    for (const n of rig.limitClamped) {
+      const b = rig.byName[n], w = before[rig.bones.indexOf(b)];
+      const d = Math.max(Math.abs(w[0] - b.anim.x), Math.abs(w[1] - b.anim.y), Math.abs(w[2] - b.anim.z));
+      if (d > over) { over = d; overAt = n; }
+    }
+  };
+  for (let i = 0; i < 400 && g.reloadTimer > 0; i++) {
+    window.step(1);
+    if (mag.visible) on++; else off++;
+  }
+  rig.updateFK = fk;
+  out.tankOff = off; out.tankOn = on;
+  out.after = g.carried.ammo;
+  out.overshootDeg = +(over * 180 / Math.PI).toFixed(2);
+  out.overshootAt = overAt;
+  g.dropCarried();
+  g.clearSpawns();
+  g.setEquipped('fists');
+  return out;
+});
+check('the flamethrower is held, burns what it reaches, and reloads by swapping the tank',
+  r.equipped === 'flamethrower' && r.pose === 'flamerHold' && r.full === 100 && r.label === 'BURN' &&
+  r.slot && r.spent >= 18 && r.spent <= 22 && r.puffs >= 8 && r.burning && r.hurt > 10 &&
+  r.puffsDie && r.floorScorched > 0 && r.scorched && r.crateScorched &&
+  /fuel/i.test(r.dryToast) && r.reloadClip === 'reloadFlamer' && r.tankOff > 30 && r.tankOn > 60 &&
+  r.after === 100 && r.overshootDeg < 1.5, JSON.stringify(r));
+
+// ---------- wounds you can see the depth of ----------
+r = await page.evaluate(async () => {
+  const g = window.stepper(), p = g.player;
+  const V = p.pos.constructor;
+  const { spawnAk } = await import('/src/game/guns.js');
+  const { worldToBoxLocal } = await import('/src/game/skeleton.js');
+  const out = {};
+  g.clearSpawns(); p.heal();
+  const o = g.map.openArea;
+  p.teleport(o.x, o.z, 0); g.camYaw = 0; g.camPitch = 0; window.step(5);
+  g.setSelected('citizen');
+  const a = g.spawnSelected().entity;
+  a.teleport(o.x, o.z - 5, Math.PI);
+  a.ai.update = () => a.moveInput.set(0, 0, 0);
+  window.step(10);
+
+  // a round leaves a hole, on the part it hit, in its surface
+  g.pickUp(spawnAk(g, new V(o.x, 1, o.z - 1)));
+  window.step(30);
+  g.camPitch = -0.08;
+  window.step(3);
+  g.gunCooldown = 0; g.fireGun();
+  window.step(2);
+  const list = () => g.wounds.byBody.get(a) || [];
+  out.holes = g.wounds.countOn(a, 'hole');
+  const w = list().find((x) => x.kind === 'hole');
+  if (w) {
+    out.onItsPart = w.mesh.parent === a.body.entries.get(w.bone).skin.mesh;
+    const e = a.body.entries.get(w.bone);
+    const half = e.cloth ? e.cloth.half : e.bone.boxHalf;
+    const l = w.local;
+    const ratio = Math.max(Math.abs(l.x) / half.x, Math.abs(l.y) / half.y, Math.abs(l.z) / half.z);
+    out.onSurface = +ratio.toFixed(3);
+  }
+  g.dropCarried();
+
+  // a blade opens a gash, a hammer that lands properly splits the skin
+  const at = (name) => a.rig.byName[name].worldPos.clone();
+  a.applyImpact(at('upperArmL'), new V(0, 0, 30), { boneName: 'upperArmL', damage: 8, type: 'impact', severity: 0.9, wound: 'gash' });
+  a.applyImpact(at('upperLegR'), new V(0, 0, 30), { boneName: 'upperLegR', damage: 8, type: 'blunt', severity: 0.9, wound: 'split' });
+  a.applyImpact(at('midTorso'), new V(0, 0, 20), { boneName: 'midTorso', damage: 3, type: 'blunt', severity: 0.4 });
+  out.gashes = g.wounds.countOn(a, 'gash');
+  out.splits = g.wounds.countOn(a, 'split');
+  out.total = g.wounds.countOn(a);
+
+  // they stay on the part as it falls about
+  const where = () => list().map((x) => x.mesh.getWorldPosition(new V()));
+  a.setState('ragdoll');
+  a.applyImpact(at('upperTorso'), new V(0, 40, -260), { boneName: 'upperTorso', damage: 0, type: 'blunt', severity: 0.6 });
+  window.step(90);
+  let drift = 0;
+  for (const x of list()) {
+    const e = a.body.entries.get(x.bone);
+    const l = worldToBoxLocal(e.bone, x.mesh.getWorldPosition(new V()), new V());
+    drift = Math.max(drift, l.distanceTo(x.local));
+  }
+  out.drift = +drift.toFixed(4);
+  void where;
+
+  // fire works its way in: the parts on fire char, and in time burn open
+  a.heal?.();
+  g.fire.ignite(a, 8, null);
+  window.step(360);
+  const charred = [...a.body.entries.values()].map((e) => e.charred || 0);
+  out.charredParts = charred.filter((x) => x > 0.2).length;
+  out.burns = g.wounds.countOn(a, 'burn');
+  g.fire.extinguish(a);
+
+  // wiped by a wash, and the player comes back whole
+  g.washGore();
+  out.afterWash = g.wounds.countOn(a);
+  out.uncharred = [...a.body.entries.values()].every((e) => !e.charred);
+  g.wounds.add(p, 'upperTorso', p.rig.byName.upperTorso.worldPos.clone(), 'gash', { severity: 0.8 });
+  out.playerHad = g.wounds.countOn(p);
+  g.respawnPlayer();
+  out.playerAfter = g.wounds.countOn(p);
+  g.clearSpawns();
+  window.step(2);
+  out.pruned = !g.wounds.byBody.has(a);
+  return out;
+});
+check('bullets, blades, hammers and fire leave solid wounds that ride on the part they opened',
+  r.holes >= 1 && r.onItsPart && r.onSurface > 0.99 && r.onSurface < 1.02 &&
+  r.gashes === 1 && r.splits === 1 && r.total === r.holes + 2 && r.drift < 0.002,
+  JSON.stringify(r));
+check('fire chars what burns and opens blistered burns; washing and respawning heal it',
+  r.charredParts >= 2 && r.burns >= 1 && r.afterWash === 0 && r.uncharred &&
+  r.playerHad === 1 && r.playerAfter === 0 && r.pruned, JSON.stringify(r));
 
 // back to the ordinary loop for what is left
 await page.evaluate(() => {

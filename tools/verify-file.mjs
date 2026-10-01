@@ -216,7 +216,8 @@ await page.tap('#btn-use'); await page.waitForTimeout(400);      // put the hamm
 
 /* Every firearm, through the buttons a player actually has: spawn it, walk to
    it, USE to pick it up, FIRE, then RELOAD back to a full magazine. */
-for (const [kind, cap] of [['glock', '15'], ['ak47', '30'], ['m16', '30']]) {
+for (const [kind, cap, label] of [['glock', '15', 'FIRE'], ['ak47', '30', 'FIRE'], ['m16', '30', 'FIRE'],
+  ['flamethrower', '100', 'BURN']]) {
   await page.tap('#btn-pause'); await page.waitForTimeout(300);
   await page.tap('#btn-clear'); await page.waitForTimeout(200);
   await page.tap('#btn-resume'); await page.waitForTimeout(400);
@@ -257,7 +258,7 @@ for (const [kind, cap] of [['glock', '15'], ['ak47', '30'], ['m16', '30']]) {
     visible: !document.querySelector('#ammo-readout').classList.contains('hidden'),
   }), kind);
   check(`USE takes the ${kind}, PRIMARY fires it and RELOAD fills it`,
-    gun.carrying === kind && gun.equipped === kind && gun.label === 'FIRE' &&
+    gun.carrying === kind && gun.equipped === kind && gun.label === label &&
     gun.reloadShown && gun.slot && gun.visible &&
     ammoBefore === cap && +ammoFired < +cap && gun.ammo === cap,
     JSON.stringify({ ...gun, ammoBefore, ammoFired }));

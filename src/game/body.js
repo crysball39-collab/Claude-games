@@ -3,7 +3,7 @@
    hair on the head, a painted face, and the machinery that lets damage be drawn
    onto whichever surface actually got hit.
    ========================================================================== */
-import { Group, Mesh, MeshLambertMaterial, Vector3, DoubleSide, FrontSide } from 'three';
+import { Group, Mesh, MeshLambertMaterial, Vector3, Color, DoubleSide, FrontSide } from 'three';
 import {
   makeAtlasBoxGeometry, localPointToFaceUV, worldToBoxLocal, FACE_NZ,
 } from './skeleton.js';
@@ -23,6 +23,9 @@ function boxGeo(size) {
   if (!g) { g = makeAtlasBoxGeometry(size.x, size.y, size.z); geoCache.set(key, g); }
   return g;
 }
+
+/** What fire turns skin and cloth towards: not black, burnt. */
+const _CHAR = new Color(0x2b1d16);
 
 const CLOTH_MARGIN = 0.013;
 
@@ -479,6 +482,26 @@ export class Body {
     }
   }
 
+  /**
+   * Fire working on a part for a while: the whole of it darkens, a little at
+   * a time, cloth first and then the skin under it once the cloth has gone
+   * dark. `amount` is added to how charred it is, 0..1.
+   */
+  char(boneName, amount) {
+    const entry = this.entries.get(boneName);
+    if (!entry || entry.detached || entry.bone.def.finger) return 0;
+    entry.charred = Math.min(1, (entry.charred || 0) + amount);
+    const k = entry.charred;
+    const tint = (e, depth) => {
+      if (!e) return;
+      this._ensureSurface(e);
+      e.material.color.setRGB(1, 1, 1).lerp(_CHAR, depth);
+    };
+    tint(entry.cloth, Math.min(0.78, k * 0.95));
+    tint(entry.skin, entry.cloth ? Math.max(0, k - 0.45) * 1.1 : k * 0.72);
+    return k;
+  }
+
   /** Blood arriving from a spray, aimed at the closest part. */
   splatterAt(boneName, worldPoint, dirX, dirY, severity) {
     this.paintHit(boneName, worldPoint, { kind: 'blood', severity, dir: { x: dirX, y: dirY }, dark: 0 });
@@ -493,6 +516,7 @@ export class Body {
       // A part that has come off is not ours to wash: its meshes are out in
       // the world now, drawing with these same materials.
       if (entry.detached) continue;
+      entry.charred = 0;
       for (const e of [entry.skin, entry.cloth]) {
         if (!e || !e.surface) continue;
         e.surface.dispose();
