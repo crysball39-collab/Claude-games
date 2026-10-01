@@ -203,7 +203,13 @@ export class Hud {
   setCutscene(on) {
     this.cutsceneEl.classList.toggle('on', !!on);
     this.root.classList.toggle('cutscene', !!on);
-    if (!on) this.hideTitle();
+    if (on) {
+      // whatever was being said before it started is not part of it
+      clearTimeout(this._toastTimer);
+      this.toastEl.classList.remove('show');
+    } else {
+      this.hideTitle();
+    }
   }
 
   showTitle(name, sub = '') {
