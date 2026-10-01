@@ -173,6 +173,7 @@ export class RCV2 {
     }
 
     const c = hit.character;
+    c.wake();
     this.grab = { type: 'character', character: c, bone: hit.bone };
     this.holdDist = clamp(hit.distance, 1.8, 9);
     if (!c.dead) {
@@ -250,6 +251,7 @@ export class RCV2 {
     } else {
       const c = this.grab.character;
       if (c.body.destroyed) { this.grab = null; return; }
+      c.wake();                          // a sleeping body is still a body you can pick up
       boneBoxCenter(this.grab.bone, _v3);
       const pair = c.boneParticles[this.grab.bone.name];
       const parts = pair ? [c.particles[pair[0]], c.particles[pair[1]]] : [c.particles.mt];

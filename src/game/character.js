@@ -191,6 +191,14 @@ export class Character {
     /** Multiplies walking speed. The game sets it each frame - water to the
         shins halves it - and it goes back to 1 the moment that stops. */
     this.speedScale = 1;
+    /* Sleeping. A body that has gone limp and stopped going anywhere is held
+       exactly where it lies until something disturbs it. See _updateSleep. */
+    this.asleep = false;
+    this._sleepRef = null;
+    this._sleepT = 0;
+    this._stillWindows = 0;
+    this._frozen = null;
+    this._sleepBox = null;
     /* Per bone muscle multiplier. A broken bone cannot hold itself up, and
        neither can anything hanging off it. */
     this.limpScale = Object.create(null);
@@ -414,6 +422,7 @@ export class Character {
   /* ---------------------------------------------------------------- helpers */
 
   teleport(x, z, yaw = this.yaw, y = null) {
+    this.wake();
     this.gazeYaw = yaw;
     this.pos.set(x, y != null ? y : this._groundHeight(x, z, 1e9) + HIP_HEIGHT, z);
     this.vel.set(0, 0, 0);
@@ -493,6 +502,7 @@ export class Character {
     if (this.state === s) return;
     this.state = s;
     this.stateTime = 0;
+    this.wake();
     if (s === STATE.STUMBLE) {
       this.animator.cancelAction();
       this.animator.playBase('stagger', { fade: 0.14 });
@@ -517,6 +527,7 @@ export class Character {
   /** Knocks the character about. `force` is an impulse in kg*m/s. */
   applyImpact(point, force, { boneName = null, damage = 0, type = 'blunt', attacker = null, severity = null, crush = 0 } = {}) {
     if (this.dead && damage <= 0) return;
+    this.wake();
     const mag = force.length();
 
     /* A hit belongs to the part it landed on, and travels from there ALONG
@@ -570,6 +581,7 @@ export class Character {
   }
 
   applyDamage(amount, { boneName = null, point = null, type = 'blunt', attacker = null, force = null, severity = null, crush = 0 } = {}) {
+    this.wake();
     /* Armour comes first, because everything after this point - health, bone
        wear, breaks, bleeding, the face - is about a hit that actually reached
        the person. What the plate ate never did.
@@ -1039,6 +1051,7 @@ export class Character {
        them - a ragdoll, a stumble, a get-up - and whenever something is broken,
        since a break is free to turn into places an animation never would. */
     this.selfCollide = this.state !== STATE.CONTROLLED || this.broken.size > 0;
+    this._updateSleep(dt);
 
     this.animator.update(dt);
     this.recoil = Math.max(0, (this.recoil || 0) - dt * 7.5);
@@ -1653,12 +1666,158 @@ export class Character {
   }
 
   postSubstep() {
+    // asleep: whatever the substep did to this body, it is back where it lay
+    if (this.asleep) {
+      const list = this.particleList, f = this._frozen;
+      if (f && f.length === list.length * 3) {
+        for (let i = 0; i < list.length; i++) {
+          const p = list[i];
+          p.x = p.px = f[i * 3]; p.y = p.py = f[i * 3 + 1]; p.z = p.pz = f[i * 3 + 2];
+        }
+      } else {
+        this.wake();
+      }
+    }
     const P = this.particles;
     this.center.set(
       (P.hip.x + P.shoulders.x) * 0.5,
       (P.hip.y + P.shoulders.y) * 0.5,
       (P.hip.z + P.shoulders.z) * 0.5,
     );
+  }
+
+  /* ------------------------------------------------------------------ sleep */
+
+  /**
+   * A body lying still is held still.
+   *
+   * Four limp bodies in a heap are a pile of things leaning on each other, and
+   * the solver never quite agrees with itself about who is holding whom up: a
+   * toe caught between two shins trades a millimetre back and forth every
+   * substep, a body on top creeps off the one under it at a few millimetres a
+   * second, and that goes on for as long as anyone is watching. Real piles do
+   * not do that; friction holds them. So once a body that is not trying to do
+   * anything - dead, or down and not getting up - has gone a full second
+   * without any part of it getting anywhere, it goes to sleep: every substep
+   * ends with it put back exactly where it was. To everything else it is now
+   * a solid thing to lie on.
+   *
+   * Anything that would move it wakes it first: a hit, damage, a change of
+   * state, a teleport, the RCV2, or something moving into the space it is
+   * lying in.
+   */
+  _updateSleep(dt) {
+    const limp = this.state === STATE.DEAD || (this.state === STATE.RAGDOLL && !this.wantsUp);
+    if (!limp || this.stateTime < 2) {
+      if (this.asleep || this._sleepRef) this.wake();
+      return;
+    }
+    if (this.asleep) {
+      if (this._disturbed()) this.wake();
+      return;
+    }
+    const list = this.particleList;
+    if (!this._sleepRef || this._sleepRef.length !== list.length * 3) {
+      this._sleepRef = new Float64Array(list.length * 3);
+      this._snapshot(this._sleepRef);
+      this._sleepT = 0;
+      this._stillWindows = 0;
+      return;
+    }
+    this._sleepT += dt;
+    if (this._sleepT < SLEEP.window) return;
+    this._sleepT = 0;
+    // how far has any part of it got in the last half second?
+    const ref = this._sleepRef;
+    let worst = 0;
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i];
+      const dx = p.x - ref[i * 3], dy = p.y - ref[i * 3 + 1], dz = p.z - ref[i * 3 + 2];
+      worst = Math.max(worst, dx * dx + dy * dy + dz * dz);
+    }
+    this._snapshot(ref);
+    this._stillWindows = worst < SLEEP.still * SLEEP.still ? this._stillWindows + 1 : 0;
+    if (this._stillWindows >= SLEEP.windows) this._fallAsleep();
+  }
+
+  _snapshot(out) {
+    const list = this.particleList;
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i];
+      out[i * 3] = p.x; out[i * 3 + 1] = p.y; out[i * 3 + 2] = p.z;
+    }
+  }
+
+  _fallAsleep() {
+    const list = this.particleList;
+    this._frozen = new Float64Array(list.length * 3);
+    this._snapshot(this._frozen);
+    let minX = Infinity, minY = Infinity, minZ = Infinity, maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+    for (const p of list) {
+      p.px = p.x; p.py = p.y; p.pz = p.z;
+      minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); minZ = Math.min(minZ, p.z);
+      maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); maxZ = Math.max(maxZ, p.z);
+    }
+    const m = SLEEP.margin;
+    this._sleepBox = { minX: minX - m, minY: minY - m, minZ: minZ - m, maxX: maxX + m, maxY: maxY + m, maxZ: maxZ + m };
+    /* Not with something still settling against it. This body has still
+       settled - its count stands, and it tries again next window - or two
+       settled bodies lying against each other would each keep resetting the
+       other and neither would ever sleep. */
+    if (this._disturbed()) {
+      this._frozen = null;
+      this._sleepBox = null;
+      return;
+    }
+    this.asleep = true;
+  }
+
+  /** Back to being simulated. Cheap, and safe to call whenever. */
+  wake() {
+    this.asleep = false;
+    this._frozen = null;
+    this._sleepRef = null;
+    this._sleepT = 0;
+    this._stillWindows = 0;
+  }
+
+  /** Is anything moving into the space this sleeping body takes up? */
+  _disturbed() {
+    const box = this._sleepBox;
+    if (!box) return true;
+    const w = this.world;
+    /* A crate or a boulder that is awake and touching it, however slowly it
+       is moving: something resting on a body has to be held up by a body
+       that answers back, so the body stays awake until the crate sleeps. */
+    for (let i = 0; i < w.bodies.length; i++) {
+      const b = w.bodies[i];
+      if (b.sleeping) continue;
+      if (b.aabbMax.x < box.minX || b.aabbMin.x > box.maxX || b.aabbMax.y < box.minY ||
+          b.aabbMin.y > box.maxY || b.aabbMax.z < box.minZ || b.aabbMin.z > box.maxZ) continue;
+      return true;
+    }
+    /* Other people. Anyone moving into it wakes it, and so does anyone lying
+       against it who has not settled yet: a pile sleeps together or not at
+       all. A body that froze while the one on top of it was still sliding
+       would be a rigid slope, and the one on top would slide all the way
+       down it - nothing under it gives. */
+    const step = SLEEP.wakeSpeed * w.substepDt;
+    for (let i = 0; i < w.characters.length; i++) {
+      const c = w.characters[i];
+      if (c === this || c.asleep) continue;
+      if (c.center.x < box.minX - 1.2 || c.center.x > box.maxX + 1.2 ||
+          c.center.z < box.minZ - 1.2 || c.center.z > box.maxZ + 1.2) continue;
+      let against = false;
+      for (const p of c.particleList) {
+        if (p.x < box.minX || p.x > box.maxX || p.y < box.minY || p.y > box.maxY ||
+            p.z < box.minZ || p.z > box.maxZ) continue;
+        against = true;
+        const dx = p.x - p.px, dy = p.y - p.py, dz = p.z - p.pz;
+        if (dx * dx + dy * dy + dz * dz > step * step) return true;
+      }
+      if (against && c._stillWindows < SLEEP.windows) return true;
+    }
+    return false;
   }
 
   /* ------------------------------------------------------------- late update */
@@ -1919,6 +2078,21 @@ export class Character {
 }
 
 const LAYOUT = particleLayout();
+
+/** When a body lying still is allowed to sleep, and what wakes it. */
+/* `still` is generous on purpose. Bodies stacked on each other creep: the
+   overlap between them is resolved along a tilted line every substep, and
+   that sideways nudge is a position fix the ground's friction never sees, so
+   the bottom one slides a few centimetres a second for as long as the pile is
+   simulated. Ten centimetres a second is well past that creep and well short
+   of anything still really going somewhere. */
+const SLEEP = {
+  window: 0.5,       // seconds per look
+  still: 0.05,       // no part may have moved further than this in a window...
+  windows: 2,        // ...this many windows running
+  margin: 0.3,       // how close a moving thing has to come to wake it, metres
+  wakeSpeed: 0.45,   // and how fast it has to be moving, m/s
+};
 
 function distance(a, b) {
   return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
