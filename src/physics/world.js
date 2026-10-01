@@ -59,10 +59,6 @@ const CROSS_BODY_STIFFNESS = 0.45;
 const MUSCLE_REACH = 0.045;
 /** How much of a sliding contact's speed one solve pass rubs off. */
 const CONTACT_FRICTION = 0.06;
-/** Grip between a joint and what it is resting on: sideways travel in a
-    substep is held to nothing, up to this many times how hard the joint was
-    pressed into the floor in that substep. See _stepParticles. */
-const STATIC_GRIP = 0.8;
 /** Deepest overlap two bones may unwind in one solver pass, in metres. */
 const MAX_CAPSULE_STEP = 0.03;
 /** Deepest overlap two people may unwind in one solver pass, in metres.
@@ -94,9 +90,6 @@ export class Particle {
     this.grounded = false;
     this.lastImpactSpeed = 0;
     this.pinned = false;
-    // where it began the current substep, and how hard it has been pressed
-    // into a floor during it (see the grip in _stepParticles)
-    this.sx = x; this.sz = z; this.press = 0;
     /* How much speed contacts may still hand this particle during the current
        fixed step. Capping each contact on its own is not enough: a boulder
        ploughing through a crowd touches the same joint on every solver pass,
@@ -805,7 +798,6 @@ export class PhysicsWorld {
     for (let i = 0; i < ps.length; i++) {
       const p = ps[i];
       if (p.pinned) { p.px = p.x; p.py = p.y; p.pz = p.z; continue; }
-      p.sx = p.x; p.sz = p.z; p.press = 0;
       let vx = (p.x - p.px) * drag, vy = (p.y - p.py) * drag, vz = (p.z - p.pz) * drag;
       // Nothing in a human body has any business moving this fast; if it does,
       // something upstream has gone wrong and this stops it leaving the map.
@@ -932,34 +924,6 @@ export class PhysicsWorld {
       this._collideParticles(dt, last, it >= this.constraintIters - 2);
     }
 
-    /* Grip. A joint resting on the floor does not slide unless something
-       pushes it harder than friction holds it.
-
-       The friction above works on speed, and that is not enough on its own:
-       bodies lying against each other, or a limb lying against its own
-       chest, are pushed apart by position fixes that carry their previous
-       positions along - deliberately, so the push is not a launch - which
-       means friction never sees them. Pushed apart along a tilted line, the
-       downward half goes into the floor and the sideways half stays, every
-       substep, and a body lying on the grass creeps across it at several
-       centimetres a second. So here the sideways distance a resting joint
-       has actually travelled this substep, from whatever cause, is held to
-       nothing as long as it is small next to how hard the joint is pressed
-       down, and cut short by that much when it is not. Position only: the
-       speed is the friction above's business. */
-    for (let i = 0; i < ps.length; i++) {
-      const p = ps[i];
-      if (!(p.press > 0) || p.pinned || p.muscle >= 0.999) continue;
-      const tx = p.x - p.sx, tz = p.z - p.sz;
-      const t2 = tx * tx + tz * tz;
-      if (t2 < 1e-14) continue;
-      const lim = STATIC_GRIP * p.press;
-      const t = Math.sqrt(t2);
-      const k = t <= lim ? 1 : lim / t;
-      p.x -= tx * k; p.z -= tz * k;
-      p.px -= tx * k; p.pz -= tz * k;
-    }
-
     /* Two guarantees about what leaves a substep.
        One: a joint held by a working muscle is where the animation says it is,
        moving at the speed the animation says. The solver spends six iterations
@@ -1003,7 +967,6 @@ export class PhysicsWorld {
         // launch.
         p.y += pen; p.py += pen;
         p.grounded = true;
-        p.press += pen;
         // tangential friction
         const f = p.friction;
         p.px += (p.x - p.px) * f * 0.55;
@@ -1079,8 +1042,6 @@ export class PhysicsWorld {
     // alone.
     p.x += _v3.x * pen; p.y += _v3.y * pen; p.z += _v3.z * pen;
     p.px += _v3.x * pen; p.py += _v3.y * pen; p.pz += _v3.z * pen;
-    // standing on it, as opposed to against it: it grips like a floor
-    if (_v3.y > 0.55 && body.invMass === 0) p.press += pen * _v3.y;
     if (_v3.y > 0.55) p.grounded = true;
 
     /* Relative velocity along the normal for the coupling impulse.

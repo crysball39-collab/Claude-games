@@ -197,6 +197,7 @@ export class Character {
     this._sleepRef = null;
     this._sleepT = 0;
     this._stillWindows = 0;
+    this._limpT = 0;
     this._frozen = null;
     this._sleepBox = null;
     /* Per bone muscle multiplier. A broken bone cannot hold itself up, and
@@ -1709,13 +1710,14 @@ export class Character {
   _updateSleep(dt) {
     const limp = this.state === STATE.DEAD || (this.state === STATE.RAGDOLL && !this.wantsUp);
     if (!limp || this.stateTime < 2) {
-      if (this.asleep || this._sleepRef) this.wake();
+      if (this.asleep || this._sleepRef || this._limpT) this.wake();
       return;
     }
     if (this.asleep) {
       if (this._disturbed()) this.wake();
       return;
     }
+    this._limpT += dt;
     const list = this.particleList;
     if (!this._sleepRef || this._sleepRef.length !== list.length * 3) {
       this._sleepRef = new Float64Array(list.length * 3);
@@ -1737,7 +1739,33 @@ export class Character {
     }
     this._snapshot(ref);
     this._stillWindows = worst < SLEEP.still * SLEEP.still ? this._stillWindows + 1 : 0;
-    if (this._stillWindows >= SLEEP.windows) this._fallAsleep();
+    if (this._ready && this._slow()) this._fallAsleep();
+  }
+
+  /**
+   * Ready to sleep: still for long enough - or limp and left alone for so
+   * long that whatever it is still doing can only be the solver creeping.
+   * A body that has had nothing touch it for six seconds has finished
+   * falling; if it is still inching across the floor, that is not physics.
+   */
+  get _ready() {
+    return this._stillWindows >= SLEEP.windows || this._limpT > SLEEP.force;
+  }
+
+  /** Not on its way anywhere: a body sliding or falling is never frozen. */
+  _slow() {
+    const list = this.particleList;
+    const h = this.world.substepDt;
+    let mx = 0, my = 0, mz = 0, fast = 0;
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i];
+      const vx = p.x - p.px, vy = p.y - p.py, vz = p.z - p.pz;
+      mx += vx; my += vy; mz += vz;
+      fast = Math.max(fast, vx * vx + vy * vy + vz * vz);
+    }
+    const n = Math.max(1, list.length);
+    const com = Math.hypot(mx / n, my / n, mz / n) / h;
+    return com < SLEEP.creep && Math.sqrt(fast) / h < SLEEP.limbSpeed;
   }
 
   _snapshot(out) {
@@ -1779,6 +1807,7 @@ export class Character {
     this._sleepRef = null;
     this._sleepT = 0;
     this._stillWindows = 0;
+    this._limpT = 0;
   }
 
   /** Is anything moving into the space this sleeping body takes up? */
@@ -1815,7 +1844,7 @@ export class Character {
         const dx = p.x - p.px, dy = p.y - p.py, dz = p.z - p.pz;
         if (dx * dx + dy * dy + dz * dz > step * step) return true;
       }
-      if (against && c._stillWindows < SLEEP.windows) return true;
+      if (against && !c._ready) return true;
     }
     return false;
   }
@@ -2084,12 +2113,17 @@ const LAYOUT = particleLayout();
    overlap between them is resolved along a tilted line every substep, and
    that sideways nudge is a position fix the ground's friction never sees, so
    the bottom one slides a few centimetres a second for as long as the pile is
-   simulated. Ten centimetres a second is well past that creep and well short
-   of anything still really going somewhere. */
+   simulated. Ten centimetres a second is well past most of that creep and
+   well short of anything still really going somewhere; `force` catches the
+   rest. Gripping the floor harder instead was tried, and it stopped bodies
+   that buckle at the knees from sliding their feet out and lying down flat. */
 const SLEEP = {
   window: 0.5,       // seconds per look
   still: 0.05,       // no part may have moved further than this in a window...
   windows: 2,        // ...this many windows running
+  force: 6,          // or this long limp with nothing touching it, seconds...
+  creep: 0.3,        // ...as long as it is creeping, not sliding, m/s
+  limbSpeed: 1.5,    // and no part of it is moving faster than this, m/s
   margin: 0.3,       // how close a moving thing has to come to wake it, metres
   wakeSpeed: 0.45,   // and how fast it has to be moving, m/s
 };
