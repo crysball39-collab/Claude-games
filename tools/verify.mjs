@@ -2447,6 +2447,7 @@ arrived = await page.evaluate(() => window.arrive('darklegacy'));
 r = await page.evaluate(() => {
   const g = window.stepper(), p = g.player, e = g.encounter;
   const run = (n) => { for (let i = 0; i < n; i++) { g.update(1 / 60, window.stub); window.stub.pressed = {}; } };
+  run(10);
   const out = {
     name: g.map.name, nobody: g.characters.length === 1,
     under: p.underwater, waiting: e?.state === 'waiting', fog: g.scene.fog.far < 80,
@@ -2522,7 +2523,7 @@ check('Dark Legacy: dark and fogged, empty, and you arrive in the water',
 check('walking past the tower brings the Shadow Mutant up out of the ground, with his name',
   r.stillWaiting && r.triggeredAtZ > 0.5 && r.triggeredAtZ < 2.5 && r.cutscene && r.rising && r.fight &&
   r.hp === 5000 && r.bar, JSON.stringify(r));
-check('he uses his attacks, raises blood zombies, can be hurt, and dies taking them with him',
+check('he uses his attacks, raises Mutants, can be hurt, and dies taking them with him',
   r.attacks.length >= 5 && r.attacks.includes('summon') && r.zombies >= 5 && r.taken > 0 &&
   r.shotHurts && r.won && r.minionsDown, JSON.stringify(r));
 check('he only summons more Mutants once the last ones are all dead',
