@@ -1,5 +1,5 @@
 /* =============================================================================
-   Blood Zombies.
+   Mutants (blood zombies).
 
    The same body as everyone else, but dead and still walking: grey-green
    skin, torn and filthy clothes, blood all down the front of them and round
@@ -8,7 +8,8 @@
    out, and when they get there they claw. They do not run from anything,
    and they keep getting up until they are put down for good.
 
-   The Shadow Mutant raises them; the RCV2 can spawn them too.
+   The Shadow Mutant raises them; the RCV2 can spawn them too. In the game
+   they are called Mutants.
    ========================================================================== */
 import { Color, Vector3 } from 'three';
 import { Character, STATE } from './character.js';
@@ -77,7 +78,7 @@ export function spawnZombie(game, position, opts = {}) {
     z: position.z,
     yaw: opts.yaw != null ? opts.yaw : rng() * Math.PI * 2,
     seed,
-    name: 'Zombie',
+    name: 'Mutant',
     castShadow: game.quality.shadows,
   });
   game.scene.add(c.body.group);

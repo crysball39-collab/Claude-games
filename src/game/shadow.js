@@ -14,7 +14,7 @@
      Tentacle Stab      one tentacle draws back, then shoots out at where
                         you were standing
      Tentacle Barrage   all six, one after another, each aimed fresh
-     Mutant Summon      arms up, and five blood zombies pull themselves out
+     Mutant Summon      arms up, and five Mutants pull themselves out
                         of the ground round it
      Slam               it kneels, raises both fists, and brings them down:
                         a blast round it and a ring of spikes running out
@@ -36,13 +36,16 @@ const _v1 = new Vector3(), _v2 = new Vector3(), _v3 = new Vector3(), _v4 = new V
 const _q = new Quaternion();
 const UP = new Vector3(0, 1, 0);
 
+/** Dark Spikes: how long the ring follows you, how long it warns, and how big it is. */
+export const SPIKES = { track: 0.5, warn: 0.8, after: 0.45, radius: 1.3 };
+
 export const SHADOW = {
   name: 'SHADOW MUTANT',
   hp: 5000,
   walk: 3.0,
   turn: 3.2,
   reach: 14,          // furthest a tentacle stretches
-  minions: 10,        // most zombies it keeps up at once
+  minions: 5,         // how many Mutants one summon raises
   dmg: { spikes: 18, stab: 22, barrage: 9, slam: 26, wave: 15 },
 };
 
@@ -402,7 +405,8 @@ export class ShadowMutant {
     if (c.spikes <= 0 && dist > 2.5) o.push(['spikes', dist > 8 ? 3 : 2]);
     if (c.stab <= 0 && dist > 2 && dist < SHADOW.reach - 1) o.push(['stab', 3]);
     if (c.barrage <= 0 && dist > 2 && dist < SHADOW.reach - 2) o.push(['barrage', 2]);
-    if (c.summon <= 0 && this.minions.length < SHADOW.minions - 4) o.push(['summon', 1.5]);
+    // a fresh summon only once every Mutant from the last one is dead
+    if (c.summon <= 0 && this.minions.length === 0) o.push(['summon', 1.5]);
     if (c.slam <= 0 && dist < 11) o.push(['slam', dist < 3.5 ? 5 : 1.8]);
     if (!o.length) return null;
     let total = 0;
@@ -440,19 +444,24 @@ export class ShadowMutant {
     this.pose = { ...this._rest(), armsUp: 0.45, lean: 0.2 };
     this._face(p.pos.x, p.pos.z, dt);
     this._move(dt);
-    const cast = 1.05;
+    /* The ring follows you for half a second, then stops where you are and
+       fills for most of a second before the spikes come up. Walking is
+       enough to get out of it in that time; only what is inside the ring
+       when they come up is hit. */
+    const S = SPIKES;
+    const cast = S.track + S.warn + S.after;
     const k = this.t - this.casts * cast;
     const mark = this.marks[this.casts % this.marks.length];
-    if (k < 0.55) {
+    if (k < S.track) {
       this.spot = this.spot || new Vector3();
       this.spot.set(p.pos.x, this.floorY(p.pos.x, p.pos.z), p.pos.z);
-      this._mark(mark, this.spot, 1.6, k / 0.85);
-    } else if (k < 0.85) {
-      this._mark(mark, this.spot, 1.6, k / 0.85);
+      this._mark(mark, this.spot, S.radius, 0);
+    } else if (k < S.track + S.warn) {
+      this._mark(mark, this.spot, S.radius, (k - S.track) / S.warn);
     } else if (!this.hitDone) {
       this.hitDone = true;
       this._hideMark(mark);
-      this._erupt(this.spot, 1.6, SHADOW.dmg.spikes);
+      this._erupt(this.spot, S.radius, SHADOW.dmg.spikes);
     } else if (k >= cast) {
       this.casts++;
       this.hitDone = false;
@@ -650,7 +659,7 @@ export class ShadowMutant {
         fx?.darkFog(at, { count: 8, spread: 0.8, size: 1.4, up: 1.4 });
         fx?.ring(at, { radius: 1.6, life: 0.6, color: 0x7a30c0 });
       }
-      this.game.hud?.toast('The dead are getting up', 1400);
+      this.game.hud?.toast('Mutants claw their way out of the ground', 1400);
     } else if (t > 2.2) {
       this.summonAt = null;
       this._end('summon', 0.8);

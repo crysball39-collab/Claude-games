@@ -2427,7 +2427,7 @@ r = await page.evaluate(() => {
   g.setSelected('zombie');
   const z = g.spawnSelected().entity;
   z.teleport(o.x, o.z - 5, 0);
-  out.zombie = z.isZombie && z.name === 'Zombie';
+  out.zombie = z.isZombie && z.name === 'Mutant';
   out.bloody = [...z.body.entries.values()].filter((e) => (e.cloth?.surface || e.skin.surface)?.bloodAmount > 0).length;
   const hp0 = victim.health;
   let closest = 99;
@@ -2438,7 +2438,7 @@ r = await page.evaluate(() => {
   g.clearSpawns();
   return out;
 });
-check('a blood zombie is covered in it, walks at the nearest living person and claws them',
+check('a Mutant is covered in blood, walks at the nearest living person and claws them',
   r.zombie && r.bloody >= 5 && r.closed < 1.4 && r.hurt > 0, JSON.stringify(r));
 
 // ---------- Dark Legacy and the Shadow Mutant ----------
@@ -2471,11 +2471,37 @@ r = await page.evaluate(() => {
   const real = p.applyDamage;
   p.applyDamage = (a) => { taken += a; };
   const seen = new Set();
+  // how many of his Mutants are still up each time he starts a summon
+  const boss = e.boss, start = boss._start.bind(boss);
+  out.summonWith = [];
+  boss._start = (n) => { if (n === 'summon') out.summonWith.push(boss.minions.length); return start(n); };
   for (let i = 0; i < 60 * 45; i++) { run(1); seen.add(e.boss.state); }
+  out.zombies = g.characters.filter((c) => c.isZombie).length;
+  out.taken = Math.round(taken);
+  // put his Mutants down and he raises more - but not before
+  for (const z of g.characters.filter((c) => c.isZombie)) z.die();
+  boss.cooldown.summon = 0;
+  for (let i = 0; i < 60 * 25 && out.summonWith.length < 2; i++) run(1);
+  boss._start = start;
+  /* Dark Spikes, once standing still and once walking: the ring stops where
+     you were, so walking out of it is enough. */
+  for (const z of g.characters.filter((c) => c.isZombie)) g.removeCharacter(z);
+  const spikesOn = (move) => {
+    let hit = 0;
+    p.applyDamage = (a) => { hit += a; };
+    boss._setState('chase'); boss._start('spikes');
+    window.stub.move = move;
+    for (let i = 0; i < 60 * 8 && boss.state === 'spikes'; i++) run(1);
+    window.stub.move = { x: 0, y: 0 };
+    return Math.round(hit);
+  };
+  out.spikesStill = spikesOn({ x: 0, y: 0 });
+  // back on your feet first: the spikes knock you about
+  p.heal(); p.teleport(p.pos.x, p.pos.z, 0); run(30);
+  g.camYaw = 0;
+  out.spikesWalking = spikesOn({ x: 1, y: 0 });
   p.applyDamage = real;
   out.attacks = [...seen].filter((s) => ['spikes', 'stab', 'barrage', 'summon', 'slam'].includes(s));
-  out.taken = Math.round(taken);
-  out.zombies = g.characters.filter((c) => c.isZombie).length;
   // guns, blades and the rest hurt him; enough of it and he goes back into the ground
   const b = e.boss;
   const hp1 = b.hp;
@@ -2499,6 +2525,10 @@ check('walking past the tower brings the Shadow Mutant up out of the ground, wit
 check('he uses his attacks, raises blood zombies, can be hurt, and dies taking them with him',
   r.attacks.length >= 5 && r.attacks.includes('summon') && r.zombies >= 5 && r.taken > 0 &&
   r.shotHurts && r.won && r.minionsDown, JSON.stringify(r));
+check('he only summons more Mutants once the last ones are all dead',
+  r.summonWith.length >= 2 && r.summonWith.every((n) => n === 0), JSON.stringify(r.summonWith));
+check('Dark Spikes hit you if you stand still, and miss you if you walk out of the ring',
+  r.spikesStill > 0 && r.spikesWalking === 0, JSON.stringify({ still: r.spikesStill, walking: r.spikesWalking }));
 
 await h.showHud();
 await ev(() => { const g=window.GOREBOX.game; g.clearSpawns(); g.debugCam=null; g.setEquipped('fists'); g.player.teleport(g.map.openArea.x, 6, 0); });

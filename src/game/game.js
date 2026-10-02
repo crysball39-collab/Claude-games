@@ -295,7 +295,7 @@ export const SPAWNABLES = {
   humans: [
     { id: 'citizen', name: 'Citizen', icon: 'citizen', hint: 'An ordinary person' },
     { id: 'officer', name: 'Officer', icon: 'officer', hint: 'Armed. Shoots you if you hurt anyone in sight.' },
-    { id: 'zombie', name: 'Blood Zombie', icon: 'zombie', hint: 'Walks at the nearest living thing and claws.' },
+    { id: 'zombie', name: 'Mutant', icon: 'zombie', hint: 'Blood-covered. Walks at the nearest living thing and claws.' },
   ],
 };
 
@@ -653,7 +653,7 @@ export class Game {
       _v2.y = groundAt;
       const spawn = { officer: spawnOfficer, zombie: spawnZombie }[id] || spawnCitizen;
       const c = spawn(this, _v2, { yaw: this.camYaw + Math.PI });
-      const name = { officer: 'Officer', zombie: 'Blood Zombie' }[id] || 'Citizen';
+      const name = { officer: 'Officer', zombie: 'Mutant' }[id] || 'Citizen';
       return { type: 'citizen', name, entity: c };
     }
     if (id === 'boulder') {
