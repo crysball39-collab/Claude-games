@@ -2302,6 +2302,64 @@ check('there is a full screen button, and this browser can use it',
   r.hud && r.pause && r.supported && r.hudShown && r.pauseShown &&
   r.label === 'FULL SCREEN', JSON.stringify(r));
 
+// ---------- Legacy ----------
+await page.evaluate(() => window.GOREBOX.game.travel('legacy'));
+arrived = await page.evaluate(() => window.arrive('legacy'));
+r = await page.evaluate(() => {
+  const g = window.stepper(), p = g.player, w = g.world;
+  const L = g.map.landmarks;
+  const feet = () => +(p.pos.y - 0.945).toFixed(2);
+  // stepped without drawing: a long walk would otherwise take minutes here
+  const run = (n) => { for (let i = 0; i < n; i++) { g.update(1 / 60, window.stub); window.stub.pressed = {}; } };
+  const walk = (yaw, frames) => {
+    g.camYaw = yaw; window.stub.move = { x: 0, y: 1 };
+    let lo = 99;
+    for (let i = 0; i < frames; i++) { run(1); lo = Math.min(lo, feet()); }
+    window.stub.move = { x: 0, y: 0 };
+    run(10);
+    return { y: feet(), lo, x: +p.pos.x.toFixed(1), z: +p.pos.z.toFixed(1), hp: Math.round(p.health) };
+  };
+  p.heal();
+  const out = {
+    name: g.map.name,
+    water: !w.hasGroundAt(-20, -38) && !w.hasGroundAt(45, -27) && w.hasGroundAt(0, 20),
+    bed: +w.floorAt(-20, -38, 0).toFixed(2),
+    crates: g.spawnedBodies.filter((b) => b.tag === 'crate').length,
+    citizensOnGround: g.characters.filter((c) => c !== p).every((c) => Math.abs(c.pos.y - 0.945) < 0.2),
+  };
+  // the ramp, all the way up to the roof of the tower
+  p.teleport(L.rampFoot.x + 1, L.rampFoot.z, Math.PI / 2); run(10);
+  out.ramp = walk(Math.PI / 2, 900);
+  /* The hotel, on foot: in through the front door, west up the first
+     flight, across the first floor and round to the foot of the second,
+     west up that. (Teleporting inside would land on the roof.) */
+  p.teleport(L.hotelDoor.x, L.hotelDoor.z + 3, 0); run(10);
+  out.lobby = walk(0, 140);
+  out.flight1 = walk(Math.PI / 2, 220);
+  walk(Math.PI, 220);
+  walk(-Math.PI / 2, 110);
+  walk(Math.PI, 80);
+  out.flight2 = walk(Math.PI / 2, 240);
+  // over the stone bridge to the tent
+  p.teleport(40, -20, 0); run(10);
+  out.bridge = walk(0, 300);
+  // down the beach into the lake, slowed by the water, and back out
+  p.teleport(-35, -21, 0); run(10);
+  out.wadeIn = walk(0, 200);
+  out.wading = p.speedScale;
+  out.wadeOut = walk(Math.PI, 400);
+  window.stub.move = { x: 0, y: 0 };
+  p.heal();
+  return out;
+});
+check('Legacy: tower ramp to the roof, a hotel you can climb, a bridge, a beach into the lake',
+  arrived && r.name === 'Legacy' && r.water && Math.abs(r.bed + 1.2) < 0.05 && r.crates >= 4 &&
+  r.citizensOnGround && r.ramp.y > 8.5 && r.ramp.hp === 100 &&
+  r.lobby.z < -19 && Math.abs(r.lobby.y) < 0.1 && Math.abs(r.flight1.y - 3) < 0.1 &&
+  Math.abs(r.flight2.y - 6) < 0.1 &&
+  r.bridge.z < -31 && r.bridge.lo > -0.1 && r.wadeIn.y < -0.8 && r.wading === 0.5 &&
+  r.wadeOut.y > -0.05 && r.wadeOut.z > -24, JSON.stringify(r));
+
 await h.showHud();
 await ev(() => { const g=window.GOREBOX.game; g.clearSpawns(); g.debugCam=null; g.setEquipped('fists'); g.player.teleport(g.map.openArea.x, 6, 0); });
 await page.waitForTimeout(800);

@@ -23,7 +23,7 @@
 import {
   Group, Mesh, BoxGeometry, PlaneGeometry, CylinderGeometry, ConeGeometry,
   IcosahedronGeometry, MeshLambertMaterial, MeshBasicMaterial, Fog, Color, Vector3,
-  Float32BufferAttribute, BufferGeometry, Shape, ShapeGeometry, InstancedMesh, Matrix4,
+  Float32BufferAttribute, BufferGeometry, Shape, ShapeGeometry, InstancedMesh, Matrix4, Matrix3,
   Quaternion, Euler, CanvasTexture, SRGBColorSpace, DoubleSide, RepeatWrapping,
 } from 'three';
 import {
@@ -178,6 +178,57 @@ function signTexture(text, { w = 256, h = 64, bg = '#e8e2d2', fg = '#2a2420' } =
   const t = new CanvasTexture(c);
   t.colorSpace = SRGBColorSpace;
   return t;
+}
+
+/**
+ * Bakes every plain, opaque, static mesh directly under `group` into one
+ * mesh per material. Legacy is built from several hundred boxes - the crane
+ * alone is a lattice of them - and a phone pays for each one it draws
+ * separately, not for how many triangles there are.
+ */
+function mergeStatic(group, disposables) {
+  const buckets = new Map();
+  for (const m of [...group.children]) {
+    if (!m.isMesh || m.isInstancedMesh || m.renderOrder !== 0) continue;
+    const mat = m.material;
+    if (Array.isArray(mat) || mat.transparent || mat.vertexColors) continue;
+    const g = m.geometry;
+    if (!g.attributes.position || !g.attributes.normal || !g.attributes.uv || g.attributes.color) continue;
+    const key = mat.uuid + (m.castShadow ? 's' : '') + (m.receiveShadow ? 'r' : '');
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(m);
+  }
+  const nm = new Matrix3();
+  for (const list of buckets.values()) {
+    if (list.length < 2) continue;
+    const pos = [], nor = [], uv = [];
+    for (const m of list) {
+      m.updateMatrix();
+      const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry;
+      const p = g.attributes.position, n = g.attributes.normal, u = g.attributes.uv;
+      nm.getNormalMatrix(m.matrix);
+      const v = new Vector3();
+      for (let i = 0; i < p.count; i++) {
+        v.fromBufferAttribute(p, i).applyMatrix4(m.matrix);
+        pos.push(v.x, v.y, v.z);
+        v.fromBufferAttribute(n, i).applyMatrix3(nm).normalize();
+        nor.push(v.x, v.y, v.z);
+        uv.push(u.getX(i), u.getY(i));
+      }
+      if (g !== m.geometry) g.dispose();
+      m.removeFromParent();
+    }
+    const merged = new BufferGeometry();
+    merged.setAttribute('position', new Float32BufferAttribute(pos, 3));
+    merged.setAttribute('normal', new Float32BufferAttribute(nor, 3));
+    merged.setAttribute('uv', new Float32BufferAttribute(uv, 2));
+    merged.computeBoundingSphere();
+    const out = new Mesh(merged, list[0].material);
+    out.castShadow = list[0].castShadow;
+    out.receiveShadow = list[0].receiveShadow;
+    group.add(out);
+    disposables.push(merged);
+  }
 }
 
 /* ---------------------------------- build ---------------------------------- */
@@ -774,6 +825,7 @@ export function buildLegacy(ctx) {
     keep(m.geometry);
   }
 
+  mergeStatic(group, disposables);
   scene.add(group);
 
   let clock = 0;
