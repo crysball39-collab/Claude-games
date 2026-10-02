@@ -25,6 +25,7 @@ import {
 } from './textures.js';
 import { createRCV2Model } from './rcv2.js';
 import { valueNoise2D, fbm, clamp01, lerp } from '../core/util.js';
+import { buildLegacy } from './legacy.js';
 
 const UP = new Vector3(0, 1, 0);
 
@@ -48,7 +49,28 @@ export const MAPS = [
       'the bottom. Look around down there.',
     build: buildPitValley,
   },
+  {
+    id: 'legacy',
+    name: 'Legacy',
+    subtitle: 'A walled island: tower, lake, hotel, crane &middot; 110 x 90 m',
+    description:
+      'An island inside a wall. A grey tower with a long ramp to its roof, a ' +
+      'lake and a beach, a river under a stone bridge, a three storey hotel ' +
+      'with a garage, a crane over the water with crates and containers ' +
+      'stacked under it, and a military tent over the parking. Paths and ' +
+      'trees everywhere in between.',
+    build: buildLegacy,
+  },
 ];
+
+/** Is (x, z) over a pool of water? Pools are circles or rectangles. */
+export function inPool(pool, x, z) {
+  if (pool.r != null) {
+    const dx = x - pool.x, dz = z - pool.z;
+    return dx * dx + dz * dz < pool.r * pool.r;
+  }
+  return x > pool.minX && x < pool.maxX && z > pool.minZ && z < pool.maxZ;
+}
 
 /** Maps you can only reach from inside another map. */
 export const SECRET_MAPS = [
@@ -71,7 +93,7 @@ export function getMap(id) {
 
 /** Sun, sky light and fill. Returns the sun so the game can keep its shadow
     camera over the player. */
-function addLights(scene, quality, {
+export function addLights(scene, quality, {
   sky = 0xbcd8f2, ground = 0x4a5a34, hemi = 0.85,
   sunColor = 0xfff3dc, sunIntensity = 1.55, sunPos = [38, 56, 22],
   ambient = 0.24, ambientColor = 0xffffff,
@@ -101,7 +123,7 @@ function addLights(scene, quality, {
   };
 }
 
-function addSky(group, disposables, stops) {
+export function addSky(group, disposables, stops) {
   const tex = makeSkyTexture(32, 256, stops);
   const mat = new MeshBasicMaterial({ map: tex, side: BackSide, fog: false, depthWrite: false });
   const sky = new Mesh(new SphereGeometry(420, 24, 16), mat);
@@ -116,7 +138,7 @@ function addSky(group, disposables, stops) {
  * and the broad colour variation in the vertex colours carries straight
  * across the joins too.
  */
-function grassPatch(material, minX, maxX, minZ, maxZ, noise, { tile = 5, density = 0.7 } = {}) {
+export function grassPatch(material, minX, maxX, minZ, maxZ, noise, { tile = 5, density = 0.7 } = {}) {
   const w = maxX - minX, d = maxZ - minZ;
   const geo = new PlaneGeometry(w, d, Math.max(1, Math.round(w * density)),
     Math.max(1, Math.round(d * density)));
@@ -148,7 +170,7 @@ function grassPatch(material, minX, maxX, minZ, maxZ, noise, { tile = 5, density
  * ever directly above a pit floor except a bridge, and a bridge has no patch,
  * so every splat shows up in exactly one place - where it landed.
  */
-function decalPatch(material, half, minX, maxX, minZ, maxZ, y) {
+export function decalPatch(material, half, minX, maxX, minZ, maxZ, y) {
   const w = maxX - minX, d = maxZ - minZ;
   const geo = new PlaneGeometry(w, d);
   geo.rotateX(-Math.PI / 2);
@@ -167,7 +189,7 @@ function decalPatch(material, half, minX, maxX, minZ, maxZ, y) {
 /** A box whose texture repeats every `tile` metres instead of stretching
     one copy over each face, which is what turns a twenty metre wall from a
     smear into masonry. */
-function tiledBox(w, h, d, tile = 2) {
+export function tiledBox(w, h, d, tile = 2) {
   const g = new BoxGeometry(w, h, d);
   const uv = g.attributes.uv;
   const dims = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
@@ -184,7 +206,7 @@ function tiledBox(w, h, d, tile = 2) {
  * Solid, static map parts: a mesh you see and a body the physics knows
  * about, built together so they can never disagree about where a wall is.
  */
-function makeSolids(group, world, quality, disposables) {
+export function makeSolids(group, world, quality, disposables) {
   const solids = [];
   const add = (w, h, d, x, y, z, mat, {
     floorDecal = false, visible = true, shadow = true, geo = null, ry = 0, tile = 0,
@@ -220,7 +242,7 @@ function makeSolids(group, world, quality, disposables) {
 }
 
 /** A flat strip laid along a line of points, for paths. */
-function pathRibbon(points, width, material, y = 0.006, tile = 2.6) {
+export function pathRibbon(points, width, material, y = 0.006, tile = 2.6) {
   const pos = [], uv = [], idx = [];
   let along = 0;
   for (let i = 0; i < points.length; i++) {
@@ -251,7 +273,7 @@ function pathRibbon(points, width, material, y = 0.006, tile = 2.6) {
 }
 
 /** A round patch of the same path surface, where paths meet. */
-function pathDisc(x, z, r, material, y = 0.008, tile = 2.6) {
+export function pathDisc(x, z, r, material, y = 0.008, tile = 2.6) {
   const geo = new CircleGeometry(r, 28);
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position, uv = geo.attributes.uv;
@@ -263,7 +285,7 @@ function pathDisc(x, z, r, material, y = 0.008, tile = 2.6) {
 }
 
 /** The four perimeter walls every map so far has had. */
-function perimeterWalls(add, half, mat, { height = 4.5, thick = 1.0 } = {}) {
+export function perimeterWalls(add, half, mat, { height = 4.5, thick = 1.0 } = {}) {
   const wy = height / 2;
   const span = half * 2;
   add(span, height, thick, 0, wy, -half + thick / 2, mat);
@@ -273,7 +295,7 @@ function perimeterWalls(add, half, mat, { height = 4.5, thick = 1.0 } = {}) {
 }
 
 /** The thing every map returns, filled in from what it built. */
-function mapRecord(o) {
+export function mapRecord(o) {
   const { scene, world, group, solids, lights, disposables, decalMat } = o;
   return {
     id: o.id,
@@ -294,6 +316,9 @@ function mapRecord(o) {
     encounter: o.encounter || null,
     /** How many citizens to start with; undefined means the usual few. */
     citizens: o.citizens,
+    /** Loose things the game drops in once the map is up: { kind, pos }. */
+    props: o.props || [],
+    landmarks: o.landmarks || null,
     tick: o.tick || null,
     attachDecalTexture(tex) { decalMat.map = tex; decalMat.needsUpdate = true; },
     dispose() {
@@ -308,7 +333,7 @@ function mapRecord(o) {
   };
 }
 
-function decalMaterial() {
+export function decalMaterial() {
   return new MeshBasicMaterial({
     transparent: true, depthWrite: false, side: DoubleSide, opacity: 0.94,
     polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,

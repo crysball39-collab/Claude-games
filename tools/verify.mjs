@@ -1531,8 +1531,10 @@ r = await page.evaluate(async () => {
      beating now, so each of these is several solid blows to the same part -
      and `jab` is the control, a long run of punch-sized hits that must never
      tear anything off at all. */
-  for (const [tag, which, blow, blows] of [['arm', 'lowerArmR', 45, 3], ['head', 'head', 60, 2],
-    ['chip', 'lowerLegL', 26, 6], ['jab', 'lowerArmL', 11, 30]]) {
+  for (const [tag, which, blow, blows, wound] of [['arm', 'lowerArmR', 45, 12, 'gash'],
+    ['head', 'head', 60, 14, 'split'], ['chip', 'lowerLegL', 30, 20, 'gash'],
+    ['jab', 'lowerArmL', 11, 30, null], ['shot', 'head', 109, 3, 'hole'],
+    ['hand', 'handR', 42, 2, 'hole']]) {
     g.clearSpawns();
     g.player.teleport(OX, 8, 0);
     const c = spawnCitizen(g, new V(OX, 0, 0));
@@ -1551,7 +1553,7 @@ r = await page.evaluate(async () => {
       if (c.gone.has(which)) break;
       tookOff++;
       c.applyImpact(at, new V(0, 8, -90), { boneName: which, damage: blow,
-        type: 'impact', severity: 0.9, crush: 0.6 });
+        type: 'impact', severity: 0.9, crush: 0.6, wound });
       for (let k = 0; k < 2; k++) await frame();
     }
     for (let i = 0; i < 120; i++) await frame();
@@ -1580,12 +1582,15 @@ r = await page.evaluate(async () => {
 check('a limb that takes a beating comes off, and the body still works',
   r.arm.gone && r.arm.detached && r.arm.stump && r.arm.shed >= 2 && r.arm.cons > 0 &&
   r.arm.pairs > 0 && r.arm.lighter > 1 && r.arm.debris > 0 &&
-  r.arm.finite && r.arm.worst < 20 && r.arm.splats && r.arm.blows >= 2,
+  r.arm.finite && r.arm.worst < 20 && r.arm.splats && r.arm.blows >= 5,
   JSON.stringify(r.arm));
-check('a head takes more than one blow to come off, and kills when it does',
-  r.head.gone && r.head.dead && r.head.finite && r.head.blows >= 2 &&
-  r.chip.gone && r.chip.detached && r.chip.finite && r.chip.worst < 20 && r.chip.blows >= 3,
+check('a head takes a beating to come off, and kills when it does',
+  r.head.gone && r.head.dead && r.head.finite && r.head.blows >= 5 &&
+  r.chip.gone && r.chip.detached && r.chip.finite && r.chip.worst < 20 && r.chip.blows >= 8,
   JSON.stringify({ head: r.head, chip: r.chip }));
+check('three rifle rounds to the head, or two to a hand, take nothing off',
+  !r.shot.gone && !r.shot.detached && r.shot.dead && !r.hand.gone && !r.hand.detached,
+  JSON.stringify({ shot: r.shot, hand: r.hand }));
 check('punches bruise and break, but never tear a limb off',
   !r.jab.gone && !r.jab.detached && r.jab.finite, JSON.stringify(r.jab));
 

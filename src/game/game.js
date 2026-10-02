@@ -7,7 +7,7 @@ import {
   PCFSoftShadowMap, SRGBColorSpace, ACESFilmicToneMapping,
 } from 'three';
 import { PhysicsWorld } from '../physics/world.js';
-import { getMap } from './map.js';
+import { getMap, inPool } from './map.js';
 import { Character, STATE } from './character.js';
 import { playerAppearance } from './appearance.js';
 import { spawnCitizen } from './citizen.js';
@@ -420,6 +420,10 @@ export class Game {
           spawnCitizen(this, _v1.set(x, 0, z));
           placed++;
         }
+        // and whatever loose things the map wants lying about
+        for (const prop of this.map.props || []) {
+          if (prop.kind === 'crate') spawnCrate(this, prop.pos.clone());
+        }
       }],
       ['Waking something up', async () => {
         // only Red Plains has anything waiting on it
@@ -768,10 +772,8 @@ export class Game {
     for (const c of this.characters) c.speedScale = 1;
     if (!pools || !pools.length) return;
     for (const pool of pools) {
-      const r2 = pool.r * pool.r;
       for (const c of this.characters) {
-        const dx = c.pos.x - pool.x, dz = c.pos.z - pool.z;
-        if (dx * dx + dz * dz > r2) continue;
+        if (!inPool(pool, c.pos.x, c.pos.z)) continue;
         const feet = c.pos.y - HIP_HEIGHT;
         if (feet > pool.y || feet < pool.floor - 0.5) continue;
         c.speedScale = Math.min(c.speedScale, 0.5);

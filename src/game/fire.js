@@ -13,6 +13,7 @@ import {
 import { DAMAGEABLE, pointInBone, boneBoxCenter, boxLocalToWorld } from './skeleton.js';
 import { softGlowMaterial } from './fx.js';
 import { paintSplat } from './paint.js';
+import { inPool } from './map.js';
 import { makeRng, clamp01 } from '../core/util.js';
 
 const _v1 = new Vector3(), _v2 = new Vector3(), _v3 = new Vector3(), _v4 = new Vector3();
@@ -191,8 +192,7 @@ export class FireSystem {
 
   _puffInWater(pos) {
     for (const pool of this.game.map?.water || []) {
-      const dx = pos.x - pool.x, dz = pos.z - pool.z;
-      if (dx * dx + dz * dz < pool.r * pool.r && pos.y < pool.y + 0.06) return true;
+      if (inPool(pool, pos.x, pos.z) && pos.y < pool.y + 0.06) return true;
     }
     return false;
   }
@@ -474,8 +474,7 @@ export class FireSystem {
 
   _inWater(c) {
     for (const pool of this.game.map?.water || []) {
-      const dx = c.center.x - pool.x, dz = c.center.z - pool.z;
-      if (dx * dx + dz * dz < pool.r * pool.r && c.center.y < pool.y + 0.9) return true;
+      if (inPool(pool, c.center.x, c.center.z) && c.center.y < pool.y + 0.9) return true;
     }
     return false;
   }

@@ -622,7 +622,10 @@ export class Character {
     if (boneName && this.partHealth[boneName] != null) {
       const had = this.partHealth[boneName];
       this.partHealth[boneName] = Math.max(0, had - amount);
-      if (amount >= GIB.minHit) this.partOverkill[boneName] += Math.max(0, amount - had);
+      if (amount >= GIB.minHit) {
+        const k = GIB.sever[wound || 'none'] ?? GIB.sever.none;
+        this.partOverkill[boneName] += Math.max(0, amount - had) * k;
+      }
     }
     if (this.dead) {
       // corpses still take visible damage, and can still come apart
@@ -807,7 +810,7 @@ export class Character {
     const bone = this.rig.byName[boneName];
     if (!bone) return false;
     const hp = bone.hp || 10;
-    if (amount >= hp * GIB.oneShot) return true;
+    if (amount >= hp * GIB.oneShot && amount >= GIB.minHit) return true;
     return (this.partOverkill[boneName] || 0) >= hp * GIB.overkill;
   }
 

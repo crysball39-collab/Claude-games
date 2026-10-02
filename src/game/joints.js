@@ -213,16 +213,23 @@ for (const S of ['R', 'L']) {
  */
 export const GIB = {
   /** Damage past zero that takes a part off, as a multiple of its health.
-      It was 1.1, which let one pistol round take a forearm or a head off and
-      four punches take an arm. At 5 it is three or four solid rifle rounds
-      into the same forearm, or two from a sledgehammer. */
-  overkill: 5.0,
-  /** One hit this many times a part's health does it on its own. Only a hand
-      is small enough for any weapon here to manage that. */
-  oneShot: 4.0,
+      It was 1.1, then 5 - which still let two pistol rounds take a head off
+      and three rifle rounds a forearm. At 12 a part has to be worked over:
+      five or six full machete swings into one forearm, half a dozen
+      sledgehammer blows to a head, most of a rifle magazine into a limb. */
+  overkill: 12.0,
+  /** One hit this many times a part's health does it on its own. At 4 a
+      single rifle round to the head (2.6x) or any round to a hand did; at 9
+      nothing in the game hits that hard. */
+  oneShot: 9.0,
   /** Hits smaller than this never count towards tearing anything off. Fists
       bruise and break; they do not dismember. */
-  minHit: 15,
+  minHit: 20,
+  /** How much of a hit counts towards taking the part off, by the wound it
+      makes. An edge severs; a round punches a hole through and out the other
+      side; a hammer crushes. Hits that are none of these - landing hard,
+      being thrown into a wall - count least of all. */
+  sever: { gash: 1.0, split: 0.85, hole: 0.5, burn: 0, none: 0.45 },
   /** What can come off. A torso cannot: there would be no body left. */
   parts: new Set([
     'head',
