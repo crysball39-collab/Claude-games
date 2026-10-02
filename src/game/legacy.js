@@ -5,7 +5,8 @@
    North is up (-Z); you arrive at the bottom middle.
 
         +--------------------------------------------------+
-        | sand |~~~~~~~ lake ~~~~~~~~~|      [ tent  ]     |
+        |#=====================( ledge )==#   [ tent  ]     |  <- walkway on the wall
+        |#sand |~~~~~~~ lake ~~~~~~~~~|                    |
         | sand |~~~~~~~~~~~~~~~~~~~~~~~~~~~~ river ~~~~~~~~=  <- stone bridge
         | sand ~~~~~~~~~  crane  ~~~~~~|     on the path   |
         | beach  [hotel][garage] crates                    |
@@ -72,7 +73,20 @@ const PATHS = [
     [-45, 20], [-40, 30], [-29, 37], [-14, 40], [0, 41]],
   // a spur to the south face of the tower
   [[3, 19], [-4, 15], [-10, 11], [-13, 7.5]],
+  // from the tent to the foot of the lake walkway
+  [[34, -40], [27, -42], [20.5, -42.5]],
 ];
+
+/* The second bridge: a walkway raised a metre over the water, along the
+   north wall from the lake's east end to the north west corner, then south
+   along the west wall and down onto the beach. Half way along, a round
+   ledge stands out over the lake. */
+const WALK = {
+  y: 1.0, w: 3,
+  north: { x0: -54, x1: 16, z0: -44, z1: -41 },
+  west: { x0: -54, x1: -51, z0: -41, z1: -31 },
+  ledge: { x: -16, z: -41, r: 7 },
+};
 
 /** Where nothing grows: the water, the buildings, the paths and their verges. */
 function treeAllowed(x, z) {
@@ -714,6 +728,108 @@ export function buildLegacy(ctx) {
     add(BW + 0.4, -BED + BRIDGE.top - 0.5, 0.9, BX, (BED + BRIDGE.top - 0.5) / 2, BZ + sz * (span / 2 - 0.4), stoneMat);
   }
 
+  /* --------------------------- the lake walkway --------------------------- */
+  {
+    const W = WALK, top = W.y, thick = 0.3;
+    const deckMat = concreteMat;
+    const deck = (x0, x1, z0, z1) => add(x1 - x0, thick, z1 - z0, (x0 + x1) / 2, top - thick / 2,
+      (z0 + z1) / 2, deckMat, { tile: 2 });
+    deck(W.north.x0, W.north.x1, W.north.z0, W.north.z1);
+    deck(W.west.x0, W.west.x1, W.west.z0, W.west.z1);
+    // a kerb along the deck's edge, so it reads as a walkway and not a slab
+    const kerb = (w, d, x, z) => {
+      const m = new Mesh(new BoxGeometry(w, 0.12, d), concreteDark);
+      m.position.set(x, top + 0.06, z);
+      group.add(m);
+      keep(m.geometry);
+    };
+    /* The ledge: half a disc out over the water, laid down as strips for the
+       physics (a box can only be a box) under one round slab you see. */
+    const L0 = W.ledge;
+    const strips = 14;
+    for (let i = 0; i < strips; i++) {
+      const xa = L0.x - L0.r + (2 * L0.r * i) / strips, xb = xa + (2 * L0.r) / strips;
+      const xm = (xa + xb) / 2 - L0.x;
+      const reach = Math.sqrt(Math.max(0, L0.r * L0.r - xm * xm));
+      if (reach < 0.3) continue;
+      add(xb - xa, thick, reach, (xa + xb) / 2, top - thick / 2, L0.z + reach / 2, deckMat,
+        { visible: false });
+    }
+    const disc = new Mesh(new CylinderGeometry(L0.r, L0.r, thick, 40, 1, false, -Math.PI / 2, Math.PI), deckMat);
+    disc.position.set(L0.x, top - thick / 2, L0.z);
+    disc.castShadow = quality.shadows;
+    disc.receiveShadow = quality.shadows;
+    group.add(disc);
+    keep(disc.geometry);
+
+    /* Pillars down to the lake bed - or to the sand, under the west leg -
+       every six metres, and a ring of them under the ledge. */
+    const pillar = (x, z) => {
+      const base = world.hasGroundAt(x, z) ? 0 : BED;
+      const h = top - thick - base;
+      add(0.5, h, 0.5, x, base + h / 2, z, concreteDark, { tile: 1 });
+    };
+    for (let x = W.north.x1 - 1; x > W.north.x0 + 2; x -= 6) pillar(x, -42.5);
+    pillar(-52.5, -37);
+    pillar(-52.5, -33);
+    for (let k = 0; k < 5; k++) {
+      const a = -Math.PI / 2 + (Math.PI * (k + 0.5)) / 5;
+      pillar(L0.x + Math.sin(a) * (L0.r - 0.8), L0.z + Math.cos(a) * (L0.r - 0.8));
+    }
+
+    /* Railings. Drawn as a top rail on posts; solid as a thin wall a metre
+       high, so nobody walks off the edge into the lake by accident. */
+    const railH = 1.0;
+    const railRun = (ax, az, bx, bz) => {
+      const len = Math.hypot(bx - ax, bz - az);
+      if (len < 0.05) return;
+      const ry = Math.atan2(-(bz - az), bx - ax);
+      add(len, railH, 0.1, (ax + bx) / 2, top + railH / 2, (az + bz) / 2, railMat, { visible: false, ry });
+      const bar = new Mesh(new BoxGeometry(len, 0.07, 0.07), railMat);
+      bar.position.set((ax + bx) / 2, top + railH - 0.035, (az + bz) / 2);
+      bar.rotation.y = ry;
+      group.add(bar);
+      keep(bar.geometry);
+      const mid = new Mesh(new BoxGeometry(len, 0.05, 0.05), railMat);
+      mid.position.set((ax + bx) / 2, top + railH * 0.5, (az + bz) / 2);
+      mid.rotation.y = ry;
+      group.add(mid);
+      keep(mid.geometry);
+      const posts = Math.max(1, Math.round(len / 2));
+      for (let i = 0; i <= posts; i++) {
+        const t = i / posts;
+        const post = new Mesh(new BoxGeometry(0.07, railH, 0.07), railMat);
+        post.position.set(ax + (bx - ax) * t, top + railH / 2, az + (bz - az) * t);
+        group.add(post);
+        keep(post.geometry);
+      }
+    };
+    // along the lake side of the north leg, broken where the ledge opens off it
+    railRun(W.west.x1, W.north.z1 - 0.05, L0.x - L0.r, W.north.z1 - 0.05);
+    railRun(L0.x + L0.r, W.north.z1 - 0.05, W.north.x1, W.north.z1 - 0.05);
+    // round the ledge
+    const segs = 16;
+    for (let i = 0; i < segs; i++) {
+      const a0 = -Math.PI / 2 + (Math.PI * i) / segs, a1 = -Math.PI / 2 + (Math.PI * (i + 1)) / segs;
+      const r = L0.r - 0.06;
+      railRun(L0.x + Math.sin(a0) * r, L0.z + Math.cos(a0) * r, L0.x + Math.sin(a1) * r, L0.z + Math.cos(a1) * r);
+    }
+    // the inner side of the west leg
+    railRun(W.west.x1 - 0.05, W.north.z1, W.west.x1 - 0.05, W.west.z1);
+    kerb(W.north.x1 - W.north.x0, 0.2, (W.north.x0 + W.north.x1) / 2, W.north.z0 + 0.1);
+    kerb(0.2, W.west.z1 - W.west.z0, W.west.x0 + 0.1, (W.west.z0 + W.west.z1) / 2);
+
+    /* Steps down at both ends: four of a quarter metre each, east onto the
+       grass by the river, south onto the beach. */
+    for (let i = 1; i <= 3; i++) {
+      const t = top - 0.25 * i;
+      add(1, t, W.w, W.north.x1 + i - 0.5, t / 2, (W.north.z0 + W.north.z1) / 2, concreteDark,
+        { floorDecal: true });
+      add(W.w, t, 1, (W.west.x0 + W.west.x1) / 2, t / 2, W.west.z1 + i - 0.5, concreteDark,
+        { floorDecal: true });
+    }
+  }
+
   /* ---------------------- the tent over the parking ----------------------- */
   // tarmac with white bays
   const tarmac = new Mesh(new PlaneGeometry(17, 11.5), keep(new MeshLambertMaterial({ color: 0x4a4d50 })));
@@ -861,6 +977,9 @@ export function buildLegacy(ctx) {
       bridge: new Vector3(BX, BRIDGE.top, BZ), tent: new Vector3(TENT.x, 0, TENT.z),
       crane: new Vector3(cx, 0, cz), beach: new Vector3(-36, 0, -18),
       stairTop2: new Vector3(STAIR.x0 + 0.3, H.floor * 2, IN.z1 - STAIR.w / 2),
+      walkEast: new Vector3(WALK.north.x1 + 4, 0, (WALK.north.z0 + WALK.north.z1) / 2),
+      walkLedge: new Vector3(WALK.ledge.x, WALK.y, WALK.ledge.z + WALK.ledge.r - 1),
+      walkBeach: new Vector3((WALK.west.x0 + WALK.west.x1) / 2, 0, WALK.west.z1 + 4),
     },
   });
 }

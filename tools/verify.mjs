@@ -2348,17 +2348,28 @@ r = await page.evaluate(() => {
   out.wadeIn = walk(0, 200);
   out.wading = p.speedScale;
   out.wadeOut = walk(Math.PI, 400);
+  /* The walkway along the north wall: up the steps at its east end, west
+     along it to the corner and down the west leg onto the beach. The ledge
+     halfway: out to its rail, which holds. */
+  p.teleport(L.walkEast.x, L.walkEast.z, Math.PI / 2); run(10);
+  out.walkway = walk(Math.PI / 2, 1100);
+  out.walkBeach = walk(Math.PI, 500);
+  p.teleport(L.walkLedge.x, L.walkLedge.z - 3, Math.PI); run(10);
+  out.ledge = walk(Math.PI, 200);
   window.stub.move = { x: 0, y: 0 };
   p.heal();
   return out;
 });
-check('Legacy: tower ramp to the roof, a hotel you can climb, a bridge, a beach into the lake',
+check('Legacy: tower ramp, a hotel you can climb, two bridges, the ledge, a beach into the lake',
   arrived && r.name === 'Legacy' && r.water && Math.abs(r.bed + 1.2) < 0.05 && r.crates >= 4 &&
   r.citizensOnGround && r.ramp.y > 8.5 && r.ramp.hp === 100 &&
   r.lobby.z < -19 && Math.abs(r.lobby.y) < 0.1 && Math.abs(r.flight1.y - 3) < 0.1 &&
   Math.abs(r.flight2.y - 6) < 0.1 &&
   r.bridge.z < -31 && r.bridge.lo > -0.1 && r.wadeIn.y < -0.8 && r.wading === 0.5 &&
-  r.wadeOut.y > -0.05 && r.wadeOut.z > -24, JSON.stringify(r));
+  r.wadeOut.y > -0.05 && r.wadeOut.z > -24 &&
+  r.walkway.x < -52 && Math.abs(r.walkway.y - 1) < 0.05 &&
+  r.walkBeach.z > -28 && Math.abs(r.walkBeach.y) < 0.05 && r.walkBeach.hp === 100 &&
+  Math.abs(r.ledge.y - 1) < 0.05 && r.ledge.z > -35.5 && r.ledge.z < -34, JSON.stringify(r));
 
 await h.showHud();
 await ev(() => { const g=window.GOREBOX.game; g.clearSpawns(); g.debugCam=null; g.setEquipped('fists'); g.player.teleport(g.map.openArea.x, 6, 0); });

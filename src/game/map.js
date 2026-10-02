@@ -55,7 +55,8 @@ export const MAPS = [
     subtitle: 'A walled island: tower, lake, hotel, crane &middot; 110 x 90 m',
     description:
       'An island inside a wall. A grey tower with a long ramp to its roof, a ' +
-      'lake and a beach, a river under a stone bridge, a three storey hotel ' +
+      'lake and a beach, a walkway along the wall over the lake with a round ' +
+      'ledge out over the water, a river under a stone bridge, a three storey hotel ' +
       'with a garage, a crane over the water with crates and containers ' +
       'stacked under it, and a military tent over the parking. Paths and ' +
       'trees everywhere in between.',
