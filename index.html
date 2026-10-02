@@ -51,6 +51,7 @@
     <div class="menu-tagline">first person &middot; physics &middot; sandbox</div>
     <div class="menu-buttons">
       <button class="mbtn primary" id="btn-maps">MAPS</button>
+      <button class="mbtn ai" id="btn-aiplay">AI PLAY</button>
       <button class="mbtn" id="btn-controls">CONTROLS</button>
       <button class="mbtn" id="btn-settings">SETTINGS</button>
     </div>
@@ -89,12 +90,14 @@
         <p>The button beside PAUSE fills the screen, and fills it back.</p>
         <p>Fire Fist (once you have earned it) &rarr; PUNCH sets people alight, FIREBALL throws fire.</p>
         <p>Flamethrower &rarr; hold BURN for a stream of fire; RELOAD swaps the fuel tank.</p>
+        <p>AI (top right) hands the controls to an AI that plays for you, and talks about it at the top of the screen. AI PLAY on the menu starts it on a map of its choosing.</p>
       </div>
       <div class="ctl-group"><b>Keyboard &amp; mouse</b>
         <p>WASD move &middot; Mouse look (click to lock) &middot; Space jump &middot; C or Ctrl crouch</p>
         <p>1 fists &middot; 2 RCV2 &middot; 3-8 and 0 whatever you are carrying &middot; 9 Fire Fist &middot; R reload</p>
         <p>Q or right click throws a fireball with the Fire Fist &middot; Space skips a cutscene</p>
         <p>Left click punch / grab &middot; E use &middot; G spawn &middot; X delete &middot; Tab spawn menu</p>
+        <p>I turns AI play on and off</p>
       </div>
     </div>
   </div>
@@ -130,6 +133,7 @@
 
     <!-- top right -->
     <div id="top-right">
+      <button id="btn-ai" class="hud-btn square small" aria-label="AI play">AI</button>
       <button id="btn-fullscreen" class="hud-btn square small" aria-label="Full screen">&#9974;</button>
       <button id="btn-pause" class="hud-btn square small" aria-label="Pause">&#9199;</button>
       <div class="health-wrap">
@@ -139,6 +143,9 @@
         <div class="health-label">HEALTH</div>
       </div>
     </div>
+
+    <!-- what the AI says while it plays -->
+    <div id="ai-chat" class="hidden"><div id="ai-chat-lines"></div></div>
 
     <!-- the boss, while there is one -->
     <div id="boss-bar" class="hidden">
@@ -233,6 +240,7 @@
     <div class="pause-card">
       <h2>PAUSED</h2>
       <button class="mbtn primary" id="btn-resume">RESUME</button>
+      <button class="mbtn" id="btn-ai-pause">AI PLAY: OFF</button>
       <button class="mbtn" id="btn-clear">CLEAR SPAWNS</button>
       <button class="mbtn" id="btn-cleangore">WASH THE BLOOD</button>
       <button class="mbtn" id="btn-fullscreen-pause">FULL SCREEN</button>

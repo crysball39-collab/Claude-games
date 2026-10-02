@@ -32,6 +32,7 @@ export class InputManager {
     this.onWeaponSelect = null;  // (index) => void
     this.onToggleDrawer = null;
     this.onPause = null;
+    this.onToggleAI = null;
   }
 
   /* ------------------------------ wiring -------------------------------- */
@@ -261,6 +262,7 @@ export class InputManager {
       case 'KeyQ': set('fireball'); break;
       case 'Tab': if (isDown) this.onToggleDrawer?.(); break;
       case 'Escape': if (isDown) this.onPause?.(); break;
+      case 'KeyI': if (isDown) this.onToggleAI?.(); break;
       default: break;
     }
     this._updateKeyboardMove();

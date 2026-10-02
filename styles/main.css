@@ -257,7 +257,7 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
 #btn-skip{position:absolute;right:calc(var(--safe-r) + 14px);bottom:calc(11vh + 12px);border-radius:8px;
   padding:.5rem 1rem;font-size:.66rem;pointer-events:auto}
 /* nothing else on the screen while one plays */
-#hud.cutscene > :not(#cutscene):not(#toast):not(#damage-vignette):not(#burn-overlay):not(#death-overlay){
+#hud.cutscene > :not(#cutscene):not(#toast):not(#damage-vignette):not(#burn-overlay):not(#death-overlay):not(#ai-chat){
   display:none !important}
 
 /* rounds left, under the crosshair on the right of the cluster */
@@ -446,3 +446,26 @@ body.portrait-block #rotate-overlay{display:flex}
   .map-list{max-width:none;flex:0 0 auto;max-height:38vh}
   .map-detail{max-width:none;flex:1 1 auto}
 }
+
+/* -------------------------------- AI play -------------------------------- */
+.mbtn.ai{border-color:rgba(120,200,255,.45);color:#cfeaff}
+#btn-ai{font-weight:900;font-size:.8rem;letter-spacing:.08em}
+#btn-ai.on{background:rgba(40,130,210,.75);border-color:rgba(150,215,255,.9);color:#fff;
+  box-shadow:0 0 12px rgba(80,170,255,.6)}
+/* the AI's chat: across the top, newest line at the bottom */
+#ai-chat{position:absolute;top:calc(var(--safe-t) + 8px);left:calc(var(--safe-l) + 66px);
+  right:calc(var(--safe-r) + 300px);max-width:480px;margin:0 auto;pointer-events:none;z-index:17}
+#ai-chat.hidden{display:none}
+#ai-chat-lines{display:flex;flex-direction:column;gap:2px}
+.ai-line{font-size:.7rem;line-height:1.25;letter-spacing:.02em;color:#eef6ff;background:rgba(6,16,28,.66);
+  border:1px solid rgba(120,190,255,.28);border-radius:6px;padding:.2rem .5rem;
+  text-shadow:0 1px 2px #000;animation:aiIn .25s ease;transition:opacity .4s ease}
+.ai-line b{color:#7cc8ff;font-weight:900;letter-spacing:.12em;margin-right:.15rem}
+.ai-line.call{border-color:rgba(255,150,90,.5)}
+.ai-line.call b{color:#ffa060}
+.ai-line.win{border-color:rgba(255,220,100,.7);color:#fff3c0}
+.ai-line.out{opacity:0}
+@keyframes aiIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+/* with the AI talking at the top, the boss bar sits under its lines */
+body.ai-play #boss-bar{top:calc(var(--safe-t) + 96px)}
+body.ai-play #hud.boss #toast{top:40%}

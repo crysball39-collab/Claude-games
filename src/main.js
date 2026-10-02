@@ -12,6 +12,7 @@ import { isUnlocked } from './game/progress.js';
 import { Menu } from './ui/menu.js';
 import { Hud } from './ui/hud.js';
 import { SpawnMenu } from './ui/spawnMenu.js';
+import { AiChat } from './ui/aichat.js';
 
 /* -------------------------------------------------------------------------- */
 /*                                  settings                                  */
@@ -78,6 +79,8 @@ const app = {
   menu: null,
   hud: null,
   spawnMenu: null,
+  /** The AI that plays for you, when AI play is on. It outlives every map. */
+  ai: null,
   lastTime: 0,
   rafId: 0,
 };
@@ -96,7 +99,10 @@ async function boot() {
     ['Checking hardware', async () => {
       if (!hasWebGL()) throw new Error('WebGL is not available on this device.');
     }],
-    ['Loading the engine', async () => { GameClass = (await import('./game/game.js')).Game; }],
+    ['Loading the engine', async () => {
+      GameClass = (await import('./game/game.js')).Game;
+      app.AutoPilot = (await import('./game/autopilot.js')).AutoPilot;
+    }],
     ['Building the menus', async () => {
       app.menu = new Menu(settings);
       app.menu.onPlay = (mapId) => startGame(mapId);
@@ -112,6 +118,7 @@ async function boot() {
       input.invertY = settings.invertY;
       app.hud = new Hud(input);
       app.spawnMenu = new SpawnMenu();
+      app.ai = new app.AutoPilot({ chat: new AiChat(), hud: app.hud });
       wireGameButtons();
     }],
     ['Almost there', async () => { await new Promise((r) => setTimeout(r, 220)); }],
@@ -152,7 +159,8 @@ async function startGame(mapId, statusMessage = '') {
   game.hud = app.hud;
   game.onTravel = (id, message) => travelTo(id, message);
 
-  app.hud.onWeaponSelect = (name) => game.setEquipped(name);
+  // while the AI is playing, it is the only one choosing weapons
+  app.hud.onWeaponSelect = (name) => { if (!app.ai?.enabled) game.setEquipped(name); };
   app.spawnMenu.onSelect = (id) => {
     const item = game.setSelected(id);
     app.hud.setSelectedItem(item.name);
@@ -161,8 +169,11 @@ async function startGame(mapId, statusMessage = '') {
     input.enabled = !open;
     if (open) input.reset();
   };
-  input.onWeaponSelect = (i) => game.setEquipped(
-    ['fists', 'rcv2', 'machete', 'sledge', 'crowbar', 'glock', 'ak47', 'm16', 'firefist', 'flamethrower'][i] || 'fists');
+  input.onWeaponSelect = (i) => {
+    if (app.ai?.enabled) return;
+    game.setEquipped(
+      ['fists', 'rcv2', 'machete', 'sledge', 'crowbar', 'glock', 'ak47', 'm16', 'firefist', 'flamethrower'][i] || 'fists');
+  };
   input.onToggleDrawer = () => app.spawnMenu.toggle();
   input.onPause = () => togglePause();
 
@@ -182,6 +193,7 @@ async function startGame(mapId, statusMessage = '') {
   app.hud.hideDeath();
 
   mapScreen.hide();
+  app.ai?.attach(game);
   app.state = 'playing';
   input.enabled = true;
   app.lastTime = performance.now();
@@ -198,6 +210,7 @@ async function travelTo(mapId, message = '') {
   if (!app.game || app.state === 'loading') return;
   input.enabled = false;
   input.reset();
+  app.ai?.detach();
   app.game.dispose();
   app.game = null;
   pauseOverlay.classList.add('hidden');
@@ -210,6 +223,8 @@ function quitToMenu() {
   if (!app.game) return;
   input.enabled = false;
   input.reset();
+  app.ai?.detach();
+  setAiPlay(false);
   app.game.dispose();
   app.game = null;
   gameScreen.classList.remove('active');
@@ -288,6 +303,14 @@ function wireGameButtons() {
   $('#btn-clear').addEventListener('click', () => { app.game?.clearSpawns(); updatePauseStats(); });
   $('#btn-cleangore').addEventListener('click', () => { app.game?.washGore(); updatePauseStats(); });
   $('#btn-respawn').addEventListener('click', () => app.game?.respawnPlayer());
+  $('#btn-ai').addEventListener('click', () => setAiPlay(!app.ai.enabled));
+  $('#btn-ai-pause').addEventListener('click', () => { setAiPlay(!app.ai.enabled); togglePause(false); });
+  input.onToggleAI = () => { if (app.state === 'playing') setAiPlay(!app.ai.enabled); };
+  // AI PLAY on the main menu: the AI picks a map and starts playing
+  $('#btn-aiplay').addEventListener('click', () => {
+    setAiPlay(true);
+    startGame(['baseplate', 'pitvalley', 'legacy'][(Math.random() * 3) | 0], 'The AI is playing');
+  });
 
   settings.on('sensitivity', (v) => { input.sensitivity = v; });
   settings.on('invertY', (v) => { input.invertY = v; });
@@ -297,6 +320,18 @@ function wireGameButtons() {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && app.state === 'playing') togglePause(true);
   });
+}
+
+/* -------------------------------- AI play ---------------------------------- */
+
+/** Turns AI play on or off, and keeps both of its buttons saying which. */
+function setAiPlay(on) {
+  if (!app.ai) return;
+  app.ai.setEnabled(on);
+  $('#btn-ai').classList.toggle('on', on);
+  $('#btn-ai-pause').textContent = on ? 'AI PLAY: ON' : 'AI PLAY: OFF';
+  document.body.classList.toggle('ai-play', on);
+  input.reset();
 }
 
 /* ------------------------------- the loop ---------------------------------- */
@@ -309,7 +344,13 @@ function loop(now) {
   input.beginFrame();
 
   if (app.state === 'playing' && app.game) {
-    app.game.update(dt, input);
+    let controls = input;
+    if (app.ai?.enabled) {
+      // the AI drives; whatever the real controls did this frame is dropped
+      input.consumeLook();
+      controls = app.ai.update(dt);
+    }
+    app.game.update(dt, controls);
     app.game.render();
   } else if (app.game && (app.state === 'paused')) {
     app.game.render();
