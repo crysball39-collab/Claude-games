@@ -334,6 +334,7 @@ export class AutoPilot {
         this._deadT = 0;
         g.respawnPlayer();
         this.task = null;
+        this._resume = null;
       }
       return this.input;
     }
@@ -349,7 +350,7 @@ export class AutoPilot {
 
     // a fight that has started is the only thing that matters
     const st = g.encounter?.state;
-    if (st === 'fight' && this.taskName !== 'boss fight') this.task = null;
+    if (st === 'fight' && this.taskName !== 'boss fight') { this.task = null; this._resume = null; }
     // things that come before whatever it was doing
     this._interrupts();
 
@@ -358,7 +359,12 @@ export class AutoPilot {
     if (this.task) {
       let r;
       try { r = this.task.next(); } catch (e) { console.warn('[autopilot]', this.taskName, e); r = { done: true }; }
-      if (r.done) this.task = null;
+      if (r.done) {
+        this.task = null;
+        const back = this._resume;
+        this._resume = null;
+        if (back && back.game === this.game) { this.task = back.task; this.taskName = back.name; }
+      }
     }
     this._safety();
     this._apply(dt);
@@ -501,6 +507,7 @@ export class AutoPilot {
 
   _start(name, gen) {
     this.taskName = name;
+    this._resume = null;
     const self = this;
     this.task = (function* run() {
       try { yield* gen; } catch (e) { console.warn('[autopilot]', name, e); }
@@ -607,7 +614,10 @@ export class AutoPilot {
     const t = this._nearestThreat(7);
     if (!t) return;
     if (t.ai?.isOfficer) this.line(LINES.officerFight, null, { force: true });
+    // whatever it was doing carries on once this is dealt with
+    const was = this.task ? { task: this.task, name: this.taskName, game: this.game } : null;
     this._start('defend', this.defend());
+    this._resume = was;
   }
 
   _isThreat(c) {
@@ -1050,6 +1060,7 @@ export class AutoPilot {
       // grab it
       let grabbed = false;
       for (let i = 0; i < 3 && !grabbed; i++) {
+        yield* this.equip('rcv2');           // a fight may have put it away
         yield* this.wait(0.35, () => { this.lookAt(th.center || th.pos); this.turnRate = 6; });
         this.press('primary');
         yield;
@@ -1084,12 +1095,16 @@ export class AutoPilot {
       if (this.game !== g) return;
       if (!g.spawnedBodies.includes(e) && !g.characters.includes(e)) continue;
       const at = () => e.center || e.pos;
-      const d0 = Math.hypot(at().x - g.player.pos.x, at().z - g.player.pos.z);
-      if (d0 > 8) yield* this.goTo(at().x, at().z, { arrive: 6, timeout: 10 });
-      yield* this.wait(0.4, () => { this.lookAt(at()); this.turnRate = 6; });
-      this.press('delete');
-      yield;
-      yield* this.wait(0.25);
+      const gone = () => !g.spawnedBodies.includes(e) && !g.characters.includes(e);
+      for (let i = 0; i < 3 && !gone(); i++) {
+        const d0 = Math.hypot(at().x - g.player.pos.x, at().z - g.player.pos.z);
+        if (d0 > 8 - i * 2.5) yield* this.goTo(at().x, at().z, { arrive: 6 - i * 2.5, timeout: 10 });
+        yield* this.equip('rcv2');
+        yield* this.wait(0.4, () => { this.lookAt(at()); this.turnRate = 6; });
+        this.press('delete');
+        yield;
+        yield* this.wait(0.25);
+      }
     }
     this._mine = this._mine.filter((e) => g.spawnedBodies.includes(e) || g.characters.includes(e));
   }
