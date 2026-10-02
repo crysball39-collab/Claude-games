@@ -2391,7 +2391,8 @@ r = await page.evaluate(() => {
   run(720);
   out.hpAfter17s = Math.round(p.health);
   // the bent grate is the one that lets you through
-  g.camYaw = 0; g.camPitch = -0.3; run(5);
+  // (the USE button relabels itself every eighth of a second)
+  g.camYaw = 0; g.camPitch = -0.3; run(12);
   out.reach = g.interactInReach()?.id || null;
   out.label = document.querySelector('#btn-use').textContent;
   out.grates = L.grates.length;
