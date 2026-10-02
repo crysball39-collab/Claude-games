@@ -2497,7 +2497,7 @@ check('walking past the tower brings the Shadow Mutant up out of the ground, wit
   r.stillWaiting && r.triggeredAtZ > 0.5 && r.triggeredAtZ < 2.5 && r.cutscene && r.rising && r.fight &&
   r.hp === 5000 && r.bar, JSON.stringify(r));
 check('he uses his attacks, raises blood zombies, can be hurt, and dies taking them with him',
-  r.attacks.length >= 4 && r.attacks.includes('summon') && r.zombies >= 5 && r.taken > 0 &&
+  r.attacks.length >= 5 && r.attacks.includes('summon') && r.zombies >= 5 && r.taken > 0 &&
   r.shotHurts && r.won && r.minionsDown, JSON.stringify(r));
 
 await h.showHud();

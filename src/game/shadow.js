@@ -403,7 +403,7 @@ export class ShadowMutant {
     if (c.stab <= 0 && dist > 2 && dist < SHADOW.reach - 1) o.push(['stab', 3]);
     if (c.barrage <= 0 && dist > 2 && dist < SHADOW.reach - 2) o.push(['barrage', 2]);
     if (c.summon <= 0 && this.minions.length < SHADOW.minions - 4) o.push(['summon', 1.5]);
-    if (c.slam <= 0 && dist < 7) o.push(['slam', dist < 3.5 ? 5 : 1.5]);
+    if (c.slam <= 0 && dist < 11) o.push(['slam', dist < 3.5 ? 5 : 1.8]);
     if (!o.length) return null;
     let total = 0;
     for (const x of o) total += x[1];
@@ -660,7 +660,27 @@ export class ShadowMutant {
   /* --------------------------------- Slam --------------------------------- */
 
   _slam(dt) {
-    const t = this.t, g = this.game;
+    const g = this.game;
+    /* From further off he closes in first, fast and low, so the slam lands
+       on top of you rather than in front of you. */
+    if (!this.slamReady) {
+      const p = this.player;
+      _v1.set(p.pos.x - this.pos.x, 0, p.pos.z - this.pos.z);
+      const d = _v1.length();
+      this._face(p.pos.x, p.pos.z, dt, SHADOW.turn * 1.5);
+      this.pose = { ...this._rest(), lean: 0.45, walk: 1 };
+      if (d > 3.6 && this.t < 2.2) {
+        _v1.multiplyScalar(1 / Math.max(d, 1e-3));
+        this.vel.x = damp(this.vel.x, _v1.x * 6.5, 6, dt);
+        this.vel.z = damp(this.vel.z, _v1.z * 6.5, 6, dt);
+        this._move(dt);
+        return;
+      }
+      this.slamReady = true;
+      this.vel.set(0, 0, 0);
+      this.t = 0;
+    }
+    const t = this.t;
     const tell = 1.05;
     if (t < tell) {
       // down on one knee, both fists up over the head
@@ -711,7 +731,7 @@ export class ShadowMutant {
         this._hurt(c, SHADOW.dmg.wave, _v2, 'lowerLegR', 'hole');
       }
       this.pose = { kneel: clamp01(1 - (t - tell - 0.5) / 0.6), armsUp: 0, slam: clamp01(1 - (t - tell) / 0.8), roar: 0, lean: 0.2, walk: 0 };
-      if (t > tell + 1.4) { this.slamMark = null; this._end('slam', 1.0); }
+      if (t > tell + 1.4) { this.slamMark = null; this.slamReady = false; this._end('slam', 1.0); }
     }
     this._move(dt);
   }
@@ -730,6 +750,7 @@ export class ShadowMutant {
   }
 
   _die() {
+    this.slamReady = false;
     for (const mk of this.marks) this._hideMark(mk);
     for (const tt of this.m.tentacles) { tt.reach = 0; tt.draw = 0; }
     this._setState('dying');
@@ -959,6 +980,7 @@ export class ShadowMutant {
 
   /** Back where he came up, whole again, for a fresh attempt. */
   reset() {
+    this.slamReady = false;
     this.hp = this.maxHp;
     this.pos.copy(this.home);
     this.vel.set(0, 0, 0);
