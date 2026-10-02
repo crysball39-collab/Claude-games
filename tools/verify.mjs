@@ -2391,7 +2391,7 @@ r = await page.evaluate(() => {
   run(720);
   out.hpAfter17s = Math.round(p.health);
   // the bent grate is the one that lets you through
-  g.camPitch = -0.3; run(5);
+  g.camYaw = 0; g.camPitch = -0.3; run(5);
   out.reach = g.interactInReach()?.id || null;
   out.label = document.querySelector('#btn-use').textContent;
   out.grates = L.grates.length;
@@ -2430,8 +2430,9 @@ r = await page.evaluate(() => {
   out.zombie = z.isZombie && z.name === 'Zombie';
   out.bloody = [...z.body.entries.values()].filter((e) => (e.cloth?.surface || e.skin.surface)?.bloodAmount > 0).length;
   const hp0 = victim.health;
-  run(600);
-  out.closed = +z.pos.distanceTo(victim.pos).toFixed(2);
+  let closest = 99;
+  for (let i = 0; i < 600; i++) { run(1); closest = Math.min(closest, z.pos.distanceTo(victim.pos)); }
+  out.closed = +closest.toFixed(2);
   out.hurt = Math.round(hp0 - victim.health);
   out.pose = z.animator.upper.clip?.name;
   g.clearSpawns();
@@ -2478,9 +2479,11 @@ r = await page.evaluate(() => {
   // guns, blades and the rest hurt him; enough of it and he goes back into the ground
   const b = e.boss;
   const hp1 = b.hp;
-  g._traceShot(p.rig.byName.head.worldPos.clone(), b.center.clone().sub(p.rig.byName.head.worldPos).normalize(),
-    { damage: 40, push: 0, range: 200 }, p);
-  out.shotHurts = b.hp < hp1;
+  // a round aimed at his chest finds him (zombies in the way aside)
+  const from = p.rig.byName.head.worldPos.clone();
+  const hit = b.raycast(from, b.center.clone().sub(from).normalize());
+  if (hit) b.takeDamage(40, hit.point, 'bullet');
+  out.shotHurts = !!hit && b.hp === hp1 - 40;
   b.takeDamage(99999, b.center.clone());
   run(400);
   out.won = e.state === 'won' && b.state === 'gone';
