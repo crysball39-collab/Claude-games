@@ -82,6 +82,13 @@ export const SECRET_MAPS = [
     description: '',
     build: buildRedPlains,
   },
+  {
+    id: 'darklegacy',
+    name: 'Dark Legacy',
+    subtitle: '',
+    description: '',
+    build: (ctx) => buildLegacy(ctx, { dark: true }),
+  },
 ];
 
 export function getMap(id) {

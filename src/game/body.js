@@ -635,11 +635,32 @@ export class Body {
    * Twenty finger boxes per body is a lot of draw calls to spend on something
    * nobody can see from across the plate.
    */
+  /**
+   * How much of the body is worth drawing from this far away. Close up,
+   * everything. Past eight metres the fingers go. Past fourteen nobody casts
+   * a shadow worth the extra pass. Past eighteen the skin under clothes is
+   * not drawn at all - at that distance a tear in a sleeve is a pixel - which
+   * halves what a clothed person costs to draw.
+   */
   setLod(distance) {
-    const near = distance < 8;
-    if (near === this.lodNear) return;
-    this.lodNear = near;
-    for (let i = 0; i < this.fingerMeshes.length; i++) this.fingerMeshes[i].visible = near;
+    const tier = distance < 8 ? 0 : distance < 14 ? 1 : distance < 18 ? 2 : 3;
+    if (tier === this.lodTier) return;
+    this.lodTier = tier;
+    const near = tier === 0;
+    if (near !== this.lodNear) {
+      this.lodNear = near;
+      for (let i = 0; i < this.fingerMeshes.length; i++) this.fingerMeshes[i].visible = near;
+    }
+    const shadows = this.castShadow && tier < 2;
+    for (const entry of this.entries.values()) {
+      if (entry.detached || entry.bone.def.finger) continue;
+      entry.skin.mesh.castShadow = shadows;
+      if (entry.cloth) {
+        entry.cloth.mesh.castShadow = shadows;
+        if (!entry.selfHidden) entry.skin.mesh.visible = tier < 3;
+      }
+    }
+    for (const m of this.hairMeshes || []) m.castShadow = shadows;
   }
 
   dispose() {

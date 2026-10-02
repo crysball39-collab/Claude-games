@@ -49,7 +49,7 @@ const CUT = { a: [55, 20], b: [36, 45] };
    ground with a stone bed, shin to knee deep. */
 const LAKE = { minX: -48, maxX: 16, minZ: -45, maxZ: -30 };
 const RIVER = { minX: -44, maxX: 55, minZ: -30, maxZ: -24.5 };
-const BED = -1.2, WATER = -0.35;
+const BED = -3.4, WATER = -0.35;
 
 const TOWER = { minX: -18, maxX: -8, minZ: -4, maxZ: 6, h: 9 };
 const RAMP = { x0: -8, x1: 16, z0: -0.5, z1: 2.5, rise: 0.2 };
@@ -143,12 +143,12 @@ function wedgeGeometry(x0, x1, y0top, y1top, z0, z1) {
   const A = [x0, 0, z0], B = [x1, 0, z0], C = [x1, y1top, z0], D = [x0, y0top, z0];
   const E = [x0, 0, z1], F = [x1, 0, z1], G = [x1, y1top, z1], H = [x0, y0top, z1];
   const tris = [
-    D, C, H, H, C, G,          // the slope
+    D, H, C, H, G, C,          // the slope
     A, D, B, B, D, C,          // side at z0
     E, F, H, H, F, G,          // side at z1
     A, E, D, D, E, H,          // the tall end, against the tower
     A, B, E, E, B, F,          // bottom
-    B, F, C, C, F, G,          // the low end (a lip a hand high)
+    B, C, F, C, G, F,          // the low end (a lip a hand high)
   ];
   const pos = [];
   for (const v of tris) pos.push(v[0], v[1], v[2]);
@@ -247,7 +247,16 @@ function mergeStatic(group, disposables) {
 
 /* ---------------------------------- build ---------------------------------- */
 
-export function buildLegacy(ctx) {
+/** The four sewer outfalls under the walkway, and the one with a bent bar. */
+const GRATES = [-44, -30, -4, 10];
+const BENT = -30;
+
+/**
+ * Legacy, or with `dark` set, Dark Legacy: the same island on the other side
+ * of the bent bar - black sky, fog down to the trees, nobody living there,
+ * and something under the ground by the tower.
+ */
+export function buildLegacy(ctx, { dark = false } = {}) {
   const { scene, world, quality } = ctx;
   const group = new Group();
   const HALF = 55;
@@ -255,14 +264,18 @@ export function buildLegacy(ctx) {
   const keep = (...xs) => { disposables.push(...xs); return xs[0]; };
 
   /* ------------------------------- lighting ------------------------------ */
-  scene.background = new Color(0x9dc0dd);
-  scene.fog = new Fog(0xa8c6dc, 70, 230);
-  const lights = addLights(scene, quality, { sunPos: [30, 60, 26], sunIntensity: 1.5 });
-  addSky(group, disposables, SKIES.day);
+  scene.background = new Color(dark ? 0x23262e : 0x9dc0dd);
+  scene.fog = dark ? new Fog(0x2a2d35, 6, 62) : new Fog(0xa8c6dc, 70, 230);
+  const lights = addLights(scene, quality, dark ? {
+    sky: 0x6a7488, ground: 0x15180f, hemi: 0.95, sunColor: 0xb0bcd8, sunIntensity: 0.85,
+    sunPos: [-26, 50, -30], ambient: 0.3, ambientColor: 0xa8b0c8,
+  } : { sunPos: [30, 60, 26], sunIntensity: 1.5 });
+  addSky(group, disposables, dark ? SKIES.dark : SKIES.day);
 
   /* ------------------------------ materials ------------------------------- */
   const grass = makeGrassTexture(quality.grassSize, 13, 'green');
-  const grassMat = keep(new MeshLambertMaterial({ map: grass.texture, vertexColors: true }));
+  const grassMat = keep(new MeshLambertMaterial({ map: grass.texture, vertexColors: true,
+    color: dark ? 0x6c786a : 0xffffff }));
   keep(grass.texture);
   const concrete = makeStoneTexture(256, 47, { tone: [150, 150, 146], courses: 3 });
   const concreteMat = keep(new MeshLambertMaterial({ map: concrete.texture, color: 0xf2f2ee }));
@@ -941,34 +954,103 @@ export function buildLegacy(ctx) {
     keep(m.geometry);
   }
 
+  /* --------------------------- the sewer outfalls ------------------------- */
+  /* Four square concrete mouths in the north wall, down on the lake bed under
+     the walkway, each barred. In one of them a bar has been bent aside, and
+     air keeps coming up out of the dark behind it. */
+  const outfall = keep(new MeshLambertMaterial({ map: concrete.texture, color: 0x8a908c }));
+  const voidMat = keep(new MeshBasicMaterial({ color: 0x020304 }));
+  const barMat = keep(new MeshLambertMaterial({ color: 0x4a4440 }));
+  const rust = keep(new MeshLambertMaterial({ color: 0x6a3a22 }));
+  const wallZ = BOUNDS.minZ + 1;
+  const GY = BED + 1.0;
+  const grateAt = [];
+  for (const gx of GRATES) {
+    // the frame round the opening, standing a little proud of the wall
+    add(2.2, 0.35, 0.4, gx, GY + 0.82, wallZ + 0.2, outfall);
+    add(2.2, 0.3, 0.4, gx, GY - 0.75, wallZ + 0.2, outfall);
+    add(0.35, 1.9, 0.4, gx - 0.92, GY, wallZ + 0.2, outfall);
+    add(0.35, 1.9, 0.4, gx + 0.92, GY, wallZ + 0.2, outfall);
+    const hole = new Mesh(new PlaneGeometry(1.5, 1.3), voidMat);
+    hole.position.set(gx, GY, wallZ + 0.02);
+    group.add(hole);
+    keep(hole.geometry);
+    // the bars: solid, so nothing gets through but what fits past the bent one
+    const bent = gx === BENT;
+    for (let i = 0; i < 6; i++) {
+      const bx = gx - 0.62 + i * 0.25;
+      if (bent && i === 3) {
+        // bent out and aside in the middle: two pieces with a kink between
+        for (const [y0, y1, out] of [[GY - 0.62, GY - 0.1, 0.0], [GY - 0.1, GY + 0.62, 0.0]]) {
+          const len = y1 - y0;
+          const bar = new Mesh(new CylinderGeometry(0.035, 0.035, len, 6), rust);
+          bar.position.set(bx + 0.18, (y0 + y1) / 2, wallZ + 0.32 + out);
+          bar.rotation.z = y0 < GY - 0.2 ? 0.55 : -0.55;
+          bar.rotation.x = -0.5;
+          group.add(bar);
+          keep(bar.geometry);
+        }
+        continue;
+      }
+      const bar = new Mesh(new CylinderGeometry(0.035, 0.035, 1.28, 6), bent ? rust : barMat);
+      bar.position.set(bx, GY, wallZ + 0.22);
+      group.add(bar);
+      keep(bar.geometry);
+      add(0.07, 1.28, 0.07, bx, GY, wallZ + 0.22, barMat, { visible: false });
+    }
+    grateAt.push(new Vector3(gx, GY, wallZ + 0.6));
+  }
+  const bentAt = grateAt[GRATES.indexOf(BENT)];
+
   mergeStatic(group, disposables);
   scene.add(group);
 
-  let clock = 0;
+  let clock = 0, bubbleT = 0;
+  const _bub = new Vector3();
   return mapRecord({
     scene, world, group, solids, lights, disposables, decalMat,
-    id: 'legacy',
-    name: 'Legacy',
+    id: dark ? 'darklegacy' : 'legacy',
+    name: dark ? 'Dark Legacy' : 'Legacy',
     half: HALF,
     /* Flat, empty grass that nothing will ever be built on, for the tests. */
     openArea: new Vector3(25, 0, 24),
-    spawnPoint: SPAWN.clone(),
-    spawnYaw: 0,
+    /* Dark Legacy starts where the bent bar lets out: under the water, just
+       off the grate, facing out into the lake. */
+    spawnPoint: dark ? new Vector3(BENT, 0, -38.5) : SPAWN.clone(),
+    spawnYaw: dark ? Math.PI : 0,
+    citizens: dark ? 0 : undefined,
+    encounter: dark ? 'shadow' : null,
+    interactables: [{
+      id: 'bentGrate',
+      label: 'ENTER',
+      position: bentAt,
+      radius: 2.2,
+      prompt: dark ? 'Back the way you came' : 'One of the bars is bent wide enough to squeeze through',
+      use: (game) => game.travel(dark ? 'legacy' : 'darklegacy',
+        dark ? 'You squeeze back through the bars' : 'You squeeze through the bent bar'),
+    }],
     water: [
       { ...LAKE, y: WATER, floor: BED },
       { ...RIVER, y: WATER, floor: BED },
     ],
     // crates by the crane that you can knock about
-    props: [
+    props: dark ? [] : [
       { kind: 'crate', pos: new Vector3(-4.5, 0.6, -14) },
       { kind: 'crate', pos: new Vector3(-4.2, 1.5, -14.1) },
       { kind: 'crate', pos: new Vector3(1.8, 0.6, -13.2) },
       { kind: 'crate', pos: new Vector3(-7.5, 0.6, -21.5) },
     ],
-    tick(dt) {
+    tick(dt, game) {
       clock += dt;
       lakeTex.texture.offset.set(clock * 0.03, Math.sin(clock * 0.2) * 0.05);
       sea.texture.offset.set(clock * 0.004, clock * 0.006);
+      // air coming up out of the bent grate, in little bursts
+      bubbleT -= dt;
+      if (bubbleT <= 0 && game?.fx) {
+        bubbleT = 0.12 + Math.random() * 0.25;
+        game.fx.bubbles(_bub.set(bentAt.x + (Math.random() - 0.5) * 0.6, bentAt.y - 0.3, bentAt.z - 0.25),
+          { count: 2, up: 1.3, life: 2.6, size: 0.07 });
+      }
     },
     // where things are, for anyone who needs to find them
     landmarks: {
@@ -980,6 +1062,7 @@ export function buildLegacy(ctx) {
       walkEast: new Vector3(WALK.north.x1 + 4, 0, (WALK.north.z0 + WALK.north.z1) / 2),
       walkLedge: new Vector3(WALK.ledge.x, WALK.y, WALK.ledge.z + WALK.ledge.r - 1),
       walkBeach: new Vector3((WALK.west.x0 + WALK.west.x1) / 2, 0, WALK.west.z1 + 4),
+      grates: grateAt, bentGrate: bentAt, towerLine: TOWER.maxZ,
     },
   });
 }

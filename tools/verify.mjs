@@ -2347,7 +2347,10 @@ r = await page.evaluate(() => {
   p.teleport(-35, -21, 0); run(10);
   out.wadeIn = walk(0, 200);
   out.wading = p.speedScale;
-  out.wadeOut = walk(Math.PI, 400);
+  // deep now: swim for the surface (JUMP held) and pull yourself out onto the beach
+  window.stub.down = { jump: true };
+  out.wadeOut = walk(Math.PI, 500);
+  window.stub.down = {};
   /* The walkway along the north wall: up the steps at its east end, west
      along it to the corner and down the west leg onto the beach. The ledge
      halfway: out to its rail, which holds. */
@@ -2361,15 +2364,138 @@ r = await page.evaluate(() => {
   return out;
 });
 check('Legacy: tower ramp, a hotel you can climb, two bridges, the ledge, a beach into the lake',
-  arrived && r.name === 'Legacy' && r.water && Math.abs(r.bed + 1.2) < 0.05 && r.crates >= 4 &&
+  arrived && r.name === 'Legacy' && r.water && Math.abs(r.bed + 3.4) < 0.05 && r.crates >= 4 &&
   r.citizensOnGround && r.ramp.y > 8.5 && r.ramp.hp === 100 &&
   r.lobby.z < -19 && Math.abs(r.lobby.y) < 0.1 && Math.abs(r.flight1.y - 3) < 0.1 &&
   Math.abs(r.flight2.y - 6) < 0.1 &&
-  r.bridge.z < -31 && r.bridge.lo > -0.1 && r.wadeIn.y < -0.8 && r.wading === 0.5 &&
+  r.bridge.z < -31 && r.bridge.lo > -0.1 && r.wadeIn.y < -0.8 && r.wading <= 0.6 &&
   r.wadeOut.y > -0.05 && r.wadeOut.z > -24 &&
   r.walkway.x < -52 && Math.abs(r.walkway.y - 1) < 0.05 &&
   r.walkBeach.z > -28 && Math.abs(r.walkBeach.y) < 0.05 && r.walkBeach.hp === 100 &&
   Math.abs(r.ledge.y - 1) < 0.05 && r.ledge.z > -35.5 && r.ledge.z < -34, JSON.stringify(r));
+
+// ---------- deep water: breath, drowning, swimming out ----------
+r = await page.evaluate(() => {
+  const g = window.stepper(), p = g.player, L = g.map.landmarks;
+  const run = (n) => { for (let i = 0; i < n; i++) { g.update(1 / 60, window.stub); window.stub.pressed = {}; } };
+  const out = {};
+  p.heal();
+  // on the bottom of the lake by the grates, three metres down
+  p.teleport(L.bentGrate.x, L.bentGrate.z + 1, 0, -3.4 + 0.945); run(30);
+  out.under = p.underwater; out.swimming = p.swimming;
+  out.feet = +(p.pos.y - 0.945).toFixed(2);
+  run(300);
+  out.air5s = +p.air.toFixed(2);
+  out.bar = !document.querySelector('#air-wrap').classList.contains('hidden');
+  out.tint = document.querySelector('#underwater').classList.contains('on');
+  run(720);
+  out.hpAfter17s = Math.round(p.health);
+  // the bent grate is the one that lets you through
+  g.camPitch = -0.3; run(5);
+  out.reach = g.interactInReach()?.id || null;
+  out.label = document.querySelector('#btn-use').textContent;
+  out.grates = L.grates.length;
+  // up for air: the meter fills back up
+  window.stub.down = { jump: true };
+  run(150);
+  out.surfaced = !p.underwater;
+  run(400);
+  window.stub.down = {};
+  out.airBack = +p.air.toFixed(2);
+  out.barGone = document.querySelector('#air-wrap').classList.contains('hidden');
+  p.heal();
+  return out;
+});
+check('deep water: the air runs out, then you drown; swim up and it comes back',
+  r.under && r.swimming && r.feet < -3 && r.air5s < 0.75 && r.air5s > 0.6 && r.bar && r.tint &&
+  r.hpAfter17s < 100 && r.surfaced && r.airBack === 1 && r.barGone, JSON.stringify(r));
+check('four sewer outfalls under the walkway; the bent one offers to let you through',
+  r.grates === 4 && r.reach === 'bentGrate' && r.label === 'ENTER', JSON.stringify(r));
+
+// ---------- blood zombies ----------
+r = await page.evaluate(() => {
+  const g = window.stepper(), p = g.player;
+  const run = (n) => { for (let i = 0; i < n; i++) { g.update(1 / 60, window.stub); window.stub.pressed = {}; } };
+  const out = {};
+  g.clearSpawns(); p.heal();
+  const o = g.map.openArea;
+  p.teleport(o.x + 8, o.z + 8, 0); run(5);
+  g.setSelected('citizen');
+  const victim = g.spawnSelected().entity;
+  victim.teleport(o.x, o.z, 0);
+  victim.ai.update = () => victim.moveInput.set(0, 0, 0);
+  g.setSelected('zombie');
+  const z = g.spawnSelected().entity;
+  z.teleport(o.x, o.z - 5, 0);
+  out.zombie = z.isZombie && z.name === 'Zombie';
+  out.bloody = [...z.body.entries.values()].filter((e) => (e.cloth?.surface || e.skin.surface)?.bloodAmount > 0).length;
+  const hp0 = victim.health;
+  run(600);
+  out.closed = +z.pos.distanceTo(victim.pos).toFixed(2);
+  out.hurt = Math.round(hp0 - victim.health);
+  out.pose = z.animator.upper.clip?.name;
+  g.clearSpawns();
+  return out;
+});
+check('a blood zombie is covered in it, walks at the nearest living person and claws them',
+  r.zombie && r.bloody >= 5 && r.closed < 1.4 && r.hurt > 0, JSON.stringify(r));
+
+// ---------- Dark Legacy and the Shadow Mutant ----------
+await page.evaluate(() => window.GOREBOX.game.travel('darklegacy'));
+arrived = await page.evaluate(() => window.arrive('darklegacy'));
+r = await page.evaluate(() => {
+  const g = window.stepper(), p = g.player, e = g.encounter;
+  const run = (n) => { for (let i = 0; i < n; i++) { g.update(1 / 60, window.stub); window.stub.pressed = {}; } };
+  const out = {
+    name: g.map.name, nobody: g.characters.length === 1,
+    under: p.underwater, waiting: e?.state === 'waiting', fog: g.scene.fog.far < 80,
+  };
+  // out of the water, and down the east side past the tower
+  p.teleport(22, -6, Math.PI); run(10);
+  out.stillWaiting = e.state === 'waiting';
+  g.camYaw = Math.PI; window.stub.move = { x: 0, y: 1 };
+  let at = null;
+  for (let i = 0; i < 400 && e.state === 'waiting'; i++) { run(1); at = +p.pos.z.toFixed(1); }
+  window.stub.move = { x: 0, y: 0 };
+  out.triggeredAtZ = at;
+  out.cutscene = e.state === 'cutscene' && g.cutscene === e;
+  run(170);
+  out.rising = e.boss.rise > 0.2 && e.boss.rise < 1;
+  window.stub.pressed = { skip: true }; run(2);
+  out.fight = e.state === 'fight';
+  out.hp = e.boss.hp;
+  out.bar = !document.querySelector('#boss-bar')?.classList.contains('hidden');
+  // what he does over half a minute, to someone who stands there and takes it
+  let taken = 0;
+  const real = p.applyDamage;
+  p.applyDamage = (a) => { taken += a; };
+  const seen = new Set();
+  for (let i = 0; i < 60 * 45; i++) { run(1); seen.add(e.boss.state); }
+  p.applyDamage = real;
+  out.attacks = [...seen].filter((s) => ['spikes', 'stab', 'barrage', 'summon', 'slam'].includes(s));
+  out.taken = Math.round(taken);
+  out.zombies = g.characters.filter((c) => c.isZombie).length;
+  // guns, blades and the rest hurt him; enough of it and he goes back into the ground
+  const b = e.boss;
+  const hp1 = b.hp;
+  g._traceShot(p.rig.byName.head.worldPos.clone(), b.center.clone().sub(p.rig.byName.head.worldPos).normalize(),
+    { damage: 40, push: 0, range: 200 }, p);
+  out.shotHurts = b.hp < hp1;
+  b.takeDamage(99999, b.center.clone());
+  run(400);
+  out.won = e.state === 'won' && b.state === 'gone';
+  out.minionsDown = g.characters.filter((c) => c.isZombie && !c.dead).length === 0;
+  p.heal();
+  return out;
+});
+check('Dark Legacy: dark and fogged, empty, and you arrive in the water',
+  arrived && r.name === 'Dark Legacy' && r.nobody && r.under && r.waiting && r.fog, JSON.stringify(r));
+check('walking past the tower brings the Shadow Mutant up out of the ground, with his name',
+  r.stillWaiting && r.triggeredAtZ > 0.5 && r.triggeredAtZ < 2.5 && r.cutscene && r.rising && r.fight &&
+  r.hp === 5000 && r.bar, JSON.stringify(r));
+check('he uses his attacks, raises blood zombies, can be hurt, and dies taking them with him',
+  r.attacks.length >= 4 && r.attacks.includes('summon') && r.zombies >= 5 && r.taken > 0 &&
+  r.shotHurts && r.won && r.minionsDown, JSON.stringify(r));
 
 await h.showHud();
 await ev(() => { const g=window.GOREBOX.game; g.clearSpawns(); g.debugCam=null; g.setEquipped('fists'); g.player.teleport(g.map.openArea.x, 6, 0); });

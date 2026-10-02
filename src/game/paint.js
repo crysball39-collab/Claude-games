@@ -486,8 +486,14 @@ export class DecalSheet {
     this.count = 0;
   }
 
-  flush() {
+  /* The sheet is the whole map, a 1024 or 2048 square: uploading it is
+     megabytes, so while blood is still landing it goes up at most five
+     times a second rather than every frame. */
+  flush(force = false) {
     if (!this.dirty) return;
+    const now = performance.now();
+    if (!force && now - (this._lastFlush || 0) < 200) return;
+    this._lastFlush = now;
     this.texture.needsUpdate = true;
     this.dirty = false;
   }

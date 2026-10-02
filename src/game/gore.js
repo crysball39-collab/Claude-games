@@ -349,6 +349,7 @@ export class GoreSystem {
     if (info.absorbed > 0 && !(info.amount > 0)) return;
     const sev = clamp01(severity != null ? severity : 0.4);
 
+    if (type === 'drown') return;
     // Fire cauterises: a burn scorches what it touches and draws no blood.
     if (type === 'burn') {
       character.body.paintHit(boneName, point, { kind: 'burn', severity: sev, allowTear: true });
@@ -429,7 +430,7 @@ export class GoreSystem {
 
   wash() {
     this.sheet.clear();
-    this.sheet.flush();
+    this.sheet.flush(true);
     for (let i = 0; i < MAX_DROPS; i++) if (this.drops[i].alive) this._retire(i, this.drops[i]);
     this.mesh.instanceMatrix.needsUpdate = true;
     this.stats.splats = 0;

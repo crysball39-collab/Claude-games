@@ -145,6 +145,14 @@ export class Character {
     this.gazeYaw = this.yaw;           // where the eyes are pointed
     this.pitch = 0;
     this.grounded = true;
+    /** The water this person is in, set by the game each frame: { surface, floor } or null. */
+    this.water = null;
+    this.swimming = false;
+    this.swimUp = false;      // held: swim for the surface
+    this.swimDown = false;    // held: dive
+    /** Breath left, 0..1. Goes down with the head under water. */
+    this.air = 1;
+    this._stepUp = STEP_UP;
     this.groundHeight = 0;
     this.coyote = 0;
     this.crouch = 0;
@@ -476,10 +484,10 @@ export class Character {
 
   /* ------------------------------------------------------------- ground scan */
 
-  _groundHeight(x, z, fromY) {
+  _groundHeight(x, z, fromY, step = STEP_UP) {
     const w = this.world;
     let best = -Infinity;
-    if (w.hasGroundAt(x, z) && w.groundY <= fromY + STEP_UP) best = w.groundY;
+    if (w.hasGroundAt(x, z) && w.groundY <= fromY + step) best = w.groundY;
     const consider = (b) => {
       if (x < b.aabbMin.x || x > b.aabbMax.x || z < b.aabbMin.z || z > b.aabbMax.z) return;
       let top;
@@ -491,7 +499,7 @@ export class Character {
       } else {
         top = b.aabbMax.y;
       }
-      if (top <= fromY + STEP_UP && top > best) best = top;
+      if (top <= fromY + step && top > best) best = top;
     };
     for (let i = 0; i < w.staticBodies.length; i++) consider(w.staticBodies[i]);
     for (let i = 0; i < w.bodies.length; i++) consider(w.bodies[i]);
@@ -706,6 +714,8 @@ export class Character {
     // Fire chars what it touches; it takes a blast, not a lick of flame, to
     // do anything to the eyes or the bones underneath.
     if (type === 'burn' && sev < 0.6) return;
+    // drowning leaves no mark on anyone
+    if (type === 'drown') return;
 
     if (boneName === 'head' || boneName === 'neck') {
       const next = {};
@@ -1037,6 +1047,7 @@ export class Character {
     this.injuries = { eyeR: 'ok', eyeL: 'ok', noseBleed: 0, mouthBleed: 0 };
     this.body.setInjuries(this.injuries);
     this.body.setExpression('neutral');
+    this.air = 1;
     for (const a of this.armourPieces) a.repair();
   }
 
@@ -1150,6 +1161,29 @@ export class Character {
       this.yaw = dampAngle(this.yaw, this.gazeYaw - keep, 7, dt);
     }
 
+    /* --- swimming ---
+       Water deeper than your chest takes your feet: you sink slowly unless
+       you swim, float with your head out once you are up, and at the
+       surface can pull yourself out onto any edge within reach. Anyone who
+       is not the player swims for the surface on their own. */
+    const W = this.water;
+    const feet0 = this.pos.y - HIP_HEIGHT;
+    this.swimming = !!W && W.surface - feet0 > 1.25;
+    this._stepUp = STEP_UP;
+    if (this.swimming) {
+      const floatFeet = W.surface - 1.4;
+      const up = this.swimUp || !this.isPlayer;
+      let target;
+      if (this.swimDown) target = -2.2;
+      else if (up || feet0 > floatFeet - 0.15) target = clamp((floatFeet - feet0) * 4, -1, 2.6);
+      else target = -0.35;
+      this.vel.y = damp(this.vel.y, target, 5, dt);
+      // at the surface, an edge up to two metres over your feet can be climbed onto
+      if (feet0 > floatFeet - 0.45) this._stepUp = 2.0;
+      this.wantJump = false;
+      this.jumpBuffer = 0;
+    }
+
     // --- jump ---
     if (this.wantJump) { this.jumpBuffer = 0.16; this.wantJump = false; }
     this.jumpBuffer = Math.max(0, this.jumpBuffer - dt);
@@ -1164,11 +1198,11 @@ export class Character {
     }
 
     // --- gravity and ground ---
-    this.vel.y += w.gravity.y * dt;
+    if (!this.swimming) this.vel.y += w.gravity.y * dt;
     this.pos.addScaledVector(this.vel, dt);
 
     const feetY = this.pos.y - HIP_HEIGHT;
-    const gh = this._groundHeight(this.pos.x, this.pos.z, feetY);
+    const gh = this._groundHeight(this.pos.x, this.pos.z, feetY, this._stepUp);
     this.groundHeight = gh;
     const wasGrounded = this.grounded;
     if (feetY <= gh + 0.02 && this.vel.y <= 0.01) {
@@ -1190,7 +1224,11 @@ export class Character {
     // --- animation selection ---
     this._jumpLatch = Math.max(0, (this._jumpLatch || 0) - dt);
     const planar = Math.hypot(this.vel.x, this.vel.z);
-    if (!this.grounded) {
+    if (this.swimming && !this.grounded) {
+      // treading water: the legs keep going whether you are moving or not
+      this.animator.playBase('walk', { fade: 0.25 });
+      this.animator.setBaseSpeed(0.55 + clamp(planar / 2, 0, 0.6));
+    } else if (!this.grounded) {
       if (this._jumpLatch > 0) this.animator.playBase('jump', { fade: 0.08 });
       else this.animator.playBase('fall', { fade: 0.18 });
     } else if (this.crouch > 0.45) {
@@ -1221,7 +1259,8 @@ export class Character {
       // carried the way its weight wants to be carried.
       this.animator.setUpper(MELEE_HOLD[this.equipped]);
     } else {
-      this.animator.setUpper(this.isPlayer || this.combatReady ? 'fistGuard' : null);
+      // a pose of its own if it has one (a zombie's reach), otherwise the guard
+      this.animator.setUpper(this.upperPose || (this.isPlayer || this.combatReady ? 'fistGuard' : null));
     }
 
     // --- rig root ---
@@ -1271,7 +1310,7 @@ export class Character {
     if (this.pos.x < b.aabbMin.x - radius - 0.05 || this.pos.x > b.aabbMax.x + radius + 0.05 ||
         this.pos.z < b.aabbMin.z - radius - 0.05 || this.pos.z > b.aabbMax.z + radius + 0.05) return;
     // Low enough to step onto: the ground scan already handles it.
-    if (b.aabbMax.y <= feet + STEP_UP) return;
+    if (b.aabbMax.y <= feet + (this._stepUp || STEP_UP)) return;
 
     _v1.set(this.pos.x, clamp(b.pos.y, feet + 0.3, top), this.pos.z);
     b.closestPoint(_v1, _v2);

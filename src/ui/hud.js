@@ -21,6 +21,9 @@ export class Hud {
     this.healthFill = $('#health-fill');
     this.armourWrap = $('#armour-wrap');
     this.armourFill = $('#armour-fill');
+    this.airWrap = $('#air-wrap');
+    this.airFill = $('#air-fill');
+    this._air = -2;
     this._armour = -1;
     this.crosshair = $('#crosshair');
     this.grabTag = $('#grab-tag');
@@ -115,6 +118,24 @@ export class Hud {
   setUseAvailable(available, label = 'USE') {
     this.useBtn.classList.toggle('show', !!available);
     if (this.useBtn.textContent !== label) this.useBtn.textContent = label;
+  }
+
+  /** The camera is under water. */
+  setUnderwater(on) {
+    if (on === this._under) return;
+    this._under = on;
+    (this._uw || (this._uw = $('#underwater'))).classList.toggle('on', !!on);
+  }
+
+  /** Breath left, 0..1, or null to hide the bar. */
+  setAir(now) {
+    const key = now == null ? -1 : Math.round(now * 200);
+    if (key === this._air) return;
+    this._air = key;
+    if (now == null) { this.airWrap.classList.add('hidden'); return; }
+    this.airWrap.classList.remove('hidden');
+    this.airFill.style.width = (Math.max(0, Math.min(1, now)) * 100).toFixed(1) + '%';
+    this.airWrap.classList.toggle('low', now < 0.25);
   }
 
   /** The vest's integrity bar. Pass null when nothing is being worn. */

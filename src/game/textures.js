@@ -181,6 +181,8 @@ export const SKIES = {
   day: [[0.00, '#2f5f9e'], [0.34, '#5f92c8'], [0.62, '#9dc0dd'], [0.80, '#cfdce2'], [1.00, '#e3e0d2']],
   // Pit Valley: the same day, an hour before the light goes
   evening: [[0.00, '#2c4f86'], [0.30, '#5a83b8'], [0.58, '#a8b9c9'], [0.78, '#e2c79c'], [1.00, '#f1c88c']],
+  // Dark Legacy: night with no moon, the fog lit from nowhere
+  dark: [[0.00, '#050507'], [0.40, '#0e1015'], [0.70, '#1a1d24'], [0.88, '#252830'], [1.00, '#2c2f37']],
   // the other side of the red RCV2
   blood: [[0.00, '#2a0306'], [0.30, '#5c0a0e'], [0.58, '#a3181a'], [0.80, '#d8452a'], [1.00, '#f07a3c']],
 };

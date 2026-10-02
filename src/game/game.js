@@ -4,7 +4,7 @@
    ========================================================================== */
 import {
   Scene, PerspectiveCamera, WebGLRenderer, Vector3, Quaternion, Euler, Matrix4,
-  PCFSoftShadowMap, SRGBColorSpace, ACESFilmicToneMapping,
+  PCFSoftShadowMap, PCFShadowMap, SRGBColorSpace, ACESFilmicToneMapping,
 } from 'three';
 import { PhysicsWorld } from '../physics/world.js';
 import { getMap, inPool } from './map.js';
@@ -22,10 +22,12 @@ import {
 import { GoreSystem, nearestBone } from './gore.js';
 import { WoundSystem } from './wounds.js';
 import { spawnOfficer, setOfficerGunSpec } from './officer.js';
+import { spawnZombie } from './zombie.js';
 import { Armour, ARMOUR, spawnArmour } from './armour.js';
 import { Fx } from './fx.js';
 import { FireSystem } from './fire.js';
 import { SilvaEncounter } from './encounter.js';
+import { ShadowEncounter } from './shadow.js';
 import { isUnlocked } from './progress.js';
 import { NavGrid } from './ai.js';
 import { RCV2 } from './rcv2.js';
@@ -262,6 +264,9 @@ export const GUNS = {
 
 setOfficerGunSpec(GUNS.glock);
 
+/** How long you can hold your breath, and what the water does after that. */
+export const AIR = { seconds: 15, drownDps: 10 };
+
 /** Everything that can be picked up and held, however it is used. */
 export const CARRY = { ...MELEE, ...GUNS };
 
@@ -290,6 +295,7 @@ export const SPAWNABLES = {
   humans: [
     { id: 'citizen', name: 'Citizen', icon: 'citizen', hint: 'An ordinary person' },
     { id: 'officer', name: 'Officer', icon: 'officer', hint: 'Armed. Shoots you if you hurt anyone in sight.' },
+    { id: 'zombie', name: 'Blood Zombie', icon: 'zombie', hint: 'Walks at the nearest living thing and claws.' },
   ],
 };
 
@@ -315,13 +321,26 @@ export class Game {
     this.scene = new Scene();
     this.camera = new PerspectiveCamera(settings.fov, 1, 0.045, 900);
     this.renderer = new WebGLRenderer({ antialias: settings.quality === 'high', powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.quality.pixelRatio));
+    /* The resolution the device asks for is where we start; if frames start
+       taking too long it comes down (to just over half), and goes back up
+       when there is time to spare. Fill rate is what a phone runs out of. */
+    this.basePixelRatio = Math.min(window.devicePixelRatio || 1, this.quality.pixelRatio);
+    this.pixelRatio = this.basePixelRatio;
+    this.renderer.setPixelRatio(this.pixelRatio);
+    this._frameAvg = 1 / 60;
+    this._slowFor = 0;
+    this._fastFor = 0;
+    this._lowPower = false;
+    this._frameN = 0;
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.toneMapping = ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.02;
     if (this.quality.shadows) {
       this.renderer.shadowMap.enabled = true;
-      this.renderer.shadowMap.type = PCFSoftShadowMap;
+      // soft shadows cost several times the samples; only high quality pays for them
+      this.renderer.shadowMap.type = settings.quality === 'high' ? PCFSoftShadowMap : PCFShadowMap;
+      // redrawn every frame normally, every other frame when struggling
+      this.renderer.shadowMap.autoUpdate = false;
     }
     container.appendChild(this.renderer.domElement);
 
@@ -428,6 +447,7 @@ export class Game {
       ['Waking something up', async () => {
         // only Red Plains has anything waiting on it
         if (this.map.encounter === 'silva') this.encounter = new SilvaEncounter(this);
+        if (this.map.encounter === 'shadow') this.encounter = new ShadowEncounter(this);
       }],
       ['Compiling shaders', async () => {
         this.updateCamera(0);
@@ -625,15 +645,16 @@ export class Game {
        or the platform if that is what is being aimed at. */
     const groundAt = this._surfaceHeight(_v2.x, _v2.z);
     const id = this.selected.id;
-    if (id === 'citizen' || id === 'officer') {
+    if (id === 'citizen' || id === 'officer' || id === 'zombie') {
       if (this.characters.length - 1 >= this.quality.maxCitizens) {
         const oldest = this.characters.find((c) => c !== this.player);
         if (oldest) this.removeCharacter(oldest);
       }
       _v2.y = groundAt;
-      const spawn = id === 'officer' ? spawnOfficer : spawnCitizen;
+      const spawn = { officer: spawnOfficer, zombie: spawnZombie }[id] || spawnCitizen;
       const c = spawn(this, _v2, { yaw: this.camYaw + Math.PI });
-      return { type: 'citizen', name: id === 'officer' ? 'Officer' : 'Citizen', entity: c };
+      const name = { officer: 'Officer', zombie: 'Blood Zombie' }[id] || 'Citizen';
+      return { type: 'citizen', name, entity: c };
     }
     if (id === 'boulder') {
       _v2.y = Math.max(_v2.y, groundAt + 0.9);
@@ -769,32 +790,79 @@ export class Game {
    */
   _updateWater(dt) {
     const pools = this.map?.water;
-    for (const c of this.characters) c.speedScale = 1;
-    if (!pools || !pools.length) return;
-    for (const pool of pools) {
-      for (const c of this.characters) {
-        if (!inPool(pool, c.pos.x, c.pos.z)) continue;
-        const feet = c.pos.y - HIP_HEIGHT;
-        if (feet > pool.y || feet < pool.floor - 0.5) continue;
-        c.speedScale = Math.min(c.speedScale, 0.5);
-        if (c.isRagdolling || c.state === STATE.DEAD) {
-          // a body in water floats a little and stops sliding about
-          const k = Math.exp(-2.4 * dt);
-          for (const p of c.particleList) {
-            if (p.y > pool.y + 0.1) continue;
-            p.px = p.x - (p.x - p.px) * k;
-            p.pz = p.z - (p.z - p.pz) * k;
-            p.py = p.y - (p.y - p.py) * Math.exp(-4 * dt);
+    for (const c of this.characters) { c.speedScale = 1; c.water = null; }
+    if (pools && pools.length) {
+      for (const pool of pools) {
+        for (const c of this.characters) {
+          if (!inPool(pool, c.pos.x, c.pos.z)) continue;
+          const feet = c.pos.y - HIP_HEIGHT;
+          if (feet > pool.y || feet < pool.floor - 0.5) continue;
+          c.water = { surface: pool.y, floor: pool.floor };
+          c.speedScale = Math.min(c.speedScale, c.swimming ? 0.6 : 0.5);
+          if (c.isRagdolling || c.state === STATE.DEAD) {
+            /* A body in water stops sliding about, and floats: the water holds
+               up a little more than it weighs, so it drifts up to the surface
+               and lies there. */
+            const k = Math.exp(-2.4 * dt);
+            const h = this.world.substepDt;
+            const lift = 9.81 * 1.12 * dt * h;
+            for (const pt of c.particleList) {
+              if (pt.y > pool.y + 0.1) continue;
+              pt.px = pt.x - (pt.x - pt.px) * k;
+              pt.pz = pt.z - (pt.z - pt.pz) * k;
+              pt.py = pt.y - (pt.y - pt.py) * Math.exp(-4 * dt);
+              if (pt.y < pool.y - 0.05) pt.py -= lift;
+            }
           }
+          const vy = c.vel.y;
+          if (vy < -5 && !c._splashed) {
+            c._splashed = true;
+            this.fx?.splash(_v1.set(c.pos.x, pool.y, c.pos.z), -vy);
+          }
+          if (vy > -1) c._splashed = false;
         }
-        const vy = c.vel.y;
-        if (vy < -5 && !c._splashed) {
-          c._splashed = true;
-          this.fx?.splash(_v1.set(c.pos.x, pool.y, c.pos.z), -vy);
-        }
-        if (vy > -1) c._splashed = false;
       }
     }
+    this._updateBreath(dt);
+  }
+
+  /**
+   * Breath. With your head under water the air runs out over fifteen seconds,
+   * and after that the water does damage until you get your head up. It comes
+   * back three times as fast as it went.
+   */
+  _updateBreath(dt) {
+    for (const c of this.characters) {
+      if (c.dead || c.body?.destroyed) continue;
+      let under = false;
+      if (c.water && !c.gone?.has('head')) {
+        const head = c.rig.byName.head;
+        under = head.worldPos.y + 0.16 < c.water.surface;
+      }
+      c.underwater = under;
+      if (under) {
+        c.air = Math.max(0, c.air - dt / AIR.seconds);
+        if (c.air <= 0) {
+          c._drownAcc = (c._drownAcc || 0) + dt * AIR.drownDps;
+          if (c._drownAcc >= 5) {
+            const head = c.rig.byName.head;
+            c.applyDamage(c._drownAcc, { boneName: 'head', point: head.worldPos.clone(), type: 'drown',
+              severity: 0 });
+            c._drownAcc = 0;
+            if (c === this.player) this.hud?.flashDamage(0.25);
+          }
+          // and it comes out of them as bubbles
+          if (this.rng() < dt * 8) this.fx?.bubbles(c.rig.byName.head.worldPos, { count: 2 });
+        } else if (this.rng() < dt * 1.5) {
+          this.fx?.bubbles(c.rig.byName.head.worldPos, { count: 1 });
+        }
+      } else {
+        c.air = Math.min(1, c.air + (dt * 3) / AIR.seconds);
+        c._drownAcc = 0;
+      }
+    }
+    const p = this.player;
+    if (p) this.hud?.setAir(p.underwater || p.air < 0.999 ? p.air : null);
   }
 
   /* ---------------------------------------------------------------- armour */
@@ -1682,6 +1750,8 @@ export class Game {
 
   update(dt, input) {
     if (!this.running || this.paused) return;
+    this._adaptPerformance(dt);
+    this.navBudget = 4;            // path searches allowed this frame, between everyone
     this.time += dt;
     dt = Math.min(dt, 1 / 24);
 
@@ -1793,6 +1863,9 @@ export class Game {
     // ---- buttons ----
     if (input.pressed.jump) p.wantJump = true;
     if (input.pressed.crouch) p.crouchWant = !p.crouchWant;
+    // in deep water, JUMP held swims up and CROUCH held dives
+    p.swimUp = !!input.down?.jump;
+    p.swimDown = !!input.down?.crouch || (p.swimming && p.crouchWant);
     if (input.pressed.primary) this.primaryAction();
     if (input.pressed.reload) this.reloadAction();
     if (input.pressed.spawn) this.spawnAction();
@@ -1848,6 +1921,13 @@ export class Game {
       this.camera.quaternion.multiply(_q1);
     }
     this.camera.updateMatrixWorld();
+    // under the water, everything goes blue-green and close
+    let under = false;
+    const cp = this.camera.position;
+    for (const pool of this.map?.water || []) {
+      if (cp.y < pool.y && cp.y > pool.floor - 0.5 && inPool(pool, cp.x, cp.z)) { under = true; break; }
+    }
+    this.hud?.setUnderwater(under);
   }
 
   _followSun() {
@@ -1912,7 +1992,40 @@ export class Game {
   }
 
   render() {
+    this._frameN++;
+    const sm = this.renderer.shadowMap;
+    if (sm.enabled) sm.needsUpdate = !this._lowPower || (this._frameN & 1) === 0;
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /**
+   * Keeps the frame rate up on a device that cannot hold it: resolution
+   * comes down a step at a time while frames run long, then the shadows go
+   * to every other frame; both come back once there is headroom.
+   */
+  _adaptPerformance(dt) {
+    if (!(dt > 0) || dt > 0.5) return;
+    this._frameAvg += (dt - this._frameAvg) * 0.05;
+    if (this._frameAvg > 1 / 45) { this._slowFor += dt; this._fastFor = 0; }
+    else if (this._frameAvg < 1 / 57) { this._fastFor += dt; this._slowFor = 0; }
+    else { this._slowFor = 0; this._fastFor = 0; }
+    const min = Math.max(0.6, this.basePixelRatio * 0.55);
+    if (this._slowFor > 1.5) {
+      this._slowFor = 0;
+      if (this.pixelRatio > min + 0.01) {
+        this.pixelRatio = Math.max(min, this.pixelRatio * 0.85);
+        this.renderer.setPixelRatio(this.pixelRatio);
+      } else {
+        this._lowPower = true;
+      }
+    } else if (this._fastFor > 5) {
+      this._fastFor = 0;
+      if (this._lowPower) this._lowPower = false;
+      else if (this.pixelRatio < this.basePixelRatio - 0.01) {
+        this.pixelRatio = Math.min(this.basePixelRatio, this.pixelRatio * 1.12);
+        this.renderer.setPixelRatio(this.pixelRatio);
+      }
+    }
   }
 
   respawnPlayer() {

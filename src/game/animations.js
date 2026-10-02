@@ -868,6 +868,26 @@ const stagger = mirrorSides({
   rootY: [[0, -0.120], [0.55, -0.060], [1.1, -0.120]],
 }, 0.5);
 
+/* A zombie's reach: both arms out in front at shoulder height, elbows soft,
+   hands hanging and the fingers hooked. It sways a little as it walks. */
+const zombieReach = {
+  name: 'zombieReach', duration: 2.4, loop: true, mask: 'upper',
+  tracks: {
+    midTorso: [[0, 0.06, -0.04, 0.02], [1.2, 0.08, 0.04, -0.02], [2.4, 0.06, -0.04, 0.02]],
+    upperTorso: [[0, 0.10, -0.05, 0.03], [1.2, 0.12, 0.05, -0.03], [2.4, 0.10, -0.05, 0.03]],
+    neck: [[0, 0.10, 0, 0.06], [1.2, 0.14, 0, -0.06], [2.4, 0.10, 0, 0.06]],
+    head: [[0, 0.06, 0.08, 0.10], [1.2, 0.02, -0.08, -0.08], [2.4, 0.06, 0.08, 0.10]],
+    upperArmR: [[0, 1.42, -0.05, -0.10], [1.2, 1.32, -0.08, -0.14], [2.4, 1.42, -0.05, -0.10]],
+    lowerArmR: [[0, 0.30, 0.10, 0.04], [1.2, 0.42, 0.10, 0.04], [2.4, 0.30, 0.10, 0.04]],
+    handR: [[0, -0.30, 0.05, 0]],
+    upperArmL: [[0, 1.30, 0.08, 0.14], [1.2, 1.44, 0.05, 0.10], [2.4, 1.30, 0.08, 0.14]],
+    lowerArmL: [[0, 0.42, -0.10, -0.04], [1.2, 0.30, -0.10, -0.04], [2.4, 0.42, -0.10, -0.04]],
+    handL: [[0, -0.30, -0.05, 0]],
+    ...fingers('R', [[0, -0.55, 0, 0]], [[0, -0.80, 0, 0]]),
+    ...fingers('L', [[0, -0.55, 0, 0]], [[0, -0.80, 0, 0]]),
+  },
+};
+
 export const CLIPS = {
   idle, walk, run, crouchIdle, crouchWalk, jump, fall,
   holding, fistGuard, punchR, punchL,
@@ -877,7 +897,7 @@ export const CLIPS = {
   glockHold, akHold, m16Hold,
   reloadPistol, reloadPistolEmpty, reloadRifle, reloadRifleEmpty,
   reloadM16, reloadM16Empty,
-  flamerHold, reloadFlamer,
+  flamerHold, reloadFlamer, zombieReach,
   getUpFront, getUpBack, stagger,
 };
 

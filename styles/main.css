@@ -160,6 +160,13 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
 .armour-bar{width:118px;height:6px;border:1.5px solid var(--hud-line);border-radius:99px;overflow:hidden;background:rgba(0,0,0,.42)}
 #armour-fill{height:100%;width:100%;background:linear-gradient(90deg,#4a5a6e,#9fb4cc);transition:width .18s ease}
 #armour-wrap.spent #armour-fill{background:#4a3030}
+/* Breath: only while your head is under water, or still catching it back. */
+#air-wrap{margin-top:3px;display:flex;align-items:center;gap:5px;justify-content:flex-end}
+#air-wrap.hidden{display:none}
+.air-bar{width:118px;height:6px;border:1.5px solid var(--hud-line);border-radius:99px;overflow:hidden;background:rgba(0,0,0,.42)}
+#air-fill{height:100%;width:100%;background:linear-gradient(90deg,#3d9fd6,#bfeaff);transition:width .12s linear}
+#air-wrap.low #air-fill{background:linear-gradient(90deg,#c4161c,#f0574c)}
+.air-label{font-size:.5rem;letter-spacing:.2em;color:rgba(200,236,255,.85)}
 .health-label{font-size:.56rem;letter-spacing:.28em;color:rgba(255,255,255,.68);margin-top:2px}
 
 #crosshair{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none}
@@ -276,6 +283,9 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
   font-size:.78rem;letter-spacing:.1em;opacity:0;transition:opacity .25s ease}
 #toast.show{opacity:1}
 
+#underwater{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .15s;
+  background:radial-gradient(ellipse at center, rgba(20,90,110,.38) 0%, rgba(6,40,56,.78) 100%)}
+#underwater.on{opacity:1}
 #damage-vignette{position:absolute;inset:0;pointer-events:none;opacity:0;
   background:radial-gradient(ellipse at center, transparent 42%, rgba(150,10,14,.85) 100%);transition:opacity .22s ease}
 
@@ -385,6 +395,14 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
   linear-gradient(#5e533b,#5e533b) 50% 58% / 76% 7% no-repeat,
   linear-gradient(#15171a,#15171a) 26% 84% / 4% 26% no-repeat,
   linear-gradient(#15171a,#15171a) 74% 84% / 4% 26% no-repeat,
+  #14181c}
+/* a zombie: grey-green face, white eyes, blood down the front */
+.ico.zombie{background:
+  radial-gradient(circle at 44% 18%, #f0eee0 0 3%, transparent 4%),
+  radial-gradient(circle at 56% 18%, #f0eee0 0 3%, transparent 4%),
+  linear-gradient(#8a9474,#8a9474) 50% 10% / 26% 24% no-repeat,
+  linear-gradient(#7a1a14,#7a1a14) 50% 62% / 30% 34% no-repeat,
+  linear-gradient(#4a4438,#4a4438) 50% 74% / 56% 52% no-repeat,
   #14181c}
 /* an officer: dark uniform, a gold badge on the chest */
 .ico.officer{background:

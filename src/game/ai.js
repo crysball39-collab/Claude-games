@@ -613,6 +613,14 @@ export class CitizenAI {
 
   _repath() {
     const c = this.c;
+    /* A search can visit a couple of thousand cells, and twenty people
+       chasing someone each want one every half second. Only a few run per
+       frame; the rest keep the path they have and ask again next frame. */
+    const g = this.game;
+    if (g.navBudget != null) {
+      if (g.navBudget <= 0) { this.repathTimer = Math.min(this.repathTimer, 0.05); return; }
+      g.navBudget--;
+    }
     this.path.length = 0;
     this.pathIndex = 0;
     this.game.nav.findPath(c.pos.x, c.pos.z, this.goal.x, this.goal.z, this.path);

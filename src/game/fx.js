@@ -287,6 +287,34 @@ export class Fx {
     }
   }
 
+  /** Bubbles rising from under water, to the surface and gone. */
+  bubbles(pos, { count = 3, spread = 0.12, up = 1.4, life = 1.6, size = 0.06 } = {}) {
+    const r = this.rng;
+    for (let i = 0; i < count; i++) {
+      this.soft.spawn(
+        pos.x + (r() - 0.5) * spread * 2, pos.y + (r() - 0.5) * spread, pos.z + (r() - 0.5) * spread * 2,
+        (r() - 0.5) * 0.25, up * (0.7 + r() * 0.6), (r() - 0.5) * 0.25,
+        life * (0.6 + r() * 0.6), size * (0.6 + r() * 0.8), size * (1.1 + r() * 0.6),
+        0xf2fbff, 0xcfe8f2, 0.75, 0.2, 0.6,
+      );
+    }
+  }
+
+  /** Thick, near black fog that hangs about and slowly lifts. */
+  darkFog(pos, { count = 2, spread = 0.6, up = 0.35, size = 1.2, life = 2.2 } = {}) {
+    const r = this.rng;
+    for (let i = 0; i < count; i++) {
+      const v = 0.02 + r() * 0.05;
+      _c.setRGB(v, v * 0.9, v * 1.15);
+      this.soft.spawn(
+        pos.x + (r() - 0.5) * spread * 2, pos.y + (r() - 0.5) * spread, pos.z + (r() - 0.5) * spread * 2,
+        (r() - 0.5) * 0.4, up * (0.4 + r() * 0.8), (r() - 0.5) * 0.4,
+        life * (0.6 + r() * 0.6), size * 0.6, size * (1.3 + r() * 0.7),
+        _c.getHex(), 0x050408, 0.7, 0.8, 0.2,
+      );
+    }
+  }
+
   /** Water thrown up by something landing in it. */
   splash(pos, speed = 6) {
     const r = this.rng;

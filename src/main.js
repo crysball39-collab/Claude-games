@@ -30,6 +30,10 @@ function guessQuality() {
   const px = Math.min(window.screen.width, window.screen.height);
   const cores = navigator.hardwareConcurrency || 4;
   if (isWeakDevice()) return 'low';
+  /* A phone with eight cores and a 1080p screen is still a phone: high means
+     twice the pixels, antialiasing and soft shadows, which is what makes it
+     lag. It can be picked in settings; it is never the default on touch. */
+  if (IS_TOUCH) return 'medium';
   if (px >= 720 && cores >= 8) return 'high';
   return 'medium';
 }
