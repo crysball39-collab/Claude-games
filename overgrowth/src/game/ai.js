@@ -81,7 +81,10 @@ export class Brain {
     if (!h.holding && !this.weapon) {
       let w = null, wd = 9;
       for (const p of g.props) {
-        if (!p.weapon || p.holder || p.removed || p.claimedBy && p.claimedBy !== h) continue;
+        if (!p.weapon || p.holder || p.removed) continue;
+        // someone else is already going for it (if they still are)
+        const c = p.claimedBy;
+        if (c && c !== h && !c.removed && c.alive && c.brain.weapon === p) continue;
         if (p.body.x.y < g.groundAt(p.body.x.x, p.body.x.z) - 0.3) continue;
         const d = Math.hypot(p.body.x.x - h.root.x, p.body.x.z - h.root.z);
         if (d < wd) { wd = d; w = p; }

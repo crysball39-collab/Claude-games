@@ -492,10 +492,13 @@ export class World {
       if (b.isStatic || b.sleeping) _t4.set(0, 0, 0);
       else if (b.kinematic) { _t5.subVectors(_t2, b.x); _t4.crossVectors(b.kw, _t5).add(b.kv); }
       else b.pointVelocity(_t2, _t4);
+      const vaN = _t3.dot(c.n);
       const vn = _t3.sub(_t4).dot(c.n);
       c.vnPre = vn;
       if (-vn > a.impact) { a.impact = -vn; a.impactOther = b; }
       if (b.dynamic && -vn > b.impact) { b.impact = -vn; b.impactOther = a; }
+      // something moved by the game records how fast the other came at it, on its own
+      if (b.kinematic && -vaN > b.impact) { b.impact = -vaN; b.impactOther = a; }
       if (b.sleeping && -vn > 0.6 && this.onWake) this.onWake(b);
     }
   }

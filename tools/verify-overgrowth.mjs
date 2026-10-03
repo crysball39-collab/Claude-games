@@ -193,7 +193,11 @@ await ev(() => {
         for (const j of h.joints) {
           const a = j.a.toWorld(j.anchorA, j._pa || (j._pa = j.anchorA.clone()));
           const b = j.b.toWorld(j.anchorB, j._pb || (j._pb = j.anchorB.clone()));
-          window.__maxSep = Math.max(window.__maxSep, a.distanceTo(b));
+          const d = a.distanceTo(b);
+          if (d > window.__maxSep) {
+            window.__maxSep = d;
+            window.__sepAt = `${h.team} ${h.state} part ${j.b.part} at ${g.time.toFixed(1)} s`;
+          }
         }
       }
     }
@@ -361,6 +365,37 @@ if (!FILE_MODE) {
   check('...then plays a get up animation and stands', rg.seen.join('>').includes('ragdoll>getup>active'), rg.seen.join('>'));
   check('every joint stays connected', rg.sep < 0.06, `largest gap ${(rg.sep * 100).toFixed(1)} cm`);
 
+  console.log('      (sections: bump starts at ' + (await ev(() => window.__og.game.time.toFixed(1))) + ' s)');
+  /* -------------------------- things flying into you ---------------------- */
+  const bump = await ev(async () => {
+    const g = window.__og.game;
+    g.clearAll();
+    const wait = (s) => new Promise((r) => { const t0 = g.time; const f = () => (g.time >= t0 + s ? r() : setTimeout(f, 30)); f(); });
+    const h = g.spawnHuman('red', 0, 10, 0);
+    h.brain.update = () => { h.move.set(0, 0, 0); h.face = 0; };
+    await wait(0.4);
+    const seen = new Set();
+    const fs = g.fixedStep; g.fixedStep = (dt) => { fs(dt); seen.add(h.state); };
+    const c = g.spawnProp('crate', 0, 12.5, 1.1);
+    c.body.v.set(0, 0.5, -7);
+    await wait(1.5);
+    g.fixedStep = fs;
+    // and someone running straight through a body lying on the ground
+    const d = g.spawnHuman('blue', 3, 6, 0);
+    d.die('test');
+    await wait(2.5);
+    const w = g.spawnHuman('red', 3, 3.5, 0);
+    const seen2 = new Set();
+    g.fixedStep = (dt) => { fs(dt); seen2.add(w.state); };
+    w.brain.update = () => { w.move.set(0, 0, 3.5); w.face = 0; };
+    await wait(2.5);
+    g.fixedStep = fs;
+    return { crate: [...seen], walker: [...seen2] };
+  });
+  check('a crate thrown at someone knocks them off balance', bump.crate.includes('stumble') || bump.crate.includes('ragdoll'), bump.crate.join(','));
+  check('running over a body on the ground does not trip anyone', bump.walker.length === 1 && bump.walker[0] === 'active', bump.walker.join(','));
+
+  console.log('      (blood starts at ' + (await ev(() => window.__og.game.time.toFixed(1))) + ' s)');
   /* ------------------------------ blood, objects -------------------------- */
   const blood = await ev(async () => {
     const g = window.__og.game;
@@ -397,6 +432,7 @@ if (!FILE_MODE) {
   await ev(() => { const g = window.__og.game; const c = g.cam; c.pos.set(0, 1.4, 12.3); c.yaw = 0; c.pitch = -0.25; c.apply(); });
   await show('blood');
 
+  console.log('      (brawl starts at ' + (await ev(() => window.__og.game.time.toFixed(1))) + ' s)');
   /* ----------------------------- six teams brawl -------------------------- */
   await ev(() => {
     const g = window.__og.game;
@@ -418,11 +454,11 @@ if (!FILE_MODE) {
     const hitters = new Set([...window.__pairs].map((p) => p.split('>')[0]));
     return { teams: new Set(g.humans.map((h) => h.team)).size, dead: g.humans.filter((h) => !h.alive).length,
       hitters: hitters.size, pairs: window.__pairs.size,
-      ms: window.__perf.t / window.__perf.n, nan: window.__nan, sep: window.__maxSep };
+      ms: window.__perf.t / window.__perf.n, nan: window.__nan, sep: window.__maxSep, sepAt: window.__sepAt };
   });
   check('six teams fight each other', brawl.teams === 6 && brawl.hitters >= 4 && brawl.pairs >= 5,
     `${brawl.hitters} teams landed blows, ${brawl.pairs} team match-ups, ${brawl.dead} dead after 15 s`);
-  check('joints hold through the whole brawl', brawl.sep < 0.05, `largest gap ${(brawl.sep * 100).toFixed(1)} cm`);
+  check('joints hold through the whole brawl', brawl.sep < 0.05, `largest gap ${(brawl.sep * 100).toFixed(1)} cm, ${brawl.sepAt}`);
   check('the physics never produces NaN', !brawl.nan);
   console.log(`      (${brawl.ms.toFixed(2)} ms per simulation step with 18 fighters on this machine)`);
   await ev(() => { const c = window.__og.game.cam; c.pos.set(0, 7, 11); c.yaw = 0; c.pitch = -0.6; c.apply(); });

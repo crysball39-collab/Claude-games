@@ -56,6 +56,9 @@ const _q1 = new Quaternion(), _q2 = new Quaternion();
 const _rootQ = new Quaternion();
 const _pts = [0, 1, 2, 3].map(() => new ContactPoint());
 const _ONE = new Vector3(1, 1, 1);
+const _ZERO = new Vector3();
+const _bp = new Vector3(), _bq = new Quaternion();
+const _blendQ = PARTS.map(() => new Quaternion());
 
 let _humanId = 0;
 
@@ -137,6 +140,7 @@ export class Human {
     this.tQuat = PARTS.map(() => new Quaternion());
     this.capPos = PARTS.map(() => new Vector3());
     this.capQuat = PARTS.map(() => new Quaternion());
+    this.capLocal = PARTS.map(() => new Quaternion());
 
     this.brain = new Brain(this);
     this.buildPose(1 / 60);
@@ -295,11 +299,7 @@ export class Human {
       const blend = this.blendIn;
       if (blend && blend.t < blend.dur) {
         blend.t += dt;
-        const w = smooth(blend.t / blend.dur);
-        for (let i = 0; i < NP; i++) {
-          this.tPos[i].lerpVectors(this.capPos[i], this.tPos[i], w);
-          this.tQuat[i].slerpQuaternions(this.capQuat[i], this.tQuat[i], w);
-        }
+        this.blendFrom(smooth(blend.t / blend.dur));
       }
       for (let i = 0; i < NP; i++) this.bodies[i].setTarget(this.tPos[i], this.tQuat[i], dt, snap);
     }
@@ -444,13 +444,22 @@ export class Human {
   /** Impulse J along dir at a point on a part (only bites when simulated). */
   push(part, point, dir, J) {
     const b = this.bodies[part];
-    _v1.copy(dir).multiplyScalar(J);
+    const parent = PARTS[part].parent;
+    // the part that was hit takes most of it; what it hangs from takes the rest
+    // at once, as a neck or a shoulder would, rather than a frame later
+    const share = parent >= 0 ? 0.78 : 1;
+    _v1.copy(dir).multiplyScalar(J * share);
     _v2.subVectors(point, b.x);
     b.applyImpulse(_v1, _v2, 1);
+    if (parent >= 0) {
+      _v1.copy(dir).multiplyScalar(J * (1 - share));
+      this.bodies[parent].applyImpulse(_v1, null, 1);
+    }
   }
 
   /** Hard landings hurt: any part hitting anything above a walking pace. */
   impacts() {
+    if (this.state === 'active' || this.state === 'getup') { this.bumped(); return; }
     // only a body nobody is holding up can land hard enough to hurt
     if (this.state !== 'ragdoll' && this.state !== 'dead') return;
     for (let i = 0; i < NP; i++) {
@@ -469,6 +478,36 @@ export class Human {
         this.game.blood.impact(this, i, b.x, sp);
       }
     }
+  }
+
+  /** Standing, and something heavy came flying in: a body, a crate. */
+  bumped() {
+    let best = 0, part = -1;
+    for (let i = 0; i < NP; i++) {
+      const b = this.bodies[i];
+      const o = b.impactOther;
+      if (b.impact <= best || !o || o.owner === this || o.kinematic || o.isStatic) continue;
+      best = b.impact; part = i;
+    }
+    if (best < 3.2) return;
+    const b = this.bodies[part], o = b.impactOther;
+    // a body lying on the ground does not fly at anyone; it is being stepped on
+    const oh = o.owner;
+    if (oh && oh.bodies && (oh.state === 'ragdoll' || oh.state === 'dead') &&
+        o.x.y - this.root.y < 0.35) return;
+    const dir = new Vector3().subVectors(b.x, o.x);
+    if (dir.lengthSq() < 1e-6) return;
+    dir.normalize();
+    const sp = best;     // how fast it came at us, on its own
+    const J = Math.min(45, Math.min(o.mass, 15) * sp * 0.6);
+    if (J < 10) return;
+    dir.setY(0);
+    if (dir.lengthSq() < 1e-6) dir.copy(o.v).setY(0);
+    dir.normalize();
+    this.takeHit({
+      part, point: b.x.clone(), dir, J, speed: sp, damage: Math.max(0, (sp - 4) * 1.2),
+      attacker: null, kind: 'impact', sharp: false, striker: null, weapon: null,
+    });
   }
 
   updateFlinch(dt) {
@@ -572,11 +611,32 @@ export class Human {
     this.brain.recovered();
   }
 
+  /** Remembers the pose the bodies are in: the hips in the world, every other joint relative to its parent. */
   capture() {
     for (let i = 0; i < NP; i++) {
       this.capPos[i].copy(this.bodies[i].x);
       this.capQuat[i].copy(this.bodies[i].q);
     }
+    for (let i = 1; i < NP; i++) {
+      this.capLocal[i].copy(this.capQuat[PARTS[i].parent]).invert().multiply(this.capQuat[i]);
+    }
+  }
+
+  /**
+   * Mixes the captured pose into the animated targets, w = 0 all captured,
+   * 1 all animation. The mix is done joint by joint and the skeleton rebuilt
+   * from the hips out, so every bone stays attached at every moment of it -
+   * mixing each part's position on its own would pull joints apart mid-blend.
+   */
+  blendFrom(w) {
+    const lq = _blendQ;
+    lq[0].identity();
+    for (let i = 1; i < NP; i++) lq[i].slerpQuaternions(this.capLocal[i], this.jq[i], w);
+    // the pelvis's centre is its joint
+    _bq.slerpQuaternions(this.capQuat[0], this.tQuat[0], w);
+    _bp.lerpVectors(this.capPos[0], this.tPos[0], w);
+    _bp.sub(_v1.copy(PARTS[0].restJoint).applyQuaternion(_bq));
+    forwardKinematics(_bp, _bq, _ZERO, lq, this.tPos, this.tQuat);
   }
 
   /* -------------------------------- ragdoll ------------------------------ */

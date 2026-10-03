@@ -102,7 +102,8 @@ export class Blood {
     }
 
     let amount = 0;
-    if (hit.sharp) amount = clamp(0.55 + hit.damage / 40, 0.6, 1.2);
+    if (hit.kind === 'impact') amount = hit.damage > 6 ? 0.2 : 0;
+    else if (hit.sharp) amount = clamp(0.55 + hit.damage / 40, 0.6, 1.2);
     else if (hit.kind === 'bat') amount = hit.damage > 12 ? clamp(hit.damage / 40, 0.3, 0.8) : 0.12;
     else {
       const face = part === P.head || part === P.neck;
