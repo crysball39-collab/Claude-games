@@ -1,7 +1,7 @@
 /* =============================================================================
    FIREARMS
 
-   Two of them, built the way everything else in this game is built: out of
+   Built the way everything else in this game is built: out of
    boxes, in code, with no art on disk. The detail is in how many boxes - a
    Glock is thirty-odd parts and an AK is nearer fifty, down to the front sight
    ears, the rivets in the receiver and the trigger safety blade inside the
@@ -575,6 +575,125 @@ export function createFlamerModel() {
 }
 
 /* -------------------------------------------------------------------------- */
+/*                               Mossberg 500                                 */
+/* -------------------------------------------------------------------------- */
+
+export const MOSSBERG = {
+  id: 'mossberg',
+  label: 'Mossberg 500',
+  capacity: 6,            // five in the tube, one in the chamber
+  length: 0.88,
+  mass: 3.4,
+  half: new Vector3(0.030, 0.090, 0.430),
+  center: new Vector3(0, -0.010, -0.140),
+  muzzle: new Vector3(0, 0.030, -0.560),
+  ejectAt: new Vector3(0.022, 0.036, -0.010),
+  /** How far the forend travels when it is racked. */
+  pumpTravel: 0.072,
+};
+
+/**
+ * A pump shotgun with a pistol grip stock: a tall alloy receiver with the
+ * ejection port on the right and the tang safety on top, a long barrel with
+ * a bead at the end, the magazine tube under it, and the ribbed forend that
+ * rides back and forth on the tube - that part moves, so it is its own group.
+ */
+export function createMossbergModel() {
+  const M = gunMaterials();
+  if (!M.shellRed) {
+    M.shellRed = new MeshLambertMaterial({ color: 0xa8231a });
+    M.mossPolymer = new MeshLambertMaterial({ color: 0x24262a });
+    M.mossAlloy = new MeshLambertMaterial({ color: 0x2e3034 });
+  }
+  const g = new Group();
+  const cyl = (mat, r, len, x, y, z, seg = 12) => {
+    const m = new Mesh(new CylinderGeometry(r, r, len, seg), mat);
+    m.rotation.x = Math.PI / 2;
+    m.position.set(x, y, z);
+    m.castShadow = true;
+    g.add(m);
+    return m;
+  };
+
+  /* ----------------------------- the receiver ---------------------------- */
+  box(g, M.mossAlloy, 0.034, 0.074, 0.150, 0, 0.004, -0.008);
+  // the top, a shade lighter where it has been handled, and the tang safety
+  box(g, M.alloy, 0.030, 0.006, 0.150, 0, 0.044, -0.008);
+  box(g, M.brightSteel, 0.010, 0.006, 0.014, 0, 0.048, 0.050);
+  // the ejection port on the right, with the bolt face showing through it
+  box(g, M.black, 0.004, 0.026, 0.060, 0.0166, 0.018, -0.030);
+  box(g, M.brightSteel, 0.003, 0.016, 0.012, 0.0172, 0.018, -0.006);
+  // the loading port underneath, and the shell lifter in it
+  box(g, M.black, 0.026, 0.004, 0.070, 0, -0.033, -0.030);
+  box(g, M.steel, 0.020, 0.004, 0.050, 0, -0.031, -0.028);
+  // the slide release behind the trigger guard, and pins through the side
+  box(g, M.steel, 0.004, 0.010, 0.012, -0.018, -0.024, 0.030);
+  for (const z of [-0.040, 0.024]) {
+    for (const sx of [-1, 1]) box(g, M.brightSteel, 0.002, 0.006, 0.006, sx * 0.0175, -0.016, z);
+  }
+
+  /* ---------------------------- trigger group ---------------------------- */
+  box(g, M.blued, 0.022, 0.006, 0.050, 0, -0.050, 0.004);       // the guard's loop
+  box(g, M.blued, 0.022, 0.024, 0.007, 0, -0.040, -0.020);
+  box(g, M.blued, 0.022, 0.022, 0.007, 0, -0.038, 0.027);
+  box(g, M.brightSteel, 0.006, 0.022, 0.007, 0, -0.035, 0.002, 0.25);
+
+  /* ------------------------------- furniture ----------------------------- */
+  // pistol grip, raked back, chequered with a darker panel
+  box(g, M.mossPolymer, 0.028, 0.094, 0.032, 0, -0.058, 0.040, 0.30);
+  box(g, M.black, 0.029, 0.050, 0.020, 0, -0.058, 0.042, 0.30);
+  box(g, M.mossPolymer, 0.030, 0.010, 0.036, 0, -0.103, 0.055, 0.30);
+  // the stock: wrist, comb, a thick rubber recoil pad
+  box(g, M.mossPolymer, 0.030, 0.042, 0.090, 0, -0.004, 0.110, -0.10);
+  box(g, M.mossPolymer, 0.032, 0.066, 0.150, 0, 0.002, 0.215, -0.07);
+  box(g, M.black, 0.036, 0.074, 0.022, 0, 0.004, 0.296, -0.07);
+  // a sling swivel under the stock
+  box(g, M.steel, 0.006, 0.010, 0.010, 0, -0.035, 0.240);
+
+  /* --------------------------- barrel and tube --------------------------- */
+  cyl(M.blued, 0.0110, 0.480, 0, 0.030, -0.320);                 // 18.5 inch barrel
+  cyl(M.blued, 0.0122, 0.030, 0, 0.030, -0.093);                 // its collar
+  box(g, M.brightSteel, 0.004, 0.005, 0.004, 0, 0.044, -0.552);  // the bead
+  cyl(M.blued, 0.0105, 0.400, 0, 0.004, -0.280);                 // magazine tube
+  cyl(M.steel, 0.0118, 0.022, 0, 0.004, -0.488);                 // its cap
+  // the barrel lug that clamps barrel to tube
+  box(g, M.blued, 0.014, 0.030, 0.016, 0, 0.016, -0.470);
+
+  /* ------------------------------ the forend ----------------------------- */
+  /* Ribbed, round the tube, on two action bars that run back into the
+     receiver: rack it and the whole lot slides back along the tube. */
+  const pump = new Group();
+  pump.name = 'pump';
+  box(pump, M.mossPolymer, 0.044, 0.040, 0.150, 0, -0.002, -0.225);
+  for (let i = 0; i < 6; i++) box(pump, M.black, 0.046, 0.006, 0.010, 0, -0.022, -0.168 - i * 0.022);
+  for (let i = 0; i < 6; i++) {
+    for (const sx of [-1, 1]) box(pump, M.black, 0.003, 0.028, 0.010, sx * 0.0225, -0.002, -0.168 - i * 0.022);
+  }
+  for (const sx of [-1, 1]) box(pump, M.steel, 0.003, 0.006, 0.120, sx * 0.012, 0.016, -0.110);
+  g.add(pump);
+
+  /* A shell, for the loading animation: it shows at the loading port while
+     the left hand is pushing one in. */
+  const shell = new Group();
+  shell.name = 'shell';
+  const hull = new Mesh(new CylinderGeometry(0.0095, 0.0095, 0.054, 10), M.shellRed);
+  hull.rotation.x = Math.PI / 2;
+  shell.add(hull);
+  const base = new Mesh(new CylinderGeometry(0.0100, 0.0100, 0.014, 10), M.brass);
+  base.rotation.x = Math.PI / 2;
+  base.position.z = 0.020;
+  shell.add(base);
+  shell.position.set(0, -0.046, -0.026);
+  shell.visible = false;
+  g.add(shell);
+
+  g.userData.pump = pump;
+  g.userData.shell = shell;
+  g.userData.materials = Object.values(M);
+  return g;
+}
+
+/* -------------------------------------------------------------------------- */
 /*                             loose guns on the map                          */
 /* -------------------------------------------------------------------------- */
 
@@ -620,6 +739,9 @@ export function spawnM16(game, position, opts = {}) {
 }
 export function spawnFlamer(game, position, opts = {}) {
   return spawnGun(game, position, FLAMER, createFlamerModel, opts);
+}
+export function spawnMossberg(game, position, opts = {}) {
+  return spawnGun(game, position, MOSSBERG, createMossbergModel, opts);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -710,10 +832,11 @@ const MAX_CASES = 40;
 
 /** Brass, thrown out to the right, bouncing once and lying where it lands. */
 export class CaseEjector {
-  constructor(scene) {
+  /** `size` and `color` make it shotgun hulls instead of brass. */
+  constructor(scene, { size = [0.009, 0.009, 0.022], color = 0xc79a3c } = {}) {
     this.scene = scene;
-    const geo = new BoxGeometry(0.009, 0.009, 0.022);
-    const mat = new MeshLambertMaterial({ color: 0xc79a3c });
+    const geo = new BoxGeometry(size[0], size[1], size[2]);
+    const mat = new MeshLambertMaterial({ color });
     this.mesh = new InstancedMesh(geo, mat, MAX_CASES);
     this.mesh.instanceMatrix.setUsage(DynamicDrawUsage);
     this.mesh.frustumCulled = false;

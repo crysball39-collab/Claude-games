@@ -152,6 +152,7 @@ const LINES = {
     'The Fire Fist is earned by beating Silva. It lives in slot 9.',
     'The M16 fires faster than the AK, the AK hits harder.',
     'The Glock is semi automatic. One press, one round.',
+    'The Mossberg 500 throws nine pellets a shell. Up close it is brutal; far off, not so much.',
     'Helmets cover the head, not the face. Aim for the face, I guess.',
     'I\'m an offline AI. No internet needed - I just know this game really well.',
     'Somebody should build a statue of me on the tower.',
@@ -347,6 +348,8 @@ export class AutoPilot {
       return this.input;
     }
     this._downSaid = false;
+    // left crouched (by you, before AI play was switched on): stand up
+    if (p.crouchWant && !p.swimming) this.press('crouch');
 
     // a fight that has started is the only thing that matters
     const st = g.encounter?.state;
@@ -413,7 +416,10 @@ export class AutoPilot {
       const s = Math.sin(yaw), c = Math.cos(yaw);
       const len = Math.hypot(this.want.x, this.want.z);
       const wx = this.want.x / len, wz = this.want.z / len;
-      const mag = this.speed >= 0.8 ? 1 : this.speed * 0.75;
+      /* Walking is the stick most of the way over - just short of where it
+         becomes a run. Pushing it half way, as this used to, crawls along at
+         a metre a second: the slow walk. */
+      const mag = this.speed >= 0.8 ? 1 : 0.76;
       this.input.move.y = (wx * -s + wz * -c) * mag;
       this.input.move.x = (wx * c + wz * -s) * mag;
     }
@@ -484,7 +490,8 @@ export class AutoPilot {
         const uz = (tz - p.pos.z) / (Math.hypot(tx - p.pos.x, tz - p.pos.z) || 1);
         this.moveDir(-uz * side + ux * 0.3, ux * side + uz * 0.3, run);
       } else {
-        this.moveToward(tx, tz, run && d > 1.6);
+        // anything more than a few steps away is a run, whatever was asked
+        this.moveToward(tx, tz, (run || d > 3.5) && d > 1.6);
       }
       if (look) this.lookAt(look);
       if (onStep) onStep(d);
@@ -583,7 +590,7 @@ export class AutoPilot {
     switch (choice) {
       case 'explore': return this._start('explore', this.explore());
       case 'rcv2': return this._start('rcv2', this.rcvPlay());
-      case 'guns': return this._start('guns', this.gunRange(pick(['glock', 'ak47', 'm16'])));
+      case 'guns': return this._start('guns', this.gunRange(pick(['glock', 'ak47', 'm16', 'mossberg', 'mossberg'])));
       case 'melee': return this._start('melee', this.meleeFight(pick(['machete', 'sledge', 'crowbar'])));
       case 'horde': return this._start('horde', this.horde());
       case 'armour': return this._start('armour',
@@ -735,7 +742,7 @@ export class AutoPilot {
       }
     }
     for (const s of stops) {
-      const ok = yield* this.goTo(s.x, s.z, { arrive: 2.2, timeout: 30, run: Math.random() < 0.7 });
+      const ok = yield* this.goTo(s.x, s.z, { arrive: 2.2, timeout: 30 });
       if (ok && s.name) this.line(LINES.landmark, { name: s.name }, { gap: 3 });
       // a look round
       const yaw0 = this.game.camYaw;
@@ -975,7 +982,7 @@ export class AutoPilot {
       this.turnRate = 9;
       this.lookAt(chest);
       if (ranged) {
-        const want = spec?.flame ? 4 : g.equipped === 'firefist' ? 6 : 8;
+        const want = spec?.flame ? 4 : spec?.pellets ? 4.5 : g.equipped === 'firefist' ? 6 : 8;
         this._strafeAround(tgt.pos, d, want, 0.7);
         // anything with claws that close: back off from it first
         const near = this._closest((c) => c.isZombie && !c.dead, 2.6);
@@ -1151,7 +1158,7 @@ export class AutoPilot {
   *horde() {
     this.line(LINES.horde);
     const g = this.game;
-    if (!g.carried || !GUNS[g.carried.kind]) yield* this.getWeapon(pick(['ak47', 'm16']));
+    if (!g.carried || !GUNS[g.carried.kind]) yield* this.getWeapon(pick(['ak47', 'm16', 'mossberg']));
     yield* this.spawnFoes('zombie', 4, 12);
     if (g.carried) yield* this.equip(g.carried.kind);
     yield* this.combat((c) => c.isZombie, { timeout: 60 });
@@ -1175,7 +1182,7 @@ export class AutoPilot {
       cit.chestPosition(_v2);
       const d = Math.hypot(cit.pos.x - g.player.pos.x, cit.pos.z - g.player.pos.z);
       this.lookAt(_v2);
-      if (d > 0.85) this.moveToward(cit.pos.x, cit.pos.z, false);
+      if (d > 0.85) this.moveToward(cit.pos.x, cit.pos.z, d > 3);
       this._fire(d);
       yield;
     }

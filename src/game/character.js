@@ -80,11 +80,12 @@ export const MELEE_COOLDOWN = { machete: 0.34, sledge: 0.52, crowbar: 0.42 };
 export const MELEE_HOLD = {
   machete: 'macheteHold', sledge: 'sledgeHold', crowbar: 'crowbarHold',
   glock: 'glockHold', ak47: 'akHold', m16: 'm16Hold', flamethrower: 'flamerHold',
+  mossberg: 'mossbergHold',
 };
 const MELEE_ACTIONS = new Set(Object.values(MELEE_CLIPS).flat());
 /** Reload clips: they own the arms while they run, but nothing strikes. */
 const RELOADS = new Set(['reloadPistol', 'reloadPistolEmpty', 'reloadRifle',
-  'reloadRifleEmpty', 'reloadM16', 'reloadM16Empty', 'reloadFlamer']);
+  'reloadRifleEmpty', 'reloadM16', 'reloadM16Empty', 'reloadFlamer', 'loadShell']);
 
 export const STATE = {
   CONTROLLED: 'controlled',

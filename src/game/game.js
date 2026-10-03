@@ -17,7 +17,8 @@ import {
 } from './objects.js';
 import { gripWorld } from './grip.js';
 import {
-  GLOCK, AK47, M16, FLAMER, spawnGlock, spawnAk, spawnM16, spawnFlamer, MuzzleFlash, CaseEjector,
+  GLOCK, AK47, M16, FLAMER, MOSSBERG, spawnGlock, spawnAk, spawnM16, spawnFlamer, spawnMossberg,
+  MuzzleFlash, CaseEjector,
 } from './guns.js';
 import { GoreSystem, nearestBone } from './gore.js';
 import { WoundSystem } from './wounds.js';
@@ -39,6 +40,7 @@ const _v1 = new Vector3(), _v2 = new Vector3(), _v3 = new Vector3(), _v4 = new V
    vector in this file, and the muzzle is still needed afterwards. */
 const _gunPos = new Vector3(), _gunAim = new Vector3(), _gunTmp = new Vector3();
 const _aimAt = new Vector3();
+const _pelletDir = new Vector3(), _pelletSide = new Vector3(), _pelletUp = new Vector3();
 const _gunQuat = new Quaternion();
 const _q1 = new Quaternion(), _q2 = new Quaternion();
 const _e = new Euler(0, 0, 0, 'YXZ');
@@ -260,6 +262,38 @@ export const GUNS = {
     reload: { normal: 'reloadFlamer', empty: 'reloadFlamer' },
     parts: { reloadFlamer: { magOut: [1.05, 1.80] } },
   },
+  mossberg: {
+    label: 'Mossberg 500',
+    spawn: spawnMossberg,
+    gun: MOSSBERG,
+    // shouldered like the AK, the left hand round the forend
+    grip: { rake: 0.30, roll: -Math.PI / 2, hold: [0, -0.050, 0.026] },
+    center: new Vector3(0, -0.010, -0.140),
+    hold: 'mossbergHold',
+    /* Pump action: one press, one shot, and then the forend has to be
+       racked before there is another. Each shell is nine pellets of 00
+       buckshot spreading out of the barrel: brutal close up, a scattering
+       of hits further off, and nothing much past forty metres. */
+    auto: false,
+    pump: 'pumpMossberg',
+    pumpDelay: 0.10,
+    interval: 0.12,
+    capacity: 6,
+    pellets: 9,
+    spread: 0.045,
+    damage: 15,
+    push: 110,
+    range: 60,
+    recoil: { pitch: 0.115, yaw: 0.030, recover: 6.5, arm: 0.65, shake: 0.62 },
+    flash: 1.15,
+    // loaded a shell at a time, and racked at the end if it ran dry
+    shells: true,
+    reload: { normal: 'loadShell', empty: 'loadShell' },
+    parts: {
+      pumpMossberg: { pump: [0.04, 0.16, 0.26, 0.40] },
+      loadShell: { shell: [0.20, 0.40] },
+    },
+  },
 };
 
 setOfficerGunSpec(GUNS.glock);
@@ -291,6 +325,7 @@ export const SPAWNABLES = {
     { id: 'ak47', name: 'AK-47', icon: 'ak47', hint: '30 rounds. Full automatic.' },
     { id: 'm16', name: 'M16', icon: 'm16', hint: '30 rounds. Faster, flatter.' },
     { id: 'flamethrower', name: 'Flamethrower', icon: 'flamer', hint: 'Sets anything it reaches on fire.' },
+    { id: 'mossberg', name: 'Mossberg 500', icon: 'mossberg', hint: 'Pump shotgun. Six shells, nine pellets each.' },
   ],
   humans: [
     { id: 'citizen', name: 'Citizen', icon: 'citizen', hint: 'An ordinary person' },
@@ -363,6 +398,8 @@ export class Game {
        camera and the arms. */
     this.gunCooldown = 0;
     this.reloadTimer = 0;
+    this._pump = null;
+    this._shells = null;
     this.gunKick = 0;
     this.recoilPitch = 0;
     this.recoilYaw = 0;
@@ -487,6 +524,8 @@ export class Game {
     this.rcv2 = new RCV2(this, this.player);
     this.flash = new MuzzleFlash(this.scene);
     this.cases = new CaseEjector(this.scene);
+    // red plastic shotgun hulls, with their brass heads
+    this.hulls = new CaseEjector(this.scene, { size: [0.020, 0.020, 0.062], color: 0xa8231a });
     this.player.setEquipped('fists');
     this.setEquipped('fists');
 
@@ -562,10 +601,13 @@ export class Game {
       this.scene.remove(this.carried.model);
       this.carried = null;
       this.reloadTimer = 0;
+      this._pump = null;
+      this._shells = null;
       this.hud?.setCarrying(null);
       this.setEquipped('fists');
     }
     this.cases?.clear();
+    this.hulls?.clear();
     this.gore?.clearDebris();
     this.fire?.clear();
     for (const b of [...this.spawnedBodies]) this.removeBody(b);
@@ -960,6 +1002,8 @@ export class Game {
       chambered: (body.userData.ammo ?? 0) > 0,
     };
     this.reloadTimer = 0;
+    this._pump = null;
+    this._shells = null;
     this.gunCooldown = 0;
     this.hud?.setCarrying(kind);
     this.setEquipped(kind);
@@ -972,6 +1016,8 @@ export class Game {
     const spec = CARRY[c.kind];
     this.carried = null;
     this.reloadTimer = 0;
+    this._pump = null;
+    this._shells = null;
     this.player.animator.cancelAction();
     this.hud?.setCarrying(null);
 
@@ -1029,6 +1075,21 @@ export class Game {
       } else {
         u.magazine.rotation.x = 0;
       }
+    }
+    if (u.pump) {
+      // the forend rides back along the tube and forward again
+      const w = win?.pump;
+      let k = 0;
+      if (w && t > w[0] && t < w[3]) {
+        k = t < w[1] ? (t - w[0]) / (w[1] - w[0]) : t < w[2] ? 1 : 1 - (t - w[2]) / (w[3] - w[2]);
+      }
+      u.pump.position.z = Math.max(0, Math.min(1, k)) * (spec.gun.pumpTravel || 0.07);
+    }
+    if (u.shell) {
+      const w = win?.shell;
+      u.shell.visible = !!(w && t >= w[0] && t <= w[1]);
+      // pushed up into the loading port and forward into the tube
+      if (u.shell.visible) u.shell.position.z = -0.026 - ((t - w[0]) / (w[1] - w[0])) * 0.04;
     }
     const back = inside(win?.slide) || inside(win?.bolt);
     if (u.slide) u.slide.position.z = back ? 0.030 : 0;
@@ -1152,7 +1213,9 @@ export class Game {
     if (!c) return false;
     const spec = GUNS[c.kind];
     if (!spec) return false;
-    if (this.reloadTimer > 0 || this.gunCooldown > 0) return false;
+    // a shotgun part way through loading stops after the shell in hand
+    if (this.reloadTimer > 0 && this._shells) this._shells.stop = true;
+    if (this.reloadTimer > 0 || this.gunCooldown > 0 || this._pump) return false;
     if (this.player.state !== STATE.CONTROLLED || this.player.dead) return false;
     if (this.player.armBroken('R')) return false;
     if (c.ammo <= 0) {
@@ -1179,12 +1242,33 @@ export class Game {
     _gunAim.copy(_aimAt).sub(muzzle);
     if (_gunAim.lengthSq() < 1e-8) return false;
     _gunAim.normalize();
-    this._traceShot(muzzle, _gunAim, spec);
+    if (spec.pellets) {
+      /* A cloud of pellets round the point of aim, each its own round, so
+         the closer the target the more of them land on it. */
+      for (let i = 0; i < spec.pellets; i++) {
+        const a = this.rng() * Math.PI * 2, r = Math.sqrt(this.rng()) * spec.spread;
+        _pelletSide.set(-_gunAim.z, 0, _gunAim.x);
+        if (_pelletSide.lengthSq() < 1e-6) _pelletSide.set(1, 0, 0);
+        _pelletSide.normalize();
+        _pelletUp.crossVectors(_pelletSide, _gunAim).normalize();
+        _pelletDir.copy(_gunAim).addScaledVector(_pelletSide, Math.cos(a) * r)
+          .addScaledVector(_pelletUp, Math.sin(a) * r).normalize();
+        this._traceShot(muzzle, _pelletDir, spec);
+      }
+    } else {
+      this._traceShot(muzzle, _gunAim, spec);
+    }
 
     this.flash.fire(muzzle, _gunQuat, spec.flash);
-    // the case comes out of the port, up and to the right of the gun
-    const at = _gunTmp.copy(spec.gun.ejectAt).applyQuaternion(_gunQuat).add(_gunPos);
-    this.cases.eject(at, _gunAim.set(0.92, 0.36, 0.14).applyQuaternion(_gunQuat).normalize());
+    if (spec.pump) {
+      // the empty hull stays in the chamber until the forend is racked
+      c.spent = true;
+      if (c.ammo > 0) this._pump = { wait: spec.pumpDelay, t: -1, ejected: false };
+    } else {
+      // the case comes out of the port, up and to the right of the gun
+      const at = _gunTmp.copy(spec.gun.ejectAt).applyQuaternion(_gunQuat).add(_gunPos);
+      this.cases.eject(at, _gunAim.set(0.92, 0.36, 0.14).applyQuaternion(_gunQuat).normalize());
+    }
 
     // recoil: some of it moves your aim for good, the rest settles back
     const r = spec.recoil;
@@ -1356,6 +1440,8 @@ export class Game {
        still has a tail on it. Without this, a reload asked for during that tail
        is swallowed: the arms are busy with work that is already finished. */
     if (this.player.reloading) this.player.animator.cancelAction();
+    if (this._pump) return;                      // let the rack finish first
+    if (spec.shells) { this._loadShell(true); return; }
     /* An empty gun needs the action worked as well as a magazine, which is a
        different job and a slower one. */
     const empty = !c.chambered;
@@ -1366,7 +1452,62 @@ export class Game {
     this.hud?.toast(empty ? 'Reloading (empty)' : 'Reloading');
   }
 
+  /**
+   * One shell into a shotgun's tube. The reload carries on a shell at a time
+   * until it is full or the trigger is pulled; a gun that ran dry is racked
+   * at the end to chamber one.
+   */
+  _loadShell(first = false) {
+    const c = this.carried, spec = c && GUNS[c.kind];
+    if (!spec) { this._shells = null; return false; }
+    if (first) this._shells = { stop: false, rack: c.ammo === 0 || !!c.spent };
+    if (!this.player.playReload(spec.reload.normal)) { this._shells = null; return false; }
+    this.reloadTimer = this.player.animator.action.clip.duration;
+    this._reloadInto = Math.min(spec.capacity, c.ammo + 1);
+    if (first) this.hud?.toast('Loading shells');
+    return true;
+  }
+
+  /** Racks a pump gun: forend back (the hull flies out), forend forward. */
+  _rack() {
+    const spec = this.carried && GUNS[this.carried.kind];
+    if (!spec?.pump) return false;
+    if (this.player.animator.actionActive) this.player.animator.cancelAction();
+    if (!this.player.playReload(spec.pump)) return false;
+    this._pump = { wait: 0, t: 0, ejected: false, dur: this.player.animator.action.clip.duration };
+    return true;
+  }
+
+  _updatePump(dt) {
+    const p = this._pump;
+    if (!p) return;
+    const c = this.carried, spec = c && GUNS[c.kind];
+    if (!spec?.pump || this.player.state !== STATE.CONTROLLED) { this._pump = null; return; }
+    if (p.t < 0) {
+      p.wait -= dt;
+      if (p.wait > 0) return;
+      if (!this._rack()) { this._pump = null; }
+      return;
+    }
+    p.t += dt;
+    if (!p.ejected && p.t >= 0.16) {
+      p.ejected = true;
+      if (c.spent) {
+        // the spent hull, out of the port on the right
+        gripWorld(this.player.rig.byName.handR, spec.grip, _gunQuat, _gunPos);
+        const at = _gunTmp.copy(spec.gun.ejectAt).applyQuaternion(_gunQuat).add(_gunPos);
+        this.hulls.eject(at, _gunAim.set(0.95, 0.30, 0.10).applyQuaternion(_gunQuat).normalize());
+      }
+      c.spent = false;
+    }
+    if (p.t >= (p.dur || 0.55)) {
+      this._pump = null;
+      c.chambered = c.ammo > 0;
+    }
+  }
+
   _updateGuns(dt, input) {
+    this._updatePump(dt);
     this.gunCooldown = Math.max(0, this.gunCooldown - dt);
     this.gunKick = Math.max(0, this.gunKick - dt * 9);
     const rec = GUNS[this.equipped]?.recoil;
@@ -1375,13 +1516,24 @@ export class Game {
     this.recoilYaw = damp(this.recoilYaw, 0, back, dt);
     this.flash?.update(dt);
     this.cases?.update(dt, this.world);
+    this.hulls?.update(dt, this.world);
 
     if (this.reloadTimer > 0) {
       this.reloadTimer -= dt;
       if (this.reloadTimer <= 0 && this.carried) {
+        const spec = GUNS[this.carried.kind];
         this.carried.ammo = this._reloadInto;
-        this.carried.chambered = true;
-        this.hud?.setAmmo(this.carried.ammo, GUNS[this.carried.kind]?.capacity || 0);
+        this.hud?.setAmmo(this.carried.ammo, spec?.capacity || 0);
+        if (spec?.shells && this._shells) {
+          // another shell, unless it is full or the trigger was pulled
+          const sh = this._shells;
+          if (this.carried.ammo < spec.capacity && !sh.stop && this._loadShell()) return;
+          this._shells = null;
+          if (sh.rack) this._rack();
+          else this.carried.chambered = true;
+        } else {
+          this.carried.chambered = true;
+        }
       }
       return;
     }
@@ -2066,6 +2218,7 @@ export class Game {
     this.rcv2?.dispose();
     this.flash?.dispose();
     this.cases?.dispose();
+    this.hulls?.dispose();
     this.gore?.dispose();
     this.fx?.dispose();
     this.map?.dispose();

@@ -360,6 +360,16 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
   linear-gradient(#a8261c,#a8261c) 62% 72% / 22% 30% no-repeat,
   linear-gradient(#1d1f22,#1d1f22) 86% 52% / 14% 26% no-repeat,
   #14181c}
+/* a pump shotgun: long barrel over the tube, a ribbed forend, and a red
+   shell beside it */
+.ico.mossberg{background:
+  linear-gradient(#24262a,#24262a) 40% 40% / 70% 9% no-repeat,
+  linear-gradient(#1b1c20,#1b1c20) 38% 52% / 56% 7% no-repeat,
+  repeating-linear-gradient(90deg,#33363b 0 3px,#1b1c20 3px 5px) 34% 52% / 22% 12% no-repeat,
+  linear-gradient(#24262a,#24262a) 88% 50% / 16% 22% no-repeat,
+  linear-gradient(#a8231a,#a8231a) 22% 80% / 9% 16% no-repeat,
+  linear-gradient(#b08a3a,#b08a3a) 22% 92% / 9% 6% no-repeat,
+  #14181c}
 /* a crowbar: the shaft, the gooseneck over the top, and the claw dropping
    back down the other side. Placed rather than striped, because a stripe
    runs the whole way across and a hook does not. */

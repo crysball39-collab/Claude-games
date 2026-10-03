@@ -258,6 +258,7 @@ export class InputManager {
       case 'Digit8': if (isDown) this.onWeaponSelect?.(7); break;
       case 'Digit9': if (isDown) this.onWeaponSelect?.(8); break;
       case 'Digit0': if (isDown) this.onWeaponSelect?.(9); break;
+      case 'Minus': if (isDown) this.onWeaponSelect?.(10); break;
       case 'KeyR': set('reload'); break;
       case 'KeyQ': set('fireball'); break;
       case 'Tab': if (isDown) this.onToggleDrawer?.(); break;

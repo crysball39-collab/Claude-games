@@ -812,6 +812,54 @@ const reloadFlamer = {
   },
 };
 
+/* ------------------------------ Mossberg 500 ------------------------------ */
+/* Shouldered like the rifles, with the left hand round the forend. Racking
+   it is the left arm alone: the forend comes back to the receiver and goes
+   forward again, and the whole of the upper body rocks with it. Loading is
+   one shell at a time: the left hand drops off the forend to the loading
+   port under the receiver, thumbs one in, and comes back - again and again
+   until the tube is full. */
+const mossbergHold = {
+  name: 'mossbergHold', duration: 3.6, loop: true, mask: 'upper',
+  tracks: { ...akHold.tracks },
+};
+
+const pumpMossberg = {
+  name: 'pumpMossberg', duration: 0.55, loop: false, mask: 'upper',
+  tracks: {
+    midTorso: [[0, 0.034, -0.114, -0.010], [0.16, 0.012, -0.110, -0.010], [0.30, 0.020, -0.112, -0.010], [0.55, 0.034, -0.114, -0.010]],
+    upperTorso: [[0, 0.014, -0.113, 0.045], [0.16, -0.010, -0.105, 0.040], [0.30, 0.000, -0.110, 0.042], [0.55, 0.014, -0.113, 0.045]],
+    upperArmR: akHold.tracks.upperArmR,
+    lowerArmR: akHold.tracks.lowerArmR,
+    handR: akHold.tracks.handR,
+    upperArmL: [[0, 1.256, 1.571, 0.358], [0.16, 1.120, 1.571, 0.300], [0.26, 1.120, 1.571, 0.300], [0.40, 1.256, 1.571, 0.358], [0.55, 1.256, 1.571, 0.358]],
+    lowerArmL: [[0, 1.010, 1.431, -0.157], [0.16, 1.230, 1.431, -0.070], [0.26, 1.230, 1.431, -0.070], [0.40, 1.010, 1.431, -0.157], [0.55, 1.010, 1.431, -0.157]],
+    handL: [[0, 0.025, 0.002, 0.002], [0.16, 0.040, 0.004, 0.010], [0.40, 0.025, 0.002, 0.002]],
+    neck: [[0, -0.030, 0, 0]],
+    head: [[0, -0.020, 0, 0], [0.16, -0.035, 0, 0], [0.40, -0.020, 0, 0]],
+    ...gripFingers('R'),
+    ...gripFingers('L'),
+  },
+};
+
+const loadShell = {
+  name: 'loadShell', duration: 0.6, loop: false, mask: 'upper',
+  tracks: {
+    midTorso: [[0, 0.034, -0.114, -0.010], [0.2, 0.060, -0.100, -0.020], [0.4, 0.050, -0.095, -0.025], [0.6, 0.034, -0.114, -0.010]],
+    upperTorso: [[0, 0.014, -0.113, 0.045], [0.2, -0.030, -0.095, 0.010], [0.4, -0.025, -0.092, 0.012], [0.6, 0.014, -0.113, 0.045]],
+    upperArmR: akHold.tracks.upperArmR,
+    lowerArmR: akHold.tracks.lowerArmR,
+    handR: akHold.tracks.handR,
+    upperArmL: [[0, 1.256, 1.571, 0.358], [0.14, 0.940, 1.571, 0.060], [0.28, 1.078, 1.558, 0.181], [0.40, 1.110, 1.560, 0.200], [0.6, 1.256, 1.571, 0.358]],
+    lowerArmL: [[0, 1.010, 1.431, -0.157], [0.14, 1.300, 1.431, 0.080], [0.28, 1.165, 1.425, -0.025], [0.40, 1.110, 1.420, -0.045], [0.6, 1.010, 1.431, -0.157]],
+    handL: [[0, 0.025, 0.002, 0.002], [0.14, 0.040, 0.020, 0.040], [0.28, 0.028, 0.004, 0.007], [0.40, 0.010, 0.000, 0.000], [0.6, 0.025, 0.002, 0.002]],
+    neck: [[0, -0.030, 0, 0], [0.25, 0.060, 0, 0], [0.6, -0.030, 0, 0]],
+    head: [[0, -0.020, 0, 0], [0.25, 0.080, 0, 0], [0.6, -0.020, 0, 0]],
+    ...gripFingers('R'),
+    ...gripFingers('L'),
+  },
+};
+
 /* --------------------------------- get up --------------------------------- */
 /* Pushing up off the floor. rootPitch and rootYAbs drive the whole body. */
 const getUpFront = mirrorSides({
@@ -898,6 +946,7 @@ export const CLIPS = {
   reloadPistol, reloadPistolEmpty, reloadRifle, reloadRifleEmpty,
   reloadM16, reloadM16Empty,
   flamerHold, reloadFlamer, zombieReach,
+  mossbergHold, pumpMossberg, loadShell,
   getUpFront, getUpBack, stagger,
 };
 

@@ -7,12 +7,12 @@ import { $, IS_TOUCH } from '../core/util.js';
 /** What the big button says for each thing you can hold. */
 const PRIMARY_LABEL = {
   rcv2: 'SHOOT', machete: 'SLASH', sledge: 'SWING', crowbar: 'SWING', fists: 'PUNCH',
-  glock: 'FIRE', ak47: 'FIRE', m16: 'FIRE', firefist: 'PUNCH', flamethrower: 'BURN',
+  glock: 'FIRE', ak47: 'FIRE', m16: 'FIRE', firefist: 'PUNCH', flamethrower: 'BURN', mossberg: 'FIRE',
 };
 /** Which slots only exist while that weapon is actually being carried. */
 const CARRY_SLOTS = ['slot-machete', 'slot-sledge', 'slot-crowbar',
-  'slot-glock', 'slot-ak47', 'slot-m16', 'slot-flamethrower'];
-const GUN_SLOTS = new Set(['glock', 'ak47', 'm16', 'flamethrower']);
+  'slot-glock', 'slot-ak47', 'slot-m16', 'slot-flamethrower', 'slot-mossberg'];
+const GUN_SLOTS = new Set(['glock', 'ak47', 'm16', 'flamethrower', 'mossberg']);
 
 export class Hud {
   constructor(input) {
