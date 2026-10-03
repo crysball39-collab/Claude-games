@@ -12,11 +12,18 @@ export class FreeCamera {
   constructor(camera, game) {
     this.camera = camera;
     this.game = game;
-    this.pos = new Vector3(0, 6.5, 13);
+    this.pos = new Vector3();
     this.vel = new Vector3();
+    this.sens = 0.0052;
+    this.reset();
+  }
+
+  /** Back to the starting view: the middle of the platform, from a little above. */
+  reset() {
+    this.pos.set(0, 6.5, 13);
+    this.vel.set(0, 0, 0);
     this.yaw = 0;
     this.pitch = -0.42;
-    this.sens = 0.0052;
     this.apply();
   }
 

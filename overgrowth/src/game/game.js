@@ -301,7 +301,7 @@ export class Game {
     for (const h of this.humans) h.syncVisual(alpha);
     for (const p of this.props) p.sync(alpha);
 
-    this.cam.update(dt, input);
+    if (input) this.cam.update(dt, input);
     this.cam.focus(this.focus);
     this.map.followShadow(this.focus);
     this.updateMarker();

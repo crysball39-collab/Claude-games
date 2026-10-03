@@ -39,7 +39,8 @@ npm run build:overgrowth     # -> dist/overgrowth.html
 
 ## Playing it
 
-**PLAY** opens the spawn menu.
+The title screen shows two random teams fighting under a circling camera.
+**PLAY** clears them away and opens the spawn menu.
 
 1. Pick a team, **Red, Blue, Yellow, Purple, Black or Orange**. The card you pick
    gets a **green outline**.

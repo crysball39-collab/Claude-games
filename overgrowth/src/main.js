@@ -55,11 +55,40 @@ function adapt(dt) {
   }
 }
 
+/* Behind the title screen: two teams going at it while the camera circles. */
+const demo = { angle: Math.random() * Math.PI * 2, over: 0 };
+function startDemo() {
+  game.clearAll();
+  const ids = ['red', 'blue', 'yellow', 'purple', 'black', 'orange'];
+  const a = ids.splice(Math.floor(Math.random() * ids.length), 1)[0];
+  const b = ids[Math.floor(Math.random() * ids.length)];
+  for (let k = 0; k < 3; k++) {
+    game.spawnHuman(a, -2.6, (k - 1) * 1.3, Math.PI / 2);
+    game.spawnHuman(b, 2.6, (k - 1) * 1.3, -Math.PI / 2);
+  }
+  if (Math.random() < 0.6) game.spawnProp(Math.random() < 0.5 ? 'bat' : 'sword', 0, 2.2);
+}
+function runDemo(dt) {
+  game.frame(dt, null);
+  demo.angle += dt * 0.12;
+  const c = game.cam;
+  c.pos.set(Math.sin(demo.angle) * 9, 3.4, Math.cos(demo.angle) * 9);
+  c.yaw = demo.angle;
+  c.pitch = -0.28;
+  c.apply();
+  // once one side is down to nobody, start another
+  const teams = new Set(game.humans.filter((h) => h.alive).map((h) => h.team));
+  demo.over = teams.size < 2 ? demo.over + dt : 0;
+  if (demo.over > 4) { demo.over = 0; startDemo(); }
+}
+startDemo();
+
 let last = performance.now();
 let started = false;
 function loop(now) {
   const dt = (now - last) / 1000;
   last = now;
+  if (!started) runDemo(dt);
   if (started) {
     game.frame(dt, input);
     adapt(dt);
@@ -81,6 +110,8 @@ document.getElementById('loading').textContent = '';
 document.getElementById('btn-play').addEventListener('click', () => {
   document.getElementById('title').classList.remove('active');
   document.getElementById('hud').classList.remove('hidden');
+  game.clearAll();
+  game.cam.reset();
   started = true;
   last = performance.now();
   sound.unlock();
