@@ -420,6 +420,16 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
 .pause-card{width:min(340px,84vw);display:flex;flex-direction:column;gap:.6rem;text-align:center}
 .pause-card h2{margin:0 0 .6rem;letter-spacing:.34em;font-size:1.1rem}
 .pause-stats{margin-top:.8rem;color:var(--muted);font-size:.7rem;letter-spacing:.1em;line-height:1.7}
+/* A phone on its side is under 400 px tall: the card has to fit in that,
+   RESUME included, so everything tightens up, and it scrolls if it still
+   cannot. */
+#pause-overlay{overflow-y:auto}
+@media (max-height:460px){
+  .pause-card{gap:.32rem;margin:auto 0}
+  .pause-card h2{margin:0 0 .2rem;font-size:.95rem}
+  .pause-card .mbtn{padding:.46rem 1rem;font-size:.82rem}
+  .pause-stats{margin-top:.3rem;line-height:1.45}
+}
 
 /* -------------------------------- rotate --------------------------------- */
 #rotate-overlay{position:absolute;inset:0;z-index:200;display:none;align-items:center;justify-content:center;
@@ -469,3 +479,13 @@ body.portrait-block #rotate-overlay{display:flex}
 /* with the AI talking at the top, the boss bar sits under its lines */
 body.ai-play #boss-bar{top:calc(var(--safe-t) + 96px)}
 body.ai-play #hud.boss #toast{top:40%}
+/* short screens: the menu gained a button, and the chat must not cover half the view */
+@media (max-height:460px){
+  #panel-main .menu-tagline{margin:.3rem 0 .9rem}
+  #panel-main .menu-buttons{gap:.45rem}
+  #panel-main .mbtn{padding:.6rem 1.2rem}
+  .ai-line{font-size:.64rem;padding:.14rem .45rem}
+  .ai-line:nth-last-child(n+3){display:none}
+}
+/* the AI chooses what it spawns; the readout would sit under its chat */
+body.ai-play #selected-spawn{display:none}
