@@ -20,11 +20,11 @@ export const PROP_TYPES = {
     name: 'Crate', size: [0.6, 0.6, 0.6], mass: 14, density: 110, friction: 0.7,
   },
   bat: {
-    name: 'Bat', size: [0.065, 0.065, 0.86], mass: 1.0, density: 260, friction: 0.5,
+    name: 'Bat', size: [0.065, 0.065, 0.86], mass: 1.0, density: 220, friction: 0.5,
     weapon: true, sharp: false, strikeMass: 3.4, damageBase: 5, damage: 1.5, grip: 0.1,
   },
   sword: {
-    name: 'Sword', size: [0.07, 0.018, 1.0], mass: 1.3, density: 260, friction: 0.4,
+    name: 'Sword', size: [0.07, 0.018, 1.0], mass: 1.3, density: 220, friction: 0.4,
     weapon: true, sharp: true, strikeMass: 2.8, damageBase: 6, damage: 1.9, grip: 0.12,
   },
 };
@@ -132,7 +132,7 @@ export class Prop {
     this.holder = null;
     this.claimedBy = null;
 
-    this.layout = packBoxes([{ size: this.size, density: T.density }], kind === 'crate' ? 256 : 512);
+    this.layout = packBoxes([{ size: this.size, density: T.density }], 256);
     this.paint = new PaintCanvas(this.layout.width, this.layout.height);
     const tiles = this.layout.tiles[0];
     if (kind === 'crate') paintCrate(this.paint.ctx, tiles);

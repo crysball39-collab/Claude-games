@@ -48,8 +48,10 @@ export function packBoxes(boxes, width, pad = 2, minPx = 6, maxPx = 512) {
   boxes.forEach((b, bi) => {
     FACES.forEach((f, fi) => {
       const du = comp(b.size, f.axisU), dv = comp(b.size, f.axisV);
-      const w = Math.max(minPx, Math.min(maxPx, Math.round(du * b.density)));
-      const h = Math.max(minPx, Math.min(maxPx, Math.round(dv * b.density)));
+      // a face can ask for less: nobody sees the underside of a platform
+      const dens = b.faceDensity && b.faceDensity[fi] != null ? b.faceDensity[fi] : b.density;
+      const w = Math.max(minPx, Math.min(maxPx, Math.round(du * dens)));
+      const h = Math.max(minPx, Math.min(maxPx, Math.round(dv * dens)));
       items.push({ bi, fi, w, h });
     });
   });
@@ -282,14 +284,6 @@ export class PaintCanvas {
     return L;
   }
 
-  /** Uploads if painted since last time, at most every `gap` seconds. */
-  flush(now, gap = 0.05) {
-    if (!this.dirty || now - this.lastUpload < gap) return;
-    this.dirty = false;
-    this.lastUpload = now;
-    this.texture.needsUpdate = true;
-  }
-
   dispose() {
     this.texture.dispose();
     PaintCanvas.all.delete(this);
@@ -385,8 +379,26 @@ export class FloorPaint {
   }
 }
 
-export function flushAll(now) {
-  for (const pc of PaintCanvas.all) pc.flush(now);
+/**
+ * Uploads painted canvases to the GPU. Each waits at least `gap` seconds
+ * between uploads, and no more than `budget` bytes go up in one frame - a
+ * phone does not want twenty fresh textures every frame of a bloody brawl.
+ * Whatever waited longest goes first.
+ */
+export function flushAll(now, gap = 0.08, budget = 2.2e6) {
+  const ready = [];
+  for (const pc of PaintCanvas.all) if (pc.dirty && now - pc.lastUpload >= gap) ready.push(pc);
+  if (!ready.length) return;
+  ready.sort((a, b) => a.lastUpload - b.lastUpload);
+  let bytes = 0;
+  for (const pc of ready) {
+    const size = pc.canvas.width * pc.canvas.height * 4;
+    if (bytes > 0 && bytes + size > budget) break;
+    bytes += size;
+    pc.dirty = false;
+    pc.lastUpload = now;
+    pc.texture.needsUpdate = true;
+  }
 }
 
 export { rng };

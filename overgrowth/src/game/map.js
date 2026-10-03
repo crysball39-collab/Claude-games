@@ -148,7 +148,7 @@ export class GameMap {
     /* ---------------------------- grey platform --------------------------- */
     const G = GREY_HALF;
     const gsize = new Vector3(G * 2, GREY_TOP, G * 2);
-    this.greyLayout = packBoxes([{ size: gsize, density: 70 }], 1024, 2, 8, 1024);
+    this.greyLayout = packBoxes([{ size: gsize, density: 60, faceDensity: { [FACE.ny]: 1 } }], 512, 2, 8, 512);
     this.greyPaint = new PaintCanvas(this.greyLayout.width, this.greyLayout.height);
     paintConcrete(this.greyPaint.ctx, this.greyLayout.tiles[0]);
     this.greyPaint.dirty = true;
