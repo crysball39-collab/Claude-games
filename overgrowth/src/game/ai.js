@@ -82,6 +82,7 @@ export class Brain {
       let w = null, wd = 9;
       for (const p of g.props) {
         if (!p.weapon || p.holder || p.removed) continue;
+        if (p === this.ignore && this.ignoreT > 0) continue;
         // someone else is already going for it (if they still are)
         const c = p.claimedBy;
         if (c && c !== h && !c.removed && c.alive && c.brain.weapon === p) continue;
@@ -94,6 +95,17 @@ export class Brain {
     }
   }
 
+  /** Reached for it and came up empty: twice, and it is not worth it for a while. */
+  missedPickup() {
+    this.missed = (this.missed || 0) + 1;
+    if (this.missed >= 2 && this.weapon) {
+      this.ignore = this.weapon;
+      this.ignoreT = 8;
+      this.missed = 0;
+      this.dropClaim();
+    }
+  }
+
   dropClaim() {
     if (this.weapon && this.weapon.claimedBy === this.h) this.weapon.claimedBy = null;
     this.weapon = null;
@@ -102,6 +114,7 @@ export class Brain {
   update(dt) {
     const h = this.h, g = h.game;
     this.thinkT -= dt; this.cool -= dt; this.grudgeT -= dt; this.strafeT -= dt; this.retreatT -= dt;
+    if (this.ignoreT > 0) this.ignoreT -= dt;
     if (this.thinkT <= 0) { this.thinkT = rand(0.25, 0.5); this.choose(); }
     h.move.set(0, 0, 0);
     h.face = null;

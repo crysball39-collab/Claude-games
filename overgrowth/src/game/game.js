@@ -187,6 +187,8 @@ export class Game {
       best.attach(h);
       h.brain.dropClaim();
       this.emit('pickup', h, best);
+    } else {
+      h.brain.missedPickup();
     }
   }
 
