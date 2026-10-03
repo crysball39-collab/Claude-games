@@ -117,6 +117,8 @@ Extended Position Based Dynamics*, 2020), with 8 substeps per 60 Hz step.
   with each other, with crates and weapons, with the platforms, and with
   themselves (a hand cannot pass through its own chest). Friction is Coulomb,
   static and dynamic.
+- A body let go from its animation while tangled with someone else eases out of
+  the overlap over a few frames instead of being fired apart.
 - A body that lies still settles. Its joints stiffen a little, and once it is
   quiet it sleeps until something touches it. That keeps a pile of bodies cheap.
 
@@ -149,12 +151,16 @@ What the blow does comes from the real closing speed at the moment of contact:
 
 - **damage**, scaled by the part hit (head ×1.6, neck ×1.4, torso ×1, limbs
   ×0.6, hands and feet ×0.4)
-- **knock**, the impulse. It is applied to the part that was hit, at the point
-  it was hit, and it drains **balance**. A small knock is a flinch. A bigger one
-  is a **stumble**. Running out of balance, or one huge blow, is a
-  **knockdown** into a ragdoll.
+- **knock**, the impulse. It lands on the part that was hit, at the point it
+  was hit, and travels up the body. Each part takes only what would move it at a
+  hard pace and passes the rest to the part it hangs from, so a punch to the
+  hand swings the arm and turns the shoulders. Knock drains **balance**. A
+  small knock is a flinch, a bigger one a **stumble**. Running out of balance,
+  or one huge blow, is a **knockdown** into a ragdoll.
 
-Landing hard as a ragdoll hurts too.
+Landing hard as a ragdoll hurts too. A crate or a body flying into someone
+standing knocks them off balance. Running over a body lying on the ground
+does not.
 
 ### Blood
 

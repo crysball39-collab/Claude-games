@@ -90,7 +90,9 @@ check('the spawn menu lists all six teams', await ev(() =>
 check('spawn is disabled until something is selected', await ev(() => document.querySelector('#btn-spawn').disabled));
 
 await tap('.card[data-team="red"]');
-await page.waitForTimeout(300);   // the outline fades in
+// the outline fades in; give a slow machine time to finish the transition
+await page.waitForFunction(() => getComputedStyle(document.querySelector('.card[data-team="red"]')).outlineColor === 'rgb(57, 255, 90)',
+  null, { timeout: 3000 }).catch(() => {});
 const sel = await ev(() => {
   const el = document.querySelector('.card[data-team="red"]');
   const cs = getComputedStyle(el);
@@ -189,7 +191,8 @@ const camAfter = await ev(() => { const c = window.__og.game.cam; return { x: c.
   await page.touchscreen.tap(at.x, at.y);
   await page.waitForTimeout(200);
   const toast = await ev(() => document.querySelector('#toast').textContent);
-  check('tapping a fighter shows their team and health', new RegExp(at.team, 'i').test(toast) && /HP/.test(toast), toast);
+  // whoever is nearest under the finger answers, which may be someone standing in front
+  check('tapping a fighter shows their team and health', /^(Red|Blue|Yellow|Purple|Black|Orange): \d+ HP/.test(toast), toast);
   await ev(() => {
     const g = window.__og.game;
     g.paused = false;
@@ -411,15 +414,17 @@ if (!FILE_MODE) {
     d.die('test');
     await wait(2.5);
     const w = g.spawnHuman('red', 3, 3.5, 0);
+    let why = '';
+    g.on('hit', (v, x) => { if (v === w && !why) why = `(${x.kind} on part ${x.part} at ${x.speed.toFixed(1)} m/s)`; });
     const seen2 = new Set();
     g.fixedStep = (dt) => { fs(dt); seen2.add(w.state); };
     w.brain.update = () => { w.move.set(0, 0, 3.5); w.face = 0; };
     await wait(2.5);
     g.fixedStep = fs;
-    return { crate: [...seen], walker: [...seen2] };
+    return { crate: [...seen], walker: [...seen2], why };
   });
   check('a crate thrown at someone knocks them off balance', bump.crate.includes('stumble') || bump.crate.includes('ragdoll'), bump.crate.join(','));
-  check('running over a body on the ground does not trip anyone', bump.walker.length === 1 && bump.walker[0] === 'active', bump.walker.join(','));
+  check('running over a body on the ground does not trip anyone', bump.walker.length === 1 && bump.walker[0] === 'active', bump.walker.join(',') + (bump.why ? ' ' + bump.why : ''));
 
   console.log('      (blood starts at ' + (await ev(() => window.__og.game.time.toFixed(1))) + ' s)');
   /* ------------------------------ blood, objects -------------------------- */
@@ -442,15 +447,20 @@ if (!FILE_MODE) {
     const before = { sword: reds(sword.paint), victim: reds(b.paint), crate: reds(crate.paint) };
     for (const h of [a, b]) h.brain.update = () => { h.move.set(0, 0, 0); h.combat = true; h.face = h === a ? Math.PI / 2 : -Math.PI / 2; };
     let hit = null;
-    g.on('hit', (v, x) => { if (!hit && x.kind === 'sword') hit = x; });
-    for (let k = 0; k < 6 && !hit; k++) { a.play(k % 2 ? A.SWING_L : A.SWING_R); await wait(0.9); }
+    const log = [];
+    g.on('hit', (v, x) => { log.push(`${v.team} hit by ${x.kind} on ${x.part}`); if (!hit && x.kind === 'sword') hit = x; });
+    for (let k = 0; k < 6 && !hit; k++) {
+      log.push(`swing ${k}: ${a.state}/${b.state} ${a.holding ? 'armed' : 'unarmed'} at ${a.root.x.toFixed(2)},${a.root.z.toFixed(2)} vs ${b.root.x.toFixed(2)},${b.root.z.toFixed(2)}`);
+      a.play(k % 2 ? A.SWING_L : A.SWING_R);
+      await wait(0.9);
+    }
     // and a spray straight down onto the crate
     const top = crate.body.x.clone(); top.y += 0.8;
     g.blood.spray(top, { x: 0, y: -1, z: 0 }, 30, 1.5, 0.15, 0.015);
     await wait(1.5);
-    return { hit: !!hit, before, after: { sword: reds(sword.paint), victim: reds(b.paint), crate: reds(crate.paint) }, stats: g.blood.stats, wounds: g.blood.wounds.length };
+    return { hit: !!hit, log: log.join('; '), before, after: { sword: reds(sword.paint), victim: reds(b.paint), crate: reds(crate.paint) }, stats: g.blood.stats, wounds: g.blood.wounds.length };
   });
-  check('a sword swing lands by contact', blood.hit);
+  check('a sword swing lands by contact', blood.hit, blood.hit ? '' : blood.log);
   check('blood lands on the enemy', blood.after.victim > blood.before.victim + 5, `${blood.before.victim} -> ${blood.after.victim} red pixels`);
   check('blood lands on the held sword', blood.after.sword > blood.before.sword + 3, `${blood.before.sword} -> ${blood.after.sword} red pixels`);
   check('blood lands on objects', blood.after.crate > blood.before.crate + 3, `${blood.before.crate} -> ${blood.after.crate} red pixels`);

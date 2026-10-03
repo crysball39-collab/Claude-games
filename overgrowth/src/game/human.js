@@ -64,6 +64,8 @@ let _humanId = 0;
 
 /** Strength of each muscle state (1 = rigidly follows the animation). */
 const STUMBLE_STRENGTH = 0.42;
+/** The most speed a blow gives any one part directly, m/s; the rest travels up the body. */
+const PUSH_SPEED = 6;
 
 export class Human {
   constructor(game, team, x, z, heading = 0) {
@@ -442,19 +444,31 @@ export class Human {
     }
   }
 
-  /** Impulse J along dir at a point on a part (only bites when simulated). */
+  /**
+   * Impulse J along dir at a point on a part (only bites when simulated).
+   * A blow carries through the body: the part that was hit takes as much as
+   * would move it at a hard pace and hands the rest to the part it hangs
+   * from, and so on up - a fist to the hand swings the arm and turns the
+   * shoulders rather than firing a 600 gram hand off its wrist.
+   */
   push(part, point, dir, J) {
-    const b = this.bodies[part];
-    const parent = PARTS[part].parent;
-    // the part that was hit takes most of it; what it hangs from takes the rest
-    // at once, as a neck or a shoulder would, rather than a frame later
-    const share = parent >= 0 ? 0.78 : 1;
-    _v1.copy(dir).multiplyScalar(J * share);
-    _v2.subVectors(point, b.x);
-    b.applyImpulse(_v1, _v2, 1);
-    if (parent >= 0) {
-      _v1.copy(dir).multiplyScalar(J * (1 - share));
-      this.bodies[parent].applyImpulse(_v1, null, 1);
+    let left = J;
+    let i = part;
+    while (i >= 0 && left > 1e-3) {
+      const b = this.bodies[i];
+      const take = i === part && PARTS[i].parent >= 0
+        ? Math.min(left * 0.78, b.mass * PUSH_SPEED)
+        : Math.min(left, b.mass * PUSH_SPEED);
+      _v1.copy(dir).multiplyScalar(take);
+      if (i === part) { _v2.subVectors(point, b.x); b.applyImpulse(_v1, _v2, 1); }
+      else b.applyImpulse(_v1, null, 1);
+      left -= take;
+      i = PARTS[i].parent;
+    }
+    // whatever is left goes into the hips
+    if (left > 1e-3) {
+      _v1.copy(dir).multiplyScalar(left);
+      this.pelvis.applyImpulse(_v1, null, 1);
     }
   }
 
@@ -499,10 +513,11 @@ export class Human {
     }
     if (best < 3.2) return;
     const b = this.bodies[part], o = b.impactOther;
-    // a body lying on the ground does not fly at anyone; it is being stepped on
+    // a body that has been lying on the ground a moment does not fly at
+    // anyone; if it moves, it is being stepped on
     const oh = o.owner;
     if (oh && oh.bodies && (oh.state === 'ragdoll' || oh.state === 'dead') &&
-        o.x.y - this.root.y < 0.35) return;
+        (o.x.y - this.root.y < 0.35 || !oh.down || oh.down.t > 0.8)) return;
     const dir = new Vector3().subVectors(b.x, o.x);
     if (dir.lengthSq() < 1e-6) return;
     dir.normalize();

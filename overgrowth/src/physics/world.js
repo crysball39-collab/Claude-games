@@ -57,6 +57,7 @@ export class Body {
     this.isStatic = kind === 'static';
     this.slab = false;       // static and axis aligned: its top is a plane
     this.ghost = false;      // passes through everything (a strike in flight)
+    this.soft = 0;           // seconds left of easing out of overlaps it was born into
     this.kinematic = kind === 'kinematic';
     this.sleeping = false;
     this.friction = friction;
@@ -113,6 +114,9 @@ export class Body {
       this.invMass = 1 / this.mass;
       this.invI.set(1 / this.inertia.x, 1 / this.inertia.y, 1 / this.inertia.z);
       this.v.copy(this.kv); this.w.copy(this.kw);
+      // an animated body may be overlapping something the moment it is let go
+      // (two fighters with their arms tangled); ease out rather than explode
+      this.soft = 0.25;
     }
   }
 
@@ -291,7 +295,8 @@ class Contact {
 }
 
 const MAX_KINEMATIC_PUSH = 0.005;
-const MAX_KINEMATIC_DV = 2.2;   // metres per substep a kinematic body may shove
+const MAX_KINEMATIC_DV = 2.2;
+const MAX_SOFT_PUSH = 0.0025;      // metres per substep for a body just let go   // metres per substep a kinematic body may shove
 const MAX_SPEED = 35;
 const MAX_SPIN = 50;
 const CELL = 1.25;
@@ -354,7 +359,10 @@ export class World {
 
   step(dt) {
     const n = this.substeps, h = dt / n;
-    for (const b of this.bodies) { b.impact = 0; b.impactOther = null; }
+    for (const b of this.bodies) {
+      b.impact = 0; b.impactOther = null;
+      if (b.soft > 0) b.soft -= dt;
+    }
     this._broadphase(dt);
     for (let s = 0; s < n; s++) {
       const alpha = (s + 1) / n;
@@ -669,6 +677,7 @@ export class World {
       let d = _t3.subVectors(pB, pA).dot(c.n);
       if (d <= 0) continue;
       if (c.kin && d > MAX_KINEMATIC_PUSH) d = MAX_KINEMATIC_PUSH;
+      if ((a.soft > 0 || b.soft > 0) && !b.isStatic && d > MAX_SOFT_PUSH) d = MAX_SOFT_PUSH;
       const wA = a.wPos(rA, c.n), wB = b.wPos(rB, c.n);
       const w = wA + wB;
       if (w < 1e-12) continue;
