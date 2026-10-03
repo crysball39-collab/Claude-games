@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="theme-color" content="#0d1610" />
+<meta name="description" content="OVERGROWTH - a 3D mobile ragdoll brawler: spawn six teams and watch them fight" />
+<title>Overgrowth</title>
+<link rel="icon" href="data:," />
+<link rel="stylesheet" href="style.css" />
+<script type="importmap">
+{ "imports": { "three": "../vendor/three.module.js" } }
+</script>
+</head>
+<body>
+
+<canvas id="view"></canvas>
+
+<!-- ================================ TITLE ================================= -->
+<div id="title" class="screen active">
+  <div class="title-bg"></div>
+  <div class="title-inner">
+    <h1 class="logo">OVER<span>GROWTH</span></h1>
+    <div class="tagline">six teams &middot; one platform &middot; real ragdolls</div>
+    <button id="btn-play" class="big-btn">PLAY</button>
+    <div class="how">
+      <div><b>Spawn</b> &mdash; open the spawn menu, pick a team (it gets a green outline), tap SPAWN.</div>
+      <div><b>Fight</b> &mdash; spawn two or more teams and they go for each other.</div>
+      <div><b>Camera</b> &mdash; joystick to move, drag to look, pinch to zoom, &#9650;&#9660; to rise and sink.</div>
+    </div>
+    <div class="loading" id="loading">Loading&hellip;</div>
+  </div>
+</div>
+
+<!-- ================================= HUD ================================== -->
+<div id="hud" class="hidden">
+  <button id="btn-menu" class="hud-btn menu-btn" aria-label="Open the spawn menu">
+    <svg viewBox="0 0 24 24" width="20" height="20"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" fill="none"/></svg>
+    <span>SPAWN</span>
+  </button>
+
+  <div id="teams"></div>
+
+  <div class="top-right">
+    <button id="btn-slow" class="hud-btn icon" aria-label="Slow motion" title="Slow motion">
+      <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="13" r="8" stroke="currentColor" stroke-width="2.2" fill="none"/><path d="M12 13V8.5M9.5 2.5h5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+    </button>
+    <button id="btn-pause" class="hud-btn icon" aria-label="Pause" title="Pause">
+      <svg viewBox="0 0 24 24" width="22" height="22" class="i-pause"><path d="M8 5v14M16 5v14" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+      <svg viewBox="0 0 24 24" width="22" height="22" class="i-play"><path d="M7 4.5v15l12-7.5z" fill="currentColor"/></svg>
+    </button>
+    <button id="btn-clear" class="hud-btn icon" aria-label="Clear everything" title="Clear everything">
+      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+    </button>
+  </div>
+
+  <div id="feed"></div>
+  <div id="crosshair"></div>
+
+  <div id="stick-base"><div id="stick-knob"></div><div class="stick-label">CAMERA</div></div>
+
+  <div class="right-controls">
+    <button id="btn-up" class="hud-btn round" aria-label="Camera up">
+      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M5 15l7-7 7 7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+    </button>
+    <button id="btn-down" class="hud-btn round" aria-label="Camera down">
+      <svg viewBox="0 0 24 24" width="22" height="22"><path d="M5 9l7 7 7-7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+    </button>
+  </div>
+  <button id="btn-quick" class="hud-btn quick hidden" aria-label="Spawn the selection">
+    <span class="swatch"></span><span class="label">SPAWN</span>
+  </button>
+
+  <div id="toast"></div>
+</div>
+
+<!-- ============================== SPAWN MENU ============================== -->
+<div id="spawn-menu" class="drawer" aria-hidden="true">
+  <div class="drawer-head">
+    <span>SPAWN MENU</span>
+    <button id="btn-close" class="x" aria-label="Close the spawn menu">
+      <svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+  <div class="tabs">
+    <button class="tab active" data-tab="humans">HUMANS</button>
+    <button class="tab" data-tab="objects">OBJECTS</button>
+  </div>
+  <div class="grids">
+    <div class="grid" id="grid-humans"></div>
+    <div class="grid hidden" id="grid-objects"></div>
+  </div>
+  <div class="drawer-foot">
+    <div class="count" id="count">
+      <button data-n="1" class="active">&times;1</button>
+      <button data-n="3">&times;3</button>
+      <button data-n="5">&times;5</button>
+    </div>
+    <button id="btn-spawn" class="spawn-btn" disabled>SPAWN</button>
+    <div class="foot-row">
+      <button id="btn-clear-dead" class="small-btn">Remove dead</button>
+      <button id="btn-blood" class="small-btn">Blood: on</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

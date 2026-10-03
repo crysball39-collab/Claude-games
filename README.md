@@ -4,6 +4,11 @@ A 3D, first person, mobile-first physics sandbox that runs in a browser. Landsca
 orientation, touch controls, no install, no build step, no assets on disk — every
 texture in the game is drawn procedurally onto a canvas at load time.
 
+> This repository also holds **OVERGROWTH**, a mobile ragdoll brawler where you
+> spawn six teams onto a platform and watch them fight. The single-file build is
+> `dist/overgrowth.html`, the source lives in `overgrowth/`, and
+> [`overgrowth/README.md`](overgrowth/README.md) has the details.
+
 ## Getting it onto a phone
 
 **`dist/gorebox.html` is the whole game in one file.** Download it, open it, play —
