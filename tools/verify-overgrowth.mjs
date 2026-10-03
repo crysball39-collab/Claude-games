@@ -171,6 +171,32 @@ const camAfter = await ev(() => { const c = window.__og.game.cam; return { x: c.
   check('dragging the view turns the camera', Math.abs(camAfter.yaw - camBefore.yaw) > 0.1, `${(camAfter.yaw - camBefore.yaw).toFixed(2)} rad`);
 }
 
+/* ------------------------- tap someone to inspect ----------------------- */
+{
+  const at = await ev(() => {
+    const g = window.__og.game;
+    const h = g.humans.find((x) => x.alive) || g.humans[0];
+    const p = h.bodies[3].x;
+    const c = g.cam;
+    c.update = function () { this.apply(); };
+    c.pos.set(p.x, p.y + 0.3, p.z + 3); c.yaw = 0; c.pitch = -0.1; c.apply();
+    g.camera.updateMatrixWorld();
+    g.paused = true;
+    const v = p.clone().project(g.camera);
+    return { x: (v.x + 1) / 2 * window.innerWidth, y: (1 - v.y) / 2 * window.innerHeight, team: h.team };
+  });
+  await page.waitForTimeout(100);
+  await page.touchscreen.tap(at.x, at.y);
+  await page.waitForTimeout(200);
+  const toast = await ev(() => document.querySelector('#toast').textContent);
+  check('tapping a fighter shows their team and health', new RegExp(at.team, 'i').test(toast) && /HP/.test(toast), toast);
+  await ev(() => {
+    const g = window.__og.game;
+    g.paused = false;
+    delete g.cam.update;
+  });
+}
+
 /* ------------------------- the rest runs headless ------------------------ */
 // Software rendering is slow; the simulation does not need the picture.
 await ev(() => {

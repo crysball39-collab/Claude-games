@@ -59,6 +59,7 @@ spawning whatever is selected.
 | **Drag** anywhere else | Turns the camera |
 | **Pinch** | Moves the camera closer or further |
 | **▲ ▼** | Raises and lowers the camera |
+| **Tap** a fighter | Shows their team, health and what they are doing |
 | 🔊 | Sound on and off (remembered) |
 | ⏱ | Slow motion |
 | ⏸ | Pause |
@@ -194,7 +195,8 @@ overgrowth/
   index.html          every screen
   style.css           mobile first, safe-area aware
   src/
-    main.js           boot, frame loop, quality step-down for slow phones
+    main.js           boot, frame loop, quality step-down for slow phones (fewer
+                      pixels, then no shadows and 6 physics substeps)
     core/             input (joystick, drag, pinch, keyboard), sound, helpers
     physics/
       collide.js      box-box SAT and contact manifolds, box-plane, rays
@@ -229,7 +231,8 @@ and checks:
 
 - the spawn menu opens and closes, lists all six teams, outlines the selection
   in green, and SPAWN puts that team (or a crate, bat or sword) on the platform
-- the joystick moves the camera and dragging turns it
+- the joystick moves the camera and dragging turns it, and tapping a fighter
+  shows their team and health
 - jabbing the air short of someone does no damage, and the same jabs at arm's
   length connect and hurt
 - idle breathes, the left and right jabs throw the right fist, and walking and

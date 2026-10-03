@@ -210,6 +210,18 @@ export class UI {
     }
   }
 
+  /** A line about one fighter. */
+  describe(h) {
+    const doing = !h.alive ? 'dead'
+      : h.state === 'ragdoll' ? 'knocked down'
+        : h.state === 'getup' ? 'getting up'
+          : h.state === 'stumble' ? 'stumbling'
+            : h.brain.target ? 'fighting ' + TEAM[h.brain.target.team].name
+              : 'looking for a fight';
+    const hp = Math.max(0, Math.round(h.health));
+    this.toast(`${TEAM[h.team].name}: ${hp} HP, ${doing}${h.holding ? ', with a ' + h.holding.name.toLowerCase() : ''}${h.kills ? `, ${h.kills} down` : ''}`);
+  }
+
   feed(html) {
     const f = $('feed');
     const d = document.createElement('div');

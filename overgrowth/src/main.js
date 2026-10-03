@@ -51,6 +51,7 @@ function adapt(dt) {
     resize();
   } else {
     game.map.sun.castShadow = false;
+    game.lowPower = true;
   }
 }
 
@@ -64,6 +65,12 @@ function loop(now) {
     adapt(dt);
     const c = game.camera.position;
     sound.listener.x = c.x; sound.listener.y = c.y; sound.listener.z = c.z;
+    // a tap on someone says who they are and how they are doing
+    for (const t of input.consumeTaps()) {
+      const hit = game.pick((t.x / window.innerWidth) * 2 - 1, -(t.y / window.innerHeight) * 2 + 1);
+      if (hit && hit.bodies) ui.describe(hit);
+      else if (hit && hit.type) ui.toast(hit.holder ? `${hit.name}, in ${hit.holder.team}'s hand` : hit.name);
+    }
   }
   renderer.render(game.scene, game.camera);
   requestAnimationFrame(loop);

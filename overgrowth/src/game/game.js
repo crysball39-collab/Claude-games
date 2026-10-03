@@ -42,6 +42,7 @@ export class Game {
     this.acc = 0;
     this.timeScale = 1;
     this.paused = false;
+    this.lowPower = false;
     this.listeners = {};
     this.stats = { hits: 0, deaths: 0, spawned: 0, punches: 0 };
 
@@ -314,7 +315,7 @@ export class Game {
     // fewer substeps when a lot is moving at once, to keep phones at speed
     let awake = 0;
     for (const b of this.world.bodies) if (b.dynamic) awake++;
-    this.world.substeps = awake > 160 ? 6 : 8;
+    this.world.substeps = awake > 160 || this.lowPower ? 6 : 8;
     this.world.step(dt);
     for (const h of [...this.humans]) h.afterStep(dt);
     for (const p of [...this.props]) {
