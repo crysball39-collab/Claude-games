@@ -59,6 +59,7 @@ spawning whatever is selected.
 | **Drag** anywhere else | Turns the camera |
 | **Pinch** | Moves the camera closer or further |
 | **▲ ▼** | Raises and lowers the camera |
+| 🔊 | Sound on and off (remembered) |
 | ⏱ | Slow motion |
 | ⏸ | Pause |
 | 🗑 (tap twice) | Clear everything |
@@ -168,6 +169,12 @@ Every body, every object and the grey platform owns a canvas, and blood is
 drawn onto it at the exact spot it hit. The grass is covered in transparent
 tiles that are only made where blood lands.
 
+### Sound
+
+Punches, bats, blades, swings and bodies hitting the ground are synthesised on
+the spot with WebAudio, so there are no sound files. Sounds get quieter with
+distance from the camera.
+
 ### The fighters' heads
 
 Each fighter picks the nearest enemy still on their feet. It favours whoever
@@ -188,7 +195,7 @@ overgrowth/
   style.css           mobile first, safe-area aware
   src/
     main.js           boot, frame loop, quality step-down for slow phones
-    core/             input (joystick, drag, pinch, keyboard), helpers
+    core/             input (joystick, drag, pinch, keyboard), sound, helpers
     physics/
       collide.js      box-box SAT and contact manifolds, box-plane, rays
       world.js        bodies, joints, contacts, muscles, broad phase, sleeping

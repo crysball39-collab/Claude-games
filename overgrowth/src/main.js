@@ -6,6 +6,7 @@ import { Game } from './game/game.js';
 import { Input } from './core/input.js';
 import { UI } from './ui/ui.js';
 import * as anim from './game/anim.js';
+import { Sound } from './core/audio.js';
 
 const canvas = document.getElementById('view');
 const renderer = new WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -19,7 +20,11 @@ renderer.toneMappingExposure = 1.05;
 
 const game = new Game(renderer);
 const input = new Input(document.body);
-const ui = new UI(game, input);
+const sound = new Sound();
+const ui = new UI(game, input, sound);
+game.on('hit', (v, h) => sound.hit(h.kind, h.speed, h.point));
+game.on('swing', (p) => sound.whoosh(p));
+game.on('thud', (p, sp) => sound.thud(sp, p));
 
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
@@ -54,7 +59,12 @@ let started = false;
 function loop(now) {
   const dt = (now - last) / 1000;
   last = now;
-  if (started) { game.frame(dt, input); adapt(dt); }
+  if (started) {
+    game.frame(dt, input);
+    adapt(dt);
+    const c = game.camera.position;
+    sound.listener.x = c.x; sound.listener.y = c.y; sound.listener.z = c.z;
+  }
   renderer.render(game.scene, game.camera);
   requestAnimationFrame(loop);
 }
@@ -66,6 +76,7 @@ document.getElementById('btn-play').addEventListener('click', () => {
   document.getElementById('hud').classList.remove('hidden');
   started = true;
   last = performance.now();
+  sound.unlock();
   ui.toggle(true);
   ui.toast('Pick a team, then tap SPAWN');
   // full screen and landscape where the browser allows it; harmless where not
@@ -78,4 +89,4 @@ document.getElementById('btn-play').addEventListener('click', () => {
 });
 
 // for tests and the curious
-window.__og = { game, ui, input, renderer, anim, quality };
+window.__og = { game, ui, input, renderer, anim, quality, sound };

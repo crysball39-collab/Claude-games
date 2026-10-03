@@ -13,9 +13,10 @@ import { shade } from '../core/util.js';
 const $ = (id) => document.getElementById(id);
 
 export class UI {
-  constructor(game, input) {
+  constructor(game, input, sound = null) {
     this.game = game;
     this.input = input;
+    this.sound = sound;
     this.count = 1;
     this.selected = null;
     this.cards = [];
@@ -58,6 +59,21 @@ export class UI {
         clearArmed = now;
         this.toast('Tap again to clear everything');
       }
+    });
+    const soundBtn = $('btn-sound');
+    let muted = false;
+    try { muted = localStorage.getItem('overgrowth.muted') === '1'; } catch (_) { /* private mode */ }
+    const setMuted = (m) => {
+      muted = m;
+      if (this.sound) this.sound.setMuted(m);
+      soundBtn.classList.toggle('off', m);
+      try { localStorage.setItem('overgrowth.muted', m ? '1' : '0'); } catch (_) { /* private mode */ }
+    };
+    setMuted(muted);
+    soundBtn.addEventListener('click', () => {
+      if (this.sound) this.sound.unlock();
+      setMuted(!muted);
+      this.toast(muted ? 'Sound off' : 'Sound on');
     });
     $('btn-clear-dead').addEventListener('click', () => { game.clearDead(); this.toast('Removed the dead'); });
     $('btn-blood').addEventListener('click', () => {

@@ -319,6 +319,7 @@ export class Human {
       for (const g of ghosts) g.ghost = true;
     }
     this.action = { clip, t: 0, aim: aim * D, weight: 0, hits: new Set(), done: false, back: false, picked: false, ghosts };
+    if (clip.kind === 'swing') this.game.emit('swing', this.bodies[P.handR].x);
   }
 
   updateAction(dt) {
@@ -466,9 +467,16 @@ export class Human {
       if (i === P.footL || i === P.footR || i === P.handL || i === P.handR) continue;
       const b = this.bodies[i];
       const sp = b.impact;
+      if (sp > 3 && (i === P.pelvis || i === P.upperTorso || i === P.head) && b.impactOther && b.impactOther.isStatic &&
+          this.time - (this.lastThud || -9) > 0.3) {
+        this.lastThud = this.time;
+        this.game.emit('thud', b.x, sp);
+      }
       if (sp < 7.5) continue;
       const other = b.impactOther;
       if (other && other.owner === this) continue;
+      // being trodden on by someone walking past is not a fall (blows are hits, not this)
+      if (other && other.kinematic) continue;
       const dmg = (sp - 7.5) * 2.5 * VITAL[i];
       if (this.alive) {
         this.health -= dmg;

@@ -68,6 +68,10 @@ button { font: inherit; color: inherit; cursor: pointer; touch-action: manipulat
 .top-right { position: absolute; right: calc(12px + var(--safe-r)); top: calc(10px + var(--safe-t)); display: flex; gap: 8px; }
 .icon { width: 46px; height: 46px; }
 .icon.on { background: rgba(57, 255, 90, 0.3); border-color: var(--accent); color: var(--accent); }
+#btn-sound .cross { display: none; }
+#btn-sound.off .cross { display: block; }
+#btn-sound.off .waves { display: none; }
+#btn-sound.off { color: var(--muted); }
 #btn-pause .i-play { display: none; }
 #btn-pause.on .i-play { display: block; }
 #btn-pause.on .i-pause { display: none; }
