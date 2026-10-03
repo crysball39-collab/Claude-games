@@ -12,7 +12,7 @@
 <link rel="icon" href="data:," />
 <link rel="stylesheet" href="styles/main.css" />
 <script type="importmap">
-{ "imports": { "three": "./vendor/three.module.js" } }
+{ "imports": { "three": "./vendor/three.module.js", "@anthropic-ai/sdk": "./vendor/anthropic-sdk.js" } }
 </script>
 </head>
 <body>
@@ -118,6 +118,13 @@
       <label class="setting"><span>Look sensitivity</span><input type="range" id="set-sens" min="30" max="300" value="120" /></label>
       <label class="setting"><span>Field of view</span><input type="range" id="set-fov" min="60" max="105" value="78" /></label>
       <label class="setting"><span>Invert look Y</span><input type="checkbox" id="set-inverty" /></label>
+      <div class="setting-head">AI PLAY</div>
+      <label class="setting"><span>Claude API key</span><input type="password" id="set-aikey" placeholder="sk-ant-..." autocomplete="off" spellcheck="false" /></label>
+      <label class="setting"><span>AI model</span><select id="set-aimodel"></select></label>
+      <label class="setting"><span>AI thinks every</span>
+        <select id="set-aievery"><option value="8">8 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option><option value="60">60 seconds</option></select>
+      </label>
+      <p class="setting-note">With a key, the AI player thinks and talks with Claude: it can say anything, answer you, and decide what to do. Each thought is one request billed to your key, so a longer gap costs less. The key stays in this browser and is sent only to the Claude API. Leave it empty and the AI plays offline on its own instincts.</p>
     </div>
   </div>
 </div>
@@ -146,7 +153,14 @@
     </div>
 
     <!-- what the AI says while it plays -->
-    <div id="ai-chat" class="hidden"><div id="ai-chat-lines"></div></div>
+    <div id="ai-chat" class="hidden">
+      <div id="ai-chat-lines"></div>
+      <form id="ai-say" autocomplete="off">
+        <span id="ai-chat-mode">OFFLINE</span>
+        <input id="ai-say-input" type="text" maxlength="240" placeholder="Talk to the AI..." enterkeyhint="send" />
+        <button type="submit" id="ai-say-send">SEND</button>
+      </form>
+    </div>
 
     <!-- the boss, while there is one -->
     <div id="boss-bar" class="hidden">

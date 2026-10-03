@@ -25,7 +25,10 @@ const result = await build({
   target: ['es2020'],
   minify: true,
   legalComments: 'none',
-  alias: { three: path.join(ROOT, 'vendor/three.module.js') },
+  alias: {
+    three: path.join(ROOT, 'vendor/three.module.js'),
+    '@anthropic-ai/sdk': path.join(ROOT, 'vendor/anthropic-sdk.js'),
+  },
   logLevel: 'warning',
 });
 const js = result.outputFiles[0].text;

@@ -65,6 +65,16 @@ export class Menu {
     sens.addEventListener('input', () => { s.sensitivity = Number(sens.value) / 1000; s.save(); s.emit('sensitivity'); });
     fov.addEventListener('input', () => { s.fov = Number(fov.value); s.save(); s.emit('fov'); });
     inv.addEventListener('change', () => { s.invertY = inv.checked; s.save(); s.emit('invertY'); });
+
+    // AI play: the key, the model, how often it thinks
+    const key = $('#set-aikey'), model = $('#set-aimodel'), every = $('#set-aievery');
+    model.innerHTML = (s.aiModels || []).map((m) => `<option value="${m.id}">${m.name}</option>`).join('');
+    key.value = s.getAiKey ? s.getAiKey() : '';
+    model.value = s.aiModel;
+    every.value = String(s.aiEvery);
+    key.addEventListener('change', () => { s.setAiKey?.(key.value.trim()); s.emit('ai'); });
+    model.addEventListener('change', () => { s.aiModel = model.value; s.save(); s.emit('ai'); });
+    every.addEventListener('change', () => { s.aiEvery = Number(every.value); s.save(); s.emit('ai'); });
   }
 
   showPanel(id) {

@@ -25,6 +25,8 @@ const DEFAULTS = {
   sensitivity: 0.0022,
   fov: 78,
   invertY: false,
+  aiModel: 'claude-opus-5-5',
+  aiEvery: 15,
 };
 
 function guessQuality() {
@@ -60,8 +62,18 @@ const settings = {
       localStorage.setItem('gorebox.settings', JSON.stringify({
         quality: this.quality, shadows: this.shadows, gore: this.gore,
         sensitivity: this.sensitivity, fov: this.fov, invertY: this.invertY,
+        aiModel: this.aiModel, aiEvery: this.aiEvery,
       }));
     } catch (e) { /* ignore */ }
+  },
+  /* The Claude API key for AI play. Kept apart from the rest so it is never
+     written anywhere but this browser's own storage. */
+  getAiKey() {
+    try { return localStorage.getItem('gorebox.aikey') || ''; } catch (e) { return this._aiKey || ''; }
+  },
+  setAiKey(k) {
+    this._aiKey = k;
+    try { if (k) localStorage.setItem('gorebox.aikey', k); else localStorage.removeItem('gorebox.aikey'); } catch (e) { /* ignore */ }
   },
   on(key, fn) { (this._listeners[key] = this._listeners[key] || []).push(fn); },
   emit(key) { for (const fn of this._listeners[key] || []) fn(this[key]); },
@@ -102,6 +114,9 @@ async function boot() {
     ['Loading the engine', async () => {
       GameClass = (await import('./game/game.js')).Game;
       app.AutoPilot = (await import('./game/autopilot.js')).AutoPilot;
+      const brain = await import('./game/brain.js');
+      app.Brain = brain.Brain;
+      settings.aiModels = brain.BRAIN_MODELS;
     }],
     ['Building the menus', async () => {
       app.menu = new Menu(settings);
@@ -118,7 +133,14 @@ async function boot() {
       input.invertY = settings.invertY;
       app.hud = new Hud(input);
       app.spawnMenu = new SpawnMenu();
-      app.ai = new app.AutoPilot({ chat: new AiChat(), hud: app.hud });
+      app.brain = new app.Brain({
+        getKey: () => settings.getAiKey(),
+        getModel: () => settings.aiModel,
+      });
+      app.ai = new app.AutoPilot({
+        chat: new AiChat(), hud: app.hud, brain: app.brain,
+        thinkEvery: () => settings.aiEvery || 15,
+      });
       wireGameButtons();
     }],
     ['Almost there', async () => { await new Promise((r) => setTimeout(r, 220)); }],
@@ -305,6 +327,17 @@ function wireGameButtons() {
   $('#btn-cleangore').addEventListener('click', () => { app.game?.washGore(); updatePauseStats(); });
   $('#btn-respawn').addEventListener('click', () => app.game?.respawnPlayer());
   $('#btn-ai').addEventListener('click', () => setAiPlay(!app.ai.enabled));
+  // talking to the AI
+  const sayInput = $('#ai-say-input');
+  $('#ai-say').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const text = sayInput.value;
+    sayInput.value = '';
+    app.ai?.tell(text);
+    sayInput.blur();
+  });
+  sayInput.addEventListener('keydown', (e) => { if (e.key === 'Escape') sayInput.blur(); e.stopPropagation(); });
+  settings.on('ai', () => showAiMode());
   $('#btn-ai-pause').addEventListener('click', () => { setAiPlay(!app.ai.enabled); togglePause(false); });
   input.onToggleAI = () => { if (app.state === 'playing') setAiPlay(!app.ai.enabled); };
   // AI PLAY on the main menu: the AI picks a map and starts playing
@@ -325,9 +358,16 @@ function wireGameButtons() {
 
 /* -------------------------------- AI play ---------------------------------- */
 
+/** The badge by the AI's talk box: thinking with Claude, or on instinct. */
+function showAiMode() {
+  const m = (settings.aiModels || []).find((x) => x.id === settings.aiModel);
+  app.ai?.chat?.setOnline(!!settings.getAiKey(), m ? m.name.replace('Claude ', '') : '');
+}
+
 /** Turns AI play on or off, and keeps both of its buttons saying which. */
 function setAiPlay(on) {
   if (!app.ai) return;
+  showAiMode();
   app.ai.setEnabled(on);
   $('#btn-ai').classList.toggle('on', on);
   $('#btn-ai-pause').textContent = on ? 'AI PLAY: ON' : 'AI PLAY: OFF';

@@ -499,3 +499,26 @@ body.ai-play #hud.boss #toast{top:40%}
 }
 /* the AI chooses what it spawns; the readout would sit under its chat */
 body.ai-play #selected-spawn{display:none}
+/* the AI's thoughts, what you say to it, and its problems */
+.ai-line.think{font-style:italic;color:#b9c6d6;background:rgba(10,16,26,.5);border-style:dashed}
+.ai-line.think b{color:#9aa8ff}
+.ai-line.you{border-color:rgba(255,220,140,.45);color:#fff5d8}
+.ai-line.you b{color:#ffcf7a}
+.ai-line.sys{border-color:rgba(255,110,110,.5);color:#ffd0d0}
+.ai-line.sys b{color:#ff8a8a}
+/* talking back: a little row under the chat */
+#ai-say{display:flex;gap:4px;margin-top:3px;pointer-events:auto;align-items:center}
+#ai-say input{flex:1;min-width:0;font:inherit;font-size:.7rem;color:#eef6ff;background:rgba(6,16,28,.72);
+  border:1px solid rgba(120,190,255,.35);border-radius:6px;padding:.28rem .5rem;outline:none}
+#ai-say input:focus{border-color:rgba(150,215,255,.85)}
+#ai-say button{font:inherit;font-size:.62rem;font-weight:800;letter-spacing:.1em;color:#dff0ff;cursor:pointer;
+  background:rgba(40,110,180,.7);border:1px solid rgba(150,215,255,.6);border-radius:6px;padding:.3rem .55rem}
+#ai-chat-mode{font-size:.55rem;font-weight:900;letter-spacing:.12em;color:#8b95a3;padding:.2rem .35rem;
+  border:1px solid rgba(140,150,165,.35);border-radius:4px;background:rgba(6,16,28,.6);white-space:nowrap}
+#ai-chat-mode.on{color:#d9b8ff;border-color:rgba(190,150,255,.55)}
+.setting-head{margin:1.2rem 0 .2rem;font-size:.72rem;font-weight:900;letter-spacing:.3em;color:#7cc8ff}
+.setting input[type=password]{width:min(240px,46vw);font:inherit;font-size:.8rem;color:#f0eeec;background:rgba(0,0,0,.4);
+  border:1px solid var(--line);border-radius:6px;padding:.35rem .5rem}
+@media (max-height:460px){
+  #ai-say input{font-size:.64rem;padding:.2rem .45rem}
+}

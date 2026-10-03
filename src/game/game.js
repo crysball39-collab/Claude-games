@@ -400,6 +400,7 @@ export class Game {
     this.reloadTimer = 0;
     this._pump = null;
     this._shells = null;
+    this._reloadAfterPump = false;
     this.gunKick = 0;
     this.recoilPitch = 0;
     this.recoilYaw = 0;
@@ -603,6 +604,7 @@ export class Game {
       this.reloadTimer = 0;
       this._pump = null;
       this._shells = null;
+      this._reloadAfterPump = false;
       this.hud?.setCarrying(null);
       this.setEquipped('fists');
     }
@@ -1004,6 +1006,7 @@ export class Game {
     this.reloadTimer = 0;
     this._pump = null;
     this._shells = null;
+    this._reloadAfterPump = false;
     this.gunCooldown = 0;
     this.hud?.setCarrying(kind);
     this.setEquipped(kind);
@@ -1018,6 +1021,7 @@ export class Game {
     this.reloadTimer = 0;
     this._pump = null;
     this._shells = null;
+    this._reloadAfterPump = false;
     this.player.animator.cancelAction();
     this.hud?.setCarrying(null);
 
@@ -1440,7 +1444,7 @@ export class Game {
        still has a tail on it. Without this, a reload asked for during that tail
        is swallowed: the arms are busy with work that is already finished. */
     if (this.player.reloading) this.player.animator.cancelAction();
-    if (this._pump) return;                      // let the rack finish first
+    if (this._pump) { this._reloadAfterPump = true; return; }   // after the rack
     if (spec.shells) { this._loadShell(true); return; }
     /* An empty gun needs the action worked as well as a magazine, which is a
        different job and a slower one. */
@@ -1503,6 +1507,7 @@ export class Game {
     if (p.t >= (p.dur || 0.55)) {
       this._pump = null;
       c.chambered = c.ammo > 0;
+      if (this._reloadAfterPump) { this._reloadAfterPump = false; this.reloadAction(); }
     }
   }
 

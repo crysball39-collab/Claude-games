@@ -217,7 +217,7 @@ await page.tap('#btn-use'); await page.waitForTimeout(400);      // put the hamm
 /* Every firearm, through the buttons a player actually has: spawn it, walk to
    it, USE to pick it up, FIRE, then RELOAD back to a full magazine. */
 for (const [kind, cap, label] of [['glock', '15', 'FIRE'], ['ak47', '30', 'FIRE'], ['m16', '30', 'FIRE'],
-  ['flamethrower', '100', 'BURN']]) {
+  ['flamethrower', '100', 'BURN'], ['mossberg', '6', 'FIRE']]) {
   await page.tap('#btn-pause'); await page.waitForTimeout(300);
   await page.tap('#btn-clear'); await page.waitForTimeout(200);
   await page.tap('#btn-resume'); await page.waitForTimeout(400);

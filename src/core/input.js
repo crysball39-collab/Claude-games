@@ -232,6 +232,9 @@ export class InputManager {
   }
 
   _key(e, isDown) {
+    // typing to the AI is not playing the game
+    const tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
     const code = e.code;
     if (isDown && (code === 'Tab' || code === 'Escape')) e.preventDefault();
     if (this._keys[code] === isDown) return;

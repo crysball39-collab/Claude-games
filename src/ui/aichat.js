@@ -19,13 +19,26 @@ export class AiChat {
 
   show(on) { this.root.classList.toggle('hidden', !on); }
 
+  /** Online (Claude) or on instinct: a small badge says which. */
+  setOnline(on, model = '') {
+    const b = this._badge || (this._badge = $('#ai-chat-mode'));
+    if (!b) return;
+    b.textContent = on ? 'CLAUDE' + (model ? ' · ' + model : '') : 'OFFLINE';
+    b.classList.toggle('on', !!on);
+  }
+
+  /**
+   * kind: '' (it says), 'think' (a thought), 'you' (what you typed),
+   * 'sys' (a problem worth knowing about), 'call' and 'win'.
+   */
   push(text, kind = '') {
-    this.log.push(text);
+    const tag = kind === 'you' ? 'YOU' : kind === 'sys' ? '!' : kind === 'think' ? 'AI thinks' : 'AI';
+    this.log.push(kind === 'you' ? 'Viewer: ' + text : kind === 'think' ? '(thought) ' + text : text);
     if (this.log.length > 200) this.log.shift();
     const el = document.createElement('div');
     el.className = 'ai-line' + (kind ? ' ' + kind : '');
     const who = document.createElement('b');
-    who.textContent = 'AI';
+    who.textContent = tag;
     el.appendChild(who);
     el.appendChild(document.createTextNode(' ' + text));
     this.list.appendChild(el);

@@ -23,6 +23,7 @@ import { STATE } from './character.js';
 import { GUNS, MELEE, CARRY, SPAWNABLES } from './game.js';
 import { ARMOUR } from './armour.js';
 import { isUnlocked } from './progress.js';
+import { BRAIN_ACTIONS } from './brain.js';
 
 const HIP = 0.945;
 const TAU = Math.PI * 2;
@@ -34,6 +35,9 @@ const yawTo = (fx, fz, tx, tz) => Math.atan2(-(tx - fx), -(tz - fz));
 const pick = (a) => a[(Math.random() * a.length) | 0];
 
 /** Activities that are already a fight, or cannot stop half way. */
+/** What a request from you (or the brain) does not cut short. */
+const UNSTOPPABLE = new Set(['boss fight', 'claim', 'travel']);
+
 const SELF_DEFENDED = new Set(['boss fight', 'defend', 'grate', 'egg', 'guns', 'melee', 'horde',
   'flamer', 'firefist', 'officer']);
 
@@ -165,6 +169,33 @@ const LINES = {
   ],
 };
 
+/** The lines that stay local even with Claude talking: they have to land
+    in the instant they are about. */
+const ESSENTIAL = new Set([
+  ...Object.values(LINES.callout), LINES.died, LINES.air,
+  LINES.bossWin.silva, LINES.bossWin.shadow,
+]);
+
+/* What it thinks, offline, when it picks something to do. Online, Claude's
+   own thinking takes the place of these. */
+const THOUGHTS = {
+  explore: ['Nothing going on. Let me see what is lying around.', 'I have not looked round this map properly yet.',
+    'A walk first. Then violence.'],
+  rcv2: ['I feel like throwing things. The RCV2 can grab anything.', 'Physics time - spawn some crates and fling them.'],
+  guns: ['I want to hear a gun go off. The {item} it is.', 'Range practice with the {item}. Mutants make good targets.'],
+  melee: ['Guns are too easy. Let me try the {item} up close.', 'Close quarters with a {item}. Risky. Fun.'],
+  horde: ['A horde would be a good warm-up. Four Mutants.', 'Let me see how many Mutants I can handle at once.'],
+  armour: ['I keep taking hits. Armour first.', 'Medium vest, neck guard, helmet - being careful for once.'],
+  flamer: ['Something should be on fire. Flamethrower.', 'Burn marks. I want to see burn marks.'],
+  officer: ['I wonder if the Officer really shoots you for punching someone. Testing it.',
+    'Officers only shoot if they see you hurt someone. Let me check that.'],
+  firefist: ['I earned the Fire Fist. Might as well use it.', 'Fireballs. Obviously.'],
+  swim: ['The lake is deep. A quick dive, watching the air.', 'Swim break.'],
+  cleanup: ['This place is a mess. Deleting my stuff.', 'Too much junk lying around. RCV2 delete.'],
+  travel: ['I have seen enough of this map. Somewhere else.', 'New map. I am bored of this one.'],
+  boss: ['I have warmed up enough. Boss time.', 'Time for a real fight.'],
+};
+
 function fill(text, vars) {
   return text.replace(/\{(\w+)\}/g, (_, k) => (vars && vars[k] != null ? vars[k] : ''));
 }
@@ -182,6 +213,16 @@ export class AutoPilot {
   constructor(o = {}) {
     this.chat = o.chat || null;
     this.hud = o.hud || null;
+    /** Claude, if there is an API key: the thinking and the talking. */
+    this.brain = o.brain || null;
+    /** How many seconds between thoughts, when online. */
+    this.thinkEvery = o.thinkEvery || (() => 15);
+    this.events = [];             // what has happened lately, as text
+    this._pending = null;         // the brain's last decision, waiting for a gap
+    this._brainT = 3;
+    this._poke = false;
+    this._userMsg = null;
+    this._lastBrainErr = '';
     this.enabled = false;
     this.game = null;
     this.time = 0;
@@ -240,7 +281,8 @@ export class AutoPilot {
     this.task = null;
     this._resetInput();
     if (on) {
-      this.say(pick(LINES.hello), { force: true });
+      this.say(this.brain?.online ? 'AI play is on - thinking with Claude. Talk to me below.' : pick(LINES.hello), { force: true });
+      this._brainT = 1.5;
       this._lastBanter = this.time;
       if (this.game) this._arrived();
     } else {
@@ -263,6 +305,8 @@ export class AutoPilot {
 
   _arrived() {
     const id = this.game?.map?.id;
+    this.event('Arrived on ' + (MAP_NAME[id] || id) + '.', true);
+    if (this.brain?.online) return;
     const lines = LINES.arrive[id];
     if (lines) this.say(pick(lines), { force: true });
   }
@@ -284,7 +328,36 @@ export class AutoPilot {
     const last = this._said.get(list);
     if (list.length > 1 && text === last) text = list[(list.indexOf(text) + 1) % list.length];
     this._said.set(list, text);
-    this.say(fill(text, vars), opts);
+    text = fill(text, vars);
+    // every line is also a note of what just happened, for the brain
+    this.event(text);
+    /* Online, Claude does the talking; only the split-second callouts stay
+       local, because by the time a reply came back the moment is gone. */
+    if (this.brain?.online && !ESSENTIAL.has(list)) return;
+    this.say(text, opts);
+  }
+
+  /** Something happened worth telling the brain about. */
+  event(text, poke = false) {
+    this.events.push({ t: this.time, text });
+    if (this.events.length > 24) this.events.shift();
+    if (poke) this._poke = true;
+  }
+
+  /** A thought, shown in the chat as one. */
+  think(text) {
+    if (!text || !this.chat) return;
+    this.chat.push(text, 'think');
+  }
+
+  /** You, typing to it. */
+  tell(text) {
+    text = String(text || '').trim().slice(0, 240);
+    if (!text) return;
+    this.chat?.push(text, 'you');
+    this.event('The viewer said: ' + text);
+    if (this.brain?.online) { this._userMsg = text; this._poke = true; return; }
+    this._offlineReply(text);
   }
 
   /* ------------------------------ the frame ------------------------------ */
@@ -318,7 +391,8 @@ export class AutoPilot {
 
     // a cutscene has the controls: watch it
     if (g.cutscene) {
-      if (!this._watching) { this._watching = true; this.line(LINES.cutscene, null, { force: true }); }
+      if (!this._watching) { this._watching = true; this.line(LINES.cutscene, null, { force: true }); this._poke = true; }
+      this._brainTick(dt);
       return this.input;
     }
     this._watching = false;
@@ -329,6 +403,7 @@ export class AutoPilot {
         this._deadT = 2.6;
         this.stats.deaths++;
         this.line(LINES.died, null, { force: true });
+        this._poke = true;
       }
       this._deadT -= dt;
       if (this._deadT <= 0.01) {
@@ -372,6 +447,7 @@ export class AutoPilot {
     this._safety();
     this._apply(dt);
     this._banter();
+    this._brainTick(dt);
     return this.input;
   }
 
@@ -538,6 +614,14 @@ export class AutoPilot {
     }
     if (this.goalFails >= 3) { this.goal = null; this.goalFails = 0; }
 
+    // what the brain (or you) asked for, unless it is in the middle of a run
+    const asked = this._takeBrainAction();
+    if (asked && (!this.goal || asked.forced || asked.action.startsWith('fight_'))) {
+      if (!asked.action.startsWith('fight_')) this.goal = null;
+      this.lastActivity = asked.action;
+      return this._startBrainAction(asked.action);
+    }
+
     if (this.goal === 'silva') {
       if (id === 'pitvalley') return this._start('egg', this.eggRun());
       if (id === 'redplains') return this._start('orb', this.orbRun());
@@ -562,6 +646,7 @@ export class AutoPilot {
       this.lastBoss = boss;
       this.goal = boss;
       this.goalFails = 0;
+      if (!this.brain?.online) this.think(pick(THOUGHTS.boss));
       this.line(LINES.bossDecide[boss], null, { force: true });
       return this._nextTask();
     }
@@ -581,12 +666,13 @@ export class AutoPilot {
       if (r <= 0) { choice = a[0]; break; }
     }
     this.lastActivity = choice;
-    return this.startActivity(choice);
+    return this.startActivity(choice, true);
   }
 
   /** Starts one activity by name. */
-  startActivity(choice) {
+  startActivity(choice, mused = false) {
     const id = this.game.map.id;
+    if (mused && !this.brain?.online) this._muse(choice);
     switch (choice) {
       case 'explore': return this._start('explore', this.explore());
       case 'rcv2': return this._start('rcv2', this.rcvPlay());
@@ -611,6 +697,12 @@ export class AutoPilot {
         return this._nextTask();
       default: return this._start('explore', this.explore());
     }
+  }
+
+  /** An offline thought about what it is about to do. */
+  _muse(choice) {
+    const list = THOUGHTS[choice];
+    if (list) this.think(fill(pick(list), { item: 'gun' }));
   }
 
   /* ------------------------------ interrupts ----------------------------- */
@@ -677,6 +769,7 @@ export class AutoPilot {
       this._known.add(c);
       if (c.lastAttacker !== p) continue;
       this.stats.kills++;
+      this._poke = this._poke || Math.random() < 0.5;
       const list = c.isZombie ? LINES.killMutant : c.ai?.isOfficer ? LINES.killOfficer : LINES.kill;
       this.line(list, null, { gap: 1.2 });
     }
@@ -686,6 +779,7 @@ export class AutoPilot {
       if (enc.state === 'won' && this._encState === 'fight') {
         const who = g.map.id === 'redplains' ? 'silva' : 'shadow';
         this.stats[who]++;
+        this._poke = true;
         this.line(LINES.bossWin[who], null, { force: true, kind: 'win' });
         if (who === 'shadow') this.goal = null;
       }
@@ -705,7 +799,145 @@ export class AutoPilot {
   }
 
   _banter() {
+    if (this.brain?.online) return;
     if (this.time - this._lastBanter > 26 + Math.random() * 10) this.line(LINES.idle, null, { gap: 6 });
+  }
+
+  /* ------------------------------- the brain ----------------------------- */
+
+  /** Every so often, or when something happens, asks Claude what next. */
+  _brainTick(dt) {
+    const b = this.brain;
+    if (!b?.online) return;
+    if (b.lastError && b.lastError !== this._lastBrainErr) {
+      this._lastBrainErr = b.lastError;
+      this.chat?.push(b.lastError, 'sys');
+    }
+    this._brainT -= dt;
+    const due = this._brainT <= 0 || (this._poke && this._brainT < this.thinkEvery() - 3);
+    if (!due || !b.ready()) return;
+    this._brainT = this.thinkEvery();
+    this._poke = false;
+    const asked = this._userMsg;
+    this._userMsg = null;
+    const game = this.game;
+    b.ask(this.describe(asked)).then((r) => {
+      if (!r || !this.enabled) return;
+      if (r.thinking) this.think(r.thinking.length > 220 ? r.thinking.slice(0, 217).trimEnd() + '...' : r.thinking);
+      else if (r.intent) this.think(r.intent);
+      if (r.say) { this.say(r.say, { force: true }); this.event('You said: ' + r.say); }
+      if (r.action && r.action !== 'continue') {
+        this._pending = { action: r.action, at: this.time, forced: !!r.now || !!asked };
+        // asked to do something else right now: drop what it is doing, unless
+        // that is a fight already under way or a map that has gone
+        if (this._pending.forced && this.game === game && !UNSTOPPABLE.has(this.taskName)) {
+          this.task = null;
+          this._resume = null;
+        }
+      }
+    });
+  }
+
+  /** The game, right now, in words. */
+  describe(viewer = null) {
+    const g = this.game, p = g.player;
+    const lines = [];
+    const mins = Math.floor(this.time / 60), secs = Math.floor(this.time % 60);
+    lines.push(`Session time ${mins}m${secs}s. Map: ${MAP_NAME[g.map.id] || g.map.id}.`);
+    const worn = Object.values(p.worn).filter(Boolean);
+    const armour = worn.length
+      ? worn.map((a) => ARMOUR[a.kind]?.label || a.kind).join(', ') +
+        ` (${Math.round(worn.reduce((n, a) => n + a.hp, 0))}/${Math.round(worn.reduce((n, a) => n + a.maxHp, 0))})`
+      : 'none';
+    const gun = g.carried ? CARRY[g.carried.kind]?.label + (GUNS[g.carried.kind]
+      ? ` (${g.carried.ammo}/${GUNS[g.carried.kind].capacity})` : '') : 'nothing';
+    lines.push(`You: health ${Math.round(p.health)}/${Math.round(p.maxHealth)}${p.dead ? ' (DEAD)' : ''}, armour ${armour}, ` +
+      `carrying ${gun}, in hand: ${g.equipped}${p.swimming ? ', swimming' : ''}${p.underwater ? `, underwater (air ${Math.round(p.air * 100)}%)` : ''}.`);
+    lines.push(`Fire Fist ${isUnlocked('firefist') ? 'unlocked' : 'locked'}. This session: ${this.stats.kills} kills, ` +
+      `${this.stats.deaths} deaths, Silva beaten ${this.stats.silva}x, Shadow Mutant beaten ${this.stats.shadow}x.`);
+    lines.push(`Doing now: ${this.taskName || 'nothing'}${this.goal ? ` (on the way to fight ${this.goal === 'silva' ? 'Silva' : 'the Shadow Mutant'})` : ''}.`);
+    // who is about
+    const counts = {};
+    let nearest = null, nd = Infinity;
+    for (const c of g.characters) {
+      if (c === p || c.dead) continue;
+      const kind = c.isZombie ? 'Mutant' : c.ai?.isOfficer ? (c.ai.hostile && c.ai.target === p ? 'Officer (shooting at you)' : 'Officer') : 'citizen';
+      counts[kind] = (counts[kind] || 0) + 1;
+      const d = Math.hypot(c.pos.x - p.pos.x, c.pos.z - p.pos.z);
+      if (d < nd) { nd = d; nearest = kind; }
+    }
+    const who = Object.entries(counts).map(([k, n]) => `${n} ${k}${n > 1 && !k.includes('(') ? 's' : ''}`).join(', ');
+    lines.push(`Around you: ${who || 'nobody alive'}${nearest ? ` (nearest: ${nearest}, ${nd.toFixed(0)} m)` : ''}; ` +
+      `${g.spawnedBodies.length} loose objects.`);
+    const enc = g.encounter, b = enc?.boss;
+    if (b) {
+      const name = g.map.id === 'redplains' ? 'Silva' : 'Shadow Mutant';
+      lines.push(`Boss: ${name}, encounter ${enc.state}, ${Math.round(b.hp)}/${b.maxHp} HP, doing: ${b.state}.`);
+    }
+    if (g.cutscene) lines.push('A cutscene is playing.');
+    const ev = this.events.slice(-12).map((e) => `- ${Math.max(0, Math.round(this.time - e.t))}s ago: ${e.text}`);
+    if (ev.length) lines.push('Recent events, oldest first:\n' + ev.join('\n'));
+    const said = (this.chat?.log || []).slice(-6);
+    if (said.length) lines.push('Recent chat (yours unless marked):\n' + said.map((t) => '- ' + t).join('\n'));
+    lines.push('Actions you can pick:\n' + Object.entries(BRAIN_ACTIONS).map(([k, v]) => `- ${k}: ${v}`).join('\n'));
+    if (viewer) lines.push(`The viewer just wrote to you: "${viewer}"`);
+    else lines.push('Nobody has written to you. Say something if you want to, and decide what to do next.');
+    return lines.join('\n\n');
+  }
+
+  /** Takes the brain's decision, if it is still fresh. */
+  _takeBrainAction() {
+    const a = this._pending;
+    this._pending = null;
+    if (!a || this.time - a.at > 90) return null;
+    return a;
+  }
+
+  /** Starts what the brain picked. */
+  _startBrainAction(name) {
+    const id = this.game.map.id;
+    const [kind, what] = name.split('_');
+    if (kind === 'guns') return this._start('guns', this.gunRange(what));
+    if (kind === 'melee') return this._start('melee', this.meleeFight(what));
+    if (kind === 'travel') return this._start('travel', this.travelTask(what));
+    if (name === 'fight_silva') return this.startActivity('silva');
+    if (name === 'fight_shadow') return this.startActivity('shadow');
+    if (name === 'flamethrower') return this.startActivity('flamer');
+    if (name === 'swim' && id !== 'legacy') return this._start('travel', this.travelTask('legacy'));
+    if (name === 'firefist' && !isUnlocked('firefist')) {
+      this.say('No Fire Fist yet - Silva has it. Going to get it.', { force: true });
+      return this.startActivity('silva');
+    }
+    return this.startActivity(name);
+  }
+
+  /**
+   * Offline, it still listens: it picks out what you asked for and does it,
+   * and tells you it is playing on instinct.
+   */
+  _offlineReply(text) {
+    const t = text.toLowerCase();
+    const want = [
+      [/silva|red plains|pit egg|red rcv2/, 'fight_silva'], [/shadow|dark legacy|grate|tentacle/, 'fight_shadow'],
+      [/shotgun|mossberg/, 'guns_mossberg'], [/\bak\b|ak-?47/, 'guns_ak47'], [/m16/, 'guns_m16'],
+      [/glock|pistol/, 'guns_glock'], [/flame/, 'flamethrower'], [/machete/, 'melee_machete'],
+      [/sledge|hammer/, 'melee_sledge'], [/crowbar/, 'melee_crowbar'], [/fire ?fist|fireball/, 'firefist'],
+      [/officer|police|cop/, 'officer'], [/horde|zombie|mutant/, 'horde'], [/armou?r|vest|helmet/, 'armour'],
+      [/rcv2|throw|grab|crate/, 'rcv2'], [/clean|delete/, 'cleanup'], [/swim|dive|lake/, 'swim'],
+      [/plains|baseplate/, 'travel_baseplate'], [/pit valley/, 'travel_pitvalley'], [/legacy/, 'travel_legacy'],
+      [/explore|walk|look around/, 'explore'],
+    ];
+    const hit = want.find(([re]) => re.test(t));
+    if (hit) {
+      this.say(pick(['On it.', 'Sure thing.', 'You got it.', 'Okay, doing that.']) + ' (' + BRAIN_ACTIONS[hit[1]] + ')', { force: true });
+      this._pending = { action: hit[1], at: this.time, forced: true };
+      if (!UNSTOPPABLE.has(this.taskName)) { this.task = null; this._resume = null; }
+      return;
+    }
+    this.say(pick([
+      'I can only follow simple requests offline - add a Claude API key in Settings and I can talk about anything.',
+      'Offline, I mostly understand things like "fight Silva", "go to Legacy" or "use the shotgun".',
+    ]), { force: true });
   }
 
   /* ============================== activities ============================== */
@@ -1118,6 +1350,9 @@ export class AutoPilot {
 
   /** A gun (or the flamethrower) against Mutants it spawns for the purpose. */
   *gunRange(kind) {
+    if (!this.brain?.online && this.lastActivity !== 'guns' && this.lastActivity !== 'flamer') {
+      this.think(fill(pick(THOUGHTS[kind === 'flamethrower' ? 'flamer' : 'guns']), { item: CARRY[kind].label }));
+    }
     this.line(kind === 'flamethrower' ? LINES.flamer : LINES.guns, { item: CARRY[kind].label });
     if (!(yield* this.getWeapon(kind))) return;
     const n = kind === 'flamethrower' ? 2 : 3;

@@ -178,6 +178,75 @@ r = await page.evaluate(async () => {
 check('AI knows who is a threat: a provoked Officer, a citizen fighting it - not calm ones',
   !r.calm && r.officer && r.citizen, JSON.stringify(r));
 
+// ---------------------------------------------------- talking to it, offline
+r = await page.evaluate(() => {
+  const app = window.GOREBOX, g = app.game, p = g.player, ai = app.ai;
+  g.clearSpawns(); p.heal();
+  p.teleport(g.map.openArea.x, g.map.openArea.z, 0);
+  ai.task = null;
+  ai.tell('use the shotgun on some mutants');
+  window.aiRun(3000, () => g.carried?.kind === 'mossberg');
+  const lines = [...document.querySelectorAll('#ai-chat .ai-line')].map((e) => e.textContent);
+  return { carried: g.carried?.kind, task: ai.taskName, you: lines.some((l) => l.startsWith('YOU')),
+    ack: lines.some((l) => /On it|Sure thing|You got it|doing that/.test(l)), lines: lines.slice(-3) };
+});
+check('offline, it still does what you type: "use the shotgun" gets the Mossberg out',
+  r.carried === 'mossberg' && r.you && r.ack, JSON.stringify(r));
+
+// ------------------------------------------- thinking with Claude (mocked API)
+/* No real key here: the Claude API is stood in for at the network, which
+   checks what the game sends and that it acts on what comes back. */
+const sent = [];
+await page.context().route('https://api.anthropic.com/**', async (route) => {
+  const q = route.request();
+  const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'POST, OPTIONS' };
+  if (q.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+  const body = JSON.parse(q.postData() || '{}');
+  sent.push({ headers: q.headers(), body });
+  const asked = /fight Silva/i.test(body.messages?.[0]?.content || '');
+  route.fulfill({ status: 200, headers: { ...cors, 'content-type': 'application/json' }, body: JSON.stringify({
+    id: 'msg_mock', type: 'message', role: 'assistant', model: body.model,
+    content: [
+      { type: 'thinking', thinking: asked ? 'The viewer wants Silva. Pit Valley first, then the red RCV2.' : 'Quiet for now.', signature: 'x' },
+      { type: 'text', text: JSON.stringify(asked
+        ? { say: 'Silva? Love that idea. Off to Pit Valley.', intent: 'go fight Silva', action: 'fight_silva', now: true }
+        : { say: '', intent: 'keep going', action: 'continue', now: false }) },
+    ],
+    stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 1000, output_tokens: 60 },
+  }) });
+});
+await page.evaluate(() => { localStorage.setItem('gorebox.aikey', 'sk-ant-mock'); });
+await page.evaluate(() => window.GOREBOX.ai.tell('go fight Silva'));
+for (let i = 0; i < 40; i++) {
+  const done = await page.evaluate(() => {
+    window.aiRun(20);
+    return window.GOREBOX.ai.goal === 'silva';
+  });
+  if (done) break;
+  await page.waitForTimeout(150);
+}
+r = await page.evaluate(() => {
+  const lines = [...document.querySelectorAll('#ai-chat .ai-line')].map((e) => e.textContent);
+  return { goal: window.GOREBOX.ai.goal, thought: lines.some((l) => l.startsWith('AI thinks') && /Silva/.test(l)),
+    said: lines.some((l) => /Love that idea/.test(l)), badge: document.querySelector('#ai-chat-mode').textContent };
+});
+const q0 = sent.find((x) => /fight Silva/i.test(x.body.messages?.[0]?.content || '')) || sent[0] || { headers: {}, body: {} };
+const shape = {
+  calls: sent.length, model: q0.body.model, thinking: q0.body.thinking?.type, display: q0.body.thinking?.display,
+  format: q0.body.output_config?.format?.type, effort: q0.body.output_config?.effort, fallbacks: q0.body.fallbacks,
+  beta: q0.headers['anthropic-beta'], key: q0.headers['x-api-key'], cached: q0.body.system?.[0]?.cache_control?.type,
+  hasState: /Map: Plains/.test(q0.body.messages?.[0]?.content || ''),
+};
+check('with a key, it asks Claude (Opus 5.5, adaptive thinking, JSON out, fallbacks, cached system prompt)',
+  shape.calls >= 1 && shape.model === 'claude-opus-5-5' && shape.thinking === 'adaptive' && shape.display === 'summarized' &&
+  shape.format === 'json_schema' && shape.fallbacks === 'default' && shape.beta === 'server-side-fallback-2026-07-01' &&
+  shape.key === 'sk-ant-mock' && shape.cached === 'ephemeral' && shape.hasState, JSON.stringify(shape));
+check('Claude\'s thinking and words show in the chat, and it acts on what it decided',
+  r.goal === 'silva' && r.thought && r.said, JSON.stringify(r));
+// back offline for the rest
+await page.evaluate(() => { localStorage.removeItem('gorebox.aikey'); });
+await page.context().unroute('https://api.anthropic.com/**');
+
 // ------------------------------------------------------------ the Silva run
 r = await page.evaluate(() => {
   const app = window.GOREBOX, g = app.game, p = g.player, ai = app.ai;
