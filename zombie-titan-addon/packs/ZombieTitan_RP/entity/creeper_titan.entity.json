@@ -1,0 +1,54 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:creeper_titan",
+			"materials": {
+				"default": "entity_emissive_alpha",
+				"charged": "charged_creeper"
+			},
+			"textures": {
+				"default": "textures/entity/creeper_titan/creeper_titan",
+				"charged": "textures/entity/creeper/creeper_armor"
+			},
+			"geometry": {
+				"default": "geometry.zt.creeper_titan",
+				"charged": "geometry.zt.creeper_titan.charged"
+			},
+			"spawn_egg": {
+				"texture": "zt_creeper_titan_egg"
+			},
+			"scripts": {
+				"scale": "1.0 + 15.0 * q.property('zt:grow')",
+				"should_update_bones_and_effects_offscreen": "1.0",
+				"should_update_effects_offscreen": "1.0",
+				"animate": [
+					"controller"
+				]
+			},
+			"animations": {
+				"pose": "animation.zt.creeper.pose",
+				"idle": "animation.zt.creeper.idle",
+				"walk": "animation.zt.creeper.walk",
+				"birth": "animation.zt.creeper.birth",
+				"head_slam": "animation.zt.creeper.head_slam",
+				"stomp": "animation.zt.creeper.stomp",
+				"body_slam": "animation.zt.creeper.body_slam",
+				"anti_air": "animation.zt.creeper.anti_air",
+				"kick": "animation.zt.creeper.kick",
+				"tnt": "animation.zt.creeper.tnt",
+				"thunder": "animation.zt.creeper.thunder",
+				"stun": "animation.zt.creeper.stun",
+				"awaken": "animation.zt.creeper.awaken",
+				"leap": "animation.zt.creeper.leap",
+				"controller": "controller.animation.zt.creeper.main"
+			},
+			"render_controllers": [
+				"controller.render.zt.creeper_titan",
+				{
+					"controller.render.zt.creeper_titan_charged": "q.property('zt:enraged')"
+				}
+			]
+		}
+	}
+}

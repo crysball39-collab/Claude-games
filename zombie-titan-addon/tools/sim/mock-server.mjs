@@ -21,11 +21,12 @@ const listeners = () => {
   };
 };
 
-export const log = { sounds: [], particles: [], messages: [], commands: [], items: [], errors: [] };
+export const log = { sounds: [], particles: [], messages: [], commands: [], items: [], errors: [], explosions: [], animations: [] };
 
 export const GameMode = { Survival: "Survival", Creative: "Creative", Adventure: "Adventure", Spectator: "Spectator" };
 export const Difficulty = { Peaceful: "Peaceful", Easy: "Easy", Normal: "Normal", Hard: "Hard" };
 export const EquipmentSlot = { Mainhand: "Mainhand", Offhand: "Offhand", Head: "Head", Chest: "Chest", Legs: "Legs", Feet: "Feet" };
+export const ItemLockMode = { inventory: "inventory", none: "none", slot: "slot" };
 
 let nextId = 1;
 let tickCounter = 0;
@@ -100,6 +101,8 @@ export class ItemStack {
     this.typeId = typeId;
     this.amount = amount;
     this.lore = [];
+    this.lockMode = "none";
+    this.keepOnDeath = false;
   }
   getLore() {
     return this.lore;
@@ -187,6 +190,10 @@ class Equippable extends Component {
   getEquipment(slot) {
     return this.slots[slot];
   }
+  setEquipment(slot, item) {
+    this.slots[slot] = item;
+    return true;
+  }
   getEquipmentSlot(slot) {
     const self = this;
     return {
@@ -208,6 +215,10 @@ const FAMILIES = {
   "zt:skeleton_titan_corpse": ["zt_ally", "inanimate"],
   "zt:titan_arrow": ["zt_ally", "projectile"],
   "zt:growth_serum": ["projectile"],
+  "zt:creeper_titan": ["creeper_titan", "titan", "zt_ally", "creeper", "monster", "mob"],
+  "zt:creeper_minion": ["creeper_minion", "zt_ally", "creeper", "monster", "mob"],
+  "zt:creeper_titan_corpse": ["zt_ally", "inanimate"],
+  "minecraft:creeper": ["creeper", "monster", "mob"],
   "minecraft:player": ["player"],
   "minecraft:zombie": ["zombie", "monster", "mob"],
   "minecraft:skeleton": ["skeleton", "undead", "monster", "mob"],
@@ -219,6 +230,7 @@ const HEALTH = {
   "zt:zombie_titan": 20000, "zt:zombie_minion": 30, "zt:zombie_titan_corpse": 1, "minecraft:player": 20, "minecraft:zombie": 20,
   "minecraft:villager_v2": 20, "zt:skeleton_titan": 20000, "zt:skeleton_minion": 30, "zt:skeleton_titan_corpse": 1,
   "minecraft:skeleton": 20, "minecraft:husk": 20, "minecraft:cow": 10,
+  "zt:creeper_titan": 25000, "zt:creeper_minion": 30, "zt:creeper_titan_corpse": 1, "minecraft:creeper": 20,
 };
 const PROPS = {
   "zt:zombie_titan": { "zt:anim": 0, "zt:moving": false, "zt:armed": true, "zt:enraged": false, "zt:birth": false, "zt:grow": 1 },
@@ -226,8 +238,11 @@ const PROPS = {
   "zt:zombie_minion": { "zt:casting": false },
   "zt:skeleton_titan": { "zt:anim": 0, "zt:moving": false, "zt:stunned": false, "zt:enraged": false, "zt:birth": false, "zt:grow": 1 },
   "zt:skeleton_minion": { "zt:casting": false },
+  "zt:creeper_titan": { "zt:anim": 0, "zt:moving": false, "zt:stunned": false, "zt:enraged": false, "zt:birth": false, "zt:grow": 1 },
+  "zt:creeper_titan_corpse": { "zt:fuse": 0, "zt:enraged": false },
+  "zt:creeper_minion": { "zt:casting": false },
 };
-const PROJECTILES = new Set(["zt:proto_ball", "zt:titan_arrow", "zt:growth_serum"]);
+const PROJECTILES = new Set(["zt:proto_ball", "zt:titan_arrow", "zt:growth_serum", "minecraft:fireball"]);
 
 export class Entity {
   constructor(dim, typeId, loc) {
@@ -247,8 +262,13 @@ export class Entity {
     this.components = {};
     if (HEALTH[typeId]) this.components["minecraft:health"] = new Health(this, HEALTH[typeId]);
     if (PROJECTILES.has(typeId)) this.components["minecraft:projectile"] = new Projectile(this);
-    if (typeId === "zt:zombie_minion" || typeId === "zt:skeleton_minion") this.components["minecraft:variant"] = { value: 0 };
+    if (typeId === "zt:zombie_minion" || typeId === "zt:skeleton_minion" || typeId === "zt:creeper_minion") {
+      this.components["minecraft:variant"] = { value: 0 };
+    }
     this.knockbacks = [];
+    this.isInWater = false;
+    this.isSwimming = false;
+    this.effectInfo = {};
   }
   get isValid() {
     return this.valid;
@@ -271,7 +291,7 @@ export class Entity {
     if (!(id in this.props)) throw new Error(`${this.typeId} has no property ${id}`);
     if (typeof v !== typeof this.props[id]) throw new Error(`property ${id} type ${typeof v}`);
     if (id === "zt:anim" && (v < 0 || v > 15 || !Number.isInteger(v))) throw new Error("anim out of range " + v);
-    if (id === "zt:grow" && (v < 0 || v > 1)) throw new Error("grow out of range " + v);
+    if ((id === "zt:grow" || id === "zt:fuse") && (v < 0 || v > 1)) throw new Error(id + " out of range " + v);
     this.props[id] = v;
   }
   getDynamicProperty(k) {
@@ -299,8 +319,9 @@ export class Entity {
       if (src?.typeId === "minecraft:player" && src.held?.typeId === "zt:dark_fists") amount *= this.props["zt:enraged"] ? 2.5 : 5;
       else if (this.props["zt:enraged"]) amount *= 0.5;
     }
-    // the skeleton titan's damage sensor: players only hurt it while it is stunned
-    if (this.typeId === "zt:skeleton_titan") {
+    // the skeleton and creeper titans' damage sensors: players only hurt them while they are stunned
+    if (this.typeId === "zt:creeper_titan" && ["lightning", "entityExplosion", "blockExplosion"].includes(opts?.cause)) return false;
+    if (this.typeId === "zt:skeleton_titan" || this.typeId === "zt:creeper_titan") {
       const src = opts?.damagingEntity;
       if (this.props["zt:birth"]) return false;
       if (src && FAMILIES[src.typeId]?.includes("zt_ally")) return false;
@@ -334,7 +355,23 @@ export class Entity {
     this.velocity = { x: 0, y: 0, z: 0 };
   }
   addEffect(id, dur, o) {
+    if (!Number.isFinite(dur) || dur <= 0) throw new Error("bad effect duration " + dur);
     this.effects.push(id);
+    this.effectInfo[id] = { duration: dur, amplifier: o?.amplifier ?? 0 };
+  }
+  removeEffect(id) {
+    const had = id in this.effectInfo;
+    delete this.effectInfo[id];
+    this.effects = this.effects.filter((e) => e !== id);
+    return had;
+  }
+  getEffect(id) {
+    return this.effectInfo[id];
+  }
+  getBlockFromViewDirection(opts) {
+    const from = this.getHeadLocation();
+    const dir = this.getViewDirection();
+    return this.dimension.getBlockFromRay(from, dir, opts);
   }
   remove() {
     this.valid = false;
@@ -365,6 +402,7 @@ export class Player extends Entity {
     this.cooldowns = {};
     this.xp = 0;
     this.components["minecraft:equippable"] = new Equippable(this);
+    this.components["minecraft:inventory"] = { container: new Container(36) };
     this.onScreenDisplay = {
       setActionBar: (t) => log.messages.push("[actionbar] " + t),
       setTitle: (t, o) => log.messages.push("[title] " + t),
@@ -386,11 +424,37 @@ export class Player extends Entity {
     return this.cooldowns[c] ?? 0;
   }
   playAnimation(a, o) {
+    if (typeof a !== "string" || !a.startsWith("animation.")) throw new Error("bad animation " + a);
     log.commands.push("anim " + a);
+    log.animations.push([this.id, a, tickCounter]);
   }
   addExperience(n) {
     this.xp += n;
     return this.xp;
+  }
+}
+
+class Container {
+  constructor(size) {
+    this.size = size;
+    this.slots = new Array(size).fill(undefined);
+  }
+  get emptySlotsCount() {
+    return this.slots.filter((x) => !x).length;
+  }
+  getItem(i) {
+    if (i < 0 || i >= this.size) throw new Error("slot out of range " + i);
+    return this.slots[i];
+  }
+  setItem(i, item) {
+    if (i < 0 || i >= this.size) throw new Error("slot out of range " + i);
+    this.slots[i] = item;
+  }
+  addItem(item) {
+    const i = this.slots.findIndex((x) => !x);
+    if (i < 0) return item;
+    this.slots[i] = item;
+    return undefined;
   }
 }
 
@@ -447,7 +511,7 @@ class Dimension {
   spawnEntity(id, loc, opts) {
     if (![loc.x, loc.y, loc.z].every(Number.isFinite)) throw new Error("bad spawn location");
     const e = id === "minecraft:player" ? new Player(this, loc) : new Entity(this, id, loc);
-    if (id === "zt:zombie_minion" && opts?.spawnEvent) {
+    if (e.components["minecraft:variant"] && opts?.spawnEvent) {
       e.components["minecraft:variant"].value = { "zt:as_loyalist": 0, "zt:as_priest": 1, "zt:as_zealot": 2, "zt:as_templar": 3 }[opts.spawnEvent];
     }
     this.entities.push(e);
@@ -486,7 +550,9 @@ class Dimension {
     return {};
   }
   createExplosion(loc, r, o) {
+    if (![loc.x, loc.y, loc.z, r].every(Number.isFinite)) throw new Error("bad explosion");
     log.commands.push("explosion");
+    log.explosions.push({ ...loc, radius: r, breaksBlocks: !!o?.breaksBlocks, tick: tickCounter });
     return true;
   }
   runCommand(c) {
@@ -515,6 +581,9 @@ export const world = {
     projectileHitEntity: listeners(),
     itemUse: listeners(),
     itemStartUse: listeners(),
+    itemCompleteUse: listeners(),
+    playerBreakBlock: listeners(),
+    playerSpawn: listeners(),
     playerLeave: listeners(),
   },
   getDimension(id) {

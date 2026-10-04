@@ -882,6 +882,522 @@
 					"volume": 1.0
 				}
 			]
+		},
+		"zt.creeper.ambient": {
+			"category": "hostile",
+			"min_distance": 24.0,
+			"max_distance": 128.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/creeper/say1",
+					"pitch": 0.42,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/creeper/say2",
+					"pitch": 0.42,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/creeper/say3",
+					"pitch": 0.42,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/creeper/say4",
+					"pitch": 0.42,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.creeper.hurt": {
+			"category": "hostile",
+			"min_distance": 16.0,
+			"max_distance": 96.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/creeper/say1",
+					"pitch": 0.55,
+					"volume": 0.8
+				},
+				{
+					"name": "sounds/mob/creeper/say2",
+					"pitch": 0.55,
+					"volume": 0.8
+				},
+				{
+					"name": "sounds/mob/creeper/say3",
+					"pitch": 0.55,
+					"volume": 0.8
+				},
+				{
+					"name": "sounds/mob/creeper/say4",
+					"pitch": 0.55,
+					"volume": 0.8
+				}
+			]
+		},
+		"zt.creeper.death": {
+			"category": "hostile",
+			"min_distance": 24.0,
+			"max_distance": 192.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/creeper/death",
+					"pitch": 0.4,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/ravager/roar1",
+					"pitch": 0.45,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/ravager/roar2",
+					"pitch": 0.45,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.creeper.hiss": {
+			"category": "hostile",
+			"min_distance": 24.0,
+			"max_distance": 192.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/creeper/say1",
+					"pitch": 0.32,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/creeper/say2",
+					"pitch": 0.32,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/creeper/say3",
+					"pitch": 0.32,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/creeper/say4",
+					"pitch": 0.32,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/random/fuse",
+					"pitch": 0.4,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.creeper.fuse": {
+			"category": "hostile",
+			"min_distance": 32.0,
+			"max_distance": 192.0,
+			"sounds": [
+				{
+					"name": "sounds/random/fuse",
+					"pitch": 0.5,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.creeper.pop": {
+			"category": "hostile",
+			"min_distance": 24.0,
+			"max_distance": 160.0,
+			"sounds": [
+				{
+					"name": "sounds/random/explode1",
+					"pitch": 0.75,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/random/explode2",
+					"pitch": 0.75,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/random/explode3",
+					"pitch": 0.75,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/random/explode4",
+					"pitch": 0.75,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.creeper.blast": {
+			"category": "hostile",
+			"min_distance": 64.0,
+			"max_distance": 320.0,
+			"sounds": [
+				{
+					"name": "sounds/random/explode1",
+					"pitch": 0.3,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/random/explode2",
+					"pitch": 0.3,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/random/explode3",
+					"pitch": 0.3,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/random/explode4",
+					"pitch": 0.3,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/ambient/weather/thunder1",
+					"pitch": 0.45,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/ambient/weather/thunder2",
+					"pitch": 0.45,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/ambient/weather/thunder3",
+					"pitch": 0.45,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.creeper.thunder": {
+			"category": "weather",
+			"min_distance": 32.0,
+			"max_distance": 192.0,
+			"sounds": [
+				{
+					"name": "sounds/ambient/weather/thunder1",
+					"pitch": 0.8,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/ambient/weather/thunder2",
+					"pitch": 0.8,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/ambient/weather/thunder3",
+					"pitch": 0.8,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.gum.eat": {
+			"category": "player",
+			"min_distance": 4.0,
+			"max_distance": 24.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/slime/big1",
+					"pitch": 0.7,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/slime/big2",
+					"pitch": 0.7,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/slime/big3",
+					"pitch": 0.7,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/slime/big4",
+					"pitch": 0.7,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.gum.stretch": {
+			"category": "player",
+			"min_distance": 4.0,
+			"max_distance": 40.0,
+			"sounds": [
+				{
+					"name": "sounds/random/bow",
+					"pitch": 0.5,
+					"volume": 0.8
+				},
+				{
+					"name": "sounds/mob/slime/small1",
+					"pitch": 0.55,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/slime/small2",
+					"pitch": 0.55,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/slime/small3",
+					"pitch": 0.55,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/slime/small4",
+					"pitch": 0.55,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/slime/small5",
+					"pitch": 0.55,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.gum.snap": {
+			"category": "player",
+			"min_distance": 4.0,
+			"max_distance": 32.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/slime/small1",
+					"pitch": 1.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/slime/small2",
+					"pitch": 1.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/slime/small3",
+					"pitch": 1.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/slime/small4",
+					"pitch": 1.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/slime/small5",
+					"pitch": 1.5,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.gum.punch": {
+			"category": "player",
+			"min_distance": 4.0,
+			"max_distance": 48.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/player/attack/strong1",
+					"pitch": 0.7,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/player/attack/strong2",
+					"pitch": 0.7,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/player/attack/strong3",
+					"pitch": 0.7,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/player/attack/strong4",
+					"pitch": 0.7,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/slime/big1",
+					"pitch": 0.9,
+					"volume": 0.6
+				},
+				{
+					"name": "sounds/mob/slime/big2",
+					"pitch": 0.9,
+					"volume": 0.6
+				},
+				{
+					"name": "sounds/mob/slime/big3",
+					"pitch": 0.9,
+					"volume": 0.6
+				},
+				{
+					"name": "sounds/mob/slime/big4",
+					"pitch": 0.9,
+					"volume": 0.6
+				}
+			]
+		},
+		"zt.gum.gatling": {
+			"category": "player",
+			"min_distance": 4.0,
+			"max_distance": 40.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/player/attack/strong1",
+					"pitch": 1.1,
+					"volume": 0.8
+				},
+				{
+					"name": "sounds/mob/player/attack/strong2",
+					"pitch": 1.1,
+					"volume": 0.8
+				},
+				{
+					"name": "sounds/mob/player/attack/strong3",
+					"pitch": 1.1,
+					"volume": 0.8
+				},
+				{
+					"name": "sounds/mob/player/attack/strong4",
+					"pitch": 1.1,
+					"volume": 0.8
+				},
+				{
+					"name": "sounds/mob/player/attack/strong1",
+					"pitch": 1.3,
+					"volume": 0.8
+				},
+				{
+					"name": "sounds/mob/player/attack/strong2",
+					"pitch": 1.3,
+					"volume": 0.8
+				},
+				{
+					"name": "sounds/mob/player/attack/strong3",
+					"pitch": 1.3,
+					"volume": 0.8
+				},
+				{
+					"name": "sounds/mob/player/attack/strong4",
+					"pitch": 1.3,
+					"volume": 0.8
+				}
+			]
+		},
+		"zt.gum.stamp": {
+			"category": "player",
+			"min_distance": 8.0,
+			"max_distance": 96.0,
+			"sounds": [
+				{
+					"name": "sounds/item/mace/smash_ground_heavy",
+					"pitch": 0.8,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/random/explode1",
+					"pitch": 0.9,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/random/explode2",
+					"pitch": 0.9,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/random/explode3",
+					"pitch": 0.9,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/random/explode4",
+					"pitch": 0.9,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.gum.rocket": {
+			"category": "player",
+			"min_distance": 4.0,
+			"max_distance": 48.0,
+			"sounds": [
+				{
+					"name": "sounds/random/bow",
+					"pitch": 0.4,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/item/trident/riptide_mono1",
+					"pitch": 1.3,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/item/trident/riptide_mono2",
+					"pitch": 1.3,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/item/trident/riptide_mono3",
+					"pitch": 1.3,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.gum.steam": {
+			"category": "player",
+			"min_distance": 4.0,
+			"max_distance": 24.0,
+			"sounds": [
+				{
+					"name": "sounds/random/fizz",
+					"pitch": 0.7,
+					"volume": 0.6
+				}
+			]
+		},
+		"zt.gum.gear2": {
+			"category": "player",
+			"min_distance": 8.0,
+			"max_distance": 48.0,
+			"sounds": [
+				{
+					"name": "sounds/random/fizz",
+					"pitch": 0.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/item/mace/smash_ground1",
+					"pitch": 0.7,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/item/mace/smash_ground2",
+					"pitch": 0.7,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/item/mace/smash_ground3",
+					"pitch": 0.7,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/item/mace/smash_ground4",
+					"pitch": 0.7,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.gum.sink": {
+			"category": "player",
+			"min_distance": 4.0,
+			"max_distance": 24.0,
+			"sounds": [
+				{
+					"name": "sounds/random/splash",
+					"pitch": 0.6,
+					"volume": 1.0
+				}
+			]
 		}
 	}
 }

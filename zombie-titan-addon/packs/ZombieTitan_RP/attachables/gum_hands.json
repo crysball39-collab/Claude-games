@@ -1,0 +1,33 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:attachable": {
+		"description": {
+			"identifier": "zt:gum_pistol.hands",
+			"item": {
+				"zt:gum_pistol": "query.owner_identifier == 'minecraft:player'",
+				"zt:gum_bazooka": "query.owner_identifier == 'minecraft:player'",
+				"zt:gum_gatling": "query.owner_identifier == 'minecraft:player'",
+				"zt:gum_stamp": "query.owner_identifier == 'minecraft:player'",
+				"zt:gum_rocket": "query.owner_identifier == 'minecraft:player'",
+				"zt:gum_gear2": "query.owner_identifier == 'minecraft:player'",
+				"zt:gum_jet_pistol": "query.owner_identifier == 'minecraft:player'",
+				"zt:gum_jet_bazooka": "query.owner_identifier == 'minecraft:player'",
+				"zt:gum_jet_gatling": "query.owner_identifier == 'minecraft:player'",
+				"zt:gum_jet_stamp": "query.owner_identifier == 'minecraft:player'",
+				"zt:gum_jet_rocket": "query.owner_identifier == 'minecraft:player'"
+			},
+			"materials": {
+				"default": "entity_alphatest"
+			},
+			"textures": {
+				"default": "textures/items/zt_gum_pistol"
+			},
+			"geometry": {
+				"default": "geometry.zt.empty"
+			},
+			"render_controllers": [
+				"controller.render.zt.bare_hands"
+			]
+		}
+	}
+}

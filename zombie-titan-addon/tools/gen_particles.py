@@ -17,6 +17,7 @@ RING = "textures/particle/zt_ring"
 SMOKE = "textures/particle/zt_smoke"
 SPARK = "textures/particle/zt_spark"
 FIST = "textures/particle/zt_fist"
+GUM_FIST = "textures/particle/zt_gum_fist"
 
 
 def effect(ident, material, texture, components):
@@ -290,6 +291,89 @@ def effects():
             ["0.5 * (1 - v.particle_age / v.particle_lifetime)", "0.5 * (1 - v.particle_age / v.particle_lifetime)"], 32, 32),
         "minecraft:particle_appearance_tinting": gradient({
             "0.0": [0.6, 1.0, 0.3, 1.0], "1.0": [0.6, 0.2, 1.0, 0.0]}),
+    })
+    # --- Creeper Titan: a lit fuse spitting sparks (its death fuse, and the warning before lightning) --
+    E["fuse_spark"] = effect("zt:fuse_spark", "particles_add", SPARK, {
+        "minecraft:emitter_rate_instant": {"num_particles": 14},
+        "minecraft:emitter_lifetime_once": {"active_time": 0.05},
+        "minecraft:emitter_shape_sphere": {"radius": 0.5, "direction": "outwards"},
+        "minecraft:particle_lifetime_expression": {"max_lifetime": "0.4 + v.particle_random_1 * 0.4"},
+        "minecraft:particle_initial_speed": "3 + v.particle_random_2 * 5",
+        "minecraft:particle_motion_dynamic": {"linear_drag_coefficient": 2.5, "linear_acceleration": [0, -8, 0]},
+        "minecraft:particle_appearance_billboard": billboard(
+            ["0.3 + v.particle_random_3 * 0.25", "0.3 + v.particle_random_3 * 0.25"], 16, 16),
+        "minecraft:particle_appearance_tinting": gradient({
+            "0.0": [1.0, 1.0, 0.85, 1.0], "0.4": [1.0, 0.75, 0.2, 1.0], "1.0": [0.9, 0.3, 0.05, 0.0]}),
+    })
+    # --- Gum Gum Fruit ------------------------------------------------------------------------
+    # Gatling: rubber fists blurring forward along v.dir
+    E["gum_fists"] = effect("zt:gum_fists", "particles_blend", GUM_FIST, {
+        "minecraft:emitter_rate_instant": {"num_particles": 6},
+        "minecraft:emitter_lifetime_once": {"active_time": 0.05},
+        "minecraft:emitter_shape_point": {
+            "offset": ["(v.particle_random_1 - 0.5) * 2.2", "(v.particle_random_2 - 0.5) * 1.4", "(v.particle_random_3 - 0.5) * 2.2"],
+            "direction": ["v.dir.x", "v.dir.y", "v.dir.z"],
+        },
+        "minecraft:particle_lifetime_expression": {"max_lifetime": "0.14 + v.particle_random_4 * 0.08"},
+        "minecraft:particle_initial_speed": "14 + v.particle_random_4 * 6",
+        "minecraft:particle_motion_dynamic": {"linear_drag_coefficient": 5},
+        "minecraft:particle_appearance_billboard": billboard(
+            ["0.45 + v.particle_random_2 * 0.2", "0.45 + v.particle_random_2 * 0.2"], 16, 16),
+        "minecraft:particle_appearance_tinting": gradient({
+            "0.0": [1, 1, 1, 0.0], "0.15": [1, 1, 1, 1.0], "0.75": [1, 1, 1, 0.85], "1.0": [1, 1, 1, 0.0]}),
+    })
+    # a punch landing: a white shock ring and a puff of dust
+    E["gum_impact"] = effect("zt:gum_impact", "particles_add", RING, {
+        "minecraft:emitter_rate_instant": {"num_particles": 3},
+        "minecraft:emitter_lifetime_once": {"active_time": 0.05},
+        "minecraft:emitter_shape_point": {},
+        "minecraft:particle_lifetime_expression": {"max_lifetime": "0.25 + v.particle_random_1 * 0.1"},
+        "minecraft:particle_appearance_billboard": billboard(
+            ["0.4 + v.particle_age * 9", "0.4 + v.particle_age * 9"], 64, 64),
+        "minecraft:particle_appearance_tinting": gradient({
+            "0.0": [1.0, 1.0, 1.0, 0.95], "1.0": [1.0, 0.85, 0.75, 0.0]}),
+    })
+    # Gear 2: steam pouring off the skin
+    E["gum_steam"] = effect("zt:gum_steam", "particles_blend", SMOKE, {
+        "minecraft:emitter_rate_instant": {"num_particles": 6},
+        "minecraft:emitter_lifetime_once": {"active_time": 0.05},
+        "minecraft:emitter_shape_box": {"offset": [0, 0.95, 0], "half_dimensions": [0.35, 0.9, 0.35], "direction": "outwards"},
+        "minecraft:particle_lifetime_expression": {"max_lifetime": "1.0 + v.particle_random_1 * 0.6"},
+        "minecraft:particle_initial_speed": "0.4 + v.particle_random_2 * 0.4",
+        "minecraft:particle_motion_dynamic": {"linear_drag_coefficient": 1.2, "linear_acceleration": [0, 1.4, 0]},
+        "minecraft:particle_appearance_billboard": billboard(
+            ["0.25 + v.particle_age * 0.7", "0.25 + v.particle_age * 0.7"], 64, 16, flipbook=SMOKE_FLIP),
+        "minecraft:particle_appearance_tinting": gradient({
+            "0.0": [1.0, 0.92, 0.94, 0.75], "1.0": [1.0, 1.0, 1.0, 0.0]}),
+    })
+    # Stamp: chunks of ground thrown into the air
+    E["gum_debris"] = effect("zt:gum_debris", "particles_alpha", SPARK, {
+        "minecraft:emitter_rate_instant": {"num_particles": 46},
+        "minecraft:emitter_lifetime_once": {"active_time": 0.05},
+        "minecraft:emitter_shape_disc": {"radius": "v.radius * 0.6", "plane_normal": "y", "direction": [
+            "v.particle_random_1 - 0.5", "1.5 + v.particle_random_2", "v.particle_random_3 - 0.5"]},
+        "minecraft:particle_lifetime_expression": {"max_lifetime": "1.2 + v.particle_random_1 * 0.8"},
+        "minecraft:particle_initial_speed": "6 + v.particle_random_2 * 8",
+        "minecraft:particle_motion_dynamic": {"linear_drag_coefficient": 0.4, "linear_acceleration": [0, -20, 0]},
+        "minecraft:particle_motion_collision": {"collision_radius": 0.15, "coefficient_of_restitution": 0.2,
+                                                "collision_drag": 4},
+        "minecraft:particle_appearance_billboard": billboard(
+            ["0.25 + v.particle_random_3 * 0.35", "0.25 + v.particle_random_3 * 0.35"], 16, 16),
+        "minecraft:particle_appearance_tinting": {"color": [
+            "0.36 + v.particle_random_4 * 0.25", "0.27 + v.particle_random_4 * 0.25", "0.18 + v.particle_random_4 * 0.25", 1.0]},
+    })
+    # Jet moves and the Rocket: a pink-white speed streak
+    E["gum_trail"] = effect("zt:gum_trail", "particles_add", GLOW, {
+        "minecraft:emitter_rate_instant": {"num_particles": 8},
+        "minecraft:emitter_lifetime_once": {"active_time": 0.05},
+        "minecraft:emitter_shape_sphere": {"radius": 0.45, "direction": "outwards"},
+        "minecraft:particle_lifetime_expression": {"max_lifetime": "0.3 + v.particle_random_1 * 0.25"},
+        "minecraft:particle_initial_speed": 0.3,
+        "minecraft:particle_motion_dynamic": {"linear_drag_coefficient": 2.0},
+        "minecraft:particle_appearance_billboard": billboard(
+            ["0.55 * (1 - v.particle_age / v.particle_lifetime)", "0.55 * (1 - v.particle_age / v.particle_lifetime)"], 32, 32),
+        "minecraft:particle_appearance_tinting": gradient({
+            "0.0": [1.0, 0.75, 0.85, 1.0], "1.0": [1.0, 0.4, 0.55, 0.0]}),
     })
     return E
 

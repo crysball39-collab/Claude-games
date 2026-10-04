@@ -25,6 +25,42 @@ def load_json(path):
 
 
 # ---------------------------------------------------------------- molang (subset)
+def ternaries(e):
+    """Rewrite Molang `cond ? a : b` (nested and parenthesised too) as Python `(a if cond else b)`."""
+    out, i = "", 0
+    while i < len(e):
+        if e[i] == "(":
+            depth, j = 1, i + 1
+            while depth:
+                depth += {"(": 1, ")": -1}.get(e[j], 0)
+                j += 1
+            out += "(" + ternaries(e[i + 1:j - 1]) + ")"
+            i = j
+        else:
+            out += e[i]
+            i += 1
+    depth, q = 0, -1
+    for k, ch in enumerate(out):
+        depth += {"(": 1, ")": -1}.get(ch, 0)
+        if ch == "?" and depth == 0:
+            q = k
+            break
+    if q < 0:
+        return out
+    depth, nest, colon = 0, 0, -1
+    for k in range(q + 1, len(out)):
+        ch = out[k]
+        depth += {"(": 1, ")": -1}.get(ch, 0)
+        if depth == 0 and ch == "?":
+            nest += 1
+        elif depth == 0 and ch == ":":
+            if nest == 0:
+                colon = k
+                break
+            nest -= 1
+    return "((%s) if (%s) else (%s))" % (out[q + 1:colon], out[:q], ternaries(out[colon + 1:]))
+
+
 def molang(expr, t, ctx=None):
     if isinstance(expr, (int, float)):
         return float(expr)
@@ -36,6 +72,7 @@ def molang(expr, t, ctx=None):
     e = re.sub(r"\bq(uery)?\.life_time\b", "__t", e)
     e = re.sub(r"\bq(uery)?\.property\('([^']+)'\)", lambda m: repr(ctx.get(m.group(2), 0)), e)
     e = re.sub(r"\b(v|variable)\.([a-z_0-9]+)", lambda m: repr(ctx.get("v." + m.group(2), 0)), e)
+    e = re.sub(r"\bq(?:uery)?\.([a-z_0-9]+)\b(?!\()", lambda m: repr(ctx.get("q." + m.group(1), 0)), e)
     e = re.sub(r"\bmath\.sin\(", "__sin(", e)
     e = re.sub(r"\bmath\.cos\(", "__cos(", e)
     e = re.sub(r"\bmath\.abs\(", "abs(", e)
@@ -44,23 +81,23 @@ def molang(expr, t, ctx=None):
     e = re.sub(r"\bmath\.clamp\(", "__clamp(", e)
     e = re.sub(r"\bmath\.mod\(", "__mod(", e)
     e = re.sub(r"\bmath\.lerp\(", "__lerp(", e)
+    e = re.sub(r"\bmath\.pow\(", "pow(", e)
+    e = re.sub(r"\bmath\.sqrt\(", "__sqrt(", e)
     e = re.sub(r"\bmath\.pi\b", repr(math.pi), e)
     e = re.sub(r"\bthis\b", "0", e)
     e = e.replace("&&", " and ").replace("||", " or ")
     e = re.sub(r"!(?!=)", " not ", e)
-    # ternary  a ? b : c  ->  (b if a else c)   (single level is enough here)
-    m = re.match(r"^(.*?)\?(.*):(.*)$", e)
-    if m:
-        e = "((%s) if (%s) else (%s))" % (m.group(2), m.group(1), m.group(3))
+    e = ternaries(e)
     env = {
         "__t": t,
         "__sin": lambda d: math.sin(math.radians(d)),
         "__cos": lambda d: math.cos(math.radians(d)),
         "__clamp": lambda v, a, b: max(a, min(b, v)),
+        "__sqrt": lambda v: math.sqrt(max(0.0, v)),
         "__mod": lambda a, b: math.fmod(a, b),
         "__lerp": lambda a, b, k: a + (b - a) * k,
     }
-    return float(eval(e, {"__builtins__": {"abs": abs, "min": min, "max": max}}, env))
+    return float(eval(e, {"__builtins__": {"abs": abs, "min": min, "max": max, "pow": pow}}, env))
 
 
 def sample_channel(ch, t, length, ctx):

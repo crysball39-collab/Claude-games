@@ -1,0 +1,18 @@
+{
+	"format_version": "1.8.0",
+	"animations": {
+		"animation.zt.creeper_minion.cast": {
+			"loop": true,
+			"animation_length": 0.5,
+			"bones": {
+				"head": {
+					"rotation": [
+						"-20 + math.sin(q.anim_time * 720) * 10",
+						0,
+						0
+					]
+				}
+			}
+		}
+	}
+}

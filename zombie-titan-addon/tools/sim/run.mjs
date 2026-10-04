@@ -8,7 +8,7 @@ import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const TESTS = ["smoke", "skeleton", "items"];
+const TESTS = ["smoke", "skeleton", "creeper", "items", "gumgum"];
 
 const here = dirname(fileURLToPath(import.meta.url));
 const work = mkdtempSync(join(tmpdir(), "zt-sim-"));

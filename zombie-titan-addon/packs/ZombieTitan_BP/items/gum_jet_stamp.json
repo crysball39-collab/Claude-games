@@ -1,0 +1,35 @@
+{
+	"format_version": "1.21.90",
+	"minecraft:item": {
+		"description": {
+			"identifier": "zt:gum_jet_stamp",
+			"menu_category": {
+				"category": "none"
+			}
+		},
+		"components": {
+			"minecraft:icon": "zt_gum_jet_stamp",
+			"minecraft:display_name": {
+				"value": "item.zt:gum_jet_stamp.name"
+			},
+			"minecraft:max_stack_size": 1,
+			"minecraft:hand_equipped": true,
+			"minecraft:can_destroy_in_creative": false,
+			"minecraft:rarity": "epic",
+			"minecraft:tags": {
+				"tags": [
+					"zt:gum_ability"
+				]
+			},
+			"minecraft:use_modifiers": {
+				"use_duration": 0.25,
+				"movement_modifier": 1.0
+			},
+			"minecraft:cooldown": {
+				"category": "zt_gum_stamp",
+				"duration": 0.25,
+				"type": "use"
+			}
+		}
+	}
+}

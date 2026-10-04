@@ -46,6 +46,48 @@
 		},
 		"zt_growth_serum": {
 			"textures": "textures/items/zt_growth_serum"
+		},
+		"zt_creeper_titan_egg": {
+			"textures": "textures/items/zt_creeper_titan_egg"
+		},
+		"zt_creeper_minion_egg": {
+			"textures": "textures/items/zt_creeper_minion_egg"
+		},
+		"zt_gum_gum_fruit": {
+			"textures": "textures/items/zt_gum_gum_fruit"
+		},
+		"zt_gum_pistol": {
+			"textures": "textures/items/zt_gum_pistol"
+		},
+		"zt_gum_bazooka": {
+			"textures": "textures/items/zt_gum_bazooka"
+		},
+		"zt_gum_gatling": {
+			"textures": "textures/items/zt_gum_gatling"
+		},
+		"zt_gum_stamp": {
+			"textures": "textures/items/zt_gum_stamp"
+		},
+		"zt_gum_rocket": {
+			"textures": "textures/items/zt_gum_rocket"
+		},
+		"zt_gum_gear2": {
+			"textures": "textures/items/zt_gum_gear2"
+		},
+		"zt_gum_jet_pistol": {
+			"textures": "textures/items/zt_gum_jet_pistol"
+		},
+		"zt_gum_jet_bazooka": {
+			"textures": "textures/items/zt_gum_jet_bazooka"
+		},
+		"zt_gum_jet_gatling": {
+			"textures": "textures/items/zt_gum_jet_gatling"
+		},
+		"zt_gum_jet_stamp": {
+			"textures": "textures/items/zt_gum_jet_stamp"
+		},
+		"zt_gum_jet_rocket": {
+			"textures": "textures/items/zt_gum_jet_rocket"
 		}
 	}
 }

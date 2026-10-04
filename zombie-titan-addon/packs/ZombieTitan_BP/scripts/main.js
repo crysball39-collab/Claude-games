@@ -1,6 +1,8 @@
 // Titans add-on: wires game events to the titan, minion and item logic.
 import { system, world } from "@minecraft/server";
 import * as DF from "./darkfists.js";
+import * as FallGuard from "./fallguard.js";
+import * as Gum from "./gumgum.js";
 import { minionTick } from "./minions.js";
 import * as Obsidian from "./obsidian.js";
 import * as Serum from "./serum.js";
@@ -39,8 +41,13 @@ world.afterEvents.entityHurt.subscribe(
 
 world.afterEvents.entityHurt.subscribe(
   safe(({ hurtEntity, damage, damageSource }) => {
-    if (damageSource.cause === "fall") Obsidian.onPlayerFell(/** @type {import("@minecraft/server").Player} */ (hurtEntity), damage);
+    if (damageSource.cause === "fall") FallGuard.onFall(/** @type {import("@minecraft/server").Player} */ (hurtEntity), damage);
   }),
+  { entityTypes: ["minecraft:player"] },
+);
+
+world.afterEvents.entityDie.subscribe(
+  safe(({ deadEntity }) => Gum.onDeath(/** @type {import("@minecraft/server").Player} */ (deadEntity))),
   { entityTypes: ["minecraft:player"] },
 );
 
@@ -82,16 +89,33 @@ world.afterEvents.projectileHitEntity.subscribe(
 
 /** @param {import("@minecraft/server").ItemUseAfterEvent | import("@minecraft/server").ItemStartUseAfterEvent} ev */
 function itemUsed({ source, itemStack }) {
-  if (itemStack?.typeId === DF.ITEM) DF.onUse(source);
-  else if (itemStack?.typeId === Obsidian.SWORD) Obsidian.onUse(source);
+  const id = itemStack?.typeId;
+  if (id === DF.ITEM) DF.onUse(source);
+  else if (id === Obsidian.SWORD) Obsidian.onUse(source);
+  else if (id && Gum.ABILITY_IDS.includes(id)) Gum.onUse(source, id);
 }
 world.afterEvents.itemUse.subscribe(safe(itemUsed));
 world.afterEvents.itemStartUse.subscribe(safe(itemUsed));
+
+// eating the Gum Gum Fruit
+world.afterEvents.itemCompleteUse.subscribe(
+  safe(({ source, itemStack }) => {
+    if (itemStack?.typeId === Gum.FRUIT) Gum.onEat(source);
+  }),
+);
+
+// one leaf block in 100,000 drops a Gum Gum Fruit
+world.afterEvents.playerBreakBlock.subscribe(
+  safe(({ player, block, brokenBlockPermutation }) => Gum.onBlockBroken(player, brokenBlockPermutation.type.id, block.location)),
+);
+
+world.afterEvents.playerSpawn.subscribe(safe(({ player }) => Gum.onSpawn(player)));
 
 world.afterEvents.playerLeave.subscribe(
   safe(({ playerId }) => {
     DF.forgetPlayer(playerId);
     Obsidian.forgetPlayer(playerId);
+    Gum.forgetPlayer(playerId);
   }),
 );
 
@@ -118,6 +142,7 @@ system.runInterval(() => {
     minionTick(tick);
     DF.darkFistsTick(tick);
     Obsidian.obsidianTick(tick);
+    Gum.gumTick(tick);
     if (tick % 600 === 300) Titan.naturalSpawnTick();
   } catch (err) {
     console.warn("[Titans] tick: " + err);

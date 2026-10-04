@@ -140,6 +140,101 @@
 			"textures": [
 				"Array.skins[q.variant]"
 			]
+		},
+		"controller.render.zt.creeper_titan": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			],
+			"overlay_color": {
+				"r": "q.property('zt:enraged') ? 0.45 : this",
+				"g": "q.property('zt:enraged') ? 0.75 : this",
+				"b": "q.property('zt:enraged') ? 1.0 : this",
+				"a": "q.property('zt:enraged') ? (0.1 + math.sin(q.life_time * 300.0) * 0.06) : this"
+			}
+		},
+		"controller.render.zt.creeper_titan_charged": {
+			"geometry": "Geometry.charged",
+			"materials": [
+				{
+					"*": "Material.charged"
+				}
+			],
+			"textures": [
+				"Texture.charged"
+			],
+			"overlay_color": {
+				"r": 1.0,
+				"g": 1.0,
+				"b": 1.0,
+				"a": 1.0
+			},
+			"uv_anim": {
+				"offset": [
+					"(math.floor(q.life_time * 20.0) + q.frame_alpha) * 0.01",
+					"(math.floor(q.life_time * 20.0) + q.frame_alpha) * 0.01"
+				],
+				"scale": [
+					1.0,
+					1.0
+				]
+			},
+			"light_color_multiplier": 0.5,
+			"ignore_lighting": true
+		},
+		"controller.render.zt.creeper_titan_corpse": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			],
+			"part_visibility": [
+				{
+					"*": "q.property('zt:fuse') < 1.0"
+				}
+			],
+			"overlay_color": {
+				"r": "math.mod(math.floor(math.pow(q.property('zt:fuse'), 2) * 44.0), 2) == 1 ? 1.0 : this",
+				"g": "math.mod(math.floor(math.pow(q.property('zt:fuse'), 2) * 44.0), 2) == 1 ? 1.0 : this",
+				"b": "math.mod(math.floor(math.pow(q.property('zt:fuse'), 2) * 44.0), 2) == 1 ? 1.0 : this",
+				"a": "math.mod(math.floor(math.pow(q.property('zt:fuse'), 2) * 44.0), 2) == 1 ? 0.6 : this"
+			}
+		},
+		"controller.render.zt.creeper_minion": {
+			"arrays": {
+				"textures": {
+					"Array.skins": [
+						"Texture.loyalist",
+						"Texture.priest",
+						"Texture.zealot",
+						"Texture.templar"
+					]
+				}
+			},
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Array.skins[q.variant]"
+			],
+			"overlay_color": {
+				"r": "((variable.flash == 0.0) || (query.swelling_dir < 0.0)) ? this : 1.0",
+				"g": "((variable.flash == 0.0) || (query.swelling_dir < 0.0)) ? this : 1.0",
+				"b": "((variable.flash == 0.0) || (query.swelling_dir < 0.0)) ? this : 1.0",
+				"a": "((variable.flash == 0.0) || (query.swelling_dir < 0.0)) ? this : 0.5"
+			}
 		}
 	}
 }

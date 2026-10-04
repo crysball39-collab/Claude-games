@@ -1,9 +1,9 @@
 {
 	"namespace": "hud",
 
-	// Every boss bar goes through this panel. A bar whose name contains "Zombie Titan" or
-	// "Skeleton Titan" (the minecraft:boss names in the titans' behaviour files) gets that
-	// titan's own bar; all others keep the vanilla look. The panel is 36 tall (vanilla: 20)
+	// Every boss bar goes through this panel. A bar whose name contains "Zombie Titan",
+	// "Skeleton Titan" or "Creeper Titan" (the minecraft:boss names in the titans' behaviour
+	// files) gets that titan's own bar; all others keep the vanilla look. The panel is 36 tall (vanilla: 20)
 	// so a second boss bar clears the taller titan bars.
 	"boss_health_panel": {
 		"type": "panel",
@@ -43,7 +43,7 @@
 						},
 						{
 							"binding_type": "view",
-							"source_property_name": "(((#bossName - 'Zombie Titan') = #bossName) and ((#bossName - 'Skeleton Titan') = #bossName))",
+							"source_property_name": "(((#bossName - 'Zombie Titan') = #bossName) and ((#bossName - 'Skeleton Titan') = #bossName) and ((#bossName - 'Creeper Titan') = #bossName))",
 							"target_property_name": "#visible"
 						}
 					]
@@ -54,6 +54,9 @@
 			},
 			{
 				"zt_skeleton_bar@hud.zt_skeleton_bar": {}
+			},
+			{
+				"zt_creeper_bar@hud.zt_creeper_bar": {}
 			}
 		],
 		"bindings": [
@@ -261,6 +264,106 @@
 			{
 				"binding_type": "view",
 				"source_property_name": "(not ((#bossName - 'Skeleton Titan') = #bossName))",
+				"target_property_name": "#visible"
+			}
+		]
+	},
+	"zt_creeper_bar": {
+		"type": "panel",
+		"size": [
+			200,
+			34
+		],
+		"anchor_from": "top_middle",
+		"anchor_to": "top_middle",
+		"controls": [
+			{
+				"creeper_name@hud.boss_name_panel": {}
+			},
+			{
+				"creeper_frame_panel": {
+					"type": "panel",
+					"size": [
+						200,
+						26
+					],
+					"offset": [
+						0,
+						8
+					],
+					"anchor_from": "top_middle",
+					"anchor_to": "top_middle",
+					"controls": [
+						{
+							"creeper_back": {
+								"type": "image",
+								"texture": "textures/ui/zt/creeper_bar_back",
+								"size": [
+									182,
+									6
+								],
+								"offset": [
+									0,
+									13
+								],
+								"anchor_from": "top_middle",
+								"anchor_to": "top_middle",
+								"layer": 1
+							}
+						},
+						{
+							"creeper_fill": {
+								"type": "image",
+								"texture": "textures/ui/zt/creeper_bar_fill",
+								"size": [
+									182,
+									6
+								],
+								"offset": [
+									0,
+									13
+								],
+								"anchor_from": "top_middle",
+								"anchor_to": "top_middle",
+								"layer": 2,
+								"clip_direction": "left",
+								"clip_pixelperfect": false,
+								"bindings": [
+									{
+										"binding_name": "#progress_percentage",
+										"binding_name_override": "#clip_ratio",
+										"binding_type": "collection",
+										"binding_collection_name": "boss_bars"
+									}
+								]
+							}
+						},
+						{
+							"creeper_frame": {
+								"type": "image",
+								"texture": "textures/ui/zt/creeper_bar_frame",
+								"size": [
+									200,
+									26
+								],
+								"anchor_from": "top_middle",
+								"anchor_to": "top_middle",
+								"layer": 3
+							}
+						}
+					]
+				}
+			}
+		],
+		"bindings": [
+			{
+				"binding_type": "collection",
+				"binding_collection_name": "boss_bars",
+				"binding_name": "#bossName"
+			},
+			{
+				"binding_type": "view",
+				"source_property_name": "(not ((#bossName - 'Creeper Titan') = #bossName))",
 				"target_property_name": "#visible"
 			}
 		]

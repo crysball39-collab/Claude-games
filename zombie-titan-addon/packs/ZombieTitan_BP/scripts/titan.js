@@ -1,9 +1,11 @@
 // Titans: the shared loop that runs every titan type. Each tick a titan
 // heals, picks a target, walks toward it and starts or plays an attack; the
-// attacks themselves come from its type (zombie_titan.js, skeleton_titan.js).
+// attacks themselves come from its type (zombie_titan.js, skeleton_titan.js,
+// creeper_titan.js).
 // Also here: the rise-from-the-ground birth, death -> corpse, loot, natural
 // night spawns and the Growth Serum turning mobs into titans.
 import { Difficulty, world } from "@minecraft/server";
+import { CREEPER_TITAN } from "./creeper_titan.js";
 import { SKELETON_TITAN } from "./skeleton_titan.js";
 import * as C from "./titan_common.js";
 import * as U from "./util.js";
@@ -14,7 +16,7 @@ import { ZOMBIE_TITAN } from "./zombie_titan.js";
 /** @typedef {import("@minecraft/server").Vector3} Vector3 */
 
 /** @type {Record<string, any>} */
-export const TYPES = { [ZOMBIE_TITAN.id]: ZOMBIE_TITAN, [SKELETON_TITAN.id]: SKELETON_TITAN };
+export const TYPES = { [ZOMBIE_TITAN.id]: ZOMBIE_TITAN, [SKELETON_TITAN.id]: SKELETON_TITAN, [CREEPER_TITAN.id]: CREEPER_TITAN };
 export const TITAN_IDS = Object.keys(TYPES);
 export const CORPSE_IDS = TITAN_IDS.map((id) => TYPES[id].corpse);
 export const MINION_IDS = TITAN_IDS.map((id) => TYPES[id].minion);
@@ -310,6 +312,7 @@ function tickTitan(e, s) {
     s.target = pickTarget(e, s);
   }
   const target = s.target;
+  T.everyTick?.(e, s, target, fury);
 
   // ----- running an attack
   if (s.anim !== C.NONE) {
@@ -486,17 +489,18 @@ export function onTitanDied(dead, damageSource) {
     /* the vanilla death animation plays instead */
   }
   let corpse;
+  let extra;
   try {
     corpse = dim.spawnEntity(T.corpse, loc);
     corpse.setRotation({ x: 0, y: yaw });
-    T.corpseInit?.(corpse, s);
+    extra = T.corpseInit?.(corpse, s);
   } catch (err) {
     C.warn("corpse: " + err);
     return;
   }
   let killer = damageSource?.damagingEntity;
   if (!U.isValid(killer) || killer.typeId !== "minecraft:player") killer = undefined;
-  C.corpses.set(corpse.id, { T, entity: corpse, t: 0, killer, armed: !!s.armed, yaw, loc: { x: loc.x, y: loc.y, z: loc.z } });
+  C.corpses.set(corpse.id, { T, entity: corpse, t: 0, killer, armed: !!s.armed, yaw, loc: { x: loc.x, y: loc.y, z: loc.z }, ...extra });
   const who = killer ? " by §f" + /** @type {Player} */ (killer).name + "§a" : "";
   U.tell(dim, loc, 200, `§a§lThe ${T.name} has been slain${who}!`);
 }
@@ -544,7 +548,7 @@ function tickCorpse(c) {
 }
 
 // =============================================================================
-// Growth Serum: a zombie or skeleton splashed with it grows into its titan
+// Growth Serum: a zombie, skeleton or creeper splashed with it grows into its titan
 // =============================================================================
 /** Mobs with a titan version of themselves, and the titan each one becomes. */
 /** @type {Record<string, string>} */
@@ -559,6 +563,8 @@ export const GROWS_INTO = {
   "minecraft:stray": SKELETON_TITAN.id,
   "minecraft:bogged": SKELETON_TITAN.id,
   [SKELETON_TITAN.minion]: SKELETON_TITAN.id,
+  "minecraft:creeper": CREEPER_TITAN.id,
+  [CREEPER_TITAN.minion]: CREEPER_TITAN.id,
 };
 
 /** "minecraft:zombie_villager_v2" -> "Zombie Villager" @param {string} typeId */
@@ -641,7 +647,7 @@ export function naturalSpawnTick() {
   for (const p of dim.getPlayers()) {
     if (!U.isVulnerablePlayer(p) || !U.chance(0.012)) continue;
     if (titanNear(dim, p.location, 256)) continue;
-    const T = U.chance(0.5) ? ZOMBIE_TITAN : SKELETON_TITAN;
+    const T = [ZOMBIE_TITAN, SKELETON_TITAN, CREEPER_TITAN][U.randInt(0, 2)];
     for (let attempt = 0; attempt < 6; attempt++) {
       const a = Math.random() * Math.PI * 2;
       const r = U.rand(48, 72);

@@ -78,7 +78,7 @@ export function onSerumHit(dim, location, hit, thrower) {
   U.sound(dim, "zt.serum.shatter", location, 1, 1);
   const mob = pickMob(dim, location, hit);
   if (!mob) {
-    tell(thrower, "§7The Growth Serum splashes, but nothing here has a titan form. §8(zombies and skeletons do)");
+    tell(thrower, "§7The Growth Serum splashes, but nothing here has a titan form. §8(zombies, skeletons and creepers do)");
     return;
   }
   let at;

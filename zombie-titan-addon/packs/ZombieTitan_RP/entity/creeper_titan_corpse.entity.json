@@ -1,0 +1,39 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:creeper_titan_corpse",
+			"materials": {
+				"default": "entity_emissive_alpha",
+				"charged": "charged_creeper"
+			},
+			"textures": {
+				"default": "textures/entity/creeper_titan/creeper_titan",
+				"charged": "textures/entity/creeper/creeper_armor"
+			},
+			"geometry": {
+				"default": "geometry.zt.creeper_titan",
+				"charged": "geometry.zt.creeper_titan.charged"
+			},
+			"scripts": {
+				"scale": "16.0",
+				"should_update_bones_and_effects_offscreen": "1.0",
+				"should_update_effects_offscreen": "1.0",
+				"animate": [
+					"death",
+					"swell"
+				]
+			},
+			"animations": {
+				"death": "animation.zt.creeper.death",
+				"swell": "animation.zt.creeper.swell"
+			},
+			"render_controllers": [
+				"controller.render.zt.creeper_titan_corpse",
+				{
+					"controller.render.zt.creeper_titan_charged": "q.property('zt:enraged') && q.property('zt:fuse') < 1.0"
+				}
+			]
+		}
+	}
+}

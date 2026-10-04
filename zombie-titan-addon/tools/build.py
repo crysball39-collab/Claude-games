@@ -29,6 +29,12 @@ GENERATORS = (
     "gen_sounds.py",
     "gen_items_art.py",
     "gen_items_data.py",
+    "gen_creeper_art.py",
+    "gen_creeper_anims.py",
+    "gen_creeper_data.py",
+    "gen_gum_art.py",
+    "gen_gum_anims.py",
+    "gen_gum_data.py",
 )
 SKIP = re.compile(r"(^|/)(\.|__pycache__|Thumbs\.db$)")
 STAMP = (2026, 1, 1, 0, 0, 0)

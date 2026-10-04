@@ -1,0 +1,111 @@
+{
+	"format_version": "1.8.0",
+	"render_controllers": {
+		"controller.render.zt.player.first_person": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			],
+			"part_visibility": [
+				{
+					"*": false
+				},
+				{
+					"rightArm": "variable.zt_gum_held || query.get_equipped_item_name(0, 1) == '' || query.get_equipped_item_name(0, 1) == 'filled_map'"
+				},
+				{
+					"rightSleeve": "variable.zt_gum_held || query.get_equipped_item_name(0, 1) == '' || query.get_equipped_item_name(0, 1) == 'filled_map'"
+				},
+				{
+					"leftArm": "variable.zt_both_arms || (!variable.zt_gum_held && ((query.get_equipped_item_name(0, 1) == 'filled_map' && query.get_equipped_item_name('off_hand') != 'shield') || (query.get_equipped_item_name('off_hand') == 'filled_map' && !query.item_is_charged) || (!query.item_is_charged && (variable.item_use_normalized > 0 && variable.item_use_normalized < 1.0))))"
+				},
+				{
+					"leftSleeve": "variable.zt_both_arms || (!variable.zt_gum_held && ((query.get_equipped_item_name(0, 1) == 'filled_map' && query.get_equipped_item_name('off_hand') != 'shield') || (query.get_equipped_item_name('off_hand') == 'filled_map' && !query.item_is_charged) || (!query.item_is_charged && (variable.item_use_normalized > 0 && variable.item_use_normalized < 1.0))))"
+				},
+				{
+					"rightLeg": "variable.zt_leg"
+				},
+				{
+					"rightPants": "variable.zt_leg"
+				}
+			],
+			"overlay_color": {
+				"r": "variable.zt_gear2 ? 1.0 : this",
+				"g": "variable.zt_gear2 ? 0.42 : this",
+				"b": "variable.zt_gear2 ? 0.56 : this",
+				"a": "variable.zt_gear2 ? 0.42 : this"
+			}
+		},
+		"controller.render.zt.player.third_person": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			],
+			"part_visibility": [
+				{
+					"*": true
+				},
+				{
+					"helmet": "variable.helmet_layer_visible"
+				},
+				{
+					"leftLegging": "variable.leg_layer_visible"
+				},
+				{
+					"rightLegging": "variable.leg_layer_visible"
+				},
+				{
+					"leftBoot": "variable.boot_layer_visible"
+				},
+				{
+					"rightBoot": "variable.boot_layer_visible"
+				},
+				{
+					"leftSock": "variable.boot_layer_visible && variable.leg_layer_visible"
+				},
+				{
+					"rightSock": "variable.boot_layer_visible && variable.leg_layer_visible"
+				},
+				{
+					"bodyArmor": "variable.chest_layer_visible"
+				},
+				{
+					"leftArmArmor": "variable.chest_layer_visible"
+				},
+				{
+					"rightArmArmor": "variable.chest_layer_visible"
+				},
+				{
+					"belt": "variable.chest_layer_visible && variable.leg_layer_visible"
+				}
+			],
+			"overlay_color": {
+				"r": "variable.zt_gear2 ? 1.0 : this",
+				"g": "variable.zt_gear2 ? 0.42 : this",
+				"b": "variable.zt_gear2 ? 0.56 : this",
+				"a": "variable.zt_gear2 ? 0.42 : this"
+			}
+		},
+		"controller.render.zt.bare_hands": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			]
+		}
+	}
+}

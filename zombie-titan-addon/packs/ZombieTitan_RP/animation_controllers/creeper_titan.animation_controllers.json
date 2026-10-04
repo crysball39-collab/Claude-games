@@ -1,0 +1,187 @@
+{
+	"format_version": "1.10.0",
+	"animation_controllers": {
+		"controller.animation.zt.creeper.main": {
+			"initial_state": "default",
+			"states": {
+				"default": {
+					"animations": [
+						"pose",
+						"idle"
+					],
+					"transitions": [
+						{
+							"birth": "q.property('zt:anim') == 13"
+						},
+						{
+							"walk": "q.property('zt:anim') == 0 && q.property('zt:moving')"
+						},
+						{
+							"head_slam": "q.property('zt:anim') == 1"
+						},
+						{
+							"stomp": "q.property('zt:anim') == 2"
+						},
+						{
+							"body_slam": "q.property('zt:anim') == 3"
+						},
+						{
+							"anti_air": "q.property('zt:anim') == 4"
+						},
+						{
+							"kick": "q.property('zt:anim') == 5"
+						},
+						{
+							"tnt": "q.property('zt:anim') == 6"
+						},
+						{
+							"thunder": "q.property('zt:anim') == 7"
+						},
+						{
+							"stun": "q.property('zt:anim') == 8"
+						},
+						{
+							"awaken": "q.property('zt:anim') == 11"
+						},
+						{
+							"leap": "q.property('zt:anim') == 14"
+						}
+					],
+					"blend_transition": 0.3
+				},
+				"walk": {
+					"animations": [
+						"walk"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 0 || !q.property('zt:moving')"
+						}
+					],
+					"blend_transition": 0.3
+				},
+				"birth": {
+					"animations": [
+						"birth"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 13"
+						}
+					],
+					"blend_transition": 0.6
+				},
+				"head_slam": {
+					"animations": [
+						"head_slam"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 1"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"stomp": {
+					"animations": [
+						"stomp"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 2"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"body_slam": {
+					"animations": [
+						"body_slam"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 3"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"anti_air": {
+					"animations": [
+						"anti_air"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 4"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"kick": {
+					"animations": [
+						"kick"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 5"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"tnt": {
+					"animations": [
+						"tnt"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 6"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"thunder": {
+					"animations": [
+						"thunder"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 7"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"stun": {
+					"animations": [
+						"stun"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 8"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"awaken": {
+					"animations": [
+						"awaken"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 11"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"leap": {
+					"animations": [
+						"leap"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 14"
+						}
+					],
+					"blend_transition": 0.25
+				}
+			}
+		}
+	}
+}

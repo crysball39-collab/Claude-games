@@ -133,9 +133,18 @@ def main():
     def known_vanilla(ref):
         # without bedrock-samples, anything outside our zt namespace is taken to be vanilla
         return ref in vanilla if vanilla is not None else ".zt." not in ref
-    # textures referenced by client entities, render setup and UI
+    # textures referenced by client entities, render setup and UI (ours, or vanilla ones such as the
+    # charged-creeper swirl when bedrock-samples is at hand)
+    vanilla_rp = os.path.abspath(os.path.join(sys.argv[1], "..", "..", "resource_pack")) if len(sys.argv) > 1 else None
+
+    ours = ("/zt", "zombie_titan", "skeleton_titan", "creeper_titan", "_minion", "titan_arrow", "proto_ball")
+
     def tex_exists(ref):
-        return any(os.path.exists(os.path.join(RP, ref + ext)) for ext in (".png", ".tga"))
+        roots = [RP] + ([vanilla_rp] if vanilla_rp and not ref.startswith("textures/ui/zt") else [])
+        if any(os.path.exists(os.path.join(root, ref + ext)) for root in roots for ext in (".png", ".tga")):
+            return True
+        # without bedrock-samples a vanilla texture (the player's skin, the charged-creeper swirl) can't be checked
+        return not vanilla_rp and not any(o in ref for o in ours)
 
     geos = set()
     for p in glob.glob(os.path.join(RP, "models", "entity", "*.json")):
@@ -161,7 +170,7 @@ def main():
     for p in glob.glob(os.path.join(RP, "entity", "*.json")):
         d = load(p)["minecraft:client_entity"]["description"]
         ident = d["identifier"]
-        if ident not in bp_ids:
+        if ident not in bp_ids and not ident.startswith("minecraft:"):
             problem(f"client entity {ident} has no behaviour entity")
         for t in d.get("textures", {}).values():
             if not tex_exists(t):
@@ -170,7 +179,8 @@ def main():
             if g not in geos and not known_vanilla(g):
                 problem(f"{ident}: geometry {g} missing")
         for name, a in d.get("animations", {}).items():
-            if a not in anims and a not in ctrls and not known_vanilla(a):
+            # (an overridden vanilla entity, like the player, also names engine-internal animations)
+            if a not in anims and a not in ctrls and not known_vanilla(a) and not ident.startswith("minecraft:"):
                 problem(f"{ident}: animation {a} missing")
         for entry in d.get("animation_controllers", []):
             for a in entry.values():
@@ -191,14 +201,57 @@ def main():
         for prop in re.findall(r"q(?:uery)?\.property\('([^']+)'\)", text):
             if prop not in bp_props:
                 problem(f"{ident}: uses property {prop} it does not define")
-    # every property referenced by animation controllers / render controllers on the titan exists
-    titan_props = set(bp_ids["zt:zombie_titan"]["properties"].keys())
+    # every property referenced by animation controllers / render controllers exists on some entity
+    all_props = set()
+    for d in bp_ids.values():
+        all_props |= set(d.get("properties", {}).keys())
     for folder in ("animation_controllers", "render_controllers", "animations"):
         for p in glob.glob(os.path.join(RP, folder, "*.json")):
             for prop in re.findall(r"q(?:uery)?\.property\('([^']+)'\)", open(p).read()):
-                known = titan_props | set(bp_ids["zt:zombie_minion"]["properties"].keys())
-                if prop not in known:
+                if prop not in all_props:
                     problem(f"{os.path.basename(p)} uses unknown property {prop}")
+    # animations: keyframes, channel shapes and balanced Molang
+    def molang_ok(expr):
+        if not isinstance(expr, str):
+            return True
+        depth = 0
+        for ch in expr:
+            depth += {"(": 1, ")": -1}.get(ch, 0)
+            if depth < 0:
+                return False
+        bare = expr.replace("??", "")      # (the null-coalescing operator)
+        return depth == 0 and bare.count("?") <= bare.count(":")
+
+    def channel_ok(ch):
+        if isinstance(ch, list):
+            return len(ch) == 3 and all(isinstance(v, (int, float)) or molang_ok(v) for v in ch)
+        if isinstance(ch, (int, float, str)):
+            return molang_ok(ch)
+        if isinstance(ch, dict):
+            for k, v in ch.items():
+                try:
+                    float(k)
+                except ValueError:
+                    return False
+                if isinstance(v, dict):
+                    if not all(channel_ok(v[x]) for x in ("pre", "post") if x in v):
+                        return False
+                elif not channel_ok(v):
+                    return False
+            return True
+        return False
+
+    for p in glob.glob(os.path.join(RP, "animations", "*.json")):
+        for name, a in load(p)["animations"].items():
+            for bone, chans in a.get("bones", {}).items():
+                for cname, ch in chans.items():
+                    if cname in ("rotation", "position", "scale") and not channel_ok(ch):
+                        problem(f"{os.path.basename(p)}: {name} {bone}.{cname} is malformed")
+            for t, v in a.get("timeline", {}).items():
+                float(t)
+                for line in (v if isinstance(v, list) else [v]):
+                    if not molang_ok(line) or not line.strip().endswith(";"):
+                        problem(f"{os.path.basename(p)}: {name} timeline {t} is malformed")
     # particle textures
     for p in glob.glob(os.path.join(RP, "particles", "*.json")):
         t = load(p)["particle_effect"]["description"]["basic_render_parameters"]["texture"]
@@ -248,13 +301,11 @@ def main():
             problem(f"{os.path.basename(p)}: icon {icon} missing from item_texture.json")
     # particles, entities, items and blocks used by scripts exist
     pids = {load(p)["particle_effect"]["description"]["identifier"] for p in glob.glob(os.path.join(RP, "particles", "*.json"))}
-    for pid in set(re.findall(r'"(zt:[a-z_]+)"', scripts)):
+    for pid in set(re.findall(r'"(zt:[a-z_]*[a-z])"', scripts)):  # (ids built from a prefix like "zt:gum_" skipped)
         if pid.startswith("zt:") and pid not in pids and pid not in bp_ids and pid not in item_ids:
             if not pid.startswith("zt:as_") and pid not in ("zt:start_birth", "zt:end_birth", "zt:natural_spawns",
-                                                            "zt:anim", "zt:moving", "zt:armed", "zt:enraged",
-                                                            "zt:birth", "zt:grow", "zt:casting", "zt:looted",
-                                                            "zt:df_mode", "zt:natural_spawns", "zt:last_natural_spawn",
-                                                            "zt:stunned") and pid not in block_ids:
+                                                            "zt:looted", "zt:df_mode", "zt:last_natural_spawn", "zt:gum_gum",
+                                                            ) and pid not in all_props and pid not in block_ids:
                 problem(f"script references unknown id {pid}")
     ours = item_ids | block_ids | {d for d in bp_ids}
     for p in glob.glob(os.path.join(BP, "recipes", "*.json")):

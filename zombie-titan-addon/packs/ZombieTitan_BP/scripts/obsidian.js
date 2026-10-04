@@ -2,6 +2,7 @@
 //   Obsidian Sword - 15 damage; tap and hold (use) to launch yourself forward
 //   Full armor set - Resistance I while all four obsidian pieces are worn
 import { EquipmentSlot, system, world } from "@minecraft/server";
+import * as FallGuard from "./fallguard.js";
 import * as U from "./util.js";
 /** @typedef {import("@minecraft/server").Player} Player */
 
@@ -21,14 +22,14 @@ const ARMOR = [
   [EquipmentSlot.Feet, "zt:obsidian_boots"],
 ];
 
-/** @type {Map<string, {readyAt: number, lastUse: number, trailUntil: number, safeUntil: number}>} */
+/** @type {Map<string, {readyAt: number, lastUse: number, trailUntil: number}>} */
 const players = new Map();
 
 /** @param {Player} p */
 function stateOf(p) {
   let s = players.get(p.id);
   if (!s) {
-    s = { readyAt: 0, lastUse: -1, trailUntil: 0, safeUntil: 0 };
+    s = { readyAt: 0, lastUse: -1, trailUntil: 0 };
     players.set(p.id, s);
   }
   return s;
@@ -85,7 +86,7 @@ export function onUse(p) {
   }
   s.readyAt = now + DASH_COOLDOWN;
   s.trailUntil = now + TRAIL_TICKS;
-  s.safeUntil = now + SAFE_LANDING;
+  FallGuard.protect(p, SAFE_LANDING);
   try {
     p.startItemCooldown(DASH_CATEGORY, DASH_COOLDOWN);
   } catch {
@@ -93,19 +94,6 @@ export function onUse(p) {
   }
   U.sound(p.dimension, "zt.obsidian.dash", p.location, 1.2, 1);
   U.particle(p.dimension, "zt:dash_trail", U.add(p.location, { x: 0, y: 1, z: 0 }));
-}
-
-/** Fall damage right after a dash is undone, so a launch never ends in a painful landing. */
-/** @param {Player} p @param {number} damage */
-export function onPlayerFell(p, damage) {
-  const s = players.get(p.id);
-  if (!s || system.currentTick > s.safeUntil) return;
-  try {
-    const hp = p.getComponent("minecraft:health");
-    if (hp && hp.currentValue > 0) hp.setCurrentValue(Math.min(hp.effectiveMax, hp.currentValue + damage));
-  } catch {
-    /* ignore */
-  }
 }
 
 /** @param {number} tick */
