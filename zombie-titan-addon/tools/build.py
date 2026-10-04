@@ -19,7 +19,17 @@ PACKS = os.path.join(ROOT, "packs")
 DIST = os.path.join(ROOT, "dist")
 OUT = os.path.join(DIST, "ZombieTitan.mcaddon")
 PACK_DIRS = ("ZombieTitan_BP", "ZombieTitan_RP")
-GENERATORS = ("gen_textures.py", "gen_animations.py", "gen_particles.py", "gen_sounds.py")
+GENERATORS = (
+    "gen_textures.py",
+    "gen_models.py",  # skeleton geometry; gen_skeleton_art.py paints its UV layout
+    "gen_skeleton_art.py",
+    "gen_animations.py",
+    "gen_skeleton_anims.py",
+    "gen_particles.py",
+    "gen_sounds.py",
+    "gen_items_art.py",
+    "gen_items_data.py",
+)
 SKIP = re.compile(r"(^|/)(\.|__pycache__|Thumbs\.db$)")
 STAMP = (2026, 1, 1, 0, 0, 0)
 

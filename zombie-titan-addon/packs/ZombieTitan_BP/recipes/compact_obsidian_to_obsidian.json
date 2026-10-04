@@ -1,0 +1,25 @@
+{
+	"format_version": "1.20.10",
+	"minecraft:recipe_shapeless": {
+		"description": {
+			"identifier": "zt:compact_obsidian_to_obsidian"
+		},
+		"tags": [
+			"crafting_table"
+		],
+		"ingredients": [
+			{
+				"item": "zt:compact_obsidian"
+			}
+		],
+		"unlock": [
+			{
+				"item": "zt:compact_obsidian"
+			}
+		],
+		"result": {
+			"item": "minecraft:obsidian",
+			"count": 9
+		}
+	}
+}

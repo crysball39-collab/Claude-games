@@ -10,6 +10,32 @@
 					"death": "zt.titan.death"
 				}
 			},
+			"zt:skeleton_titan": {
+				"volume": 1.0,
+				"pitch": 1.0,
+				"events": {
+					"ambient": "zt.skel.ambient",
+					"hurt": "zt.skel.hurt",
+					"death": "zt.skel.death"
+				}
+			},
+			"zt:skeleton_minion": {
+				"volume": 1.0,
+				"pitch": [
+					0.8,
+					1.0
+				],
+				"events": {
+					"ambient": "mob.skeleton.say",
+					"hurt": "mob.skeleton.hurt",
+					"death": "mob.skeleton.death",
+					"step": {
+						"sound": "mob.skeleton.step",
+						"volume": 0.15,
+						"pitch": 1.0
+					}
+				}
+			},
 			"zt:zombie_minion": {
 				"volume": 1.0,
 				"pitch": [

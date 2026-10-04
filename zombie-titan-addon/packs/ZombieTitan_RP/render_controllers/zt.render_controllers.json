@@ -3,9 +3,19 @@
 	"render_controllers": {
 		"controller.render.zt.zombie_titan": {
 			"geometry": "Geometry.default",
-			"materials": [{"*": "Material.default"}],
-			"textures": ["Texture.default"],
-			"part_visibility": [{"sword": "q.property('zt:armed')"}],
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			],
+			"part_visibility": [
+				{
+					"sword": "q.property('zt:armed')"
+				}
+			],
 			"overlay_color": {
 				"r": "q.property('zt:enraged') ? 0.9 : this",
 				"g": "q.property('zt:enraged') ? 0.05 : this",
@@ -15,24 +25,121 @@
 		},
 		"controller.render.zt.zombie_titan_corpse": {
 			"geometry": "Geometry.default",
-			"materials": [{"*": "Material.default"}],
-			"textures": ["Texture.default"],
-			"part_visibility": [{"sword": "q.property('zt:armed')"}]
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			],
+			"part_visibility": [
+				{
+					"sword": "q.property('zt:armed')"
+				}
+			]
 		},
 		"controller.render.zt.zombie_minion": {
 			"arrays": {
 				"textures": {
-					"Array.skins": ["Texture.loyalist", "Texture.priest", "Texture.zealot", "Texture.templar"]
+					"Array.skins": [
+						"Texture.loyalist",
+						"Texture.priest",
+						"Texture.zealot",
+						"Texture.templar"
+					]
 				}
 			},
 			"geometry": "Geometry.default",
-			"materials": [{"*": "Material.default"}],
-			"textures": ["Array.skins[q.variant]"]
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Array.skins[q.variant]"
+			]
 		},
 		"controller.render.zt.proto_ball": {
 			"geometry": "Geometry.default",
-			"materials": [{"*": "Material.default"}],
-			"textures": ["Texture.default"]
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			]
+		},
+		"controller.render.zt.skeleton_titan": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			],
+			"part_visibility": [
+				{
+					"nockedArrow": "q.property('zt:anim') == 5"
+				}
+			],
+			"overlay_color": {
+				"r": "q.property('zt:enraged') ? 0.9 : this",
+				"g": "q.property('zt:enraged') ? 0.05 : this",
+				"b": "q.property('zt:enraged') ? 0.05 : this",
+				"a": "q.property('zt:enraged') ? (0.12 + math.sin(q.life_time * 240.0) * 0.06) : this"
+			}
+		},
+		"controller.render.zt.skeleton_titan_corpse": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			],
+			"part_visibility": [
+				{
+					"nockedArrow": "false"
+				}
+			]
+		},
+		"controller.render.zt.titan_arrow": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			]
+		},
+		"controller.render.zt.skeleton_minion": {
+			"arrays": {
+				"textures": {
+					"Array.skins": [
+						"Texture.loyalist",
+						"Texture.priest",
+						"Texture.zealot",
+						"Texture.templar"
+					]
+				}
+			},
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Array.skins[q.variant]"
+			]
 		}
 	}
 }

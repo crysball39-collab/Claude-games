@@ -47,9 +47,51 @@ def schema_registry(schema_dir):
     return Registry().with_resources(resources)
 
 
+def vanilla_ids(schema_dir):
+    """Animation, controller and geometry ids from the vanilla resource pack in bedrock-samples."""
+    rp = os.path.abspath(os.path.join(schema_dir, "..", "..", "resource_pack"))
+    ids = set()
+    if not os.path.isdir(rp):
+        return None
+    for p in glob.glob(os.path.join(rp, "animations", "*.json")):
+        try:
+            ids |= set(load(p).get("animations", {}).keys())
+        except Exception:
+            pass
+    for p in glob.glob(os.path.join(rp, "animation_controllers", "*.json")):
+        try:
+            ids |= set(load(p).get("animation_controllers", {}).keys())
+        except Exception:
+            pass
+    for p in glob.glob(os.path.join(rp, "render_controllers", "*.json")):
+        try:
+            ids |= set(load(p).get("render_controllers", {}).keys())
+        except Exception:
+            pass
+    for p in glob.glob(os.path.join(rp, "models", "**", "*.json"), recursive=True):
+        try:
+            d = load(p)
+        except Exception:
+            continue
+        for g in d.get("minecraft:geometry", []):
+            ids.add(g["description"]["identifier"])
+        ids |= {k.split(":")[0] for k in d if k.startswith("geometry.")}
+    return ids
+
+
+def duplicate_one_of(err):
+    """Mojang's Block Descriptor schema lists the same alternative twice in a oneOf, so every
+    object descriptor "is valid under each of" them. That is a schema bug, not a pack error."""
+    if err.validator != "oneOf" or "is valid under each of" not in err.message:
+        return False
+    alts = [json.dumps(a, sort_keys=True) for a in err.validator_value]
+    return len(set(alts)) < len(alts)
+
+
 def validate(registry, schema_id, instance, label):
     v = Draft7Validator({"$ref": "https://schemas.local" + schema_id}, registry=registry)
-    errs = sorted(v.iter_errors(instance), key=lambda e: list(e.path))
+    errs = [e for e in v.iter_errors(instance) if not duplicate_one_of(e)]
+    errs.sort(key=lambda e: list(e.path))
     for e in errs[:12]:
         problem(f"{label}: {'/'.join(map(str, e.path))}: {e.message[:200]}")
     return not errs
@@ -76,12 +118,21 @@ def main():
             d = load(p)
             ok = validate(reg, "/server/item/1.26.30/ItemDocument.json", d["minecraft:item"], os.path.basename(p))
             print("  item", os.path.basename(p), "ok" if ok else "")
+        for p in sorted(glob.glob(os.path.join(BP, "blocks", "*.json"))):
+            d = load(p)
+            ok = validate(reg, "/server/block/1.26.20/Blocks.json", d["minecraft:block"], os.path.basename(p))
+            print("  block", os.path.basename(p), "ok" if ok else "")
         for p in sorted(glob.glob(os.path.join(RP, "particles", "*.json"))):
             d = load(p)
             ok = validate(reg, "/client/particles/1.21.10/Particle%20Effect%20Data.json", d["particle_effect"], os.path.basename(p))
             print("  particle", os.path.basename(p), "ok" if ok else "")
 
     print("cross references")
+    vanilla = vanilla_ids(sys.argv[1]) if len(sys.argv) > 1 else None
+
+    def known_vanilla(ref):
+        # without bedrock-samples, anything outside our zt namespace is taken to be vanilla
+        return ref in vanilla if vanilla is not None else ".zt." not in ref
     # textures referenced by client entities, render setup and UI
     def tex_exists(ref):
         return any(os.path.exists(os.path.join(RP, ref + ext)) for ext in (".png", ".tga"))
@@ -116,13 +167,17 @@ def main():
             if not tex_exists(t):
                 problem(f"{ident}: texture {t} missing")
         for g in d.get("geometry", {}).values():
-            if g not in geos:
+            if g not in geos and not known_vanilla(g):
                 problem(f"{ident}: geometry {g} missing")
         for name, a in d.get("animations", {}).items():
-            if a not in anims and a not in ctrls:
+            if a not in anims and a not in ctrls and not known_vanilla(a):
                 problem(f"{ident}: animation {a} missing")
+        for entry in d.get("animation_controllers", []):
+            for a in entry.values():
+                if a not in ctrls and not known_vanilla(a):
+                    problem(f"{ident}: animation controller {a} missing")
         for rc in d.get("render_controllers", []):
-            if isinstance(rc, str) and rc not in rcs:
+            if isinstance(rc, str) and rc not in rcs and not known_vanilla(rc):
                 problem(f"{ident}: render controller {rc} missing")
         egg = d.get("spawn_egg", {}).get("texture")
         if egg and egg not in items_tex:
@@ -154,15 +209,23 @@ def main():
     for t in re.findall(r'"texture":\s*"([^"]+)"', ui):
         if not tex_exists(t):
             problem(f"hud_screen.json: texture {t} missing")
-    # the titan bar only replaces boss bars whose name contains the HUD's marker text, and a
-    # custom entity's bar is labelled "Unknown" unless minecraft:boss names it
-    boss = load(os.path.join(BP, "entities", "zombie_titan.json"))["minecraft:entity"]["components"]["minecraft:boss"]
+    # each titan bar only replaces boss bars whose name contains its marker text, and a custom
+    # entity's bar is labelled "Unknown" unless minecraft:boss names it
     markers = set(re.findall(r"#bossName - '([^']+)'", ui))
     if not markers:
         problem("hud_screen.json: no boss name test found")
-    for marker in markers:
-        if marker not in boss.get("name", ""):
-            problem(f"titan boss name {boss.get('name')!r} lacks {marker!r}, so the custom boss bar never shows")
+    boss_names = {}
+    for p in glob.glob(os.path.join(BP, "entities", "*.json")):
+        ent = load(p)["minecraft:entity"]
+        if "minecraft:boss" in ent["components"]:
+            boss_names[ent["description"]["identifier"]] = ent["components"]["minecraft:boss"].get("name", "")
+    for ident, name in boss_names.items():
+        hits = [m for m in markers if m in name]
+        if len(hits) != 1:
+            problem(f"{ident}: boss name {name!r} matches {len(hits)} titan bars in hud_screen.json (needs exactly 1)")
+    for m in markers:
+        if not any(m in n for n in boss_names.values()):
+            problem(f"hud_screen.json tests for {m!r} but no boss is named that")
     # sounds used by scripts / entities exist
     sdefs = load(os.path.join(RP, "sounds", "sound_definitions.json"))["sound_definitions"]
     scripts = "".join(open(p).read() for p in glob.glob(os.path.join(BP, "scripts", "*.js")))
@@ -170,15 +233,72 @@ def main():
     for sid in set(re.findall(r'"(zt\.[a-z_.]+)"', scripts)):
         if sid not in sdefs:
             problem(f"script plays undefined sound {sid}")
-    # particles used by scripts exist
+    # custom blocks
+    block_ids = set()
+    for p in glob.glob(os.path.join(BP, "blocks", "*.json")):
+        block_ids.add(load(p)["minecraft:block"]["description"]["identifier"])
+    # items, recipes, blocks, attachables and loot tables point at things that exist
+    item_ids = set()
+    for p in glob.glob(os.path.join(BP, "items", "*.json")):
+        it = load(p)["minecraft:item"]
+        item_ids.add(it["description"]["identifier"])
+        icon = it["components"].get("minecraft:icon")
+        icon = icon if isinstance(icon, str) else (icon or {}).get("textures", {}).get("default")
+        if icon and icon not in items_tex:
+            problem(f"{os.path.basename(p)}: icon {icon} missing from item_texture.json")
+    # particles, entities, items and blocks used by scripts exist
     pids = {load(p)["particle_effect"]["description"]["identifier"] for p in glob.glob(os.path.join(RP, "particles", "*.json"))}
     for pid in set(re.findall(r'"(zt:[a-z_]+)"', scripts)):
-        if pid.startswith("zt:") and pid not in pids and pid not in bp_ids and pid not in ("zt:dark_fists",):
+        if pid.startswith("zt:") and pid not in pids and pid not in bp_ids and pid not in item_ids:
             if not pid.startswith("zt:as_") and pid not in ("zt:start_birth", "zt:end_birth", "zt:natural_spawns",
                                                             "zt:anim", "zt:moving", "zt:armed", "zt:enraged",
                                                             "zt:birth", "zt:grow", "zt:casting", "zt:looted",
-                                                            "zt:df_mode", "zt:natural_spawns", "zt:last_natural_spawn"):
+                                                            "zt:df_mode", "zt:natural_spawns", "zt:last_natural_spawn",
+                                                            "zt:stunned") and pid not in block_ids:
                 problem(f"script references unknown id {pid}")
+    ours = item_ids | block_ids | {d for d in bp_ids}
+    for p in glob.glob(os.path.join(BP, "recipes", "*.json")):
+        text = open(p).read()
+        for ref in set(re.findall(r'"(zt:[a-z_]+)"', text)):
+            r = load(p)
+            ident = next(iter(v for k, v in r.items() if k.startswith("minecraft:recipe")))["description"]["identifier"]
+            if ref != ident and ref not in ours:
+                problem(f"{os.path.basename(p)}: unknown item {ref}")
+            if ref == ident and ref not in ours and not ref.endswith("_to_obsidian"):
+                problem(f"{os.path.basename(p)}: recipe {ref} has no matching item")
+    terrain = {}
+    tp = os.path.join(RP, "textures", "terrain_texture.json")
+    if os.path.exists(tp):
+        terrain = load(tp)["texture_data"]
+        for k, v in terrain.items():
+            if not tex_exists(v["textures"]):
+                problem(f"terrain texture {k} -> {v['textures']} missing")
+    for p in glob.glob(os.path.join(BP, "blocks", "*.json")):
+        block = load(p)
+        comps = block["minecraft:block"]["components"]
+        # block tags moved into minecraft:tags in format 1.26.20; older formats don't know it
+        if "minecraft:tags" in comps and tuple(map(int, block["format_version"].split("."))) < (1, 26, 20):
+            problem(f"{os.path.basename(p)}: minecraft:tags needs format_version 1.26.20 or later")
+        for inst in comps.get("minecraft:material_instances", {}).values():
+            if inst.get("texture") and inst["texture"] not in terrain:
+                problem(f"{os.path.basename(p)}: texture {inst['texture']} missing from terrain_texture.json")
+        loot = comps.get("minecraft:loot")
+        if loot and not os.path.exists(os.path.join(BP, loot)):
+            problem(f"{os.path.basename(p)}: loot table {loot} missing")
+    for p in glob.glob(os.path.join(BP, "entities", "*.json")):
+        comps = load(p)["minecraft:entity"]
+        text = json.dumps(comps)
+        for table in set(re.findall(r'"(loot_tables/[^"]+)"', text)):
+            if not os.path.exists(os.path.join(BP, table)):
+                problem(f"{os.path.basename(p)}: {table} missing")
+    for p in glob.glob(os.path.join(RP, "attachables", "*.json")):
+        d = load(p)["minecraft:attachable"]["description"]
+        for t in d.get("textures", {}).values():
+            if not t.startswith("textures/misc/") and not tex_exists(t):
+                problem(f"{os.path.basename(p)}: texture {t} missing")
+        for it in list(d.get("item", {}).keys()) + [d["identifier"].split(".")[0]]:
+            if it.startswith("zt:") and it not in item_ids:
+                problem(f"{os.path.basename(p)}: attaches to unknown item {it}")
     # manifests
     bpm = load(os.path.join(BP, "manifest.json"))
     rpm = load(os.path.join(RP, "manifest.json"))

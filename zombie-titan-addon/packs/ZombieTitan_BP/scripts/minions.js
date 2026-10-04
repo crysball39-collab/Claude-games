@@ -1,10 +1,10 @@
-// Zombie Titan minions (Java Titans mod tiers):
+// Titan minions, zombie and skeleton alike (Java Titans mod tiers):
 //   Loyalist - fights for its titan
 //   Priest   - heals nearby injured allies, including the titan
 //   Zealot   - fast and strong, leaps at its prey
 //   Templar  - the strongest; brings lightning down on the titan's enemies
 import { system, world } from "@minecraft/server";
-import { MINION, TITAN } from "./titan.js";
+import { MINION_IDS, TITAN_IDS } from "./titan.js";
 import * as U from "./util.js";
 /** @typedef {import("@minecraft/server").Entity} Entity */
 /** @typedef {import("@minecraft/server").Player} Player */
@@ -29,9 +29,10 @@ function variantOf(e) {
 export function minionTick(tick) {
   if (tick % 10 !== 0) return;
   for (const dimId of ["overworld", "nether", "the_end"]) {
-    let list;
+    let list = [];
     try {
-      list = world.getDimension(dimId).getEntities({ type: MINION });
+      const dim = world.getDimension(dimId);
+      for (const type of MINION_IDS) list = list.concat(dim.getEntities({ type }));
     } catch {
       continue;
     }
@@ -73,7 +74,8 @@ function tickMinion(m, tick) {
   if (v === PRIEST) {
     st.next = tick + 100;
     let healed = false;
-    for (const t of dim.getEntities({ type: TITAN, location: loc, maxDistance: 48 })) {
+    const titans = TITAN_IDS.flatMap((type) => dim.getEntities({ type, location: loc, maxDistance: 48 }));
+    for (const t of titans) {
       const hp = t.getComponent("minecraft:health");
       if (hp && hp.currentValue < hp.effectiveMax) {
         hp.setCurrentValue(Math.min(hp.effectiveMax, hp.currentValue + 60));
@@ -81,7 +83,8 @@ function tickMinion(m, tick) {
         healed = true;
       }
     }
-    for (const ally of dim.getEntities({ type: MINION, location: loc, maxDistance: 10 })) {
+    const allies = MINION_IDS.flatMap((type) => dim.getEntities({ type, location: loc, maxDistance: 10 }));
+    for (const ally of allies) {
       const hp = ally.getComponent("minecraft:health");
       if (hp && hp.currentValue < hp.effectiveMax) {
         hp.setCurrentValue(Math.min(hp.effectiveMax, hp.currentValue + 8));

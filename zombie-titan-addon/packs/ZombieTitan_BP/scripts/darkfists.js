@@ -4,7 +4,7 @@
 //   Barrage:   a flurry of dark punches in front of you for 7 seconds
 //   Dark Beam: a giant dark beam that fires for 5 seconds
 import { EquipmentSlot, system, world } from "@minecraft/server";
-import { notifySwordBlocked } from "./titan.js";
+import { isTitan, notifyTitanBlocked } from "./titan.js";
 import * as U from "./util.js";
 /** @typedef {import("@minecraft/server").Entity} Entity */
 /** @typedef {import("@minecraft/server").Player} Player */
@@ -218,7 +218,7 @@ function barrageTick(p, s) {
   if (a.t % 10 === 2) {
     for (const v of targetsInFront(p, head, dir, BARRAGE_REACH)) {
       U.hurt(v, PUNCH_DAMAGE * PUNCHES_PER_VOLLEY, p);
-      if (v.typeId === "zt:zombie_titan") notifySwordBlocked(p, v);
+      if (isTitan(v.typeId)) notifyTitanBlocked(p, v);
       U.knock(v, dir.x, dir.z, 0.25, 0.05);
       U.particle(dim, "zt:spark_burst", U.centerOf(v), { color: { red: 0.8, green: 0.35, blue: 1 } });
     }
@@ -301,9 +301,9 @@ function beamTick(p, s) {
     for (const v of U.livingAround(dim, mid, length / 2 + 10, { exclude: [p] })) {
       if (!canHurt(p, v) || !beamTouches(origin, dir, length, v)) continue;
       U.hurt(v, BEAM_DAMAGE, p);
-      if (v.typeId === "zt:zombie_titan") notifySwordBlocked(p, v);
+      if (isTitan(v.typeId)) notifyTitanBlocked(p, v);
       U.knock(v, dir.x, dir.z, 0.7, 0.15);
-      if (v.typeId !== "zt:zombie_titan") {
+      if (!isTitan(v.typeId)) {
         try {
           v.addEffect("wither", 40, { amplifier: 0 });
         } catch {

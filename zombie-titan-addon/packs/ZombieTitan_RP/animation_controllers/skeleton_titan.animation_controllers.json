@@ -1,0 +1,213 @@
+{
+	"format_version": "1.10.0",
+	"animation_controllers": {
+		"controller.animation.zt.skeleton.main": {
+			"initial_state": "default",
+			"states": {
+				"default": {
+					"animations": [
+						"pose",
+						"idle"
+					],
+					"transitions": [
+						{
+							"birth": "q.property('zt:anim') == 13"
+						},
+						{
+							"walk": "q.property('zt:anim') == 0 && q.property('zt:moving')"
+						},
+						{
+							"anti_air": "q.property('zt:anim') == 1"
+						},
+						{
+							"swat": "q.property('zt:anim') == 2"
+						},
+						{
+							"punch": "q.property('zt:anim') == 3"
+						},
+						{
+							"anti_air2": "q.property('zt:anim') == 4"
+						},
+						{
+							"volley": "q.property('zt:anim') == 5"
+						},
+						{
+							"stomp": "q.property('zt:anim') == 6"
+						},
+						{
+							"slam": "q.property('zt:anim') == 7"
+						},
+						{
+							"stun": "q.property('zt:anim') == 8"
+						},
+						{
+							"awaken": "q.property('zt:anim') == 11"
+						},
+						{
+							"leap": "q.property('zt:anim') == 14"
+						}
+					],
+					"blend_transition": 0.3
+				},
+				"walk": {
+					"animations": [
+						"pose",
+						"walk"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 0 || !q.property('zt:moving')"
+						}
+					],
+					"blend_transition": 0.3
+				},
+				"birth": {
+					"animations": [
+						"birth"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 13"
+						}
+					],
+					"blend_transition": 0.6
+				},
+				"anti_air": {
+					"animations": [
+						"anti_air"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 1"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"swat": {
+					"animations": [
+						"swat"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 2"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"punch": {
+					"animations": [
+						"punch"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 3"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"anti_air2": {
+					"animations": [
+						"anti_air2"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 4"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"volley": {
+					"animations": [
+						"volley",
+						"volley_draw"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 5"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"stomp": {
+					"animations": [
+						"stomp"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 6"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"slam": {
+					"animations": [
+						"slam"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 7"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"stun": {
+					"animations": [
+						"stun"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 8"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"awaken": {
+					"animations": [
+						"awaken"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 11"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"leap": {
+					"animations": [
+						"leap"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 14"
+						}
+					],
+					"blend_transition": 0.25
+				}
+			}
+		},
+		"controller.animation.zt.skeleton_minion.cast": {
+			"initial_state": "default",
+			"states": {
+				"default": {
+					"transitions": [
+						{
+							"casting": "q.property('zt:casting')"
+						}
+					],
+					"blend_transition": 0.2
+				},
+				"casting": {
+					"animations": [
+						"cast"
+					],
+					"transitions": [
+						{
+							"default": "!q.property('zt:casting')"
+						}
+					],
+					"blend_transition": 0.2
+				}
+			}
+		}
+	}
+}

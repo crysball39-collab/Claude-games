@@ -1,0 +1,29 @@
+{
+	"format_version": "1.20.10",
+	"minecraft:recipe_shaped": {
+		"description": {
+			"identifier": "zt:obsidian_boots"
+		},
+		"tags": [
+			"crafting_table"
+		],
+		"pattern": [
+			"X X",
+			"X X"
+		],
+		"key": {
+			"X": {
+				"item": "zt:compact_obsidian"
+			}
+		},
+		"unlock": [
+			{
+				"item": "zt:compact_obsidian"
+			}
+		],
+		"result": {
+			"item": "zt:obsidian_boots",
+			"count": 1
+		}
+	}
+}

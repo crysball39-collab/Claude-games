@@ -2,29 +2,29 @@
 	"format_version": 2,
 	"header": {
 		"name": "Zombie Titan BP",
-		"description": "Zombie Titan boss (Titans mod) + Dark Fists. Made with Claude.",
+		"description": "Version 1.1.0 | Zombie Titan and Skeleton Titan bosses (Titans mod), Dark Fists, Obsidian gear and Growth Serum. Made with Claude.",
 		"uuid": "eb62af9e-d45f-48f6-a804-77eff0d1caab",
-		"version": [1, 0, 1],
+		"version": [1, 1, 0],
 		"min_engine_version": [1, 21, 90]
 	},
 	"modules": [
 		{
 			"type": "data",
 			"uuid": "4f436c22-d9c4-4028-8f9f-2806bce9a302",
-			"version": [1, 0, 1]
+			"version": [1, 1, 0]
 		},
 		{
 			"type": "script",
 			"language": "javascript",
 			"uuid": "4e5ec676-93e6-49b8-a4f2-7759abb82b4d",
-			"version": [1, 0, 1],
+			"version": [1, 1, 0],
 			"entry": "scripts/main.js"
 		}
 	],
 	"dependencies": [
 		{
 			"uuid": "ffbdbde4-2def-4922-bb3f-a52e099db75e",
-			"version": [1, 0, 1]
+			"version": [1, 1, 0]
 		},
 		{
 			"module_name": "@minecraft/server",

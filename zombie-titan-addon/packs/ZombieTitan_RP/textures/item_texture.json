@@ -2,8 +2,50 @@
 	"resource_pack_name": "zombie_titan",
 	"texture_name": "atlas.items",
 	"texture_data": {
-		"zt_dark_fists": {"textures": "textures/items/zt_dark_fists"},
-		"zt_zombie_titan_egg": {"textures": "textures/items/zt_zombie_titan_egg"},
-		"zt_zombie_minion_egg": {"textures": "textures/items/zt_zombie_minion_egg"}
+		"zt_dark_fists": {
+			"textures": "textures/items/zt_dark_fists"
+		},
+		"zt_zombie_titan_egg": {
+			"textures": "textures/items/zt_zombie_titan_egg"
+		},
+		"zt_zombie_minion_egg": {
+			"textures": "textures/items/zt_zombie_minion_egg"
+		},
+		"zt_skeleton_titan_egg": {
+			"textures": "textures/items/zt_skeleton_titan_egg"
+		},
+		"zt_skeleton_minion_egg": {
+			"textures": "textures/items/zt_skeleton_minion_egg"
+		},
+		"zt_obsidian_sword": {
+			"textures": "textures/items/zt_obsidian_sword"
+		},
+		"zt_obsidian_pickaxe": {
+			"textures": "textures/items/zt_obsidian_pickaxe"
+		},
+		"zt_obsidian_axe": {
+			"textures": "textures/items/zt_obsidian_axe"
+		},
+		"zt_obsidian_shovel": {
+			"textures": "textures/items/zt_obsidian_shovel"
+		},
+		"zt_obsidian_hoe": {
+			"textures": "textures/items/zt_obsidian_hoe"
+		},
+		"zt_obsidian_helmet": {
+			"textures": "textures/items/zt_obsidian_helmet"
+		},
+		"zt_obsidian_chestplate": {
+			"textures": "textures/items/zt_obsidian_chestplate"
+		},
+		"zt_obsidian_leggings": {
+			"textures": "textures/items/zt_obsidian_leggings"
+		},
+		"zt_obsidian_boots": {
+			"textures": "textures/items/zt_obsidian_boots"
+		},
+		"zt_growth_serum": {
+			"textures": "textures/items/zt_growth_serum"
+		}
 	}
 }

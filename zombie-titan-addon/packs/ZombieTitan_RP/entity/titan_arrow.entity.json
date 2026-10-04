@@ -1,0 +1,29 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:titan_arrow",
+			"materials": {
+				"default": "entity_alphatest"
+			},
+			"textures": {
+				"default": "textures/entity/titan_arrow"
+			},
+			"geometry": {
+				"default": "geometry.zt.titan_arrow"
+			},
+			"scripts": {
+				"scale": "3.5",
+				"animate": [
+					"move"
+				]
+			},
+			"animations": {
+				"move": "animation.zt.titan_arrow.move"
+			},
+			"render_controllers": [
+				"controller.render.zt.titan_arrow"
+			]
+		}
+	}
+}

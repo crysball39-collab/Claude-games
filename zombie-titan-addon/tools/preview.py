@@ -197,8 +197,12 @@ def render(geo_path, tex_path, out_path, pose=None, yaw=-35, pitch=18, size=900,
     for name, b in bones.items():
         if name in hidden or b.get("neverRender"):
             continue
-        M = bone_mat(name)
+        Mb = bone_mat(name)
         for cube in b.get("cubes", []):
+            M = Mb
+            if "rotation" in cube:
+                cpiv = to_preview(cube.get("pivot", [0, 0, 0]))
+                M = Mb @ tr(cpiv) @ bone_rot_matrix(cube["rotation"]) @ tr(-cpiv)
             o = np.array(cube["origin"], dtype=float)
             sz = np.array(cube["size"], dtype=float)
             inf = cube.get("inflate", 0)

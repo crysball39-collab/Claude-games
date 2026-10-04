@@ -1,0 +1,64 @@
+{
+	"format_version": "1.21.90",
+	"minecraft:item": {
+		"description": {
+			"identifier": "zt:obsidian_sword",
+			"menu_category": {
+				"category": "equipment",
+				"group": "minecraft:itemGroup.name.sword"
+			}
+		},
+		"components": {
+			"minecraft:icon": "zt_obsidian_sword",
+			"minecraft:display_name": {
+				"value": "item.zt:obsidian_sword.name"
+			},
+			"minecraft:max_stack_size": 1,
+			"minecraft:hand_equipped": true,
+			"minecraft:damage": 15,
+			"minecraft:durability": {
+				"max_durability": 2500
+			},
+			"minecraft:enchantable": {
+				"slot": "sword",
+				"value": 15
+			},
+			"minecraft:repairable": {
+				"repair_items": [
+					{
+						"items": [
+							"zt:compact_obsidian"
+						],
+						"repair_amount": "query.max_durability * 0.25"
+					},
+					{
+						"items": [
+							"zt:obsidian_sword"
+						],
+						"repair_amount": "context.other->query.remaining_durability + 0.05 * context.other->query.max_durability"
+					}
+				]
+			},
+			"minecraft:tags": {
+				"tags": [
+					"minecraft:is_sword",
+					"minecraft:is_tool",
+					"minecraft:netherite_tier"
+				]
+			},
+			"minecraft:fire_resistant": {
+				"value": true
+			},
+			"minecraft:rarity": "rare",
+			"minecraft:use_modifiers": {
+				"use_duration": 0.5,
+				"movement_modifier": 1.0
+			},
+			"minecraft:cooldown": {
+				"category": "zt_obsidian_dash",
+				"duration": 1.5,
+				"type": "use"
+			}
+		}
+	}
+}

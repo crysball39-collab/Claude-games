@@ -34,6 +34,12 @@ SONIC_CHARGE = ["sounds/mob/warden/sonic_charge1", "sounds/mob/warden/sonic_char
 SONIC_BOOM = ["sounds/mob/warden/sonic_boom1", "sounds/mob/warden/sonic_boom2", "sounds/mob/warden/sonic_boom3",
               "sounds/mob/warden/sonic_boom4"]
 BEACON_POWER = ["sounds/block/beacon/power1", "sounds/block/beacon/power2", "sounds/block/beacon/power3"]
+SKEL_SAY = ["sounds/mob/skeleton/say1", "sounds/mob/skeleton/say2", "sounds/mob/skeleton/say3"]
+SKEL_HURT = ["sounds/mob/skeleton/hurt1", "sounds/mob/skeleton/hurt2", "sounds/mob/skeleton/hurt3", "sounds/mob/skeleton/hurt4"]
+BONE_STEP = ["sounds/step/bone_block%d" % i for i in range(1, 6)]
+BONE_DIG = ["sounds/dig/bone_block%d" % i for i in range(1, 6)]
+RIPTIDE = ["sounds/item/trident/riptide_mono1", "sounds/item/trident/riptide_mono2", "sounds/item/trident/riptide_mono3"]
+GLASS = ["sounds/random/glass1", "sounds/random/glass2", "sounds/random/glass3"]
 
 
 def definitions():
@@ -60,6 +66,22 @@ def definitions():
         "zt.df.beam_loop": event(snd(SONIC_BOOM, 0.7, 0.6), category="player", min_d=8.0, max_d=64.0),
         "zt.df.switch": event(snd(BEACON_POWER, 1.6, 0.8), category="player", min_d=2.0, max_d=16.0),
         "zt.df.ready": event(snd(["sounds/random/orb"], 0.6, 0.6), category="player", min_d=2.0, max_d=8.0),
+        # Skeleton Titan: vanilla skeleton, bow and bone block sounds played low
+        "zt.skel.ambient": event(snd(SKEL_SAY, 0.45, 1.0)),
+        "zt.skel.hurt": event(snd(SKEL_HURT, 0.5, 0.8), min_d=16.0, max_d=96.0),
+        "zt.skel.death": event(snd(["sounds/mob/skeleton/death"], 0.4, 1.0) + snd(BONE_DIG, 0.45, 1.0), max_d=192.0),
+        "zt.skel.step": event(snd(WARDEN_STEP, 0.5, 1.0) + snd(BONE_STEP, 0.45, 1.0), min_d=16.0, max_d=112.0),
+        "zt.skel.bow": event(snd(["sounds/random/bow"], 0.45, 1.0), min_d=16.0, max_d=128.0),
+        "zt.skel.draw": event(snd(["sounds/crossbow/loading_start"], 0.45, 1.0) +
+                              snd(["sounds/crossbow/loading_middle1", "sounds/crossbow/loading_middle2"], 0.4, 1.0), max_d=96.0),
+        "zt.skel.rattle": event(snd(BONE_DIG, 0.6, 1.0) + snd(SKEL_SAY, 0.5, 1.0), max_d=128.0),
+        "zt.skel.roar": event(snd(SKEL_HURT, 0.35, 1.0) + snd(RAV_ROAR, 0.7, 1.0), max_d=192.0),
+        "zt.skel.crack": event(snd(BONE_DIG, 0.4, 1.0) + snd(["sounds/random/break"], 0.5, 1.0), max_d=128.0),
+        # Obsidian Sword dash and Growth Serum
+        "zt.obsidian.dash": event(snd(RIPTIDE, 1.1, 1.0), category="player", min_d=4.0, max_d=32.0),
+        "zt.serum.shatter": event(snd(GLASS, 0.8, 1.0), category="neutral", min_d=4.0, max_d=32.0),
+        "zt.serum.grow": event(snd(["sounds/mob/zombie/unfect"], 0.5, 1.0) + snd(["sounds/mob/zombie/remedy"], 0.6, 1.0),
+                               max_d=96.0),
     }
     return {"format_version": "1.20.20", "sound_definitions": D}
 
@@ -72,6 +94,21 @@ def entity_sounds():
                     "volume": 1.0,
                     "pitch": 1.0,
                     "events": {"ambient": "zt.titan.ambient", "hurt": "zt.titan.hurt", "death": "zt.titan.death"},
+                },
+                "zt:skeleton_titan": {
+                    "volume": 1.0,
+                    "pitch": 1.0,
+                    "events": {"ambient": "zt.skel.ambient", "hurt": "zt.skel.hurt", "death": "zt.skel.death"},
+                },
+                "zt:skeleton_minion": {
+                    "volume": 1.0,
+                    "pitch": [0.8, 1.0],
+                    "events": {
+                        "ambient": "mob.skeleton.say",
+                        "hurt": "mob.skeleton.hurt",
+                        "death": "mob.skeleton.death",
+                        "step": {"sound": "mob.skeleton.step", "volume": 0.15, "pitch": 1.0},
+                    },
                 },
                 "zt:zombie_minion": {
                     "volume": 1.0,

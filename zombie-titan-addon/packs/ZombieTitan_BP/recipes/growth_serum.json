@@ -1,0 +1,32 @@
+{
+	"format_version": "1.20.10",
+	"minecraft:recipe_shaped": {
+		"description": {
+			"identifier": "zt:growth_serum"
+		},
+		"tags": [
+			"crafting_table"
+		],
+		"pattern": [
+			"GGG",
+			"GDG",
+			"GGG"
+		],
+		"key": {
+			"G": {
+				"item": "minecraft:glass"
+			},
+			"D": {
+				"item": "minecraft:dragon_breath"
+			}
+		},
+		"unlock": [
+			{
+				"item": "minecraft:dragon_breath"
+			}
+		],
+		"result": {
+			"item": "zt:growth_serum"
+		}
+	}
+}

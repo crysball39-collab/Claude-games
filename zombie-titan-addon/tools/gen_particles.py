@@ -238,6 +238,59 @@ def effects():
         "minecraft:particle_appearance_tinting": gradient({
             "0.0": [0.4, 0.9, 0.2, 0.95], "1.0": [0.15, 0.35, 0.1, 0.0]}),
     })
+    # --- Skeleton Titan: bone chips flying off a hit ---------------------------------------
+    E["bone_dust"] = effect("zt:bone_dust", "particles_alpha", SPARK, {
+        "minecraft:emitter_rate_instant": {"num_particles": 24},
+        "minecraft:emitter_lifetime_once": {"active_time": 0.05},
+        "minecraft:emitter_shape_sphere": {"radius": 1.2, "direction": "outwards"},
+        "minecraft:particle_lifetime_expression": {"max_lifetime": "0.8 + v.particle_random_1 * 0.6"},
+        "minecraft:particle_initial_speed": "4 + v.particle_random_2 * 6",
+        "minecraft:particle_motion_dynamic": {"linear_drag_coefficient": 1.2, "linear_acceleration": [0, -14, 0]},
+        "minecraft:particle_motion_collision": {"collision_radius": 0.1, "coefficient_of_restitution": 0.3},
+        "minecraft:particle_appearance_billboard": billboard(
+            ["0.3 + v.particle_random_3 * 0.3", "0.3 + v.particle_random_3 * 0.3"], 16, 16),
+        "minecraft:particle_appearance_tinting": {"color": [0.93, 0.91, 0.84, 1.0]},
+    })
+    # --- Obsidian Sword dash: a dark purple streak behind the player ------------------------
+    E["dash_trail"] = effect("zt:dash_trail", "particles_add", GLOW, {
+        "minecraft:emitter_rate_instant": {"num_particles": 10},
+        "minecraft:emitter_lifetime_once": {"active_time": 0.05},
+        "minecraft:emitter_shape_sphere": {"radius": 0.5, "direction": "outwards"},
+        "minecraft:particle_lifetime_expression": {"max_lifetime": "0.35 + v.particle_random_1 * 0.3"},
+        "minecraft:particle_initial_speed": 0.4,
+        "minecraft:particle_motion_dynamic": {"linear_drag_coefficient": 2.0},
+        "minecraft:particle_appearance_billboard": billboard(
+            ["0.6 * (1 - v.particle_age / v.particle_lifetime)", "0.6 * (1 - v.particle_age / v.particle_lifetime)"], 32, 32),
+        "minecraft:particle_appearance_tinting": gradient({
+            "0.0": [0.62, 0.3, 1.0, 1.0], "1.0": [0.15, 0.03, 0.3, 0.0]}),
+    })
+    # --- Growth Serum: the bottle shatters in a glowing splash, then a swirl climbs the mob -----
+    E["serum_splash"] = effect("zt:serum_splash", "particles_add", GLOW, {
+        "minecraft:emitter_rate_instant": {"num_particles": 40},
+        "minecraft:emitter_lifetime_once": {"active_time": 0.05},
+        "minecraft:emitter_shape_sphere": {"radius": 0.4, "direction": "outwards"},
+        "minecraft:particle_lifetime_expression": {"max_lifetime": "0.5 + v.particle_random_1 * 0.6"},
+        "minecraft:particle_initial_speed": "3 + v.particle_random_2 * 4",
+        "minecraft:particle_motion_dynamic": {"linear_drag_coefficient": 2.0, "linear_acceleration": [0, -6, 0]},
+        "minecraft:particle_appearance_billboard": billboard(
+            ["0.45 * (1 - v.particle_age / v.particle_lifetime)", "0.45 * (1 - v.particle_age / v.particle_lifetime)"], 32, 32),
+        "minecraft:particle_appearance_tinting": gradient({
+            "0.0": [0.75, 1.0, 0.35, 1.0], "0.5": [0.7, 0.3, 1.0, 0.9], "1.0": [0.3, 0.1, 0.5, 0.0]}),
+    })
+    E["serum_swirl"] = effect("zt:serum_swirl", "particles_add", GLOW, {
+        "minecraft:emitter_rate_steady": {"spawn_rate": 60, "max_particles": 160},
+        "minecraft:emitter_lifetime_once": {"active_time": 2.5},
+        "minecraft:emitter_shape_point": {"offset": [
+            "math.cos(v.emitter_age * 720) * (1.2 + v.emitter_age)", "v.emitter_age * 2.4",
+            "math.sin(v.emitter_age * 720) * (1.2 + v.emitter_age)"]},
+        "minecraft:particle_lifetime_expression": {"max_lifetime": 1.0},
+        "minecraft:particle_initial_speed": 0.2,
+        "minecraft:particle_motion_dynamic": {"linear_acceleration": [0, 1.5, 0]},
+        "minecraft:particle_appearance_billboard": billboard(
+            ["0.5 * (1 - v.particle_age / v.particle_lifetime)", "0.5 * (1 - v.particle_age / v.particle_lifetime)"], 32, 32),
+        "minecraft:particle_appearance_tinting": gradient({
+            "0.0": [0.6, 1.0, 0.3, 1.0], "1.0": [0.6, 0.2, 1.0, 0.0]}),
+    })
     return E
 
 

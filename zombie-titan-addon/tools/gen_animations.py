@@ -44,15 +44,17 @@ def r(v):
     return round(float(v), 3)
 
 
-def build_timeline(frames, enrage_speed=2.0):
-    """frames: list of (time, pose[, 'smooth'|'linear'])."""
+def build_timeline(frames, enrage_speed=2.0, bone_list=None, base_pose=None):
+    """frames: list of (time, pose[, 'smooth'|'linear']). Poses are deltas from base_pose (BASE)."""
+    bone_list = BONES if bone_list is None else bone_list
+    base_pose = BASE if base_pose is None else base_pose
     bones = {}
     used = set()
     for f in frames:
         for k in f[1]:
             used.add("root" if k == "root_pos" else k)
-    used |= set(BASE.keys())
-    for bone in BONES:
+    used |= set(base_pose.keys())
+    for bone in bone_list:
         if bone not in used:
             continue
         rot = {}
@@ -60,7 +62,7 @@ def build_timeline(frames, enrage_speed=2.0):
         for f in frames:
             t, pose = f[0], f[1]
             mode = f[2] if len(f) > 2 else "smooth"
-            base = BASE.get(bone, [0, 0, 0])
+            base = base_pose.get(bone, [0, 0, 0])
             d = pose.get(bone, [0, 0, 0])
             val = [r(base[i] + d[i]) for i in range(3)]
             key = "%.2f" % t

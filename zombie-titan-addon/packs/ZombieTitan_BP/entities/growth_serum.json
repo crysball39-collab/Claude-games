@@ -1,0 +1,33 @@
+{
+	"format_version": "1.21.90",
+	"minecraft:entity": {
+		"description": {
+			"identifier": "zt:growth_serum",
+			"is_spawnable": false,
+			"is_summonable": true
+		},
+		"components": {
+			"minecraft:type_family": {
+				"family": [
+					"projectile",
+					"growth_serum"
+				]
+			},
+			"minecraft:collision_box": {
+				"width": 0.25,
+				"height": 0.25
+			},
+			"minecraft:physics": {},
+			"minecraft:projectile": {
+				"angle_offset": -20.0,
+				"power": 0.75,
+				"gravity": 0.05,
+				"hit_sound": "glass",
+				"on_hit": {
+					"remove_on_hit": {}
+				}
+			}
+		},
+		"events": {}
+	}
+}

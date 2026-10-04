@@ -1,0 +1,31 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:skeleton_titan_corpse",
+			"materials": {
+				"default": "entity_emissive_alpha"
+			},
+			"textures": {
+				"default": "textures/entity/skeleton_titan/skeleton_titan"
+			},
+			"geometry": {
+				"default": "geometry.zt.skeleton_titan"
+			},
+			"scripts": {
+				"scale": "16.0",
+				"should_update_bones_and_effects_offscreen": "1.0",
+				"should_update_effects_offscreen": "1.0",
+				"animate": [
+					"death"
+				]
+			},
+			"animations": {
+				"death": "animation.zt.skeleton.death"
+			},
+			"render_controllers": [
+				"controller.render.zt.skeleton_titan_corpse"
+			]
+		}
+	}
+}

@@ -1,0 +1,28 @@
+{
+	"format_version": "1.21.90",
+	"minecraft:item": {
+		"description": {
+			"identifier": "zt:growth_serum",
+			"menu_category": {
+				"category": "items"
+			}
+		},
+		"components": {
+			"minecraft:icon": "zt_growth_serum",
+			"minecraft:display_name": {
+				"value": "item.zt:growth_serum.name"
+			},
+			"minecraft:max_stack_size": 16,
+			"minecraft:throwable": {
+				"do_swing_animation": true,
+				"launch_power_scale": 1.0,
+				"max_launch_power": 1.0
+			},
+			"minecraft:projectile": {
+				"projectile_entity": "zt:growth_serum"
+			},
+			"minecraft:rarity": "epic",
+			"minecraft:glint": true
+		}
+	}
+}

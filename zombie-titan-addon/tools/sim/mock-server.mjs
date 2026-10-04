@@ -62,7 +62,8 @@ export function runTicks(n, each) {
       }
     }
     for (const iv of intervals) if (tickCounter % iv.n === 0) iv.fn();
-    if (each) each(tickCounter);
+    // a callback returning true stops early
+    if (each && each(tickCounter) === true) return;
   }
 }
 
@@ -202,16 +203,31 @@ const FAMILIES = {
   "zt:zombie_minion": ["zombie_minion", "zt_ally", "zombie", "undead", "monster", "mob"],
   "zt:zombie_titan_corpse": ["zt_ally", "inanimate"],
   "zt:proto_ball": ["zt_ally", "projectile"],
+  "zt:skeleton_titan": ["skeleton_titan", "titan", "zt_ally", "skeleton", "undead", "monster", "mob"],
+  "zt:skeleton_minion": ["skeleton_minion", "zt_ally", "skeleton", "undead", "monster", "mob"],
+  "zt:skeleton_titan_corpse": ["zt_ally", "inanimate"],
+  "zt:titan_arrow": ["zt_ally", "projectile"],
+  "zt:growth_serum": ["projectile"],
   "minecraft:player": ["player"],
   "minecraft:zombie": ["zombie", "monster", "mob"],
+  "minecraft:skeleton": ["skeleton", "undead", "monster", "mob"],
+  "minecraft:husk": ["zombie", "monster", "mob"],
+  "minecraft:cow": ["cow", "mob"],
   "minecraft:villager_v2": ["villager", "mob"],
 };
-const HEALTH = { "zt:zombie_titan": 20000, "zt:zombie_minion": 30, "zt:zombie_titan_corpse": 1, "minecraft:player": 20, "minecraft:zombie": 20, "minecraft:villager_v2": 20 };
+const HEALTH = {
+  "zt:zombie_titan": 20000, "zt:zombie_minion": 30, "zt:zombie_titan_corpse": 1, "minecraft:player": 20, "minecraft:zombie": 20,
+  "minecraft:villager_v2": 20, "zt:skeleton_titan": 20000, "zt:skeleton_minion": 30, "zt:skeleton_titan_corpse": 1,
+  "minecraft:skeleton": 20, "minecraft:husk": 20, "minecraft:cow": 10,
+};
 const PROPS = {
   "zt:zombie_titan": { "zt:anim": 0, "zt:moving": false, "zt:armed": true, "zt:enraged": false, "zt:birth": false, "zt:grow": 1 },
   "zt:zombie_titan_corpse": { "zt:armed": false },
   "zt:zombie_minion": { "zt:casting": false },
+  "zt:skeleton_titan": { "zt:anim": 0, "zt:moving": false, "zt:stunned": false, "zt:enraged": false, "zt:birth": false, "zt:grow": 1 },
+  "zt:skeleton_minion": { "zt:casting": false },
 };
+const PROJECTILES = new Set(["zt:proto_ball", "zt:titan_arrow", "zt:growth_serum"]);
 
 export class Entity {
   constructor(dim, typeId, loc) {
@@ -230,8 +246,9 @@ export class Entity {
     this.events = [];
     this.components = {};
     if (HEALTH[typeId]) this.components["minecraft:health"] = new Health(this, HEALTH[typeId]);
-    if (typeId === "zt:proto_ball") this.components["minecraft:projectile"] = new Projectile(this);
-    if (typeId === "zt:zombie_minion") this.components["minecraft:variant"] = { value: 0 };
+    if (PROJECTILES.has(typeId)) this.components["minecraft:projectile"] = new Projectile(this);
+    if (typeId === "zt:zombie_minion" || typeId === "zt:skeleton_minion") this.components["minecraft:variant"] = { value: 0 };
+    this.knockbacks = [];
   }
   get isValid() {
     return this.valid;
@@ -282,6 +299,16 @@ export class Entity {
       if (src?.typeId === "minecraft:player" && src.held?.typeId === "zt:dark_fists") amount *= this.props["zt:enraged"] ? 2.5 : 5;
       else if (this.props["zt:enraged"]) amount *= 0.5;
     }
+    // the skeleton titan's damage sensor: players only hurt it while it is stunned
+    if (this.typeId === "zt:skeleton_titan") {
+      const src = opts?.damagingEntity;
+      if (this.props["zt:birth"]) return false;
+      if (src && FAMILIES[src.typeId]?.includes("zt_ally")) return false;
+      if (src?.typeId === "minecraft:player" && !this.props["zt:stunned"]) return false;
+      if (opts?.cause === "projectile" && this.props["zt:enraged"]) return false;
+      if (src?.typeId === "minecraft:player" && src.held?.typeId === "zt:dark_fists") amount *= this.props["zt:enraged"] ? 2.5 : 5;
+      else if (this.props["zt:enraged"]) amount *= 0.5;
+    }
     if (FAMILIES[this.typeId]?.includes("zt_ally") && opts?.damagingEntity && FAMILIES[opts.damagingEntity.typeId]?.includes("zt_ally")) return false;
     this.damageTaken += amount;
     hp.setCurrentValue(hp.currentValue - amount);
@@ -294,6 +321,7 @@ export class Entity {
   }
   applyKnockback(h, v) {
     if (![h.x, h.z, v].every(Number.isFinite)) throw new Error("bad knockback");
+    this.knockbacks.push({ x: h.x, z: h.z, y: v, tick: tickCounter });
   }
   applyImpulse(v) {
     if (![v.x, v.y, v.z].every(Number.isFinite)) throw new Error("bad impulse");

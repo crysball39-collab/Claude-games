@@ -105,6 +105,7 @@ export function isValid(e) {
 export function bodySize(e) {
   switch (e.typeId) {
     case "zt:zombie_titan":
+    case "zt:skeleton_titan":
       return { r: 4, h: 32 };
     case "minecraft:ender_dragon":
       return { r: 6, h: 6 };

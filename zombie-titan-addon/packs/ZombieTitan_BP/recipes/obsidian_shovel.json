@@ -1,0 +1,33 @@
+{
+	"format_version": "1.20.10",
+	"minecraft:recipe_shaped": {
+		"description": {
+			"identifier": "zt:obsidian_shovel"
+		},
+		"tags": [
+			"crafting_table"
+		],
+		"pattern": [
+			"X",
+			"S",
+			"S"
+		],
+		"key": {
+			"X": {
+				"item": "zt:compact_obsidian"
+			},
+			"S": {
+				"item": "minecraft:stick"
+			}
+		},
+		"unlock": [
+			{
+				"item": "zt:compact_obsidian"
+			}
+		],
+		"result": {
+			"item": "zt:obsidian_shovel",
+			"count": 1
+		}
+	}
+}

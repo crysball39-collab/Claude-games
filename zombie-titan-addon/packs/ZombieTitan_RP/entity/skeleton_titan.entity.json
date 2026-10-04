@@ -1,0 +1,49 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:skeleton_titan",
+			"materials": {
+				"default": "entity_emissive_alpha"
+			},
+			"textures": {
+				"default": "textures/entity/skeleton_titan/skeleton_titan"
+			},
+			"geometry": {
+				"default": "geometry.zt.skeleton_titan"
+			},
+			"spawn_egg": {
+				"texture": "zt_skeleton_titan_egg"
+			},
+			"scripts": {
+				"scale": "1.0 + 15.0 * q.property('zt:grow')",
+				"should_update_bones_and_effects_offscreen": "1.0",
+				"should_update_effects_offscreen": "1.0",
+				"animate": [
+					"controller"
+				]
+			},
+			"animations": {
+				"pose": "animation.zt.skeleton.pose",
+				"idle": "animation.zt.skeleton.idle",
+				"walk": "animation.zt.skeleton.walk",
+				"birth": "animation.zt.skeleton.birth",
+				"anti_air": "animation.zt.skeleton.anti_air",
+				"anti_air2": "animation.zt.skeleton.anti_air2",
+				"swat": "animation.zt.skeleton.swat",
+				"punch": "animation.zt.skeleton.punch",
+				"volley": "animation.zt.skeleton.volley",
+				"volley_draw": "animation.zt.skeleton.volley_draw",
+				"stomp": "animation.zt.skeleton.stomp",
+				"slam": "animation.zt.skeleton.slam",
+				"stun": "animation.zt.skeleton.stun",
+				"awaken": "animation.zt.skeleton.awaken",
+				"leap": "animation.zt.skeleton.leap",
+				"controller": "controller.animation.zt.skeleton.main"
+			},
+			"render_controllers": [
+				"controller.render.zt.skeleton_titan"
+			]
+		}
+	}
+}

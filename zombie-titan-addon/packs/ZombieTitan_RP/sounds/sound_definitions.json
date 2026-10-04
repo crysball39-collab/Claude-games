@@ -518,6 +518,370 @@
 					"volume": 0.6
 				}
 			]
+		},
+		"zt.skel.ambient": {
+			"category": "hostile",
+			"min_distance": 24.0,
+			"max_distance": 128.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/skeleton/say1",
+					"pitch": 0.45,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/skeleton/say2",
+					"pitch": 0.45,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/skeleton/say3",
+					"pitch": 0.45,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.skel.hurt": {
+			"category": "hostile",
+			"min_distance": 16.0,
+			"max_distance": 96.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/skeleton/hurt1",
+					"pitch": 0.5,
+					"volume": 0.8
+				},
+				{
+					"name": "sounds/mob/skeleton/hurt2",
+					"pitch": 0.5,
+					"volume": 0.8
+				},
+				{
+					"name": "sounds/mob/skeleton/hurt3",
+					"pitch": 0.5,
+					"volume": 0.8
+				},
+				{
+					"name": "sounds/mob/skeleton/hurt4",
+					"pitch": 0.5,
+					"volume": 0.8
+				}
+			]
+		},
+		"zt.skel.death": {
+			"category": "hostile",
+			"min_distance": 24.0,
+			"max_distance": 192.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/skeleton/death",
+					"pitch": 0.4,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/dig/bone_block1",
+					"pitch": 0.45,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/dig/bone_block2",
+					"pitch": 0.45,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/dig/bone_block3",
+					"pitch": 0.45,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/dig/bone_block4",
+					"pitch": 0.45,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/dig/bone_block5",
+					"pitch": 0.45,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.skel.step": {
+			"category": "hostile",
+			"min_distance": 16.0,
+			"max_distance": 112.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/warden/step_1",
+					"pitch": 0.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/warden/step_2",
+					"pitch": 0.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/warden/step_3",
+					"pitch": 0.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/warden/step_4",
+					"pitch": 0.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/step/bone_block1",
+					"pitch": 0.45,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/step/bone_block2",
+					"pitch": 0.45,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/step/bone_block3",
+					"pitch": 0.45,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/step/bone_block4",
+					"pitch": 0.45,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/step/bone_block5",
+					"pitch": 0.45,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.skel.bow": {
+			"category": "hostile",
+			"min_distance": 16.0,
+			"max_distance": 128.0,
+			"sounds": [
+				{
+					"name": "sounds/random/bow",
+					"pitch": 0.45,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.skel.draw": {
+			"category": "hostile",
+			"min_distance": 24.0,
+			"max_distance": 96.0,
+			"sounds": [
+				{
+					"name": "sounds/crossbow/loading_start",
+					"pitch": 0.45,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/crossbow/loading_middle1",
+					"pitch": 0.4,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/crossbow/loading_middle2",
+					"pitch": 0.4,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.skel.rattle": {
+			"category": "hostile",
+			"min_distance": 24.0,
+			"max_distance": 128.0,
+			"sounds": [
+				{
+					"name": "sounds/dig/bone_block1",
+					"pitch": 0.6,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/dig/bone_block2",
+					"pitch": 0.6,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/dig/bone_block3",
+					"pitch": 0.6,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/dig/bone_block4",
+					"pitch": 0.6,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/dig/bone_block5",
+					"pitch": 0.6,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/skeleton/say1",
+					"pitch": 0.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/skeleton/say2",
+					"pitch": 0.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/skeleton/say3",
+					"pitch": 0.5,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.skel.roar": {
+			"category": "hostile",
+			"min_distance": 24.0,
+			"max_distance": 192.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/skeleton/hurt1",
+					"pitch": 0.35,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/skeleton/hurt2",
+					"pitch": 0.35,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/skeleton/hurt3",
+					"pitch": 0.35,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/skeleton/hurt4",
+					"pitch": 0.35,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/ravager/roar1",
+					"pitch": 0.7,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/ravager/roar2",
+					"pitch": 0.7,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/ravager/roar3",
+					"pitch": 0.7,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/ravager/roar4",
+					"pitch": 0.7,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.skel.crack": {
+			"category": "hostile",
+			"min_distance": 24.0,
+			"max_distance": 128.0,
+			"sounds": [
+				{
+					"name": "sounds/dig/bone_block1",
+					"pitch": 0.4,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/dig/bone_block2",
+					"pitch": 0.4,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/dig/bone_block3",
+					"pitch": 0.4,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/dig/bone_block4",
+					"pitch": 0.4,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/dig/bone_block5",
+					"pitch": 0.4,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/random/break",
+					"pitch": 0.5,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.obsidian.dash": {
+			"category": "player",
+			"min_distance": 4.0,
+			"max_distance": 32.0,
+			"sounds": [
+				{
+					"name": "sounds/item/trident/riptide_mono1",
+					"pitch": 1.1,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/item/trident/riptide_mono2",
+					"pitch": 1.1,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/item/trident/riptide_mono3",
+					"pitch": 1.1,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.serum.shatter": {
+			"category": "neutral",
+			"min_distance": 4.0,
+			"max_distance": 32.0,
+			"sounds": [
+				{
+					"name": "sounds/random/glass1",
+					"pitch": 0.8,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/random/glass2",
+					"pitch": 0.8,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/random/glass3",
+					"pitch": 0.8,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.serum.grow": {
+			"category": "hostile",
+			"min_distance": 24.0,
+			"max_distance": 96.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/zombie/unfect",
+					"pitch": 0.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/zombie/remedy",
+					"pitch": 0.6,
+					"volume": 1.0
+				}
+			]
 		}
 	}
 }
