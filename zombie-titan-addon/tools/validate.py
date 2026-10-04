@@ -154,6 +154,15 @@ def main():
     for t in re.findall(r'"texture":\s*"([^"]+)"', ui):
         if not tex_exists(t):
             problem(f"hud_screen.json: texture {t} missing")
+    # the titan bar only replaces boss bars whose name contains the HUD's marker text, and a
+    # custom entity's bar is labelled "Unknown" unless minecraft:boss names it
+    boss = load(os.path.join(BP, "entities", "zombie_titan.json"))["minecraft:entity"]["components"]["minecraft:boss"]
+    markers = set(re.findall(r"#bossName - '([^']+)'", ui))
+    if not markers:
+        problem("hud_screen.json: no boss name test found")
+    for marker in markers:
+        if marker not in boss.get("name", ""):
+            problem(f"titan boss name {boss.get('name')!r} lacks {marker!r}, so the custom boss bar never shows")
     # sounds used by scripts / entities exist
     sdefs = load(os.path.join(RP, "sounds", "sound_definitions.json"))["sound_definitions"]
     scripts = "".join(open(p).read() for p in glob.glob(os.path.join(BP, "scripts", "*.js")))
@@ -176,6 +185,8 @@ def main():
     dep = [d for d in bpm["dependencies"] if "uuid" in d]
     if not dep or dep[0]["uuid"] != rpm["header"]["uuid"]:
         problem("BP does not depend on the RP uuid")
+    elif dep[0]["version"] != rpm["header"]["version"]:
+        problem(f"BP depends on RP version {dep[0]['version']}, but the RP is {rpm['header']['version']}")
     uuids = [bpm["header"]["uuid"], rpm["header"]["uuid"]] + [m["uuid"] for m in bpm["modules"] + rpm["modules"]]
     if len(set(uuids)) != len(uuids):
         problem("duplicate uuids in manifests")

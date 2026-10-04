@@ -2,11 +2,12 @@
 	"namespace": "hud",
 
 	// Every boss bar goes through this panel. Bars whose name contains
-	// "Zombie Titan" get the custom mossy titan bar; all others keep the
-	// vanilla look exactly as before.
+	// "Zombie Titan" (the minecraft:boss name in the titan's behaviour file)
+	// get the custom mossy titan bar; all others keep the vanilla look.
+	// It is 36 tall (vanilla: 20) so a second boss bar clears the titan bar.
 	"boss_health_panel": {
 		"type": "panel",
-		"size": [182, 20],
+		"size": [182, 36],
 		"anchor_from": "top_middle",
 		"anchor_to": "top_middle",
 		"$progress_bar_collection": "boss_bars",

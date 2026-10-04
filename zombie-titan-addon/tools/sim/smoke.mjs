@@ -1,6 +1,6 @@
 // Smoke test: runs the behaviour pack scripts against the mock API.
 //   node tools/sim/run.mjs
-import { blockOverrides, ItemStack, log, Player, runTicks, world } from "@minecraft/server";
+import { blockOverrides, Entity, ItemStack, log, Player, runTicks, world } from "@minecraft/server";
 
 const warnings = [];
 console.warn = (...a) => {
@@ -43,7 +43,13 @@ check(titan.props["zt:birth"] === false, "birth finished");
 check(titan.props["zt:grow"] === 1, "fully grown");
 check(titan.getComponent("minecraft:health").currentValue === 20000, "full 20,000 HP");
 check(titan.props["zt:anim"] === 11, "roars when it wakes up");
-check(titan.nameTag.includes("Zombie Titan") && titan.nameTag.includes("20,000"), "boss bar name shows HP: " + titan.nameTag);
+check(titan.nameTag === "", "no name tag, so the boss bar uses the name from the entity file");
+const oldTitan = new Entity(ow, "zt:zombie_titan", { x: 400, y: 64, z: 400 });
+oldTitan.nameTag = "§l§2Zombie Titan§r §c20000§7/§c20000 §8[§7Sword§8]";
+ow.entities.push(oldTitan);
+runTicks(21);
+check(oldTitan.nameTag === "", "clears the health name tag left by version 1.0.0");
+oldTitan.valid = false;
 
 console.log("fighting");
 const seen = new Set();

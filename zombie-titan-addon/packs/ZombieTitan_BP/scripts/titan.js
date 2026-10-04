@@ -107,8 +107,6 @@ function stateOf(e) {
     foot: 1,
     regenTick: 0,
     minionTick: 60,
-    nameTick: 0,
-    lastHpShown: -1,
     wanderTicks: 0,
     idleTicks: 0,
     birthT: 0,
@@ -135,6 +133,7 @@ function stateOf(e) {
   } catch {
     /* ignore */
   }
+  clearOldNameTag(e);
   // after a reload the animation and walking flags start fresh
   s.props["zt:anim"] = -1;
   s.props["zt:moving"] = undefined;
@@ -221,7 +220,6 @@ function beginBirth(e, s, ticks) {
     /* ignore */
   }
   setHealth(e, CFG.maxHp * 0.1);
-  updateName(e, s, true);
   const dim = e.dimension;
   U.sound(dim, "zt.titan.quake", e.location, 2, 0.6);
   U.tell(dim, e.location, 160, "§2§lThe ground trembles... §r§aa Zombie Titan is rising!");
@@ -236,7 +234,6 @@ function birthTick(e, s) {
   const grow = Math.round((0.0625 + 0.9375 * k) * 1000) / 1000;
   prop(e, s, "zt:grow", grow);
   if (s.birthT % 5 === 0) setHealth(e, CFG.maxHp * (0.1 + 0.9 * k));
-  if (s.birthT % 10 === 0) updateName(e, s, false);
   if (s.props["zt:anim"] !== ANIM.BIRTH) startAnim(e, s, ANIM.BIRTH);
   followGround(e, s, 0, 0, true);
   // slowly face the nearest player
@@ -349,12 +346,6 @@ function tickTitan(e, s, tick) {
     if (U.chance(1 / 5)) amount += 10;
     if (U.chance(1 / 6)) amount += 10;
     if (hpC && hp < CFG.maxHp && hp > 0) hpC.setCurrentValue(Math.min(CFG.maxHp, hp + amount));
-  }
-
-  // ----- name / boss bar text
-  if (--s.nameTick <= 0) {
-    s.nameTick = 10;
-    updateName(e, s, false);
   }
 
   // ----- target
@@ -1086,22 +1077,16 @@ export function spawnMinion(titan, event, at, dimOverride) {
 }
 
 // =============================================================================
-// name / boss bar
+// old name tags
 // =============================================================================
-/** @param {Entity} e @param {any} s @param {boolean} force */
-function updateName(e, s, force) {
-  let hp = CFG.maxHp;
+/**
+ * Version 1.0.0 wrote the titan's health into its name tag, hoping the boss bar would show it.
+ * The boss bar takes its name from the entity file instead, so clear those old tags.
+ * @param {Entity} e
+ */
+function clearOldNameTag(e) {
   try {
-    hp = Math.ceil(e.getComponent("minecraft:health").currentValue);
-  } catch {
-    /* ignore */
-  }
-  if (!force && hp === s.lastHpShown) return;
-  s.lastHpShown = hp;
-  const sword = s.armed ? " §8[§7Sword§8]" : "";
-  const rage = s.props["zt:enraged"] ? " §4[ENRAGED]" : "";
-  try {
-    e.nameTag = `§l§2Zombie Titan§r §c${hp.toLocaleString("en-US")}§7/§c${CFG.maxHp.toLocaleString("en-US")}${sword}${rage}`;
+    if (e.nameTag.startsWith("§l§2Zombie Titan")) e.nameTag = "";
   } catch {
     /* ignore */
   }

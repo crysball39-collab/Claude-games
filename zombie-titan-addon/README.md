@@ -20,6 +20,13 @@ needs **no experimental toggles**.
 If tapping the file does nothing, long-press it, choose **Open with**, and pick
 **Minecraft**.
 
+**Updating.** Import the new file the same way, then reopen your world.
+- If Minecraft says the packs are already installed, go to **Settings →
+  Storage**, delete the old *Zombie Titan BP* and *Zombie Titan RP*, and import
+  again.
+- If the world still acts like the old version, check under **Behavior Packs**
+  that Zombie Titan BP is active.
+
 ## The Zombie Titan
 
 | | |
@@ -28,7 +35,7 @@ If tapping the file does nothing, long-press it, choose **Open with**, and pick
 | Health | 20,000 HP |
 | Damage | 120 per hit, or 240 with its sword. Some attacks multiply this. |
 | XP | 10,000 to the player who kills it |
-| Boss bar | Custom rotting, vine-covered bar showing the HP left. It also says whether the titan still holds its sword. |
+| Boss bar | Custom rotting, vine-covered bar that shows how much health it has left |
 
 ### Spawning
 

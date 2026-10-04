@@ -23,7 +23,7 @@
 		"components": {
 			"minecraft:type_family": {"family": ["zombie_titan", "titan", "zt_ally", "zombie", "undead", "monster", "mob"]},
 			"minecraft:health": {"value": 20000, "max": 20000},
-			"minecraft:boss": {"should_darken_sky": false, "hud_range": 100},
+			"minecraft:boss": {"name": "Zombie Titan", "should_darken_sky": false, "hud_range": 100},
 			"minecraft:collision_box": {"width": 8.0, "height": 32.0},
 			"minecraft:physics": {"has_gravity": false, "has_collision": false},
 			"minecraft:knockback_resistance": {"value": 1.0},
