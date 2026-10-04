@@ -1,0 +1,523 @@
+{
+	"format_version": "1.20.20",
+	"sound_definitions": {
+		"zt.titan.ambient": {
+			"category": "hostile",
+			"min_distance": 24.0,
+			"max_distance": 128.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/zombie/say1",
+					"pitch": 0.42,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/zombie/say2",
+					"pitch": 0.42,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/zombie/say3",
+					"pitch": 0.42,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.titan.hurt": {
+			"category": "hostile",
+			"min_distance": 16.0,
+			"max_distance": 96.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/zombie/hurt1",
+					"pitch": 0.45,
+					"volume": 0.8
+				},
+				{
+					"name": "sounds/mob/zombie/hurt2",
+					"pitch": 0.45,
+					"volume": 0.8
+				}
+			]
+		},
+		"zt.titan.death": {
+			"category": "hostile",
+			"min_distance": 24.0,
+			"max_distance": 192.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/zombie/death",
+					"pitch": 0.38,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/ravager/roar1",
+					"pitch": 0.4,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/ravager/roar2",
+					"pitch": 0.4,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.titan.roar": {
+			"category": "hostile",
+			"min_distance": 24.0,
+			"max_distance": 192.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/ravager/roar1",
+					"pitch": 0.55,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/ravager/roar2",
+					"pitch": 0.55,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/ravager/roar3",
+					"pitch": 0.55,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/ravager/roar4",
+					"pitch": 0.55,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/warden/roar_1",
+					"pitch": 0.62,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/warden/roar_2",
+					"pitch": 0.62,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/warden/roar_3",
+					"pitch": 0.62,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/warden/roar_4",
+					"pitch": 0.62,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/warden/roar_5",
+					"pitch": 0.62,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.titan.step": {
+			"category": "hostile",
+			"min_distance": 16.0,
+			"max_distance": 112.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/warden/step_1",
+					"pitch": 0.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/warden/step_2",
+					"pitch": 0.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/warden/step_3",
+					"pitch": 0.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/warden/step_4",
+					"pitch": 0.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/irongolem/walk1",
+					"pitch": 0.38,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/irongolem/walk2",
+					"pitch": 0.38,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/irongolem/walk3",
+					"pitch": 0.38,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/irongolem/walk4",
+					"pitch": 0.38,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.titan.slam": {
+			"category": "hostile",
+			"min_distance": 24.0,
+			"max_distance": 160.0,
+			"sounds": [
+				{
+					"name": "sounds/random/explode1",
+					"pitch": 0.55,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/random/explode2",
+					"pitch": 0.55,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/random/explode3",
+					"pitch": 0.55,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/random/explode4",
+					"pitch": 0.55,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/item/mace/smash_ground_heavy",
+					"pitch": 0.55,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.titan.swing": {
+			"category": "hostile",
+			"min_distance": 16.0,
+			"max_distance": 96.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/breeze/whirl1",
+					"pitch": 0.45,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/breeze/whirl2",
+					"pitch": 0.45,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/breeze/whirl3",
+					"pitch": 0.45,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/breeze/whirl4",
+					"pitch": 0.45,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/breeze/whirl5",
+					"pitch": 0.45,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.titan.clang": {
+			"category": "hostile",
+			"min_distance": 24.0,
+			"max_distance": 128.0,
+			"sounds": [
+				{
+					"name": "sounds/random/anvil_land",
+					"pitch": 0.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/random/anvil_break",
+					"pitch": 0.45,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.titan.block": {
+			"category": "player",
+			"min_distance": 4.0,
+			"max_distance": 24.0,
+			"sounds": [
+				{
+					"name": "sounds/random/anvil_land",
+					"pitch": 1.2,
+					"volume": 0.6
+				}
+			]
+		},
+		"zt.titan.quake": {
+			"category": "weather",
+			"min_distance": 24.0,
+			"max_distance": 192.0,
+			"sounds": [
+				{
+					"name": "sounds/ambient/weather/thunder1",
+					"pitch": 0.5,
+					"volume": 0.7
+				},
+				{
+					"name": "sounds/ambient/weather/thunder2",
+					"pitch": 0.5,
+					"volume": 0.7
+				},
+				{
+					"name": "sounds/ambient/weather/thunder3",
+					"pitch": 0.5,
+					"volume": 0.7
+				}
+			]
+		},
+		"zt.titan.summon": {
+			"category": "hostile",
+			"min_distance": 24.0,
+			"max_distance": 96.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/evocation_illager/prepare_summon",
+					"pitch": 0.6,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.titan.spit": {
+			"category": "hostile",
+			"min_distance": 24.0,
+			"max_distance": 128.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/llama/spit1",
+					"pitch": 0.4,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/llama/spit2",
+					"pitch": 0.4,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/ghast/fireball4",
+					"pitch": 0.55,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.titan.fall": {
+			"category": "hostile",
+			"min_distance": 24.0,
+			"max_distance": 256.0,
+			"sounds": [
+				{
+					"name": "sounds/random/explode1",
+					"pitch": 0.35,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/random/explode2",
+					"pitch": 0.35,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/random/explode3",
+					"pitch": 0.35,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/random/explode4",
+					"pitch": 0.35,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.titan.splat": {
+			"category": "hostile",
+			"min_distance": 12.0,
+			"max_distance": 64.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/slime/big1",
+					"pitch": 0.6,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/slime/big2",
+					"pitch": 0.6,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/slime/big3",
+					"pitch": 0.6,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/slime/big4",
+					"pitch": 0.6,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.df.punch": {
+			"category": "player",
+			"min_distance": 4.0,
+			"max_distance": 32.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/player/attack/strong1",
+					"pitch": 0.8,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/player/attack/strong2",
+					"pitch": 0.8,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/player/attack/strong3",
+					"pitch": 0.8,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/player/attack/strong4",
+					"pitch": 0.8,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/player/attack/strong1",
+					"pitch": 1.0,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/player/attack/strong2",
+					"pitch": 1.0,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/player/attack/strong3",
+					"pitch": 1.0,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/player/attack/strong4",
+					"pitch": 1.0,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/player/attack/strong1",
+					"pitch": 1.2,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/player/attack/strong2",
+					"pitch": 1.2,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/player/attack/strong3",
+					"pitch": 1.2,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/player/attack/strong4",
+					"pitch": 1.2,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.df.beam_start": {
+			"category": "player",
+			"min_distance": 8.0,
+			"max_distance": 48.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/warden/sonic_charge1",
+					"pitch": 1.25,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/warden/sonic_charge2",
+					"pitch": 1.25,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/warden/sonic_charge3",
+					"pitch": 1.25,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/warden/sonic_charge4",
+					"pitch": 1.25,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.df.beam_loop": {
+			"category": "player",
+			"min_distance": 8.0,
+			"max_distance": 64.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/warden/sonic_boom1",
+					"pitch": 0.7,
+					"volume": 0.6
+				},
+				{
+					"name": "sounds/mob/warden/sonic_boom2",
+					"pitch": 0.7,
+					"volume": 0.6
+				},
+				{
+					"name": "sounds/mob/warden/sonic_boom3",
+					"pitch": 0.7,
+					"volume": 0.6
+				},
+				{
+					"name": "sounds/mob/warden/sonic_boom4",
+					"pitch": 0.7,
+					"volume": 0.6
+				}
+			]
+		},
+		"zt.df.switch": {
+			"category": "player",
+			"min_distance": 2.0,
+			"max_distance": 16.0,
+			"sounds": [
+				{
+					"name": "sounds/block/beacon/power1",
+					"pitch": 1.6,
+					"volume": 0.8
+				},
+				{
+					"name": "sounds/block/beacon/power2",
+					"pitch": 1.6,
+					"volume": 0.8
+				},
+				{
+					"name": "sounds/block/beacon/power3",
+					"pitch": 1.6,
+					"volume": 0.8
+				}
+			]
+		},
+		"zt.df.ready": {
+			"category": "player",
+			"min_distance": 2.0,
+			"max_distance": 8.0,
+			"sounds": [
+				{
+					"name": "sounds/random/orb",
+					"pitch": 0.6,
+					"volume": 0.6
+				}
+			]
+		}
+	}
+}

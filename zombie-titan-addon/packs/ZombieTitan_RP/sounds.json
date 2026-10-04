@@ -1,0 +1,32 @@
+{
+	"entity_sounds": {
+		"entities": {
+			"zt:zombie_titan": {
+				"volume": 1.0,
+				"pitch": 1.0,
+				"events": {
+					"ambient": "zt.titan.ambient",
+					"hurt": "zt.titan.hurt",
+					"death": "zt.titan.death"
+				}
+			},
+			"zt:zombie_minion": {
+				"volume": 1.0,
+				"pitch": [
+					0.8,
+					1.0
+				],
+				"events": {
+					"ambient": "mob.zombie.say",
+					"hurt": "mob.zombie.hurt",
+					"death": "mob.zombie.death",
+					"step": {
+						"sound": "mob.zombie.step",
+						"volume": 0.15,
+						"pitch": 1.0
+					}
+				}
+			}
+		}
+	}
+}

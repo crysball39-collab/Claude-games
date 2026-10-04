@@ -1,0 +1,106 @@
+{
+	"namespace": "hud",
+
+	// Every boss bar goes through this panel. Bars whose name contains
+	// "Zombie Titan" get the custom mossy titan bar; all others keep the
+	// vanilla look exactly as before.
+	"boss_health_panel": {
+		"type": "panel",
+		"size": [182, 20],
+		"anchor_from": "top_middle",
+		"anchor_to": "top_middle",
+		"$progress_bar_collection": "boss_bars",
+		"controls": [
+			{
+				"zt_vanilla_boss_bar": {
+					"type": "panel",
+					"size": ["100%", "100%"],
+					"controls": [
+						{"boss_name@hud.boss_name_panel": {}},
+						{"progress_bar_for_collections@common.progress_bar_for_collections": {"offset": [0, 10]}}
+					],
+					"bindings": [
+						{"binding_type": "collection", "binding_collection_name": "boss_bars", "binding_name": "#bossName"},
+						{"binding_type": "view", "source_property_name": "((#bossName - 'Zombie Titan') = #bossName)", "target_property_name": "#visible"}
+					]
+				}
+			},
+			{"zt_titan_bar@hud.zt_titan_bar": {}}
+		],
+		"bindings": [
+			{
+				"binding_name": "#bar_visible",
+				"binding_type": "collection",
+				"binding_collection_name": "boss_bars",
+				"binding_name_override": "#visible"
+			}
+		]
+	},
+
+	"zt_titan_bar": {
+		"type": "panel",
+		"size": [200, 34],
+		"anchor_from": "top_middle",
+		"anchor_to": "top_middle",
+		"controls": [
+			{"zt_titan_name@hud.boss_name_panel": {}},
+			{
+				"zt_titan_frame_panel": {
+					"type": "panel",
+					"size": [200, 26],
+					"offset": [0, 8],
+					"anchor_from": "top_middle",
+					"anchor_to": "top_middle",
+					"controls": [
+						{
+							"zt_titan_bar_back": {
+								"type": "image",
+								"texture": "textures/ui/zt/titan_bar_back",
+								"size": [182, 6],
+								"offset": [0, 13],
+								"anchor_from": "top_middle",
+								"anchor_to": "top_middle",
+								"layer": 1
+							}
+						},
+						{
+							"zt_titan_bar_fill": {
+								"type": "image",
+								"texture": "textures/ui/zt/titan_bar_fill",
+								"size": [182, 6],
+								"offset": [0, 13],
+								"anchor_from": "top_middle",
+								"anchor_to": "top_middle",
+								"layer": 2,
+								"clip_direction": "left",
+								"clip_pixelperfect": false,
+								"bindings": [
+									{
+										"binding_name": "#progress_percentage",
+										"binding_name_override": "#clip_ratio",
+										"binding_type": "collection",
+										"binding_collection_name": "boss_bars"
+									}
+								]
+							}
+						},
+						{
+							"zt_titan_bar_frame": {
+								"type": "image",
+								"texture": "textures/ui/zt/titan_bar_frame",
+								"size": [200, 26],
+								"anchor_from": "top_middle",
+								"anchor_to": "top_middle",
+								"layer": 3
+							}
+						}
+					]
+				}
+			}
+		],
+		"bindings": [
+			{"binding_type": "collection", "binding_collection_name": "boss_bars", "binding_name": "#bossName"},
+			{"binding_type": "view", "source_property_name": "(not ((#bossName - 'Zombie Titan') = #bossName))", "target_property_name": "#visible"}
+		]
+	}
+}

@@ -1,0 +1,9 @@
+{
+	"resource_pack_name": "zombie_titan",
+	"texture_name": "atlas.items",
+	"texture_data": {
+		"zt_dark_fists": {"textures": "textures/items/zt_dark_fists"},
+		"zt_zombie_titan_egg": {"textures": "textures/items/zt_zombie_titan_egg"},
+		"zt_zombie_minion_egg": {"textures": "textures/items/zt_zombie_minion_egg"}
+	}
+}

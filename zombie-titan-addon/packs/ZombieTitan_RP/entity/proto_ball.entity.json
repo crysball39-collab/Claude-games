@@ -1,0 +1,21 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:proto_ball",
+			"materials": {"default": "entity_emissive_alpha"},
+			"textures": {"default": "textures/entity/proto_ball"},
+			"geometry": {"default": "geometry.zt.proto_ball"},
+			"scripts": {
+				"scale": "4.0",
+				"animate": ["controller"]
+			},
+			"animations": {
+				"spin": "animation.zt.proto_ball.spin",
+				"controller": "controller.animation.zt.proto_ball.trail"
+			},
+			"particle_effects": {"trail": "zt:proto_trail"},
+			"render_controllers": ["controller.render.zt.proto_ball"]
+		}
+	}
+}

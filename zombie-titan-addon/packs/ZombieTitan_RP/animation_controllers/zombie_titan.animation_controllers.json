@@ -1,0 +1,78 @@
+{
+	"format_version": "1.10.0",
+	"animation_controllers": {
+		"controller.animation.zt.titan.main": {
+			"initial_state": "default",
+			"states": {
+				"default": {
+					"animations": ["pose", "idle"],
+					"transitions": [
+						{"birth": "q.property('zt:anim') == 13"},
+						{"walk": "q.property('zt:anim') == 0 && q.property('zt:moving')"},
+						{"kick": "q.property('zt:anim') == 1"},
+						{"reform": "q.property('zt:anim') == 2"},
+						{"smash": "q.property('zt:anim') == 3"},
+						{"swat": "q.property('zt:anim') == 4"},
+						{"lightning": "q.property('zt:anim') == 5"},
+						{"stomp": "q.property('zt:anim') == 6"},
+						{"slash_down": "q.property('zt:anim') == 7"},
+						{"stun": "q.property('zt:anim') == 8"},
+						{"slash_side": "q.property('zt:anim') == 9"},
+						{"roar": "q.property('zt:anim') == 11"},
+						{"spit": "q.property('zt:anim') == 12"},
+						{"leap": "q.property('zt:anim') == 14"}
+					],
+					"blend_transition": 0.3
+				},
+				"walk": {
+					"animations": ["pose", "idle", "walk"],
+					"transitions": [
+						{"default": "q.property('zt:anim') != 0 || !q.property('zt:moving')"}
+					],
+					"blend_transition": 0.35
+				},
+				"birth": {
+					"animations": ["birth"],
+					"transitions": [{"default": "q.property('zt:anim') != 13"}],
+					"blend_transition": 0.6
+				},
+				"kick": {"animations": ["kick"], "transitions": [{"default": "q.property('zt:anim') != 1"}], "blend_transition": 0.25},
+				"reform": {"animations": ["reform"], "transitions": [{"default": "q.property('zt:anim') != 2"}], "blend_transition": 0.3},
+				"smash": {"animations": ["smash"], "transitions": [{"default": "q.property('zt:anim') != 3"}], "blend_transition": 0.25},
+				"swat": {"animations": ["swat"], "transitions": [{"default": "q.property('zt:anim') != 4"}], "blend_transition": 0.15},
+				"lightning": {"animations": ["lightning"], "transitions": [{"default": "q.property('zt:anim') != 5"}], "blend_transition": 0.3},
+				"stomp": {"animations": ["stomp"], "transitions": [{"default": "q.property('zt:anim') != 6"}], "blend_transition": 0.3},
+				"slash_down": {"animations": ["slash_down"], "transitions": [{"default": "q.property('zt:anim') != 7"}], "blend_transition": 0.3},
+				"stun": {"animations": ["stun"], "transitions": [{"default": "q.property('zt:anim') != 8"}], "blend_transition": 0.2},
+				"slash_side": {"animations": ["slash_side"], "transitions": [{"default": "q.property('zt:anim') != 9"}], "blend_transition": 0.3},
+				"roar": {"animations": ["roar"], "transitions": [{"default": "q.property('zt:anim') != 11"}], "blend_transition": 0.3},
+				"spit": {"animations": ["spit"], "transitions": [{"default": "q.property('zt:anim') != 12"}], "blend_transition": 0.3},
+				"leap": {"animations": ["leap"], "transitions": [{"default": "q.property('zt:anim') != 14"}], "blend_transition": 0.2}
+			}
+		},
+		"controller.animation.zt.minion.main": {
+			"initial_state": "default",
+			"states": {
+				"default": {
+					"animations": ["look", "move", "arms"],
+					"transitions": [{"casting": "q.property('zt:casting')"}],
+					"blend_transition": 0.2
+				},
+				"casting": {
+					"animations": ["look", "move", "cast"],
+					"transitions": [{"default": "!q.property('zt:casting')"}],
+					"blend_transition": 0.2
+				}
+			}
+		},
+		"controller.animation.zt.proto_ball.trail": {
+			"initial_state": "default",
+			"states": {
+				"default": {
+					"animations": ["spin"],
+					"particle_effects": [{"effect": "trail"}]
+				}
+			}
+		}
+	}
+}

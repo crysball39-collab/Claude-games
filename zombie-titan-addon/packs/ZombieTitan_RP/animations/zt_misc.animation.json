@@ -1,0 +1,71 @@
+{
+	"format_version": "1.8.0",
+	"animations": {
+		"animation.zt.proto_ball.spin": {
+			"loop": true,
+			"bones": {
+				"ball": {
+					"rotation": [
+						"q.life_time * 540",
+						"q.life_time * 360",
+						0
+					],
+					"scale": "1.0 + math.sin(q.life_time * 1440) * 0.08"
+				}
+			}
+		},
+		"animation.zt.player.barrage": {
+			"loop": false,
+			"animation_length": 7.0,
+			"bones": {
+				"rightArm": {
+					"rotation": [
+						"q.is_first_person ? math.sin(q.anim_time * 1500) * 10 : (-85 + math.sin(q.anim_time * 1200) * 25)",
+						"q.is_first_person ? 0 : 10",
+						0
+					]
+				},
+				"leftArm": {
+					"rotation": [
+						"q.is_first_person ? 0 : (-85 - math.sin(q.anim_time * 1200) * 25)",
+						"q.is_first_person ? 0 : -10",
+						0
+					]
+				}
+			}
+		},
+		"animation.zt.player.beam": {
+			"loop": false,
+			"animation_length": 5.5,
+			"bones": {
+				"rightArm": {
+					"rotation": [
+						"q.is_first_person ? 0 : (-90 + q.target_x_rotation)",
+						"q.is_first_person ? 0 : 8",
+						0
+					]
+				},
+				"leftArm": {
+					"rotation": [
+						"q.is_first_person ? 0 : (-90 + q.target_x_rotation)",
+						"q.is_first_person ? 0 : -8",
+						0
+					]
+				}
+			}
+		},
+		"animation.zt.player.reset": {
+			"loop": false,
+			"animation_length": 0.05,
+			"bones": {
+				"rightArm": {
+					"rotation": [
+						0,
+						0,
+						0
+					]
+				}
+			}
+		}
+	}
+}

@@ -1,0 +1,74 @@
+{
+	"format_version": "1.8.0",
+	"animations": {
+		"animation.zt.minion.look": {
+			"loop": true,
+			"bones": {
+				"head": {
+					"rotation": [
+						"q.target_x_rotation",
+						"q.target_y_rotation",
+						0
+					]
+				}
+			}
+		},
+		"animation.zt.minion.move": {
+			"loop": true,
+			"bones": {
+				"rightLeg": {
+					"rotation": [
+						"math.cos(q.modified_distance_moved * 38.17) * 80.0 * q.modified_move_speed",
+						0,
+						0
+					]
+				},
+				"leftLeg": {
+					"rotation": [
+						"-math.cos(q.modified_distance_moved * 38.17) * 80.0 * q.modified_move_speed",
+						0,
+						0
+					]
+				}
+			}
+		},
+		"animation.zt.minion.arms": {
+			"loop": true,
+			"bones": {
+				"rightArm": {
+					"rotation": [
+						"-90 - math.sin((v.attack_time ?? 0) * 180) * 60 + math.sin(q.life_time * 76.8) * 2.9",
+						"-5",
+						"math.cos(q.life_time * 103.1) * 2.9 + 2.9"
+					]
+				},
+				"leftArm": {
+					"rotation": [
+						"-90 - math.sin((v.attack_time ?? 0) * 180) * 60 - math.sin(q.life_time * 76.8) * 2.9",
+						"5",
+						"-math.cos(q.life_time * 103.1) * 2.9 - 2.9"
+					]
+				}
+			}
+		},
+		"animation.zt.minion.cast": {
+			"loop": true,
+			"bones": {
+				"rightArm": {
+					"rotation": [
+						"-150 + math.sin(q.life_time * 400) * 6",
+						0,
+						"30"
+					]
+				},
+				"leftArm": {
+					"rotation": [
+						"-150 - math.sin(q.life_time * 400) * 6",
+						0,
+						"-30"
+					]
+				}
+			}
+		}
+	}
+}

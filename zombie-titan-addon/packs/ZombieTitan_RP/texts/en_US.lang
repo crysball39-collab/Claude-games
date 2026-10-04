@@ -1,0 +1,10 @@
+pack.name=Zombie Titan Resources
+pack.description=The Zombie Titan boss from the Titans mod and the Dark Fists.
+entity.zt:zombie_titan.name=Zombie Titan
+entity.zt:zombie_titan_corpse.name=Fallen Zombie Titan
+entity.zt:zombie_minion.name=Zombie Minion
+entity.zt:proto_ball.name=Proto Ball
+item.spawn_egg.entity.zt:zombie_titan.name=Spawn Zombie Titan
+item.spawn_egg.entity.zt:zombie_minion.name=Spawn Zombie Minion
+item.zt:dark_fists=Dark Fists
+item.zt:dark_fists.name=Dark Fists

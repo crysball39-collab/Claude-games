@@ -1,0 +1,55 @@
+{
+	"format_version": "1.21.90",
+	"minecraft:entity": {
+		"description": {
+			"identifier": "zt:proto_ball",
+			"is_spawnable": false,
+			"is_summonable": true
+		},
+		"components": {
+			"minecraft:type_family": {
+				"family": [
+					"zt_ally",
+					"projectile",
+					"proto_ball"
+				]
+			},
+			"minecraft:collision_box": {
+				"width": 1.0,
+				"height": 1.0
+			},
+			"minecraft:physics": {},
+			"minecraft:damage_sensor": {
+				"triggers": [
+					{
+						"cause": "all",
+						"deals_damage": "no"
+					}
+				]
+			},
+			"minecraft:projectile": {
+				"anchor": 1,
+				"offset": [
+					0,
+					-0.1,
+					0
+				],
+				"power": 1.4,
+				"gravity": 0.05,
+				"inertia": 0.995,
+				"liquid_inertia": 0.9,
+				"uncertainty_base": 0,
+				"uncertainty_multiplier": 0,
+				"on_hit": {
+					"impact_damage": {
+						"damage": 24,
+						"knockback": true,
+						"destroy_on_hit": false
+					},
+					"remove_on_hit": {}
+				}
+			}
+		},
+		"events": {}
+	}
+}

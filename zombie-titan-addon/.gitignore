@@ -1,0 +1,3 @@
+__pycache__/
+# the repo ignores dist/ folders; this one holds the add-on download
+!dist/

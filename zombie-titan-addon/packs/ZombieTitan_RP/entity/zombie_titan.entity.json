@@ -1,0 +1,38 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:zombie_titan",
+			"materials": {"default": "entity_emissive_alpha"},
+			"textures": {"default": "textures/entity/zombie_titan/zombie_titan"},
+			"geometry": {"default": "geometry.zt.zombie_titan"},
+			"spawn_egg": {"texture": "zt_zombie_titan_egg"},
+			"scripts": {
+				"scale": "1.0 + 15.0 * q.property('zt:grow')",
+				"should_update_bones_and_effects_offscreen": "1.0",
+				"should_update_effects_offscreen": "1.0",
+				"animate": ["controller"]
+			},
+			"animations": {
+				"pose": "animation.zt.titan.pose",
+				"idle": "animation.zt.titan.idle",
+				"walk": "animation.zt.titan.walk",
+				"birth": "animation.zt.titan.birth",
+				"kick": "animation.zt.titan.kick",
+				"reform": "animation.zt.titan.reform",
+				"smash": "animation.zt.titan.smash",
+				"swat": "animation.zt.titan.swat",
+				"lightning": "animation.zt.titan.lightning",
+				"stomp": "animation.zt.titan.stomp",
+				"slash_down": "animation.zt.titan.slash_down",
+				"stun": "animation.zt.titan.stun",
+				"slash_side": "animation.zt.titan.slash_side",
+				"roar": "animation.zt.titan.roar",
+				"spit": "animation.zt.titan.spit",
+				"leap": "animation.zt.titan.leap",
+				"controller": "controller.animation.zt.titan.main"
+			},
+			"render_controllers": ["controller.render.zt.zombie_titan"]
+		}
+	}
+}

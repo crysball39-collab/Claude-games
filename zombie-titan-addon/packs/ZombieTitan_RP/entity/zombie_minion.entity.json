@@ -1,0 +1,29 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:zombie_minion",
+			"materials": {"default": "entity_emissive_alpha"},
+			"textures": {
+				"loyalist": "textures/entity/zombie_minion/loyalist",
+				"priest": "textures/entity/zombie_minion/priest",
+				"zealot": "textures/entity/zombie_minion/zealot",
+				"templar": "textures/entity/zombie_minion/templar"
+			},
+			"geometry": {"default": "geometry.zt.zombie_minion"},
+			"spawn_egg": {"texture": "zt_zombie_minion_egg"},
+			"scripts": {
+				"animate": ["controller"]
+			},
+			"animations": {
+				"look": "animation.zt.minion.look",
+				"move": "animation.zt.minion.move",
+				"arms": "animation.zt.minion.arms",
+				"cast": "animation.zt.minion.cast",
+				"controller": "controller.animation.zt.minion.main"
+			},
+			"render_controllers": ["controller.render.zt.zombie_minion"],
+			"enable_attachables": true
+		}
+	}
+}
