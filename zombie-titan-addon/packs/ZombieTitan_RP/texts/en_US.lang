@@ -1,5 +1,5 @@
 pack.name=Zombie Titan Resources
-pack.description=Version 1.4.0 | Zombie, Skeleton, Creeper and Spider Titan bosses (Titans mod), Dark Fists, Obsidian gear, Growth Serum, the Gum Gum Fruit, and Doors: the Library with the Figure and the Seek chase.
+pack.description=Version 1.4.1 | Zombie, Skeleton, Creeper and Spider Titan bosses (Titans mod), Dark Fists, Obsidian gear, Growth Serum, the Gum Gum Fruit, and Doors: the Library with the Figure and the Seek chase.
 entity.zt:zombie_titan.name=Zombie Titan
 entity.zt:zombie_titan_corpse.name=Fallen Zombie Titan
 entity.zt:zombie_minion.name=Zombie Minion

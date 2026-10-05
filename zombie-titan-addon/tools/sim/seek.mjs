@@ -175,6 +175,39 @@ check(log.messages.some((m) => m.includes("dragged away by Seek's hands")) || bu
   "...by Seek's hands");
 check(barLate < 15, "the bar emptied as the chase ran out (" + barLate.toFixed(0) + "%)");
 
+console.log("the rooms, walked through");
+const state = (r, u, f, k) => ow.getBlock(fr.cell(r, u, f)).permutation.getState(k);
+const passable = (id) => id === "minecraft:air" || id.endsWith("_carpet") || id.startsWith("minecraft:light_block");
+// every crawl gap: bare floor under and either side of the fallen shelf, and its top slab 1.5 blocks up
+let gapsOk = 0;
+let gapsAll = 0;
+for (const r of d.rooms) {
+  for (const sh of r.shelves) {
+    for (const rr of [r.c + sh.gap, r.c + sh.gap + 1]) {
+      gapsAll++;
+      const bare = [sh.f - 1, sh.f, sh.f + 1].every((f) => blk(rr, 0, f) === "minecraft:air");
+      const slabTop = blk(rr, 1, sh.f) === "minecraft:dark_oak_slab" && state(rr, 1, sh.f, "minecraft:vertical_half") === "top";
+      if (bare && slabTop) gapsOk++;
+    }
+  }
+}
+check(gapsAll >= 8 && gapsOk === gapsAll, "every crawl gap is 1.5 blocks high over bare floor, no carpet (" + gapsOk + "/" + gapsAll + ")");
+// every door of the three-door rooms: its doorway shut (barrier) or open, never walled up, and nothing in front of it
+let doorsOk = 0;
+let doorsAll = 0;
+for (const r of d.rooms.filter((x) => x.kind === "three")) {
+  for (const dr of [r.exit, ...r.fakes]) {
+    doorsAll++;
+    const cols = [dr.r, dr.r + 1];
+    const doorwayOk = cols.every((c) => [0, 1, 2].every((u) => ["minecraft:barrier", "minecraft:air"].includes(blk(c, u, dr.f))));
+    const frontOk = cols.every((c) => [0, 1, 2].every((u) => passable(blk(c, u, dr.f - 1)) && passable(blk(c, u, dr.f - 2))));
+    if (doorwayOk && frontOk) doorsOk++;
+  }
+}
+check(doorsAll === 9 && doorsOk === doorsAll, "all three doors of every three-door room can be walked up to, none walled over (" + doorsOk + "/" + doorsAll + ")");
+check(d.rooms.filter((x) => x.kind === "three").every((r) => r.fakeDoors.every((fd) => Doors.doorEntity(fd) && !fd.open)),
+  "the wrong doors are still there, shut");
+
 console.log("the last door");
 check(run.phase === "ending", "through the last door: it slams shut");
 check(fin.door && !fin.door.open && blk(fin.exit.r, 0, fin.exit.f) === "minecraft:barrier", "the Guiding Light shut it on Seek");
@@ -229,6 +262,10 @@ world.afterEvents.entityDie.subscribe(({ deadEntity }) => {
 });
 runTicks(25);
 check(killed && wild.valid, "it kills a player it catches");
+
+console.log("Seek runs, it never jumps");
+const seekJumps = log.teleports.filter((t) => t.typeId === "zt:seek" && t.age > 0);
+check(seekJumps.length === 0, "no teleports once it is out (" + seekJumps.length + ")");
 
 console.log("an area that won't load");
 const p5 = new Player(ow, { x: 5000.5, y: 64, z: 0.5 });

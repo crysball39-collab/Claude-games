@@ -88,7 +88,7 @@ export function forgetPlayer(id) {
  *   state: string, goal?: Local, path: Local[], replanAt: number, stateUntil: number,
  *   heard: Map<string, number>, lastHeardBy?: string, lastRoar: number, bonus: number,
  *   yaw: number, lureId?: string, lureAt: number, act: number, actUntil: number,
- *   lastPos?: Vector3, gait: number, stepAt: number, holdUntil: number, scriptSpeed?: number,
+ *   lastPos?: Vector3, gait: number, stepAt: number, holdUntil: number, scriptSpeed?: number, from?: Local,
  * }} Brain
  */
 /** @type {Map<string, Brain>} */
@@ -147,6 +147,7 @@ export function scriptMove(e, to, speed, gait = 1) {
   b.state = "scripted";
   b.goal = to;
   b.path = b.nav.path(b.run.frame.local(e.location), to) ?? [to];
+  b.from = undefined;
   b.scriptSpeed = speed;
   b.gait = gait;
 }
@@ -188,7 +189,21 @@ export function addBonus(e, amount) {
 // ---------------------------------------------------------------- movement
 const WALK_EPS = 0.35;
 
-/** Kinematic step along the brain's path. Returns true when the end was reached. @param {Brain} b @param {Entity} e */
+/** How far a frame point is from the segment a-b (across the floor). @param {Local} p @param {Local} a @param {Local} b */
+function offSegment(p, a, b) {
+  const dr = b.r - a.r;
+  const df = b.f - a.f;
+  const L2 = dr * dr + df * df;
+  const t = L2 > 0 ? Math.max(0, Math.min(1, ((p.r - a.r) * dr + (p.f - a.f) * df) / L2)) : 0;
+  return Math.hypot(a.r + dr * t - p.r, a.f + df * t - p.f);
+}
+
+/**
+ * Kinematic step along the brain's path: it walks, it never jumps. A straightened path has
+ * long legs, so the next point can be far away; only if it somehow ends up off the line it
+ * is walking does it look for a new way from where it is. Returns true at the end of the path.
+ * @param {Brain} b @param {Entity} e
+ */
 function follow(b, e, speed) {
   const fr = b.run.frame;
   const loc = e.location;
@@ -196,25 +211,21 @@ function follow(b, e, speed) {
   while (b.path.length) {
     const n = b.path[0];
     if (Math.hypot(n.r - here.r, n.f - here.f) > WALK_EPS || Math.abs(n.u - here.u) > 1.2) break;
-    b.path.shift();
+    b.from = b.path.shift();
   }
   if (!b.path.length) {
     halt(b, e);
     return true;
   }
+  if (b.from && b.goal && offSegment(here, b.from, b.path[0]) > 3) {
+    const again = b.nav.path(here, b.goal);
+    b.from = undefined;
+    if (again?.length) b.path = again;
+  }
   const n = b.path[0];
   const dr = n.r - here.r;
   const df = n.f - here.f;
   const dl = Math.hypot(dr, df);
-  // knocked far off its path (or a lag spike): put it back on it
-  if (dl > 6) {
-    try {
-      e.teleport(fr.at(n.r, n.u, n.f));
-    } catch {
-      /* ignore */
-    }
-    return false;
-  }
   const step = Math.min(speed / 20, dl || 0);
   const k = dl > 0 ? step / dl : 1;
   // the floor height runs smoothly from node to node (up the stairs to the balcony)
@@ -255,6 +266,7 @@ function planTo(b, e, goal) {
   const path = b.nav.path(fr.local(e.location), goal);
   b.goal = goal;
   b.path = path ?? [];
+  b.from = undefined;
   b.replanAt = system.currentTick + 12;
 }
 

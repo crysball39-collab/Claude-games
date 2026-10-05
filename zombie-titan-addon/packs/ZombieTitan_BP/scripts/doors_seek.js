@@ -215,8 +215,11 @@ function roomBox(r) {
   return [r0 - 1, -1, r.f0 - 1, r1 + 1, r.u1 + 1, r.f1 + 1];
 }
 
-/** @param {Frame} fr @param {Room} r @param {() => number} rng */
-function roomPlan(fr, r, rng) {
+/**
+ * @param {Frame} fr @param {Room} r @param {() => number} rng
+ * @param {Room} [prev] the room before, whose far wall this room's near wall is
+ */
+function roomPlan(fr, r, rng, prev) {
   const plan = new Plan();
   for (const b of r.boxes) hotelShell(plan, b[0], b[1], b[2], b[3], r.u1, r.paper);
   for (const b of r.boxes) plan.box(b[0], 0, b[2], b[1], r.u1, b[3], B.air);
@@ -225,10 +228,13 @@ function roomPlan(fr, r, rng) {
   // the way in: the doorway from the room before (for the first room, an open doorway)
   if (r.index === 0) plan.box(r.entryC - 1, 0, r.f0 - 1, r.entryC, 2, r.f0 - 1, B.air);
   else doorway(plan, fr, r.entryC - 1, r.f0 - 1);
+  // the room before's wrong doors are in this wall too: keep their doorways (their doors stay shut)
+  for (const fake of prev?.fakes ?? []) doorway(plan, fr, fake.r, fake.f);
   if (r.exit) doorway(plan, fr, r.exit.r, r.exit.f);
   for (const fake of r.fakes) doorway(plan, fr, fake.r, fake.f);
-  // a red runner and lights down the middle
-  if (r.kind !== "jog") plan.box(r.c - 1, 0, r.f0, r.c, 0, r.f1, B.carpet);
+  // a red runner and lights down the middle (wider in the last hall)
+  if (r.kind === "final") plan.box(r.c - 2, 0, r.f0, r.c + 1, 0, r.f1, B.carpet);
+  else if (r.kind !== "jog") plan.box(r.c - 1, 0, r.f0, r.c, 0, r.f1, B.carpet);
   const lampEvery = r.kind === "final" ? 8 : 6;
   for (let f = r.f0 + 2; f <= r.f1 - 1; f += lampEvery) {
     const lc = r.kind === "jog" ? (f < r.f0 + 6 ? r.turn.from : r.turn.to) : r.c;
@@ -255,8 +261,11 @@ function roomPlan(fr, r, rng) {
       plan.set(r1, 3, f + 2, "minecraft:red_wool");
     }
   }
-  // fallen bookshelves to crouch under: a 1.5-block gap below, only where the Guiding Light shows
+  // fallen bookshelves to crouch under: a 1.5-block gap below, only where the Guiding Light shows.
+  // No carpet under it or either side of it: standing on carpet, a crouching player is 1/16 of a
+  // block too tall to get under.
   for (const s of r.shelves) {
+    plan.box(r0, 0, s.f - 1, r1, 0, s.f + 1, B.air);
     for (let rr = r0; rr <= r1; rr++) {
       const inGap = rr >= r.c + s.gap && rr <= r.c + s.gap + 1;
       if (inGap) {
@@ -267,12 +276,10 @@ function roomPlan(fr, r, rng) {
     r.gaps.push({ r: r.c + s.gap + 1, f: s.f });
   }
   if (r.kind === "three") {
-    // the corners cut off: an octagonal room
+    // the near corners cut off; the far wall stays straight, its three doors clear to walk up to
     for (let k = 0; k < 3; k++) {
       plan.box(r0, 0, r.f0 + k, r0 + 2 - k, r.u1, r.f0 + k, B.wainscot);
       plan.box(r1 - 2 + k, 0, r.f0 + k, r1, r.u1, r.f0 + k, B.wainscot);
-      plan.box(r0, 0, r.f1 - k, r0 + 2 - k, r.u1, r.f1 - k, B.wainscot);
-      plan.box(r1 - 2 + k, 0, r.f1 - k, r1, r.u1, r.f1 - k, B.wainscot);
     }
     plan.set(r.c - 1, r.u1, (r.f0 + r.f1) >> 1, pillar(fr, "minecraft:iron_chain", "u"));
   }
@@ -292,8 +299,6 @@ function roomPlan(fr, r, rng) {
       plan.set(w.side < 0 ? r0 : r1, 4, w.f - 1, "minecraft:red_wool");
       plan.set(w.side < 0 ? r0 : r1, 4, w.f + 2, "minecraft:red_wool");
     }
-    // the chandeliers' chains in the ceiling and a long runner
-    plan.box(r.c - 2, 0, r.f0, r.c + 1, 0, r.f1, B.carpet);
   }
   if (r.kind === "exit") {
     plan.box(r.c - 1, 1, r.f1 + 1, r.c, 2, r.f1 + 1, "minecraft:sea_lantern");
@@ -383,15 +388,16 @@ function buildRoom(run, i) {
   if (!isLoaded(fr, roomBox(r))) return;
   r.building = true;
   d.buildBusy = true;
-  build(fr, roomPlan(fr, r, rngFrom(d.seed + i * 7919)), (ok, failed) => {
+  const prev = d.rooms[i - 1];
+  build(fr, roomPlan(fr, r, rngFrom(d.seed + i * 7919), prev), (ok, failed) => {
     r.building = false;
     d.buildBusy = false;
     d.skipped += failed;
     if (!ok) return;
     r.built = true;
-    // this room's walls share the doorway with the room before: keep its door shut
-    const prev = d.rooms[i - 1];
+    // this room's near wall is the room before's far wall: keep the doors in it shut
     if (prev?.door) Doors.sealDoor(run, prev.door);
+    for (const fake of prev?.fakeDoors ?? []) Doors.sealDoor(run, fake);
     furnish(run, r);
   }, () => run.phase === "over");
 }

@@ -3,6 +3,7 @@
 // players can hurt it), its fury at low health, its death and loot, and the
 // Growth Serum on spiders.
 //   node tools/sim/run.mjs spider
+import { readFileSync } from "node:fs";
 import { ItemStack, log, Player, runTicks, world } from "@minecraft/server";
 
 const warnings = [];
@@ -164,13 +165,35 @@ runTicks(240);
 check(titan.props["zt:stunned"] === false, "gets back up after 21 seconds");
 runTicks(120, () => titan.props["zt:anim"] === 0);
 
+console.log("its legs are part of its hitbox");
+{
+  const box = JSON.parse(readFileSync("entities.json", "utf8"))["zt:spider_titan"];
+  const cb = box.collision;
+  // its knees stand about 11 blocks out and 15 up, its lower legs reach 13-18 blocks out
+  let inside = 0;
+  let total = 0;
+  for (const yaw of [0, 30, 45, 90, 135]) {
+    const a = (yaw * Math.PI) / 180;
+    for (const [side, ahead, up] of [[11, -9, 14], [11, 0, 15], [11, 7, 14], [14, -7, 8], [15, 0, 6], [15, 5, 6], [13, 9, 5]]) {
+      for (const sgn of [-1, 1]) {
+        // a point `ahead` in front and `side` to one side, turned to the titan's facing
+        const dx = -Math.sin(a) * ahead - Math.cos(a) * side * sgn;
+        const dz = Math.cos(a) * ahead - Math.sin(a) * side * sgn;
+        total++;
+        if (Math.abs(dx) <= cb.width / 2 && Math.abs(dz) <= cb.width / 2 && up <= cb.height) inside++;
+      }
+    }
+  }
+  check(inside === total, "its knees and lower legs are inside its hitbox whichever way it faces (" + inside + "/" + total + ")");
+}
+
 console.log("arrows in its legs");
 let shots = 0;
 for (let i = 0; i < 8; i++) {
   runTicks(6);
   stand(player, around(titan, 30, 0), titan.location);
   const a0 = log.messages.length;
-  shoot(player, titan, around(titan, -1, i % 2 ? 7 : -7, 3));
+  shoot(player, titan, around(titan, [-1, 4, -6, 2][i % 4], i % 2 ? 13 : -13, [3, 8, 14, 6][i % 4]));
   if (since(a0).some((m) => m.includes("Leg hit") || m.includes("LEGS GIVE WAY"))) shots++;
 }
 check(shots === 8 && titan.props["zt:stunned"] === true, "eight arrows in its legs knock it down too (" + shots + ")");

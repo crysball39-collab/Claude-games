@@ -1,6 +1,6 @@
 # Titans: Zombie, Skeleton, Creeper and Spider Titans, Dark Fists, Obsidian gear, Gum Gum Fruit, Doors
 
-**Version 1.4.0**
+**Version 1.4.1**
 
 A Minecraft Bedrock (Pocket Edition) add-on that brings the **Zombie Titan**, the
 **Skeleton Titan**, the **Creeper Titan** and the **Spider Titan** from the Java
@@ -21,7 +21,7 @@ needs **no experimental toggles**. The Compact Obsidian block needs 1.26.20 or n
 1. Download **[`dist/ZombieTitan.mcaddon`](dist/ZombieTitan.mcaddon)**.
 2. Open **Files → Downloads** and tap `ZombieTitan.mcaddon`. Minecraft opens and
    imports two packs: *Zombie Titan BP* and *Zombie Titan RP*. Their descriptions
-   start with the version number (*Version 1.4.0*).
+   start with the version number (*Version 1.4.1*).
 3. Create a world, or edit one. Under **Behavior Packs**, activate
    **Zombie Titan BP**. Minecraft adds the resource pack with it.
 4. Play. Here is where everything is in the creative inventory:
@@ -42,7 +42,7 @@ If tapping the file does nothing, long-press it, choose **Open with**, and pick
   Storage**, delete the old *Zombie Titan BP* and *Zombie Titan RP*, and import
   again.
 - If the world still acts like the old version, check under **Behavior Packs**
-  that Zombie Titan BP is active and that its description says *Version 1.4.0*.
+  that Zombie Titan BP is active and that its description says *Version 1.4.1*.
 
 ## The Zombie Titan
 
@@ -311,9 +311,10 @@ A second later the loot falls into the crater:
 
 1. **Hit its legs.** Explosions and lightning never hurt it, and attacks from players
    do nothing while it stands. But **8 hits on its legs** knock it off balance:
-   - Hit a leg with a weapon. Aim at the legs beside its head and body, not at its
-     head. The action bar counts your hits: *Leg hit! 3/8*.
-   - Or shoot its legs with arrows.
+   - Hit a leg with a weapon: walk up beside it, or aim at the legs to either side of
+     its head, not at its head. The action bar counts your hits: *Leg hit! 3/8*.
+   - Or shoot its legs with arrows. Its hitbox takes in its legs (knees and all),
+     so an arrow that hits it anywhere beside its head and body counts.
    - It keeps turning to face you, so get beside it while it is busy with an
      attack.
 2. **Hit it hard while it is down.** On the 8th hit its legs give way and it drops
@@ -643,6 +644,16 @@ Development checks:
 
 ## Version history
 
+- **1.4.1**
+  - Fixed: in the Seek chase's rooms with three doors, the doors could be blocked:
+    the room's angled corners stood in front of the two side doors, and the next
+    room's wall was built over the wrong doors. All three doors are clear now.
+  - Fixed: you couldn't crouch under the fallen bookshelves. The carpet lifted you
+    1/16 of a block too high, so there is no carpet under or beside them now.
+  - Fixed: the Figure teleported around the Library. On long straight paths it
+    jumped to the end instead of walking. It always walks now.
+  - Fixed: the Spider Titan's legs couldn't be hit, and arrows went through them.
+    Its hitbox now takes in its legs.
 - **1.4.0**
   - New: the **Spider Titan**, with its own boss bar, spider minions, web shots,
     lightning, cobwebs and its leg-hit weak spot.

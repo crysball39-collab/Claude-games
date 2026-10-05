@@ -23,7 +23,7 @@ const listeners = () => {
   };
 };
 
-export const log = { sounds: [], particles: [], messages: [], commands: [], items: [], errors: [], explosions: [], animations: [] };
+export const log = { sounds: [], particles: [], messages: [], commands: [], items: [], errors: [], explosions: [], animations: [], teleports: [] };
 
 export const GameMode = { Survival: "Survival", Creative: "Creative", Adventure: "Adventure", Spectator: "Spectator" };
 export const Difficulty = { Peaceful: "Peaceful", Easy: "Easy", Normal: "Normal", Hard: "Hard" };
@@ -551,6 +551,8 @@ export class Entity {
   teleport(loc, opts) {
     if (![loc.x, loc.y, loc.z].every(Number.isFinite)) throw new Error("bad teleport");
     if (!this.valid) throw new Error("teleport of removed entity");
+    log.teleports.push({ id: this.id, typeId: this.typeId, tick: tickCounter, age: tickCounter - (this.spawnTick ?? 0),
+      jump: Math.hypot(loc.x - this.location.x, loc.y - this.location.y, loc.z - this.location.z) });
     this.location = { x: loc.x, y: loc.y, z: loc.z };
     if (opts?.dimension && opts.dimension !== this.dimension) {
       this.dimension.entities = this.dimension.entities.filter((e) => e !== this);
@@ -795,6 +797,7 @@ class Dimension {
     if (opts?.spawnEvent && ENTITIES[id] && !ENTITIES[id].events.includes(opts.spawnEvent)) throw new Error(`${id} has no event ${opts.spawnEvent}`);
     const e = id === "minecraft:player" ? new Player(this, loc) : new Entity(this, id, loc);
     e.spawnEvent = opts?.spawnEvent;
+    e.spawnTick = tickCounter;
     if (e.components["minecraft:variant"] && opts?.spawnEvent) {
       e.components["minecraft:variant"].value = { "zt:as_loyalist": 0, "zt:as_priest": 1, "zt:as_zealot": 2, "zt:as_templar": 3 }[opts.spawnEvent];
     }

@@ -80,8 +80,9 @@ def spider_titan():
                                                      "mob"]},
                 "minecraft:health": {"value": 10000, "max": 10000},
                 "minecraft:boss": {"name": "Spider Titan", "should_darken_sky": False, "hud_range": 100},
-                # wide and low: the body and the inner half of each leg
-                "minecraft:collision_box": {"width": 18.0, "height": 12.0},
+                # wide enough to take in its legs (their knees and most of their length, whichever way it
+                # faces: a collision box doesn't turn), so blows and arrows at a leg land on it
+                "minecraft:collision_box": {"width": 32.0, "height": 16.0},
                 "minecraft:physics": {"has_gravity": False, "has_collision": False},
                 "minecraft:knockback_resistance": {"value": 1.0},
                 "minecraft:fire_immune": {},

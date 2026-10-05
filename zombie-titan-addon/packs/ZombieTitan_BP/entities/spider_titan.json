@@ -77,8 +77,8 @@
 				"hud_range": 100
 			},
 			"minecraft:collision_box": {
-				"width": 18.0,
-				"height": 12.0
+				"width": 32.0,
+				"height": 16.0
 			},
 			"minecraft:physics": {
 				"has_gravity": false,

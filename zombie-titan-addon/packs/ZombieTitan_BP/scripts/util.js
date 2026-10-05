@@ -110,7 +110,7 @@ export function bodySize(e) {
     case "zt:creeper_titan":
       return { r: 4, h: 26 };
     case "zt:spider_titan":
-      return { r: 9, h: 14 };
+      return { r: 14, h: 16 };
     case "minecraft:ender_dragon":
       return { r: 6, h: 6 };
     case "minecraft:wither":

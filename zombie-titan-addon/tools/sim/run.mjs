@@ -50,6 +50,7 @@ for (const f of readdirSync(entitiesDir).filter((n) => n.endsWith(".json"))) {
     events: Object.keys(ent.events ?? {}),
     families: comps["minecraft:type_family"]?.family ?? [],
     health: comps["minecraft:health"]?.max ?? comps["minecraft:health"]?.value,
+    collision: comps["minecraft:collision_box"],
     sensor: [comps["minecraft:damage_sensor"]?.triggers ?? []].flat(),
   };
 }

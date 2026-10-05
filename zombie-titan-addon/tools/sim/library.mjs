@@ -291,6 +291,10 @@ check(only("zt:figure_lure").length === 1, "it hears you walking and heads for t
 check(only("zt:figure_bar").some((b) => dist(b.location, p3.location) < 2), "you get its meter too");
 check(wild.valid, "it is still there");
 
+console.log("the Figure walks, it never jumps");
+const jumps = log.teleports.filter((t) => t.typeId === "zt:figure" && t.age > 0);
+check(jumps.length === 0, "no teleports once it is out (" + jumps.length + (jumps.length ? ", up to " + Math.max(...jumps.map((j) => j.jump)).toFixed(1) + " blocks" : "") + ")");
+
 console.log("an area that stops loading");
 const p4 = new Player(ow, { x: 3000.5, y: 64, z: 0.5 });
 ow.entities.push(p4);
