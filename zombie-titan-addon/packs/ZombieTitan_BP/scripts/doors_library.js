@@ -50,6 +50,7 @@ const B = {
   trim: "zt:hotel_trim",
   shelf: "zt:library_shelf",
   planks: "minecraft:dark_oak_planks",
+  slab: "minecraft:dark_oak_slab",
   carpet: "minecraft:red_carpet",
   log: "minecraft:stripped_dark_oak_log",
   light: "minecraft:light_block_6",
@@ -137,9 +138,9 @@ export function layout(fr, rng) {
 
   // ---- the corridor (room 49)
   plan.box(-1, 0, ANTE.f0, 0, 0, ANTE.f1, B.carpet);
-  plan.set(ANTE.r1, 0, 3, slab(B.planks, true));
+  plan.set(ANTE.r1, 0, 3, slab(B.slab, true));
   plan.set(ANTE.r1, 1, 3, lantern(false));
-  plan.set(ANTE.r0, 0, 5, slab(B.planks, true));
+  plan.set(ANTE.r0, 0, 5, slab(B.slab, true));
   plan.set(ANTE.r0, 1, 5, candles(3));
   plan.set(-1, ANTE.u1, 2, pillar(fr, "minecraft:iron_chain", "u"));
   plan.set(-1, ANTE.u1 - 1, 2, lantern(true));
@@ -161,7 +162,7 @@ export function layout(fr, rng) {
 
   // reading tables on the right
   for (const [r0, r1] of [[5, 7], [10, 12]]) {
-    plan.box(r0, 0, 11, r1, 0, 11, slab(B.planks, true));
+    plan.box(r0, 0, 11, r1, 0, 11, slab(B.slab, true));
     plan.set(r0 + 1, 1, 11, candles(2));
     plan.set(r0, 0, 10, stairs(fr, "minecraft:dark_oak_stairs", "b"));
     plan.set(r1, 0, 12, stairs(fr, "minecraft:dark_oak_stairs", "f"));
@@ -232,7 +233,7 @@ export function layout(fr, rng) {
     for (let r = r0; r <= r1; r++) for (let u = BAL_U; u <= BAL_U + 1; u++) shelves.push([r, u, 45]);
   }
   // a reading table at the back of the floor
-  plan.box(-2, 0, 36, 1, 0, 37, slab(B.planks, true));
+  plan.box(-2, 0, 36, 1, 0, 37, slab(B.slab, true));
   plan.set(-1, 1, 36, candles(3));
   plan.set(0, 1, 37, candles(2));
   block(ground, -2, 36, 1, 37);
@@ -587,16 +588,17 @@ function start(p) {
   const run = Doors.newRun("library", p, fr, BOUNDS, data);
   p.sendMessage("§7Building the Library...");
   Doors.sound(p.dimension, "zt.doors.close", p.location, 0.6, 0.7);
-  build(fr, lay.plan, (ok) => {
+  build(fr, lay.plan, (ok, failed) => {
     if (!ok) {
-      p.sendMessage("§cThe Library couldn't be built here (part of the area unloaded). Try again in an open space.");
+      p.sendMessage("§cPart of the Library's area stopped being loaded while it was being built. Stay close until it's done, and use Door 50 again.");
       Doors.endRun(run, "build failed");
       return;
     }
+    if (failed) p.sendMessage(`§7(${failed} decoration${failed === 1 ? "" : "s"} couldn't be placed in this version of Minecraft.)`);
     furnish(run);
     run.phase = "ready";
     p.sendMessage("§6Door 50 §7is ready. Walk up to the door...");
-  });
+  }, () => run.phase === "over");
 }
 
 /** The doors, the lamp, the paper and the books. @param {Run} run */

@@ -2,7 +2,7 @@
 // Figure's hearing and its "how safe are you" meter, its deadly touch, the books, the
 // solution paper, the padlock, the escape, and dying to it.
 //   node tools/sim/run.mjs library
-import { GameMode, InputPermissionCategory, ItemStack, log, Player, runTicks, world } from "@minecraft/server";
+import { GameMode, InputPermissionCategory, ItemStack, log, Player, runTicks, unloadedChunks, world } from "@minecraft/server";
 import { ui } from "@minecraft/server-ui";
 
 const warnings = [];
@@ -60,6 +60,14 @@ check(blk(-12, 0, 12) === "minecraft:dark_oak_planks", "the librarian's desk, on
 check(blk(-14, 3, 37) === "minecraft:dark_oak_stairs" && blk(13, 6, 40) === "minecraft:dark_oak_stairs", "two staircases up to the balcony");
 check(blk(0, 6, 44) === "minecraft:dark_oak_planks" && blk(0, 7, 41) === "minecraft:dark_oak_fence", "a balcony with a railing");
 check(blk(0, 3, 4) === "minecraft:air" && blk(3, 2, 4).startsWith("zt:hotel_wall"), "a hotel corridor before door 50");
+// every kind of block goes in, whichever version of Minecraft (ZT_MC) this is
+const state = (r, u, f, k) => ow.getBlock(fr.cell(r, u, f)).permutation.getState(k);
+check(blk(2, 0, 3) === "minecraft:dark_oak_slab" && blk(5, 0, 11) === "minecraft:dark_oak_slab" && blk(-2, 0, 36) === "minecraft:dark_oak_slab"
+  && state(2, 0, 3, "minecraft:vertical_half") === "top", "slab-topped tables in the corridor, the hall and at the back");
+check(blk(0, 12, 14) === (process.env.ZT_MC === "1.21.90" ? "minecraft:chain" : "minecraft:iron_chain") && blk(0, 11, 14) === "minecraft:lantern",
+  "lanterns hang from chains (" + blk(0, 12, 14) + ")");
+check(blk(2, 1, 3) === "minecraft:lantern" && blk(-3, 1, 5) === "minecraft:candle" && blk(-12, 1, 12) === "minecraft:candle", "a lantern and candles on the tables");
+check(!log.messages.some((m) => m.includes("couldn't")) && !warnings.length, "nothing was skipped or refused");
 check(blk(-1, 0, 8) === "minecraft:barrier" && blk(0, 2, 8) === "minecraft:barrier", "door 50 is shut");
 check(blk(-1, 7, 49) === "minecraft:barrier", "door 51 is shut");
 const doors = only("zt:hotel_door");
@@ -282,6 +290,33 @@ runTicks(12, () => {
 check(only("zt:figure_lure").length === 1, "it hears you walking and heads for the sound");
 check(only("zt:figure_bar").some((b) => dist(b.location, p3.location) < 2), "you get its meter too");
 check(wild.valid, "it is still there");
+
+console.log("an area that stops loading");
+const p4 = new Player(ow, { x: 3000.5, y: 64, z: 0.5 });
+ow.entities.push(p4);
+p4.rotation = { x: 0, y: 0 };
+let m0 = log.messages.length;
+const w0 = warnings.length;
+world.afterEvents.itemUse.fire({ source: p4, itemStack: new ItemStack("zt:door_50") });
+await settle();
+const run4 = [...Doors.runs.values()].find((r) => r.owner === p4.id);
+// the far end of the room unloads before the building gets there
+const far = run4.frame.cell(0, 0, 50);
+unloadedChunks.add(`${Math.floor(far.x / 16)},${Math.floor(far.z / 16)}`);
+runTicks(40, () => run4.phase !== "building");
+check(run4.phase === "over" && Doors.runOf(p4) === undefined && Doors.pendingRunOf(p4) === undefined, "the build stops and the level is called off");
+check(since(m0).some((m) => m.includes("stopped being loaded")) && !since(m0).some((m) => m.includes("is ready")), "you're told why, and to stay close");
+check(warnings.slice(w0).length === 1 && warnings[w0].includes("unloaded"), "one note in the log");
+warnings.splice(w0);
+unloadedChunks.clear();
+runTicks(20);
+m0 = log.messages.length;
+world.afterEvents.itemUse.fire({ source: p4, itemStack: new ItemStack("zt:door_50") });
+await settle();
+const run5 = [...Doors.runs.values()].find((r) => r.owner === p4.id);
+runTicks(400, () => run5?.phase === "ready");
+check(run5?.phase === "ready" && since(m0).some((m) => m.includes("is ready")), "once it's loaded, Door 50 builds it again");
+Doors.endRun(run5, "test over");
 
 console.log("");
 if (warnings.length) {

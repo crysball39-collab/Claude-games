@@ -42,6 +42,7 @@ const B = {
   trim: "zt:hotel_trim",
   shelf: "zt:library_shelf",
   planks: "minecraft:dark_oak_planks",
+  slab: "minecraft:dark_oak_slab",
   log: "minecraft:stripped_dark_oak_log",
   carpet: "minecraft:red_carpet",
   light: "minecraft:light_block_5",
@@ -242,7 +243,7 @@ function roomPlan(fr, r, rng) {
   if (r.kind === "ante" || r.kind === "hall" || r.kind === "three") {
     for (let f = r.f0 + 2; f < r.f1 - 1; f += 7) {
       const side = rng() < 0.5 ? r0 : r1;
-      plan.set(side, 0, f, slab(B.planks, true));
+      plan.set(side, 0, f, slab(B.slab, true));
       plan.set(side, 1, f, rng() < 0.5 ? candles(2) : lantern(false));
     }
   }
@@ -259,7 +260,7 @@ function roomPlan(fr, r, rng) {
     for (let rr = r0; rr <= r1; rr++) {
       const inGap = rr >= r.c + s.gap && rr <= r.c + s.gap + 1;
       if (inGap) {
-        plan.set(rr, 1, s.f, slab(B.planks, true));
+        plan.set(rr, 1, s.f, slab(B.slab, true));
         plan.box(rr, 2, s.f, rr, r.u1, s.f, B.shelf);
       } else plan.box(rr, 0, s.f, rr, r.u1, s.f, B.shelf);
     }
@@ -279,8 +280,8 @@ function roomPlan(fr, r, rng) {
     // overturned furniture to weave around
     plan.box(r0, 0, r.f0 + 4, r.c - 1, 1, r.f0 + 4, B.shelf);
     plan.box(r.c, 0, r.f0 + 9, r1, 1, r.f0 + 9, B.shelf);
-    plan.set(r.c + 2, 0, r.f0 + 2, slab(B.planks, true));
-    plan.set(r.c - 3, 0, r.f0 + 12, slab(B.planks, true));
+    plan.set(r.c + 2, 0, r.f0 + 2, slab(B.slab, true));
+    plan.set(r.c - 3, 0, r.f0 + 12, slab(B.slab, true));
     plan.set(r.c + 1, 0, r.f0 + 13, stairs(fr, "minecraft:dark_oak_stairs", "l"));
     plan.set(r.c - 2, 0, r.f0 + 7, stairs(fr, "minecraft:dark_oak_stairs", "r"));
   }
@@ -311,7 +312,7 @@ function doorway(plan, fr, r, f) {
 /**
  * @typedef {{
  *   rooms: Room[], line: any, seed: number, rng: () => number, seekId?: string, s: number, introAt: number,
- *   chaseAt: number, lastKill: number, stepAt: number, buildBusy: boolean, endAt: number, escaped: Set<string>,
+ *   chaseAt: number, lastKill: number, stepAt: number, buildBusy: boolean, skipped: number, endAt: number, escaped: Set<string>,
  *   hands: { id: string, room: number, w: any, out: boolean, at: number, face: number }[],
  *   lights: { id: string, f: number, state: number, at: number, u: number }[],
  *   burnt: Map<string, number>, rattleAt: number, guidedRoom: number, finalOpen: boolean,
@@ -352,7 +353,7 @@ function start(p) {
   }
   /** @type {SeekData} */
   const data = {
-    rooms, line: polyline(rooms), seed, rng, s: 0, introAt: 0, chaseAt: 0, lastKill: 0, stepAt: 0, buildBusy: false,
+    rooms, line: polyline(rooms), seed, rng, s: 0, introAt: 0, chaseAt: 0, lastKill: 0, stepAt: 0, buildBusy: false, skipped: 0,
     endAt: 0, escaped: new Set(), hands: [], lights: [], burnt: new Map(), rattleAt: 0, guidedRoom: -1, finalOpen: false,
   };
   let r0 = Infinity;
@@ -363,39 +364,36 @@ function start(p) {
     r1 = Math.max(r1, b[3]);
   }
   const last = rooms[rooms.length - 1];
-  const run = Doors.newRun("seek", p, fr, [r0, -1, -1, r1, 7, last.f1 + 1], data);
+  Doors.newRun("seek", p, fr, [r0, -1, -1, r1, 7, last.f1 + 1], data);
+  // the first two rooms go up now (see tick), the rest ahead of the players as they run
   p.sendMessage("§7Building the hotel...");
-  buildRoom(run, 0, () => buildRoom(run, 1, () => {
-    run.phase = "ready";
-    p.sendMessage("§6Door 30 §7is ready. Go in... and keep going.");
-    buildRoom(run, 2);
-  }));
 }
 
-/** @param {Run} run */
-function buildRoom(run, i, then) {
+/**
+ * Build room i if it isn't yet. A room whose area isn't loaded is left for a later tick to
+ * try again.
+ * @param {Run} run
+ */
+function buildRoom(run, i) {
   /** @type {SeekData} */
   const d = run.data;
   const r = d.rooms[i];
-  if (!r || r.built || r.building) {
-    then?.();
-    return;
-  }
+  if (!r || r.built || r.building) return;
   const fr = run.frame;
   if (!isLoaded(fr, roomBox(r))) return;
   r.building = true;
   d.buildBusy = true;
-  build(fr, roomPlan(fr, r, rngFrom(d.seed + i * 7919)), (ok) => {
+  build(fr, roomPlan(fr, r, rngFrom(d.seed + i * 7919)), (ok, failed) => {
     r.building = false;
     d.buildBusy = false;
+    d.skipped += failed;
     if (!ok) return;
     r.built = true;
     // this room's walls share the doorway with the room before: keep its door shut
     const prev = d.rooms[i - 1];
     if (prev?.door) Doors.sealDoor(run, prev.door);
     furnish(run, r);
-    then?.();
-  });
+  }, () => run.phase === "over");
 }
 
 /** Doors, eyes, hands and chandeliers of a freshly built room. @param {Run} run @param {Room} r */
@@ -451,7 +449,23 @@ function tick(run, now) {
   /** @type {SeekData} */
   const d = run.data;
   const fr = run.frame;
-  if (run.phase === "building") return;
+  if (run.phase === "building") {
+    if (d.buildBusy) return;
+    const next = d.rooms.findIndex((r) => !r.built);
+    if (next >= 0 && next < 2) {
+      buildRoom(run, next);
+      return;
+    }
+    run.phase = "ready";
+    const owner = world.getEntity(run.owner);
+    if (isValid(owner)) {
+      const p = /** @type {Player} */ (owner);
+      if (d.skipped) p.sendMessage(`§7(${d.skipped} decoration${d.skipped === 1 ? "" : "s"} couldn't be placed in this version of Minecraft.)`);
+      p.sendMessage("§6Door 30 §7is ready. Go in... and keep going.");
+    }
+    buildRoom(run, 2);
+    return;
+  }
   if (run.phase === "ready") {
     const near = run.dim.getPlayers({ location: fr.at(0, 0, 20), maxDistance: 40 }).filter((p) => Doors.inside(run, p.location, 1));
     // door 30 opens for whoever walks up to it

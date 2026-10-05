@@ -109,16 +109,72 @@ export function candles(n, color = "") {
   return { id: "minecraft:" + (color ? color + "_" : "") + "candle", states: { candles: Math.max(0, Math.min(3, n - 1)), lit: true } };
 }
 
+// Block ids and states move between versions of Minecraft. A spec is written with today's
+// names; these are what older versions call the same block.
+const OLD_IDS = { "minecraft:iron_chain": "minecraft:chain" };
+
+/** @returns {BlockPermutation | undefined} */
+function tryResolve(id, states) {
+  try {
+    return BlockPermutation.resolve(id, states);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Older spellings of a block spec. @param {string} id @param {Record<string, any>} states */
+function olderForms(id, states) {
+  /** @type {[string, Record<string, any>][]} */
+  const forms = [];
+  if (OLD_IDS[id]) forms.push([OLD_IDS[id], states]);
+  const light = /^minecraft:light_block_(\d+)$/.exec(id);
+  if (light) forms.push(["minecraft:light_block", { block_light_level: Number(light[1]) }]);
+  if ("minecraft:vertical_half" in states) {
+    const { "minecraft:vertical_half": half, ...rest } = states;
+    forms.push([id, { ...rest, top_slot_bit: half === "top" }]);
+  }
+  return forms;
+}
+
+/**
+ * The closest permutation this version of Minecraft has for a spec: an older id when the
+ * current one is unknown, and any state the block doesn't have here left out (a fence
+ * without connection states joins up by itself). Undefined if there is no such block.
+ * @param {string} id @param {Record<string, any>} states
+ */
+function resolveSpec(id, states) {
+  const forms = [[id, states], ...olderForms(id, states)];
+  for (const [i, s] of forms) {
+    const p = tryResolve(i, s);
+    if (p) return p;
+  }
+  for (const [i, s] of forms) {
+    let p = tryResolve(i, {});
+    if (!p) continue;
+    for (const [k, v] of Object.entries(s)) {
+      try {
+        p = p.withState(/** @type {any} */ (k), v);
+      } catch {
+        /* not a state of this block in this version */
+      }
+    }
+    return p;
+  }
+  return undefined;
+}
+
 const permCache = new Map();
-/** @param {BlockSpec} spec */
+/** The permutation for a spec, or undefined when this version has no such block. @param {BlockSpec} spec */
 export function perm(spec) {
-  const key = typeof spec === "string" ? spec : spec.id + JSON.stringify(spec.states ?? {});
-  let p = permCache.get(key);
-  if (!p) {
-    p = typeof spec === "string" ? BlockPermutation.resolve(spec) : BlockPermutation.resolve(spec.id, spec.states ?? {});
+  const id = typeof spec === "string" ? spec : spec.id;
+  const states = typeof spec === "string" ? {} : spec.states ?? {};
+  const key = id + JSON.stringify(states);
+  if (!permCache.has(key)) {
+    const p = resolveSpec(id, states);
+    if (!p) console.warn("[Titans] doors build: no block " + id + " in this version of Minecraft");
     permCache.set(key, p);
   }
-  return p;
+  return /** @type {BlockPermutation | undefined} */ (permCache.get(key));
 }
 
 // ---------------------------------------------------------------- plans
@@ -185,10 +241,17 @@ export function worldBox(fr, box) {
 
 /** Apply one operation. @param {Frame} fr */
 export function applyOp(fr, op) {
-  const [a, b] = worldBox(fr, op.box);
   const p = perm(op.block);
+  if (!p) throw new Error("unknown block " + (typeof op.block === "string" ? op.block : op.block.id));
+  const [a, b] = worldBox(fr, op.box);
   if (a.x === b.x && a.y === b.y && a.z === b.z) fr.dim.setBlockPermutation(a, p);
   else fillWorld(fr.dim, a, b, p);
+}
+
+/** True for the errors Minecraft throws when blocks are placed in a chunk that isn't loaded. */
+export function isUnloadedError(err) {
+  const e = /** @type {any} */ (err);
+  return /unloaded/i.test(`${e?.constructor?.name ?? ""} ${e?.name ?? ""} ${e?.message ?? ""}`);
 }
 
 /** True when every chunk under the frame-space box is loaded. @param {Frame} fr */
@@ -214,25 +277,33 @@ export function fitsHeight(fr, box) {
 }
 
 /**
- * Build a plan over several ticks. `done(ok)` runs when it finishes (ok = false if a chunk
- * unloaded or a block was refused part way).
- * @param {Frame} fr @param {Plan} plan @param {(ok: boolean) => void} done @param {number} [perTick]
+ * Build a plan over several ticks. `done(ok, failed)` runs when it finishes: ok is false if
+ * part of the area wasn't loaded (the build stops there); `failed` counts operations that
+ * were skipped for any other reason, such as a block this version of Minecraft lacks. Once
+ * `stop()` is true the build is dropped where it is, without calling `done`.
+ * @param {Frame} fr @param {Plan} plan @param {(ok: boolean, failed: number) => void} done @param {() => boolean} [stop]
  */
-export function build(fr, plan, done, perTick = 24) {
+export function build(fr, plan, done, stop) {
+  const perTick = 24;
   const ops = plan.ops;
   function* job() {
     let ok = true;
+    let failed = 0;
     for (let i = 0; i < ops.length; i++) {
+      if (stop?.()) return;
       try {
         applyOp(fr, ops[i]);
       } catch (err) {
-        ok = false;
-        console.warn("[Titans] doors build: " + err);
-        break;
+        if (isUnloadedError(err)) {
+          ok = false;
+          console.warn("[Titans] doors build stopped: " + err);
+          break;
+        }
+        if (failed++ < 5) console.warn("[Titans] doors build skipped a block: " + err);
       }
       if (i % perTick === perTick - 1) yield;
     }
-    done(ok);
+    if (!stop?.()) done(ok, failed);
   }
   try {
     system.runJob(job());

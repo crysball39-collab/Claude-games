@@ -689,7 +689,15 @@ export function doorsTick(now) {
     } catch (err) {
       console.warn("[Titans] doors " + run.kind + ": " + err);
     }
-    // a built level nobody entered for five minutes, or a run with nobody left in it
+    // a level that never finished building (its area wouldn't load), a built level nobody
+    // entered for five minutes, or a run with nobody left in it
+    if (run.phase === "building" && now - run.since > 1200) {
+      const owner = world.getEntity(run.owner);
+      if (isValid(owner)) {
+        /** @type {Player} */ (owner).sendMessage("§cThe level couldn't finish building: part of its area isn't loaded. Stay close to it, or try again in an open space.");
+      }
+      endRun(run, "build failed");
+    }
     if (run.phase === "ready" && now - run.since > 6000) endRun(run, "abandoned");
     if ((run.phase === "live" || run.phase === "intro") && !livePlayers(run).length) {
       endRun(run, "nobody left");

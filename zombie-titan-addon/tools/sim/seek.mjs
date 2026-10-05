@@ -3,7 +3,7 @@
 // jog, the furniture), the last hall's hands and burning chandeliers, the Guiding Light
 // shutting the last door, and being caught.
 //   node tools/sim/run.mjs seek
-import { GameMode, InputPermissionCategory, ItemStack, log, Player, runTicks, world } from "@minecraft/server";
+import { GameMode, InputPermissionCategory, ItemStack, log, Player, runTicks, unloadedChunks, world } from "@minecraft/server";
 import { ui } from "@minecraft/server-ui";
 
 const warnings = [];
@@ -74,6 +74,8 @@ check(only("zt:hotel_door").some((e) => e.props["zt:plate"] === 1), "with its nu
 const eyes0 = only("zt:seek_eye").length;
 check(eyes0 >= 10, "eyes are already watching from the walls (" + eyes0 + ")");
 check(d.rooms[1].kind === "hall" && d.rooms[1].f1 - d.rooms[1].f0 >= 30, "a long hallway");
+check(only("zt:hotel_door").length >= 2 && !log.messages.some((m) => m.includes("couldn't")) && !warnings.length,
+  "every block of the first rooms went in, and their doors are up");
 
 console.log("Seek rises");
 walkToSeek(run, [player, buddy]);
@@ -227,6 +229,40 @@ world.afterEvents.entityDie.subscribe(({ deadEntity }) => {
 });
 runTicks(25);
 check(killed && wild.valid, "it kills a player it catches");
+
+console.log("an area that won't load");
+const p5 = new Player(ow, { x: 5000.5, y: 64, z: 0.5 });
+ow.entities.push(p5);
+p5.rotation = { x: 0, y: 0 };
+let m0 = log.messages.length;
+const fresh = () => log.messages.slice(m0);
+world.afterEvents.itemUse.fire({ source: p5, itemStack: new ItemStack("zt:door_30") });
+await settle();
+const run5 = [...Doors.runs.values()].find((r) => r.owner === p5.id);
+// the hallway's far end unloads before it is built
+const hall5 = run5.data.rooms[1];
+const far = run5.frame.cell(hall5.c, 0, hall5.f1);
+unloadedChunks.add(`${Math.floor(far.x / 16)},${Math.floor(far.z / 16)}`);
+runTicks(200);
+check(run5.data.rooms[0].built && !run5.data.rooms[1].built && run5.phase === "building" && !fresh().some((m) => m.includes("is ready")),
+  "the first room goes up; the hallway waits for its area to load");
+unloadedChunks.clear();
+runTicks(200, () => run5.phase === "ready");
+check(run5.phase === "ready" && run5.data.rooms[1].built && fresh().some((m) => m.includes("is ready")), "once it loads, the hotel is finished");
+Doors.endRun(run5, "test over");
+check(run5.data.buildBusy && run5.data.rooms[2].building, "(a room was still going up when that level ended)");
+runTicks(20);
+check(!run5.data.rooms[2].built && !(run5.data.rooms[2].ents?.length), "an ended level's build stops, and its room isn't furnished");
+m0 = log.messages.length;
+world.afterEvents.itemUse.fire({ source: p5, itemStack: new ItemStack("zt:door_30") });
+await settle();
+const run6 = [...Doors.runs.values()].find((r) => r.owner === p5.id);
+const far6 = run6.frame.cell(run6.data.rooms[1].c, 0, run6.data.rooms[1].f1);
+unloadedChunks.add(`${Math.floor(far6.x / 16)},${Math.floor(far6.z / 16)}`);
+runTicks(1300, () => run6.phase === "over");
+check(run6.phase === "over" && Doors.pendingRunOf(p5) === undefined && fresh().some((m) => m.includes("couldn't finish building")),
+  "if it never loads, the level gives up after a minute and says why (so you can start another)");
+unloadedChunks.clear();
 
 console.log("");
 if (warnings.length) {

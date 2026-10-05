@@ -2,14 +2,16 @@
 // and runs the simulation tests against them, each in a fresh process.
 //   node tools/sim/run.mjs              all tests
 //   node tools/sim/run.mjs skeleton     just tools/sim/skeleton.mjs
+//   node tools/sim/run.mjs seek@1.21.90 the Seek test with the blocks of Minecraft 1.21.90
 // Math.random is seeded so runs repeat exactly; ZT_SEED=<number> tries another seed.
-import { cpSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-const TESTS = ["smoke", "skeleton", "creeper", "items", "gumgum", "library", "seek"];
+// the Doors levels place many kinds of blocks: build them with older block lists too
+const TESTS = ["smoke", "skeleton", "creeper", "items", "gumgum", "library", "seek", "library@1.21.90", "seek@1.21.90", "library@1.26.20"];
 
 const here = dirname(fileURLToPath(import.meta.url));
 const work = mkdtempSync(join(tmpdir(), "zt-sim-"));
@@ -23,6 +25,33 @@ cpSync(join(here, "mock-server-ui.mjs"), join(uiPkg, "index.mjs"));
 writeFileSync(join(uiPkg, "package.json"), JSON.stringify({ name: "@minecraft/server-ui", type: "module", main: "index.mjs" }));
 writeFileSync(join(work, "package.json"), JSON.stringify({ type: "module" }));
 cpSync(join(here, "..", "..", "packs", "ZombieTitan_BP", "scripts"), join(work, "scripts"), { recursive: true });
+// the blocks the game knows: vanilla ones (per version) and the pack's own, with their states
+cpSync(join(here, "vanilla-blocks.json"), join(work, "vanilla-blocks.json"));
+const blocksDir = join(here, "..", "..", "packs", "ZombieTitan_BP", "blocks");
+const custom = {};
+for (const f of readdirSync(blocksDir).filter((n) => n.endsWith(".json"))) {
+  const desc = JSON.parse(readFileSync(join(blocksDir, f), "utf8"))["minecraft:block"].description;
+  const states = {};
+  for (const [k, v] of Object.entries(desc.states ?? {})) {
+    states[k] = Array.isArray(v) ? v : Array.from({ length: v.values.max - v.values.min + 1 }, (_, i) => v.values.min + i);
+  }
+  custom[desc.identifier] = states;
+}
+writeFileSync(join(work, "custom-blocks.json"), JSON.stringify(custom));
+// the pack's entities as the game reads them: properties, events, families and health
+const entitiesDir = join(here, "..", "..", "packs", "ZombieTitan_BP", "entities");
+const entities = {};
+for (const f of readdirSync(entitiesDir).filter((n) => n.endsWith(".json"))) {
+  const ent = JSON.parse(readFileSync(join(entitiesDir, f), "utf8"))["minecraft:entity"];
+  const comps = ent.components ?? {};
+  entities[ent.description.identifier] = {
+    props: ent.description.properties ?? {},
+    events: Object.keys(ent.events ?? {}),
+    families: comps["minecraft:type_family"]?.family ?? [],
+    health: comps["minecraft:health"]?.max ?? comps["minecraft:health"]?.value,
+  };
+}
+writeFileSync(join(work, "entities.json"), JSON.stringify(entities));
 // a seeded Math.random, loaded before each test (mulberry32)
 writeFileSync(join(work, "seed.mjs"), `let s = ${Number(process.env.ZT_SEED ?? 1005) >>> 0};
 Math.random = () => {
@@ -36,9 +65,13 @@ Math.random = () => {
 const wanted = process.argv.length > 2 ? process.argv.slice(2) : TESTS;
 let failed = 0;
 for (const name of wanted) {
-  cpSync(join(here, name + ".mjs"), join(work, name + ".mjs"));
+  const [file, mc] = name.split("@");
+  cpSync(join(here, file + ".mjs"), join(work, file + ".mjs"));
   console.log("=== " + name);
-  const r = spawnSync(process.execPath, ["--import", "./seed.mjs", join(work, name + ".mjs")], { stdio: "inherit", cwd: work });
+  const env = { ...process.env };
+  if (mc) env.ZT_MC = mc;
+  else delete env.ZT_MC;
+  const r = spawnSync(process.execPath, ["--import", "./seed.mjs", join(work, file + ".mjs")], { stdio: "inherit", cwd: work, env });
   if (r.status !== 0) failed++;
 }
 console.log(failed === 0 ? "ALL TESTS PASSED" : `${failed} test file(s) failed`);

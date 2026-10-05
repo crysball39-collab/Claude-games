@@ -1,5 +1,7 @@
 // A tiny stand-in for @minecraft/server, just enough to run the add-on's
 // scripts in Node and smoke-test them (flat stone world at y = 64).
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 const listeners = () => {
   const subs = [];
   return {
@@ -128,8 +130,48 @@ export class ItemStack {
   }
 }
 
+// The blocks of one version of Minecraft (ZT_MC, default the newest in vanilla-blocks.json,
+// which run.mjs puts in the working directory with custom-blocks.json for the pack's own):
+// id -> { state: allowed values }. Without those files any well-formed id passes.
+function loadBlocks() {
+  let vanilla;
+  let custom = {};
+  try {
+    vanilla = JSON.parse(readFileSync(join(process.cwd(), "vanilla-blocks.json"), "utf8"));
+    custom = JSON.parse(readFileSync(join(process.cwd(), "custom-blocks.json"), "utf8"));
+  } catch {
+    return undefined;
+  }
+  const want = process.env.ZT_MC || vanilla.base;
+  const base = vanilla.versions[vanilla.base];
+  const v = vanilla.versions[want];
+  if (!v) throw new Error("no block list for Minecraft " + want);
+  const props = { ...base.props, ...v.props };
+  const names = { ...base.blocks };
+  if (want !== vanilla.base) {
+    for (const id of v.removed) delete names[id];
+    Object.assign(names, v.blocks);
+  }
+  const table = new Map();
+  for (const [id, list] of Object.entries(names)) table.set(id, Object.fromEntries(list.map((k) => [k, props[k]])));
+  for (const [id, states] of Object.entries(custom)) table.set(id, states);
+  return { version: want, table };
+}
+export const blocks = loadBlocks();
+
+function checkState(id, k, v) {
+  const allowed = blocks?.table.get(id)?.[k];
+  if (!blocks) {
+    if (!["string", "number", "boolean"].includes(typeof v)) throw new Error("bad block state " + k);
+    return;
+  }
+  if (!allowed) throw new Error(`block ${id} has no state ${k} in Minecraft ${blocks.version}`);
+  if (!allowed.some((a) => a === v)) throw new Error(`${JSON.stringify(v)} is not a value of ${id} state ${k} in Minecraft ${blocks.version}`);
+}
+
 export const BlockTypes = {
   get(id) {
+    if (blocks) return blocks.table.has(id) ? { id } : undefined;
     return id.startsWith("minecraft:") ? { id } : undefined;
   },
 };
@@ -141,14 +183,34 @@ export class BlockPermutation {
   }
   static resolve(id, states) {
     if (typeof id !== "string" || !/^(minecraft|zt):[a-z0-9_]+$/.test(id)) throw new Error("bad block id " + id);
-    for (const [k, v] of Object.entries(states ?? {})) {
-      if (!["string", "number", "boolean"].includes(typeof v)) throw new Error("bad block state " + k);
-    }
+    if (blocks && !blocks.table.has(id)) throw new Error(`no block ${id} in Minecraft ${blocks.version}`);
+    for (const [k, v] of Object.entries(states ?? {})) checkState(id, k, v);
     return new BlockPermutation(id, states);
+  }
+  withState(k, v) {
+    checkState(this.type.id, k, v);
+    return new BlockPermutation(this.type.id, { ...this.states, [k]: v });
   }
   getState(k) {
     return this.states[k];
   }
+}
+
+// Chunks a test marks as not loaded ("cx,cz"): placing or reading blocks there throws, as in the game.
+export const unloadedChunks = new Set();
+export class LocationInUnloadedChunkError extends Error {}
+export class UnloadedChunksError extends Error {}
+function chunkUnloaded(x, z) {
+  return unloadedChunks.has(`${Math.floor(x / 16)},${Math.floor(z / 16)}`);
+}
+function areaUnloaded(a, b) {
+  if (!unloadedChunks.size) return false;
+  for (let x = Math.min(a.x, b.x); x <= Math.max(a.x, b.x) + 15; x += 16) {
+    for (let z = Math.min(a.z, b.z); z <= Math.max(a.z, b.z) + 15; z += 16) {
+      if (chunkUnloaded(Math.min(x, Math.max(a.x, b.x)), Math.min(z, Math.max(a.z, b.z)))) return true;
+    }
+  }
+  return false;
 }
 
 const stoneTop = 64;
@@ -318,6 +380,34 @@ const PROPS = {
 };
 const PROP_RANGES = { "zt:gait": [0, 2], "zt:act": [0, 4], "zt:plate": [0, 13], "zt:state": [0, 2], "zt:size": [0.4, 2.0],
   "zt:yaw": [-180, 180] };
+// The pack's own entities, read from its files by run.mjs: these win over the tables above.
+const ENTITIES = (() => {
+  try {
+    return JSON.parse(readFileSync(join(process.cwd(), "entities.json"), "utf8"));
+  } catch {
+    return {};
+  }
+})();
+for (const [id, def] of Object.entries(ENTITIES)) {
+  FAMILIES[id] = def.families;
+  if (def.health !== undefined) HEALTH[id] = def.health;
+  PROPS[id] = Object.fromEntries(Object.entries(def.props).map(([k, p]) => {
+    const fallback = { bool: false, int: p.range?.[0] ?? 0, float: p.range?.[0] ?? 0, enum: p.values?.[0] }[p.type];
+    return [k, typeof p.default === typeof fallback ? p.default : fallback];
+  }));
+}
+/** A property value the game would refuse, as an error message (or undefined). */
+function badProperty(typeId, id, v) {
+  const p = ENTITIES[typeId]?.props[id];
+  if (!p) return undefined;
+  if (p.type === "bool") return typeof v === "boolean" ? undefined : `${id} must be true or false`;
+  if (p.type === "enum") return p.values.includes(v) ? undefined : `${id} has no value ${v}`;
+  if (typeof v !== "number" || !Number.isFinite(v)) return `${id} must be a number`;
+  if (p.type === "int" && !Number.isInteger(v)) return `${id} must be whole: ${v}`;
+  if (p.range && (v < p.range[0] || v > p.range[1])) return `${id} out of range ${v}`;
+  return undefined;
+}
+
 const PROJECTILES = new Set(["zt:proto_ball", "zt:titan_arrow", "zt:growth_serum", "minecraft:fireball"]);
 
 export class Entity {
@@ -367,6 +457,8 @@ export class Entity {
   }
   setProperty(id, v) {
     if (!(id in this.props)) throw new Error(`${this.typeId} has no property ${id}`);
+    const bad = badProperty(this.typeId, id, v);
+    if (bad) throw new Error(`${this.typeId}: ${bad}`);
     if (typeof v !== typeof this.props[id]) throw new Error(`property ${id} type ${typeof v}`);
     if (id === "zt:anim" && (v < 0 || v > 15 || !Number.isInteger(v))) throw new Error("anim out of range " + v);
     if (["zt:yaw", "zt:plate", "zt:gait", "zt:act", "zt:state"].includes(id) && !Number.isInteger(v)) throw new Error(id + " must be whole: " + v);
@@ -384,6 +476,8 @@ export class Entity {
     this.dyn[k] = v;
   }
   triggerEvent(id) {
+    const def = ENTITIES[this.typeId];
+    if (def && !def.events.includes(id)) throw new Error(`${this.typeId} has no event ${id}`);
     this.events.push(id);
   }
   getComponent(id) {
@@ -686,6 +780,8 @@ class Dimension {
   }
   spawnEntity(id, loc, opts) {
     if (![loc.x, loc.y, loc.z].every(Number.isFinite)) throw new Error("bad spawn location");
+    if (id.startsWith("zt:") && Object.keys(ENTITIES).length && !ENTITIES[id]) throw new Error("no entity " + id);
+    if (opts?.spawnEvent && ENTITIES[id] && !ENTITIES[id].events.includes(opts.spawnEvent)) throw new Error(`${id} has no event ${opts.spawnEvent}`);
     const e = id === "minecraft:player" ? new Player(this, loc) : new Entity(this, id, loc);
     e.spawnEvent = opts?.spawnEvent;
     if (e.components["minecraft:variant"] && opts?.spawnEvent) {
@@ -709,6 +805,7 @@ class Dimension {
   }
   getBlock(l) {
     if (l.y < this.heightRange.min || l.y >= this.heightRange.max) throw new Error("LocationOutOfWorldBoundaries");
+    if (chunkUnloaded(l.x, l.z)) throw new LocationInUnloadedChunkError("location is in an unloaded chunk");
     return new Block(this, Math.floor(l.x), Math.floor(l.y), Math.floor(l.z));
   }
   getTopmostBlock(xz) {
@@ -728,6 +825,9 @@ class Dimension {
     const b = vol.to;
     const n = (Math.abs(b.x - a.x) + 1) * (Math.abs(b.y - a.y) + 1) * (Math.abs(b.z - a.z) + 1);
     if (n > 32768) throw new Error("fill too large: " + n);
+    if (typeof block === "string") BlockPermutation.resolve(block);
+    else if (!(block instanceof BlockPermutation)) throw new Error("not a block");
+    if (areaUnloaded(a, b)) throw new UnloadedChunksError("the area has unloaded chunks");
     if (block instanceof BlockPermutation) {
       for (let x = Math.min(a.x, b.x); x <= Math.max(a.x, b.x); x++) {
         for (let y = Math.min(a.y, b.y); y <= Math.max(a.y, b.y); y++) {
@@ -740,10 +840,13 @@ class Dimension {
   setBlockPermutation(loc, perm) {
     if (!(perm instanceof BlockPermutation)) throw new Error("not a permutation");
     if (![loc.x, loc.y, loc.z].every(Number.isInteger)) throw new Error("block location not whole: " + JSON.stringify(loc));
+    if (chunkUnloaded(loc.x, loc.z)) throw new LocationInUnloadedChunkError("location is in an unloaded chunk");
     placeBlock(loc, perm);
   }
   setBlockType(loc, id) {
-    placeBlock(loc, BlockPermutation.resolve(id));
+    const perm = BlockPermutation.resolve(id);
+    if (chunkUnloaded(loc.x, loc.z)) throw new LocationInUnloadedChunkError("location is in an unloaded chunk");
+    placeBlock(loc, perm);
   }
   createExplosion(loc, r, o) {
     if (![loc.x, loc.y, loc.z, r].every(Number.isFinite)) throw new Error("bad explosion");
