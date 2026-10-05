@@ -344,6 +344,61 @@
 				"b": 1.0,
 				"a": "q.property('zt:guided') ? 0.28 + math.sin(q.life_time * 240.0) * 0.12 : 0.0"
 			}
+		},
+		"controller.render.zt.spider_titan": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			],
+			"overlay_color": {
+				"r": "q.property('zt:enraged') ? 1.0 : this",
+				"g": "q.property('zt:enraged') ? 0.08 : this",
+				"b": "q.property('zt:enraged') ? 0.06 : this",
+				"a": "q.property('zt:enraged') ? (0.12 + math.max(0, math.sin(q.life_time * 360.0)) * 0.38) : this"
+			}
+		},
+		"controller.render.zt.spider_titan_corpse": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			]
+		},
+		"controller.render.zt.spider_minion": {
+			"arrays": {
+				"textures": {
+					"Array.skins": [
+						"Texture.loyalist",
+						"Texture.priest",
+						"Texture.zealot",
+						"Texture.templar"
+					]
+				},
+				"materials": {
+					"Array.materials": [
+						"Material.default",
+						"Material.invisible"
+					]
+				}
+			},
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Array.materials[q.is_invisible]"
+				}
+			],
+			"textures": [
+				"Array.skins[q.variant]"
+			]
 		}
 	}
 }

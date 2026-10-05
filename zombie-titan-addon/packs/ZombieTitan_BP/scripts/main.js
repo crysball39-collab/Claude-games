@@ -81,6 +81,9 @@ function projectileHit(ev, hit) {
   }
   if (type === Serum.SERUM) Serum.onSerumHit(ev.dimension, ev.location, hit, ev.source);
   else Titan.onProjectileHit(ev.projectile, ev.dimension, ev.location);
+  if (hit && Titan.isTitan(hit.typeId) && ev.source?.typeId === "minecraft:player") {
+    Titan.onTitanShot(hit, /** @type {import("@minecraft/server").Player} */ (ev.source), ev.location);
+  }
 }
 world.afterEvents.projectileHitBlock.subscribe(safe((ev) => projectileHit(ev)));
 world.afterEvents.projectileHitEntity.subscribe(

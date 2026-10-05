@@ -1,12 +1,13 @@
 // Titans: the shared loop that runs every titan type. Each tick a titan
 // heals, picks a target, walks toward it and starts or plays an attack; the
 // attacks themselves come from its type (zombie_titan.js, skeleton_titan.js,
-// creeper_titan.js).
+// creeper_titan.js, spider_titan.js).
 // Also here: the rise-from-the-ground birth, death -> corpse, loot, natural
 // night spawns and the Growth Serum turning mobs into titans.
 import { Difficulty, world } from "@minecraft/server";
 import { CREEPER_TITAN } from "./creeper_titan.js";
 import { SKELETON_TITAN } from "./skeleton_titan.js";
+import { SPIDER_TITAN } from "./spider_titan.js";
 import * as C from "./titan_common.js";
 import * as U from "./util.js";
 import { ZOMBIE_TITAN } from "./zombie_titan.js";
@@ -16,7 +17,12 @@ import { ZOMBIE_TITAN } from "./zombie_titan.js";
 /** @typedef {import("@minecraft/server").Vector3} Vector3 */
 
 /** @type {Record<string, any>} */
-export const TYPES = { [ZOMBIE_TITAN.id]: ZOMBIE_TITAN, [SKELETON_TITAN.id]: SKELETON_TITAN, [CREEPER_TITAN.id]: CREEPER_TITAN };
+export const TYPES = {
+  [ZOMBIE_TITAN.id]: ZOMBIE_TITAN,
+  [SKELETON_TITAN.id]: SKELETON_TITAN,
+  [CREEPER_TITAN.id]: CREEPER_TITAN,
+  [SPIDER_TITAN.id]: SPIDER_TITAN,
+};
 export const TITAN_IDS = Object.keys(TYPES);
 export const CORPSE_IDS = TITAN_IDS.map((id) => TYPES[id].corpse);
 export const MINION_IDS = TITAN_IDS.map((id) => TYPES[id].minion);
@@ -381,12 +387,13 @@ function tickTitan(e, s) {
 
 /** @param {Entity} e @param {any} s @param {number} fury */
 function walkEffects(e, s, fury) {
-  const period = fury > 1 ? 21 : 32;
+  const cfg = s.T.cfg;
+  const period = fury > 1 ? (cfg.stepPeriodFast ?? 21) : (cfg.stepPeriod ?? 32);
   if (s.stepTick-- > 0) return;
   s.stepTick = period;
   s.foot = -s.foot;
   const dim = e.dimension;
-  const footPos = U.offsetFrom(e.location, s.yaw, 2, s.foot * 2, 0);
+  const footPos = U.offsetFrom(e.location, s.yaw, cfg.footAhead ?? 2, s.foot * (cfg.footSide ?? 2), 0);
   U.sound(dim, s.T.snd.step, footPos, 2.2, 1);
   U.particle(dim, "zt:footstep", footPos);
   U.quake(dim, footPos, 40, 0.8, 0.35);
@@ -454,6 +461,13 @@ export function onPlayerHitTitan(player, titan) {
 export function notifyTitanBlocked(player, titan) {
   const s = stateOf(titan);
   s.T.notifyBlocked?.(player, titan, s);
+}
+
+/** A player's arrow or trident hit a titan at `location`: some care where (the Spider Titan's legs). */
+/** @param {Entity} titan @param {Player} shooter @param {Vector3} location */
+export function onTitanShot(titan, shooter, location) {
+  const s = stateOf(titan);
+  s.T.onPlayerShot?.(shooter, titan, s, location);
 }
 
 /** Proto balls, giant arrows...: the first titan type that owns the projectile handles it. */
@@ -548,7 +562,7 @@ function tickCorpse(c) {
 }
 
 // =============================================================================
-// Growth Serum: a zombie, skeleton or creeper splashed with it grows into its titan
+// Growth Serum: a zombie, skeleton, creeper or spider splashed with it grows into its titan
 // =============================================================================
 /** Mobs with a titan version of themselves, and the titan each one becomes. */
 /** @type {Record<string, string>} */
@@ -565,6 +579,9 @@ export const GROWS_INTO = {
   [SKELETON_TITAN.minion]: SKELETON_TITAN.id,
   "minecraft:creeper": CREEPER_TITAN.id,
   [CREEPER_TITAN.minion]: CREEPER_TITAN.id,
+  "minecraft:spider": SPIDER_TITAN.id,
+  "minecraft:cave_spider": SPIDER_TITAN.id,
+  [SPIDER_TITAN.minion]: SPIDER_TITAN.id,
 };
 
 /** "minecraft:zombie_villager_v2" -> "Zombie Villager" @param {string} typeId */
@@ -647,7 +664,7 @@ export function naturalSpawnTick() {
   for (const p of dim.getPlayers()) {
     if (!U.isVulnerablePlayer(p) || !U.chance(0.012)) continue;
     if (titanNear(dim, p.location, 256)) continue;
-    const T = [ZOMBIE_TITAN, SKELETON_TITAN, CREEPER_TITAN][U.randInt(0, 2)];
+    const T = [ZOMBIE_TITAN, SKELETON_TITAN, CREEPER_TITAN, SPIDER_TITAN][U.randInt(0, 3)];
     for (let attempt = 0; attempt < 6; attempt++) {
       const a = Math.random() * Math.PI * 2;
       const r = U.rand(48, 72);

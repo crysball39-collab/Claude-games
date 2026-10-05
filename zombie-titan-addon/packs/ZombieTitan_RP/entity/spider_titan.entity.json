@@ -1,0 +1,46 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:spider_titan",
+			"materials": {
+				"default": "entity_emissive_alpha"
+			},
+			"textures": {
+				"default": "textures/entity/spider_titan/spider_titan"
+			},
+			"geometry": {
+				"default": "geometry.zt.spider_titan"
+			},
+			"spawn_egg": {
+				"texture": "zt_spider_titan_egg"
+			},
+			"scripts": {
+				"scale": "1.0 + 15.0 * q.property('zt:grow')",
+				"should_update_bones_and_effects_offscreen": "1.0",
+				"should_update_effects_offscreen": "1.0",
+				"animate": [
+					"controller"
+				]
+			},
+			"animations": {
+				"idle": "animation.zt.spider.idle",
+				"walk": "animation.zt.spider.walk",
+				"birth": "animation.zt.spider.birth",
+				"smash": "animation.zt.spider.smash",
+				"anti_air": "animation.zt.spider.anti_air",
+				"sweep": "animation.zt.spider.sweep",
+				"web": "animation.zt.spider.web",
+				"lightning": "animation.zt.spider.lightning",
+				"clap": "animation.zt.spider.clap",
+				"stun": "animation.zt.spider.stun",
+				"awaken": "animation.zt.spider.awaken",
+				"leap": "animation.zt.spider.leap",
+				"controller": "controller.animation.zt.spider.main"
+			},
+			"render_controllers": [
+				"controller.render.zt.spider_titan"
+			]
+		}
+	}
+}

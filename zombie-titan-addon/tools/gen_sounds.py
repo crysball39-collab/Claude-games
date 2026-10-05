@@ -44,6 +44,10 @@ CREEPER_SAY = ["sounds/mob/creeper/say1", "sounds/mob/creeper/say2", "sounds/mob
 SLIME_BIG = ["sounds/mob/slime/big1", "sounds/mob/slime/big2", "sounds/mob/slime/big3", "sounds/mob/slime/big4"]
 SLIME_SMALL = ["sounds/mob/slime/small1", "sounds/mob/slime/small2", "sounds/mob/slime/small3", "sounds/mob/slime/small4",
                "sounds/mob/slime/small5"]
+SPIDER_SAY = ["sounds/mob/spider/say1", "sounds/mob/spider/say2", "sounds/mob/spider/say3", "sounds/mob/spider/say4"]
+SPIDER_STEP = ["sounds/mob/spider/step1", "sounds/mob/spider/step2", "sounds/mob/spider/step3", "sounds/mob/spider/step4"]
+LLAMA_SPIT = ["sounds/mob/llama/spit1", "sounds/mob/llama/spit2"]
+WEB_BREAK = ["sounds/block/web/break1", "sounds/block/web/break2", "sounds/block/web/break3"]
 MACE_GROUND = ["sounds/item/mace/smash_ground1", "sounds/item/mace/smash_ground2", "sounds/item/mace/smash_ground3",
                "sounds/item/mace/smash_ground4"]
 
@@ -126,6 +130,15 @@ def definitions():
         "zt.creeper.blast": event(snd(EXPLODE, 0.3, 1.0) + snd(THUNDER, 0.45, 1.0), category="hostile", min_d=64.0,
                                   max_d=320.0),
         "zt.creeper.thunder": event(snd(THUNDER, 0.8, 1.0), category="weather", min_d=32.0, max_d=192.0),
+        # Spider Titan: vanilla spider hisses and steps played low, with a llama's spit for its web
+        "zt.spider.ambient": event(snd(SPIDER_SAY, 0.45, 1.0)),
+        "zt.spider.hurt": event(snd(SPIDER_SAY, 0.62, 1.0), min_d=16.0, max_d=96.0),
+        "zt.spider.death": event(snd(["sounds/mob/spider/death"], 0.4, 1.0) + snd(RAV_ROAR[:2], 0.5, 0.8), max_d=192.0),
+        "zt.spider.step": event(snd(SPIDER_STEP, 0.45, 1.0) + snd(WARDEN_STEP, 0.7, 0.6), min_d=16.0, max_d=96.0),
+        "zt.spider.hiss": event(snd(SPIDER_SAY, 0.32, 1.0), min_d=32.0, max_d=160.0),
+        "zt.spider.roar": event(snd(SPIDER_SAY, 0.36, 1.0) + snd(RAV_ROAR, 0.55, 0.8), min_d=32.0, max_d=192.0),
+        "zt.spider.web": event(snd(LLAMA_SPIT, 0.45, 1.0) + snd(WEB_BREAK, 0.55, 1.0), min_d=16.0, max_d=128.0),
+        "zt.spider.web_hit": event(snd(WEB_BREAK, 0.75, 1.0) + snd(SLIME_SMALL, 0.6, 0.8), min_d=8.0, max_d=64.0),
         # Gum Gum Fruit: rubbery slime squelches, bow twangs and punches
         "zt.gum.eat": event(snd(SLIME_BIG, 0.7, 1.0), category="player", min_d=4.0, max_d=24.0),
         "zt.gum.stretch": event(snd(["sounds/random/bow"], 0.5, 0.8) + snd(SLIME_SMALL, 0.55, 1.0), category="player",
@@ -230,6 +243,21 @@ def entity_sounds():
                         "hurt": "mob.creeper.say",
                         "death": "mob.creeper.death",
                         "fuse": {"sound": "random.fuse", "volume": 1.0, "pitch": 0.5},
+                    },
+                },
+                "zt:spider_titan": {
+                    "volume": 1.0,
+                    "pitch": 1.0,
+                    "events": {"ambient": "zt.spider.ambient", "hurt": "zt.spider.hurt", "death": "zt.spider.death"},
+                },
+                "zt:spider_minion": {
+                    "volume": 1.0,
+                    "pitch": [0.8, 1.2],
+                    "events": {
+                        "ambient": "mob.spider.say",
+                        "hurt": "mob.spider.say",
+                        "death": "mob.spider.death",
+                        "step": {"sound": "mob.spider.step", "volume": 0.35, "pitch": 1.0},
                     },
                 },
                 "zt:figure": {"volume": 1.0, "pitch": 1.0, "events": {"ambient": "zt.figure.ambient"}},

@@ -1,4 +1,4 @@
-// Titan minions, zombie and skeleton alike (Java Titans mod tiers):
+// Titan minions, zombie, skeleton, creeper and spider alike (Java Titans mod tiers):
 //   Loyalist - fights for its titan
 //   Priest   - heals nearby injured allies, including the titan
 //   Zealot   - fast and strong, leaps at its prey
@@ -79,7 +79,7 @@ function tickMinion(m, tick) {
       const hp = t.getComponent("minecraft:health");
       if (hp && hp.currentValue < hp.effectiveMax) {
         hp.setCurrentValue(Math.min(hp.effectiveMax, hp.currentValue + 60));
-        U.particle(dim, "minecraft:heart_particle", U.add(t.location, { x: 0, y: 22, z: 0 }));
+        U.particle(dim, "minecraft:heart_particle", U.add(t.location, { x: 0, y: U.bodySize(t).h * 0.7, z: 0 }));
         healed = true;
       }
     }

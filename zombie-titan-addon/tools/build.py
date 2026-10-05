@@ -32,6 +32,9 @@ GENERATORS = (
     "gen_creeper_art.py",
     "gen_creeper_anims.py",
     "gen_creeper_data.py",
+    "gen_spider_art.py",
+    "gen_spider_anims.py",
+    "gen_spider_data.py",  # after gen_creeper_data.py: both add to item_texture.json and the render controllers
     "gen_gum_art.py",
     "gen_gum_anims.py",
     "gen_gum_data.py",

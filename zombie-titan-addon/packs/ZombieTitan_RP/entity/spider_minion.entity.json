@@ -1,0 +1,41 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:spider_minion",
+			"materials": {
+				"default": "spider",
+				"invisible": "spider_invisible"
+			},
+			"textures": {
+				"loyalist": "textures/entity/spider_minion/loyalist",
+				"priest": "textures/entity/spider_minion/priest",
+				"zealot": "textures/entity/spider_minion/zealot",
+				"templar": "textures/entity/spider_minion/templar"
+			},
+			"geometry": {
+				"default": "geometry.spider.v1.8"
+			},
+			"spawn_egg": {
+				"texture": "zt_spider_minion_egg"
+			},
+			"scripts": {
+				"animate": [
+					"move",
+					"cast"
+				]
+			},
+			"animations": {
+				"default_leg_pose": "animation.spider.default_leg_pose",
+				"look_at_target": "animation.spider.look_at_target",
+				"walk": "animation.spider.walk",
+				"move": "controller.animation.spider.move",
+				"cast_wave": "animation.zt.spider_minion.cast",
+				"cast": "controller.animation.zt.spider_minion.cast"
+			},
+			"render_controllers": [
+				"controller.render.zt.spider_minion"
+			]
+		}
+	}
+}

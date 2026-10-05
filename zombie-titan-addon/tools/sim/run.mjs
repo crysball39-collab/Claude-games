@@ -11,7 +11,8 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 // the Doors levels place many kinds of blocks: build them with older block lists too
-const TESTS = ["smoke", "skeleton", "creeper", "items", "gumgum", "library", "seek", "library@1.21.90", "seek@1.21.90", "library@1.26.20"];
+const TESTS = ["smoke", "skeleton", "creeper", "spider", "items", "gumgum", "library", "seek", "library@1.21.90", "seek@1.21.90",
+  "library@1.26.20"];
 
 const here = dirname(fileURLToPath(import.meta.url));
 const work = mkdtempSync(join(tmpdir(), "zt-sim-"));
@@ -49,6 +50,7 @@ for (const f of readdirSync(entitiesDir).filter((n) => n.endsWith(".json"))) {
     events: Object.keys(ent.events ?? {}),
     families: comps["minecraft:type_family"]?.family ?? [],
     health: comps["minecraft:health"]?.max ?? comps["minecraft:health"]?.value,
+    sensor: [comps["minecraft:damage_sensor"]?.triggers ?? []].flat(),
   };
 }
 writeFileSync(join(work, "entities.json"), JSON.stringify(entities));

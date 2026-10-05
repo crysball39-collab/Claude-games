@@ -1,0 +1,29 @@
+{
+	"format_version": "1.10.0",
+	"animation_controllers": {
+		"controller.animation.zt.spider_minion.cast": {
+			"initial_state": "default",
+			"states": {
+				"default": {
+					"transitions": [
+						{
+							"casting": "q.property('zt:casting')"
+						}
+					],
+					"blend_transition": 0.2
+				},
+				"casting": {
+					"animations": [
+						"cast_wave"
+					],
+					"transitions": [
+						{
+							"default": "!q.property('zt:casting')"
+						}
+					],
+					"blend_transition": 0.2
+				}
+			}
+		}
+	}
+}

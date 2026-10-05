@@ -252,6 +252,37 @@ def effects():
             ["0.3 + v.particle_random_3 * 0.3", "0.3 + v.particle_random_3 * 0.3"], 16, 16),
         "minecraft:particle_appearance_tinting": {"color": [0.93, 0.91, 0.84, 1.0]},
     })
+    # --- Spider Titan: its web shot, a pale strand along v.dir for v.len blocks, and the web bursting
+    #     over its target -------------------------------------------------------------------------------
+    E["web_strand"] = effect("zt:web_strand", "particles_alpha", SPARK, {
+        "minecraft:emitter_rate_instant": {"num_particles": "math.min(140, v.len * 3)"},
+        "minecraft:emitter_lifetime_once": {"active_time": 0.05},
+        "minecraft:emitter_shape_point": {
+            "offset": ["v.dir.x * %s + (v.particle_random_2 - 0.5) * 0.5" % along,
+                       "v.dir.y * %s + (v.particle_random_3 - 0.5) * 0.5" % along,
+                       "v.dir.z * %s + (v.particle_random_4 - 0.5) * 0.5" % along],
+            "direction": ["v.dir.x", "v.dir.y", "v.dir.z"],
+        },
+        "minecraft:particle_lifetime_expression": {"max_lifetime": "0.6 + v.particle_random_2 * 0.5"},
+        "minecraft:particle_initial_speed": 0.2,
+        "minecraft:particle_motion_dynamic": {"linear_acceleration": [0, -1.5, 0]},
+        "minecraft:particle_appearance_billboard": billboard(
+            ["0.22 + v.particle_random_3 * 0.18", "0.22 + v.particle_random_3 * 0.18"], 16, 16),
+        "minecraft:particle_appearance_tinting": gradient({
+            "0.0": [0.95, 0.95, 0.92, 1.0], "0.7": [0.88, 0.88, 0.86, 0.9], "1.0": [0.8, 0.8, 0.8, 0.0]}),
+    })
+    E["web_burst"] = effect("zt:web_burst", "particles_alpha", SPARK, {
+        "minecraft:emitter_rate_instant": {"num_particles": 46},
+        "minecraft:emitter_lifetime_once": {"active_time": 0.05},
+        "minecraft:emitter_shape_sphere": {"radius": 1.0, "direction": "outwards"},
+        "minecraft:particle_lifetime_expression": {"max_lifetime": "0.9 + v.particle_random_1 * 0.7"},
+        "minecraft:particle_initial_speed": "3 + v.particle_random_2 * 5",
+        "minecraft:particle_motion_dynamic": {"linear_drag_coefficient": 3.0, "linear_acceleration": [0, -3, 0]},
+        "minecraft:particle_appearance_billboard": billboard(
+            ["0.3 + v.particle_random_3 * 0.3", "0.3 + v.particle_random_3 * 0.3"], 16, 16),
+        "minecraft:particle_appearance_tinting": gradient({
+            "0.0": [1.0, 1.0, 0.97, 1.0], "0.8": [0.9, 0.9, 0.88, 0.85], "1.0": [0.85, 0.85, 0.85, 0.0]}),
+    })
     # --- Obsidian Sword dash: a dark purple streak behind the player ------------------------
     E["dash_trail"] = effect("zt:dash_trail", "particles_add", GLOW, {
         "minecraft:emitter_rate_instant": {"num_particles": 10},

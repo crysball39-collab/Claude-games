@@ -1,14 +1,14 @@
-# Titans: Zombie, Skeleton and Creeper Titans, Dark Fists, Obsidian gear, Gum Gum Fruit, Doors
+# Titans: Zombie, Skeleton, Creeper and Spider Titans, Dark Fists, Obsidian gear, Gum Gum Fruit, Doors
 
-**Version 1.3.0**
+**Version 1.4.0**
 
 A Minecraft Bedrock (Pocket Edition) add-on that brings the **Zombie Titan**, the
-**Skeleton Titan** and the **Creeper Titan** from the Java *Titans Mod* to Bedrock,
-each with its own boss bar. It also adds:
+**Skeleton Titan**, the **Creeper Titan** and the **Spider Titan** from the Java
+*Titans Mod* to Bedrock, each with its own boss bar. It also adds:
 
 - the **Dark Fists** weapon
 - a full set of **Obsidian** tools and armor, made from **Compact Obsidian**
-- the **Growth Serum**, which turns zombies, skeletons and creepers into titans
+- the **Growth Serum**, which turns zombies, skeletons, creepers and spiders into titans
 - the **Gum Gum Fruit**: eat it to get rubber powers (and lose the ability to swim)
 - two levels from the Roblox horror game **DOORS**: **Door 50** (the Library, with
   **the Figure**) and **Door 30** (the **Seek** chase)
@@ -21,11 +21,11 @@ needs **no experimental toggles**. The Compact Obsidian block needs 1.26.20 or n
 1. Download **[`dist/ZombieTitan.mcaddon`](dist/ZombieTitan.mcaddon)**.
 2. Open **Files → Downloads** and tap `ZombieTitan.mcaddon`. Minecraft opens and
    imports two packs: *Zombie Titan BP* and *Zombie Titan RP*. Their descriptions
-   start with the version number (*Version 1.3.0*).
+   start with the version number (*Version 1.4.0*).
 3. Create a world, or edit one. Under **Behavior Packs**, activate
    **Zombie Titan BP**. Minecraft adds the resource pack with it.
 4. Play. Here is where everything is in the creative inventory:
-   - **Spawn eggs** (the three titans and their minions): with the other spawn eggs.
+   - **Spawn eggs** (the four titans and their minions): with the other spawn eggs.
    - **Dark Fists** and the **Obsidian** tools and armor: in the Equipment tab.
    - **Compact Obsidian**: in the Construction tab.
    - **Growth Serum**: in the Items tab.
@@ -42,7 +42,7 @@ If tapping the file does nothing, long-press it, choose **Open with**, and pick
   Storage**, delete the old *Zombie Titan BP* and *Zombie Titan RP*, and import
   again.
 - If the world still acts like the old version, check under **Behavior Packs**
-  that Zombie Titan BP is active and that its description says *Version 1.3.0*.
+  that Zombie Titan BP is active and that its description says *Version 1.4.0*.
 
 ## The Zombie Titan
 
@@ -62,7 +62,7 @@ If tapping the file does nothing, long-press it, choose **Open with**, and pick
   8 seconds. See [Growth Serum](#growth-serum).
 - **Naturally.** At night, there is a small chance that a titan rises 48–72 blocks
   from a player. The rise takes 43 seconds and the player gets a warning.
-  - It is a Zombie, Skeleton or Creeper Titan, with even odds.
+  - It is a Zombie, Skeleton, Creeper or Spider Titan, with even odds.
   - At most one titan rises every two in-game days.
   - Natural spawns never happen on Peaceful.
   - To turn them off, run `/scriptevent zt:natural_spawns off`. Use `on` to turn
@@ -277,6 +277,73 @@ A second later the loot falls into the crater:
 - a 1 in 10 chance of a bedrock block
 - 50,000 XP for the player who killed it
 
+## The Spider Titan
+
+| | |
+|---|---|
+| Size | 16 blocks tall at the knees and about 32 across its legs (16× a spider) |
+| Health | 10,000 HP |
+| Damage | 90 per hit; its Force Smash deals 5×, its Frontal Clap and lightning 2× |
+| XP | 12,000 to the player who kills it |
+| Boss bar | Custom bar with a black frame, red eyes at the ends, cobwebs in the corners and a spider hanging over it |
+
+### Spawning
+
+- **Spawn egg.** It rises out of the ground at spider size, hissing, and grows to
+  full size over 10 seconds. While it is rising it can't be hurt.
+- **Naturally.** At night, like the Zombie Titan.
+- **Growth Serum.** Throw one at a spider or a cave spider.
+
+### Attacks
+
+| Attack | What it does |
+|---|---|
+| **Force Smash** | Rears up high on its back legs, then crashes down: everything within 26 blocks takes 5× damage and is flung into the air. When it rears up, run! |
+| **Sweep** | Swings a front leg across, hitting you and everything near you. |
+| **Frontal Clap** | Spreads its front legs wide and claps them shut in front of it: 2× damage. |
+| **Anti-titan strike** | Stabs upward at players who fly or stand 10 or more blocks up, and at other giants: 4× damage. |
+| **Web Shot** | When you are far away: it curls its abdomen up over its back and shoots a strand of web at you. It hits, slows you down, and cobwebs bloom all around you. |
+| **Lightning Shot** | When you are far away: it rears up with its front legs raised to the sky, then whips them down. Lightning and blasts strike you and everything within 6 blocks of you. |
+| **Leap** | Now and then it jumps at players who are far away. |
+| **Webs** | While it hunts you, it spins cobwebs where you stand (with `mobGriefing` on). All its cobwebs melt away after 30 seconds. |
+
+### How to beat it
+
+1. **Hit its legs.** Explosions and lightning never hurt it, and attacks from players
+   do nothing while it stands. But **8 hits on its legs** knock it off balance:
+   - Hit a leg with a weapon. Aim at the legs beside its head and body, not at its
+     head. The action bar counts your hits: *Leg hit! 3/8*.
+   - Or shoot its legs with arrows.
+   - It keeps turning to face you, so get beside it while it is busy with an
+     attack.
+2. **Hit it hard while it is down.** On the 8th hit its legs give way and it drops
+   flat on the ground for 21 seconds. Now it can be hurt. It can't heal while it is
+   down, and the **Dark Fists** deal **5×** damage to it. Gum Gum moves count as
+   hits too.
+3. **Fury.** Below 1/4 of its health it flashes red: it moves and attacks faster
+   and takes half damage.
+
+### Minions
+
+Spider minions climb walls and leap at you like spiders. They come in the same four
+types as the other minions: Loyalist (brown), Priest (pale, heals the titan),
+Zealot (red, fast and strong) and Templar (steel blue, calls down lightning). There
+is a spawn egg for them too.
+
+### Death and loot
+
+When it dies, it rears up one last time and its legs give way. It crashes to the
+ground, rolls over onto its back and curls its legs up, the way dead spiders do.
+Then the loot falls:
+
+- 256–511 string
+- 64–127 spider eyes and 24–47 fermented spider eyes
+- 24–47 cobwebs and 24–47 mossy cobblestone
+- 36–71 leather, 48–95 iron ingots and 32–63 coal
+- 8–15 emeralds and 8–15 diamonds
+- up to 3 netherite scrap
+- 12,000 XP for the player who killed it
+
 ## Dark Fists
 
 | | |
@@ -372,6 +439,7 @@ Throw it at a mob that has a titan form, and the mob grows into that titan over
 | Zombie, Husk, Drowned, Zombie Villager, Zombie Minion | **Zombie Titan** |
 | Skeleton, Stray, Bogged, Skeleton Minion | **Skeleton Titan** |
 | Creeper, Creeper Minion | **Creeper Titan** |
+| Spider, Cave Spider, Spider Minion | **Spider Titan** |
 
 - Throw it with **Use**, like a splash potion. A near miss still works if the
   bottle breaks within 2½ blocks of the mob.
@@ -565,11 +633,30 @@ Development checks:
 - **Simulation.** Runs the behaviour pack scripts against a mock of the
   `@minecraft/server` and `@minecraft/server-ui` APIs: `node tools/sim/run.mjs`.
   Random numbers are seeded so runs repeat; set `ZT_SEED=<number>` to try others.
+  The mock refuses blocks and block states the game would refuse, using Mojang's
+  block lists in `tools/sim/vanilla-blocks.json` (made by
+  `tools/sim/gen_vanilla_blocks.py`). It also reads the pack's entity files for their
+  properties, events and damage sensors. `node tools/sim/run.mjs seek@1.21.90` runs
+  a test with an older version's blocks.
 - **Preview.** `tools/preview.py` renders the model, textures and animation
   poses to PNG.
 
 ## Version history
 
+- **1.4.0**
+  - New: the **Spider Titan**, with its own boss bar, spider minions, web shots,
+    lightning, cobwebs and its leg-hit weak spot.
+  - The Growth Serum now also works on spiders and cave spiders, and natural spawns
+    can be any of the four titans.
+  - Fixed: **Door 50** said part of the area wasn't loaded and left the Library
+    empty, and **Door 30** stopped at "Building the hotel..." after one room with no
+    doors. Both placed a slab state on a block that has none, and the builder gave
+    up at the first block Minecraft refused.
+    - The builder now adapts each block to your version of Minecraft. It skips a
+      block it can't place and keeps going.
+    - It only stops when the area really is unloaded, and then it says so.
+  - Fixed: a level that can't finish building gives up after a minute, so you can
+    start another one.
 - **1.3.0**
   - New: **Door 50 Library**: the Library from DOORS, with the Figure, ten shape
     books, the solution paper and door 51's padlock.

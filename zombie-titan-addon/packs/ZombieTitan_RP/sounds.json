@@ -61,6 +61,32 @@
 					}
 				}
 			},
+			"zt:spider_titan": {
+				"volume": 1.0,
+				"pitch": 1.0,
+				"events": {
+					"ambient": "zt.spider.ambient",
+					"hurt": "zt.spider.hurt",
+					"death": "zt.spider.death"
+				}
+			},
+			"zt:spider_minion": {
+				"volume": 1.0,
+				"pitch": [
+					0.8,
+					1.2
+				],
+				"events": {
+					"ambient": "mob.spider.say",
+					"hurt": "mob.spider.say",
+					"death": "mob.spider.death",
+					"step": {
+						"sound": "mob.spider.step",
+						"volume": 0.35,
+						"pitch": 1.0
+					}
+				}
+			},
 			"zt:figure": {
 				"volume": 1.0,
 				"pitch": 1.0,

@@ -137,7 +137,7 @@ def main():
     # charged-creeper swirl when bedrock-samples is at hand)
     vanilla_rp = os.path.abspath(os.path.join(sys.argv[1], "..", "..", "resource_pack")) if len(sys.argv) > 1 else None
 
-    ours = ("/zt", "zombie_titan", "skeleton_titan", "creeper_titan", "_minion", "titan_arrow", "proto_ball")
+    ours = ("/zt", "zombie_titan", "skeleton_titan", "creeper_titan", "spider_titan", "_minion", "titan_arrow", "proto_ball")
 
     def tex_exists(ref):
         roots = [RP] + ([vanilla_rp] if vanilla_rp and not ref.startswith("textures/ui/zt") else [])

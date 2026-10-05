@@ -133,6 +133,12 @@
 		},
 		"zt_book_crescent": {
 			"textures": "textures/items/zt_book_crescent"
+		},
+		"zt_spider_titan_egg": {
+			"textures": "textures/items/zt_spider_titan_egg"
+		},
+		"zt_spider_minion_egg": {
+			"textures": "textures/items/zt_spider_minion_egg"
 		}
 	}
 }

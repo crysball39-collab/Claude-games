@@ -282,11 +282,15 @@ def render(geo_path, tex_path, out_path, pose=None, yaw=-35, pitch=18, size=900,
     cxm, cym = (minx + maxx) / 2, (miny + maxy) / 2
 
     canvas = Image.new("RGBA", (size, size), (120, 160, 200, 255))
-    # ground line
     dz = ImageDraw.Draw(canvas)
 
     def P(p):
         return (size / 2 + (p[0] - cxm) * k, size / 2 - (p[1] - cym) * k)
+
+    # ground line (the model's y = 0) in level views
+    if pitch == 0:
+        gy = P((0, 0, 0))[1]
+        dz.line([(0, gy), (size, gy)], fill=(70, 110, 60, 255), width=2)
 
     faces.sort(key=lambda f: f[0][:, 2].mean())   # far (low z) first; camera looks toward -z
     for pts, (u, v, w, h), n, mirror in faces:

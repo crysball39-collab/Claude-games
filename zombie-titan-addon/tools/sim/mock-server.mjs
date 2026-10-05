@@ -330,6 +330,8 @@ const FAMILIES = {
   "zt:creeper_minion": ["creeper_minion", "zt_ally", "creeper", "monster", "mob"],
   "zt:creeper_titan_corpse": ["zt_ally", "inanimate"],
   "minecraft:creeper": ["creeper", "monster", "mob"],
+  "minecraft:spider": ["spider", "arthropod", "monster", "mob"],
+  "minecraft:cave_spider": ["cave_spider", "spider", "arthropod", "monster", "mob"],
   "minecraft:player": ["player"],
   "minecraft:zombie": ["zombie", "monster", "mob"],
   "minecraft:skeleton": ["skeleton", "undead", "monster", "mob"],
@@ -356,6 +358,7 @@ const HEALTH = {
   "minecraft:villager_v2": 20, "zt:skeleton_titan": 20000, "zt:skeleton_minion": 30, "zt:skeleton_titan_corpse": 1,
   "minecraft:skeleton": 20, "minecraft:husk": 20, "minecraft:cow": 10,
   "zt:creeper_titan": 25000, "zt:creeper_minion": 30, "zt:creeper_titan_corpse": 1, "minecraft:creeper": 20,
+  "minecraft:spider": 16, "minecraft:cave_spider": 12,
   "zt:figure": 50000, "zt:seek": 1000, "zt:figure_bar": 100, "zt:seek_bar": 100, "zt:figure_lure": 1, "zt:hotel_door": 1,
   "zt:library_book": 1, "zt:library_paper": 1, "zt:library_lamp": 1, "zt:chandelier": 1, "zt:seek_hand": 1, "zt:seek_eye": 1,
 };
@@ -396,6 +399,36 @@ for (const [id, def] of Object.entries(ENTITIES)) {
     return [k, typeof p.default === typeof fallback ? p.default : fallback];
   }));
 }
+/** Does a damage sensor filter pass? (the tests this pack uses; anything else is a mock gap) */
+function sensorFilter(f, self, other) {
+  if (!f) return true;
+  if (Array.isArray(f)) return f.every((g) => sensorFilter(g, self, other));
+  if (f.all_of) return f.all_of.every((g) => sensorFilter(g, self, other));
+  if (f.any_of) return f.any_of.some((g) => sensorFilter(g, self, other));
+  const subj = (f.subject ?? "self") === "other" ? other : self;
+  let result;
+  if (f.test === "is_family") result = !!subj && (FAMILIES[subj.typeId] ?? []).includes(f.value);
+  else if (f.test === "bool_property") result = !!subj && subj.props?.[f.domain] === (f.value ?? true);
+  else if (f.test === "has_equipment") result = !!subj && f.domain === "hand" && subj.held?.typeId === f.value;
+  else throw new Error("mock damage sensor: no filter test " + f.test);
+  return (f.operator ?? "==") === "!=" ? !result : result;
+}
+/**
+ * An entity's damage sensor from its behaviour file: the first trigger whose cause and filters
+ * match decides. Returns the damage dealt (0 when the trigger says it deals none).
+ */
+function sensed(self, amount, opts) {
+  const cause = String(opts?.cause ?? "none").replace(/[A-Z]/g, (c) => "_" + c.toLowerCase());
+  for (const t of ENTITIES[self.typeId]?.sensor ?? []) {
+    if (t.cause && t.cause !== "all" && t.cause !== cause) continue;
+    if (!sensorFilter(t.on_damage?.filters, self, opts?.damagingEntity)) continue;
+    if (t.on_damage?.event) self.events.push(t.on_damage.event);
+    if (t.deals_damage === "no" || t.deals_damage === false) return 0;
+    return amount * (t.damage_multiplier ?? 1);
+  }
+  return amount;
+}
+
 /** A property value the game would refuse, as an error message (or undefined). */
 function badProperty(typeId, id, v) {
   const p = ENTITIES[typeId]?.props[id];
@@ -487,32 +520,10 @@ export class Entity {
     if (!Number.isFinite(amount) || amount < 0) throw new Error("bad damage " + amount);
     const hp = this.components["minecraft:health"];
     if (!hp) return false;
-    // Doors scenery and Seek: nothing hurts them. The Figure: only weapons, and not its own kind
-    if (DOORS_PROPS.has(this.typeId) || this.typeId === "zt:seek") return false;
-    if (this.typeId === "zt:figure") {
-      const src = opts?.damagingEntity;
-      if (!["entityAttack", "projectile"].includes(opts?.cause)) return false;
-      if (src && (FAMILIES[src.typeId]?.includes("zt_figure") || FAMILIES[src.typeId]?.includes("zt_seek"))) return false;
-    }
-    // the titan's damage sensor: immune while armed to players, allies never hurt it
-    if (this.typeId === "zt:zombie_titan") {
-      const src = opts?.damagingEntity;
-      if (this.props["zt:birth"]) return false;
-      if (src && FAMILIES[src.typeId]?.includes("zt_ally")) return false;
-      if (src?.typeId === "minecraft:player" && this.props["zt:armed"]) return false;
-      if (src?.typeId === "minecraft:player" && src.held?.typeId === "zt:dark_fists") amount *= this.props["zt:enraged"] ? 2.5 : 5;
-      else if (this.props["zt:enraged"]) amount *= 0.5;
-    }
-    // the skeleton and creeper titans' damage sensors: players only hurt them while they are stunned
-    if (this.typeId === "zt:creeper_titan" && ["lightning", "entityExplosion", "blockExplosion"].includes(opts?.cause)) return false;
-    if (this.typeId === "zt:skeleton_titan" || this.typeId === "zt:creeper_titan") {
-      const src = opts?.damagingEntity;
-      if (this.props["zt:birth"]) return false;
-      if (src && FAMILIES[src.typeId]?.includes("zt_ally")) return false;
-      if (src?.typeId === "minecraft:player" && !this.props["zt:stunned"]) return false;
-      if (opts?.cause === "projectile" && this.props["zt:enraged"]) return false;
-      if (src?.typeId === "minecraft:player" && src.held?.typeId === "zt:dark_fists") amount *= this.props["zt:enraged"] ? 2.5 : 5;
-      else if (this.props["zt:enraged"]) amount *= 0.5;
+    // the pack's own entities: their damage sensors, read from their behaviour files
+    if (ENTITIES[this.typeId]) {
+      amount = sensed(this, amount, opts);
+      if (amount <= 0) return false;
     }
     if (FAMILIES[this.typeId]?.includes("zt_ally") && opts?.damagingEntity && FAMILIES[opts.damagingEntity.typeId]?.includes("zt_ally")) return false;
     this.damageTaken += amount;
