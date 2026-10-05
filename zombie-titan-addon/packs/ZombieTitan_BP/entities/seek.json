@@ -1,0 +1,157 @@
+{
+	"format_version": "1.21.90",
+	"minecraft:entity": {
+		"description": {
+			"identifier": "zt:seek",
+			"is_spawnable": true,
+			"is_summonable": true,
+			"spawn_category": "monster",
+			"properties": {
+				"zt:anim": {
+					"type": "int",
+					"range": [
+						0,
+						3
+					],
+					"default": 0,
+					"client_sync": true
+				}
+			}
+		},
+		"component_groups": {
+			"zt:level": {
+				"minecraft:physics": {
+					"has_gravity": false,
+					"has_collision": false
+				}
+			},
+			"zt:free": {
+				"minecraft:physics": {},
+				"minecraft:movement": {
+					"value": 0.3
+				},
+				"minecraft:movement.basic": {},
+				"minecraft:jump.static": {},
+				"minecraft:navigation.walk": {
+					"can_path_over_water": true,
+					"avoid_water": true,
+					"can_open_doors": true
+				},
+				"minecraft:attack": {
+					"damage": 0
+				},
+				"minecraft:behavior.float": {
+					"priority": 0
+				},
+				"minecraft:behavior.nearest_attackable_target": {
+					"priority": 1,
+					"must_see": false,
+					"reselect_targets": true,
+					"within_radius": 40,
+					"entity_types": [
+						{
+							"filters": {
+								"test": "is_family",
+								"subject": "other",
+								"value": "player"
+							},
+							"max_dist": 40
+						}
+					]
+				},
+				"minecraft:behavior.melee_attack": {
+					"priority": 2,
+					"speed_multiplier": 1.6,
+					"track_target": true,
+					"require_complete_path": false
+				},
+				"minecraft:behavior.random_stroll": {
+					"priority": 6,
+					"speed_multiplier": 0.6
+				},
+				"minecraft:behavior.look_at_player": {
+					"priority": 7,
+					"look_distance": 16
+				}
+			}
+		},
+		"components": {
+			"minecraft:type_family": {
+				"family": [
+					"seek",
+					"zt_seek",
+					"monster",
+					"mob"
+				]
+			},
+			"minecraft:health": {
+				"value": 1000,
+				"max": 1000
+			},
+			"minecraft:collision_box": {
+				"width": 0.6,
+				"height": 2.2
+			},
+			"minecraft:knockback_resistance": {
+				"value": 1.0
+			},
+			"minecraft:pushable": {
+				"is_pushable": false,
+				"is_pushable_by_piston": false
+			},
+			"minecraft:fire_immune": {},
+			"minecraft:persistent": {},
+			"minecraft:nameable": {},
+			"minecraft:follow_range": {
+				"value": 48,
+				"max": 48
+			},
+			"minecraft:breathable": {
+				"breathes_air": true,
+				"breathes_water": true,
+				"suffocate_time": 0
+			},
+			"minecraft:ambient_sound_interval": {
+				"value": 6.0,
+				"range": 6.0,
+				"event_name": "ambient"
+			},
+			"minecraft:damage_sensor": {
+				"triggers": [
+					{
+						"cause": "all",
+						"deals_damage": "no"
+					}
+				]
+			}
+		},
+		"events": {
+			"minecraft:entity_spawned": {
+				"add": {
+					"component_groups": [
+						"zt:free"
+					]
+				}
+			},
+			"zt:as_level": {
+				"add": {
+					"component_groups": [
+						"zt:level"
+					]
+				}
+			},
+			"zt:as_free": {
+				"remove": {
+					"component_groups": [
+						"zt:level"
+					]
+				},
+				"add": {
+					"component_groups": [
+						"zt:free"
+					]
+				}
+			}
+		}
+	}
+}

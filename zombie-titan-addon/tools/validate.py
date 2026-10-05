@@ -299,13 +299,18 @@ def main():
         icon = icon if isinstance(icon, str) else (icon or {}).get("textures", {}).get("default")
         if icon and icon not in items_tex:
             problem(f"{os.path.basename(p)}: icon {icon} missing from item_texture.json")
-    # particles, entities, items and blocks used by scripts exist
+    # particles, entities, items, blocks, entity events and dynamic properties used by scripts exist
     pids = {load(p)["particle_effect"]["description"]["identifier"] for p in glob.glob(os.path.join(RP, "particles", "*.json"))}
+    events = set()
+    for p in glob.glob(os.path.join(BP, "entities", "*.json")):
+        events |= set(load(p)["minecraft:entity"].get("events", {}).keys())
+    dynamic = {"zt:run", "zt:keep", "zt:gap", "zt:fake", "zt:doors_mode", "zt:doors_death"}
     for pid in set(re.findall(r'"(zt:[a-z_]*[a-z])"', scripts)):  # (ids built from a prefix like "zt:gum_" skipped)
         if pid.startswith("zt:") and pid not in pids and pid not in bp_ids and pid not in item_ids:
             if not pid.startswith("zt:as_") and pid not in ("zt:start_birth", "zt:end_birth", "zt:natural_spawns",
                                                             "zt:looted", "zt:df_mode", "zt:last_natural_spawn", "zt:gum_gum",
-                                                            ) and pid not in all_props and pid not in block_ids:
+                                                            ) and pid not in all_props and pid not in block_ids \
+                    and pid not in events and pid not in dynamic:
                 problem(f"script references unknown id {pid}")
     ours = item_ids | block_ids | {d for d in bp_ids}
     for p in glob.glob(os.path.join(BP, "recipes", "*.json")):

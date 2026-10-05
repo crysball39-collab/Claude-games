@@ -235,6 +235,115 @@
 				"b": "((variable.flash == 0.0) || (query.swelling_dir < 0.0)) ? this : 1.0",
 				"a": "((variable.flash == 0.0) || (query.swelling_dir < 0.0)) ? this : 0.5"
 			}
+		},
+		"controller.render.zt.default": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			]
+		},
+		"controller.render.zt.seek": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				},
+				{
+					"puddle": "Material.cutout"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			]
+		},
+		"controller.render.zt.seek_eye": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			],
+			"part_visibility": [
+				{
+					"*": true
+				},
+				{
+					"eye2": "q.property('zt:pair')"
+				},
+				{
+					"pupil2": "q.property('zt:pair')"
+				}
+			]
+		},
+		"controller.render.zt.hotel_door": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			],
+			"part_visibility": [
+				{
+					"*": true
+				},
+				{
+					"padlock": "q.property('zt:locked')"
+				}
+			],
+			"overlay_color": {
+				"r": 0.35,
+				"g": 0.72,
+				"b": 1.0,
+				"a": "q.property('zt:guided') ? 0.28 + math.sin(q.life_time * 240.0) * 0.12 : 0.0"
+			}
+		},
+		"controller.render.zt.hotel_door_plate": {
+			"arrays": {
+				"textures": {
+					"Array.plates": [
+						"Texture.plate_blank",
+						"Texture.plate_30",
+						"Texture.plate_31",
+						"Texture.plate_32",
+						"Texture.plate_33",
+						"Texture.plate_34",
+						"Texture.plate_35",
+						"Texture.plate_36",
+						"Texture.plate_37",
+						"Texture.plate_38",
+						"Texture.plate_39",
+						"Texture.plate_40",
+						"Texture.plate_50",
+						"Texture.plate_51"
+					]
+				}
+			},
+			"geometry": "Geometry.plate",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Array.plates[q.property('zt:plate')]"
+			],
+			"overlay_color": {
+				"r": 0.35,
+				"g": 0.72,
+				"b": 1.0,
+				"a": "q.property('zt:guided') ? 0.28 + math.sin(q.life_time * 240.0) * 0.12 : 0.0"
+			}
 		}
 	}
 }

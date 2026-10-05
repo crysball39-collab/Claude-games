@@ -1,0 +1,38 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:seek",
+			"materials": {
+				"default": "entity_emissive_alpha",
+				"cutout": "entity_alphatest"
+			},
+			"textures": {
+				"default": "textures/entity/doors/seek"
+			},
+			"geometry": {
+				"default": "geometry.zt.seek"
+			},
+			"render_controllers": [
+				"controller.render.zt.seek"
+			],
+			"scripts": {
+				"animate": [
+					"base",
+					"main"
+				]
+			},
+			"animations": {
+				"base": "animation.zt.seek.base",
+				"idle": "animation.zt.seek.idle",
+				"rise": "animation.zt.seek.rise",
+				"run": "animation.zt.seek.run",
+				"kill": "animation.zt.seek.kill",
+				"main": "controller.animation.zt.seek.main"
+			},
+			"spawn_egg": {
+				"texture": "zt_seek_egg"
+			}
+		}
+	}
+}

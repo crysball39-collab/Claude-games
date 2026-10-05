@@ -1,0 +1,31 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:library_lamp",
+			"materials": {
+				"default": "entity_emissive_alpha"
+			},
+			"textures": {
+				"default": "textures/entity/doors/library_lamp"
+			},
+			"geometry": {
+				"default": "geometry.zt.library_lamp"
+			},
+			"render_controllers": [
+				"controller.render.zt.default"
+			],
+			"scripts": {
+				"animate": [
+					"face",
+					"main"
+				]
+			},
+			"animations": {
+				"fall": "animation.zt.library_lamp.fall",
+				"main": "controller.animation.zt.library_lamp",
+				"face": "animation.zt.prop.face"
+			}
+		}
+	}
+}

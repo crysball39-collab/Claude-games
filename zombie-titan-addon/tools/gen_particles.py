@@ -375,6 +375,77 @@ def effects():
         "minecraft:particle_appearance_tinting": gradient({
             "0.0": [1.0, 0.75, 0.85, 1.0], "1.0": [1.0, 0.4, 0.55, 0.0]}),
     })
+    # --- Doors ----------------------------------------------------------------------------------
+    # the Guiding Light: soft blue motes rising over a door or a gap to crouch under
+    # (v.hx, v.hy, v.hz: half the size of the box they rise from)
+    E["guiding_light"] = effect("zt:guiding_light", "particles_add", GLOW, {
+        "minecraft:emitter_rate_instant": {"num_particles": 9},
+        "minecraft:emitter_lifetime_once": {"active_time": 0.05},
+        "minecraft:emitter_shape_box": {"offset": [0, 0, 0], "half_dimensions": ["v.hx", "v.hy", "v.hz"],
+                                        "direction": [0, 1, 0]},
+        "minecraft:particle_lifetime_expression": {"max_lifetime": "1.0 + v.particle_random_1 * 0.8"},
+        "minecraft:particle_initial_speed": "0.15 + v.particle_random_2 * 0.25",
+        "minecraft:particle_motion_dynamic": {"linear_drag_coefficient": 0.6, "linear_acceleration": [0, 0.25, 0]},
+        "minecraft:particle_appearance_billboard": billboard(
+            ["0.1 + v.particle_random_3 * 0.12", "0.1 + v.particle_random_3 * 0.12"], 32, 32),
+        "minecraft:particle_appearance_tinting": gradient({
+            "0.0": [0.3, 0.7, 1.0, 0.0], "0.2": [0.45, 0.82, 1.0, 1.0], "0.8": [0.3, 0.65, 1.0, 0.8],
+            "1.0": [0.2, 0.5, 1.0, 0.0]}),
+    })
+    # a library book's faint shimmer
+    E["book_glint"] = effect("zt:book_glint", "particles_add", SPARK, {
+        "minecraft:emitter_rate_instant": {"num_particles": 3},
+        "minecraft:emitter_lifetime_once": {"active_time": 0.05},
+        "minecraft:emitter_shape_sphere": {"radius": 0.25, "direction": "outwards"},
+        "minecraft:particle_lifetime_expression": {"max_lifetime": "0.5 + v.particle_random_1 * 0.4"},
+        "minecraft:particle_initial_speed": 0.2,
+        "minecraft:particle_motion_dynamic": {"linear_drag_coefficient": 2.0, "linear_acceleration": [0, 0.4, 0]},
+        "minecraft:particle_appearance_billboard": billboard(
+            ["0.08 + v.particle_random_2 * 0.06", "0.08 + v.particle_random_2 * 0.06"], 16, 16),
+        "minecraft:particle_appearance_tinting": gradient({
+            "0.0": [0.6, 0.85, 1.0, 1.0], "1.0": [0.3, 0.55, 1.0, 0.0]}),
+    })
+    # Seek's black slime dripping and splashing
+    E["seek_goo"] = effect("zt:seek_goo", "particles_blend", GLOW, {
+        "minecraft:emitter_rate_instant": {"num_particles": 7},
+        "minecraft:emitter_lifetime_once": {"active_time": 0.05},
+        "minecraft:emitter_shape_sphere": {"radius": 0.5, "direction": "outwards"},
+        "minecraft:particle_lifetime_expression": {"max_lifetime": "0.6 + v.particle_random_1 * 0.5"},
+        "minecraft:particle_initial_speed": "0.8 + v.particle_random_2 * 1.5",
+        "minecraft:particle_motion_dynamic": {"linear_drag_coefficient": 0.5, "linear_acceleration": [0, -14, 0]},
+        "minecraft:particle_motion_collision": {"collision_radius": 0.05, "coefficient_of_restitution": 0.0,
+                                                "collision_drag": 10},
+        "minecraft:particle_appearance_billboard": billboard(
+            ["0.12 + v.particle_random_3 * 0.1", "0.12 + v.particle_random_3 * 0.1"], 32, 32),
+        "minecraft:particle_appearance_tinting": {"color": [0.02, 0.02, 0.03, 0.95]},
+    })
+    # a fallen chandelier burning: the vanilla flame sprite, bigger, and a smoky glow
+    E["chandelier_fire"] = effect("zt:chandelier_fire", "particles_alpha", "textures/particle/particles", {
+        "minecraft:emitter_rate_instant": {"num_particles": 8},
+        "minecraft:emitter_lifetime_once": {"active_time": 0.05},
+        "minecraft:emitter_shape_disc": {"radius": 0.9, "plane_normal": "y", "direction": [0, 1, 0]},
+        "minecraft:particle_lifetime_expression": {"max_lifetime": "0.5 + v.particle_random_1 * 0.5"},
+        "minecraft:particle_initial_speed": "0.6 + v.particle_random_2 * 0.8",
+        "minecraft:particle_motion_dynamic": {"linear_drag_coefficient": 1.0, "linear_acceleration": [0, 1.2, 0]},
+        "minecraft:particle_appearance_billboard": billboard(
+            ["(0.35 + v.particle_random_3 * 0.3) * (1 - v.particle_age / v.particle_lifetime * 0.6)",
+             "(0.35 + v.particle_random_3 * 0.3) * (1 - v.particle_age / v.particle_lifetime * 0.6)"],
+            128, 128, uv=(0, 24), uv_size=(8, 8)),
+    })
+    # glass bursting inward when the hands smash through the windows
+    E["glass_burst"] = effect("zt:glass_burst", "particles_alpha", SPARK, {
+        "minecraft:emitter_rate_instant": {"num_particles": 22},
+        "minecraft:emitter_lifetime_once": {"active_time": 0.05},
+        "minecraft:emitter_shape_box": {"offset": [0, 0, 0], "half_dimensions": [0.6, 0.9, 0.6], "direction": "outwards"},
+        "minecraft:particle_lifetime_expression": {"max_lifetime": "0.6 + v.particle_random_1 * 0.6"},
+        "minecraft:particle_initial_speed": "2 + v.particle_random_2 * 4",
+        "minecraft:particle_motion_dynamic": {"linear_drag_coefficient": 1.0, "linear_acceleration": [0, -14, 0]},
+        "minecraft:particle_motion_collision": {"collision_radius": 0.05, "coefficient_of_restitution": 0.3,
+                                                "collision_drag": 4},
+        "minecraft:particle_appearance_billboard": billboard(
+            ["0.08 + v.particle_random_3 * 0.1", "0.08 + v.particle_random_3 * 0.1"], 16, 16),
+        "minecraft:particle_appearance_tinting": {"color": [0.85, 0.95, 1.0, 0.85]},
+    })
     return E
 
 

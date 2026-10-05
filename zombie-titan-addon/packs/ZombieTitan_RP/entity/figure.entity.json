@@ -1,0 +1,43 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:figure",
+			"materials": {
+				"default": "entity_emissive_alpha"
+			},
+			"textures": {
+				"default": "textures/entity/doors/figure"
+			},
+			"geometry": {
+				"default": "geometry.zt.figure"
+			},
+			"render_controllers": [
+				"controller.render.zt.default"
+			],
+			"scripts": {
+				"scale": "0.9",
+				"animate": [
+					"base",
+					"gait",
+					"act"
+				]
+			},
+			"animations": {
+				"base": "animation.zt.figure.base",
+				"idle": "animation.zt.figure.idle",
+				"walk": "animation.zt.figure.walk",
+				"run": "animation.zt.figure.run",
+				"listen": "animation.zt.figure.listen",
+				"roar": "animation.zt.figure.roar",
+				"kill": "animation.zt.figure.kill",
+				"stumble": "animation.zt.figure.stumble",
+				"gait": "controller.animation.zt.figure.gait",
+				"act": "controller.animation.zt.figure.act"
+			},
+			"spawn_egg": {
+				"texture": "zt_figure_egg"
+			}
+		}
+	}
+}

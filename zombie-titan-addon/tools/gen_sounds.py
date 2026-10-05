@@ -48,6 +48,34 @@ MACE_GROUND = ["sounds/item/mace/smash_ground1", "sounds/item/mace/smash_ground2
                "sounds/item/mace/smash_ground4"]
 
 
+def warden(*names):
+    return ["sounds/mob/warden/" + n for n in names]
+
+
+W_ROAR = warden("roar_1", "roar_2", "roar_3", "roar_4", "roar_5")
+W_ANGRY = warden("listening_angry_1", "listening_angry_2", "listening_angry_3", "listening_angry_4", "listening_angry_5")
+W_SNIFF = warden("sniff_1", "sniff_2", "sniff_3", "sniff_4")
+W_HEART = warden("heartbeat_1", "heartbeat_2", "heartbeat_3", "heartbeat_4")
+W_HIT = warden("attack_impact_1", "attack_impact_2")
+CREAK_ATTACK = ["sounds/mob/creaking/attack1", "sounds/mob/creaking/attack2", "sounds/mob/creaking/attack3",
+                "sounds/mob/creaking/attack4"]
+CREAK_IDLE = ["sounds/mob/creaking/idle%d" % i for i in range(1, 7)]
+HONEY_STEP = ["sounds/step/honey_block%d" % i for i in range(1, 6)]
+WOOD_STEP = ["sounds/step/wood%d" % i for i in range(1, 7)]
+DOOR_OPEN = ["sounds/block/wooden_door/open1", "sounds/block/wooden_door/open2"]
+DOOR_CLOSE = ["sounds/block/wooden_door/close1", "sounds/block/wooden_door/close2", "sounds/block/wooden_door/close3"]
+IRON_DOOR = ["sounds/block/iron_door/close1", "sounds/block/iron_door/close2", "sounds/block/iron_door/close3",
+             "sounds/block/iron_door/close4"]
+IRON_TRAP = ["sounds/block/iron_trapdoor/open1", "sounds/block/iron_trapdoor/open2", "sounds/block/iron_trapdoor/open3",
+             "sounds/block/iron_trapdoor/open4"]
+CHAIN = ["sounds/dig/chain1", "sounds/dig/chain2", "sounds/dig/chain3", "sounds/dig/chain4"]
+PAGE = ["sounds/item/book/open_flip1", "sounds/item/book/open_flip2", "sounds/item/book/open_flip3"]
+LANTERN_BREAK = ["sounds/block/lantern/break%d" % i for i in range(1, 7)]
+SCREAM = ["sounds/mob/endermen/scream1", "sounds/mob/endermen/scream2", "sounds/mob/endermen/scream3",
+          "sounds/mob/endermen/scream4"]
+GHAST_SCREAM = ["sounds/mob/ghast/scream%d" % i for i in range(1, 6)]
+
+
 def definitions():
     D = {
         "zt.titan.ambient": event(snd(ZSAY, 0.42, 1.0)),
@@ -114,6 +142,54 @@ def definitions():
         "zt.gum.gear2": event(snd(["sounds/random/fizz"], 0.5, 1.0) + snd(MACE_GROUND, 0.7, 1.0), category="player",
                               min_d=8.0, max_d=48.0),
         "zt.gum.sink": event(snd(["sounds/random/splash"], 0.6, 1.0), category="player", min_d=4.0, max_d=24.0),
+        # The Figure: a blind, listening thing (warden sounds, lower and wetter) on creaking wood
+        "zt.figure.ambient": event(snd(W_ANGRY, 0.75, 0.9) + snd(CREAK_IDLE, 0.55, 0.8), min_d=6.0, max_d=40.0),
+        "zt.figure.roar": event(snd(W_ROAR, 0.78, 1.0) + snd(RAV_ROAR, 0.62, 0.9), min_d=16.0, max_d=96.0),
+        "zt.figure.sniff": event(snd(W_SNIFF, 0.75, 1.0), min_d=4.0, max_d=28.0),
+        "zt.figure.step": event(snd(WARDEN_STEP, 0.7, 0.7) + snd(WOOD_STEP, 0.5, 0.9), min_d=6.0, max_d=36.0),
+        "zt.figure.kill": event(snd(W_HIT, 0.8, 1.0) + snd(CREAK_ATTACK, 0.6, 1.0), min_d=8.0, max_d=48.0),
+        "zt.figure.heartbeat": event(snd(W_HEART, 1.0, 1.0), category="player", min_d=2.0, max_d=6.0),
+        "zt.figure.heartbeat_fast": event(snd(W_HEART, 1.35, 1.0), category="player", min_d=2.0, max_d=6.0),
+        # Seek: black slime
+        "zt.seek.ambient": event(snd(SLIME_BIG, 0.5, 0.7) + snd(HONEY_STEP, 0.6, 0.8), min_d=6.0, max_d=32.0),
+        "zt.seek.rise": event(snd(["sounds/mob/warden/emerge"], 1.15, 1.0) + snd(SLIME_BIG, 0.45, 1.0), min_d=16.0,
+                              max_d=80.0),
+        "zt.seek.roar": event(snd(SCREAM, 0.55, 1.0) + snd(GHAST_SCREAM, 0.5, 0.8), min_d=16.0, max_d=96.0),
+        "zt.seek.step": event(snd(HONEY_STEP, 0.75, 1.0) + snd(SLIME_SMALL, 0.6, 0.6), min_d=6.0, max_d=32.0),
+        "zt.seek.kill": event(snd(SLIME_BIG, 0.5, 1.0) + snd(CREAK_ATTACK, 0.5, 1.0), min_d=8.0, max_d=48.0),
+        "zt.seek.hands": event(snd(GLASS, 0.85, 1.0) + snd(SLIME_BIG, 0.6, 0.8), min_d=8.0, max_d=48.0),
+        "zt.seek.grab": event(snd(SLIME_BIG, 0.4, 1.0) + snd(GLASS, 0.6, 0.6), min_d=8.0, max_d=48.0),
+        "zt.seek.chandelier": event(snd(["sounds/random/anvil_land"], 0.55, 0.8) + snd(GLASS, 0.7, 1.0) +
+                                    snd(LANTERN_BREAK, 0.7, 1.0), min_d=12.0, max_d=64.0),
+        "zt.seek.fire": event(snd(["sounds/fire/fire"], 0.9, 1.0), category="block", min_d=3.0, max_d=16.0),
+        "zt.seek.slam": event(snd(DOOR_CLOSE, 0.55, 1.0) + snd(["sounds/random/anvil_land"], 0.4, 0.7), min_d=12.0,
+                              max_d=64.0),
+        # the hotel
+        "zt.doors.open": event(snd(DOOR_OPEN, 0.62, 1.0), category="block", min_d=8.0, max_d=32.0),
+        "zt.doors.close": event(snd(DOOR_CLOSE, 0.7, 1.0), category="block", min_d=8.0, max_d=32.0),
+        "zt.doors.slam": event(snd(DOOR_CLOSE, 0.5, 1.0) + snd(["sounds/random/anvil_land"], 0.45, 0.5), category="block",
+                               min_d=10.0, max_d=48.0),
+        "zt.doors.locked": event(snd(IRON_DOOR, 1.5, 0.6) + snd(CHAIN, 1.0, 0.8), category="block", min_d=4.0,
+                                 max_d=24.0),
+        "zt.doors.padlock": event(snd(CHAIN, 1.2, 1.0), category="block", min_d=4.0, max_d=24.0),
+        "zt.doors.unlock": event(snd(IRON_TRAP, 1.3, 1.0) + snd(["sounds/random/click"], 0.8, 1.0), category="block",
+                                 min_d=6.0, max_d=32.0),
+        "zt.doors.wrong": event(snd(["sounds/note/bass"], 0.5, 1.0) + snd(CHAIN, 0.8, 0.8), category="block", min_d=4.0,
+                                max_d=24.0),
+        "zt.doors.book": event(snd(PAGE, 1.0, 1.0), category="player", min_d=4.0, max_d=20.0),
+        "zt.doors.shimmer": event(snd(["sounds/block/amethyst/shimmer"], 1.25, 0.5), category="block", min_d=2.0,
+                                  max_d=10.0),
+        "zt.doors.lamp": event(snd(GLASS, 0.9, 1.0) + snd(LANTERN_BREAK, 0.8, 1.0), category="block", min_d=12.0,
+                               max_d=64.0),
+        "zt.doors.guiding": event(snd(["sounds/block/amethyst/shimmer"], 0.8, 1.0) + snd(BEACON_POWER, 1.7, 0.4),
+                                  category="player", min_d=4.0, max_d=16.0),
+        "zt.doors.escape": event(snd(["sounds/random/levelup"], 0.9, 0.8) + snd(BEACON_POWER, 1.4, 0.6),
+                                 category="player", min_d=4.0, max_d=16.0),
+        "zt.doors.jumpscare": event(snd(SCREAM, 0.5, 1.0) + snd(W_ROAR, 0.9, 1.0), category="player", min_d=4.0,
+                                    max_d=16.0),
+        # the Seek chase's music (generated by gen_doors_audio.py)
+        "zt.music.seek_chase": {"category": "music", "sounds": [{"name": "sounds/zt/seek_chase", "stream": True,
+                                                                 "volume": 0.85}]},
     }
     return {"format_version": "1.20.20", "sound_definitions": D}
 
@@ -156,6 +232,8 @@ def entity_sounds():
                         "fuse": {"sound": "random.fuse", "volume": 1.0, "pitch": 0.5},
                     },
                 },
+                "zt:figure": {"volume": 1.0, "pitch": 1.0, "events": {"ambient": "zt.figure.ambient"}},
+                "zt:seek": {"volume": 1.0, "pitch": 1.0, "events": {"ambient": "zt.seek.ambient"}},
                 "zt:zombie_minion": {
                     "volume": 1.0,
                     "pitch": [0.8, 1.0],

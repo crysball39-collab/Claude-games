@@ -88,6 +88,51 @@
 		},
 		"zt_gum_jet_rocket": {
 			"textures": "textures/items/zt_gum_jet_rocket"
+		},
+		"zt_door_50": {
+			"textures": "textures/items/zt_door_50"
+		},
+		"zt_door_30": {
+			"textures": "textures/items/zt_door_30"
+		},
+		"zt_figure_egg": {
+			"textures": "textures/items/zt_figure_egg"
+		},
+		"zt_seek_egg": {
+			"textures": "textures/items/zt_seek_egg"
+		},
+		"zt_solution_paper": {
+			"textures": "textures/items/zt_solution_paper"
+		},
+		"zt_book_triangle": {
+			"textures": "textures/items/zt_book_triangle"
+		},
+		"zt_book_square": {
+			"textures": "textures/items/zt_book_square"
+		},
+		"zt_book_circle": {
+			"textures": "textures/items/zt_book_circle"
+		},
+		"zt_book_star": {
+			"textures": "textures/items/zt_book_star"
+		},
+		"zt_book_diamond": {
+			"textures": "textures/items/zt_book_diamond"
+		},
+		"zt_book_hexagon": {
+			"textures": "textures/items/zt_book_hexagon"
+		},
+		"zt_book_pentagon": {
+			"textures": "textures/items/zt_book_pentagon"
+		},
+		"zt_book_cross": {
+			"textures": "textures/items/zt_book_cross"
+		},
+		"zt_book_heart": {
+			"textures": "textures/items/zt_book_heart"
+		},
+		"zt_book_crescent": {
+			"textures": "textures/items/zt_book_crescent"
 		}
 	}
 }

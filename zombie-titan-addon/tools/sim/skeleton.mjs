@@ -110,6 +110,8 @@ blockOverrides.clear();
 hp0 = titan.getComponent("minecraft:health").currentValue;
 titan.applyDamage(50, { cause: "entityAttack", damagingEntity: player });
 check(titan.getComponent("minecraft:health").currentValue < hp0, "players can hurt it while it is down");
+// (its priest minions may still heal it, as in the Java mod: clear them for this check)
+for (const m of ow.getEntities({ type: "zt:skeleton_minion" })) m.valid = false;
 const regenHp = titan.getComponent("minecraft:health").currentValue;
 runTicks(200);
 check(titan.getComponent("minecraft:health").currentValue <= regenHp, "no healing while stunned");

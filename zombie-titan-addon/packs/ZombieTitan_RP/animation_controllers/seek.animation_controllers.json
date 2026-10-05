@@ -1,0 +1,78 @@
+{
+	"format_version": "1.10.0",
+	"animation_controllers": {
+		"controller.animation.zt.seek.main": {
+			"initial_state": "idle",
+			"states": {
+				"idle": {
+					"animations": [
+						"idle"
+					],
+					"transitions": [
+						{
+							"rise": "q.property('zt:anim') == 1"
+						},
+						{
+							"run": "q.property('zt:anim') == 2"
+						},
+						{
+							"kill": "q.property('zt:anim') == 3"
+						}
+					],
+					"blend_transition": 0.2
+				},
+				"rise": {
+					"animations": [
+						"rise"
+					],
+					"transitions": [
+						{
+							"idle": "q.property('zt:anim') == 0"
+						},
+						{
+							"run": "q.property('zt:anim') == 2"
+						},
+						{
+							"kill": "q.property('zt:anim') == 3"
+						}
+					],
+					"blend_transition": 0.0
+				},
+				"run": {
+					"animations": [
+						"run"
+					],
+					"transitions": [
+						{
+							"idle": "q.property('zt:anim') == 0"
+						},
+						{
+							"rise": "q.property('zt:anim') == 1"
+						},
+						{
+							"kill": "q.property('zt:anim') == 3"
+						}
+					],
+					"blend_transition": 0.2
+				},
+				"kill": {
+					"animations": [
+						"kill"
+					],
+					"transitions": [
+						{
+							"idle": "q.property('zt:anim') == 0"
+						},
+						{
+							"rise": "q.property('zt:anim') == 1"
+						},
+						{
+							"run": "q.property('zt:anim') == 2"
+						}
+					],
+					"blend_transition": 0.2
+				}
+			}
+		}
+	}
+}

@@ -1,0 +1,255 @@
+{
+	"format_version": "1.21.90",
+	"minecraft:entity": {
+		"description": {
+			"identifier": "zt:figure",
+			"is_spawnable": true,
+			"is_summonable": true,
+			"spawn_category": "monster",
+			"properties": {
+				"zt:gait": {
+					"type": "int",
+					"range": [
+						0,
+						2
+					],
+					"default": 0,
+					"client_sync": true
+				},
+				"zt:act": {
+					"type": "int",
+					"range": [
+						0,
+						4
+					],
+					"default": 0,
+					"client_sync": true
+				}
+			}
+		},
+		"component_groups": {
+			"zt:level": {
+				"minecraft:physics": {
+					"has_gravity": false,
+					"has_collision": false
+				}
+			},
+			"zt:free": {
+				"minecraft:physics": {},
+				"minecraft:movement": {
+					"value": 0.24
+				},
+				"minecraft:movement.basic": {},
+				"minecraft:jump.static": {},
+				"minecraft:navigation.walk": {
+					"can_path_over_water": true,
+					"avoid_water": true,
+					"avoid_damage_blocks": true,
+					"can_open_doors": false,
+					"can_pass_doors": true
+				},
+				"minecraft:attack": {
+					"damage": 0
+				},
+				"minecraft:behavior.float": {
+					"priority": 0
+				},
+				"minecraft:behavior.nearest_attackable_target": {
+					"priority": 1,
+					"must_see": false,
+					"reselect_targets": true,
+					"within_radius": 48,
+					"scan_interval": 2,
+					"entity_types": [
+						{
+							"filters": {
+								"test": "is_family",
+								"subject": "other",
+								"value": "zt_figure_lure"
+							},
+							"max_dist": 48,
+							"must_see": false
+						}
+					]
+				},
+				"minecraft:behavior.melee_attack": {
+					"priority": 2,
+					"speed_multiplier": 1.7,
+					"track_target": true,
+					"require_complete_path": false,
+					"reach_multiplier": 1.0
+				},
+				"minecraft:behavior.random_stroll": {
+					"priority": 6,
+					"speed_multiplier": 0.6,
+					"interval": 80
+				}
+			}
+		},
+		"components": {
+			"minecraft:type_family": {
+				"family": [
+					"figure",
+					"zt_figure",
+					"monster",
+					"mob"
+				]
+			},
+			"minecraft:health": {
+				"value": 50000,
+				"max": 50000
+			},
+			"minecraft:collision_box": {
+				"width": 0.8,
+				"height": 2.7
+			},
+			"minecraft:knockback_resistance": {
+				"value": 1.0
+			},
+			"minecraft:pushable": {
+				"is_pushable": false,
+				"is_pushable_by_piston": false
+			},
+			"minecraft:fire_immune": {},
+			"minecraft:persistent": {},
+			"minecraft:nameable": {},
+			"minecraft:follow_range": {
+				"value": 64,
+				"max": 64
+			},
+			"minecraft:breathable": {
+				"breathes_air": true,
+				"breathes_water": true,
+				"suffocate_time": 0
+			},
+			"minecraft:ambient_sound_interval": {
+				"value": 7.0,
+				"range": 6.0,
+				"event_name": "ambient"
+			},
+			"minecraft:damage_sensor": {
+				"triggers": [
+					{
+						"cause": "fall",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "fire",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "fire_tick",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "lava",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "drowning",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "suffocation",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "freezing",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "contact",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "stalactite",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "stalagmite",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "fly_into_wall",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "temperature",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "magma",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "anvil",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "falling_block",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "lightning",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "wither",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "magic",
+						"deals_damage": "no"
+					},
+					{
+						"on_damage": {
+							"filters": {
+								"any_of": [
+									{
+										"test": "is_family",
+										"subject": "other",
+										"value": "zt_figure"
+									},
+									{
+										"test": "is_family",
+										"subject": "other",
+										"value": "zt_seek"
+									}
+								]
+							}
+						},
+						"deals_damage": "no"
+					}
+				]
+			}
+		},
+		"events": {
+			"minecraft:entity_spawned": {
+				"add": {
+					"component_groups": [
+						"zt:free"
+					]
+				}
+			},
+			"zt:as_level": {
+				"add": {
+					"component_groups": [
+						"zt:level"
+					]
+				}
+			},
+			"zt:as_free": {
+				"remove": {
+					"component_groups": [
+						"zt:level"
+					]
+				},
+				"add": {
+					"component_groups": [
+						"zt:free"
+					]
+				}
+			}
+		}
+	}
+}

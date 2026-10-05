@@ -1,6 +1,6 @@
-# Titans: Zombie, Skeleton and Creeper Titans, Dark Fists, Obsidian gear, Gum Gum Fruit
+# Titans: Zombie, Skeleton and Creeper Titans, Dark Fists, Obsidian gear, Gum Gum Fruit, Doors
 
-**Version 1.2.0**
+**Version 1.3.0**
 
 A Minecraft Bedrock (Pocket Edition) add-on that brings the **Zombie Titan**, the
 **Skeleton Titan** and the **Creeper Titan** from the Java *Titans Mod* to Bedrock,
@@ -10,6 +10,8 @@ each with its own boss bar. It also adds:
 - a full set of **Obsidian** tools and armor, made from **Compact Obsidian**
 - the **Growth Serum**, which turns zombies, skeletons and creepers into titans
 - the **Gum Gum Fruit**: eat it to get rubber powers (and lose the ability to swim)
+- two levels from the Roblox horror game **DOORS**: **Door 50** (the Library, with
+  **the Figure**) and **Door 30** (the **Seek** chase)
 
 Made for Minecraft Bedrock **1.26.50** on Android. It works on 1.21.90 and newer and
 needs **no experimental toggles**. The Compact Obsidian block needs 1.26.20 or newer.
@@ -19,7 +21,7 @@ needs **no experimental toggles**. The Compact Obsidian block needs 1.26.20 or n
 1. Download **[`dist/ZombieTitan.mcaddon`](dist/ZombieTitan.mcaddon)**.
 2. Open **Files → Downloads** and tap `ZombieTitan.mcaddon`. Minecraft opens and
    imports two packs: *Zombie Titan BP* and *Zombie Titan RP*. Their descriptions
-   start with the version number (*Version 1.2.0*).
+   start with the version number (*Version 1.3.0*).
 3. Create a world, or edit one. Under **Behavior Packs**, activate
    **Zombie Titan BP**. Minecraft adds the resource pack with it.
 4. Play. Here is where everything is in the creative inventory:
@@ -28,6 +30,9 @@ needs **no experimental toggles**. The Compact Obsidian block needs 1.26.20 or n
    - **Compact Obsidian**: in the Construction tab.
    - **Growth Serum**: in the Items tab.
    - **Gum Gum Fruit**: in the Nature tab.
+   - **Door 50 Library** and **Door 30 Seek Chase**: in the Items tab.
+   - **The Figure** and **Seek** spawn eggs: with the other spawn eggs.
+   - The **hotel blocks** (wallpaper, wainscoting, floor...): in the Construction tab.
 
 If tapping the file does nothing, long-press it, choose **Open with**, and pick
 **Minecraft**.
@@ -37,7 +42,7 @@ If tapping the file does nothing, long-press it, choose **Open with**, and pick
   Storage**, delete the old *Zombie Titan BP* and *Zombie Titan RP*, and import
   again.
 - If the world still acts like the old version, check under **Behavior Packs**
-  that Zombie Titan BP is active and that its description says *Version 1.2.0*.
+  that Zombie Titan BP is active and that its description says *Version 1.3.0*.
 
 ## The Zombie Titan
 
@@ -441,6 +446,103 @@ knock the Creeper Titan out when its head is down.
 copy of the vanilla player model file. Another add-on that also changes the player
 model can clash with it.
 
+## Doors
+
+Two items rebuild rooms from **DOORS** in front of you, with their monsters. Each one
+first asks if you want to build there, because the rooms replace whatever is in the way.
+
+While you play a door, you are in **Adventure mode** so the walls can't be broken.
+When you escape, die or leave, you get your own game mode back. If you die, the
+**Guiding Light** tells you what killed you and how to survive it, like in the game.
+
+### Door 50: the Library
+
+Use **Door 50 Library** and a hotel corridor appears in front of you, ending at
+door 50. Behind it is the **Library** (32 × 58 blocks, 15 high):
+- bookshelves along every wall and in rows, with an aisle up the middle
+- the librarian's desk on the left, with the **solution paper** on it
+- reading tables, hanging lanterns, a red runner and a rug
+- two staircases up to a balcony, where **door 51** is locked with a **padlock**.
+  Sometimes one staircase is blocked by a heap of fallen shelves.
+
+Walk through door 50. It slams shut behind you. **The Figure** walks out from behind
+the shelves and roars, then a lamp crashes to the floor and it runs at the noise.
+
+**The puzzle.**
+- **10 books** glow on the bottom three shelves of the bookshelves. Tap one to take
+  it. Each shows a **shape** and the **digit** it stands for, for example
+  *Triangle = 4*. (The shapes: triangle, square, circle, star, diamond, hexagon,
+  pentagon, cross, heart and crescent.)
+- The **solution paper** on the desk shows the **five shapes** of the code, **in
+  order**. Tap it to take it; use it from your hotbar to look again.
+- Tap the **padlock** on door 51 and type the five digits. It shows the shapes and
+  digits you know.
+- When it opens, the Figure goes mad and runs at you. Get through door 51: it slams
+  shut behind you and you escape.
+
+Holding a book or the paper shows what you know of the code at the bottom of the screen.
+
+### The Figure
+
+| | |
+|---|---|
+| Health | 50,000 HP |
+| Touch | Instantly kills **any living thing** it touches, except **Seek** and the **titans** |
+| Senses | **Blind**, but hears footsteps: walking is heard 14 blocks away, sprinting 24, landing a jump 16. Taking a book, the paper or working the padlock makes noise too |
+| Boss bar | Not its health: **how safe you are** (below) |
+
+**Crouch to be silent.** Standing still is silent too. When the Figure hears you, it
+runs to where the sound came from, then stops and listens. It gets a little faster
+with every book you take.
+
+**Its boss bar** is a fleshy, toothed bar that shows how much danger you are in:
+
+| Bar | What it means |
+|---|---|
+| **Low** (green) | It isn't close, and it can't hear you. |
+| **Middle** (yellow) | It's close, but it can't hear you. Stay quiet. |
+| **High** (orange) | It isn't close, but it heard you and it's coming. |
+| **Full** (red) | It hears you, it's close, and it's coming. Run or hide! |
+
+You also hear your heartbeat when it's close.
+
+A Figure from a **spawn egg** roams the world the same way. It follows the sounds of
+players, and of creatures moving close to it, and kills what it touches.
+
+### Door 30: the Seek chase
+
+Use **Door 30 Seek Chase** and a hotel corridor appears, with **eyes** on the walls.
+Go through door 30 into the long hallway. More and more eyes watch you. At the end
+of the hallway the view turns around: **Seek** rises out of a puddle of black slime.
+
+**Run.** The chase is **10 rooms** long, and **Seek's boss bar** shows how much of
+it is left. The rooms are built ahead of you as you run:
+- **Crawl spaces**: fallen bookshelves block the room. **Crouch** under the gap.
+- **Rooms with three doors**: only one opens. The others are locked.
+- A corridor that turns, and a room full of overturned furniture.
+- **The last hall**: black **hands** burst through the windows and drag you out if
+  you get close, and **chandeliers** crash down and burn on the floor (9 damage).
+
+The **Guiding Light** shows the way: the right door glows **blue**, and blue lights
+mark where to crouch and the safe way around the fire. Reach the last door and the
+Guiding Light slams it shut in Seek's face.
+
+Seek is a little **slower than walking**, but it catches up fast when it falls
+behind. Keep moving, follow the light and don't stop. Sprinting gives you room for
+mistakes. Original chase music plays while it's after you.
+
+A Seek from a **spawn egg** chases the nearest player and kills whoever it catches.
+Nothing can hurt it.
+
+### Hotel blocks
+
+The rooms are built from new blocks, which you can also build with: **Hotel
+Wallpaper** (red and green), **Hotel Wainscoting**, **Hotel Floor**, **Hotel
+Molding**, **Hotel Ceiling** and the **Library Bookshelf**.
+
+The structures stay in your world after you play. Their doors are left open so you
+can walk around them.
+
 ## Building from source
 
 The models, textures, animations, particles, sound definitions and the obsidian
@@ -451,6 +553,9 @@ pip install numpy pillow
 python3 tools/build.py        # regenerates everything, writes dist/ZombieTitan.mcaddon
 ```
 
+The Seek chase's music is synthesized by `tools/gen_doors_audio.py` and encoded with
+`ffmpeg` (libvorbis). Without ffmpeg, the build keeps the existing music file.
+
 Development checks:
 
 - **Schema validation.** Checks the packs against Mojang's JSON schemas from
@@ -458,12 +563,20 @@ Development checks:
   `python3 tools/validate.py <bedrock-samples>/metadata/json_schemas`
   (needs `pip install jsonschema`).
 - **Simulation.** Runs the behaviour pack scripts against a mock of the
-  `@minecraft/server` API: `node tools/sim/run.mjs`.
+  `@minecraft/server` and `@minecraft/server-ui` APIs: `node tools/sim/run.mjs`.
+  Random numbers are seeded so runs repeat; set `ZT_SEED=<number>` to try others.
 - **Preview.** `tools/preview.py` renders the model, textures and animation
   poses to PNG.
 
 ## Version history
 
+- **1.3.0**
+  - New: **Door 50 Library**: the Library from DOORS, with the Figure, ten shape
+    books, the solution paper and door 51's padlock.
+  - New: **Door 30 Seek Chase**: Seek's 10-room chase from DOORS, ending in the hall
+    of hands and burning chandeliers.
+  - New: **The Figure** and **Seek** spawn eggs, and the hotel blocks.
+  - New: the Figure's "how safe are you" boss bar and Seek's chase-progress bar.
 - **1.2.0**
   - New: the Creeper Titan, with its own boss bar, creeper minions, TNT rain,
     lightning and a slow death explosion.
@@ -485,6 +598,10 @@ Development checks:
 ## Credits
 
 The Gum Gum Fruit and its moves are a fan tribute to *One Piece* by Eiichiro Oda.
+
+The Doors levels, the Figure and Seek are a fan tribute to *DOORS* by LSPLASH on
+Roblox. The rooms, models, textures and code are all new, and the chase music is an
+original piece synthesized for this add-on.
 
 The titans' stats, attacks and timings are based on
 [The Titans Mod](https://modrinth.com/mod/the-titans-mod) for Minecraft Java

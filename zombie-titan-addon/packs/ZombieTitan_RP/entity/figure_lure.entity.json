@@ -1,0 +1,20 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:figure_lure",
+			"materials": {
+				"default": "entity_alphatest"
+			},
+			"textures": {
+				"default": "textures/entity/doors/invisible"
+			},
+			"geometry": {
+				"default": "geometry.zt.invisible"
+			},
+			"render_controllers": [
+				"controller.render.zt.default"
+			]
+		}
+	}
+}

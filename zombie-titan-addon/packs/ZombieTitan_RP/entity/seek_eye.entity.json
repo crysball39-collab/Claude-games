@@ -1,0 +1,31 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:seek_eye",
+			"materials": {
+				"default": "entity_alphatest"
+			},
+			"textures": {
+				"default": "textures/entity/doors/seek_eye"
+			},
+			"geometry": {
+				"default": "geometry.zt.seek_eye"
+			},
+			"render_controllers": [
+				"controller.render.zt.seek_eye"
+			],
+			"scripts": {
+				"scale": "q.property('zt:size')",
+				"animate": [
+					"face",
+					"look"
+				]
+			},
+			"animations": {
+				"look": "animation.zt.seek_eye.look",
+				"face": "animation.zt.prop.face"
+			}
+		}
+	}
+}

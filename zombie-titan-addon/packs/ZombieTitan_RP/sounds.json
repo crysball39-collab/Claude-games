@@ -61,6 +61,20 @@
 					}
 				}
 			},
+			"zt:figure": {
+				"volume": 1.0,
+				"pitch": 1.0,
+				"events": {
+					"ambient": "zt.figure.ambient"
+				}
+			},
+			"zt:seek": {
+				"volume": 1.0,
+				"pitch": 1.0,
+				"events": {
+					"ambient": "zt.seek.ambient"
+				}
+			},
 			"zt:zombie_minion": {
 				"volume": 1.0,
 				"pitch": [

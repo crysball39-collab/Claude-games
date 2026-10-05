@@ -2,5 +2,26 @@
 	"format_version": "1.21.40",
 	"zt:compact_obsidian": {
 		"sound": "stone"
+	},
+	"zt:hotel_wallpaper": {
+		"sound": "wood"
+	},
+	"zt:hotel_wallpaper_green": {
+		"sound": "wood"
+	},
+	"zt:hotel_wainscot": {
+		"sound": "wood"
+	},
+	"zt:hotel_floor": {
+		"sound": "wood"
+	},
+	"zt:hotel_trim": {
+		"sound": "wood"
+	},
+	"zt:hotel_ceiling": {
+		"sound": "stone"
+	},
+	"zt:library_shelf": {
+		"sound": "wood"
 	}
 }

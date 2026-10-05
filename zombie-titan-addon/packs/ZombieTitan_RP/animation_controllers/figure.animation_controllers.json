@@ -1,0 +1,118 @@
+{
+	"format_version": "1.10.0",
+	"animation_controllers": {
+		"controller.animation.zt.figure.gait": {
+			"initial_state": "idle",
+			"states": {
+				"idle": {
+					"animations": [
+						"idle"
+					],
+					"transitions": [
+						{
+							"walk": "q.property('zt:gait') == 1"
+						},
+						{
+							"run": "q.property('zt:gait') == 2"
+						}
+					],
+					"blend_transition": 0.3
+				},
+				"walk": {
+					"animations": [
+						"walk"
+					],
+					"transitions": [
+						{
+							"idle": "q.property('zt:gait') == 0"
+						},
+						{
+							"run": "q.property('zt:gait') == 2"
+						}
+					],
+					"blend_transition": 0.3
+				},
+				"run": {
+					"animations": [
+						"run"
+					],
+					"transitions": [
+						{
+							"idle": "q.property('zt:gait') == 0"
+						},
+						{
+							"walk": "q.property('zt:gait') == 1"
+						}
+					],
+					"blend_transition": 0.25
+				}
+			}
+		},
+		"controller.animation.zt.figure.act": {
+			"initial_state": "none",
+			"states": {
+				"none": {
+					"transitions": [
+						{
+							"listen": "q.property('zt:act') == 1"
+						},
+						{
+							"roar": "q.property('zt:act') == 2"
+						},
+						{
+							"kill": "q.property('zt:act') == 3"
+						},
+						{
+							"stumble": "q.property('zt:act') == 4"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"listen": {
+					"animations": [
+						"listen"
+					],
+					"transitions": [
+						{
+							"none": "q.property('zt:act') != 1"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"roar": {
+					"animations": [
+						"roar"
+					],
+					"transitions": [
+						{
+							"none": "q.property('zt:act') != 2"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"kill": {
+					"animations": [
+						"kill"
+					],
+					"transitions": [
+						{
+							"none": "q.property('zt:act') != 3"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"stumble": {
+					"animations": [
+						"stumble"
+					],
+					"transitions": [
+						{
+							"none": "q.property('zt:act') != 4"
+						}
+					],
+					"blend_transition": 0.25
+				}
+			}
+		}
+	}
+}

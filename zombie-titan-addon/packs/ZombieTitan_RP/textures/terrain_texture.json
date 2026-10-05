@@ -6,6 +6,30 @@
 	"texture_data": {
 		"zt_compact_obsidian": {
 			"textures": "textures/blocks/zt_compact_obsidian"
+		},
+		"zt_hotel_wallpaper": {
+			"textures": "textures/blocks/zt_hotel_wallpaper"
+		},
+		"zt_hotel_wallpaper_green": {
+			"textures": "textures/blocks/zt_hotel_wallpaper_green"
+		},
+		"zt_hotel_wainscot": {
+			"textures": "textures/blocks/zt_hotel_wainscot"
+		},
+		"zt_hotel_wood": {
+			"textures": "textures/blocks/zt_hotel_wood"
+		},
+		"zt_hotel_floor": {
+			"textures": "textures/blocks/zt_hotel_floor"
+		},
+		"zt_hotel_trim": {
+			"textures": "textures/blocks/zt_hotel_trim"
+		},
+		"zt_hotel_ceiling": {
+			"textures": "textures/blocks/zt_hotel_ceiling"
+		},
+		"zt_library_shelf": {
+			"textures": "textures/blocks/zt_library_shelf"
 		}
 	}
 }

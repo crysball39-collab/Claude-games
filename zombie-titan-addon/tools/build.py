@@ -35,6 +35,11 @@ GENERATORS = (
     "gen_gum_art.py",
     "gen_gum_anims.py",
     "gen_gum_data.py",
+    "gen_doors_art.py",
+    "gen_hotel_art.py",
+    "gen_doors_anims.py",
+    "gen_doors_audio.py",
+    "gen_doors_data.py",  # after gen_items_data.py: it adds to terrain_texture.json and blocks.json
 )
 SKIP = re.compile(r"(^|/)(\.|__pycache__|Thumbs\.db$)")
 STAMP = (2026, 1, 1, 0, 0, 0)

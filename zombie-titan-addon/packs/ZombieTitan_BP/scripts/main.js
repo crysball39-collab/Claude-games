@@ -1,7 +1,11 @@
 // Titans add-on: wires game events to the titan, minion and item logic.
 import { system, world } from "@minecraft/server";
 import * as DF from "./darkfists.js";
+import * as Doors from "./doors_common.js";
+import * as Library from "./doors_library.js";
+import * as Seek from "./doors_seek.js";
 import * as FallGuard from "./fallguard.js";
+import * as Fig from "./figure.js";
 import * as Gum from "./gumgum.js";
 import { minionTick } from "./minions.js";
 import * as Obsidian from "./obsidian.js";
@@ -47,7 +51,11 @@ world.afterEvents.entityHurt.subscribe(
 );
 
 world.afterEvents.entityDie.subscribe(
-  safe(({ deadEntity }) => Gum.onDeath(/** @type {import("@minecraft/server").Player} */ (deadEntity))),
+  safe(({ deadEntity }) => {
+    const p = /** @type {import("@minecraft/server").Player} */ (deadEntity);
+    Gum.onDeath(p);
+    Doors.onPlayerDeath(p);
+  }),
   { entityTypes: ["minecraft:player"] },
 );
 
@@ -87,12 +95,23 @@ world.afterEvents.projectileHitEntity.subscribe(
   }),
 );
 
+// the Doors items open a form: one use per tap, though both use events fire
+const doorsUsedAt = new Map();
+
 /** @param {import("@minecraft/server").ItemUseAfterEvent | import("@minecraft/server").ItemStartUseAfterEvent} ev */
 function itemUsed({ source, itemStack }) {
   const id = itemStack?.typeId;
   if (id === DF.ITEM) DF.onUse(source);
   else if (id === Obsidian.SWORD) Obsidian.onUse(source);
   else if (id && Gum.ABILITY_IDS.includes(id)) Gum.onUse(source, id);
+  else if (id === Library.ITEM || id === Seek.ITEM || id === Doors.PAPER || id?.startsWith(Doors.BOOK_PREFIX)) {
+    const now = system.currentTick;
+    if (now - (doorsUsedAt.get(source.id) ?? -99) < 10) return;
+    doorsUsedAt.set(source.id, now);
+    if (id === Library.ITEM) Library.onUse(source);
+    else if (id === Seek.ITEM) Seek.onUse(source);
+    else Library.onItemUse(source, id);
+  }
 }
 world.afterEvents.itemUse.subscribe(safe(itemUsed));
 world.afterEvents.itemStartUse.subscribe(safe(itemUsed));
@@ -109,13 +128,30 @@ world.afterEvents.playerBreakBlock.subscribe(
   safe(({ player, block, brokenBlockPermutation }) => Gum.onBlockBroken(player, brokenBlockPermutation.type.id, block.location)),
 );
 
-world.afterEvents.playerSpawn.subscribe(safe(({ player }) => Gum.onSpawn(player)));
+world.afterEvents.playerSpawn.subscribe(
+  safe(({ player, initialSpawn }) => {
+    Gum.onSpawn(player);
+    Doors.onPlayerSpawn(player, initialSpawn);
+  }),
+);
+
+// the Library's books, its solution paper and door 51's padlock
+world.afterEvents.playerInteractWithEntity.subscribe(
+  safe(({ player, target }) => {
+    if (target.typeId === "zt:library_book" || target.typeId === "zt:library_paper" || target.typeId === "zt:hotel_door") {
+      Library.onInteract(player, target);
+    }
+  }),
+);
 
 world.afterEvents.playerLeave.subscribe(
   safe(({ playerId }) => {
     DF.forgetPlayer(playerId);
     Obsidian.forgetPlayer(playerId);
     Gum.forgetPlayer(playerId);
+    Doors.onPlayerLeave(playerId);
+    Fig.forgetPlayer(playerId);
+    doorsUsedAt.delete(playerId);
   }),
 );
 
@@ -143,6 +179,9 @@ system.runInterval(() => {
     DF.darkFistsTick(tick);
     Obsidian.obsidianTick(tick);
     Gum.gumTick(tick);
+    Doors.doorsTick(tick);
+    Fig.figureTick(tick);
+    Seek.seekFreeTick(tick);
     if (tick % 600 === 300) Titan.naturalSpawnTick();
   } catch (err) {
     console.warn("[Titans] tick: " + err);

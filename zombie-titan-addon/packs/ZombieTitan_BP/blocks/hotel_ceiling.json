@@ -1,0 +1,32 @@
+{
+	"format_version": "1.26.20",
+	"minecraft:block": {
+		"description": {
+			"identifier": "zt:hotel_ceiling",
+			"menu_category": {
+				"category": "construction"
+			}
+		},
+		"components": {
+			"minecraft:geometry": {
+				"identifier": "minecraft:geometry.full_block"
+			},
+			"minecraft:material_instances": {
+				"*": {
+					"texture": "zt_hotel_ceiling",
+					"render_method": "opaque"
+				}
+			},
+			"minecraft:destructible_by_mining": {
+				"seconds_to_destroy": 1.5
+			},
+			"minecraft:destructible_by_explosion": {
+				"explosion_resistance": 6
+			},
+			"minecraft:tags": [
+				"minecraft:is_axe_item_destructible"
+			],
+			"minecraft:map_color": "#362e28"
+		}
+	}
+}

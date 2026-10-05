@@ -1,0 +1,30 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:library_book",
+			"materials": {
+				"default": "entity_emissive_alpha"
+			},
+			"textures": {
+				"default": "textures/entity/doors/library_book"
+			},
+			"geometry": {
+				"default": "geometry.zt.library_book"
+			},
+			"render_controllers": [
+				"controller.render.zt.default"
+			],
+			"scripts": {
+				"animate": [
+					"face",
+					"idle"
+				]
+			},
+			"animations": {
+				"idle": "animation.zt.library_book.idle",
+				"face": "animation.zt.prop.face"
+			}
+		}
+	}
+}

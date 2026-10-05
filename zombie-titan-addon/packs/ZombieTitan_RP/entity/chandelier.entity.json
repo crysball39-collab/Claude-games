@@ -1,0 +1,31 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:chandelier",
+			"materials": {
+				"default": "entity_emissive_alpha"
+			},
+			"textures": {
+				"default": "textures/entity/doors/chandelier"
+			},
+			"geometry": {
+				"default": "geometry.zt.chandelier"
+			},
+			"render_controllers": [
+				"controller.render.zt.default"
+			],
+			"scripts": {
+				"animate": [
+					"main"
+				]
+			},
+			"animations": {
+				"hang": "animation.zt.chandelier.hang",
+				"fall": "animation.zt.chandelier.fall",
+				"fallen": "animation.zt.chandelier.fallen",
+				"main": "controller.animation.zt.chandelier"
+			}
+		}
+	}
+}

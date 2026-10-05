@@ -1,0 +1,35 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:seek_hand",
+			"materials": {
+				"default": "entity_emissive_alpha"
+			},
+			"textures": {
+				"default": "textures/entity/doors/seek_hand"
+			},
+			"geometry": {
+				"default": "geometry.zt.seek_hand"
+			},
+			"render_controllers": [
+				"controller.render.zt.default"
+			],
+			"scripts": {
+				"animate": [
+					"face",
+					"base",
+					"main"
+				]
+			},
+			"animations": {
+				"base": "animation.zt.hand.base",
+				"burst": "animation.zt.hand.burst",
+				"grope": "animation.zt.hand.grope",
+				"grab": "animation.zt.hand.grab",
+				"main": "controller.animation.zt.hand",
+				"face": "animation.zt.prop.face"
+			}
+		}
+	}
+}
