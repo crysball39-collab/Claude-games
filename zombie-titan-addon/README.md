@@ -1,14 +1,15 @@
-# Titans: Zombie, Skeleton, Creeper and Spider Titans, Dark Fists, Obsidian gear, Gum Gum Fruit, Doors
+# Titans: Zombie, Skeleton, Creeper and Spider Titans, the Omegafish, Dark Fists, Obsidian gear, Gum Gum Fruit, Doors
 
-**Version 1.5.0**
+**Version 1.6.0**
 
 A Minecraft Bedrock (Pocket Edition) add-on that brings the **Zombie Titan**, the
-**Skeleton Titan**, the **Creeper Titan** and the **Spider Titan** from the Java
-*Titans Mod* to Bedrock, each with its own boss bar. It also adds:
+**Skeleton Titan**, the **Creeper Titan**, the **Spider Titan** and the **Omegafish**
+(the silverfish titan) from the Java *Titans Mod* to Bedrock, each with its own boss
+bar. It also adds:
 
 - the **Dark Fists** weapon
 - a full set of **Obsidian** tools and armor, made from **Compact Obsidian**
-- the **Growth Serum**, which turns zombies, skeletons, creepers and spiders into titans
+- the **Growth Serum**, which turns zombies, skeletons, creepers, spiders and silverfish into titans
 - the **Gum Gum Fruit**: eat it to get rubber powers (and lose the ability to swim)
 - the Roblox horror game **DOORS**: the **Lobby** and all of **Floor 1** (the Hotel,
   doors 0 to 100, with Rush, Screech, Hide, Seek, the Figure and Jeff's shop), and
@@ -22,11 +23,11 @@ needs **no experimental toggles**. The Compact Obsidian block needs 1.26.20 or n
 1. Download **[`dist/ZombieTitan.mcaddon`](dist/ZombieTitan.mcaddon)**.
 2. Open **Files → Downloads** and tap `ZombieTitan.mcaddon`. Minecraft opens and
    imports two packs: *Zombie Titan BP* and *Zombie Titan RP*. Their descriptions
-   start with the version number (*Version 1.5.0*).
+   start with the version number (*Version 1.6.0*).
 3. Create a world, or edit one. Under **Behavior Packs**, activate
    **Zombie Titan BP**. Minecraft adds the resource pack with it.
 4. Play. Here is where everything is in the creative inventory:
-   - **Spawn eggs** (the four titans and their minions): with the other spawn eggs.
+   - **Spawn eggs** (the five titans and their minions): with the other spawn eggs.
    - **Dark Fists** and the **Obsidian** tools and armor: in the Equipment tab.
    - **Compact Obsidian**: in the Construction tab.
    - **Growth Serum**: in the Items tab.
@@ -45,7 +46,7 @@ If tapping the file does nothing, long-press it, choose **Open with**, and pick
   Storage**, delete the old *Zombie Titan BP* and *Zombie Titan RP*, and import
   again.
 - If the world still acts like the old version, check under **Behavior Packs**
-  that Zombie Titan BP is active and that its description says *Version 1.5.0*.
+  that Zombie Titan BP is active and that its description says *Version 1.6.0*.
 
 ## The Zombie Titan
 
@@ -65,7 +66,7 @@ If tapping the file does nothing, long-press it, choose **Open with**, and pick
   8 seconds. See [Growth Serum](#growth-serum).
 - **Naturally.** At night, there is a small chance that a titan rises 48–72 blocks
   from a player. The rise takes 43 seconds and the player gets a warning.
-  - It is a Zombie, Skeleton, Creeper or Spider Titan, with even odds.
+  - It is a Zombie, Skeleton, Creeper or Spider Titan, or an Omegafish, with even odds.
   - At most one titan rises every two in-game days.
   - Natural spawns never happen on Peaceful.
   - To turn them off, run `/scriptevent zt:natural_spawns off`. Use `on` to turn
@@ -348,6 +349,76 @@ Then the loot falls:
 - up to 3 netherite scrap
 - 12,000 XP for the player who killed it
 
+## The Omegafish
+
+The silverfish titan. It is the smallest and weakest of the titans, but still no
+pushover.
+
+| | |
+|---|---|
+| Size | About 19 blocks long and 8 tall at its armour plates (16× a silverfish) |
+| Health | 8,000 HP |
+| Damage | Head Butt 50, Tail Swipe 50–200, Lightning Shot 50 (and sets you on fire), Tail Smash 400, Body Slam 500 |
+| XP | 1,000 to the player who kills it |
+| Boss bar | Custom bar framed in grey, segmented armour plates with spikes along the top, its head at one end and its tail prongs at the other |
+
+### Spawning
+
+- **Spawn egg.** It wriggles out of the ground at silverfish size and grows to full
+  size over 10 seconds. While it is rising it can't be hurt.
+- **Naturally.** At night, like the Zombie Titan.
+- **Growth Serum.** Throw one at a silverfish.
+
+### Attacks
+
+Its head attacks hit what is in front of it. Its tail lashes at whatever is beside
+or behind it.
+
+| Attack | What it does |
+|---|---|
+| **Head Butt** | Lunges and rams whatever is in front of its head: 50 damage, and you are knocked back. |
+| **Body Slam** | Rears the front of its body up high, then crashes it down in front of it: 500 damage. When it rears up, get out of the way! |
+| **Tail Swipe** | Lashes its tail across everything beside and behind it: 50 to 200 damage. |
+| **Tail Smash** | Curls its tail up over its back and slams it down behind it: 400 damage, and you are thrown into the air. |
+| **Lightning Shot** | Rears up with sparks crackling around its jaws, then thrusts its head at you: lightning strikes you for 50 damage and sets you on fire. It mostly uses it on players who are far away or high above it. |
+| **Burrow** | When you are far away, it noses down into the ground and tunnels toward you, much faster than it walks. All you see is a rumbling trail of dust, and the tips of its tail prongs cutting through the ground like a fin. It bursts out right under you: everything there is hurt and thrown into the air. Nothing can hurt it while it is underground. |
+| **Explosions** | Below 1/4 of its health it glows white. Now and then the ground under your feet crackles white, and a second later it explodes, so keep moving! The explosions break no blocks. |
+
+### How to beat it
+
+1. **Shoot it with arrows.** Its armour plates turn blades and fists, so attacks
+   from players do nothing while it is upright, and explosions and lightning never
+   hurt it. But **6 arrows** (or thrown tridents) flip it over. The action bar counts
+   them: *Arrow hit! 2/6*.
+   - An arrow that hits it anywhere counts. A multishot volley counts once.
+   - Snowballs, eggs and other thrown things don't count.
+   - Arrows can't reach it while it is underground.
+2. **Hit it while it is on its back.** It lies there with its legs kicking for about
+   19 seconds. Now it can be hurt. It can't heal while it is down, and the **Dark
+   Fists** deal **5×** damage to it. Gum Gum moves count as hits too.
+3. **Low on health** it glows white and takes half damage. Explosions go off at your
+   feet (see above), and it summons minions faster.
+
+### Minions
+
+Silverfish minions swarm around it. They come in the same four types as the other
+minions: Loyalist (silver), Priest (pale with gold trim, heals the Omegafish), Zealot
+(dark red, fast and strong) and Templar (dark purple with gold trim, calls down
+lightning). There is a spawn egg for them too.
+
+### Death and loot
+
+When it dies, it rears up and writhes, curls up, and flops over onto its back with its
+legs twitching. Its experience bursts out of it. Then the loot falls:
+
+- 16–48 stone and 32–63 cobblestone
+- 16–31 stone bricks, 8–23 mossy stone bricks and 8–23 cracked stone bricks
+- 16–64 paper
+- 16–31 iron ingots and 8–15 gold ingots
+- 4–15 emeralds and 4–15 diamonds
+- up to 2 netherite scrap
+- 1,000 XP for the player who killed it
+
 ## Dark Fists
 
 | | |
@@ -444,6 +515,7 @@ Throw it at a mob that has a titan form, and the mob grows into that titan over
 | Skeleton, Stray, Bogged, Skeleton Minion | **Skeleton Titan** |
 | Creeper, Creeper Minion | **Creeper Titan** |
 | Spider, Cave Spider, Spider Minion | **Spider Titan** |
+| Silverfish, Silverfish Minion | **Omegafish** |
 
 - Throw it with **Use**, like a splash potion. A near miss still works if the
   bottle breaks within 2½ blocks of the mob.
@@ -630,7 +702,8 @@ go, and each one ends in a numbered door:
   **crucifix**, or nothing.
 - **Closets** to hide in, and **beds** to hide under (tap them). Crouch again to
   come out.
-- About one room in twenty, from door 4 on, is **dark**. Screech lives there.
+- About one room in twenty, from door 4 on, is **dark**: without a light you can
+  barely see your hand. Screech lives there.
 - Behind you, the rooms you have left are taken down as you go.
 
 **Where things are:**
@@ -655,8 +728,8 @@ chair. Tap Jeff, El Goblino or the goods to shop:
 
 | Item | Price | What it does |
 |---|---|---|
-| **Lighter** | 100 | Use to light it: a warm light follows you. About a minute of fuel |
-| **Flashlight** | 200 | A brighter light that shines where you look. Two minutes of battery |
+| **Lighter** | 100 | Hold it and it lights: a warm light follows you, and in dark rooms you can see about 13 blocks. Use it to close it. About a minute of fuel |
+| **Flashlight** | 200 | Hold it and it shines where you look, and in dark rooms you can see about 22 blocks. Use it to switch it off. Two minutes of battery |
 | **Skeleton Key** | 400 | Opens any lock, even skull locks. Two uses |
 | **Crucifix** | 500 | Hold it up (in your hand) against Rush or Screech, and the Guiding Light's chains drag them into the floor. Seek and the Figure are only held back for **5 seconds**. One use |
 
@@ -735,7 +808,7 @@ python3 tools/build.py        # regenerates everything, writes dist/ZombieTitan.
 ```
 
 The Seek chase's music is synthesized by `tools/gen_doors_audio.py`, and the elevator
-music, door 100's chase and Screech's whisper by `tools/gen_floor1_audio.py`. They are
+music, door 100's chase, Screech's whisper and Rush's roar by `tools/gen_floor1_audio.py`. They are
 encoded with `ffmpeg` (libvorbis). Without ffmpeg, the build keeps the existing files.
 
 Development checks:
@@ -757,6 +830,22 @@ Development checks:
 
 ## Version history
 
+- **1.6.0**
+  - New: the **Omegafish**, the silverfish titan, with its own boss bar, silverfish
+    minions, burrowing, lightning, explosions at your feet and its arrow weak spot.
+  - The Growth Serum now also works on silverfish, and natural spawns can be any of
+    the five titans.
+  - Fixed: door 1's key hung inside the reception's back wall, out of reach. It now
+    hangs on the front of the key rack, where you can tap it.
+  - Fixed: doors, gates, closets, drawers, the elevator doors and the breaker box
+    swung shut again right after they opened. They stay open now.
+  - Fixed: Rush didn't get louder as it came. Its roar now grows from a far-off rumble
+    to a scream over the 7 seconds before it arrives, and it roars past you once.
+  - Fixed: dark rooms weren't dark, and lighters and flashlights gave no light. Dark
+    rooms are now black a few blocks away. A lighter lets you see about 13 blocks and
+    lights up the blocks around you; a flashlight lets you see about 22 blocks and
+    lights up where you point it. A light in your hand is lit by itself: use it to put
+    it out.
 - **1.5.0**
   - New: **Spawn The Lobby+Floor 1**: the DOORS Lobby with eight working elevators,
     and the whole of Floor 1, the Hotel, from the reception to door 100. Every run is

@@ -1,4 +1,4 @@
-// Titan minions, zombie, skeleton, creeper and spider alike (Java Titans mod tiers):
+// Titan minions, zombie, skeleton, creeper, spider and silverfish alike (Java Titans mod tiers):
 //   Loyalist - fights for its titan
 //   Priest   - heals nearby injured allies, including the titan
 //   Zealot   - fast and strong, leaps at its prey

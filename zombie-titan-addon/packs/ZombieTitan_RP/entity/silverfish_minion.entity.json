@@ -1,0 +1,38 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:silverfish_minion",
+			"materials": {
+				"default": "silverfish",
+				"body_layer": "silverfish_layers"
+			},
+			"textures": {
+				"loyalist": "textures/entity/silverfish_minion/loyalist",
+				"priest": "textures/entity/silverfish_minion/priest",
+				"zealot": "textures/entity/silverfish_minion/zealot",
+				"templar": "textures/entity/silverfish_minion/templar"
+			},
+			"geometry": {
+				"default": "geometry.silverfish"
+			},
+			"spawn_egg": {
+				"texture": "zt_silverfish_minion_egg"
+			},
+			"scripts": {
+				"animate": [
+					"move",
+					"cast"
+				]
+			},
+			"animations": {
+				"move": "animation.silverfish.move",
+				"cast_rear": "animation.zt.silverfish_minion.cast",
+				"cast": "controller.animation.zt.silverfish_minion.cast"
+			},
+			"render_controllers": [
+				"controller.render.zt.silverfish_minion"
+			]
+		}
+	}
+}

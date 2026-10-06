@@ -48,6 +48,12 @@ SPIDER_SAY = ["sounds/mob/spider/say1", "sounds/mob/spider/say2", "sounds/mob/sp
 SPIDER_STEP = ["sounds/mob/spider/step1", "sounds/mob/spider/step2", "sounds/mob/spider/step3", "sounds/mob/spider/step4"]
 LLAMA_SPIT = ["sounds/mob/llama/spit1", "sounds/mob/llama/spit2"]
 WEB_BREAK = ["sounds/block/web/break1", "sounds/block/web/break2", "sounds/block/web/break3"]
+SILVER_SAY = ["sounds/mob/silverfish/say1", "sounds/mob/silverfish/say2", "sounds/mob/silverfish/say3", "sounds/mob/silverfish/say4"]
+SILVER_HIT = ["sounds/mob/silverfish/hit1", "sounds/mob/silverfish/hit2", "sounds/mob/silverfish/hit3"]
+SILVER_STEP = ["sounds/mob/silverfish/step1", "sounds/mob/silverfish/step2", "sounds/mob/silverfish/step3",
+               "sounds/mob/silverfish/step4"]
+DIG_STONE = ["sounds/dig/stone1", "sounds/dig/stone2", "sounds/dig/stone3", "sounds/dig/stone4"]
+DIG_GRAVEL = ["sounds/dig/gravel1", "sounds/dig/gravel2", "sounds/dig/gravel3", "sounds/dig/gravel4"]
 MACE_GROUND = ["sounds/item/mace/smash_ground1", "sounds/item/mace/smash_ground2", "sounds/item/mace/smash_ground3",
                "sounds/item/mace/smash_ground4"]
 
@@ -160,6 +166,14 @@ def definitions():
         "zt.spider.roar": event(snd(SPIDER_SAY, 0.36, 1.0) + snd(RAV_ROAR, 0.55, 0.8), min_d=32.0, max_d=192.0),
         "zt.spider.web": event(snd(LLAMA_SPIT, 0.45, 1.0) + snd(WEB_BREAK, 0.55, 1.0), min_d=16.0, max_d=128.0),
         "zt.spider.web_hit": event(snd(WEB_BREAK, 0.75, 1.0) + snd(SLIME_SMALL, 0.6, 0.8), min_d=8.0, max_d=64.0),
+        # Omegafish: vanilla silverfish chirps and skitters played low, rock grinding as it burrows
+        "zt.omega.ambient": event(snd(SILVER_SAY, 0.4, 1.0)),
+        "zt.omega.hurt": event(snd(SILVER_HIT, 0.5, 1.0), min_d=16.0, max_d=96.0),
+        "zt.omega.death": event(snd(["sounds/mob/silverfish/kill"], 0.35, 1.0) + snd(RAV_ROAR[:2], 0.6, 0.7), max_d=192.0),
+        "zt.omega.step": event(snd(SILVER_STEP, 0.5, 1.0) + snd(WARDEN_STEP, 0.9, 0.4), min_d=16.0, max_d=96.0),
+        "zt.omega.hiss": event(snd(SILVER_SAY, 0.3, 1.0), min_d=32.0, max_d=160.0),
+        "zt.omega.roar": event(snd(SILVER_SAY, 0.33, 1.0) + snd(RAV_ROAR, 0.6, 0.7), min_d=32.0, max_d=192.0),
+        "zt.omega.dig": event(snd(DIG_STONE, 0.5, 1.0) + snd(DIG_GRAVEL, 0.45, 1.0), min_d=16.0, max_d=96.0),
         # Gum Gum Fruit: rubbery slime squelches, bow twangs and punches
         "zt.gum.eat": event(snd(SLIME_BIG, 0.7, 1.0), category="player", min_d=4.0, max_d=24.0),
         "zt.gum.stretch": event(snd(["sounds/random/bow"], 0.5, 0.8) + snd(SLIME_SMALL, 0.55, 1.0), category="player",
@@ -385,6 +399,21 @@ def entity_sounds():
                         "hurt": "mob.spider.say",
                         "death": "mob.spider.death",
                         "step": {"sound": "mob.spider.step", "volume": 0.35, "pitch": 1.0},
+                    },
+                },
+                "zt:omegafish": {
+                    "volume": 1.0,
+                    "pitch": 1.0,
+                    "events": {"ambient": "zt.omega.ambient", "hurt": "zt.omega.hurt", "death": "zt.omega.death"},
+                },
+                "zt:silverfish_minion": {
+                    "volume": 1.0,
+                    "pitch": [0.8, 1.1],
+                    "events": {
+                        "ambient": "mob.silverfish.say",
+                        "hurt": "mob.silverfish.hit",
+                        "death": "mob.silverfish.kill",
+                        "step": {"sound": "mob.silverfish.step", "volume": 0.35, "pitch": 1.0},
                     },
                 },
                 "zt:figure": {"volume": 1.0, "pitch": 1.0, "events": {"ambient": "zt.figure.ambient"}},

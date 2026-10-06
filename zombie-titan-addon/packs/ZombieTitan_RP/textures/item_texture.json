@@ -166,6 +166,12 @@
 		},
 		"zt_breaker_switch": {
 			"textures": "textures/items/zt_breaker_switch"
+		},
+		"zt_omegafish_egg": {
+			"textures": "textures/items/zt_omegafish_egg"
+		},
+		"zt_silverfish_minion_egg": {
+			"textures": "textures/items/zt_silverfish_minion_egg"
 		}
 	}
 }

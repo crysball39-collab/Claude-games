@@ -87,6 +87,32 @@
 					}
 				}
 			},
+			"zt:omegafish": {
+				"volume": 1.0,
+				"pitch": 1.0,
+				"events": {
+					"ambient": "zt.omega.ambient",
+					"hurt": "zt.omega.hurt",
+					"death": "zt.omega.death"
+				}
+			},
+			"zt:silverfish_minion": {
+				"volume": 1.0,
+				"pitch": [
+					0.8,
+					1.1
+				],
+				"events": {
+					"ambient": "mob.silverfish.say",
+					"hurt": "mob.silverfish.hit",
+					"death": "mob.silverfish.kill",
+					"step": {
+						"sound": "mob.silverfish.step",
+						"volume": 0.35,
+						"pitch": 1.0
+					}
+				}
+			},
 			"zt:figure": {
 				"volume": 1.0,
 				"pitch": 1.0,

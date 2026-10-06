@@ -1,0 +1,175 @@
+{
+	"format_version": "1.10.0",
+	"animation_controllers": {
+		"controller.animation.zt.omegafish.main": {
+			"initial_state": "default",
+			"states": {
+				"default": {
+					"animations": [
+						"idle"
+					],
+					"transitions": [
+						{
+							"birth": "q.property('zt:anim') == 13"
+						},
+						{
+							"walk": "q.property('zt:anim') == 0 && q.property('zt:moving')"
+						},
+						{
+							"headbutt": "q.property('zt:anim') == 3"
+						},
+						{
+							"tail_swipe": "q.property('zt:anim') == 4"
+						},
+						{
+							"lightning": "q.property('zt:anim') == 5"
+						},
+						{
+							"tail_smash": "q.property('zt:anim') == 6"
+						},
+						{
+							"body_slam": "q.property('zt:anim') == 7"
+						},
+						{
+							"stun": "q.property('zt:anim') == 8"
+						},
+						{
+							"burrow": "q.property('zt:anim') == 9"
+						},
+						{
+							"erupt": "q.property('zt:anim') == 10"
+						},
+						{
+							"awaken": "q.property('zt:anim') == 11"
+						}
+					],
+					"blend_transition": 0.3
+				},
+				"walk": {
+					"animations": [
+						"walk"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 0 || !q.property('zt:moving')"
+						}
+					],
+					"blend_transition": 0.3
+				},
+				"birth": {
+					"animations": [
+						"birth"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 13"
+						}
+					],
+					"blend_transition": 0.6
+				},
+				"headbutt": {
+					"animations": [
+						"headbutt"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 3"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"tail_swipe": {
+					"animations": [
+						"tail_swipe"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 4"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"lightning": {
+					"animations": [
+						"lightning"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 5"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"tail_smash": {
+					"animations": [
+						"tail_smash"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 6"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"body_slam": {
+					"animations": [
+						"body_slam"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 7"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"stun": {
+					"animations": [
+						"stun"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 8"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"burrow": {
+					"animations": [
+						"burrow"
+					],
+					"transitions": [
+						{
+							"erupt": "q.property('zt:anim') == 10"
+						},
+						{
+							"default": "q.property('zt:anim') != 9"
+						}
+					],
+					"blend_transition": 0.0
+				},
+				"erupt": {
+					"animations": [
+						"erupt"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 10"
+						}
+					],
+					"blend_transition": 0.0
+				},
+				"awaken": {
+					"animations": [
+						"awaken"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') != 11"
+						}
+					],
+					"blend_transition": 0.25
+				}
+			}
+		}
+	}
+}

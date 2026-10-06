@@ -1,0 +1,31 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:omegafish_corpse",
+			"materials": {
+				"default": "entity_emissive_alpha"
+			},
+			"textures": {
+				"default": "textures/entity/omegafish/omegafish"
+			},
+			"geometry": {
+				"default": "geometry.zt.omegafish"
+			},
+			"scripts": {
+				"scale": "16.0",
+				"should_update_bones_and_effects_offscreen": "1.0",
+				"should_update_effects_offscreen": "1.0",
+				"animate": [
+					"death"
+				]
+			},
+			"animations": {
+				"death": "animation.zt.omegafish.death"
+			},
+			"render_controllers": [
+				"controller.render.zt.omegafish_corpse"
+			]
+		}
+	}
+}

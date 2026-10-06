@@ -11,7 +11,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 // the Doors levels place many kinds of blocks: build them with older block lists too
-const TESTS = ["smoke", "skeleton", "creeper", "spider", "items", "gumgum", "library", "seek", "library@1.21.90", "seek@1.21.90",
+const TESTS = ["smoke", "skeleton", "creeper", "spider", "omegafish", "items", "gumgum", "library", "seek", "library@1.21.90", "seek@1.21.90",
   "library@1.26.20", "floor1", "floor1@1.21.90"];
 
 const here = dirname(fileURLToPath(import.meta.url));

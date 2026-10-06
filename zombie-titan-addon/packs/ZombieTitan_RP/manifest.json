@@ -2,16 +2,16 @@
 	"format_version": 2,
 	"header": {
 		"name": "Zombie Titan RP",
-		"description": "Version 1.5.0 | Zombie, Skeleton, Creeper and Spider Titan bosses, Dark Fists, Obsidian gear, Growth Serum, the Gum Gum Fruit and Doors, with Floor 1 (resources)",
+		"description": "Version 1.6.0 | Zombie, Skeleton, Creeper and Spider Titan and Omegafish bosses, Dark Fists, Obsidian gear, Growth Serum, the Gum Gum Fruit and Doors, with Floor 1 (resources)",
 		"uuid": "ffbdbde4-2def-4922-bb3f-a52e099db75e",
-		"version": [1, 5, 0],
+		"version": [1, 6, 0],
 		"min_engine_version": [1, 21, 90]
 	},
 	"modules": [
 		{
 			"type": "resources",
 			"uuid": "a9369950-e4be-40f3-aa13-25bf15759a92",
-			"version": [1, 5, 0]
+			"version": [1, 6, 0]
 		}
 	]
 }

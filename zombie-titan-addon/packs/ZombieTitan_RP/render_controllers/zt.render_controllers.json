@@ -910,6 +910,58 @@
 			"textures": [
 				"Texture.default"
 			]
+		},
+		"controller.render.zt.omegafish": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			],
+			"overlay_color": {
+				"r": "q.property('zt:enraged') ? 1.0 : this",
+				"g": "q.property('zt:enraged') ? 1.0 : this",
+				"b": "q.property('zt:enraged') ? 1.0 : this",
+				"a": "q.property('zt:enraged') ? (0.25 + math.max(0, math.sin(q.life_time * 300.0)) * 0.35) : this"
+			}
+		},
+		"controller.render.zt.omegafish_corpse": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			]
+		},
+		"controller.render.zt.silverfish_minion": {
+			"arrays": {
+				"textures": {
+					"Array.skins": [
+						"Texture.loyalist",
+						"Texture.priest",
+						"Texture.zealot",
+						"Texture.templar"
+					]
+				}
+			},
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				},
+				{
+					"bodyLayer_*": "Material.body_layer"
+				}
+			],
+			"textures": [
+				"Array.skins[q.variant]"
+			]
 		}
 	}
 }

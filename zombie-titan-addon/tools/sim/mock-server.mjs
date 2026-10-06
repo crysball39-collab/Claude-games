@@ -355,6 +355,7 @@ const FAMILIES = {
   "minecraft:creeper": ["creeper", "monster", "mob"],
   "minecraft:spider": ["spider", "arthropod", "monster", "mob"],
   "minecraft:cave_spider": ["cave_spider", "spider", "arthropod", "monster", "mob"],
+  "minecraft:silverfish": ["silverfish", "arthropod", "monster", "mob"],
   "minecraft:player": ["player"],
   "minecraft:zombie": ["zombie", "monster", "mob"],
   "minecraft:skeleton": ["skeleton", "undead", "monster", "mob"],
@@ -381,7 +382,7 @@ const HEALTH = {
   "minecraft:villager_v2": 20, "zt:skeleton_titan": 20000, "zt:skeleton_minion": 30, "zt:skeleton_titan_corpse": 1,
   "minecraft:skeleton": 20, "minecraft:husk": 20, "minecraft:cow": 10,
   "zt:creeper_titan": 25000, "zt:creeper_minion": 30, "zt:creeper_titan_corpse": 1, "minecraft:creeper": 20,
-  "minecraft:spider": 16, "minecraft:cave_spider": 12,
+  "minecraft:spider": 16, "minecraft:cave_spider": 12, "minecraft:silverfish": 8,
   "zt:figure": 50000, "zt:seek": 1000, "zt:figure_bar": 100, "zt:seek_bar": 100, "zt:figure_lure": 1, "zt:hotel_door": 1,
   "zt:library_book": 1, "zt:library_paper": 1, "zt:library_lamp": 1, "zt:chandelier": 1, "zt:seek_hand": 1, "zt:seek_eye": 1,
 };
@@ -484,7 +485,7 @@ export class Entity {
     this.components = {};
     if (HEALTH[typeId]) this.components["minecraft:health"] = new Health(this, HEALTH[typeId]);
     if (PROJECTILES.has(typeId)) this.components["minecraft:projectile"] = new Projectile(this);
-    if (typeId === "zt:zombie_minion" || typeId === "zt:skeleton_minion" || typeId === "zt:creeper_minion") {
+    if (["zt:zombie_minion", "zt:skeleton_minion", "zt:creeper_minion", "zt:silverfish_minion"].includes(typeId)) {
       this.components["minecraft:variant"] = { value: 0 };
     }
     this.knockbacks = [];

@@ -1,0 +1,46 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:omegafish",
+			"materials": {
+				"default": "entity_emissive_alpha"
+			},
+			"textures": {
+				"default": "textures/entity/omegafish/omegafish"
+			},
+			"geometry": {
+				"default": "geometry.zt.omegafish"
+			},
+			"spawn_egg": {
+				"texture": "zt_omegafish_egg"
+			},
+			"scripts": {
+				"scale": "1.0 + 15.0 * q.property('zt:grow')",
+				"should_update_bones_and_effects_offscreen": "1.0",
+				"should_update_effects_offscreen": "1.0",
+				"animate": [
+					"controller"
+				]
+			},
+			"animations": {
+				"idle": "animation.zt.omegafish.idle",
+				"walk": "animation.zt.omegafish.walk",
+				"birth": "animation.zt.omegafish.birth",
+				"headbutt": "animation.zt.omegafish.headbutt",
+				"tail_swipe": "animation.zt.omegafish.tail_swipe",
+				"lightning": "animation.zt.omegafish.lightning",
+				"tail_smash": "animation.zt.omegafish.tail_smash",
+				"body_slam": "animation.zt.omegafish.body_slam",
+				"stun": "animation.zt.omegafish.stun",
+				"burrow": "animation.zt.omegafish.burrow",
+				"erupt": "animation.zt.omegafish.erupt",
+				"awaken": "animation.zt.omegafish.awaken",
+				"controller": "controller.animation.zt.omegafish.main"
+			},
+			"render_controllers": [
+				"controller.render.zt.omegafish"
+			]
+		}
+	}
+}

@@ -1,0 +1,341 @@
+{
+	"format_version": "1.21.90",
+	"minecraft:entity": {
+		"description": {
+			"identifier": "zt:omegafish",
+			"is_spawnable": true,
+			"is_summonable": true,
+			"spawn_category": "monster",
+			"properties": {
+				"zt:anim": {
+					"type": "int",
+					"range": [
+						0,
+						15
+					],
+					"default": 0,
+					"client_sync": true
+				},
+				"zt:moving": {
+					"type": "bool",
+					"default": false,
+					"client_sync": true
+				},
+				"zt:stunned": {
+					"type": "bool",
+					"default": false,
+					"client_sync": true
+				},
+				"zt:enraged": {
+					"type": "bool",
+					"default": false,
+					"client_sync": true
+				},
+				"zt:birth": {
+					"type": "bool",
+					"default": false,
+					"client_sync": false
+				},
+				"zt:burrowed": {
+					"type": "bool",
+					"default": false,
+					"client_sync": false
+				},
+				"zt:grow": {
+					"type": "float",
+					"range": [
+						0.0,
+						1.0
+					],
+					"default": 1.0,
+					"client_sync": true
+				}
+			}
+		},
+		"component_groups": {
+			"zt:small": {
+				"minecraft:collision_box": {
+					"width": 1.5,
+					"height": 1.0
+				}
+			}
+		},
+		"components": {
+			"minecraft:type_family": {
+				"family": [
+					"omegafish",
+					"titan",
+					"zt_ally",
+					"silverfish",
+					"arthropod",
+					"monster",
+					"mob"
+				]
+			},
+			"minecraft:health": {
+				"value": 8000,
+				"max": 8000
+			},
+			"minecraft:boss": {
+				"name": "Omegafish",
+				"should_darken_sky": false,
+				"hud_range": 100
+			},
+			"minecraft:collision_box": {
+				"width": 14.0,
+				"height": 8.0
+			},
+			"minecraft:physics": {
+				"has_gravity": false,
+				"has_collision": false
+			},
+			"minecraft:knockback_resistance": {
+				"value": 1.0
+			},
+			"minecraft:fire_immune": {},
+			"minecraft:movement": {
+				"value": 0.0
+			},
+			"minecraft:movement.basic": {},
+			"minecraft:persistent": {},
+			"minecraft:nameable": {
+				"allow_name_tag_renaming": false,
+				"always_show": false
+			},
+			"minecraft:breathable": {
+				"breathes_air": true,
+				"breathes_water": true,
+				"total_supply": 15,
+				"suffocate_time": 0
+			},
+			"minecraft:ambient_sound_interval": {
+				"value": 6.0,
+				"range": 6.0,
+				"event_name": "ambient"
+			},
+			"minecraft:mob_effect_immunity": {
+				"mob_effects": [
+					"poison",
+					"fatal_poison",
+					"wither",
+					"slowness",
+					"weakness",
+					"levitation",
+					"blindness",
+					"darkness",
+					"nausea",
+					"mining_fatigue",
+					"hunger",
+					"instant_damage",
+					"slow_falling",
+					"infested",
+					"oozing",
+					"weaving",
+					"wind_charged"
+				]
+			},
+			"minecraft:damage_sensor": {
+				"triggers": [
+					{
+						"on_damage": {
+							"filters": {
+								"test": "bool_property",
+								"domain": "zt:birth",
+								"value": true
+							}
+						},
+						"deals_damage": "no"
+					},
+					{
+						"on_damage": {
+							"filters": {
+								"test": "bool_property",
+								"domain": "zt:burrowed",
+								"value": true
+							}
+						},
+						"deals_damage": "no"
+					},
+					{
+						"cause": "fall",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "fire",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "fire_tick",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "lava",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "drowning",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "suffocation",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "entity_explosion",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "block_explosion",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "magic",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "wither",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "lightning",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "anvil",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "falling_block",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "freezing",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "contact",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "stalactite",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "stalagmite",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "fly_into_wall",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "temperature",
+						"deals_damage": "no"
+					},
+					{
+						"on_damage": {
+							"filters": {
+								"test": "is_family",
+								"subject": "other",
+								"value": "zt_ally"
+							}
+						},
+						"deals_damage": "no"
+					},
+					{
+						"on_damage": {
+							"filters": {
+								"all_of": [
+									{
+										"test": "bool_property",
+										"domain": "zt:stunned",
+										"value": false
+									},
+									{
+										"test": "is_family",
+										"subject": "other",
+										"value": "player"
+									}
+								]
+							},
+							"event": "zt:omegafish_block"
+						},
+						"deals_damage": "no"
+					},
+					{
+						"on_damage": {
+							"filters": {
+								"all_of": [
+									{
+										"test": "bool_property",
+										"domain": "zt:enraged",
+										"value": true
+									},
+									{
+										"test": "is_family",
+										"subject": "other",
+										"value": "player"
+									},
+									{
+										"test": "has_equipment",
+										"subject": "other",
+										"domain": "hand",
+										"value": "zt:dark_fists"
+									}
+								]
+							}
+						},
+						"damage_multiplier": 2.5
+					},
+					{
+						"on_damage": {
+							"filters": {
+								"all_of": [
+									{
+										"test": "is_family",
+										"subject": "other",
+										"value": "player"
+									},
+									{
+										"test": "has_equipment",
+										"subject": "other",
+										"domain": "hand",
+										"value": "zt:dark_fists"
+									}
+								]
+							}
+						},
+						"damage_multiplier": 5.0
+					},
+					{
+						"on_damage": {
+							"filters": {
+								"test": "bool_property",
+								"domain": "zt:enraged",
+								"value": true
+							}
+						},
+						"damage_multiplier": 0.5
+					}
+				]
+			}
+		},
+		"events": {
+			"zt:start_birth": {
+				"add": {
+					"component_groups": [
+						"zt:small"
+					]
+				}
+			},
+			"zt:end_birth": {
+				"remove": {
+					"component_groups": [
+						"zt:small"
+					]
+				}
+			},
+			"zt:omegafish_block": {}
+		}
+	}
+}

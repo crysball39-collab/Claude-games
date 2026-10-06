@@ -1,0 +1,25 @@
+{
+	"format_version": "1.8.0",
+	"animations": {
+		"animation.zt.silverfish_minion.cast": {
+			"loop": true,
+			"animation_length": 0.5,
+			"bones": {
+				"bodyPart_0": {
+					"rotation": [
+						"-30 + math.sin(q.anim_time * 1440) * 6",
+						0,
+						0
+					]
+				},
+				"bodyPart_1": {
+					"rotation": [
+						"-20",
+						0,
+						0
+					]
+				}
+			}
+		}
+	}
+}

@@ -1,7 +1,9 @@
 // The Hotel's items (DOORS): found in drawers or bought at Jeff's shop, and taken back when
 // the run ends.
-//   Lighter       use to light it: a glow follows you; a minute of fuel (its durability bar)
-//   Flashlight    use to switch it on: lights up what you point it at; two minutes of battery
+//   Lighter       lit while you hold it (use it to close it): a glow follows you and keeps
+//                 dark rooms' darkness back; a minute of fuel (its durability bar)
+//   Flashlight    on while you hold it (use it to switch it off): lights up what you point it
+//                 at; two minutes of battery
 //   Crucifix      hold it up when Rush or Screech would get you and they're dragged into the
 //                 floor; Seek and the Figure are only held back for five seconds
 //   Skeleton Key  opens any lock, skull locks too; two uses
@@ -15,8 +17,8 @@ import { isValid } from "./util.js";
 /** @typedef {import("@minecraft/server").Vector3} Vector3 */
 
 export const KINDS = {
-  lighter: { id: "zt:lighter", name: "§6Lighter", lore: ["§7Use to light it. A glow follows you.", "§7About a minute of fuel."] },
-  flashlight: { id: "zt:flashlight", name: "§eFlashlight", lore: ["§7Use to switch it on.", "§7Two minutes of battery."] },
+  lighter: { id: "zt:lighter", name: "§6Lighter", lore: ["§7Hold it and it lights: a glow follows you.", "§7Use it to close it. About a minute of fuel."] },
+  flashlight: { id: "zt:flashlight", name: "§eFlashlight", lore: ["§7Hold it and it shines where you look.", "§7Use it to switch it off. Two minutes of battery."] },
   crucifix: { id: "zt:crucifix", name: "§bCrucifix", lore: ["§7Hold it up when something comes for you.", "§7Rush and Screech can't stand it."] },
   skeleton_key: { id: "zt:skeleton_key", name: "§fSkeleton Key", lore: ["§7Opens any lock, even skull locks.", "§7Two uses."] },
   herb: { id: "zt:herb_of_viridis", name: "§aHerb of Viridis", lore: ["§7Eat it: a little faster and healing,", "§7for the rest of the run."] },

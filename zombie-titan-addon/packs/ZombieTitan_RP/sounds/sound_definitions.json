@@ -1370,6 +1370,245 @@
 				}
 			]
 		},
+		"zt.omega.ambient": {
+			"category": "hostile",
+			"min_distance": 24.0,
+			"max_distance": 128.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/silverfish/say1",
+					"pitch": 0.4,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/silverfish/say2",
+					"pitch": 0.4,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/silverfish/say3",
+					"pitch": 0.4,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/silverfish/say4",
+					"pitch": 0.4,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.omega.hurt": {
+			"category": "hostile",
+			"min_distance": 16.0,
+			"max_distance": 96.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/silverfish/hit1",
+					"pitch": 0.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/silverfish/hit2",
+					"pitch": 0.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/silverfish/hit3",
+					"pitch": 0.5,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.omega.death": {
+			"category": "hostile",
+			"min_distance": 24.0,
+			"max_distance": 192.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/silverfish/kill",
+					"pitch": 0.35,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/ravager/roar1",
+					"pitch": 0.6,
+					"volume": 0.7
+				},
+				{
+					"name": "sounds/mob/ravager/roar2",
+					"pitch": 0.6,
+					"volume": 0.7
+				}
+			]
+		},
+		"zt.omega.step": {
+			"category": "hostile",
+			"min_distance": 16.0,
+			"max_distance": 96.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/silverfish/step1",
+					"pitch": 0.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/silverfish/step2",
+					"pitch": 0.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/silverfish/step3",
+					"pitch": 0.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/silverfish/step4",
+					"pitch": 0.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/warden/step_1",
+					"pitch": 0.9,
+					"volume": 0.4
+				},
+				{
+					"name": "sounds/mob/warden/step_2",
+					"pitch": 0.9,
+					"volume": 0.4
+				},
+				{
+					"name": "sounds/mob/warden/step_3",
+					"pitch": 0.9,
+					"volume": 0.4
+				},
+				{
+					"name": "sounds/mob/warden/step_4",
+					"pitch": 0.9,
+					"volume": 0.4
+				}
+			]
+		},
+		"zt.omega.hiss": {
+			"category": "hostile",
+			"min_distance": 32.0,
+			"max_distance": 160.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/silverfish/say1",
+					"pitch": 0.3,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/silverfish/say2",
+					"pitch": 0.3,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/silverfish/say3",
+					"pitch": 0.3,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/silverfish/say4",
+					"pitch": 0.3,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.omega.roar": {
+			"category": "hostile",
+			"min_distance": 32.0,
+			"max_distance": 192.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/silverfish/say1",
+					"pitch": 0.33,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/silverfish/say2",
+					"pitch": 0.33,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/silverfish/say3",
+					"pitch": 0.33,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/silverfish/say4",
+					"pitch": 0.33,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/ravager/roar1",
+					"pitch": 0.6,
+					"volume": 0.7
+				},
+				{
+					"name": "sounds/mob/ravager/roar2",
+					"pitch": 0.6,
+					"volume": 0.7
+				},
+				{
+					"name": "sounds/mob/ravager/roar3",
+					"pitch": 0.6,
+					"volume": 0.7
+				},
+				{
+					"name": "sounds/mob/ravager/roar4",
+					"pitch": 0.6,
+					"volume": 0.7
+				}
+			]
+		},
+		"zt.omega.dig": {
+			"category": "hostile",
+			"min_distance": 16.0,
+			"max_distance": 96.0,
+			"sounds": [
+				{
+					"name": "sounds/dig/stone1",
+					"pitch": 0.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/dig/stone2",
+					"pitch": 0.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/dig/stone3",
+					"pitch": 0.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/dig/stone4",
+					"pitch": 0.5,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/dig/gravel1",
+					"pitch": 0.45,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/dig/gravel2",
+					"pitch": 0.45,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/dig/gravel3",
+					"pitch": 0.45,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/dig/gravel4",
+					"pitch": 0.45,
+					"volume": 1.0
+				}
+			]
+		},
 		"zt.gum.eat": {
 			"category": "player",
 			"min_distance": 4.0,
