@@ -256,7 +256,7 @@ def blocks():
                                         selection={"origin": [-8, 0, -1], "size": [16, 16, 2]}, render="alpha_test",
                                         permutations=turnable([]))
     out["exit_sign"] = geo_block("exit_sign", "geometry.zt.exit_sign", "zt_exit_sign", light=5, trait=True,
-                                 selection={"origin": [-5, 4, 6], "size": [10, 6, 2]}, render="opaque", permutations=turnable([]))
+                                 selection={"origin": [-7, 5, 6], "size": [14, 6, 2]}, render="opaque", permutations=turnable([]))
     return out
 
 
@@ -272,6 +272,14 @@ EXTRA_TERRAIN = ["zt_invisible", "zt_lamp_on", "zt_lamp_off", "zt_lamp_broken", 
 # client
 # =============================================================================================
 FACE = {"face": "animation.zt.prop.face"}
+
+
+def ease(var, target, rate=12.0):
+    """A pre-animation script: v.<var> eases toward `target` (frame-rate independent)."""
+    return "v.%s = math.lerp(v.%s, %s, math.min(1.0, q.delta_time * %.1f));" % (var, var, target, rate)
+
+
+DRAWERS = [ease("d%d" % k, "math.mod(math.floor(q.property('zt:drawers') / %d), 2)" % (1 << k)) for k in range(3)]
 
 
 def clients():
@@ -290,13 +298,15 @@ def clients():
         "zt:dresser", "geometry.zt.dresser", TEX + "dresser", material="entity_alphatest",
         extra_textures={"nightstand": TEX + "nightstand", "desk": TEX + "desk"},
         extra_geometry={"nightstand": "geometry.zt.nightstand", "desk": "geometry.zt.desk"},
-        animations=dict(FACE, drawers="animation.zt.drawers"), animate=["face", "drawers"], rc=["controller.render.zt.dresser"])
+        animations=dict(FACE, drawers="animation.zt.drawers"), animate=["face", "drawers"], rc=["controller.render.zt.dresser"],
+        pre=DRAWERS)
     out["cabinet"] = client("zt:cabinet", "geometry.zt.cabinet", TEX + "cabinet", material="entity_alphatest",
-                            animations=dict(FACE, drawers="animation.zt.drawers"), animate=["face", "drawers"])
+                            animations=dict(FACE, drawers="animation.zt.drawers"), animate=["face", "drawers"], pre=DRAWERS)
     out["couch"] = client("zt:couch", "geometry.zt.couch", TEX + "couch_0", material="entity_alphatest",
                           extra_textures={"couch_1": TEX + "couch_1", "couch_2": TEX + "couch_2"}, animations=FACE, animate=["face"],
                           rc=["controller.render.zt.couch"])
     out["room_key"] = client("zt:room_key", "geometry.zt.room_key", TEX + "room_key", material="entity_alphatest",
+                             extra_textures={"grey": TEX + "room_key_grey"},
                              animations=dict(FACE, spin="animation.zt.room_key.spin"), animate=["face", "spin"],
                              rc=["controller.render.zt.room_key"])
     out["flesh_pile"] = client("zt:flesh_pile", "geometry.zt.flesh_pile", TEX + "flesh_pile", material="entity_alphatest",
@@ -313,8 +323,8 @@ def clients():
     out["metal_door"] = client(
         "zt:metal_door", "geometry.zt.metal_door", TEX + "metal_door", material="entity_alphatest",
         animations=dict(FACE, open="animation.zt.door.open", close="animation.zt.door.close", bang="animation.zt.metal_door.bang",
-                        broken="animation.zt.metal_door.broken", hit="controller.animation.zt.metal_door", **door_anims),
-        animate=["face", "main", "hit"], rc=["controller.render.zt.metal_door"])
+                        broken="animation.zt.metal_door.broken", main="controller.animation.zt.metal_door"),
+        animate=["face", "main"], rc=["controller.render.zt.metal_door"])
     out["big_gate"] = client(
         "zt:big_gate", "geometry.zt.big_gate", TEX + "big_gate", material="entity_alphatest",
         animations=dict(FACE, open="animation.zt.big_gate.open", close="animation.zt.big_gate.close", **door_anims),
@@ -324,24 +334,29 @@ def clients():
         animations=dict(FACE, open="animation.zt.elevator_gate.open", close="animation.zt.elevator_gate.close", **door_anims),
         animate=["face", "main"])
     out["wall_lever"] = client("zt:wall_lever", "geometry.zt.wall_lever", TEX + "wall_lever", material="entity_alphatest",
-                               animations=dict(FACE, pull="animation.zt.wall_lever.pull"), animate=["face", "pull"])
+                               animations=dict(FACE, pull="animation.zt.wall_lever.pull"), animate=["face", "pull"],
+                               pre=[ease("pull", "q.property('zt:on') ? 1.0 : 0.0", 5.0)])
     out["breaker_box"] = client(
         "zt:breaker_box", "geometry.zt.breaker_box", TEX + "breaker_box", material="entity_alphatest",
+        extra_materials={"glow": "entity_emissive_alpha"},
         animations=dict(FACE, open="animation.zt.breaker_box.open", close="animation.zt.breaker_box.close", **door_anims),
         animate=["face", "main"], rc=["controller.render.zt.breaker_box"])
     out["breaker_lever"] = client("zt:breaker_lever", "geometry.zt.breaker_lever", TEX + "breaker_lever", material="entity_alphatest",
-                                  animations=dict(FACE, flip="animation.zt.breaker_lever.flip"), animate=["face", "flip"])
+                                  animations=dict(FACE, flip="animation.zt.breaker_lever.flip"), animate=["face", "flip"],
+                                  pre=[ease("flip", "q.property('zt:on') ? 1.0 : 0.0", 25.0)])
     out["switch_pickup"] = client("zt:switch_pickup", "geometry.zt.switch_pickup", TEX + "breaker_lever", material="entity_alphatest",
                                   animations=FACE, animate=["face"])
     out["live_wire"] = client("zt:live_wire", "geometry.zt.live_wire", TEX + "live_wire", material="entity_alphatest",
                               animations=dict(FACE, sway="animation.zt.live_wire.sway"), animate=["face", "sway"])
-    out["herb_plant"] = client("zt:herb_plant", "geometry.zt.herb_plant", TEX + "herb_plant",
-                               animations=dict(FACE, sway="animation.zt.herb_plant.sway"), animate=["face", "sway"])
+    out["herb_plant"] = client("zt:herb_plant", "geometry.zt.herb_plant", TEX + "herb_plant", material="entity_alphatest",
+                               extra_materials={"glow": "entity_emissive_alpha"},
+                               animations=dict(FACE, sway="animation.zt.herb_plant.sway"), animate=["face", "sway"],
+                               rc=["controller.render.zt.herb_plant"])
     out["angel_statue"] = client("zt:angel_statue", "geometry.zt.angel_statue", TEX + "angel_statue", material="entity_alphatest",
                                  animations=FACE, animate=["face"])
     out["jeff"] = client("zt:jeff", "geometry.zt.jeff", TEX + "jeff", animations=dict(FACE, idle="animation.zt.jeff.idle"),
                          animate=["face", "idle"])
-    out["el_goblino"] = client("zt:el_goblino", "geometry.zt.el_goblino", TEX + "el_goblino",
+    out["el_goblino"] = client("zt:el_goblino", "geometry.zt.el_goblino", TEX + "el_goblino", material="entity_alphatest",
                                animations=dict(FACE, idle="animation.zt.el_goblino.idle"), animate=["face", "idle"])
     out["bob"] = client("zt:bob", "geometry.zt.bob", TEX + "bob", material="entity_alphatest", animations=FACE, animate=["face"])
     out["shop_display"] = client("zt:shop_display", "geometry.zt.shop_display", TEX + "shop_display", material="entity_alphatest",
@@ -383,10 +398,12 @@ def render_controllers(existing):
         "textures": ["Array.skins[q.property('zt:style')]"],
     }
     style = "q.property('zt:style')"
+    # 0: a gold room key lying somewhere, 1: door 100's grey electrical key, 2: a room key on the reception's rack
     rc["controller.render.zt.room_key"] = {
-        "geometry": "Geometry.default", "materials": [{"*": "Material.default"}], "textures": ["Texture.default"],
-        "part_visibility": [{"*": True}, {"flat": "%s != 2" % style}, {"hanging": "%s == 2" % style},
-                            {"gold": "%s != 1" % style}, {"grey": "%s == 1" % style}],
+        "arrays": {"textures": {"Array.skins": ["Texture.default", "Texture.grey"]}},
+        "geometry": "Geometry.default", "materials": [{"*": "Material.default"}],
+        "textures": ["Array.skins[%s == 1 ? 1 : 0]" % style],
+        "part_visibility": [{"*": True}, {"flat": "%s != 2" % style}, {"hanging": "%s == 2" % style}],
     }
     rc["controller.render.zt.flesh_pile"] = {
         "geometry": "Geometry.default", "materials": [{"*": "Material.default"}], "textures": ["Texture.default"],
@@ -404,11 +421,16 @@ def render_controllers(existing):
     }
     num = "q.property('zt:num')"
     fill = "q.property('zt:fill')"
+    rc["controller.render.zt.herb_plant"] = {
+        "geometry": "Geometry.default", "materials": [{"*": "Material.default"}, {"bud": "Material.glow"}], "textures": ["Texture.default"],
+    }
     rc["controller.render.zt.breaker_box"] = {
-        "geometry": "Geometry.default", "materials": [{"*": "Material.default"}], "textures": ["Texture.default"],
+        "geometry": "Geometry.default", "textures": ["Texture.default"],
+        "materials": [{"*": "Material.default"}, {"num_*": "Material.glow"}, {"square*": "Material.glow"}, {"ok_light": "Material.glow"}],
         "part_visibility": [{"*": True}] + [{"num_%d" % n: "%s == %d" % (num, n)} for n in range(1, 11)] + [
             {"num_q": "%s == 11" % num}, {"square": "%s >= 1" % fill}, {"square_fill": "%s == 2" % fill},
-            {"ok_light": "q.property('zt:ok')"}, {"screen_on": "%s > 0 || q.property('zt:ok')" % num}],
+            {"ok_light": "q.property('zt:ok')"}, {"screen_on": "%s > 0 || q.property('zt:ok')" % num}] +
+        [{"sw_%d" % n: "q.property('zt:slots') >= %d" % n} for n in range(1, 11)],
     }
     return existing
 

@@ -16,6 +16,9 @@
 				"controller.render.zt.default"
 			],
 			"scripts": {
+				"pre_animation": [
+					"v.pull = math.lerp(v.pull, q.property('zt:on') ? 1.0 : 0.0, math.min(1.0, q.delta_time * 5.0));"
+				],
 				"animate": [
 					"face",
 					"pull"

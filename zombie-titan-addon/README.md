@@ -1,6 +1,6 @@
 # Titans: Zombie, Skeleton, Creeper and Spider Titans, Dark Fists, Obsidian gear, Gum Gum Fruit, Doors
 
-**Version 1.4.1**
+**Version 1.5.0**
 
 A Minecraft Bedrock (Pocket Edition) add-on that brings the **Zombie Titan**, the
 **Skeleton Titan**, the **Creeper Titan** and the **Spider Titan** from the Java
@@ -10,8 +10,9 @@ A Minecraft Bedrock (Pocket Edition) add-on that brings the **Zombie Titan**, th
 - a full set of **Obsidian** tools and armor, made from **Compact Obsidian**
 - the **Growth Serum**, which turns zombies, skeletons, creepers and spiders into titans
 - the **Gum Gum Fruit**: eat it to get rubber powers (and lose the ability to swim)
-- two levels from the Roblox horror game **DOORS**: **Door 50** (the Library, with
-  **the Figure**) and **Door 30** (the **Seek** chase)
+- the Roblox horror game **DOORS**: the **Lobby** and all of **Floor 1** (the Hotel,
+  doors 0 to 100, with Rush, Screech, Hide, Seek, the Figure and Jeff's shop), and
+  **Door 50** (the Library) and **Door 30** (the Seek chase) on their own
 
 Made for Minecraft Bedrock **1.26.50** on Android. It works on 1.21.90 and newer and
 needs **no experimental toggles**. The Compact Obsidian block needs 1.26.20 or newer.
@@ -21,7 +22,7 @@ needs **no experimental toggles**. The Compact Obsidian block needs 1.26.20 or n
 1. Download **[`dist/ZombieTitan.mcaddon`](dist/ZombieTitan.mcaddon)**.
 2. Open **Files → Downloads** and tap `ZombieTitan.mcaddon`. Minecraft opens and
    imports two packs: *Zombie Titan BP* and *Zombie Titan RP*. Their descriptions
-   start with the version number (*Version 1.4.1*).
+   start with the version number (*Version 1.5.0*).
 3. Create a world, or edit one. Under **Behavior Packs**, activate
    **Zombie Titan BP**. Minecraft adds the resource pack with it.
 4. Play. Here is where everything is in the creative inventory:
@@ -30,9 +31,11 @@ needs **no experimental toggles**. The Compact Obsidian block needs 1.26.20 or n
    - **Compact Obsidian**: in the Construction tab.
    - **Growth Serum**: in the Items tab.
    - **Gum Gum Fruit**: in the Nature tab.
-   - **Door 50 Library** and **Door 30 Seek Chase**: in the Items tab.
+   - **Spawn The Lobby+Floor 1**, **Door 50 Library** and **Door 30 Seek Chase**: in
+     the Items tab.
    - **The Figure** and **Seek** spawn eggs: with the other spawn eggs.
-   - The **hotel blocks** (wallpaper, wainscoting, floor...): in the Construction tab.
+   - The **hotel blocks** (wallpaper, wainscoting, floor, crates...): in the Construction
+     tab. Lamps, paintings and signs: in the Items tab.
 
 If tapping the file does nothing, long-press it, choose **Open with**, and pick
 **Minecraft**.
@@ -42,7 +45,7 @@ If tapping the file does nothing, long-press it, choose **Open with**, and pick
   Storage**, delete the old *Zombie Titan BP* and *Zombie Titan RP*, and import
   again.
 - If the world still acts like the old version, check under **Behavior Packs**
-  that Zombie Titan BP is active and that its description says *Version 1.4.1*.
+  that Zombie Titan BP is active and that its description says *Version 1.5.0*.
 
 ## The Zombie Titan
 
@@ -517,8 +520,8 @@ model can clash with it.
 
 ## Doors
 
-Two items rebuild rooms from **DOORS** in front of you, with their monsters. Each one
-first asks if you want to build there, because the rooms replace whatever is in the way.
+Three items rebuild **DOORS** in front of you, with its monsters. Each one first asks
+if you want to build there, because the rooms replace whatever is in the way.
 
 While you play a door, you are in **Adventure mode** so the walls can't be broken.
 When you escape, die or leave, you get your own game mode back. If you die, the
@@ -603,14 +606,123 @@ mistakes. Original chase music plays while it's after you.
 A Seek from a **spawn egg** chases the nearest player and kills whoever it catches.
 Nothing can hurt it.
 
+### The Lobby and Floor 1: the Hotel
+
+Use **Spawn The Lobby+Floor 1** and the **Lobby** is built in front of you: a grand
+hall with **eight elevators**, four down each side, couches, plants and chandeliers.
+It is 36 × 39 blocks and 11 high. The hotel's rooms are built on beyond its far end as
+you play, up to about 2,500 blocks ahead and 40 to each side. The Lobby stays where it is, and its elevators keep working after you
+close and reopen the world (up to six lobbies per world).
+
+**Riding down.** Step into an elevator and it asks where you're going: pick **The
+Hotel** (Floor 1). *The Mines* (Floor 2) isn't open yet. Everyone standing in the car
+when its doors shut comes along. The doors close, and the car
+goes down for **15 seconds** while elevator music plays. Then it opens onto the
+Hotel's **reception**.
+
+**The rooms.** Every run is a different hotel. Rooms are built ahead of you as you
+go, and each one ends in a numbered door:
+- **Door 1** is locked. Its key hangs on the rack **behind the reception desk**.
+- About **one room in five** has a **locked door**. Its **key** is somewhere in that
+  room: on a desk or a bed, or **inside a drawer**. Tap a locked door with the key.
+- **Drawers** (dressers, nightstands, desks and filing cabinets): tap one to open
+  it. You can find **gold**, a **lighter**, a **flashlight**, rarely a
+  **crucifix**, or nothing.
+- **Closets** to hide in, and **beds** to hide under (tap them). Crouch again to
+  come out.
+- About one room in twenty, from door 4 on, is **dark**. Screech lives there.
+- Behind you, the rooms you have left are taken down as you go.
+
+**Where things are:**
+
+| Doors | What's there |
+|---|---|
+| 0 | The reception, with door 1's key behind the desk |
+| 27 to 30 | **Seek's eyes** on the walls, more and more of them. At **30**, Seek rises and chases you through the next rooms (follow the blue Guiding Light) |
+| 50 | **The Library**, with the Figure and the padlock puzzle (as in Door 50) |
+| 52 | **Jeff's shop** |
+| 53 and on | The **abandoned hotel**: torn, scratched wallpaper, piles of flesh, knocked-over furniture, broken lights |
+| 57 to 70 | Seek's eyes come back from 57, and Seek chases you again between 60 and 70 |
+| 80 | **The Infirmary**: beds behind curtains, and a side room with a **skull lock** that only a skeleton key opens. Inside is the **Herb of Viridis** |
+| 89 | An iron **gate**, out into the **Courtyard**: grass, graves, an angel statue and stairs along its sides |
+| 90 to 99 | **The Greenhouse**: dark rooms of plants under a glass roof, behind gates with white numbers. Lightning, not flickering lights, warns of Rush here |
+| 100 | **The Electrical Room** (below) |
+
+**Gold and Jeff's shop.** Gold from drawers is counted for each player (shown when
+you pick it up). At door 52, **Jeff** (a dark-blue, tentacled shopkeeper with glowing
+blue eyes) sells, with **El Goblino** at the counter and **Bob** the skeleton in his
+chair. Tap Jeff, El Goblino or the goods to shop:
+
+| Item | Price | What it does |
+|---|---|---|
+| **Lighter** | 100 | Use to light it: a warm light follows you. About a minute of fuel |
+| **Flashlight** | 200 | A brighter light that shines where you look. Two minutes of battery |
+| **Skeleton Key** | 400 | Opens any lock, even skull locks. Two uses |
+| **Crucifix** | 500 | Hold it up (in your hand) against Rush or Screech, and the Guiding Light's chains drag them into the floor. Seek and the Figure are only held back for **5 seconds**. One use |
+
+Lighters (15% of drawers), flashlights (5%) and crucifixes (1%) can also be found.
+
+**Rush.** When a door opens there is a 1-in-10 chance (1-in-4 in the Greenhouse) that
+Rush comes. The lights **flicker** (or lightning flashes in the Greenhouse), and for
+about **7 seconds** a roar grows louder. **Hide** in a closet or under a bed before it
+arrives! Rush tears through the rooms, smashing their lights, and kills anyone not
+hiding.
+
+**Screech.** In a **dark room**, you may hear *"psst"*. Screech is hiding nearby.
+**Turn and look at it** within 3 seconds and it shrieks and goes away. Otherwise it
+bites (8 damage).
+
+**Hide.** Don't stay hidden too long. After **10 seconds**, eyes appear around you,
+you hear whispers and the screen flashes red: **get out**. Five seconds later, Hide
+throws you out and hurts you (8 damage).
+
+**Seek and the Figure** are as in their own levels: run from Seek and follow the
+Guiding Light; stay quiet around the Figure.
+
+**Dying.** You're sent back to the Lobby, and the **Guiding Light** tells you what
+killed you and how to survive it. Anyone still alive keeps going. Keys you were
+carrying are left where you died.
+
+### Door 100: the Electrical Room
+
+Through the greenhouse's last gate, a corridor of flickering lights leads into a big
+grey electrical room: halls around two great square blocks, with shelves and
+closets, open side rooms full of shelves, and a locked door marked **WARNING: HIGH
+VOLTAGE**. Beside a wide grey gate is a **lever**.
+
+1. **Pull the lever.** The gate slides open, and **the Figure** comes down the stairs
+   and starts hunting the halls (it won't leave them). Keep quiet.
+2. Go through the gate and up the stairs to a gated room with the **broken-down
+   elevator**. On one of the wooden crates is a grey **Electrical Room Key**.
+3. The key opens the **High Voltage** room. Its **breaker box** has ten empty slots
+   and a black screen. Find the **10 Breaker Switches**: two or three are upstairs,
+   the rest are on the shelves in the Figure's halls. A bar shows how many you have.
+   Tap the box to put them in.
+4. When all ten are in, the Figure steps on a sparking **live wire**. The oil under it
+   catches fire, and it runs, crashing into two walls and out through a window.
+5. **The breaker puzzle.** The screen shows a switch number with a **full square**
+   (switch it **on**) or an **empty square** (**off**). Set the switches to match:
+   tap a switch to flip it, or tap the box to set them all at once. There are three
+   rounds, each faster. In the last, the final number shows as **??**: it's the one
+   that wasn't shown.
+6. The power comes back... and the Figure slams into the door behind you, twice, and
+   bursts through on the third time. Get past it and **run** up to the elevator. Its
+   gate shuts in the Figure's face, and down you go.
+7. Ten seconds of elevator music. Then the Figure lands on the roof, the cable snaps,
+   and the elevator **falls**. The crash ends Floor 1, and you're back in the Lobby.
+
 ### Hotel blocks
 
 The rooms are built from new blocks, which you can also build with: **Hotel
-Wallpaper** (red and green), **Hotel Wainscoting**, **Hotel Floor**, **Hotel
-Molding**, **Hotel Ceiling** and the **Library Bookshelf**.
+Wallpaper** (red, green, blue and torn), **Hotel Wainscoting**, **Hotel Floor**,
+**Hotel Molding**, **Hotel Ceiling**, the **Library Bookshelf**, **Hotel Windows**,
+**Wooden Crates**, **Infirmary Tiles** and **Floor**, **Elevator Panelling**, **Hazard
+Stripes** and **Metal Shelves**, and (in the Items tab) **Ceiling Lamps**, **Wall
+Lamps**, **Paintings**, **Hospital Curtains** and **Exit Signs**.
 
-The structures stay in your world after you play. Their doors are left open so you
-can walk around them.
+The Library and the Seek chase stay in your world after you play, with their doors
+left open so you can walk around them. Floor 1's rooms are taken down behind you as
+you go; the Lobby stays.
 
 ## Building from source
 
@@ -622,8 +734,9 @@ pip install numpy pillow
 python3 tools/build.py        # regenerates everything, writes dist/ZombieTitan.mcaddon
 ```
 
-The Seek chase's music is synthesized by `tools/gen_doors_audio.py` and encoded with
-`ffmpeg` (libvorbis). Without ffmpeg, the build keeps the existing music file.
+The Seek chase's music is synthesized by `tools/gen_doors_audio.py`, and the elevator
+music, door 100's chase and Screech's whisper by `tools/gen_floor1_audio.py`. They are
+encoded with `ffmpeg` (libvorbis). Without ffmpeg, the build keeps the existing files.
 
 Development checks:
 
@@ -644,6 +757,21 @@ Development checks:
 
 ## Version history
 
+- **1.5.0**
+  - New: **Spawn The Lobby+Floor 1**: the DOORS Lobby with eight working elevators,
+    and the whole of Floor 1, the Hotel, from the reception to door 100. Every run is
+    a new hotel.
+  - New: locked rooms and keys, drawers with gold and items, closets and beds to hide
+    in, dark rooms, the abandoned hotel, the Infirmary, the Courtyard and the
+    Greenhouse.
+  - New monsters: **Rush**, **Screech** and **Hide**. Seek chases you at door 30 and
+    again later, and the Library is at door 50.
+  - New: **Jeff's shop** at door 52 (Jeff, El Goblino and Bob), with the **Lighter**,
+    **Flashlight**, **Skeleton Key** and **Crucifix**, and the **Herb of Viridis**.
+  - New: **door 100**: the lever, the Figure, the ten breaker switches, the fire, the
+    breaker puzzle, and the escape in the elevator.
+  - New hotel blocks, lamps, paintings and signs, and original elevator and chase
+    music.
 - **1.4.1**
   - Fixed: in the Seek chase's rooms with three doors, the doors could be blocked:
     the room's angled corners stood in front of the two side doors, and the next

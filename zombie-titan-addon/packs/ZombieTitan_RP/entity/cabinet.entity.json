@@ -16,6 +16,11 @@
 				"controller.render.zt.default"
 			],
 			"scripts": {
+				"pre_animation": [
+					"v.d0 = math.lerp(v.d0, math.mod(math.floor(q.property('zt:drawers') / 1), 2), math.min(1.0, q.delta_time * 12.0));",
+					"v.d1 = math.lerp(v.d1, math.mod(math.floor(q.property('zt:drawers') / 2), 2), math.min(1.0, q.delta_time * 12.0));",
+					"v.d2 = math.lerp(v.d2, math.mod(math.floor(q.property('zt:drawers') / 4), 2), math.min(1.0, q.delta_time * 12.0));"
+				],
 				"animate": [
 					"face",
 					"drawers"

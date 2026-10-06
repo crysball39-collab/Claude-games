@@ -321,8 +321,10 @@ def hotel_block(name):
 # client files
 # =============================================================================================
 def client(ident, geometry, texture, material="entity_emissive_alpha", animations=None, animate=None, rc=None,
-           egg=None, scale=None, extra_textures=None, extra_geometry=None, extra_materials=None):
+           egg=None, scale=None, extra_textures=None, extra_geometry=None, extra_materials=None, pre=None):
     scripts = {}
+    if pre:
+        scripts["pre_animation"] = pre
     if scale:
         scripts["scale"] = scale
     if animate:

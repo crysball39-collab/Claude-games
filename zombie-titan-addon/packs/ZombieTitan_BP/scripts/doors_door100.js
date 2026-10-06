@@ -709,7 +709,7 @@ function placeSwitches(run, d, s) {
   const room = d.rooms[100];
   for (const sp of spots) {
     const v = fr.vec(sp.face);
-    const at = L.at(sp.x + 0.5 + 0, sp.y + 0.05, sp.z + 0.5);
+    const at = L.at(sp.x + 0.5, sp.y + 0.065, sp.z + 0.5);    // on the shelf's lowest board (1/16 thick)
     const loc = { x: at.x + v.x * 0.18, y: at.y, z: at.z + v.z * 0.18 };
     const e = Doors.spawnFor(run, "zt:switch_pickup", loc, { yaw: fr.yawOf(sp.face) });
     s.switches.set(e.id, sp);
@@ -853,7 +853,8 @@ function startPuzzle(run, d, s) {
     s.levers.push(e.id);
     d.rooms[100].ents.push(e.id);
   }
-  if (isValid(box)) box.setProperty("zt:slots", SWITCHES);
+  // the box stops drawing the switches put into it: these are the real ones now
+  if (isValid(box)) box.setProperty("zt:slots", 0);
   s.puzzle = newRound(1);
   s.puzzle.at = system.currentTick + 40;
 }

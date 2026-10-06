@@ -477,6 +477,78 @@ def effects():
             ["0.08 + v.particle_random_3 * 0.1", "0.08 + v.particle_random_3 * 0.1"], 16, 16),
         "minecraft:particle_appearance_tinting": {"color": [0.85, 0.95, 1.0, 0.85]},
     })
+    # --- the Hotel (Floor 1) ----------------------------------------------------------------------
+    # Rush's trail: billows of black smoke
+    E["rush_smoke"] = effect("zt:rush_smoke", "particles_blend", SMOKE, {
+        "minecraft:emitter_rate_instant": {"num_particles": 6},
+        "minecraft:emitter_lifetime_once": {"active_time": 0.05},
+        "minecraft:emitter_shape_sphere": {"radius": 1.4, "direction": "outwards"},
+        "minecraft:particle_lifetime_expression": {"max_lifetime": "0.9 + v.particle_random_1 * 0.7"},
+        "minecraft:particle_initial_speed": "0.3 + v.particle_random_2 * 0.5",
+        "minecraft:particle_motion_dynamic": {"linear_drag_coefficient": 1.2, "linear_acceleration": [0, 0.3, 0]},
+        "minecraft:particle_appearance_billboard": billboard(
+            ["(1.4 + v.particle_random_3 * 1.4) * (0.6 + v.particle_age / v.particle_lifetime * 0.6)",
+             "(1.4 + v.particle_random_3 * 1.4) * (0.6 + v.particle_age / v.particle_lifetime * 0.6)"],
+            64, 16, flipbook=SMOKE_FLIP),
+        "minecraft:particle_appearance_tinting": gradient({
+            "0.0": [0.02, 0.02, 0.03, 0.95], "0.6": [0.05, 0.05, 0.06, 0.8], "1.0": [0.08, 0.08, 0.09, 0.0]}),
+    })
+    # Hide: eyes open in the dark round you, stare, and close
+    E["hide_eyes"] = effect("zt:hide_eyes", "particles_alpha", "textures/particle/zt_eyes", {
+        "minecraft:emitter_rate_instant": {"num_particles": 1},
+        "minecraft:emitter_lifetime_once": {"active_time": 0.05},
+        "minecraft:emitter_shape_point": {"offset": [0, 0, 0]},
+        "minecraft:particle_lifetime_expression": {"max_lifetime": "0.6 + v.particle_random_1 * 0.5"},
+        "minecraft:particle_initial_speed": 0.0,
+        "minecraft:particle_motion_dynamic": {},
+        "minecraft:particle_appearance_billboard": billboard(
+            ["0.32 + v.particle_random_2 * 0.2", "(0.16 + v.particle_random_2 * 0.1) * math.min(1, math.sin(v.particle_age / "
+             "v.particle_lifetime * 180) * 3)"], 32, 16),
+        "minecraft:particle_appearance_lighting": {},
+    })
+    # electric sparks spitting from the live wire and the snapping cable
+    E["sparks"] = effect("zt:sparks", "particles_add", SPARK, {
+        "minecraft:emitter_rate_instant": {"num_particles": "6 + v.particle_random_1 * 6"},
+        "minecraft:emitter_lifetime_once": {"active_time": 0.05},
+        "minecraft:emitter_shape_sphere": {"radius": 0.15, "direction": "outwards"},
+        "minecraft:particle_lifetime_expression": {"max_lifetime": "0.25 + v.particle_random_1 * 0.35"},
+        "minecraft:particle_initial_speed": "2.5 + v.particle_random_2 * 3.5",
+        "minecraft:particle_motion_dynamic": {"linear_drag_coefficient": 1.5, "linear_acceleration": [0, -12, 0]},
+        "minecraft:particle_motion_collision": {"collision_radius": 0.03, "coefficient_of_restitution": 0.4,
+                                                "collision_drag": 3},
+        "minecraft:particle_appearance_billboard": billboard(
+            ["0.06 + v.particle_random_3 * 0.05", "0.06 + v.particle_random_3 * 0.05"], 16, 16),
+        "minecraft:particle_appearance_tinting": gradient({
+            "0.0": [1.0, 1.0, 0.85, 1.0], "0.4": [1.0, 0.85, 0.35, 1.0], "1.0": [1.0, 0.45, 0.1, 0.0]}),
+    })
+    # the crucifix: chains of the Guiding Light lash down round the creature and drag it under
+    E["crucifix_chains"] = effect("zt:crucifix_chains", "particles_add", "textures/particle/zt_chain", {
+        "minecraft:emitter_rate_steady": {"spawn_rate": 40, "max_particles": 60},
+        "minecraft:emitter_lifetime_once": {"active_time": 1.2},
+        "minecraft:emitter_shape_disc": {"radius": 1.1, "plane_normal": "y", "offset": [0, 3.2, 0], "direction": [0, -1, 0]},
+        "minecraft:particle_lifetime_expression": {"max_lifetime": "0.5 + v.particle_random_1 * 0.3"},
+        "minecraft:particle_initial_speed": "6 + v.particle_random_2 * 3",
+        "minecraft:particle_motion_dynamic": {"linear_drag_coefficient": 0.5},
+        "minecraft:particle_appearance_billboard": billboard([0.18, 0.36], 16, 16, facing="lookat_y"),
+        "minecraft:particle_appearance_tinting": gradient({
+            "0.0": [0.55, 0.85, 1.0, 0.0], "0.15": [0.55, 0.85, 1.0, 1.0], "0.85": [0.35, 0.7, 1.0, 0.9],
+            "1.0": [0.2, 0.5, 1.0, 0.0]}),
+    })
+    # door 100's metal door torn off its hinges: chunks and dust
+    E["door_debris"] = effect("zt:door_debris", "particles_alpha", SPARK, {
+        "minecraft:emitter_rate_instant": {"num_particles": 30},
+        "minecraft:emitter_lifetime_once": {"active_time": 0.05},
+        "minecraft:emitter_shape_box": {"offset": [0, 0, 0], "half_dimensions": [0.9, 1.3, 0.2], "direction": "outwards"},
+        "minecraft:particle_lifetime_expression": {"max_lifetime": "0.8 + v.particle_random_1 * 0.8"},
+        "minecraft:particle_initial_speed": "2 + v.particle_random_2 * 4",
+        "minecraft:particle_motion_dynamic": {"linear_drag_coefficient": 0.8, "linear_acceleration": [0, -14, 0]},
+        "minecraft:particle_motion_collision": {"collision_radius": 0.06, "coefficient_of_restitution": 0.25,
+                                                "collision_drag": 5},
+        "minecraft:particle_appearance_billboard": billboard(
+            ["0.1 + v.particle_random_3 * 0.14", "0.1 + v.particle_random_3 * 0.14"], 16, 16),
+        "minecraft:particle_appearance_tinting": {"color": [0.45, 0.47, 0.5, 1.0]},
+        "minecraft:particle_appearance_lighting": {},
+    })
     return E
 
 

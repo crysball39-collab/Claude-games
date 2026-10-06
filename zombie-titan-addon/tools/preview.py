@@ -293,6 +293,8 @@ def render(geo_path, tex_path, out_path, pose=None, yaw=-35, pitch=18, size=900,
         dz.line([(0, gy), (size, gy)], fill=(70, 110, 60, 255), width=2)
 
     faces.sort(key=lambda f: f[0][:, 2].mean())   # far (low z) first; camera looks toward -z
+    zbuf = np.full((size, size), -np.inf)
+    ys, xs = np.mgrid[0:size, 0:size]
     for pts, (u, v, w, h), n, mirror in faces:
         if n[2] <= 0:      # facing away (camera at +z)
             continue
@@ -321,8 +323,19 @@ def render(geo_path, tex_path, out_path, pose=None, yaw=-35, pitch=18, size=900,
         shade = 0.55 + 0.45 * max(0.0, float(n[2])) + 0.12 * float(n[1])
         wa[..., :3] = np.clip(wa[..., :3].astype(float) * shade, 0, 255).astype(np.uint8)
         alpha = np.minimum(np.array(mask), wa[..., 3])
-        wa[..., 3] = alpha
-        canvas.alpha_composite(Image.fromarray(wa))
+        # depth test: the face is a plane, so its depth is affine in screen space
+        (qx0, qy0), (qx1, qy1), (qx3, qy3) = q[0], q[1], q[3]
+        A3 = np.array([[qx0, qy0, 1.0], [qx1, qy1, 1.0], [qx3, qy3, 1.0]])
+        if abs(np.linalg.det(A3)) < 1e-9:
+            continue
+        a, b, c = np.linalg.solve(A3, np.array([pts[0][2], pts[1][2], pts[3][2]]))
+        depth = a * (xs + 0.5) + b * (ys + 0.5) + c
+        draw = (alpha > 0) & (depth >= zbuf - 1e-6)
+        zbuf[draw] = depth[draw]
+        cv = np.array(canvas)
+        cv[draw] = wa[draw]
+        cv[draw, 3] = 255
+        canvas = Image.fromarray(cv)
     canvas.save(out_path)
 
 

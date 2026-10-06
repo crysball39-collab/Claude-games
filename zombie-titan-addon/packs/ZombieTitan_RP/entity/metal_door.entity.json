@@ -18,8 +18,7 @@
 			"scripts": {
 				"animate": [
 					"face",
-					"main",
-					"hit"
+					"main"
 				]
 			},
 			"animations": {
@@ -28,8 +27,7 @@
 				"close": "animation.zt.door.close",
 				"bang": "animation.zt.metal_door.bang",
 				"broken": "animation.zt.metal_door.broken",
-				"hit": "controller.animation.zt.metal_door",
-				"main": "controller.animation.zt.door"
+				"main": "controller.animation.zt.metal_door"
 			}
 		}
 	}

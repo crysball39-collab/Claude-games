@@ -4,7 +4,8 @@
 		"description": {
 			"identifier": "zt:breaker_box",
 			"materials": {
-				"default": "entity_alphatest"
+				"default": "entity_alphatest",
+				"glow": "entity_emissive_alpha"
 			},
 			"textures": {
 				"default": "textures/entity/hotel/breaker_box"

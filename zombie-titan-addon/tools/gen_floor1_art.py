@@ -152,7 +152,7 @@ def text_px(c, x, y, text, color, k=1):
 # Closets (wardrobes): a tall cabinet with two slatted doors you can see out through
 # =============================================================================================
 def wardrobe_geo():
-    g = Geo("geometry.zt.wardrobe", 128, 128, 2, 3.5, (0, 1.5, 0))
+    g = Geo("geometry.zt.wardrobe", 128, None, 2, 3.5, (0, 1.5, 0))
     for name, size in [("back", (16, 42, 1)), ("side", (1, 42, 15)), ("top", (18, 2, 17)), ("crown", (17, 1, 16)),
                        ("base", (16, 2, 15)), ("door", (7.5, 39, 1)), ("knob", (1, 1.6, 1)), ("foot", (2, 1, 2))]:
         g.part(name, *size)
@@ -206,7 +206,7 @@ def wardrobe_textures(g):
 # Beds: a hotel double bed (red blanket) and a hospital bed (white, on a metal frame)
 # =============================================================================================
 def bed_geo():
-    g = Geo("geometry.zt.hotel_bed", 192, 192, 3, 2, (0, 0.6, 0))
+    g = Geo("geometry.zt.hotel_bed", 192, None, 3, 2, (0, 0.6, 0))
     for name, size in [("headboard", (32, 22, 2)), ("footboard", (32, 12, 2)), ("rail", (1, 3, 44)), ("leg", (2, 4, 2)),
                        ("mattress", (30, 5, 44)), ("blanket", (31, 1.5, 32)), ("drape", (31, 4, 0.5)), ("pillow", (12, 3, 7))]:
         g.part(name, *size)
@@ -269,7 +269,7 @@ def drawer_parts(g, sizes, depth):
 
 
 def dresser_geo():
-    g = Geo("geometry.zt.dresser", 160, 160, 2.5, 1.5, (0, 0.5, 0))
+    g = Geo("geometry.zt.dresser", 160, None, 2.5, 1.5, (0, 0.5, 0))
     for name, size in [("body", (32, 14, 14)), ("top", (33, 1.5, 15)), ("leg", (2, 1.5, 2)), ("mirror", (20, 14, 1)),
                        ("mirror_frame", (22, 1, 1.5))]:
         g.part(name, *size)
@@ -286,7 +286,7 @@ def dresser_geo():
 
 
 def nightstand_geo():
-    g = Geo("geometry.zt.nightstand", 96, 96, 1.2, 1.2, (0, 0.5, 0))
+    g = Geo("geometry.zt.nightstand", 96, None, 1.2, 1.2, (0, 0.5, 0))
     for name, size in [("body", (14, 10, 13)), ("top", (15, 1.5, 14)), ("leg", (1.5, 2, 1.5)), ("lamp_base", (3, 1, 3)),
                        ("lamp_stem", (1, 5, 1)), ("lamp_shade", (5, 3, 5))]:
         g.part(name, *size)
@@ -302,7 +302,7 @@ def nightstand_geo():
 
 
 def desk_geo():
-    g = Geo("geometry.zt.desk", 160, 160, 2.5, 1.5, (0, 0.5, 0))
+    g = Geo("geometry.zt.desk", 160, None, 2.5, 1.5, (0, 0.5, 0))
     for name, size in [("top", (32, 1.5, 14)), ("leg", (2, 14, 2)), ("pedestal", (12, 14, 13)), ("modesty", (18, 8, 1)),
                        ("papers", (6, 0.3, 8)), ("lamp", (2, 6, 2)), ("shade", (4, 2, 4))]:
         g.part(name, *size)
@@ -320,7 +320,7 @@ def desk_geo():
 
 
 def cabinet_geo():
-    g = Geo("geometry.zt.cabinet", 128, 128, 1.2, 2.2, (0, 1.0, 0))
+    g = Geo("geometry.zt.cabinet", 128, None, 1.2, 2.2, (0, 1.0, 0))
     for name, size in [("body", (14, 30, 12)), ("label", (4, 1.5, 0.3))]:
         g.part(name, *size)
     drawer_parts(g, [(12, 8.5)], 10)
@@ -376,7 +376,7 @@ def drawer_textures():
 # Couches
 # =============================================================================================
 def couch_geo():
-    g = Geo("geometry.zt.couch", 192, 192, 3.5, 1.5, (0, 0.6, 0))
+    g = Geo("geometry.zt.couch", 192, None, 3.5, 1.5, (0, 0.6, 0))
     for name, size in [("base", (44, 6, 15)), ("seat", (14, 3, 12)), ("back", (44, 11, 4)), ("arm", (3, 10, 15)), ("leg", (2, 2, 2)),
                        ("cushion", (13, 7, 3))]:
         g.part(name, *size)
@@ -413,7 +413,7 @@ def couch_textures(g):
 # Keys (lying on things, or hanging on the reception's key rack), flesh piles
 # =============================================================================================
 def key_geo():
-    g = Geo("geometry.zt.room_key", 64, 64, 1, 1, (0, 0.3, 0))
+    g = Geo("geometry.zt.room_key", 64, None, 1, 1, (0, 0.3, 0))
     for name, size in [("bow", (4, 0.8, 4)), ("shaft", (7, 0.8, 1.2)), ("bit", (1.6, 0.8, 2.4)), ("tag", (4, 0.4, 3)),
                        ("ring", (1, 0.6, 3)), ("hook", (1, 1, 2))]:
         g.part(name, *size)
@@ -444,7 +444,7 @@ def key_textures(g):
 
 
 def flesh_geo():
-    g = Geo("geometry.zt.flesh_pile", 64, 64, 1.5, 1, (0, 0.3, 0))
+    g = Geo("geometry.zt.flesh_pile", 64, None, 1.5, 1, (0, 0.3, 0))
     for name, size in [("lump_a", (8, 3.5, 7)), ("lump_b", (6, 3, 6)), ("lump_c", (5, 2.5, 5)), ("bit", (2, 1.5, 2)), ("smear", (12, 0.2, 10))]:
         g.part(name, *size)
     g.bone("root")
@@ -485,7 +485,7 @@ def flesh_texture(g):
 # the elevator's folding gate
 # =============================================================================================
 def elevator_door_geo():
-    g = Geo("geometry.zt.elevator_door", 128, 64, 3, 3.5, (0, 1.5, 0))
+    g = Geo("geometry.zt.elevator_door", 128, None, 3, 3.5, (0, 1.5, 0))
     g.part("panel", 16, 48, 1)
     g.part("trim", 1, 48, 1.2)
     g.bone("root")
@@ -513,7 +513,7 @@ def elevator_door_texture(g):
 
 
 def gate_geo():
-    g = Geo("geometry.zt.gate_door", 128, 64, 4, 4, (0, 1.5, 0))
+    g = Geo("geometry.zt.gate_door", 128, None, 4, 4, (0, 1.5, 0))
     for name, size in [("stile", (2, 48, 2)), ("rail", (28, 2, 2)), ("bar", (1, 44, 1)), ("plate", (10, 5, 0.6)),
                        ("lock", (3.2, 3.2, 1.4)), ("shackle", (2.2, 2.2, 0.5)), ("spike", (1, 2, 1))]:
         g.part(name, *size)
@@ -552,7 +552,7 @@ def gate_texture(g):
 
 
 def metal_door_geo():
-    g = Geo("geometry.zt.metal_door", 128, 64, 4, 4, (0, 1.5, 0))
+    g = Geo("geometry.zt.metal_door", 128, None, 4, 4, (0, 1.5, 0))
     for name, size in [("leaf", (32, 48, 2)), ("sign", (22, 13, 0.4)), ("handle", (1.5, 6, 1.5)), ("window", (10, 6, 0.3))]:
         g.part(name, *size)
     g.bone("root")
@@ -597,7 +597,7 @@ def metal_door_texture(g):
 
 
 def big_gate_geo():
-    g = Geo("geometry.zt.big_gate", 256, 192, 7, 5, (0, 2, 0))
+    g = Geo("geometry.zt.big_gate", 256, None, 7, 5, (0, 2, 0))
     g.part("panel", 48, 64, 2)
     g.part("rib", 48, 1.5, 2.6)
     g.bone("root")
@@ -626,7 +626,7 @@ def big_gate_texture(g):
 
 
 def elevator_gate_geo():
-    g = Geo("geometry.zt.elevator_gate", 128, 64, 4.5, 3.5, (0, 1.5, 0))
+    g = Geo("geometry.zt.elevator_gate", 128, None, 4.5, 3.5, (0, 1.5, 0))
     for name, size in [("bar", (1, 46, 1)), ("rail", (32, 1.5, 1.5)), ("lattice", (0.6, 9, 0.6)), ("handle", (1, 5, 2))]:
         g.part(name, *size)
     g.bone("root")
@@ -653,13 +653,15 @@ def elevator_gate_texture(g):
 # Door 100: the lever, the breaker box and its switches, the live wire
 # =============================================================================================
 def wall_lever_geo():
-    g = Geo("geometry.zt.wall_lever", 64, 64, 1, 1.5, (0, 0.8, 0))
+    g = Geo("geometry.zt.wall_lever", 64, None, 1, 1.5, (0, 0.8, 0))
     for name, size in [("base", (6, 10, 2)), ("stick", (1.4, 7, 1.4)), ("grip", (2.6, 2.6, 2.6)), ("slot", (1.6, 7, 0.3))]:
         g.part(name, *size)
     g.bone("root")
     g.bone("base", "root", (0, 0, 0), cubes=[g.cube("base", (-3, -5, 0)), g.cube("slot", (-0.8, -3.5, -0.3))])
-    g.bone("handle", "root", (0, 0, 0), cubes=[g.cube("stick", (-0.7, 0, -0.7), rotation=(-90, 0, 0), pivot=(0, 0, 0)),
-                                               g.cube("grip", (-1.3, 5.5, -1.3), rotation=(-90, 0, 0), pivot=(0, 0, 0))])
+    # the handle points up and a little out from the wall (positive x rotation tips it forward, -z); pulling it
+    # swings it down
+    g.bone("handle", "root", (0, 0, -0.5), cubes=[g.cube("stick", (-0.7, 0, -1.2), rotation=(30, 0, 0), pivot=(0, 0, -0.5)),
+                                                  g.cube("grip", (-1.3, 5.5, -1.8), rotation=(30, 0, 0), pivot=(0, 0, -0.5))])
     return g
 
 
@@ -670,15 +672,18 @@ def wall_lever_texture(g):
 
 
 NUM_X = [-14.4 + c * 7.2 for c in range(5)]
+BIG = (3.0, 5.0, 0.05)      # the screen's digits: a 3 x 5 grid of 1 x 1 cells
+QMARK = ["111", "001", "010", "000", "010"]
 
 
 def breaker_box_geo():
-    g = Geo("geometry.zt.breaker_box", 256, 128, 3, 3, (0, 1.3, 0))
+    g = Geo("geometry.zt.breaker_box", 256, None, 3, 3, (0, 1.3, 0))
     for name, size in [("body", (40, 40, 6)), ("door", (40, 40, 1)), ("screen", (34, 10, 0.3)), ("led", (2, 2, 0.4)),
-                       ("sq_side", (6, 0.6, 0.2)), ("sq_post", (0.6, 6, 0.2)), ("sq_fill", (4.6, 4.6, 0.2)), ("conduit", (4, 20, 4)),
-                       ("qglyph", (2.0, 3.0, 0.05))]:
+                       ("sq_side", (6, 0.6, 0.2)), ("sq_post", (0.6, 6, 0.2)), ("sq_fill", (4.4, 4.4, 0.2)), ("conduit", (4, 20, 4)),
+                       ("sw_plate", (3, 5, 0.6)), ("sw_stick", (1.1, 1.1, 3.4)), ("sw_tip", (1.6, 1.6, 1.6))]:
         g.part(name, *size)
-    glyph_parts(g)
+    for n in list(range(10)) + ["q"]:
+        g.part("big%s" % n, *BIG)
     g.bone("root")
     g.bone("body", "root", (0, 0, 0), cubes=[g.cube("body", (-20, 0, -3.12)), g.cube("conduit", (-2, 40, -1))])
     g.bone("screen_on", "body", (0, 0, 0), cubes=[g.cube("screen", (-17, 27, -3.42))])
@@ -686,17 +691,22 @@ def breaker_box_geo():
     z = -3.5
     for n in range(1, 11):
         digits = str(n)
-        x = -12 if len(digits) == 1 else -14.4
-        cubes = []
-        for k, ch in enumerate(digits):
-            cubes.append(g.cube("g" + ch, (x + k * 2.4, 30.5, z)))
-        g.bone("num_%d" % n, "body", (0, 30, z), cubes=cubes)
-    g.bone("num_q", "body", (0, 30, z), cubes=[g.cube("qglyph", (-14.4, 30.5, z)), g.cube("qglyph", (-12.0, 30.5, z))])
+        x = -11 if len(digits) == 1 else -13
+        g.bone("num_%d" % n, "body", (0, 30, z), cubes=[g.cube("big" + ch, (x + k * 4, 29.5, z)) for k, ch in enumerate(digits)])
+    g.bone("num_q", "body", (0, 30, z), cubes=[g.cube("bigq", (-13, 29.5, z)), g.cube("bigq", (-9, 29.5, z))])
     g.bone("square", "body", (6, 30, z), cubes=[g.cube("sq_side", (3, 29, z)), g.cube("sq_side", (3, 34.4, z)),
                                                 g.cube("sq_post", (3, 29, z)), g.cube("sq_post", (8.4, 29, z))])
-    g.bone("square_fill", "body", (6, 30, z), cubes=[g.cube("sq_fill", (3.7, 29.7, z + 0.05))])
+    g.bone("square_fill", "body", (6, 30, z), cubes=[g.cube("sq_fill", (3.8, 29.8, z + 0.05))])
     g.bone("ok_light", "body", (15, 38, z), cubes=[g.cube("led", (14, 37, z))])
     g.bone("door", "root", (-20, 0, -3.5), cubes=[g.cube("door", (-20, 0, -4.12))])
+    # the switches put into the slots (tipped down, off), shown until the real switches take over
+    for n in range(1, 11):
+        row, col = divmod(n - 1, 5)
+        x, y = NUM_X[col], 16 if row == 0 else 8
+        g.bone("sw_%d" % n, "body", (x, y, -3.12), cubes=[
+            g.cube("sw_plate", (x - 1.5, y - 2.5, -3.72)),
+            g.cube("sw_stick", (x - 0.55, y - 0.55, -7.12), rotation=(35, 0, 0), pivot=(x, y, -3.72)),
+            g.cube("sw_tip", (x - 0.8, y - 0.8, -8.4), rotation=(35, 0, 0), pivot=(x, y, -3.72))])
     return g
 
 
@@ -727,24 +737,27 @@ def breaker_box_texture(g):
             c.rect(x + w - 3 * S, y + h * 0.45, S, 4 * S, (40, 40, 44))
         p.shade_edges(x, y, w, h, amount=0.35)
 
-    def qglyph(c, p, rect, side, rng, part):
+    ink = (240, 240, 236, 10)
+
+    def big(c, p, rect, side, rng, part):
         x, y, w, h = rect
         if side != "front":
             return
-        cw, ch = w / 4.0, h / 6.0
-        for gy, row in enumerate(["111", "001", "010", "000", "010"]):
+        rows = QMARK if part == "bigq" else DIGITS[part[3:]]
+        for gy, row in enumerate(rows):
             for gx, bit in enumerate(row):
                 if bit == "1":
-                    c.rect(x + (gx + 0.5) * cw, y + (gy + 0.5) * ch, math.ceil(cw), math.ceil(ch), (240, 240, 236))
-    tex = paint(g, {"door": door, "screen": flat((6, 8, 10)), "led": flat((60, 230, 80, 40)), "sq_side": flat((240, 240, 236)),
-                    "sq_post": flat((240, 240, 236)), "sq_fill": flat((240, 240, 236)), "conduit": mat(*DARK_METAL),
-                    "qglyph": qglyph}, default=body, seed=2300)
-    paint_glyphs(tex, g, S, (240, 240, 236))
+                    c.rect(x + gx * w / 3, y + gy * h / 5, w / 3, h / 5, ink)
+    painters = {"door": door, "screen": flat((6, 8, 10)), "led": flat((60, 230, 80, 40)), "sq_side": flat(ink),
+                "sq_post": flat(ink), "sq_fill": flat(ink), "conduit": mat(*DARK_METAL), "sw_plate": mat(*DARK_METAL),
+                "sw_stick": mat(*GREY_METAL), "sw_tip": mat((150, 16, 14), (200, 34, 28), (240, 90, 80))}
+    painters.update({"big%s" % n: big for n in list(range(10)) + ["q"]})
+    tex = paint(g, painters, default=body, seed=2300)
     save(tex, "breaker_box")
 
 
 def breaker_lever_geo():
-    g = Geo("geometry.zt.breaker_lever", 32, 32, 1, 1, (0, 0.2, 0))
+    g = Geo("geometry.zt.breaker_lever", 32, None, 1, 1, (0, 0.2, 0))
     for name, size in [("plate", (3, 5, 0.6)), ("stick", (1.1, 1.1, 3.4)), ("tip", (1.6, 1.6, 1.6))]:
         g.part(name, *size)
     g.bone("root")
@@ -754,12 +767,12 @@ def breaker_lever_geo():
 
 
 def switch_pickup_geo():
-    g = Geo("geometry.zt.switch_pickup", 32, 32, 1, 1, (0, 0.2, 0))
+    g = Geo("geometry.zt.switch_pickup", 32, None, 1, 1, (0, 0.2, 0))
     for name, size in [("plate", (3, 5, 0.6)), ("stick", (1.1, 1.1, 3.4)), ("tip", (1.6, 1.6, 1.6))]:
         g.part(name, *size)
     g.bone("root")
     # lying on the shelf: the plate flat, the handle up
-    g.bone("switch", "root", (0, 0, 0), rotation=(90, 0, 0), cubes=[
+    g.bone("switch", "root", (0, 0, 0), rotation=(-90, 0, 0), cubes=[
         g.cube("plate", (-1.5, -2.5, -0.6)), g.cube("stick", (-0.55, -0.55, -4.0)), g.cube("tip", (-0.8, -0.8, -5.3))])
     return g
 
@@ -771,7 +784,7 @@ def breaker_lever_texture(g):
 
 
 def live_wire_geo():
-    g = Geo("geometry.zt.live_wire", 64, 64, 2, 6, (0, 2.5, 0))
+    g = Geo("geometry.zt.live_wire", 64, None, 2, 6, (0, 2.5, 0))
     for name, size in [("cable", (1, 21, 1)), ("strand", (0.3, 2, 0.3)), ("cap", (1.6, 1.6, 1.6))]:
         g.part(name, *size)
     g.bone("root")
@@ -795,7 +808,7 @@ def live_wire_texture(g):
 # The Infirmary's herb, the Courtyard's angel
 # =============================================================================================
 def herb_geo():
-    g = Geo("geometry.zt.herb_plant", 64, 64, 1, 1.2, (0, 0.5, 0))
+    g = Geo("geometry.zt.herb_plant", 64, None, 1, 1.2, (0, 0.5, 0))
     for name, size in [("pot", (6, 5, 6)), ("rim", (7, 1, 7)), ("soil", (5, 0.2, 5)), ("leaf", (7, 9, 0.1)), ("bud", (2, 2, 2))]:
         g.part(name, *size)
     g.bone("root")
@@ -803,8 +816,8 @@ def herb_geo():
     leaves = []
     for k in range(4):
         leaves.append(g.cube("leaf", (-3.5, 5, -0.05), rotation=(0, k * 45, 0), pivot=(0, 5, 0)))
-    leaves.append(g.cube("bud", (-1, 13, -1)))
     g.bone("leaves", "pot", (0, 5, 0), cubes=leaves)
+    g.bone("bud", "leaves", (0, 13, 0), cubes=[g.cube("bud", (-1, 13, -1))])
     return g
 
 
@@ -813,7 +826,7 @@ def herb_texture(g):
         x, y, w, h = rect
         if side not in ("front", "back"):
             return
-        # a sprig of glowing green leaves (low alpha glows with entity_emissive_alpha)
+        # a sprig of bright green leaves (the bud on top glows)
         cx = x + w / 2
         for t in range(int(h)):
             c.px(cx, y + t, (60, 160, 70))
@@ -823,7 +836,7 @@ def herb_texture(g):
                 hh = max(1, int((w / 2 - dx) / 2.5))
                 for s in (-1, 1):
                     for dy in range(-hh, hh + 1):
-                        c.px(cx + s * dx, ly + dy + dx * 0.3, (80, 220, 110, 30) if (dx + dy) % 3 else (150, 255, 170, 18))
+                        c.px(cx + s * dx, ly + dy + dx * 0.3, (80, 220, 110) if (dx + dy) % 3 else (150, 255, 170))
     tex = paint(g, {"leaf": leaf, "bud": flat((210, 255, 200, 14)), "soil": flat((40, 28, 18)),
                     "pot": mat((110, 56, 36), (150, 80, 52), (186, 110, 76)), "rim": mat((110, 56, 36), (150, 80, 52), (186, 110, 76))},
                 seed=2600)
@@ -831,7 +844,7 @@ def herb_texture(g):
 
 
 def angel_geo():
-    g = Geo("geometry.zt.angel_statue", 128, 128, 3, 4, (0, 1.5, 0))
+    g = Geo("geometry.zt.angel_statue", 128, None, 3, 4, (0, 1.5, 0))
     for name, size in [("plinth", (14, 4, 14)), ("robe", (10, 18, 7)), ("torso", (8, 9, 5)), ("head", (5, 5.5, 5)), ("hair", (5.6, 3, 5.6)),
                        ("arm", (2, 9, 2)), ("hands", (3, 3, 2)), ("wing", (2, 24, 12)), ("feather", (1.5, 12, 6))]:
         g.part(name, *size)
@@ -870,7 +883,7 @@ BLUE_GLOW = (110, 190, 255, 12)
 
 
 def jeff_geo():
-    g = Geo("geometry.zt.jeff", 128, 128, 3, 4, (0, 1.4, 0))
+    g = Geo("geometry.zt.jeff", 128, None, 3, 4, (0, 1.4, 0))
     for name, size in [("body", (16, 18, 13)), ("hump", (12, 8, 10)), ("brow", (14, 3, 4)), ("eye", (4.5, 3.2, 0.6)),
                        ("pupil", (1.2, 1.6, 0.3)), ("tent", (3, 9, 3)), ("tent2", (2.4, 9, 2.4)), ("tent3", (1.8, 8, 1.8))]:
         g.part(name, *size)
@@ -909,7 +922,7 @@ GOBLIN = ((120, 18, 16), (176, 36, 30), (220, 76, 62))
 
 
 def goblino_geo():
-    g = Geo("geometry.zt.el_goblino", 128, 128, 1.5, 1.5, (0, 0.6, 0))
+    g = Geo("geometry.zt.el_goblino", 128, None, 1.5, 1.5, (0, 0.6, 0))
     for name, size in [("head", (8, 7, 7)), ("eye", (2.4, 2.4, 0.5)), ("pupil", (1, 1.2, 0.3)), ("nose", (2, 2, 3)), ("ear", (4.5, 3, 1)),
                        ("ring", (1, 1, 0.6)), ("fang", (0.6, 1.2, 0.4)), ("body", (6, 6, 4)), ("shorts", (6.4, 3, 4.4)),
                        ("arm", (2, 5, 2)), ("band", (2.6, 1.4, 2.6)), ("spike", (0.6, 0.6, 1.2)), ("leg", (2, 4, 2)), ("tail", (1, 1, 4))]:
@@ -956,7 +969,7 @@ def goblino_texture(g):
 
 
 def bob_geo():
-    g = Geo("geometry.zt.bob", 128, 128, 1.5, 2, (0, 0.8, 0))
+    g = Geo("geometry.zt.bob", 128, None, 1.5, 2, (0, 0.8, 0))
     for name, size in [("seat", (12, 2, 12)), ("chair_leg", (1.5, 7, 1.5)), ("chair_back", (12, 14, 1.5)), ("skull", (5.5, 5.5, 5.5)),
                        ("jaw", (4, 1.5, 3.5)), ("spine", (1.5, 10, 1.5)), ("rib", (7, 0.8, 4)), ("pelvis", (6, 2.5, 3.5)),
                        ("bone", (1.4, 7, 1.4)), ("hand", (2, 1, 2.5))]:
@@ -998,7 +1011,7 @@ def bob_texture(g):
 
 
 def display_geo():
-    g = Geo("geometry.zt.shop_display", 64, 64, 1.5, 1, (0, 0.3, 0))
+    g = Geo("geometry.zt.shop_display", 64, None, 1.5, 1, (0, 0.3, 0))
     for name, size in [("cloth", (16, 0.4, 10)), ("lighter", (2, 3, 1.2)), ("light_tube", (2, 2, 6)), ("light_head", (2.6, 2.6, 1.5)),
                        ("key_shaft", (5, 0.6, 1)), ("key_bow", (2.4, 0.6, 2.4)), ("cross_v", (1, 5, 0.6)), ("cross_h", (3.4, 1, 0.6)),
                        ("tag", (2, 0.2, 1.2))]:
@@ -1030,7 +1043,7 @@ SMOKE = ((4, 4, 6), (18, 18, 22), (44, 44, 50))
 
 
 def rush_geo():
-    g = Geo("geometry.zt.rush", 256, 256, 5, 5, (0, 1.5, 0))
+    g = Geo("geometry.zt.rush", 256, None, 5, 5, (0, 1.5, 0))
     for name, size in [("cloud", (30, 30, 12)), ("puff", (14, 14, 10)), ("puff_s", (9, 9, 8)), ("eye", (8, 9, 0.6)), ("pupil", (2.4, 3, 0.4)),
                        ("mouth", (22, 8, 0.6)), ("tooth", (1.6, 2.4, 0.4))]:
         g.part(name, *size)
@@ -1064,6 +1077,7 @@ def rush_texture(g):
         yy, xx = np.mgrid[0:int(h), 0:int(w)]
         d = np.hypot((xx + 0.5 - w / 2) / (w / 2), (yy + 0.5 - h / 2) / (h / 2))
         reg = c.a[int(y):int(y) + int(h), int(x):int(x) + int(w)]
+        reg[:] = SMOKE[0] + (255,)
         reg[d <= 1.0] = (236, 234, 226, 20)
         reg[(d > 0.86) & (d <= 1.0)] = (10, 10, 12, 255)
 
@@ -1079,7 +1093,7 @@ PINK = ((170, 110, 112), (212, 152, 150), (236, 192, 186))
 
 
 def screech_geo():
-    g = Geo("geometry.zt.screech", 128, 128, 2, 2, (0, 0.8, 0))
+    g = Geo("geometry.zt.screech", 128, None, 2, 2, (0, 0.8, 0))
     for name, size in [("body", (10, 10, 10)), ("bulge", (12, 6, 8)), ("eye", (2.4, 2.4, 0.4)), ("mouth", (6, 6, 0.4)), ("jaw", (6, 2, 2)),
                        ("tooth", (0.8, 1.2, 0.3)), ("tent", (1.6, 6, 1.6)), ("tent2", (1.2, 6, 1.2))]:
         g.part(name, *size)

@@ -281,15 +281,28 @@ def main():
             problem(f"hud_screen.json tests for {m!r} but no boss is named that")
     # sounds used by scripts / entities exist
     sdefs = load(os.path.join(RP, "sounds", "sound_definitions.json"))["sound_definitions"]
+    # ...and every sound file they play is a vanilla one (or ships in the pack)
+    if vanilla_rp and os.path.isdir(vanilla_rp):
+        vfiles = set()
+        for v in load(os.path.join(vanilla_rp, "sounds", "sound_definitions.json"))["sound_definitions"].values():
+            for snd in v.get("sounds", []):
+                vfiles.add(snd if isinstance(snd, str) else snd["name"])
+        for sid, v in sdefs.items():
+            for snd in v.get("sounds", []):
+                name = snd if isinstance(snd, str) else snd["name"]
+                if name not in vfiles and not glob.glob(os.path.join(RP, name + ".*")):
+                    problem(f"sound {sid} plays {name}, which is neither vanilla nor in the pack")
     scripts = "".join(open(p).read() for p in glob.glob(os.path.join(BP, "scripts", "*.js")))
     vanilla_ok = {"random.anvil_break", "random.explode", "mob.evocation_illager.cast_spell"}
     for sid in set(re.findall(r'"(zt\.[a-z_.]+)"', scripts)):
         if sid not in sdefs:
             problem(f"script plays undefined sound {sid}")
-    # custom blocks
+    # custom blocks (and their states, which scripts set by name)
     block_ids = set()
     for p in glob.glob(os.path.join(BP, "blocks", "*.json")):
-        block_ids.add(load(p)["minecraft:block"]["description"]["identifier"])
+        desc = load(p)["minecraft:block"]["description"]
+        block_ids.add(desc["identifier"])
+        block_ids |= set(desc.get("states", {}).keys())
     # items, recipes, blocks, attachables and loot tables point at things that exist
     item_ids = set()
     for p in glob.glob(os.path.join(BP, "items", "*.json")):
@@ -304,7 +317,7 @@ def main():
     events = set()
     for p in glob.glob(os.path.join(BP, "entities", "*.json")):
         events |= set(load(p)["minecraft:entity"].get("events", {}).keys())
-    dynamic = {"zt:run", "zt:keep", "zt:gap", "zt:fake", "zt:doors_mode", "zt:doors_death"}
+    dynamic = {"zt:run", "zt:keep", "zt:gap", "zt:fake", "zt:doors_mode", "zt:doors_death", "zt:doors_home", "zt:lobbies"}
     for pid in set(re.findall(r'"(zt:[a-z_]*[a-z])"', scripts)):  # (ids built from a prefix like "zt:gum_" skipped)
         if pid.startswith("zt:") and pid not in pids and pid not in bp_ids and pid not in item_ids:
             if not pid.startswith("zt:as_") and pid not in ("zt:start_birth", "zt:end_birth", "zt:natural_spawns",

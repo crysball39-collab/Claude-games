@@ -4,7 +4,8 @@
 		"description": {
 			"identifier": "zt:herb_plant",
 			"materials": {
-				"default": "entity_emissive_alpha"
+				"default": "entity_alphatest",
+				"glow": "entity_emissive_alpha"
 			},
 			"textures": {
 				"default": "textures/entity/hotel/herb_plant"
@@ -13,7 +14,7 @@
 				"default": "geometry.zt.herb_plant"
 			},
 			"render_controllers": [
-				"controller.render.zt.default"
+				"controller.render.zt.herb_plant"
 			],
 			"scripts": {
 				"animate": [

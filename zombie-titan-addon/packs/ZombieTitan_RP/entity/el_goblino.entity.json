@@ -4,7 +4,7 @@
 		"description": {
 			"identifier": "zt:el_goblino",
 			"materials": {
-				"default": "entity_emissive_alpha"
+				"default": "entity_alphatest"
 			},
 			"textures": {
 				"default": "textures/entity/hotel/el_goblino"

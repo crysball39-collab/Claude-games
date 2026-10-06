@@ -1,0 +1,160 @@
+{
+	"format_version": "1.10.0",
+	"animation_controllers": {
+		"controller.animation.zt.metal_door": {
+			"initial_state": "closed",
+			"states": {
+				"closed": {
+					"transitions": [
+						{
+							"broken": "q.property('zt:broken')"
+						},
+						{
+							"opening": "q.property('zt:open')"
+						},
+						{
+							"bang": "q.property('zt:bang')"
+						}
+					]
+				},
+				"bang": {
+					"animations": [
+						"bang"
+					],
+					"transitions": [
+						{
+							"broken": "q.property('zt:broken')"
+						},
+						{
+							"opening": "q.property('zt:open')"
+						},
+						{
+							"closed": "!q.property('zt:bang') && q.all_animations_finished"
+						}
+					]
+				},
+				"opening": {
+					"animations": [
+						"open"
+					],
+					"transitions": [
+						{
+							"broken": "q.property('zt:broken')"
+						},
+						{
+							"closing": "!q.property('zt:open')"
+						}
+					]
+				},
+				"closing": {
+					"animations": [
+						"close"
+					],
+					"transitions": [
+						{
+							"broken": "q.property('zt:broken')"
+						},
+						{
+							"opening": "q.property('zt:open')"
+						},
+						{
+							"closed": "q.all_animations_finished"
+						}
+					]
+				},
+				"broken": {
+					"animations": [
+						"broken"
+					],
+					"transitions": [
+						{
+							"closed": "!q.property('zt:broken')"
+						}
+					]
+				}
+			}
+		},
+		"controller.animation.zt.rush": {
+			"initial_state": "fly",
+			"states": {
+				"fly": {
+					"animations": [
+						"fly"
+					],
+					"transitions": [
+						{
+							"sink": "q.property('zt:anim') == 1"
+						}
+					]
+				},
+				"sink": {
+					"animations": [
+						"sink"
+					],
+					"transitions": [
+						{
+							"fly": "q.property('zt:anim') == 0"
+						}
+					]
+				}
+			}
+		},
+		"controller.animation.zt.screech": {
+			"initial_state": "lurk",
+			"states": {
+				"lurk": {
+					"animations": [
+						"lurk"
+					],
+					"transitions": [
+						{
+							"bite": "q.property('zt:anim') == 1"
+						},
+						{
+							"flee": "q.property('zt:anim') == 2"
+						},
+						{
+							"sink": "q.property('zt:anim') == 3"
+						}
+					]
+				},
+				"bite": {
+					"animations": [
+						"bite"
+					],
+					"transitions": [
+						{
+							"lurk": "q.property('zt:anim') == 0"
+						},
+						{
+							"flee": "q.property('zt:anim') == 2"
+						},
+						{
+							"sink": "q.property('zt:anim') == 3"
+						}
+					]
+				},
+				"flee": {
+					"animations": [
+						"flee"
+					],
+					"transitions": [
+						{
+							"lurk": "q.property('zt:anim') == 0"
+						}
+					]
+				},
+				"sink": {
+					"animations": [
+						"sink"
+					],
+					"transitions": [
+						{
+							"lurk": "q.property('zt:anim') == 0"
+						}
+					]
+				}
+			}
+		}
+	}
+}

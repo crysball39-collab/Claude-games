@@ -3,7 +3,8 @@
 
 	// Every boss bar goes through this panel. A bar whose name contains "Zombie Titan",
 	// "Skeleton Titan", "Creeper Titan" or "Spider Titan" (the minecraft:boss names in the titans'
-	// behaviour files), "The Figure" (its danger meter) or "Seek" (the chase's progress) gets its own bar;
+	// behaviour files), "The Figure" (its danger meter), "Seek" (the chase's progress) or "Breaker
+	// Switches" (door 100's switches found) gets its own bar;
 	// all others keep the vanilla look. The panel is 36 tall (vanilla: 20) so a second boss bar
 	// clears the taller custom bars.
 	"boss_health_panel": {
@@ -44,7 +45,7 @@
 						},
 						{
 							"binding_type": "view",
-							"source_property_name": "(((#bossName - 'Zombie Titan') = #bossName) and ((#bossName - 'Skeleton Titan') = #bossName) and ((#bossName - 'Creeper Titan') = #bossName) and ((#bossName - 'Spider Titan') = #bossName) and ((#bossName - 'The Figure') = #bossName) and ((#bossName - 'Seek') = #bossName))",
+							"source_property_name": "(((#bossName - 'Zombie Titan') = #bossName) and ((#bossName - 'Skeleton Titan') = #bossName) and ((#bossName - 'Creeper Titan') = #bossName) and ((#bossName - 'Spider Titan') = #bossName) and ((#bossName - 'The Figure') = #bossName) and ((#bossName - 'Seek') = #bossName) and ((#bossName - 'Breaker Switches') = #bossName))",
 							"target_property_name": "#visible"
 						}
 					]
@@ -67,6 +68,9 @@
 			},
 			{
 				"zt_seek_bar@hud.zt_seek_bar": {}
+			},
+			{
+				"zt_switch_bar@hud.zt_switch_bar": {}
 			}
 		],
 		"bindings": [
@@ -674,6 +678,106 @@
 			{
 				"binding_type": "view",
 				"source_property_name": "(not ((#bossName - 'Seek') = #bossName))",
+				"target_property_name": "#visible"
+			}
+		]
+	},
+	"zt_switch_bar": {
+		"type": "panel",
+		"size": [
+			200,
+			34
+		],
+		"anchor_from": "top_middle",
+		"anchor_to": "top_middle",
+		"controls": [
+			{
+				"switch_name@hud.boss_name_panel": {}
+			},
+			{
+				"switch_frame_panel": {
+					"type": "panel",
+					"size": [
+						200,
+						26
+					],
+					"offset": [
+						0,
+						8
+					],
+					"anchor_from": "top_middle",
+					"anchor_to": "top_middle",
+					"controls": [
+						{
+							"switch_back": {
+								"type": "image",
+								"texture": "textures/ui/zt/switch_bar_back",
+								"size": [
+									182,
+									6
+								],
+								"offset": [
+									0,
+									13
+								],
+								"anchor_from": "top_middle",
+								"anchor_to": "top_middle",
+								"layer": 1
+							}
+						},
+						{
+							"switch_fill": {
+								"type": "image",
+								"texture": "textures/ui/zt/switch_bar_fill",
+								"size": [
+									182,
+									6
+								],
+								"offset": [
+									0,
+									13
+								],
+								"anchor_from": "top_middle",
+								"anchor_to": "top_middle",
+								"layer": 2,
+								"clip_direction": "left",
+								"clip_pixelperfect": false,
+								"bindings": [
+									{
+										"binding_name": "#progress_percentage",
+										"binding_name_override": "#clip_ratio",
+										"binding_type": "collection",
+										"binding_collection_name": "boss_bars"
+									}
+								]
+							}
+						},
+						{
+							"switch_frame": {
+								"type": "image",
+								"texture": "textures/ui/zt/switch_bar_frame",
+								"size": [
+									200,
+									26
+								],
+								"anchor_from": "top_middle",
+								"anchor_to": "top_middle",
+								"layer": 3
+							}
+						}
+					]
+				}
+			}
+		],
+		"bindings": [
+			{
+				"binding_type": "collection",
+				"binding_collection_name": "boss_bars",
+				"binding_name": "#bossName"
+			},
+			{
+				"binding_type": "view",
+				"source_property_name": "(not ((#bossName - 'Breaker Switches') = #bossName))",
 				"target_property_name": "#visible"
 			}
 		]

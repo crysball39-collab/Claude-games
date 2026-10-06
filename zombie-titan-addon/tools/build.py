@@ -43,6 +43,11 @@ GENERATORS = (
     "gen_doors_anims.py",
     "gen_doors_audio.py",
     "gen_doors_data.py",  # after gen_items_data.py: it adds to terrain_texture.json and blocks.json
+    "gen_floor1_art.py",
+    "gen_floor1_blocks.py",
+    "gen_floor1_anims.py",
+    "gen_floor1_audio.py",
+    "gen_floor1_data.py",  # after gen_doors_data.py: it adds to the texture lists, blocks.json and the render controllers
 )
 SKIP = re.compile(r"(^|/)(\.|__pycache__|Thumbs\.db$)")
 STAMP = (2026, 1, 1, 0, 0, 0)

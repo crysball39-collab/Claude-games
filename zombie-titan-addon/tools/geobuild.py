@@ -15,8 +15,9 @@ def r4(v):
 
 class Geo:
     def __init__(self, ident, tex_w, tex_h, bounds_w, bounds_h, bounds_offset=(0, 0, 0)):
+        """tex_h=None lets the atlas grow as tall as its parts need (rounded up to 16)."""
         self.ident = ident
-        self.tw, self.th = tex_w, tex_h
+        self.tw, self._th = tex_w, tex_h
         self.bounds = (bounds_w, bounds_h, list(bounds_offset))
         self.parts = {}
         self.bones = []
@@ -32,11 +33,17 @@ class Geo:
         rw, rh = math.ceil(2 * d + 2 * w), math.ceil(d + h)
         if self._x + rw > self.tw:
             self._x, self._y, self._row = 0, self._y + self._row, 0
-        if self._y + rh > self.th or rw > self.tw:
+        if (self._th is not None and self._y + rh > self._th) or rw > self.tw:
             raise ValueError(f"{self.ident}: no room for part {name} ({rw} x {rh})")
         self.parts[name] = ((self._x, self._y), (w, h, d))
         self._x += rw
         self._row = max(self._row, rh)
+
+    @property
+    def th(self):
+        if self._th is not None:
+            return self._th
+        return max(16, -(-(self._y + self._row) // 16) * 16)
 
     def faces(self, name, s=1):
         (u, v), (w, h, d) = self.parts[name]

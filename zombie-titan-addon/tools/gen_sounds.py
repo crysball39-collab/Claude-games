@@ -78,6 +78,27 @@ LANTERN_BREAK = ["sounds/block/lantern/break%d" % i for i in range(1, 7)]
 SCREAM = ["sounds/mob/endermen/scream1", "sounds/mob/endermen/scream2", "sounds/mob/endermen/scream3",
           "sounds/mob/endermen/scream4"]
 GHAST_SCREAM = ["sounds/mob/ghast/scream%d" % i for i in range(1, 6)]
+IRON_OPEN = ["sounds/block/iron_door/open%d" % i for i in range(1, 5)]
+GATE_OPEN = ["sounds/block/fence_gate/open1", "sounds/block/fence_gate/open2"]
+GATE_CLOSE = ["sounds/block/fence_gate/close1", "sounds/block/fence_gate/close2"]
+COPPER_DOOR = ["sounds/block/copper_door/toggle%d" % i for i in range(1, 4)]
+BARREL_OPEN = ["sounds/block/barrel/open1", "sounds/block/barrel/open2"]
+WHISPER = ["sounds/ambient/nether/soulsand_valley/whisper%d" % i for i in range(1, 9)]
+CLOTH = ["sounds/step/cloth%d" % i for i in range(1, 5)]
+LEATHER = ["sounds/armor/equip_leather%d" % i for i in range(1, 7)]
+EQUIP_CHAIN = ["sounds/armor/equip_chain%d" % i for i in range(1, 7)]
+EQUIP_GOLD = ["sounds/armor/equip_gold%d" % i for i in range(1, 7)]
+EQUIP_IRON = ["sounds/armor/equip_iron%d" % i for i in range(1, 7)]
+EAT = ["sounds/random/eat1", "sounds/random/eat2", "sounds/random/eat3"]
+BELL = ["sounds/block/bell/bell_use01", "sounds/block/bell/bell_use02"]
+WITCH = ["sounds/mob/witch/ambient%d" % i for i in range(1, 6)]
+VEX_CHARGE = ["sounds/mob/vex/charge1", "sounds/mob/vex/charge2", "sounds/mob/vex/charge3"]
+SCRAPE = ["sounds/item/axe/scrape1", "sounds/item/axe/scrape2", "sounds/item/axe/scrape3"]
+AIR = ["sounds/mob/breeze/idle_air%d" % i for i in range(1, 5)]
+DEBRIS = ["sounds/ambient/nether/basalt_deltas/long_debris1", "sounds/ambient/nether/basalt_deltas/long_debris2"]
+BASALT_CLICK = ["sounds/ambient/nether/basalt_deltas/click%d" % i for i in range(1, 9)]
+SHATTER = ["sounds/block/decorated_pot/shatter%d" % i for i in range(1, 6)]
+HIT = ["sounds/damage/hit1", "sounds/damage/hit2", "sounds/damage/hit3"]
 
 
 def definitions():
@@ -204,7 +225,112 @@ def definitions():
         "zt.music.seek_chase": {"category": "music", "sounds": [{"name": "sounds/zt/seek_chase", "stream": True,
                                                                  "volume": 0.85}]},
     }
+    D.update(hotel_definitions())
     return {"format_version": "1.20.20", "sound_definitions": D}
+
+
+def hotel_definitions():
+    """The Hotel (Floor 1): the Lobby's elevators, doors and gates, drawers and closets, Rush,
+    Screech, Hide, Jeff's shop, door 100's lever, breaker box and the Figure's last chase."""
+    blk, plr, hos = "block", "player", "hostile"
+    return {
+        # the elevators
+        "zt.elevator.open": event(snd(["sounds/tile/piston/out"], 0.5, 0.8) + snd(COPPER_DOOR, 0.6, 0.6), category=blk,
+                                  min_d=6.0, max_d=32.0),
+        "zt.elevator.close": event(snd(["sounds/tile/piston/in"], 0.5, 0.8) + snd(COPPER_DOOR, 0.55, 0.6), category=blk,
+                                   min_d=6.0, max_d=32.0),
+        "zt.elevator.ding": event(snd(["sounds/note/bell"], 1.19, 0.9), category=blk, min_d=6.0, max_d=32.0),
+        "zt.elevator.hum": event(snd(["sounds/minecart/inside"], 0.55, 0.7), category=blk, min_d=4.0, max_d=16.0),
+        "zt.elevator.gate": event(snd(IRON_OPEN, 0.8, 0.8) + snd(CHAIN, 1.1, 1.0), category=blk, min_d=6.0, max_d=32.0),
+        "zt.elevator.cable": event(snd(["sounds/random/break"], 0.5, 1.0) + snd(CHAIN, 0.6, 1.0), category=blk, min_d=8.0,
+                                   max_d=48.0),
+        "zt.elevator.alarm": event(snd(BELL, 1.5, 0.8), category=blk, min_d=8.0, max_d=48.0),
+        "zt.elevator.fall": event(snd(SCRAPE, 0.5, 1.0) + snd(WHIRL, 0.6, 1.0), category=plr, min_d=4.0, max_d=16.0),
+        "zt.elevator.crash": event(snd(EXPLODE, 0.6, 1.0) + snd(["sounds/random/anvil_land"], 0.5, 1.0) + snd(GLASS, 0.7, 0.8),
+                                   category=plr, min_d=4.0, max_d=16.0),
+        # doors and gates
+        "zt.gate.open": event(snd(GATE_OPEN, 0.6, 1.0) + snd(IRON_OPEN, 0.7, 0.6), category=blk, min_d=8.0, max_d=32.0),
+        "zt.gate.close": event(snd(GATE_CLOSE, 0.6, 1.0) + snd(IRON_DOOR, 0.7, 0.6), category=blk, min_d=8.0, max_d=32.0),
+        "zt.big_gate.open": event(snd(["sounds/tile/piston/out"], 0.35, 1.0) + snd(["sounds/block/vault/open_shutter"], 0.6, 1.0),
+                                  category=blk, min_d=16.0, max_d=64.0),
+        "zt.metal_door.open": event(snd(IRON_OPEN, 0.8, 1.0), category=blk, min_d=8.0, max_d=32.0),
+        "zt.metal_door.close": event(snd(IRON_DOOR, 0.8, 1.0), category=blk, min_d=8.0, max_d=32.0),
+        "zt.door.burst": event(snd(EXPLODE, 1.2, 0.8) + snd(IRON_DOOR, 0.5, 1.0) + snd(["sounds/random/anvil_land"], 0.6, 1.0),
+                               category=hos, min_d=16.0, max_d=64.0),
+        "zt.window.crash": event(snd(GLASS, 0.8, 1.0) + snd(SHATTER, 0.6, 1.0), category=hos, min_d=16.0, max_d=64.0),
+        # the Figure at door 100
+        "zt.figure.bang": event(snd(["sounds/random/anvil_land"], 0.5, 1.0) + snd(IRON_DOOR, 0.45, 1.0) + snd(W_HIT, 0.8, 0.8),
+                                category=hos, min_d=16.0, max_d=64.0),
+        "zt.figure.bang_gate": event(snd(IRON_DOOR, 0.6, 1.0) + snd(CHAIN, 0.8, 1.0) + snd(["sounds/random/anvil_land"], 0.7, 0.7),
+                                     category=hos, min_d=16.0, max_d=64.0),
+        "zt.figure.bump": event(snd(["sounds/random/anvil_land"], 0.4, 1.0) + snd(["sounds/damage/fallbig"], 0.6, 1.0),
+                                category=hos, min_d=16.0, max_d=64.0),
+        "zt.figure.land": event(snd(["sounds/random/anvil_land"], 0.45, 1.0) + snd(["sounds/item/mace/smash_ground_heavy"], 0.7, 1.0),
+                                category=hos, min_d=16.0, max_d=64.0),
+        "zt.fire.whoosh": event(snd(["sounds/mob/ghast/fireball4"], 0.6, 1.0) + snd(["sounds/fire/ignite"], 0.6, 1.0), category=blk,
+                                min_d=12.0, max_d=48.0),
+        "zt.wire.spark": event(snd(["sounds/random/fizz"], 1.8, 0.8) + snd(BASALT_CLICK, 1.5, 1.0), category=blk, min_d=6.0,
+                               max_d=32.0),
+        # door 100's lever and breaker box
+        "zt.lever.pull": event(snd(["sounds/random/click"], 0.5, 1.0) + snd(IRON_TRAP, 0.6, 1.0), category=blk, min_d=8.0,
+                               max_d=32.0),
+        "zt.breaker.open": event(snd(IRON_TRAP, 1.0, 1.0), category=blk, min_d=6.0, max_d=24.0),
+        "zt.breaker.insert": event(snd(["sounds/random/click"], 0.9, 1.0) + snd(["sounds/block/vault/insert"], 1.2, 1.0), category=blk,
+                                   min_d=6.0, max_d=24.0),
+        "zt.breaker.pickup": event(snd(EQUIP_IRON, 1.4, 1.0), category=plr, min_d=4.0, max_d=16.0),
+        "zt.breaker.click": event(snd(["sounds/random/click"], 1.4, 1.0), category=blk, min_d=4.0, max_d=16.0),
+        "zt.breaker.beep": event(snd(["sounds/note/bit"], 1.5, 0.8), category=blk, min_d=6.0, max_d=24.0),
+        "zt.breaker.correct": event(snd(["sounds/note/bit"], 2.0, 0.8) + snd(["sounds/random/orb"], 1.4, 0.8), category=blk,
+                                    min_d=6.0, max_d=24.0),
+        "zt.breaker.power": event(snd(BEACON_POWER, 0.7, 1.0) + snd(["sounds/block/conduit/activate"], 0.8, 1.0), category=blk,
+                                  min_d=16.0, max_d=64.0),
+        # hiding, searching, picking things up
+        "zt.closet.enter": event(snd(DOOR_CLOSE, 1.15, 0.8), category=plr, min_d=4.0, max_d=16.0),
+        "zt.closet.exit": event(snd(DOOR_OPEN, 1.1, 0.8), category=plr, min_d=4.0, max_d=16.0),
+        "zt.bed.enter": event(snd(CLOTH, 0.8, 1.0) + snd(LEATHER, 0.8, 0.8), category=plr, min_d=4.0, max_d=16.0),
+        "zt.drawer.open": event(snd(BARREL_OPEN, 1.25, 0.7), category=blk, min_d=4.0, max_d=16.0),
+        "zt.key.pickup": event(snd(["sounds/random/pop"], 1.5, 0.6) + snd(EQUIP_CHAIN, 1.4, 1.0), category=plr, min_d=4.0, max_d=16.0),
+        "zt.gold.pickup": event(snd(["sounds/random/orb"], 1.2, 0.7) + snd(EQUIP_GOLD, 1.6, 1.0), category=plr, min_d=4.0, max_d=16.0),
+        "zt.item.pickup": event(snd(["sounds/random/pop"], 1.1, 0.8), category=plr, min_d=4.0, max_d=16.0),
+        "zt.item.break": event(snd(["sounds/random/break"], 1.0, 1.0), category=plr, min_d=4.0, max_d=16.0),
+        "zt.lighter.flick": event(snd(["sounds/fire/ignite"], 1.4, 0.8), category=plr, min_d=4.0, max_d=16.0),
+        "zt.lighter.close": event(snd(["sounds/random/click"], 1.6, 0.7), category=plr, min_d=4.0, max_d=16.0),
+        "zt.flashlight.click": event(snd(["sounds/random/click"], 1.8, 0.6), category=plr, min_d=4.0, max_d=16.0),
+        "zt.herb.eat": event(snd(EAT, 1.1, 1.0) + snd(["sounds/random/burp"], 1.2, 0.4), category=plr, min_d=4.0, max_d=16.0),
+        "zt.crucifix.chains": event(snd(CHAIN, 0.6, 1.0) + snd(["sounds/block/amethyst/shimmer"], 0.8, 1.0) +
+                                    snd(BEACON_POWER, 1.7, 0.5), category=plr, min_d=8.0, max_d=48.0),
+        # Hide
+        "zt.hide.whisper": event(snd(WHISPER, 0.7, 1.0), category=hos, min_d=2.0, max_d=8.0),
+        "zt.hide.kick": event(snd(DOOR_OPEN, 0.7, 1.0) + snd(HIT, 0.8, 1.0) + snd(SCREAM, 0.6, 0.5), category=hos, min_d=4.0,
+                              max_d=24.0),
+        # Rush
+        "zt.rush.far": event(snd(AIR, 0.5, 1.0) + snd(DEBRIS, 0.6, 1.0), category=hos, min_d=16.0, max_d=96.0),
+        "zt.rush.pass": event(snd(RAV_ROAR, 1.2, 1.0) + snd(WHIRL, 0.6, 1.0) + snd(EXPLODE, 0.5, 0.4), category=hos, min_d=16.0,
+                              max_d=64.0),
+        "zt.rush.flicker": event(snd(["sounds/block/copper_bulb/turn_on"], 1.5, 0.8) + snd(["sounds/random/click"], 2.0, 0.6),
+                                 category=blk, min_d=8.0, max_d=48.0),
+        "zt.rush.gone": event(snd(WHIRL, 0.4, 0.6), category=hos, min_d=16.0, max_d=96.0),
+        "zt.rush.kill": event(snd(EXPLODE, 0.8, 1.0) + snd(SCREAM, 0.6, 1.0) + snd(RAV_ROAR, 1.3, 1.0), category=hos, min_d=8.0,
+                              max_d=48.0),
+        "zt.rush.thunder": event(snd(THUNDER, 1.0, 1.0), category="weather", min_d=32.0, max_d=192.0),
+        "zt.rush.banished": event(snd(["sounds/block/beacon/deactivate"], 0.8, 1.0) + snd(CHAIN, 0.6, 1.0), category=hos, min_d=16.0,
+                                  max_d=64.0),
+        "zt.lights.break": event(snd(GLASS, 1.2, 1.0) + snd(LANTERN_BREAK, 1.0, 1.0), category=blk, min_d=8.0, max_d=48.0),
+        # Screech (its "psst" is made by gen_floor1_audio.py)
+        "zt.screech.psst": event([{"name": "sounds/zt/psst", "volume": 1.0, "pitch": 1.0}], category=hos, min_d=2.0, max_d=12.0),
+        "zt.screech.scream": event(snd(VEX_CHARGE, 1.3, 1.0) + snd(SCREAM, 1.4, 0.6), category=hos, min_d=4.0, max_d=24.0),
+        "zt.screech.bite": event(snd(["sounds/mob/evocation_illager/fangs"], 1.2, 1.0) + snd(STRONG, 1.4, 1.0) +
+                                 snd(SLIME_SMALL, 0.8, 0.6), category=hos, min_d=4.0, max_d=24.0),
+        # Jeff's shop
+        "zt.shop.bell": event(snd(["sounds/note/bell"], 1.5, 0.7) + snd(["sounds/note/bell"], 1.78, 0.7), category=blk, min_d=6.0,
+                              max_d=24.0),
+        "zt.shop.buy": event(snd(["sounds/random/orb"], 1.0, 0.8) + snd(EQUIP_GOLD, 1.2, 1.0), category=plr, min_d=4.0, max_d=16.0),
+        "zt.goblino.laugh": event(snd(WITCH, 1.5, 1.0), category="neutral", min_d=6.0, max_d=24.0),
+        "zt.bob.rattle": event(snd(SKEL_SAY, 1.2, 0.8) + snd(BONE_DIG, 1.0, 0.8), category="neutral", min_d=6.0, max_d=24.0),
+        # music (made by gen_floor1_audio.py)
+        "zt.music.elevator": {"category": "music", "sounds": [{"name": "sounds/zt/elevator_music", "stream": True, "volume": 0.8}]},
+        "zt.music.door100": {"category": "music", "sounds": [{"name": "sounds/zt/door100_chase", "stream": True, "volume": 0.9}]},
+    }
 
 
 def entity_sounds():
