@@ -1,41 +1,6 @@
 {
 	"format_version": "1.10.0",
 	"animation_controllers": {
-		"controller.animation.zt.door": {
-			"initial_state": "closed",
-			"states": {
-				"closed": {
-					"transitions": [
-						{
-							"opening": "q.property('zt:open')"
-						}
-					]
-				},
-				"opening": {
-					"animations": [
-						"open"
-					],
-					"transitions": [
-						{
-							"closing": "!q.property('zt:open')"
-						}
-					]
-				},
-				"closing": {
-					"animations": [
-						"close"
-					],
-					"transitions": [
-						{
-							"opening": "q.property('zt:open')"
-						},
-						{
-							"closed": "q.all_animations_finished"
-						}
-					]
-				}
-			}
-		},
 		"controller.animation.zt.hand": {
 			"initial_state": "hidden",
 			"states": {
@@ -131,28 +96,6 @@
 					"transitions": [
 						{
 							"hang": "q.property('zt:state') == 0"
-						}
-					]
-				}
-			}
-		},
-		"controller.animation.zt.library_lamp": {
-			"initial_state": "standing",
-			"states": {
-				"standing": {
-					"transitions": [
-						{
-							"fallen": "q.property('zt:fallen')"
-						}
-					]
-				},
-				"fallen": {
-					"animations": [
-						"fall"
-					],
-					"transitions": [
-						{
-							"standing": "!q.property('zt:fallen')"
 						}
 					]
 				}

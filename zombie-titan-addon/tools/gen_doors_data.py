@@ -320,9 +320,24 @@ def hotel_block(name):
 # =============================================================================================
 # client files
 # =============================================================================================
+def swing(opening, closing, target="q.property('zt:open')"):
+    """Client scripts for something that opens and shuts (a door, a gate, a closet, the breaker
+    box): v.open runs from 0 (shut) to 1 (open) in `opening` seconds, and back in `closing`, and
+    v.swing is it eased. Its pose follows v.swing every frame, so it can't be left showing the
+    wrong way: it starts in the right state when the entity appears and always heads toward it."""
+    return {
+        "init": ["v.open = (%s) ? 1.0 : 0.0;" % target],
+        "pre": ["v.open = math.clamp(v.open + ((%s) ? q.delta_time / %.2f : -q.delta_time / %.2f), 0.0, 1.0);"
+                % (target, opening, closing),
+                "v.swing = v.open * v.open * (3.0 - 2.0 * v.open);"],
+    }
+
+
 def client(ident, geometry, texture, material="entity_emissive_alpha", animations=None, animate=None, rc=None,
-           egg=None, scale=None, extra_textures=None, extra_geometry=None, extra_materials=None, pre=None):
+           egg=None, scale=None, extra_textures=None, extra_geometry=None, extra_materials=None, pre=None, init=None):
     scripts = {}
+    if init:
+        scripts["initialize"] = init
     if pre:
         scripts["pre_animation"] = pre
     if scale:
@@ -373,11 +388,11 @@ def clients():
                     "grope": "animation.zt.hand.grope", "grab": "animation.zt.hand.grab",
                     "main": "controller.animation.zt.hand", "face": "animation.zt.prop.face"},
         animate=["face", "base", "main"])
+    sw = swing(0.5, 0.25)
     out["hotel_door"] = client(
         "zt:hotel_door", "geometry.zt.hotel_door", tex + "hotel_door", material="entity_alphatest",
-        animations={"open": "animation.zt.door.open", "close": "animation.zt.door.close",
-                    "main": "controller.animation.zt.door", "face": "animation.zt.prop.face"},
-        animate=["face", "main"], rc=["controller.render.zt.hotel_door"])
+        animations={"swing": "animation.zt.door.swing", "face": "animation.zt.prop.face"},
+        animate=["face", "swing"], rc=["controller.render.zt.hotel_door"], init=sw["init"], pre=sw["pre"])
     out["chandelier"] = client(
         "zt:chandelier", "geometry.zt.chandelier", tex + "chandelier",
         animations={"hang": "animation.zt.chandelier.hang", "fall": "animation.zt.chandelier.fall",
@@ -389,11 +404,12 @@ def clients():
         animate=["face", "idle"])
     out["library_paper"] = client("zt:library_paper", "geometry.zt.library_paper", tex + "library_paper",
                                   animations={"face": "animation.zt.prop.face"}, animate=["face"])
+    fallen = "q.property('zt:fallen')"
     out["library_lamp"] = client(
         "zt:library_lamp", "geometry.zt.library_lamp", tex + "library_lamp",
-        animations={"fall": "animation.zt.library_lamp.fall", "main": "controller.animation.zt.library_lamp",
-                    "face": "animation.zt.prop.face"},
-        animate=["face", "main"])
+        animations={"fall": "animation.zt.library_lamp.fall", "face": "animation.zt.prop.face"},
+        animate=["face", "fall"], init=["v.fall = %s ? 1.0 : 0.0;" % fallen],
+        pre=["v.fall = math.clamp(v.fall + (%s ? q.delta_time / 0.55 : -1.0), 0.0, 1.0);" % fallen])
     for name in ("figure_bar", "seek_bar", "figure_lure"):
         out[name] = client("zt:" + name, "geometry.zt.invisible", tex + "invisible", material="entity_alphatest")
     return out

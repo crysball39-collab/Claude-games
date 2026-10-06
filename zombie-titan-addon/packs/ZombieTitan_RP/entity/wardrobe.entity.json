@@ -18,16 +18,21 @@
 				"controller.render.zt.wardrobe"
 			],
 			"scripts": {
+				"initialize": [
+					"v.open = (q.property('zt:open')) ? 1.0 : 0.0;"
+				],
+				"pre_animation": [
+					"v.open = math.clamp(v.open + ((q.property('zt:open')) ? q.delta_time / 0.20 : -q.delta_time / 0.25), 0.0, 1.0);",
+					"v.swing = v.open * v.open * (3.0 - 2.0 * v.open);"
+				],
 				"animate": [
 					"face",
-					"main"
+					"swing"
 				]
 			},
 			"animations": {
 				"face": "animation.zt.prop.face",
-				"open": "animation.zt.wardrobe.open",
-				"close": "animation.zt.wardrobe.close",
-				"main": "controller.animation.zt.door"
+				"swing": "animation.zt.wardrobe.swing"
 			}
 		}
 	}

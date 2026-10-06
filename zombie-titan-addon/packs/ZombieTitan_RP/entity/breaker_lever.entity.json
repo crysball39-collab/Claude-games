@@ -16,6 +16,9 @@
 				"controller.render.zt.default"
 			],
 			"scripts": {
+				"initialize": [
+					"v.flip = q.property('zt:on') ? 1.0 : 0.0;"
+				],
 				"pre_animation": [
 					"v.flip = math.lerp(v.flip, q.property('zt:on') ? 1.0 : 0.0, math.min(1.0, q.delta_time * 25.0));"
 				],

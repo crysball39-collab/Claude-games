@@ -421,13 +421,16 @@ def key_geo():
     flat_cubes = [g.cube("bow", (-6, 0, -2)), g.cube("shaft", (-2, 0, -0.6)), g.cube("bit", (3.5, 0, -0.6)),
                   g.cube("ring", (-8, 0.1, -1.5)), g.cube("tag", (-12, 0.2, -1.5))]
     g.bone("flat", "root", (0, 0, 0), cubes=flat_cubes)
-    # hanging on a hook on the wall: the same key turned upright (it hangs off the wall's face, model +z)
+    # hanging on a hook on the wall: the same key turned upright, 3 to 4 px behind the entity (the script
+    # puts the entity 0.72 of a block out from the wall, so the key hangs just off the wall's face) and
+    # from the entity's feet up, inside its tap box
+    z, y = 2.4, 5.0
     g.bone("hanging", "root", (0, 0, 0), rotation=(0, 0, 0), cubes=[
-        g.cube("hook", (-0.5, 4.5, 6)),
-        g.cube("bow", (-2, 1.5, 6), rotation=(90, 0, 90), pivot=(0, 3.5, 6.4)),
-        g.cube("shaft", (-1, -2.5, 6), rotation=(90, 0, 90), pivot=(0, -0.5, 6.4)),
-        g.cube("bit", (-0.8, -5.0, 6), rotation=(90, 0, 90), pivot=(0, -4.0, 6.4)),
-        g.cube("tag", (-2, -1, 6.6), rotation=(90, 0, 0), pivot=(0, 0, 6.8)),
+        g.cube("hook", (-0.5, 4.5 + y, z)),
+        g.cube("bow", (-2, 1.5 + y, z), rotation=(90, 0, 90), pivot=(0, 3.5 + y, z + 0.4)),
+        g.cube("shaft", (-1, -2.5 + y, z), rotation=(90, 0, 90), pivot=(0, -0.5 + y, z + 0.4)),
+        g.cube("bit", (-0.8, -5.0 + y, z), rotation=(90, 0, 90), pivot=(0, -4.0 + y, z + 0.4)),
+        g.cube("tag", (-2, -1 + y, z + 0.6), rotation=(90, 0, 0), pivot=(0, y, z + 0.8)),
     ])
     return g
 

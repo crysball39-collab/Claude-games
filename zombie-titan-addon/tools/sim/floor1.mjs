@@ -291,6 +291,13 @@ check(door1 && door1.locked && door1.number === 1, "door 1 is locked");
 const key1 = [...d.keys.entries()].find(([, n]) => n === 1);
 const key1e = key1 && world.getEntity(key1[0]);
 check(!!key1e && key1e.props["zt:style"] === 2 && fr.local(key1e.location).r > rec.c + 4, "its key hangs on the wall behind the desk");
+{
+  // the hanging key's model is 2.4-3.4 px behind the entity (toward the wall, +r here): it has to be
+  // in front of the wall, and its tap box (0.5 wide) out in the room
+  const kl = fr.local(key1e.location);
+  const solid = (r) => !["minecraft:air", "zt:hotel_painting"].includes(blk(Math.floor(r), Math.floor(kl.u + 0.3), Math.floor(kl.f)));
+  check(!solid(kl.r + 3.4 / 16) && !solid(kl.r - 0.25) && solid(kl.r + 0.5), "...in front of the wall, where you can reach it");
+}
 const m0 = log.messages.length;
 go(player, { r: door1.cells[0] + 1, u: 0, f: rec.f1 - 0.3 });
 runTicks(3);
@@ -419,6 +426,7 @@ const lit0 = lampsLit(nRush);
 Mobs.startRush(run, d, nRush, 0);
 d.rush.at = world.getAbsoluteTime() - 100000;
 check(d.rush?.phase === "warn" && log.sounds.includes("zt.rush.flicker"), "the lights flicker...");
+check(log.sounds.includes("zt.rush.approach"), "...and something is coming, louder and louder");
 let flickered = false;
 runTicks(30, () => {
   if (lampsLit(nRush) < lit0) flickered = true;
@@ -433,6 +441,8 @@ world.afterEvents.playerInteractWithEntity.fire({ player, target: world.getEntit
 check(Doors.isHidden(player), "you hide");
 runTicks(140, () => d.rush?.phase === "pass");
 check(d.rush?.phase === "pass" && only("zt:rush").length === 1, "seven seconds later Rush comes roaring through");
+runTicks(40, () => log.sounds.includes("zt.rush.pass"));
+check(log.sounds.includes("zt.rush.pass"), "...with a roar as it goes by");
 runTicks(200, () => !d.rush || d.rush.phase === "banished");
 check(!buddy.dead && Doors.countItem(buddy, "zt:crucifix") === 0 && log.particles.includes("zt:crucifix_chains"),
   "your friend held up the crucifix: chains drag Rush into the floor");
@@ -494,20 +504,50 @@ check(hp.currentValue === hpS - 8, "you don't: it bites (" + (hpS - hp.currentVa
 darkRoom.dark = false;
 hp.setCurrentValue(20);
 
-console.log("the lighter");
+console.log("the lighter, and the dark");
 const lighter = new ItemStack("zt:lighter", 1);
+const head = player.getHeadLocation();
+const headLight = () => ow.getBlock({ x: Math.floor(head.x), y: Math.floor(head.y), z: Math.floor(head.z) }).typeId;
+// (the player's own fog commands: everyone's commands land in the same log)
+const myCommands = [];
+const runCommand0 = player.runCommand.bind(player);
+player.runCommand = (c) => {
+  myCommands.push(c);
+  return runCommand0(c);
+};
+const fogs = () => myCommands.filter((c) => c.startsWith("fog "));
+// (Rush smashed this room's lights earlier: light it again for this, then put it back)
+const broken0 = darkRoom.broken;
+const lamps0 = darkRoom.lamps;
+darkRoom.broken = false;
+darkRoom.lamps = [];
+runTicks(2);
+check(fogs().at(-1) === "fog @s remove zt_dark", "in a lit room you can see");
+darkRoom.dark = true;
+runTicks(2);
+check(fogs().at(-1) === "fog @s push zt:dark_room zt_dark", "in a dark room the dark closes in (" + fogs().at(-1) + ")");
 player.components["minecraft:equippable"].slots.Mainhand = lighter;
+runTicks(4);
+check(headLight().startsWith("minecraft:light_block"), "take out the lighter: it lights, light all around you (" + headLight() + ")");
+check(fogs().at(-1) === "fog @s push zt:dark_lighter zt_dark", "...and it holds the dark back");
 world.afterEvents.itemUse.fire({ source: player, itemStack: lighter });
 runTicks(4);
-const head = player.getHeadLocation();
-const lightAt = ow.getBlock({ x: Math.floor(head.x), y: Math.floor(head.y), z: Math.floor(head.z) }).typeId;
-check(lightAt.startsWith("minecraft:light_block"), "use the lighter: light all around you (" + lightAt + ")");
+check(!headLight().startsWith("minecraft:light_block") && fogs().at(-1) === "fog @s push zt:dark_room zt_dark",
+  "use it: you close it, and it's dark again");
+runTicks(12);
+world.afterEvents.itemUse.fire({ source: player, itemStack: lighter });
+runTicks(4);
+check(headLight().startsWith("minecraft:light_block"), "use it again: lit");
 runTicks(41);
 check(lighter.getComponent("minecraft:durability").damage >= 2, "...burning its fuel");
 player.components["minecraft:equippable"].slots.Mainhand = undefined;
 runTicks(4);
-check(!ow.getBlock({ x: Math.floor(head.x), y: Math.floor(head.y), z: Math.floor(head.z) }).typeId.startsWith("minecraft:light_block"),
-  "put it away and it goes out");
+check(!headLight().startsWith("minecraft:light_block"), "put it away and it goes out");
+darkRoom.dark = false;
+runTicks(2);
+check(fogs().at(-1) === "fog @s remove zt_dark", "out of the dark, the fog lifts");
+darkRoom.broken = broken0;
+darkRoom.lamps = lamps0;
 
 // ---------------------------------------------------------------- on to Seek
 /** Through ordinary rooms from where the player is up to (not including) room `upTo`. */

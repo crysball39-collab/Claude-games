@@ -2,18 +2,12 @@
 	"format_version": "1.10.0",
 	"animation_controllers": {
 		"controller.animation.zt.metal_door": {
-			"initial_state": "closed",
+			"initial_state": "still",
 			"states": {
-				"closed": {
+				"still": {
 					"transitions": [
 						{
-							"broken": "q.property('zt:broken')"
-						},
-						{
-							"opening": "q.property('zt:open')"
-						},
-						{
-							"bang": "q.property('zt:bang')"
+							"bang": "q.property('zt:bang') && !q.property('zt:broken') && !q.property('zt:open')"
 						}
 					]
 				},
@@ -23,52 +17,7 @@
 					],
 					"transitions": [
 						{
-							"broken": "q.property('zt:broken')"
-						},
-						{
-							"opening": "q.property('zt:open')"
-						},
-						{
-							"closed": "!q.property('zt:bang') && q.all_animations_finished"
-						}
-					]
-				},
-				"opening": {
-					"animations": [
-						"open"
-					],
-					"transitions": [
-						{
-							"broken": "q.property('zt:broken')"
-						},
-						{
-							"closing": "!q.property('zt:open')"
-						}
-					]
-				},
-				"closing": {
-					"animations": [
-						"close"
-					],
-					"transitions": [
-						{
-							"broken": "q.property('zt:broken')"
-						},
-						{
-							"opening": "q.property('zt:open')"
-						},
-						{
-							"closed": "q.all_animations_finished"
-						}
-					]
-				},
-				"broken": {
-					"animations": [
-						"broken"
-					],
-					"transitions": [
-						{
-							"closed": "!q.property('zt:broken')"
+							"still": "!q.property('zt:bang') && q.all_animations_finished"
 						}
 					]
 				}

@@ -22,7 +22,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 from gen_doors_data import (BLOCK_FORMAT, GUIDED_GLOW, boss_bar, client, digit_visibility, door_entity, dump, facing,  # noqa: E402
-                            interact, prop_bool, prop_entity, prop_int, usable_item)
+                            interact, prop_bool, prop_entity, prop_int, swing, usable_item)
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 BP = os.path.join(ROOT, "packs", "ZombieTitan_BP")
@@ -58,7 +58,7 @@ def entities():
                                components=comps(box(1.0, 2.0), interact("action.interact.zt_search")))
     E["couch"] = prop_entity("zt:couch", ["zt_furniture"], properties=facing({"zt:style": prop_int(0, 2)}))
     E["room_key"] = prop_entity("zt:room_key", ["zt_key"], properties=facing({"zt:style": prop_int(0, 2)}),
-                                components=comps(box(0.5, 0.35), interact("action.interact.zt_take")))
+                                components=comps(box(0.5, 0.65), interact("action.interact.zt_take")))
     E["flesh_pile"] = prop_entity("zt:flesh_pile", ["zt_furniture"], properties=facing({"zt:style": prop_int(0, 2)}))
     # doors
     E["elevator_door"] = door_entity("zt:elevator_door")
@@ -279,7 +279,16 @@ def ease(var, target, rate=12.0):
     return "v.%s = math.lerp(v.%s, %s, math.min(1.0, q.delta_time * %.1f));" % (var, var, target, rate)
 
 
-DRAWERS = [ease("d%d" % k, "math.mod(math.floor(q.property('zt:drawers') / %d), 2)" % (1 << k)) for k in range(3)]
+DRAWER_OPEN = ["math.mod(math.floor(q.property('zt:drawers') / %d), 2)" % (1 << k) for k in range(3)]
+DRAWERS = [ease("d%d" % k, DRAWER_OPEN[k]) for k in range(3)]
+DRAWERS_INIT = ["v.d%d = %s;" % (k, DRAWER_OPEN[k]) for k in range(3)]
+ON = "q.property('zt:on') ? 1.0 : 0.0"
+
+
+def sw(opening, closing):
+    """client() arguments for something that opens and shuts on zt:open (see swing())."""
+    s = swing(opening, closing)
+    return {"init": s["init"], "pre": s["pre"]}
 
 
 def clients():
@@ -288,9 +297,8 @@ def clients():
     out["wardrobe"] = client(
         "zt:wardrobe", "geometry.zt.wardrobe", TEX + "wardrobe_0", material="entity_alphatest",
         extra_textures={k: v for k, v in skins("wardrobe", 3).items() if not k.endswith("_0")},
-        animations=dict(FACE, open="animation.zt.wardrobe.open", close="animation.zt.wardrobe.close",
-                        main="controller.animation.zt.door"),
-        animate=["face", "main"], rc=["controller.render.zt.wardrobe"])
+        animations=dict(FACE, swing="animation.zt.wardrobe.swing"),
+        animate=["face", "swing"], rc=["controller.render.zt.wardrobe"], **sw(0.2, 0.25))
     out["hotel_bed"] = client("zt:hotel_bed", "geometry.zt.hotel_bed", TEX + "hotel_bed_0", material="entity_alphatest",
                               extra_textures={"hotel_bed_1": TEX + "hotel_bed_1"}, animations=FACE, animate=["face"],
                               rc=["controller.render.zt.hotel_bed"])
@@ -299,9 +307,10 @@ def clients():
         extra_textures={"nightstand": TEX + "nightstand", "desk": TEX + "desk"},
         extra_geometry={"nightstand": "geometry.zt.nightstand", "desk": "geometry.zt.desk"},
         animations=dict(FACE, drawers="animation.zt.drawers"), animate=["face", "drawers"], rc=["controller.render.zt.dresser"],
-        pre=DRAWERS)
+        pre=DRAWERS, init=DRAWERS_INIT)
     out["cabinet"] = client("zt:cabinet", "geometry.zt.cabinet", TEX + "cabinet", material="entity_alphatest",
-                            animations=dict(FACE, drawers="animation.zt.drawers"), animate=["face", "drawers"], pre=DRAWERS)
+                            animations=dict(FACE, drawers="animation.zt.drawers"), animate=["face", "drawers"], pre=DRAWERS,
+                            init=DRAWERS_INIT)
     out["couch"] = client("zt:couch", "geometry.zt.couch", TEX + "couch_0", material="entity_alphatest",
                           extra_textures={"couch_1": TEX + "couch_1", "couch_2": TEX + "couch_2"}, animations=FACE, animate=["face"],
                           rc=["controller.render.zt.couch"])
@@ -311,39 +320,39 @@ def clients():
                              rc=["controller.render.zt.room_key"])
     out["flesh_pile"] = client("zt:flesh_pile", "geometry.zt.flesh_pile", TEX + "flesh_pile", material="entity_alphatest",
                                animations=FACE, animate=["face"], rc=["controller.render.zt.flesh_pile"])
-    door_anims = {"main": "controller.animation.zt.door"}
     out["elevator_door"] = client(
         "zt:elevator_door", "geometry.zt.elevator_door", TEX + "elevator_door", material="entity_alphatest",
-        animations=dict(FACE, open="animation.zt.elevator_door.open", close="animation.zt.elevator_door.close", **door_anims),
-        animate=["face", "main"])
+        animations=dict(FACE, swing="animation.zt.elevator_door.swing"), animate=["face", "swing"], **sw(1.0, 1.0))
     out["gate_door"] = client(
         "zt:gate_door", "geometry.zt.gate_door", TEX + "gate_door", material="entity_alphatest",
-        animations=dict(FACE, open="animation.zt.door.open", close="animation.zt.door.close", **door_anims),
-        animate=["face", "main"], rc=["controller.render.zt.gate_door"])
+        animations=dict(FACE, swing="animation.zt.door.swing"),
+        animate=["face", "swing"], rc=["controller.render.zt.gate_door"], **sw(0.6, 0.3))
+    # door 100's metal door: shut, open, slammed (zt:bang) or torn off and flat on the floor (zt:broken)
+    metal = swing(0.5, 0.25, "q.property('zt:open') && !q.property('zt:broken')")
+    metal["init"].append("v.broken = q.property('zt:broken') ? 1.0 : 0.0;")
+    metal["pre"].append("v.broken = math.clamp(v.broken + (q.property('zt:broken') ? q.delta_time / 0.6 : -1.0), 0.0, 1.0);")
     out["metal_door"] = client(
         "zt:metal_door", "geometry.zt.metal_door", TEX + "metal_door", material="entity_alphatest",
-        animations=dict(FACE, open="animation.zt.door.open", close="animation.zt.door.close", bang="animation.zt.metal_door.bang",
-                        broken="animation.zt.metal_door.broken", main="controller.animation.zt.metal_door"),
-        animate=["face", "main"], rc=["controller.render.zt.metal_door"])
+        animations=dict(FACE, swing="animation.zt.metal_door.swing", bang="animation.zt.metal_door.bang",
+                        hit="controller.animation.zt.metal_door"),
+        animate=["face", "swing", "hit"], rc=["controller.render.zt.metal_door"], init=metal["init"], pre=metal["pre"])
     out["big_gate"] = client(
         "zt:big_gate", "geometry.zt.big_gate", TEX + "big_gate", material="entity_alphatest",
-        animations=dict(FACE, open="animation.zt.big_gate.open", close="animation.zt.big_gate.close", **door_anims),
-        animate=["face", "main"])
+        animations=dict(FACE, swing="animation.zt.big_gate.swing"), animate=["face", "swing"], **sw(3.0, 1.5))
     out["elevator_gate"] = client(
         "zt:elevator_gate", "geometry.zt.elevator_gate", TEX + "elevator_gate", material="entity_alphatest",
-        animations=dict(FACE, open="animation.zt.elevator_gate.open", close="animation.zt.elevator_gate.close", **door_anims),
-        animate=["face", "main"])
+        animations=dict(FACE, swing="animation.zt.elevator_gate.swing"), animate=["face", "swing"], **sw(0.6, 0.45))
     out["wall_lever"] = client("zt:wall_lever", "geometry.zt.wall_lever", TEX + "wall_lever", material="entity_alphatest",
                                animations=dict(FACE, pull="animation.zt.wall_lever.pull"), animate=["face", "pull"],
-                               pre=[ease("pull", "q.property('zt:on') ? 1.0 : 0.0", 5.0)])
+                               pre=[ease("pull", ON, 5.0)], init=["v.pull = %s;" % ON])
     out["breaker_box"] = client(
         "zt:breaker_box", "geometry.zt.breaker_box", TEX + "breaker_box", material="entity_alphatest",
         extra_materials={"glow": "entity_emissive_alpha"},
-        animations=dict(FACE, open="animation.zt.breaker_box.open", close="animation.zt.breaker_box.close", **door_anims),
-        animate=["face", "main"], rc=["controller.render.zt.breaker_box"])
+        animations=dict(FACE, swing="animation.zt.breaker_box.swing"),
+        animate=["face", "swing"], rc=["controller.render.zt.breaker_box"], **sw(0.5, 0.3))
     out["breaker_lever"] = client("zt:breaker_lever", "geometry.zt.breaker_lever", TEX + "breaker_lever", material="entity_alphatest",
                                   animations=dict(FACE, flip="animation.zt.breaker_lever.flip"), animate=["face", "flip"],
-                                  pre=[ease("flip", "q.property('zt:on') ? 1.0 : 0.0", 25.0)])
+                                  pre=[ease("flip", ON, 25.0)], init=["v.flip = %s;" % ON])
     out["switch_pickup"] = client("zt:switch_pickup", "geometry.zt.switch_pickup", TEX + "breaker_lever", material="entity_alphatest",
                                   animations=FACE, animate=["face"])
     out["live_wire"] = client("zt:live_wire", "geometry.zt.live_wire", TEX + "live_wire", material="entity_alphatest",
@@ -480,6 +489,13 @@ def main():
     for name, sound in BLOCK_SOUNDS.items():
         sounds["zt:" + name] = {"sound": sound}
     dump(RP, "blocks.json", sounds)
+
+    # dark rooms: a black fog a few blocks out, pushed back by a lighter, and farther by a flashlight
+    for mode, start, end in (("room", 0.0, 7.0), ("lighter", 2.0, 13.0), ("flashlight", 4.0, 22.0)):
+        dump(RP, "fogs/zt_dark_%s.json" % mode, {"format_version": "1.16.100", "minecraft:fog_settings": {
+            "description": {"identifier": "zt:dark_" + mode},
+            "distance": {"air": {"fog_start": start, "fog_end": end, "fog_color": "#000000", "render_distance_type": "fixed"}},
+        }})
 
     path = os.path.join(RP, "render_controllers", "zt.render_controllers.json")
     with open(path) as f:

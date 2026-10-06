@@ -1,127 +1,22 @@
 {
 	"format_version": "1.8.0",
 	"animations": {
-		"animation.zt.wardrobe.open": {
-			"loop": "hold_on_last_frame",
-			"animation_length": 0.3,
+		"animation.zt.wardrobe.swing": {
+			"loop": true,
 			"bones": {
 				"door_l": {
-					"rotation": {
-						"0.00": {
-							"post": [
-								0,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.22": {
-							"post": [
-								0,
-								112,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.30": {
-							"post": [
-								0,
-								105,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						}
-					}
+					"rotation": [
+						0,
+						"v.swing * 105.0",
+						0
+					]
 				},
 				"door_r": {
-					"rotation": {
-						"0.00": {
-							"post": [
-								0,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.22": {
-							"post": [
-								0,
-								-112,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.30": {
-							"post": [
-								0,
-								-105,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						}
-					}
-				}
-			}
-		},
-		"animation.zt.wardrobe.close": {
-			"loop": "hold_on_last_frame",
-			"animation_length": 0.25,
-			"bones": {
-				"door_l": {
-					"rotation": {
-						"0.00": {
-							"post": [
-								0,
-								105,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.20": {
-							"post": [
-								0,
-								-2,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.25": {
-							"post": [
-								0,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						}
-					}
-				},
-				"door_r": {
-					"rotation": {
-						"0.00": {
-							"post": [
-								0,
-								-105,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.20": {
-							"post": [
-								0,
-								2,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.25": {
-							"post": [
-								0,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						}
-					}
+					"rotation": [
+						0,
+						"-v.swing * 105.0",
+						0
+					]
 				}
 			}
 		},
@@ -168,295 +63,60 @@
 				}
 			}
 		},
-		"animation.zt.elevator_door.open": {
-			"loop": "hold_on_last_frame",
-			"animation_length": 1.0,
+		"animation.zt.elevator_door.swing": {
+			"loop": true,
 			"bones": {
 				"left": {
-					"position": {
-						"0.00": {
-							"post": [
-								0,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"1.00": {
-							"post": [
-								-15,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						}
-					}
+					"position": [
+						"-v.swing * 15.0",
+						0,
+						0
+					]
 				},
 				"right": {
-					"position": {
-						"0.00": {
-							"post": [
-								0,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"1.00": {
-							"post": [
-								15,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						}
-					}
+					"position": [
+						"v.swing * 15.0",
+						0,
+						0
+					]
 				}
 			}
 		},
-		"animation.zt.elevator_door.close": {
-			"loop": "hold_on_last_frame",
-			"animation_length": 1.0,
+		"animation.zt.big_gate.swing": {
+			"loop": true,
 			"bones": {
 				"left": {
-					"position": {
-						"0.00": {
-							"post": [
-								-15,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"1.00": {
-							"post": [
-								0,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						}
-					}
+					"position": [
+						"-v.open * 44.0",
+						0,
+						0
+					]
 				},
 				"right": {
-					"position": {
-						"0.00": {
-							"post": [
-								15,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"1.00": {
-							"post": [
-								0,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						}
-					}
+					"position": [
+						"v.open * 44.0",
+						0,
+						0
+					]
 				}
 			}
 		},
-		"animation.zt.big_gate.open": {
-			"loop": "hold_on_last_frame",
-			"animation_length": 3.0,
+		"animation.zt.elevator_gate.swing": {
+			"loop": true,
 			"bones": {
 				"left": {
-					"position": {
-						"0.00": {
-							"post": [
-								0,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.40": {
-							"post": [
-								-1,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"3.00": {
-							"post": [
-								-44,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						}
-					}
+					"scale": [
+						"1.0 - v.swing * 0.88",
+						1,
+						1
+					]
 				},
 				"right": {
-					"position": {
-						"0.00": {
-							"post": [
-								0,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.40": {
-							"post": [
-								1,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"3.00": {
-							"post": [
-								44,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						}
-					}
-				}
-			}
-		},
-		"animation.zt.big_gate.close": {
-			"loop": "hold_on_last_frame",
-			"animation_length": 1.5,
-			"bones": {
-				"left": {
-					"position": {
-						"0.00": {
-							"post": [
-								-44,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"1.50": {
-							"post": [
-								0,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						}
-					}
-				},
-				"right": {
-					"position": {
-						"0.00": {
-							"post": [
-								44,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"1.50": {
-							"post": [
-								0,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						}
-					}
-				}
-			}
-		},
-		"animation.zt.elevator_gate.open": {
-			"loop": "hold_on_last_frame",
-			"animation_length": 0.6,
-			"bones": {
-				"left": {
-					"scale": {
-						"0.00": {
-							"post": [
-								1,
-								1,
-								1
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.60": {
-							"post": [
-								0.12,
-								1,
-								1
-							],
-							"lerp_mode": "catmullrom"
-						}
-					}
-				},
-				"right": {
-					"scale": {
-						"0.00": {
-							"post": [
-								1,
-								1,
-								1
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.60": {
-							"post": [
-								0.12,
-								1,
-								1
-							],
-							"lerp_mode": "catmullrom"
-						}
-					}
-				}
-			}
-		},
-		"animation.zt.elevator_gate.close": {
-			"loop": "hold_on_last_frame",
-			"animation_length": 0.45,
-			"bones": {
-				"left": {
-					"scale": {
-						"0.00": {
-							"post": [
-								0.12,
-								1,
-								1
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.45": {
-							"post": [
-								1,
-								1,
-								1
-							],
-							"lerp_mode": "catmullrom"
-						}
-					}
-				},
-				"right": {
-					"scale": {
-						"0.00": {
-							"post": [
-								0.12,
-								1,
-								1
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.45": {
-							"post": [
-								1,
-								1,
-								1
-							],
-							"lerp_mode": "catmullrom"
-						}
-					}
+					"scale": [
+						"1.0 - v.swing * 0.88",
+						1,
+						1
+					]
 				}
 			}
 		},
@@ -536,147 +196,32 @@
 				}
 			}
 		},
-		"animation.zt.metal_door.broken": {
-			"loop": "hold_on_last_frame",
-			"animation_length": 0.7,
+		"animation.zt.metal_door.swing": {
+			"loop": true,
 			"bones": {
 				"hinge": {
-					"rotation": {
-						"0.00": {
-							"post": [
-								0,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.25": {
-							"post": [
-								-50,
-								8,
-								6
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.55": {
-							"post": [
-								-92,
-								10,
-								4
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.62": {
-							"post": [
-								-86,
-								10,
-								4
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.70": {
-							"post": [
-								-90,
-								10,
-								4
-							],
-							"lerp_mode": "catmullrom"
-						}
-					},
-					"position": {
-						"0.00": {
-							"post": [
-								0,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.25": {
-							"post": [
-								0,
-								3,
-								6
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.55": {
-							"post": [
-								0,
-								1,
-								10
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.70": {
-							"post": [
-								0,
-								1,
-								10
-							],
-							"lerp_mode": "catmullrom"
-						}
-					}
+					"rotation": [
+						"-(v.broken * v.broken) * 90.0",
+						"v.swing * 100.0 + v.broken * 10.0",
+						"v.broken * 4.0"
+					],
+					"position": [
+						0,
+						"math.sin(v.broken * 180.0) * 4.0 + v.broken",
+						"v.broken * 10.0"
+					]
 				}
 			}
 		},
-		"animation.zt.breaker_box.open": {
-			"loop": "hold_on_last_frame",
-			"animation_length": 0.5,
+		"animation.zt.breaker_box.swing": {
+			"loop": true,
 			"bones": {
 				"door": {
-					"rotation": {
-						"0.00": {
-							"post": [
-								0,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.40": {
-							"post": [
-								0,
-								118,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.50": {
-							"post": [
-								0,
-								112,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						}
-					}
-				}
-			}
-		},
-		"animation.zt.breaker_box.close": {
-			"loop": "hold_on_last_frame",
-			"animation_length": 0.3,
-			"bones": {
-				"door": {
-					"rotation": {
-						"0.00": {
-							"post": [
-								0,
-								112,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.30": {
-							"post": [
-								0,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						}
-					}
+					"rotation": [
+						0,
+						"v.swing * 112.0",
+						0
+					]
 				}
 			}
 		},

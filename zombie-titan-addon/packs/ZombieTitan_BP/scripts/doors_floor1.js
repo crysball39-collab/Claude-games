@@ -495,6 +495,13 @@ function tick(run, now) {
   }
   hidingTick(run, d, now);
   Items.itemsTick(run, d, now);
+  // dark rooms are dark: a black fog closes in, and a light in your hand pushes it back
+  for (const x of where) {
+    const idx = roomIndexAt(d, x.l);
+    if (idx < 0) continue;      // (in a doorway: as it was)
+    const p = /** @type {Player} */ (x.p);
+    Items.setDark(p, isDark(d.rooms[idx]) ? Items.litKind(p) ?? "room" : undefined);
+  }
   if (now % 40 === 20) clearMobs(run, d, players);
   if (now % 100 === 50) clearBehind(run, d);
   roomTitles(run, d, where);

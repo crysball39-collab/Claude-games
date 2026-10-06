@@ -1,71 +1,15 @@
 {
 	"format_version": "1.8.0",
 	"animations": {
-		"animation.zt.door.open": {
-			"loop": "hold_on_last_frame",
-			"animation_length": 0.5,
+		"animation.zt.door.swing": {
+			"loop": true,
 			"bones": {
 				"hinge": {
-					"rotation": {
-						"0.00": {
-							"post": [
-								0,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.35": {
-							"post": [
-								0,
-								108,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.50": {
-							"post": [
-								0,
-								100,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						}
-					}
-				}
-			}
-		},
-		"animation.zt.door.close": {
-			"loop": "hold_on_last_frame",
-			"animation_length": 0.25,
-			"bones": {
-				"hinge": {
-					"rotation": {
-						"0.00": {
-							"post": [
-								0,
-								100,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.20": {
-							"post": [
-								0,
-								-3,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.25": {
-							"post": [
-								0,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						}
-					}
+					"rotation": [
+						0,
+						"v.swing * 100.0",
+						0
+					]
 				}
 			}
 		},
@@ -759,44 +703,14 @@
 			}
 		},
 		"animation.zt.library_lamp.fall": {
-			"loop": "hold_on_last_frame",
-			"animation_length": 0.6,
+			"loop": true,
 			"bones": {
 				"lamp": {
-					"rotation": {
-						"0.00": {
-							"post": [
-								0,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.45": {
-							"post": [
-								92,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.52": {
-							"post": [
-								84,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						},
-						"0.60": {
-							"post": [
-								88,
-								0,
-								0
-							],
-							"lerp_mode": "catmullrom"
-						}
-					}
+					"rotation": [
+						"v.fall * v.fall * 92.0 - math.sin(math.clamp((v.fall - 0.8) * 5.0, 0.0, 1.0) * 180.0) * 6.0",
+						0,
+						0
+					]
 				}
 			}
 		}

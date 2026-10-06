@@ -304,9 +304,10 @@ def hotel_definitions():
         "zt.hide.kick": event(snd(DOOR_OPEN, 0.7, 1.0) + snd(HIT, 0.8, 1.0) + snd(SCREAM, 0.6, 0.5), category=hos, min_d=4.0,
                               max_d=24.0),
         # Rush
-        "zt.rush.far": event(snd(AIR, 0.5, 1.0) + snd(DEBRIS, 0.6, 1.0), category=hos, min_d=16.0, max_d=96.0),
-        "zt.rush.pass": event(snd(RAV_ROAR, 1.2, 1.0) + snd(WHIRL, 0.6, 1.0) + snd(EXPLODE, 0.5, 0.4), category=hos, min_d=16.0,
-                              max_d=64.0),
+        # (its approach and its roar going past are made by gen_floor1_audio.py)
+        "zt.rush.approach": event([{"name": "sounds/zt/rush_approach", "volume": 1.0, "pitch": 1.0}], category=hos, min_d=4.0,
+                                  max_d=16.0),
+        "zt.rush.pass": event([{"name": "sounds/zt/rush_pass", "volume": 1.0, "pitch": 1.0}], category=hos, min_d=4.0, max_d=16.0),
         "zt.rush.flicker": event(snd(["sounds/block/copper_bulb/turn_on"], 1.5, 0.8) + snd(["sounds/random/click"], 2.0, 0.6),
                                  category=blk, min_d=8.0, max_d=48.0),
         "zt.rush.gone": event(snd(WHIRL, 0.4, 0.6), category=hos, min_d=16.0, max_d=96.0),

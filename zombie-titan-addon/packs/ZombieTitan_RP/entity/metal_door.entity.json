@@ -16,18 +16,26 @@
 				"controller.render.zt.metal_door"
 			],
 			"scripts": {
+				"initialize": [
+					"v.open = (q.property('zt:open') && !q.property('zt:broken')) ? 1.0 : 0.0;",
+					"v.broken = q.property('zt:broken') ? 1.0 : 0.0;"
+				],
+				"pre_animation": [
+					"v.open = math.clamp(v.open + ((q.property('zt:open') && !q.property('zt:broken')) ? q.delta_time / 0.50 : -q.delta_time / 0.25), 0.0, 1.0);",
+					"v.swing = v.open * v.open * (3.0 - 2.0 * v.open);",
+					"v.broken = math.clamp(v.broken + (q.property('zt:broken') ? q.delta_time / 0.6 : -1.0), 0.0, 1.0);"
+				],
 				"animate": [
 					"face",
-					"main"
+					"swing",
+					"hit"
 				]
 			},
 			"animations": {
 				"face": "animation.zt.prop.face",
-				"open": "animation.zt.door.open",
-				"close": "animation.zt.door.close",
+				"swing": "animation.zt.metal_door.swing",
 				"bang": "animation.zt.metal_door.bang",
-				"broken": "animation.zt.metal_door.broken",
-				"main": "controller.animation.zt.metal_door"
+				"hit": "controller.animation.zt.metal_door"
 			}
 		}
 	}

@@ -5,6 +5,9 @@
   door100_chase.ogg    an original, seamlessly looping chase for the Figure's last hunt
                        (150 BPM, E minor, with a flat second for dread)
   psst.ogg             Screech's whisper from the dark
+  rush_approach.ogg    Rush coming: seven seconds of rumble, roar and static that start almost
+                       silent and swell until it bursts in
+  rush_pass.ogg        Rush tearing past: a roar that peaks and falls away (its pitch dropping)
 
 Nothing is sampled; every sound is made here from sines, saws and noise. The OGGs are encoded
 with ffmpeg (libvorbis) in bit-exact mode, so the same script always produces the same files.
@@ -256,10 +259,59 @@ def psst():
     encode(out, "psst", peak=0.75)
 
 
+# =============================================================================================
+# Rush
+# =============================================================================================
+def roar_layers(rng, n, f0, f1, growl=1.0):
+    """Rush's voice: a low rumble, a howling roar of filtered noise, a distorted growl gliding from
+    f0 to f1 Hz, and crackling static. Each layer comes back separately so the caller can shape it."""
+    t = np.arange(n) / SR
+    rumble = lowpass(lowpass(rng.standard_normal(n), 140), 140) * 6.0
+    howl = rng.standard_normal(n)
+    howl = lowpass(howl - lowpass(howl, 300), 1600)
+    howl *= 1.0 + 0.6 * np.sin(2 * np.pi * (7 + 5 * t / t[-1]) * t)
+    f = f0 + (f1 - f0) * (t / t[-1])
+    phase = 2 * np.pi * np.cumsum(f) / SR
+    growl_w = np.tanh((2 * ((phase / (2 * np.pi)) % 1.0) - 1) * 3.0 + 0.6 * np.sin(phase * 1.5)) * growl
+    static = rng.standard_normal(n)
+    static = static - lowpass(static, 3000)
+    static *= (rng.random(n) < 0.35) * 1.0          # crackle: noise that cuts in and out
+    static = lowpass(static, 9000)
+    return t, rumble, howl, growl_w, static
+
+
+def rush_approach():
+    rng = np.random.default_rng(1313)
+    n = int(7.0 * SR)
+    t, rumble, howl, growl, static = roar_layers(rng, n, 48, 72)
+    x = t / t[-1]
+    # it starts almost silent, far away, and swells (slowly, then fast) as it comes
+    swell = 0.05 + 0.95 * x ** 2.2
+    mix = rumble * (0.5 + 0.5 * x) + howl * 0.7 + growl * (0.15 + 0.85 * x ** 1.5) * 0.45 + static * x ** 3 * 0.6
+    mix *= swell
+    # far away is muffled: the highs open up as it nears
+    near = lowpass(mix, 9000)
+    far = lowpass(mix, 700)
+    mix = far * (1 - x ** 2) + near * x ** 2
+    mix[-int(0.03 * SR):] *= np.linspace(1, 0.6, int(0.03 * SR))
+    encode(np.tanh(mix * 0.9), "rush_approach", peak=0.8)
+
+
+def rush_pass():
+    rng = np.random.default_rng(1414)
+    n = int(2.6 * SR)
+    t, rumble, howl, growl, static = roar_layers(rng, n, 96, 44, growl=1.2)
+    env_ = np.clip(t / 0.12, 0, 1) * np.exp(-np.maximum(t - 0.35, 0) * 1.9)
+    mix = (rumble * 0.8 + howl * 0.8 + growl * 0.55 + static * 0.5) * env_
+    encode(np.tanh(mix * 1.1), "rush_pass", peak=0.7)
+
+
 def main():
     elevator_music()
     chase()
     psst()
+    rush_approach()
+    rush_pass()
 
 
 if __name__ == "__main__":

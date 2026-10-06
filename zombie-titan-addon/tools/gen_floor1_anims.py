@@ -38,13 +38,10 @@ def loop(bones, length=None):
 # =============================================================================================
 def furniture():
     A = {}
-    # closets: the two doors swing out, and back
-    A["animation.zt.wardrobe.open"] = hold(0.3, {
-        "door_l": {"rotation": keys([(0.0, [0, 0, 0]), (0.22, [0, 112, 0]), (0.3, [0, 105, 0])])},
-        "door_r": {"rotation": keys([(0.0, [0, 0, 0]), (0.22, [0, -112, 0]), (0.3, [0, -105, 0])])}})
-    A["animation.zt.wardrobe.close"] = hold(0.25, {
-        "door_l": {"rotation": keys([(0.0, [0, 105, 0]), (0.2, [0, -2, 0]), (0.25, [0, 0, 0])])},
-        "door_r": {"rotation": keys([(0.0, [0, -105, 0]), (0.2, [0, 2, 0]), (0.25, [0, 0, 0])])}})
+    # closets: the two doors swing out as far as v.swing says (0 shut, 1 open)
+    A["animation.zt.wardrobe.swing"] = loop({
+        "door_l": {"rotation": [0, "v.swing * 105.0", 0]},
+        "door_r": {"rotation": [0, "-v.swing * 105.0", 0]}})
     # drawers slide out to the front (v.dN eases between 0 and 1 in the client entity)
     A["animation.zt.drawers"] = loop({"d%d" % k: {"position": [0, 0, "-v.d%d * 7.0" % k]} for k in range(3)})
     # a key lying somewhere turns slowly, catching the light; one on the rack hangs still
@@ -58,41 +55,32 @@ def furniture():
 # =============================================================================================
 def doors():
     A = {}
+    # everything here opens as far as the client's v.swing says (0 shut, 1 open; see swing() in
+    # gen_doors_data.py), so it can't be left showing the wrong way
     # the lobby's elevators: two brass panels slide apart into the walls
-    A["animation.zt.elevator_door.open"] = hold(1.0, {
-        "left": {"position": keys([(0.0, [0, 0, 0]), (1.0, [-15, 0, 0])])},
-        "right": {"position": keys([(0.0, [0, 0, 0]), (1.0, [15, 0, 0])])}})
-    A["animation.zt.elevator_door.close"] = hold(1.0, {
-        "left": {"position": keys([(0.0, [-15, 0, 0]), (1.0, [0, 0, 0])])},
-        "right": {"position": keys([(0.0, [15, 0, 0]), (1.0, [0, 0, 0])])}})
-    # door 100's wide grey gate grinds apart, slowly
-    A["animation.zt.big_gate.open"] = hold(3.0, {
-        "left": {"position": keys([(0.0, [0, 0, 0]), (0.4, [-1, 0, 0]), (3.0, [-44, 0, 0])])},
-        "right": {"position": keys([(0.0, [0, 0, 0]), (0.4, [1, 0, 0]), (3.0, [44, 0, 0])])}})
-    A["animation.zt.big_gate.close"] = hold(1.5, {
-        "left": {"position": keys([(0.0, [-44, 0, 0]), (1.5, [0, 0, 0])])},
-        "right": {"position": keys([(0.0, [44, 0, 0]), (1.5, [0, 0, 0])])}})
+    A["animation.zt.elevator_door.swing"] = loop({
+        "left": {"position": ["-v.swing * 15.0", 0, 0]},
+        "right": {"position": ["v.swing * 15.0", 0, 0]}})
+    # door 100's wide grey gate grinds apart, slowly (v.open runs linearly, so it creeps)
+    A["animation.zt.big_gate.swing"] = loop({
+        "left": {"position": ["-v.open * 44.0", 0, 0]},
+        "right": {"position": ["v.open * 44.0", 0, 0]}})
     # the elevator's folding lattice gate concertinas to the sides (scaled about its outer edges)
-    A["animation.zt.elevator_gate.open"] = hold(0.6, {
-        "left": {"scale": keys([(0.0, [1, 1, 1]), (0.6, [0.12, 1, 1])])},
-        "right": {"scale": keys([(0.0, [1, 1, 1]), (0.6, [0.12, 1, 1])])}})
-    A["animation.zt.elevator_gate.close"] = hold(0.45, {
-        "left": {"scale": keys([(0.0, [0.12, 1, 1]), (0.45, [1, 1, 1])])},
-        "right": {"scale": keys([(0.0, [0.12, 1, 1]), (0.45, [1, 1, 1])])}})
+    A["animation.zt.elevator_gate.swing"] = loop({
+        "left": {"scale": ["1.0 - v.swing * 0.88", 1, 1]},
+        "right": {"scale": ["1.0 - v.swing * 0.88", 1, 1]}})
     # the High Voltage room's metal door: the Figure slams into it (it bulges in), and on the third
     # time it tears off and falls flat into the room
     A["animation.zt.metal_door.bang"] = hold(0.3, {
         "hinge": {"rotation": keys([(0.0, [0, 0, 0]), (0.06, [-3, -4, 1]), (0.16, [1, 1.5, 0]), (0.3, [0, 0, 0])]),
                   "position": keys([(0.0, [0, 0, 0]), (0.06, [0, 0, 1.4]), (0.16, [0, 0, -0.3]), (0.3, [0, 0, 0])])}})
-    A["animation.zt.metal_door.broken"] = hold(0.7, {
-        "hinge": {"rotation": keys([(0.0, [0, 0, 0]), (0.25, [-50, 8, 6]), (0.55, [-92, 10, 4]), (0.62, [-86, 10, 4]),
-                                    (0.7, [-90, 10, 4])]),
-                  "position": keys([(0.0, [0, 0, 0]), (0.25, [0, 3, 6]), (0.55, [0, 1, 10]), (0.7, [0, 1, 10])])}})
+    # swung open (v.swing), or torn off and thrown flat into the room (v.broken: it falls back, -x)
+    b = "(v.broken * v.broken)"
+    A["animation.zt.metal_door.swing"] = loop({
+        "hinge": {"rotation": ["-%s * 90.0" % b, "v.swing * 100.0 + v.broken * 10.0", "v.broken * 4.0"],
+                  "position": [0, "math.sin(v.broken * 180.0) * 4.0 + v.broken", "v.broken * 10.0"]}})
     # the breaker box's door
-    A["animation.zt.breaker_box.open"] = hold(0.5, {
-        "door": {"rotation": keys([(0.0, [0, 0, 0]), (0.4, [0, 118, 0]), (0.5, [0, 112, 0])])}})
-    A["animation.zt.breaker_box.close"] = hold(0.3, {
-        "door": {"rotation": keys([(0.0, [0, 112, 0]), (0.3, [0, 0, 0])])}})
+    A["animation.zt.breaker_box.swing"] = loop({"door": {"rotation": [0, "v.swing * 112.0", 0]}})
     return A
 
 
@@ -195,14 +183,10 @@ def controllers():
     is_open, bang, broken = P("zt:open"), P("zt:bang"), P("zt:broken")
     anim = P("zt:anim")
     return {"format_version": "1.10.0", "animation_controllers": {
-        "controller.animation.zt.metal_door": {"initial_state": "closed", "states": {
-            "closed": {"transitions": [{"broken": broken}, {"opening": is_open}, {"bang": bang}]},
-            "bang": {"animations": ["bang"], "transitions": [{"broken": broken}, {"opening": is_open},
-                                                             {"closed": "!%s && q.all_animations_finished" % bang}]},
-            "opening": {"animations": ["open"], "transitions": [{"broken": broken}, {"closing": "!" + is_open}]},
-            "closing": {"animations": ["close"], "transitions": [{"broken": broken}, {"opening": is_open},
-                                                                 {"closed": "q.all_animations_finished"}]},
-            "broken": {"animations": ["broken"], "transitions": [{"closed": "!" + broken}]},
+        # the Figure slamming into it: a shudder each time zt:bang goes up
+        "controller.animation.zt.metal_door": {"initial_state": "still", "states": {
+            "still": {"transitions": [{"bang": "%s && !%s && !%s" % (bang, broken, is_open)}]},
+            "bang": {"animations": ["bang"], "transitions": [{"still": "!%s && q.all_animations_finished" % bang}]},
         }},
         "controller.animation.zt.rush": {"initial_state": "fly", "states": {
             "fly": {"animations": ["fly"], "transitions": [{"sink": "%s == 1" % anim}]},

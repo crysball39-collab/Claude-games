@@ -16,16 +16,21 @@
 				"controller.render.zt.gate_door"
 			],
 			"scripts": {
+				"initialize": [
+					"v.open = (q.property('zt:open')) ? 1.0 : 0.0;"
+				],
+				"pre_animation": [
+					"v.open = math.clamp(v.open + ((q.property('zt:open')) ? q.delta_time / 0.60 : -q.delta_time / 0.30), 0.0, 1.0);",
+					"v.swing = v.open * v.open * (3.0 - 2.0 * v.open);"
+				],
 				"animate": [
 					"face",
-					"main"
+					"swing"
 				]
 			},
 			"animations": {
 				"face": "animation.zt.prop.face",
-				"open": "animation.zt.door.open",
-				"close": "animation.zt.door.close",
-				"main": "controller.animation.zt.door"
+				"swing": "animation.zt.door.swing"
 			}
 		}
 	}

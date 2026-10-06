@@ -844,6 +844,12 @@ export function onPlayerSpawn(p, initial) {
   if (!run) {
     if (p.getDynamicProperty(MODE_KEY) !== undefined) restore(p);
     else clearRunItems(p);
+    // a dark room's fog, if they left the game in one
+    try {
+      p.runCommand("fog @s remove zt_dark");
+    } catch {
+      /* ignore */
+    }
   }
   if (!initial) {
     system.runTimeout(() => {

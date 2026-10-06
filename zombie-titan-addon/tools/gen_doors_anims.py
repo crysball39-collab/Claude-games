@@ -260,10 +260,9 @@ def seek_controller():
 # =============================================================================================
 def prop_animations():
     A = {}
-    A["animation.zt.door.open"] = {"loop": "hold_on_last_frame", "animation_length": 0.5, "bones": {
-        "hinge": {"rotation": keys([(0.0, [0, 0, 0]), (0.35, [0, 108, 0]), (0.5, [0, 100, 0])])}}}
-    A["animation.zt.door.close"] = {"loop": "hold_on_last_frame", "animation_length": 0.25, "bones": {
-        "hinge": {"rotation": keys([(0.0, [0, 100, 0]), (0.2, [0, -3, 0]), (0.25, [0, 0, 0])])}}}
+    # a door swings on its hinge as far as the client's v.swing says (0 shut, 1 open: see swing() in
+    # gen_doors_data.py)
+    A["animation.zt.door.swing"] = {"loop": True, "bones": {"hinge": {"rotation": [0, "v.swing * 100.0", 0]}}}
     # Seek's hands: hidden in the wall, burst out, grope, grab
     fingers = ["finger%d" % k for k in range(4)]
     out_pose = {"arm_pos": [0, 0, 0], "finger0": [-25, -18, 0], "finger1": [-20, -6, 0], "finger2": [-20, 6, 0],
@@ -322,8 +321,9 @@ def prop_animations():
     # a library book sliding a little in and out of its shelf
     A["animation.zt.library_book.idle"] = {"loop": True, "animation_length": 2.0, "bones": {
         "book": {"position": [0, 0, "math.sin(q.anim_time * 180) * 0.3 - 0.3"]}}}
-    A["animation.zt.library_lamp.fall"] = {"loop": "hold_on_last_frame", "animation_length": 0.6, "bones": {
-        "lamp": {"rotation": keys([(0.0, [0, 0, 0]), (0.45, [92, 0, 0]), (0.52, [84, 0, 0]), (0.6, [88, 0, 0])])}}}
+    # the lamp topples as v.fall runs from 0 to 1 (set from zt:fallen by the client, so it stays down)
+    A["animation.zt.library_lamp.fall"] = {"loop": True, "bones": {
+        "lamp": {"rotation": ["v.fall * v.fall * 92.0 - math.sin(math.clamp((v.fall - 0.8) * 5.0, 0.0, 1.0) * 180.0) * 6.0", 0, 0]}}}
     return {"format_version": "1.8.0", "animations": A}
 
 
@@ -332,12 +332,6 @@ def prop_controllers():
     hand = P("zt:anim")
     state = P("zt:state")
     return {"format_version": "1.10.0", "animation_controllers": {
-        "controller.animation.zt.door": {"initial_state": "closed", "states": {
-            "closed": {"transitions": [{"opening": is_open}]},
-            "opening": {"animations": ["open"], "transitions": [{"closing": "!" + is_open}]},
-            "closing": {"animations": ["close"], "transitions": [{"opening": is_open},
-                                                                 {"closed": "q.all_animations_finished"}]},
-        }},
         "controller.animation.zt.hand": {"initial_state": "hidden", "states": {
             "hidden": {"transitions": [{"burst": "%s == 1" % hand}, {"grab": "%s == 2" % hand}]},
             "burst": {"animations": ["burst"], "transitions": [{"grope": "q.all_animations_finished"},
@@ -351,10 +345,6 @@ def prop_controllers():
             "hang": {"animations": ["hang"], "transitions": [{"fall": "%s == 1" % state}, {"fallen": "%s == 2" % state}]},
             "fall": {"animations": ["fall"], "transitions": [{"fallen": "%s == 2" % state}, {"hang": "%s == 0" % state}]},
             "fallen": {"animations": ["fallen"], "transitions": [{"hang": "%s == 0" % state}]},
-        }},
-        "controller.animation.zt.library_lamp": {"initial_state": "standing", "states": {
-            "standing": {"transitions": [{"fallen": P("zt:fallen")}]},
-            "fallen": {"animations": ["fall"], "transitions": [{"standing": "!" + P("zt:fallen")}]},
         }},
     }}
 

@@ -926,7 +926,9 @@ function reception(k) {
   k.set(dx, 2, 9, candles(1));
   // a key rack on the wall behind the desk, the key for door 1 on it
   k.set(k.x1, 2, 8, { id: B.painting, states: { "minecraft:cardinal_direction": k.fr.cardinal("l"), "zt:art": 3 } });
-  k.receptionKey = { r: k.R(k.x1 + 0.92), u: k.U(2.3), f: k.F(8.5) };
+  // (the key's model hangs 3/16 of a block behind the entity, against the rack; its tap box reaches out
+  // into the room so it can be taken from behind the desk)
+  k.receptionKey = { r: k.R(k.x1 + 0.72), u: k.U(2.0), f: k.F(8.5) };
   // couches facing each other on the left, a low table between them
   if (k.areaFree(k.x0, 4, k.x0, 6)) k.put("couch", { x0: k.x0, x1: k.x0, z0: 4, z1: 6, face: "r", wall: "left" }, { style: 1 });
   k.box(k.x0 + 2, 0, 4, k.x0 + 2, 0, 6, slab(B.slab, false));

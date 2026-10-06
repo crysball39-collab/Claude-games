@@ -35,7 +35,7 @@ export function maybeRush(run, d, n, now) {
 
 /** The warning: flickering lights (or lightning), and a roar that grows. @param {Run} run @param {FloorData} d */
 export function startRush(run, d, n, now) {
-  d.rush = { phase: "warn", at: now, room: n, s: 0, id: undefined, line: undefined, broke: new Set(), soundAt: now,
+  d.rush = { phase: "warn", at: now, room: n, s: 0, id: undefined, line: undefined, broke: new Set(), heard: new Set(),
     flickerAt: now, passAt: 0, end: n };
   d.lastRush = n;
   const room = d.rooms[n];
@@ -50,6 +50,14 @@ export function startRush(run, d, n, now) {
     }
   } else {
     for (const p of Doors.livePlayers(run)) Doors.sound(run.dim, "zt.rush.flicker", p.location, 1.0, 1.0);
+  }
+  // somewhere behind you it's coming, louder and louder: seven seconds of it, swelling until it bursts in
+  for (const p of Doors.livePlayers(run)) {
+    try {
+      p.playSound("zt.rush.approach", { volume: 1.0 });
+    } catch {
+      /* ignore */
+    }
   }
 }
 
@@ -72,20 +80,6 @@ export function rushTick(run, d, now) {
       for (let n = Math.max(0, d.rear - 2); n <= d.lead; n++) {
         const room = d.rooms[n];
         if (room && !room.dark && !room.seg) roomLights(run, room, true);
-      }
-    }
-    // somewhere behind you it's coming, louder and louder
-    if (now >= r.soundAt) {
-      r.soundAt = now + 20;
-      const behind = d.rooms[Math.max(0, d.rear - 2)];
-      const at = behind ? fr.at(behind.entryR + 1, behind.u0 + 1, behind.f0) : fr.at(0, 1, 0);
-      const vol = 0.4 + (t / RUSH.warn) * 2.2;
-      for (const p of Doors.livePlayers(run)) {
-        try {
-          p.playSound("zt.rush.far", { location: at, volume: vol, pitch: 0.9 + (t / RUSH.warn) * 0.2 });
-        } catch {
-          /* ignore */
-        }
       }
     }
     if (t >= RUSH.warn) spawnRush(run, d, now);
@@ -124,7 +118,7 @@ function spawnRush(run, d, now) {
   r.id = e.id;
   r.phase = "pass";
   r.s = 0;
-  Doors.sound(run.dim, "zt.rush.pass", e.location, 3.0, 1.0);
+  r.heard = new Set();
 }
 
 /** Through the rooms: lights burst, and whoever isn't hiding dies. @param {Run} run @param {FloorData} d */
@@ -144,9 +138,15 @@ function passTick(run, d, r, now) {
     /* ignore */
   }
   if (now % 2 === 0) particle(run.dim, "zt:rush_smoke", at);
-  if (now >= r.passAt) {
-    r.passAt = now + 8;
-    Doors.sound(run.dim, "zt.rush.pass", at, 2.5, 0.95 + Math.random() * 0.1);
+  // the roar as it tears past: each player hears it once, as it comes within reach of them
+  for (const q of Doors.livePlayers(run)) {
+    if (r.heard.has(q.id) || len(sub(q.location, at)) > 28) continue;
+    r.heard.add(q.id);
+    try {
+      q.playSound("zt.rush.pass", { volume: 1.0, pitch: 0.95 + Math.random() * 0.1 });
+    } catch {
+      /* ignore */
+    }
   }
   const here = roomIndexAt(d, p);
   const room = d.rooms[here];

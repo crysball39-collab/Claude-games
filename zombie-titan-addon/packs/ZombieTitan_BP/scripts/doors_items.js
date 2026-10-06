@@ -57,10 +57,36 @@ export function give(p, kind, bought = false) {
  * @type {Map<string, { kind: "lighter" | "flashlight", placed: Vector3[], dim: any, fuelAt: number }>}
  */
 const lit = new Map();
+/** Lights their player switched off themselves (by using it): which kind. @type {Map<string, string>} */
+const switchedOff = new Map();
+/** Each player's dark-room fog: "room", "lighter" or "flashlight". @type {Map<string, string>} */
+const fogOf = new Map();
 
 /** Is this player carrying a lit light? @param {Player} p */
 export function isLit(p) {
   return lit.has(p.id);
+}
+
+/** Which light this player has lit, if any. @param {Player} p */
+export function litKind(p) {
+  return lit.get(p.id)?.kind;
+}
+
+/**
+ * Dark rooms are dark: a black fog closes in a few blocks away, and a lit lighter (or, farther, a
+ * flashlight) pushes it back. mode: "room" (no light), "lighter", "flashlight", or undefined for none.
+ * @param {Player} p @param {string | undefined} mode
+ */
+export function setDark(p, mode) {
+  if (fogOf.get(p.id) === mode) return;
+  try {
+    if (fogOf.has(p.id)) p.runCommand("fog @s remove zt_dark");
+    if (mode) p.runCommand("fog @s push zt:dark_" + mode + " zt_dark");
+  } catch {
+    /* ignore */
+  }
+  if (mode) fogOf.set(p.id, mode);
+  else fogOf.delete(p.id);
 }
 
 /** @param {Player} p */
@@ -71,21 +97,29 @@ function heldKind(p) {
   return undefined;
 }
 
+/** Light it (it then follows its player in itemsTick). @param {Player} p @param {"lighter" | "flashlight"} kind */
+function lightUp(p, kind) {
+  if (lit.has(p.id)) off(p.id);
+  lit.set(p.id, { kind, placed: [], dim: p.dimension, fuelAt: system.currentTick + 20 });
+  Doors.sound(p.dimension, kind === "lighter" ? "zt.lighter.flick" : "zt.flashlight.click", p.location, 1.0, 1.0);
+  Doors.actionbar(p, kind === "lighter" ? "§6The lighter flickers on. §7(Use it to close it.)" : "§eFlashlight on. §7(Use it to switch it off.)");
+}
+
 /** Use of an item. @param {Player} p */
 export function onUse(p, typeId, run, d) {
   if (typeId === KINDS.lighter.id || typeId === KINDS.flashlight.id) {
+    // held, a light is on by itself; using it switches it off, and on again
     const kind = typeId === KINDS.lighter.id ? "lighter" : "flashlight";
     const on = lit.get(p.id);
     if (on && on.kind === kind) {
       off(p.id);
+      switchedOff.set(p.id, kind);
       Doors.sound(p.dimension, kind === "lighter" ? "zt.lighter.close" : "zt.flashlight.click", p.location, 1.0, 0.9);
       Doors.actionbar(p, kind === "lighter" ? "§7You close the lighter." : "§7Flashlight off.");
       return;
     }
-    if (on) off(p.id);
-    lit.set(p.id, { kind, placed: [], dim: p.dimension, fuelAt: system.currentTick + 20 });
-    Doors.sound(p.dimension, kind === "lighter" ? "zt.lighter.flick" : "zt.flashlight.click", p.location, 1.0, 1.0);
-    Doors.actionbar(p, kind === "lighter" ? "§6The lighter flickers on." : "§eFlashlight on.");
+    switchedOff.delete(p.id);
+    lightUp(p, kind);
     return;
   }
   if (typeId === KINDS.herb.id) {
@@ -125,9 +159,13 @@ export function off(pid) {
   lit.delete(pid);
 }
 
-/** A player is gone (or their run ended). */
+/** A player is gone (or their run ended): their light goes out, and the dark lifts. */
 export function forget(pid) {
   off(pid);
+  switchedOff.delete(pid);
+  const p = world.getEntity(pid);
+  if (isValid(p)) setDark(/** @type {Player} */ (p), undefined);
+  else fogOf.delete(pid);
 }
 
 function clearLight(dim, at) {
@@ -180,21 +218,24 @@ function burn(p) {
   return true;
 }
 
-/** A lit light follows its player; the herb's effects stay on. */
+/** A light in your hand is lit (unless you switched it off) and follows you; the herb's effects stay on. */
 export function itemsTick(run, d, now) {
-  for (const [pid, l] of lit) {
-    if (!run.players.has(pid)) continue;
+  for (const [pid, st] of run.players) {
+    if (st.status !== "in") {
+      if (lit.has(pid) || fogOf.has(pid)) forget(pid);
+      continue;
+    }
     const p = /** @type {Player} */ (world.getEntity(pid));
     if (!isValid(p)) {
       off(pid);
       continue;
     }
     const kind = heldKind(p);
-    if (kind !== l.kind) {
-      // put away: it goes out
-      off(pid);
-      continue;
-    }
+    if (switchedOff.has(pid) && switchedOff.get(pid) !== kind) switchedOff.delete(pid);
+    if (lit.has(pid) && lit.get(pid)?.kind !== kind) off(pid);     // put away: it goes out
+    if (kind && !lit.has(pid) && !switchedOff.has(pid)) lightUp(p, kind);
+    const l = lit.get(pid);
+    if (!l) continue;
     if (now % 2 === 0) {
       const head = p.getHeadLocation();
       const spots = [{ at: head, level: l.kind === "lighter" ? 12 : 8 }];

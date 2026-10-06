@@ -16,16 +16,21 @@
 				"controller.render.zt.default"
 			],
 			"scripts": {
+				"initialize": [
+					"v.open = (q.property('zt:open')) ? 1.0 : 0.0;"
+				],
+				"pre_animation": [
+					"v.open = math.clamp(v.open + ((q.property('zt:open')) ? q.delta_time / 1.00 : -q.delta_time / 1.00), 0.0, 1.0);",
+					"v.swing = v.open * v.open * (3.0 - 2.0 * v.open);"
+				],
 				"animate": [
 					"face",
-					"main"
+					"swing"
 				]
 			},
 			"animations": {
 				"face": "animation.zt.prop.face",
-				"open": "animation.zt.elevator_door.open",
-				"close": "animation.zt.elevator_door.close",
-				"main": "controller.animation.zt.door"
+				"swing": "animation.zt.elevator_door.swing"
 			}
 		}
 	}

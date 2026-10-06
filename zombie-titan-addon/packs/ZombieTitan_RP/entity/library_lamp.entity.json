@@ -16,14 +16,19 @@
 				"controller.render.zt.default"
 			],
 			"scripts": {
+				"initialize": [
+					"v.fall = q.property('zt:fallen') ? 1.0 : 0.0;"
+				],
+				"pre_animation": [
+					"v.fall = math.clamp(v.fall + (q.property('zt:fallen') ? q.delta_time / 0.55 : -1.0), 0.0, 1.0);"
+				],
 				"animate": [
 					"face",
-					"main"
+					"fall"
 				]
 			},
 			"animations": {
 				"fall": "animation.zt.library_lamp.fall",
-				"main": "controller.animation.zt.library_lamp",
 				"face": "animation.zt.prop.face"
 			}
 		}
