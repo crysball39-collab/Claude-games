@@ -1,0 +1,74 @@
+{
+	"format_version": "1.26.20",
+	"minecraft:block": {
+		"description": {
+			"identifier": "zt:ceiling_lamp",
+			"menu_category": {
+				"category": "items"
+			},
+			"states": {
+				"zt:lit": {
+					"values": {
+						"min": 0,
+						"max": 2
+					}
+				}
+			}
+		},
+		"components": {
+			"minecraft:geometry": {
+				"identifier": "geometry.zt.ceiling_lamp"
+			},
+			"minecraft:material_instances": {
+				"*": {
+					"texture": "zt_lamp_on",
+					"render_method": "alpha_test"
+				}
+			},
+			"minecraft:collision_box": false,
+			"minecraft:light_dampening": 0,
+			"minecraft:destructible_by_mining": {
+				"seconds_to_destroy": 0.5
+			},
+			"minecraft:selection_box": {
+				"origin": [
+					-4,
+					7,
+					-4
+				],
+				"size": [
+					8,
+					9,
+					8
+				]
+			},
+			"minecraft:light_emission": 14
+		},
+		"permutations": [
+			{
+				"condition": "q.block_state('zt:lit') == 0",
+				"components": {
+					"minecraft:material_instances": {
+						"*": {
+							"texture": "zt_lamp_off",
+							"render_method": "alpha_test"
+						}
+					},
+					"minecraft:light_emission": 0
+				}
+			},
+			{
+				"condition": "q.block_state('zt:lit') == 2",
+				"components": {
+					"minecraft:material_instances": {
+						"*": {
+							"texture": "zt_lamp_broken",
+							"render_method": "alpha_test"
+						}
+					},
+					"minecraft:light_emission": 0
+				}
+			}
+		]
+	}
+}

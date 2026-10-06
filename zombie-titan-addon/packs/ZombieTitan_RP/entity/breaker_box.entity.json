@@ -1,0 +1,32 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:breaker_box",
+			"materials": {
+				"default": "entity_alphatest"
+			},
+			"textures": {
+				"default": "textures/entity/hotel/breaker_box"
+			},
+			"geometry": {
+				"default": "geometry.zt.breaker_box"
+			},
+			"render_controllers": [
+				"controller.render.zt.breaker_box"
+			],
+			"scripts": {
+				"animate": [
+					"face",
+					"main"
+				]
+			},
+			"animations": {
+				"face": "animation.zt.prop.face",
+				"open": "animation.zt.breaker_box.open",
+				"close": "animation.zt.breaker_box.close",
+				"main": "controller.animation.zt.door"
+			}
+		}
+	}
+}

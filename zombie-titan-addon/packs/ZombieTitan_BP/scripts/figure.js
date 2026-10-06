@@ -89,6 +89,7 @@ export function forgetPlayer(id) {
  *   heard: Map<string, number>, lastHeardBy?: string, lastRoar: number, bonus: number,
  *   yaw: number, lureId?: string, lureAt: number, act: number, actUntil: number,
  *   lastPos?: Vector3, gait: number, stepAt: number, holdUntil: number, scriptSpeed?: number, from?: Local,
+ *   fr?: any, stunUntil: number, savedAt: number, killKind?: any,
  * }} Brain
  */
 /** @type {Map<string, Brain>} */
@@ -97,22 +98,35 @@ const brains = new Map();
 function newBrain(e, mode) {
   return {
     id: e.id, mode, state: "patrol", path: [], replanAt: 0, stateUntil: 0, heard: new Map(), lastRoar: -9999,
-    bonus: 0, yaw: e.getRotation().y, lureAt: 0, act: 0, actUntil: 0, gait: 0, stepAt: 0, holdUntil: 0,
+    bonus: 0, yaw: e.getRotation().y, lureAt: 0, act: 0, actUntil: 0, gait: 0, stepAt: 0, holdUntil: 0, stunUntil: 0,
+    savedAt: -9999,
   };
 }
 
 /**
- * Put a Library Figure under script control.
- * nav: { node(l) -> Local | undefined, path(a, b) -> Local[], random(rng?) -> Local, height(l) -> number }
+ * Put a level's Figure under script control. Its paths are in frame `fr` (the run's frame
+ * unless the level sits in a part of a bigger building, like Door 100 in the hotel).
+ * nav: { node(l) -> Local | undefined, path(a, b) -> Local[], random(rng?) -> Local }
  * @param {Entity} e
  */
-export function attachLevel(e, run, nav) {
+export function attachLevel(e, run, nav, fr) {
   const b = newBrain(e, "level");
   b.run = run;
   b.nav = nav;
+  b.fr = fr ?? run.frame;
   b.state = "scripted";
   brains.set(e.id, b);
   return b;
+}
+
+/** Give a level's Figure a new map (and frame) to hunt in. @param {Entity} e */
+export function setNav(e, nav, fr) {
+  const b = brains.get(e.id);
+  if (!b) return;
+  b.nav = nav;
+  if (fr) b.fr = fr;
+  b.path = [];
+  b.from = undefined;
 }
 
 export function brainOf(e) {
@@ -146,10 +160,49 @@ export function scriptMove(e, to, speed, gait = 1) {
   if (!b || !b.nav) return;
   b.state = "scripted";
   b.goal = to;
-  b.path = b.nav.path(b.run.frame.local(e.location), to) ?? [to];
+  b.path = b.nav.path(b.fr.local(e.location), to) ?? [to];
   b.from = undefined;
   b.scriptSpeed = speed;
   b.gait = gait;
+}
+
+/** Walk a scripted Figure along given frame points (heights included: down a staircase...). */
+export function scriptPath(e, points, speed, gait = 1) {
+  const b = brains.get(e.id);
+  if (!b) return;
+  b.state = "scripted";
+  b.path = points.map((p) => ({ ...p }));
+  b.goal = b.path[b.path.length - 1];
+  b.from = undefined;
+  b.scriptSpeed = speed;
+  b.gait = gait;
+}
+
+/** Is a scripted Figure still walking? @param {Entity} e */
+export function isWalking(e) {
+  const b = brains.get(e.id);
+  return !!b && b.path.length > 0;
+}
+
+/** Stunned (a crucifix): it stands there, reeling, and touches nobody. @param {Entity} e */
+export function stun(e, ticks) {
+  const b = brains.get(e.id);
+  if (!b) return;
+  b.stunUntil = system.currentTick + ticks;
+  act(b, e, "stumble", ticks);
+  halt(b, e);
+  if (b.mode === "free") {
+    try {
+      e.addEffect("slowness", ticks, { amplifier: 10, showParticles: false });
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+export function isStunned(e) {
+  const b = brains.get(e.id);
+  return !!b && system.currentTick < b.stunUntil;
 }
 
 export function scriptAct(e, which, ticks) {
@@ -205,7 +258,7 @@ function offSegment(p, a, b) {
  * @param {Brain} b @param {Entity} e
  */
 function follow(b, e, speed) {
-  const fr = b.run.frame;
+  const fr = b.fr;
   const loc = e.location;
   const here = fr.local(loc);
   while (b.path.length) {
@@ -262,7 +315,7 @@ function face(b, e, yaw, maxTurn) {
 
 /** @param {Brain} b @param {Entity} e @param {Local} goal */
 function planTo(b, e, goal) {
-  const fr = b.run.frame;
+  const fr = b.fr;
   const path = b.nav.path(fr.local(e.location), goal);
   b.goal = goal;
   b.path = path ?? [];
@@ -280,6 +333,7 @@ function listen(b, e, players) {
   const heard = [];
   const at = e.location;
   for (const p of players) {
+    if (Doors.isHidden(p)) continue;
     const r = footsteps(p);
     if (r > 0 && len(sub(p.location, at)) <= r) heard.push({ player: p, loc: p.location, loudness: r - len(sub(p.location, at)) });
   }
@@ -301,6 +355,11 @@ function listen(b, e, players) {
 function levelTick(b, e, now) {
   const run = b.run;
   const players = Doors.livePlayers(run);
+  if (now < b.stunUntil) {
+    halt(b, e);
+    setProp(e, "zt:gait", 0);
+    return;
+  }
   // what can it hear?
   if (b.state !== "scripted" && b.state !== "kill") {
     const heard = listen(b, e, players);
@@ -308,7 +367,7 @@ function levelTick(b, e, now) {
       const h = heard[0];
       for (const x of heard) if (x.player) b.heard.set(x.player.id, now);
       if (h.player) b.lastHeardBy = h.player.id;
-      const goal = b.nav.node(run.frame.local(h.loc));
+      const goal = b.nav.node(b.fr.local(h.loc));
       if (b.state !== "rage" && goal) {
         const fresh = b.state === "patrol" || b.state === "search";
         if (!b.goal || b.state !== "hunt" || Math.hypot(goal.r - b.goal.r, goal.f - b.goal.f) > 1.5 || b.goal.u !== goal.u) {
@@ -354,6 +413,7 @@ function levelTick(b, e, now) {
     let best;
     let bestD = Infinity;
     for (const p of players) {
+      if (Doors.isHidden(p)) continue;
       const d = len(sub(p.location, e.location));
       if (d < bestD) {
         bestD = d;
@@ -364,7 +424,7 @@ function levelTick(b, e, now) {
       b.lastHeardBy = best.id;
       b.heard.set(best.id, now);
       if (now >= b.replanAt || !b.path.length) {
-        const goal = b.nav.node(run.frame.local(best.location));
+        const goal = b.nav.node(b.fr.local(best.location));
         if (goal) planTo(b, e, goal);
         b.replanAt = now + 10;
       }
@@ -381,7 +441,7 @@ function levelTick(b, e, now) {
   } else if (b.state === "patrol") {
     if (!b.path.length) {
       if (now >= b.stateUntil) {
-        const here = run.frame.local(e.location);
+        const here = b.fr.local(e.location);
         let goal;
         for (let i = 0; i < 6; i++) {
           goal = b.nav.random();
@@ -495,21 +555,39 @@ function freeTick(b, e, now) {
 }
 
 // ---------------------------------------------------------------- touch, meters
-/** Everything it touches dies, except Seek, the titans and its own kind. @param {Brain} b @param {Entity} e */
+/**
+ * Everything it touches dies, except Seek, the titans, its own kind and whoever is hiding. A
+ * player holding up a crucifix is spared: the Figure is stunned instead.
+ * @param {Brain} b @param {Entity} e
+ */
 function touch(b, e, now) {
+  if (now < b.stunUntil) return;
   const at = e.location;
   for (const v of livingAround(e.dimension, at, 3, { excludeFamilies: NEVER_KILL })) {
     if (v.id === e.id) continue;
     const s = bodySize(v);
     if (dist2D(v.location, at) > 0.45 + s.r + 0.25) continue;
     if (v.location.y > at.y + 2.7 || v.location.y + s.h < at.y) continue;
-    if (v.typeId === "minecraft:player" && !Doors.canDie(/** @type {Player} */ (v))) continue;
     if (v.typeId === "minecraft:player") {
+      const p = /** @type {Player} */ (v);
+      if (!Doors.canDie(p) || Doors.isHidden(p)) continue;
+      if (Doors.holdsCrucifix(p)) {
+        Doors.spendCrucifix(p, at);
+        stun(e, 100);
+        Doors.sound(e.dimension, "zt.figure.roar", at, 2.0, 1.2);
+        return;
+      }
       act(b, e, "kill", 20);
       b.holdUntil = now + 16;
     }
-    Doors.kill(v, e, "figure");
+    Doors.kill(v, e, b.killKind ?? "figure");
   }
+}
+
+/** What a kill by this Figure counts as (Door 100's last chase: "elevator"). @param {Entity} e */
+export function setKillKind(e, kind) {
+  const b = brains.get(e.id);
+  if (b) b.killKind = kind;
 }
 
 /**

@@ -30,6 +30,90 @@
 		},
 		"zt_library_shelf": {
 			"textures": "textures/blocks/zt_library_shelf"
+		},
+		"zt_hotel_wallpaper_blue": {
+			"textures": "textures/blocks/zt_hotel_wallpaper_blue"
+		},
+		"zt_hotel_wallpaper_torn": {
+			"textures": "textures/blocks/zt_hotel_wallpaper_torn"
+		},
+		"zt_hotel_window": {
+			"textures": "textures/blocks/zt_hotel_window"
+		},
+		"zt_wooden_crate": {
+			"textures": "textures/blocks/zt_wooden_crate"
+		},
+		"zt_wooden_crate_top": {
+			"textures": "textures/blocks/zt_wooden_crate_top"
+		},
+		"zt_hospital_wall": {
+			"textures": "textures/blocks/zt_hospital_wall"
+		},
+		"zt_hospital_floor": {
+			"textures": "textures/blocks/zt_hospital_floor"
+		},
+		"zt_elevator_panel": {
+			"textures": "textures/blocks/zt_elevator_panel"
+		},
+		"zt_hazard_stripes": {
+			"textures": "textures/blocks/zt_hazard_stripes"
+		},
+		"zt_shaft_wall": {
+			"textures": "textures/blocks/zt_shaft_wall"
+		},
+		"zt_shaft_wall_fast": {
+			"textures": "textures/blocks/zt_shaft_wall_fast"
+		},
+		"zt_invisible": {
+			"textures": "textures/blocks/zt_invisible"
+		},
+		"zt_lamp_on": {
+			"textures": "textures/blocks/zt_lamp_on"
+		},
+		"zt_lamp_off": {
+			"textures": "textures/blocks/zt_lamp_off"
+		},
+		"zt_lamp_broken": {
+			"textures": "textures/blocks/zt_lamp_broken"
+		},
+		"zt_sconce_on": {
+			"textures": "textures/blocks/zt_sconce_on"
+		},
+		"zt_sconce_off": {
+			"textures": "textures/blocks/zt_sconce_off"
+		},
+		"zt_sconce_broken": {
+			"textures": "textures/blocks/zt_sconce_broken"
+		},
+		"zt_metal_shelf": {
+			"textures": "textures/blocks/zt_metal_shelf"
+		},
+		"zt_curtain": {
+			"textures": "textures/blocks/zt_curtain"
+		},
+		"zt_exit_sign": {
+			"textures": "textures/blocks/zt_exit_sign"
+		},
+		"zt_painting_0": {
+			"textures": "textures/blocks/zt_painting_0"
+		},
+		"zt_painting_1": {
+			"textures": "textures/blocks/zt_painting_1"
+		},
+		"zt_painting_2": {
+			"textures": "textures/blocks/zt_painting_2"
+		},
+		"zt_key_rack": {
+			"textures": "textures/blocks/zt_key_rack"
+		},
+		"zt_painting_torn": {
+			"textures": "textures/blocks/zt_painting_torn"
+		},
+		"zt_sign_jeff": {
+			"textures": "textures/blocks/zt_sign_jeff"
+		},
+		"zt_sign_hotel": {
+			"textures": "textures/blocks/zt_sign_hotel"
 		}
 	}
 }

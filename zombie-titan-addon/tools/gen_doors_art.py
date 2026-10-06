@@ -538,15 +538,45 @@ DIGITS = {
     "6": ["111", "100", "111", "101", "111"], "7": ["111", "001", "010", "010", "010"],
     "8": ["111", "101", "111", "101", "111"], "9": ["111", "101", "111", "001", "111"],
 }
-# the plates the add-on needs: the Seek chase (doors 30-40), the Library (50 and 51) and a blank one
-PLATES = [None] + list(range(30, 41)) + [50, 51]
+# a door's number is shown digit by digit: four places, ten glyphs each, picked by the door's
+# zt:number property in the render controller (so any door, 0000 to 9999, needs no texture of its own)
+GLYPH = (2.0, 3.0, 0.05)
+GLYPH_X = [-4.6 + k * 2.4 for k in range(4)]
+
+
+def glyph_parts(g):
+    for n in range(10):
+        g.part("g%d" % n, *GLYPH)
+
+
+def glyph_bones(g, parent, y, z, prefix="d"):
+    """Forty bones, one per place and digit: d<place>_<digit>, place 0 the thousands."""
+    for place, x in enumerate(GLYPH_X):
+        for n in range(10):
+            g.bone("%s%d_%d" % (prefix, place, n), parent, (x, y, z), cubes=[g.cube("g%d" % n, (x, y, z))])
+
+
+def paint_glyphs(c, g, S, ink, background=None):
+    """Each glyph's front: the digit in `ink` (on a clear or `background` face), drawn on a 3 x 5 grid."""
+    for n in range(10):
+        x, y, w, h = g.faces("g%d" % n, S)["front"]
+        if background:
+            c.rect(x, y, w, h, background)
+        cw, ch = w / 4.0, h / 6.0
+        for gy, row in enumerate(DIGITS[str(n)]):
+            for gx, bit in enumerate(row):
+                if bit == "1":
+                    c.rect(x + (gx + 0.5) * cw, y + (gy + 0.5) * ch, math.ceil(cw), math.ceil(ch), ink)
 
 
 def door_geo():
     g = Geo("geometry.zt.hotel_door", 128, 64, 4, 4, (0, 1.5, 0))
     for name, size in [("leaf", (32, 48, 2)), ("knob", (1.5, 1.5, 1.5)), ("rose", (1.4, 4, 0.4)),
-                       ("hasp", (1, 3.5, 0.5)), ("lock", (3.2, 3.2, 1.4)), ("shackle", (2.2, 2.2, 0.5))]:
+                       ("hasp", (1, 3.5, 0.5)), ("lock", (3.2, 3.2, 1.4)), ("shackle", (2.2, 2.2, 0.5)),
+                       ("plate", (10, 3.5, 0.3)), ("skull", (3.6, 3.4, 1.8)), ("jaw", (2.6, 1.2, 1.4)),
+                       ("skull_bar", (4.6, 0.8, 0.6))]:
         g.part(name, *size)
+    glyph_parts(g)
     g.bone("root")
     g.bone("hinge", "root", (16, 0, 0), cubes=[
         g.cube("leaf", (-16, 0, -1)),
@@ -560,14 +590,15 @@ def door_geo():
         g.cube("lock", (-15.1, 24.2, -3.0)),
         g.cube("shackle", (-14.6, 27.4, -2.55)),
     ])
-    return g
-
-
-def door_plate_geo():
-    g = Geo("geometry.zt.hotel_door_plate", 32, 16, 4, 4, (0, 1.5, 0))
-    g.part("plate", 10, 3.5, 0.3)
-    g.bone("root")
-    g.bone("hinge", "root", (16, 0, 0), cubes=[g.cube("plate", (-5, 34, -1.3))])
+    # the skull lock on the Infirmary's side room: a little bone skull holding a bar across the door
+    g.bone("skull", "hinge", (-13.5, 26, -2), cubes=[
+        g.cube("skull_bar", (-16.0, 26.2, -1.6)),
+        g.cube("skull", (-15.3, 24.6, -3.4)),
+        g.cube("jaw", (-14.8, 23.5, -3.0)),
+    ])
+    # the number plate, with its four digits just in front of it
+    g.bone("plate", "hinge", (0, 34, -1.3), cubes=[g.cube("plate", (-5, 34, -1.3))])
+    glyph_bones(g, "plate", 34.25, -1.36)
     return g
 
 
@@ -577,6 +608,8 @@ def door_texture(g):
     p = Painter(c, seed=901)
     rng = np.random.default_rng(903)
     for part in g.parts:
+        if part.startswith("g") and part[1:].isdigit():
+            continue
         for side, rect in g.faces(part, S).items():
             x, y, w, h = rect
             if w < 1 or h < 1:
@@ -610,38 +643,29 @@ def door_texture(g):
                 if side == "front":
                     c.rect(x + w / 2 - 1, y + h * 0.45, 2, h * 0.35, (20, 20, 24))   # keyhole
                 p.shade_edges(x, y, w, h, amount=0.3)
-            elif part == "shackle":
+            elif part in ("shackle", "skull_bar"):
                 p.material(x, y, w, h, (120, 124, 134), (176, 180, 190), (220, 224, 232), contrast=0.8)
+                if part == "skull_bar":
+                    p.material(x, y, w, h, (40, 38, 40), (70, 66, 66), (100, 96, 92), contrast=0.9)
+            elif part in ("skull", "jaw"):
+                p.material(x, y, w, h, (168, 158, 128), (214, 206, 176), (238, 232, 210), contrast=0.9)
+                if part == "skull" and side == "front":
+                    # two dark eye sockets and a nose hole
+                    for ex in (0.24, 0.62):
+                        c.rect(x + w * ex, y + h * 0.3, w * 0.2, h * 0.24, (30, 20, 18))
+                    c.rect(x + w * 0.46, y + h * 0.62, w * 0.1, h * 0.14, (40, 28, 24))
+                if part == "jaw" and side == "front":
+                    for k in range(4):
+                        c.rect(x + w * (0.12 + k * 0.22), y, 1, h * 0.6, (90, 80, 64))
+                p.shade_edges(x, y, w, h, amount=0.25)
+            elif part == "plate":
+                p.material(x, y, w, h, *BRASS, contrast=0.9, grain=0.08)
+                if side == "front":
+                    p.shade_edges(x, y, w, h, amount=0.35, width=3)
+                    c.rect(x + 2, y + 2, w - 4, 1, (250, 224, 140))
+    # the digits: engraved dark brown, the rest of each glyph clear
+    paint_glyphs(c, g, S, (30, 18, 8))
     c.save(out("textures", "entity", "doors", "hotel_door.png"))
-
-
-def plate_textures(g):
-    S = 8
-    for i, number in enumerate(PLATES):
-        c = Canvas(g.tw * S, g.th * S, CLEAR)
-        p = Painter(c, seed=950 + i)
-        for side, rect in g.faces("plate", S).items():
-            x, y, w, h = rect
-            if w < 1 or h < 1:
-                continue
-            p.material(x, y, w, h, *BRASS, contrast=0.9, grain=0.08)
-            if side == "front":
-                p.shade_edges(x, y, w, h, amount=0.35, width=3)
-                c.rect(x + 2, y + 2, w - 4, 1, (250, 224, 140))
-                if number is not None:
-                    # four engraved digits: "0030"
-                    text = "%04d" % number
-                    k = 4  # pixels per font cell
-                    tw_ = len(text) * 3 * k + (len(text) - 1) * k
-                    tx = x + (w - tw_) / 2
-                    ty = y + (h - 5 * k) / 2
-                    for ch in text:
-                        for gy, row in enumerate(DIGITS[ch]):
-                            for gx, bit in enumerate(row):
-                                if bit == "1":
-                                    c.rect(tx + gx * k, ty + gy * k, k, k, (30, 18, 8))
-                        tx += 4 * k
-        c.save(out("textures", "entity", "doors", "plates", "plate_%s.png" % ("blank" if number is None else number)))
 
 
 # =============================================================================================
@@ -886,10 +910,9 @@ def main():
     hd = hand_geo()
     write_json("models/entity/seek_hand.geo.json", geometry_file(hd))
     hand_texture(hd)
-    dr, pl = door_geo(), door_plate_geo()
-    write_json("models/entity/hotel_door.geo.json", geometry_file(dr, pl))
+    dr = door_geo()
+    write_json("models/entity/hotel_door.geo.json", geometry_file(dr))
     door_texture(dr)
-    plate_textures(pl)
     ch = chandelier_geo()
     write_json("models/entity/chandelier.geo.json", geometry_file(ch))
     chandelier_texture(ch)

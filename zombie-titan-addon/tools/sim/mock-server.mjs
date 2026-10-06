@@ -112,15 +112,38 @@ export class BlockVolume {
   }
 }
 
+// the pack's items (run.mjs writes them): stack sizes and durability
+const ITEMS = (() => {
+  try {
+    return JSON.parse(readFileSync(join(process.cwd(), "items.json"), "utf8"));
+  } catch {
+    return {};
+  }
+})();
+
 export class ItemStack {
   constructor(typeId, amount = 1) {
     if (!typeId.includes(":")) throw new Error("bad item " + typeId);
     if (amount < 1 || amount > 255) throw new Error("bad amount " + amount);
+    const def = ITEMS[typeId];
+    if (def && amount > def.maxStack) throw new Error(`${typeId} stacks to ${def.maxStack}, not ${amount}`);
     this.typeId = typeId;
     this.amount = amount;
     this.lore = [];
     this.lockMode = "none";
     this.keepOnDeath = false;
+    if (def?.durability) {
+      const self = this;
+      this.durability = { damage: 0, get maxDurability() {
+        return def.durability;
+      }, set damageValue(v) {
+        self.durability.damage = v;
+      } };
+    }
+  }
+  getComponent(id) {
+    if (id === "minecraft:durability" || id === "durability") return this.durability;
+    return undefined;
   }
   getLore() {
     return this.lore;

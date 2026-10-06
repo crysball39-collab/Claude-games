@@ -73,6 +73,22 @@ export class Frame {
   }
 }
 
+/**
+ * A frame turned to face side `dir` ("r" or "l") of `fr`, for a door in a side wall: its row
+ * f' = 0 is column `r` of `fr`, and its cells r' = 0, 1 are rows `f` + 1 and `f` ("r") or `f`
+ * and `f` + 1 ("l"). Its forward points out through that wall, away from `fr`'s middle.
+ * @param {Frame} fr
+ */
+export function turned(fr, dir, r, f) {
+  if (dir === "r") return new Frame(fr.dim, fr.at(r, 0, f + 2), fr.yaw + 90);
+  return new Frame(fr.dim, fr.at(r + 1, 0, f), fr.yaw - 90);
+}
+
+/** The same frame moved: its origin at `fr`'s point (r, u, f). @param {Frame} fr */
+export function shifted(fr, r, u, f) {
+  return new Frame(fr.dim, fr.at(r, u, f), fr.yaw);
+}
+
 // ---------------------------------------------------------------- block specs
 const WEIRDO = { east: 0, west: 1, south: 2, north: 3 };
 

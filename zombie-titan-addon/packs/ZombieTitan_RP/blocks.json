@@ -23,5 +23,62 @@
 	},
 	"zt:library_shelf": {
 		"sound": "wood"
+	},
+	"zt:hotel_wallpaper_blue": {
+		"sound": "wood"
+	},
+	"zt:hotel_wallpaper_torn": {
+		"sound": "wood"
+	},
+	"zt:hotel_window": {
+		"sound": "glass"
+	},
+	"zt:wooden_crate": {
+		"sound": "wood"
+	},
+	"zt:hospital_wall": {
+		"sound": "stone"
+	},
+	"zt:hospital_floor": {
+		"sound": "stone"
+	},
+	"zt:elevator_panel": {
+		"sound": "metal"
+	},
+	"zt:hazard_stripes": {
+		"sound": "metal"
+	},
+	"zt:shaft_wall": {
+		"sound": "stone"
+	},
+	"zt:shaft_wall_fast": {
+		"sound": "stone"
+	},
+	"zt:collider": {
+		"sound": "stone"
+	},
+	"zt:collider_mid": {
+		"sound": "stone"
+	},
+	"zt:collider_low": {
+		"sound": "stone"
+	},
+	"zt:ceiling_lamp": {
+		"sound": "lantern"
+	},
+	"zt:wall_lamp": {
+		"sound": "lantern"
+	},
+	"zt:hotel_painting": {
+		"sound": "wood"
+	},
+	"zt:metal_shelf": {
+		"sound": "metal"
+	},
+	"zt:hospital_curtain": {
+		"sound": "cloth"
+	},
+	"zt:exit_sign": {
+		"sound": "metal"
 	}
 }

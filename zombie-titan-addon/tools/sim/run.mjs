@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 
 // the Doors levels place many kinds of blocks: build them with older block lists too
 const TESTS = ["smoke", "skeleton", "creeper", "spider", "items", "gumgum", "library", "seek", "library@1.21.90", "seek@1.21.90",
-  "library@1.26.20"];
+  "library@1.26.20", "floor1", "floor1@1.21.90"];
 
 const here = dirname(fileURLToPath(import.meta.url));
 const work = mkdtempSync(join(tmpdir(), "zt-sim-"));
@@ -36,6 +36,9 @@ for (const f of readdirSync(blocksDir).filter((n) => n.endsWith(".json"))) {
   for (const [k, v] of Object.entries(desc.states ?? {})) {
     states[k] = Array.isArray(v) ? v : Array.from({ length: v.values.max - v.values.min + 1 }, (_, i) => v.values.min + i);
   }
+  // states that traits add
+  const dirs = desc.traits?.["minecraft:placement_direction"]?.enabled_states ?? [];
+  if (dirs.includes("minecraft:cardinal_direction")) states["minecraft:cardinal_direction"] = ["north", "south", "east", "west"];
   custom[desc.identifier] = states;
 }
 writeFileSync(join(work, "custom-blocks.json"), JSON.stringify(custom));
@@ -55,6 +58,15 @@ for (const f of readdirSync(entitiesDir).filter((n) => n.endsWith(".json"))) {
   };
 }
 writeFileSync(join(work, "entities.json"), JSON.stringify(entities));
+// the pack's items: how many stack, and how much durability they have
+const itemsDir = join(here, "..", "..", "packs", "ZombieTitan_BP", "items");
+const items = {};
+for (const f of readdirSync(itemsDir).filter((n) => n.endsWith(".json"))) {
+  const it = JSON.parse(readFileSync(join(itemsDir, f), "utf8"))["minecraft:item"];
+  const c = it.components ?? {};
+  items[it.description.identifier] = { maxStack: c["minecraft:max_stack_size"] ?? 64, durability: c["minecraft:durability"]?.max_durability };
+}
+writeFileSync(join(work, "items.json"), JSON.stringify(items));
 // a seeded Math.random, loaded before each test (mulberry32)
 writeFileSync(join(work, "seed.mjs"), `let s = ${Number(process.env.ZT_SEED ?? 1005) >>> 0};
 Math.random = () => {

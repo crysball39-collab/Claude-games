@@ -1,0 +1,30 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:jeff",
+			"materials": {
+				"default": "entity_emissive_alpha"
+			},
+			"textures": {
+				"default": "textures/entity/hotel/jeff"
+			},
+			"geometry": {
+				"default": "geometry.zt.jeff"
+			},
+			"render_controllers": [
+				"controller.render.zt.default"
+			],
+			"scripts": {
+				"animate": [
+					"face",
+					"idle"
+				]
+			},
+			"animations": {
+				"face": "animation.zt.prop.face",
+				"idle": "animation.zt.jeff.idle"
+			}
+		}
+	}
+}

@@ -1,0 +1,32 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:big_gate",
+			"materials": {
+				"default": "entity_alphatest"
+			},
+			"textures": {
+				"default": "textures/entity/hotel/big_gate"
+			},
+			"geometry": {
+				"default": "geometry.zt.big_gate"
+			},
+			"render_controllers": [
+				"controller.render.zt.default"
+			],
+			"scripts": {
+				"animate": [
+					"face",
+					"main"
+				]
+			},
+			"animations": {
+				"face": "animation.zt.prop.face",
+				"open": "animation.zt.big_gate.open",
+				"close": "animation.zt.big_gate.close",
+				"main": "controller.animation.zt.door"
+			}
+		}
+	}
+}

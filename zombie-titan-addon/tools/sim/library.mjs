@@ -72,8 +72,8 @@ check(blk(-1, 0, 8) === "minecraft:barrier" && blk(0, 2, 8) === "minecraft:barri
 check(blk(-1, 7, 49) === "minecraft:barrier", "door 51 is shut");
 const doors = only("zt:hotel_door");
 check(doors.length === 2, "two hotel doors");
-const door50 = doors.find((d) => d.props["zt:plate"] === 12);
-const door51 = doors.find((d) => d.props["zt:plate"] === 13);
+const door50 = doors.find((d) => d.props["zt:number"] === 50);
+const door51 = doors.find((d) => d.props["zt:number"] === 51);
 check(!!door50 && !!door51 && door51.props["zt:locked"] && !door50.props["zt:locked"], "door 50 and door 51 (padlocked)");
 const books = only("zt:library_book");
 check(books.length === 10, "ten books on the shelves");

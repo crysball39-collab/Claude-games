@@ -1,0 +1,139 @@
+{
+	"format_version": "1.21.90",
+	"minecraft:entity": {
+		"description": {
+			"identifier": "zt:metal_door",
+			"is_spawnable": false,
+			"is_summonable": true,
+			"properties": {
+				"zt:yaw": {
+					"type": "int",
+					"range": [
+						-180,
+						180
+					],
+					"default": 0,
+					"client_sync": true
+				},
+				"zt:open": {
+					"type": "bool",
+					"default": false,
+					"client_sync": true
+				},
+				"zt:locked": {
+					"type": "bool",
+					"default": false,
+					"client_sync": true
+				},
+				"zt:guided": {
+					"type": "bool",
+					"default": false,
+					"client_sync": true
+				},
+				"zt:sign": {
+					"type": "bool",
+					"default": false,
+					"client_sync": true
+				},
+				"zt:broken": {
+					"type": "bool",
+					"default": false,
+					"client_sync": true
+				},
+				"zt:bang": {
+					"type": "bool",
+					"default": false,
+					"client_sync": true
+				}
+			}
+		},
+		"components": {
+			"minecraft:type_family": {
+				"family": [
+					"zt_hotel_door",
+					"zt_doors_prop",
+					"inanimate"
+				]
+			},
+			"minecraft:health": {
+				"value": 1,
+				"max": 1
+			},
+			"minecraft:collision_box": {
+				"width": 0.1,
+				"height": 0.1
+			},
+			"minecraft:physics": {
+				"has_gravity": false,
+				"has_collision": false
+			},
+			"minecraft:pushable": {
+				"is_pushable": false,
+				"is_pushable_by_piston": false
+			},
+			"minecraft:knockback_resistance": {
+				"value": 1.0
+			},
+			"minecraft:fire_immune": {},
+			"minecraft:persistent": {},
+			"minecraft:nameable": {
+				"allow_name_tag_renaming": false
+			},
+			"minecraft:breathable": {
+				"breathes_air": true,
+				"breathes_water": true,
+				"suffocate_time": 0
+			},
+			"minecraft:damage_sensor": {
+				"triggers": [
+					{
+						"cause": "all",
+						"deals_damage": "no"
+					}
+				]
+			}
+		},
+		"events": {
+			"zt:interacted": {},
+			"zt:lock": {
+				"add": {
+					"component_groups": [
+						"zt:lockable"
+					]
+				}
+			},
+			"zt:unlock": {
+				"remove": {
+					"component_groups": [
+						"zt:lockable"
+					]
+				}
+			}
+		},
+		"component_groups": {
+			"zt:lockable": {
+				"minecraft:collision_box": {
+					"width": 1.6,
+					"height": 3.0
+				},
+				"minecraft:interact": {
+					"interactions": [
+						{
+							"on_interact": {
+								"filters": {
+									"test": "is_family",
+									"subject": "other",
+									"value": "player"
+								},
+								"event": "zt:interacted",
+								"target": "self"
+							},
+							"swing": true,
+							"interact_text": "action.interact.zt_padlock"
+						}
+					]
+				}
+			}
+		}
+	}
+}

@@ -1,0 +1,36 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:metal_door",
+			"materials": {
+				"default": "entity_alphatest"
+			},
+			"textures": {
+				"default": "textures/entity/hotel/metal_door"
+			},
+			"geometry": {
+				"default": "geometry.zt.metal_door"
+			},
+			"render_controllers": [
+				"controller.render.zt.metal_door"
+			],
+			"scripts": {
+				"animate": [
+					"face",
+					"main",
+					"hit"
+				]
+			},
+			"animations": {
+				"face": "animation.zt.prop.face",
+				"open": "animation.zt.door.open",
+				"close": "animation.zt.door.close",
+				"bang": "animation.zt.metal_door.bang",
+				"broken": "animation.zt.metal_door.broken",
+				"hit": "controller.animation.zt.metal_door",
+				"main": "controller.animation.zt.door"
+			}
+		}
+	}
+}

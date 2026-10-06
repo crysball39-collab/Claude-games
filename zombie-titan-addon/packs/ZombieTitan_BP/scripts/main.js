@@ -2,7 +2,10 @@
 import { system, world } from "@minecraft/server";
 import * as DF from "./darkfists.js";
 import * as Doors from "./doors_common.js";
+import * as Floor from "./doors_floor1.js";
+import * as Items from "./doors_items.js";
 import * as Library from "./doors_library.js";
+import * as Lobby from "./doors_lobby.js";
 import * as Seek from "./doors_seek.js";
 import * as FallGuard from "./fallguard.js";
 import * as Fig from "./figure.js";
@@ -98,8 +101,10 @@ world.afterEvents.projectileHitEntity.subscribe(
   }),
 );
 
-// the Doors items open a form: one use per tap, though both use events fire
+// the Doors items open a form or switch something on: one use per tap, though both use events fire
 const doorsUsedAt = new Map();
+const HOTEL_ITEMS = new Set(["zt:lighter", "zt:flashlight", "zt:crucifix", "zt:skeleton_key", "zt:herb_of_viridis", "zt:room_key",
+  "zt:electrical_key", "zt:breaker_switch"]);
 
 /** @param {import("@minecraft/server").ItemUseAfterEvent | import("@minecraft/server").ItemStartUseAfterEvent} ev */
 function itemUsed({ source, itemStack }) {
@@ -107,12 +112,15 @@ function itemUsed({ source, itemStack }) {
   if (id === DF.ITEM) DF.onUse(source);
   else if (id === Obsidian.SWORD) Obsidian.onUse(source);
   else if (id && Gum.ABILITY_IDS.includes(id)) Gum.onUse(source, id);
-  else if (id === Library.ITEM || id === Seek.ITEM || id === Doors.PAPER || id?.startsWith(Doors.BOOK_PREFIX)) {
+  else if (id === Library.ITEM || id === Seek.ITEM || id === Lobby.ITEM || id === Doors.PAPER || id?.startsWith(Doors.BOOK_PREFIX) ||
+    HOTEL_ITEMS.has(id)) {
     const now = system.currentTick;
     if (now - (doorsUsedAt.get(source.id) ?? -99) < 10) return;
     doorsUsedAt.set(source.id, now);
     if (id === Library.ITEM) Library.onUse(source);
     else if (id === Seek.ITEM) Seek.onUse(source);
+    else if (id === Lobby.ITEM) Lobby.onUse(source);
+    else if (HOTEL_ITEMS.has(id)) Floor.onItemUse(source, id);
     else Library.onItemUse(source, id);
   }
 }
@@ -138,12 +146,13 @@ world.afterEvents.playerSpawn.subscribe(
   }),
 );
 
-// the Library's books, its solution paper and door 51's padlock
+// the Library's books, its solution paper and door 51's padlock; the Hotel's closets, beds,
+// drawers, keys, locked doors, Jeff's shop and door 100's lever, breaker box and switches
 world.afterEvents.playerInteractWithEntity.subscribe(
   safe(({ player, target }) => {
-    if (target.typeId === "zt:library_book" || target.typeId === "zt:library_paper" || target.typeId === "zt:hotel_door") {
-      Library.onInteract(player, target);
-    }
+    if (!target.typeId.startsWith("zt:")) return;
+    if (Library.onInteract(player, target)) return;
+    Floor.onInteract(player, target);
   }),
 );
 
@@ -153,6 +162,7 @@ world.afterEvents.playerLeave.subscribe(
     Obsidian.forgetPlayer(playerId);
     Gum.forgetPlayer(playerId);
     Doors.onPlayerLeave(playerId);
+    Items.forget(playerId);
     Fig.forgetPlayer(playerId);
     doorsUsedAt.delete(playerId);
   }),
@@ -183,6 +193,7 @@ system.runInterval(() => {
     Obsidian.obsidianTick(tick);
     Gum.gumTick(tick);
     Doors.doorsTick(tick);
+    Lobby.lobbyTick(tick);
     Fig.figureTick(tick);
     Seek.seekFreeTick(tick);
     if (tick % 600 === 300) Titan.naturalSpawnTick();

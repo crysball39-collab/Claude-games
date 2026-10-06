@@ -1,0 +1,32 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:elevator_door",
+			"materials": {
+				"default": "entity_alphatest"
+			},
+			"textures": {
+				"default": "textures/entity/hotel/elevator_door"
+			},
+			"geometry": {
+				"default": "geometry.zt.elevator_door"
+			},
+			"render_controllers": [
+				"controller.render.zt.default"
+			],
+			"scripts": {
+				"animate": [
+					"face",
+					"main"
+				]
+			},
+			"animations": {
+				"face": "animation.zt.prop.face",
+				"open": "animation.zt.elevator_door.open",
+				"close": "animation.zt.elevator_door.close",
+				"main": "controller.animation.zt.door"
+			}
+		}
+	}
+}

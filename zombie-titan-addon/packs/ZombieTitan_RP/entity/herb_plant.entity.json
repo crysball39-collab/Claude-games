@@ -1,0 +1,30 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:herb_plant",
+			"materials": {
+				"default": "entity_emissive_alpha"
+			},
+			"textures": {
+				"default": "textures/entity/hotel/herb_plant"
+			},
+			"geometry": {
+				"default": "geometry.zt.herb_plant"
+			},
+			"render_controllers": [
+				"controller.render.zt.default"
+			],
+			"scripts": {
+				"animate": [
+					"face",
+					"sway"
+				]
+			},
+			"animations": {
+				"face": "animation.zt.prop.face",
+				"sway": "animation.zt.herb_plant.sway"
+			}
+		}
+	}
+}

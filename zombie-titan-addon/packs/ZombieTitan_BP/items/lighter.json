@@ -1,0 +1,36 @@
+{
+	"format_version": "1.21.90",
+	"minecraft:item": {
+		"description": {
+			"identifier": "zt:lighter",
+			"menu_category": {
+				"category": "none"
+			}
+		},
+		"components": {
+			"minecraft:icon": "zt_lighter",
+			"minecraft:display_name": {
+				"value": "item.zt:lighter.name"
+			},
+			"minecraft:max_stack_size": 1,
+			"minecraft:can_destroy_in_creative": false,
+			"minecraft:rarity": "uncommon",
+			"minecraft:use_modifiers": {
+				"use_duration": 0.25,
+				"movement_modifier": 1.0
+			},
+			"minecraft:cooldown": {
+				"category": "zt_lighter",
+				"duration": 0.4,
+				"type": "use"
+			},
+			"minecraft:durability": {
+				"max_durability": 60,
+				"damage_chance": {
+					"min": 0,
+					"max": 0
+				}
+			}
+		}
+	}
+}

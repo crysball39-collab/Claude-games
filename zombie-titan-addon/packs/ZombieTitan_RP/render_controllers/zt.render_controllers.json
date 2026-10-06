@@ -298,45 +298,134 @@
 					"*": true
 				},
 				{
-					"padlock": "q.property('zt:locked')"
-				}
-			],
-			"overlay_color": {
-				"r": 0.35,
-				"g": 0.72,
-				"b": 1.0,
-				"a": "q.property('zt:guided') ? 0.28 + math.sin(q.life_time * 240.0) * 0.12 : 0.0"
-			}
-		},
-		"controller.render.zt.hotel_door_plate": {
-			"arrays": {
-				"textures": {
-					"Array.plates": [
-						"Texture.plate_blank",
-						"Texture.plate_30",
-						"Texture.plate_31",
-						"Texture.plate_32",
-						"Texture.plate_33",
-						"Texture.plate_34",
-						"Texture.plate_35",
-						"Texture.plate_36",
-						"Texture.plate_37",
-						"Texture.plate_38",
-						"Texture.plate_39",
-						"Texture.plate_40",
-						"Texture.plate_50",
-						"Texture.plate_51"
-					]
-				}
-			},
-			"geometry": "Geometry.plate",
-			"materials": [
+					"padlock": "q.property('zt:locked') && !q.property('zt:skull')"
+				},
 				{
-					"*": "Material.default"
+					"skull": "q.property('zt:locked') && q.property('zt:skull')"
+				},
+				{
+					"plate": "q.property('zt:number') > -2"
+				},
+				{
+					"d0_0": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1000), 10) == 0"
+				},
+				{
+					"d0_1": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1000), 10) == 1"
+				},
+				{
+					"d0_2": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1000), 10) == 2"
+				},
+				{
+					"d0_3": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1000), 10) == 3"
+				},
+				{
+					"d0_4": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1000), 10) == 4"
+				},
+				{
+					"d0_5": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1000), 10) == 5"
+				},
+				{
+					"d0_6": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1000), 10) == 6"
+				},
+				{
+					"d0_7": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1000), 10) == 7"
+				},
+				{
+					"d0_8": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1000), 10) == 8"
+				},
+				{
+					"d0_9": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1000), 10) == 9"
+				},
+				{
+					"d1_0": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 100), 10) == 0"
+				},
+				{
+					"d1_1": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 100), 10) == 1"
+				},
+				{
+					"d1_2": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 100), 10) == 2"
+				},
+				{
+					"d1_3": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 100), 10) == 3"
+				},
+				{
+					"d1_4": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 100), 10) == 4"
+				},
+				{
+					"d1_5": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 100), 10) == 5"
+				},
+				{
+					"d1_6": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 100), 10) == 6"
+				},
+				{
+					"d1_7": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 100), 10) == 7"
+				},
+				{
+					"d1_8": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 100), 10) == 8"
+				},
+				{
+					"d1_9": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 100), 10) == 9"
+				},
+				{
+					"d2_0": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 10), 10) == 0"
+				},
+				{
+					"d2_1": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 10), 10) == 1"
+				},
+				{
+					"d2_2": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 10), 10) == 2"
+				},
+				{
+					"d2_3": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 10), 10) == 3"
+				},
+				{
+					"d2_4": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 10), 10) == 4"
+				},
+				{
+					"d2_5": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 10), 10) == 5"
+				},
+				{
+					"d2_6": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 10), 10) == 6"
+				},
+				{
+					"d2_7": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 10), 10) == 7"
+				},
+				{
+					"d2_8": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 10), 10) == 8"
+				},
+				{
+					"d2_9": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 10), 10) == 9"
+				},
+				{
+					"d3_0": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1), 10) == 0"
+				},
+				{
+					"d3_1": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1), 10) == 1"
+				},
+				{
+					"d3_2": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1), 10) == 2"
+				},
+				{
+					"d3_3": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1), 10) == 3"
+				},
+				{
+					"d3_4": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1), 10) == 4"
+				},
+				{
+					"d3_5": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1), 10) == 5"
+				},
+				{
+					"d3_6": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1), 10) == 6"
+				},
+				{
+					"d3_7": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1), 10) == 7"
+				},
+				{
+					"d3_8": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1), 10) == 8"
+				},
+				{
+					"d3_9": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1), 10) == 9"
 				}
-			],
-			"textures": [
-				"Array.plates[q.property('zt:plate')]"
 			],
 			"overlay_color": {
 				"r": 0.35,
@@ -398,6 +487,373 @@
 			],
 			"textures": [
 				"Array.skins[q.variant]"
+			]
+		},
+		"controller.render.zt.wardrobe": {
+			"arrays": {
+				"textures": {
+					"Array.skins": [
+						"Texture.default",
+						"Texture.wardrobe_1",
+						"Texture.wardrobe_2"
+					]
+				}
+			},
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Array.skins[q.property('zt:style')]"
+			]
+		},
+		"controller.render.zt.hotel_bed": {
+			"arrays": {
+				"textures": {
+					"Array.skins": [
+						"Texture.default",
+						"Texture.hotel_bed_1"
+					]
+				}
+			},
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Array.skins[q.property('zt:style')]"
+			]
+		},
+		"controller.render.zt.couch": {
+			"arrays": {
+				"textures": {
+					"Array.skins": [
+						"Texture.default",
+						"Texture.couch_1",
+						"Texture.couch_2"
+					]
+				}
+			},
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Array.skins[q.property('zt:style')]"
+			]
+		},
+		"controller.render.zt.dresser": {
+			"arrays": {
+				"textures": {
+					"Array.skins": [
+						"Texture.default",
+						"Texture.nightstand",
+						"Texture.desk"
+					]
+				},
+				"geometries": {
+					"Array.geos": [
+						"Geometry.default",
+						"Geometry.nightstand",
+						"Geometry.desk"
+					]
+				}
+			},
+			"geometry": "Array.geos[q.property('zt:style')]",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Array.skins[q.property('zt:style')]"
+			]
+		},
+		"controller.render.zt.room_key": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			],
+			"part_visibility": [
+				{
+					"*": true
+				},
+				{
+					"flat": "q.property('zt:style') != 2"
+				},
+				{
+					"hanging": "q.property('zt:style') == 2"
+				},
+				{
+					"gold": "q.property('zt:style') != 1"
+				},
+				{
+					"grey": "q.property('zt:style') == 1"
+				}
+			]
+		},
+		"controller.render.zt.flesh_pile": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			],
+			"part_visibility": [
+				{
+					"*": true
+				},
+				{
+					"lump_a": "q.property('zt:style') != 1"
+				},
+				{
+					"lump_b": "q.property('zt:style') != 2"
+				},
+				{
+					"lump_c": "q.property('zt:style') != 0"
+				}
+			]
+		},
+		"controller.render.zt.gate_door": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			],
+			"part_visibility": [
+				{
+					"*": true
+				},
+				{
+					"padlock": "q.property('zt:locked')"
+				},
+				{
+					"plate": "q.property('zt:number') > -2"
+				},
+				{
+					"d0_0": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1000), 10) == 0"
+				},
+				{
+					"d0_1": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1000), 10) == 1"
+				},
+				{
+					"d0_2": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1000), 10) == 2"
+				},
+				{
+					"d0_3": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1000), 10) == 3"
+				},
+				{
+					"d0_4": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1000), 10) == 4"
+				},
+				{
+					"d0_5": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1000), 10) == 5"
+				},
+				{
+					"d0_6": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1000), 10) == 6"
+				},
+				{
+					"d0_7": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1000), 10) == 7"
+				},
+				{
+					"d0_8": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1000), 10) == 8"
+				},
+				{
+					"d0_9": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1000), 10) == 9"
+				},
+				{
+					"d1_0": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 100), 10) == 0"
+				},
+				{
+					"d1_1": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 100), 10) == 1"
+				},
+				{
+					"d1_2": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 100), 10) == 2"
+				},
+				{
+					"d1_3": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 100), 10) == 3"
+				},
+				{
+					"d1_4": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 100), 10) == 4"
+				},
+				{
+					"d1_5": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 100), 10) == 5"
+				},
+				{
+					"d1_6": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 100), 10) == 6"
+				},
+				{
+					"d1_7": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 100), 10) == 7"
+				},
+				{
+					"d1_8": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 100), 10) == 8"
+				},
+				{
+					"d1_9": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 100), 10) == 9"
+				},
+				{
+					"d2_0": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 10), 10) == 0"
+				},
+				{
+					"d2_1": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 10), 10) == 1"
+				},
+				{
+					"d2_2": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 10), 10) == 2"
+				},
+				{
+					"d2_3": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 10), 10) == 3"
+				},
+				{
+					"d2_4": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 10), 10) == 4"
+				},
+				{
+					"d2_5": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 10), 10) == 5"
+				},
+				{
+					"d2_6": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 10), 10) == 6"
+				},
+				{
+					"d2_7": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 10), 10) == 7"
+				},
+				{
+					"d2_8": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 10), 10) == 8"
+				},
+				{
+					"d2_9": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 10), 10) == 9"
+				},
+				{
+					"d3_0": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1), 10) == 0"
+				},
+				{
+					"d3_1": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1), 10) == 1"
+				},
+				{
+					"d3_2": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1), 10) == 2"
+				},
+				{
+					"d3_3": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1), 10) == 3"
+				},
+				{
+					"d3_4": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1), 10) == 4"
+				},
+				{
+					"d3_5": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1), 10) == 5"
+				},
+				{
+					"d3_6": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1), 10) == 6"
+				},
+				{
+					"d3_7": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1), 10) == 7"
+				},
+				{
+					"d3_8": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1), 10) == 8"
+				},
+				{
+					"d3_9": "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / 1), 10) == 9"
+				}
+			],
+			"overlay_color": {
+				"r": 0.35,
+				"g": 0.72,
+				"b": 1.0,
+				"a": "q.property('zt:guided') ? 0.28 + math.sin(q.life_time * 240.0) * 0.12 : 0.0"
+			}
+		},
+		"controller.render.zt.metal_door": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			],
+			"part_visibility": [
+				{
+					"*": true
+				},
+				{
+					"sign": "q.property('zt:sign')"
+				}
+			]
+		},
+		"controller.render.zt.breaker_box": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			],
+			"part_visibility": [
+				{
+					"*": true
+				},
+				{
+					"num_1": "q.property('zt:num') == 1"
+				},
+				{
+					"num_2": "q.property('zt:num') == 2"
+				},
+				{
+					"num_3": "q.property('zt:num') == 3"
+				},
+				{
+					"num_4": "q.property('zt:num') == 4"
+				},
+				{
+					"num_5": "q.property('zt:num') == 5"
+				},
+				{
+					"num_6": "q.property('zt:num') == 6"
+				},
+				{
+					"num_7": "q.property('zt:num') == 7"
+				},
+				{
+					"num_8": "q.property('zt:num') == 8"
+				},
+				{
+					"num_9": "q.property('zt:num') == 9"
+				},
+				{
+					"num_10": "q.property('zt:num') == 10"
+				},
+				{
+					"num_q": "q.property('zt:num') == 11"
+				},
+				{
+					"square": "q.property('zt:fill') >= 1"
+				},
+				{
+					"square_fill": "q.property('zt:fill') == 2"
+				},
+				{
+					"ok_light": "q.property('zt:ok')"
+				},
+				{
+					"screen_on": "q.property('zt:num') > 0 || q.property('zt:ok')"
+				}
 			]
 		}
 	}

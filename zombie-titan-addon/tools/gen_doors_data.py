@@ -19,7 +19,6 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
-from gen_doors_art import PLATES  # noqa: E402
 from gen_hotel_art import SHAPES  # noqa: E402
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -225,20 +224,25 @@ def boss_bar(ident, name):
     })
 
 
+def door_entity(ident, extra=None, width=1.6, height=3.0):
+    """A door: open or shut, locked or not, glowing with the Guiding Light. A locked door is
+    something you can tap (to work its padlock, or to use a key on it)."""
+    props_ = {"zt:open": prop_bool(), "zt:locked": prop_bool(), "zt:guided": prop_bool()}
+    props_.update(extra or {})
+    return prop_entity(
+        ident, ["zt_hotel_door"], properties=facing(props_),
+        groups={"zt:lockable": dict({"minecraft:collision_box": {"width": width, "height": height}},
+                                    **interact("action.interact.zt_padlock"))},
+        events={"zt:lock": {"add": {"component_groups": ["zt:lockable"]}},
+                "zt:unlock": {"remove": {"component_groups": ["zt:lockable"]}}})
+
+
 def props():
     out = {}
     out["figure_bar"] = boss_bar("zt:figure_bar", "The Figure")
     out["seek_bar"] = boss_bar("zt:seek_bar", "Seek")
     out["figure_lure"] = prop_entity("zt:figure_lure", ["zt_figure_lure"])
-    out["hotel_door"] = prop_entity(
-        "zt:hotel_door", ["zt_hotel_door"],
-        properties=facing({"zt:open": prop_bool(), "zt:locked": prop_bool(), "zt:guided": prop_bool(),
-                           "zt:plate": prop_int(0, len(PLATES) - 1)}),
-        # a locked door is something you can tap, to work its padlock
-        groups={"zt:lockable": dict({"minecraft:collision_box": {"width": 1.6, "height": 3.0}},
-                                    **interact("action.interact.zt_padlock"))},
-        events={"zt:lock": {"add": {"component_groups": ["zt:lockable"]}},
-                "zt:unlock": {"remove": {"component_groups": ["zt:lockable"]}}})
+    out["hotel_door"] = door_entity("zt:hotel_door", {"zt:skull": prop_bool(), "zt:number": prop_int(-2, 9999, -1)})
     out["library_book"] = prop_entity("zt:library_book", ["zt_library_book"], collision=(0.45, 0.65), properties=facing(),
                                       components=interact("action.interact.zt_take_book"))
     out["library_paper"] = prop_entity("zt:library_paper", ["zt_library_paper"], collision=(0.7, 0.2), properties=facing(),
@@ -367,14 +371,11 @@ def clients():
                     "grope": "animation.zt.hand.grope", "grab": "animation.zt.hand.grab",
                     "main": "controller.animation.zt.hand", "face": "animation.zt.prop.face"},
         animate=["face", "base", "main"])
-    plates = {"plate_%s" % ("blank" if n is None else n): tex + "plates/plate_%s" % ("blank" if n is None else n)
-              for n in PLATES}
     out["hotel_door"] = client(
         "zt:hotel_door", "geometry.zt.hotel_door", tex + "hotel_door", material="entity_alphatest",
-        extra_textures=plates, extra_geometry={"plate": "geometry.zt.hotel_door_plate"},
         animations={"open": "animation.zt.door.open", "close": "animation.zt.door.close",
                     "main": "controller.animation.zt.door", "face": "animation.zt.prop.face"},
-        animate=["face", "main"], rc=["controller.render.zt.hotel_door", "controller.render.zt.hotel_door_plate"])
+        animate=["face", "main"], rc=["controller.render.zt.hotel_door"])
     out["chandelier"] = client(
         "zt:chandelier", "geometry.zt.chandelier", tex + "chandelier",
         animations={"hang": "animation.zt.chandelier.hang", "fall": "animation.zt.chandelier.fall",
@@ -396,8 +397,27 @@ def clients():
     return out
 
 
+# the Guiding Light: a pulsing blue glow on the door to take
+GUIDED_GLOW = {"r": 0.35, "g": 0.72, "b": 1.0,
+               "a": "q.property('zt:guided') ? 0.28 + math.sin(q.life_time * 240.0) * 0.12 : 0.0"}
+
+
+def digit_visibility(prefix="d"):
+    """A door number's four places (zt:number, -1 for none): bone <prefix><place>_<digit> shows its digit."""
+    out = []
+    for place in range(4):
+        div = 10 ** (3 - place)
+        for n in range(10):
+            out.append({"%s%d_%d" % (prefix, place, n):
+                        "q.property('zt:number') >= 0 && math.mod(math.floor(q.property('zt:number') / %d), 10) == %d"
+                        % (div, n)})
+    return out
+
+
 def render_controllers(existing):
     rc = existing["render_controllers"]
+    # door plates used to be one texture per number (1.3-1.4)
+    rc.pop("controller.render.zt.hotel_door_plate", None)
     rc["controller.render.zt.default"] = {
         "geometry": "Geometry.default",
         "materials": [{"*": "Material.default"}],
@@ -415,22 +435,14 @@ def render_controllers(existing):
         "part_visibility": [{"*": True}, {"eye2": "q.property('zt:pair')"}, {"pupil2": "q.property('zt:pair')"}],
     }
     # the Guiding Light: a pulsing blue glow on the door to take
-    guided = "q.property('zt:guided')"
-    glow = {"r": 0.35, "g": 0.72, "b": 1.0, "a": "%s ? 0.28 + math.sin(q.life_time * 240.0) * 0.12 : 0.0" % guided}
     rc["controller.render.zt.hotel_door"] = {
         "geometry": "Geometry.default",
         "materials": [{"*": "Material.default"}],
         "textures": ["Texture.default"],
-        "part_visibility": [{"*": True}, {"padlock": "q.property('zt:locked')"}],
-        "overlay_color": glow,
-    }
-    names = ["Texture.plate_%s" % ("blank" if n is None else n) for n in PLATES]
-    rc["controller.render.zt.hotel_door_plate"] = {
-        "arrays": {"textures": {"Array.plates": names}},
-        "geometry": "Geometry.plate",
-        "materials": [{"*": "Material.default"}],
-        "textures": ["Array.plates[q.property('zt:plate')]"],
-        "overlay_color": glow,
+        "part_visibility": [{"*": True}, {"padlock": "q.property('zt:locked') && !q.property('zt:skull')"},
+                            {"skull": "q.property('zt:locked') && q.property('zt:skull')"},
+                            {"plate": "q.property('zt:number') > -2"}] + digit_visibility(),
+        "overlay_color": GUIDED_GLOW,
     }
     return existing
 

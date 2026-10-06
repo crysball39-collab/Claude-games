@@ -1,0 +1,32 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:gate_door",
+			"materials": {
+				"default": "entity_alphatest"
+			},
+			"textures": {
+				"default": "textures/entity/hotel/gate_door"
+			},
+			"geometry": {
+				"default": "geometry.zt.gate_door"
+			},
+			"render_controllers": [
+				"controller.render.zt.gate_door"
+			],
+			"scripts": {
+				"animate": [
+					"face",
+					"main"
+				]
+			},
+			"animations": {
+				"face": "animation.zt.prop.face",
+				"open": "animation.zt.door.open",
+				"close": "animation.zt.door.close",
+				"main": "controller.animation.zt.door"
+			}
+		}
+	}
+}

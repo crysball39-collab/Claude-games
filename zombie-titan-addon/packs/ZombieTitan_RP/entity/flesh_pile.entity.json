@@ -1,0 +1,28 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:flesh_pile",
+			"materials": {
+				"default": "entity_alphatest"
+			},
+			"textures": {
+				"default": "textures/entity/hotel/flesh_pile"
+			},
+			"geometry": {
+				"default": "geometry.zt.flesh_pile"
+			},
+			"render_controllers": [
+				"controller.render.zt.flesh_pile"
+			],
+			"scripts": {
+				"animate": [
+					"face"
+				]
+			},
+			"animations": {
+				"face": "animation.zt.prop.face"
+			}
+		}
+	}
+}

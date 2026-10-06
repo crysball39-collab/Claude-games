@@ -1,0 +1,30 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:wall_lever",
+			"materials": {
+				"default": "entity_alphatest"
+			},
+			"textures": {
+				"default": "textures/entity/hotel/wall_lever"
+			},
+			"geometry": {
+				"default": "geometry.zt.wall_lever"
+			},
+			"render_controllers": [
+				"controller.render.zt.default"
+			],
+			"scripts": {
+				"animate": [
+					"face",
+					"pull"
+				]
+			},
+			"animations": {
+				"face": "animation.zt.prop.face",
+				"pull": "animation.zt.wall_lever.pull"
+			}
+		}
+	}
+}

@@ -1,0 +1,40 @@
+[
+	{
+		"flipbook_texture": "textures/blocks/zt_shaft_wall",
+		"atlas_tile": "zt_shaft_wall",
+		"ticks_per_frame": 2,
+		"frames": [
+			0,
+			1,
+			2,
+			3,
+			4,
+			5,
+			6,
+			7,
+			8,
+			9,
+			10,
+			11,
+			12,
+			13,
+			14,
+			15
+		]
+	},
+	{
+		"flipbook_texture": "textures/blocks/zt_shaft_wall_fast",
+		"atlas_tile": "zt_shaft_wall_fast",
+		"ticks_per_frame": 1,
+		"frames": [
+			0,
+			1,
+			2,
+			3,
+			4,
+			5,
+			6,
+			7
+		]
+	}
+]

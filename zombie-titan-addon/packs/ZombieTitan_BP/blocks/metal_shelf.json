@@ -1,0 +1,28 @@
+{
+	"format_version": "1.26.20",
+	"minecraft:block": {
+		"description": {
+			"identifier": "zt:metal_shelf",
+			"menu_category": {
+				"category": "construction"
+			}
+		},
+		"components": {
+			"minecraft:geometry": {
+				"identifier": "geometry.zt.metal_shelf"
+			},
+			"minecraft:material_instances": {
+				"*": {
+					"texture": "zt_metal_shelf",
+					"render_method": "alpha_test"
+				}
+			},
+			"minecraft:collision_box": true,
+			"minecraft:light_dampening": 0,
+			"minecraft:destructible_by_mining": {
+				"seconds_to_destroy": 1.5
+			},
+			"minecraft:selection_box": false
+		}
+	}
+}

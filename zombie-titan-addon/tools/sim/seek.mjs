@@ -70,7 +70,7 @@ check(d.rooms[0].built && d.rooms[1].built && d.rooms[2].built && !d.rooms[4].bu
 check(ow.getBlock(fr.cell(0, 1, 5)).isAir && blk(3, 2, 5).startsWith("zt:hotel_wall") && blk(0, -1, 5) === "zt:hotel_floor",
   "a hotel corridor: floor, papered walls");
 check(blk(-1, 0, 10) === "minecraft:barrier", "door 30 is shut");
-check(only("zt:hotel_door").some((e) => e.props["zt:plate"] === 1), "with its number plate (0030)");
+check(only("zt:hotel_door").some((e) => e.props["zt:number"] === 30), "with its number plate (0030)");
 const eyes0 = only("zt:seek_eye").length;
 check(eyes0 >= 10, "eyes are already watching from the walls (" + eyes0 + ")");
 check(d.rooms[1].kind === "hall" && d.rooms[1].f1 - d.rooms[1].f0 >= 30, "a long hallway");

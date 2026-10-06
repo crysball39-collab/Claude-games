@@ -1,0 +1,29 @@
+{
+	"format_version": "1.21.90",
+	"minecraft:item": {
+		"description": {
+			"identifier": "zt:room_key",
+			"menu_category": {
+				"category": "none"
+			}
+		},
+		"components": {
+			"minecraft:icon": "zt_room_key",
+			"minecraft:display_name": {
+				"value": "item.zt:room_key.name"
+			},
+			"minecraft:max_stack_size": 1,
+			"minecraft:can_destroy_in_creative": false,
+			"minecraft:rarity": "uncommon",
+			"minecraft:use_modifiers": {
+				"use_duration": 0.25,
+				"movement_modifier": 1.0
+			},
+			"minecraft:cooldown": {
+				"category": "zt_room_key",
+				"duration": 0.5,
+				"type": "use"
+			}
+		}
+	}
+}

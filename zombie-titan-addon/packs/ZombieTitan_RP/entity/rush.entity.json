@@ -1,0 +1,32 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:rush",
+			"materials": {
+				"default": "entity_emissive_alpha"
+			},
+			"textures": {
+				"default": "textures/entity/hotel/rush"
+			},
+			"geometry": {
+				"default": "geometry.zt.rush"
+			},
+			"render_controllers": [
+				"controller.render.zt.default"
+			],
+			"scripts": {
+				"animate": [
+					"face",
+					"main"
+				]
+			},
+			"animations": {
+				"face": "animation.zt.prop.face",
+				"fly": "animation.zt.rush.fly",
+				"sink": "animation.zt.rush.sink",
+				"main": "controller.animation.zt.rush"
+			}
+		}
+	}
+}

@@ -97,7 +97,7 @@ function doorway(plan, fr, r, u, f) {
  * Everything about the room that the build, the Figure and the puzzle need.
  * @param {Frame} fr @param {() => number} rng
  */
-export function layout(fr, rng) {
+export function layout(fr, rng, floor = false) {
   const plan = new Plan();
   const ground = new Set();       // cells (r,f) the Figure can't walk on the floor
   const balcony = new Set();      // cells it can't walk on the balcony
@@ -120,8 +120,9 @@ export function layout(fr, rng) {
   plan.box(HALL.r0 - 1, HALL.u1 + 1, HALL.f0 - 1, HALL.r1 + 1, HALL.u1 + 1, HALL.f1 + 1, B.ceiling);
   plan.box(HALL.r0, 0, HALL.f0, HALL.r1, HALL.u1, HALL.f1, B.air);
   hotelShell(plan, EXIT.r0, EXIT.r1, EXIT.f0, EXIT.f1, BAL_U, BAL_U + 3, "zt:hotel_wallpaper_green");
-  // the way in: an open doorway at the back of the corridor
-  plan.box(-1, 0, ANTE.f0 - 1, 0, 2, ANTE.f0 - 1, B.air);
+  // the way in: an open doorway at the back of the corridor (in the hotel, door 49's doorway)
+  if (floor) doorway(plan, fr, -1, 0, ANTE.f0 - 1);
+  else plan.box(-1, 0, ANTE.f0 - 1, 0, 2, ANTE.f0 - 1, B.air);
   // door 50 and door 51
   doorway(plan, fr, DOOR50.r, DOOR50.u, DOOR50.f);
   doorway(plan, fr, DOOR51.r, DOOR51.u, DOOR51.f);
@@ -253,8 +254,11 @@ export function layout(fr, rng) {
       if (f >= BAL_F0 && !balcony.has(key(r, f))) plan.set(r, BAL_U + 1, f, B.light);
     }
   }
-  // the little room past door 51: lit like the way out
-  plan.box(-1, BAL_U, EXIT.f1 + 1, 0, BAL_U + 2, EXIT.f1 + 1, B.glow);
+  // the little room past door 51: lit like the way out (in the hotel, door 52 is there)
+  if (floor) {
+    doorway(plan, fr, -1, BAL_U, EXIT.f1 + 1);
+    plan.set(-2, BAL_U + 2, EXIT.f0 + 2, B.light);
+  } else plan.box(-1, BAL_U, EXIT.f1 + 1, 0, BAL_U + 2, EXIT.f1 + 1, B.glow);
   plan.box(-2, BAL_U, EXIT.f0, 1, BAL_U, EXIT.f1, "minecraft:green_carpet");
 
   // the floor in front of door 51 must stay clear; the doorway cells too
@@ -520,11 +524,14 @@ function bookSpots(lay, rng) {
 
 // ---- the run ----------------------------------------------------------------------------------
 /**
+ * A Library's state, laid out in frame `fr`. Standing alone (the Door 50 item) it is its run's
+ * data; in the hotel it is part of the Floor 1 run's.
  * @typedef {{
  *   seed: number, nav: LibraryNav, spots: any[], paper: Local, digits: Record<string, number>,
  *   code: string[], found: Set<string>, paperTaken: boolean, books: Map<string, string>,
  *   paperId?: string, lampId?: string, figureId?: string, door50?: any, door51?: any,
  *   introAt: number, unlocked: boolean, escaped: Set<string>, endAt: number, glintAt: number, tipAt: number,
+ *   fr: Frame, floor: boolean, phase: string, plan?: Plan, built: boolean, building: boolean,
  * }} LibraryData
  */
 
@@ -539,7 +546,7 @@ export function onUse(p) {
     p.sendMessage("§cThere is no room for the Library here (too close to the top or bottom of the world).");
     return;
   }
-  confirm(p, "Door 50: The Library", "Build the Library in front of you?\n\nIt fills a 32 x 58 block area ahead of you (15 high) and replaces anything there.\n\nWalk through door 50 when you are ready... and stay quiet.", () => start(p));
+  confirm(p, "Door 50: The Library", "Build the Library in front of you?\\n\\nIt fills a 32 x 58 block area ahead of you (15 high) and replaces anything there.\\n\\nWalk through door 50 when you are ready... and stay quiet.", () => start(p));
 }
 
 /** @param {Player} p */
@@ -553,8 +560,8 @@ function frameFor(p) {
 }
 
 /** @param {Player} p */
-export function confirm(p, heading, body, yes) {
-  const form = new ActionFormData().title(heading).body(body).button("§2Build it here").button("Cancel");
+export function confirm(p, heading, body, yes, button = "§2Build it here") {
+  const form = new ActionFormData().title(heading).body(body).button(button).button("Cancel");
   form.show(p).then((res) => {
     if (res.canceled || res.selection !== 0) return;
     if (Doors.runOf(p) || Doors.pendingRunOf(p)) return;
@@ -562,6 +569,25 @@ export function confirm(p, heading, body, yes) {
   }).catch(() => {
     /* the player was busy */
   });
+}
+
+/**
+ * A Library laid out in frame `fr` (its corridor's doorway at the frame's origin), not built yet.
+ * @param {Frame} fr @returns {LibraryData}
+ */
+export function newLibrary(fr, seed, floor = false) {
+  const rng = rngFrom(seed);
+  const lay = layout(fr, rng, floor);
+  /** @type {Record<string, number>} */
+  const digits = {};
+  const pool = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  for (const s of SHAPES) digits[s] = pool.splice(Math.floor(rng() * pool.length), 1)[0];
+  const shuffled = [...SHAPES].sort(() => rng() - 0.5);
+  return {
+    seed, nav: lay.nav, spots: bookSpots(lay, rng), paper: lay.paper, digits, code: shuffled.slice(0, 5),
+    found: new Set(), paperTaken: false, books: new Map(), introAt: 0, unlocked: false, escaped: new Set(), endAt: 0,
+    glintAt: 0, tipAt: 0, fr, floor, phase: "building", plan: lay.plan, built: false, building: false,
+  };
 }
 
 /** @param {Player} p */
@@ -572,43 +598,55 @@ function start(p) {
     return;
   }
   const seed = Math.floor(Math.random() * 1e9);
-  const rng = rngFrom(seed);
-  const lay = layout(fr, rng);
-  /** @type {Record<string, number>} */
-  const digits = {};
-  const pool = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-  for (const s of SHAPES) digits[s] = pool.splice(Math.floor(rng() * pool.length), 1)[0];
-  const shuffled = [...SHAPES].sort(() => rng() - 0.5);
-  /** @type {LibraryData} */
-  const data = {
-    seed, nav: lay.nav, spots: bookSpots(lay, rng), paper: lay.paper, digits, code: shuffled.slice(0, 5),
-    found: new Set(), paperTaken: false, books: new Map(), introAt: 0, unlocked: false, escaped: new Set(), endAt: 0,
-    glintAt: 0, tipAt: 0,
-  };
+  const data = newLibrary(fr, seed);
   const run = Doors.newRun("library", p, fr, BOUNDS, data);
   p.sendMessage("§7Building the Library...");
   Doors.sound(p.dimension, "zt.doors.close", p.location, 0.6, 0.7);
-  build(fr, lay.plan, (ok, failed) => {
+  buildLibrary(run, data, (ok, failed) => {
     if (!ok) {
       p.sendMessage("§cPart of the Library's area stopped being loaded while it was being built. Stay close until it's done, and use Door 50 again.");
       Doors.endRun(run, "build failed");
       return;
     }
     if (failed) p.sendMessage(`§7(${failed} decoration${failed === 1 ? "" : "s"} couldn't be placed in this version of Minecraft.)`);
-    furnish(run);
-    run.phase = "ready";
+    data.phase = run.phase = "ready";
     p.sendMessage("§6Door 50 §7is ready. Walk up to the door...");
+  });
+}
+
+/**
+ * Build a Library's rooms, then its doors, lamp, paper and books. `done(ok, failed)` as for build().
+ * @param {Run} run @param {LibraryData} d
+ */
+export function buildLibrary(run, d, done) {
+  if (d.built || d.building || !d.plan) return;
+  d.building = true;
+  build(d.fr, d.plan, (ok, failed) => {
+    d.building = false;
+    if (ok) {
+      d.built = true;
+      d.plan = undefined;
+      furnish(run, d);
+      if (d.phase === "building") d.phase = "ready";
+    }
+    done(ok, failed);
   }, () => run.phase === "over");
 }
 
-/** The doors, the lamp, the paper and the books. @param {Run} run */
-function furnish(run) {
-  const fr = run.frame;
-  /** @type {LibraryData} */
-  const d = run.data;
-  d.door50 = Doors.spawnDoor(run, DOOR50.r, DOOR50.u, DOOR50.f, plateIndex(50), { number: 50 });
-  d.door51 = Doors.spawnDoor(run, DOOR51.r, DOOR51.u, DOOR51.f, plateIndex(51), { number: 51, locked: true });
-  const lamp = Doors.spawnFor(run, "zt:library_lamp", fr.at(LAMP.r, 0, LAMP.f), { keep: true, yaw: fr.yawOf("l") });
+/** The frame-space box the Library takes up in its own frame. */
+export function libraryBounds() {
+  return [...BOUNDS];
+}
+
+/** Where the Library's last little room has its far door (door 52 in the hotel), in its own frame. */
+export const LIBRARY_EXIT = { r: -1, u: BAL_U, f: EXIT.f1 + 1 };
+
+/** The doors, the lamp, the paper and the books. @param {Run} run @param {LibraryData} d */
+function furnish(run, d) {
+  const fr = d.fr;
+  d.door50 = Doors.spawnDoor(run, DOOR50.r, DOOR50.u, DOOR50.f, 50, { frame: fr, keep: !d.floor });
+  d.door51 = Doors.spawnDoor(run, DOOR51.r, DOOR51.u, DOOR51.f, 51, { frame: fr, keep: !d.floor, locked: true });
+  const lamp = Doors.spawnFor(run, "zt:library_lamp", fr.at(LAMP.r, 0, LAMP.f), { keep: !d.floor, yaw: fr.yawOf("l") });
   d.lampId = lamp.id;
   const paper = Doors.spawnFor(run, "zt:library_paper", fr.at(d.paper.r, d.paper.u, d.paper.f), { yaw: fr.yawOf("b") });
   d.paperId = paper.id;
@@ -619,40 +657,16 @@ function furnish(run) {
   });
 }
 
-/** Index of a door number in the plate textures (gen_doors_art.py: blank, 30..40, 50, 51). */
-export function plateIndex(n) {
-  if (n === null || n === undefined) return 0;
-  if (n >= 30 && n <= 40) return n - 29;
-  if (n === 50) return 12;
-  if (n === 51) return 13;
-  return 0;
-}
-
 // ---- per tick ------------------------------------------------------------------------------------
-/** @param {Run} run */
+/** The Door 50 item's run: the Library and nothing else. @param {Run} run */
 function tick(run, now) {
   /** @type {LibraryData} */
   const d = run.data;
-  const fr = run.frame;
-  if (run.phase === "ready") {
-    // door 50 opens for anyone who walks up; stepping through starts it all
-    const near = run.dim.getPlayers({ location: fr.at(0, 0, 4), maxDistance: 24 });
-    Doors.autoOpenDoors(run, near, 2.6, (door) => door === d.door50);
-    for (const p of near) {
-      const l = fr.local(p.location);
-      if (l.f > DOOR50.f + 1.3 && l.f < HALL.f0 + 6 && Math.abs(l.r) < 8 && l.u > -1 && l.u < 4) {
-        intro(run, now);
-        break;
-      }
-    }
-    return;
-  }
-  if (run.phase === "intro") {
-    introTick(run, now);
-    return;
-  }
-  if (run.phase === "live") liveTick(run, now);
-  if (run.phase === "ending" && now >= d.endAt) {
+  if (d.phase === "building") return;
+  const near = d.phase === "ready" ? run.dim.getPlayers({ location: d.fr.at(0, 0, 4), maxDistance: 24 }) : [];
+  libraryTick(run, d, now, near);
+  run.phase = d.phase === "escaped" ? "ending" : d.phase;
+  if (d.phase === "ending" && now >= d.endAt) {
     for (const id of d.escaped) {
       const p = world.getEntity(id);
       if (isValid(p)) Doors.sendHome(run, /** @type {Player} */ (p));
@@ -661,14 +675,41 @@ function tick(run, now) {
   }
 }
 
-/** Everyone in the corridor or the hall plays; door 50 slams behind them; the Figure appears. @param {Run} run */
-function intro(run, now) {
-  /** @type {LibraryData} */
-  const d = run.data;
-  const fr = run.frame;
-  run.phase = "intro";
+/**
+ * One tick of a built Library: door 50 opening for `near` players and the scene starting when
+ * one steps in, the intro, the hunt, and the escape through door 51 (in the hotel, `d.phase`
+ * ends up "escaped").
+ * @param {Run} run @param {LibraryData} d @param {Player[]} near
+ */
+export function libraryTick(run, d, now, near) {
+  const fr = d.fr;
+  if (d.phase === "ready") {
+    // door 50 opens for anyone who walks up; stepping through starts it all
+    Doors.autoOpenDoors(run, near, 2.6, (door) => door === d.door50);
+    for (const p of near) {
+      const l = fr.local(p.location);
+      if (l.f > DOOR50.f + 1.3 && l.f < HALL.f0 + 6 && Math.abs(l.r) < 8 && l.u > -1 && l.u < 4) {
+        intro(run, d, now);
+        break;
+      }
+    }
+    return;
+  }
+  if (d.phase === "intro") {
+    introTick(run, d, now);
+    return;
+  }
+  if (d.phase === "live") liveTick(run, d, now);
+}
+
+/** Everyone in the corridor or the hall plays; door 50 slams behind them; the Figure appears. @param {Run} run @param {LibraryData} d */
+function intro(run, d, now) {
+  const fr = d.fr;
+  d.phase = "intro";
   d.introAt = now;
-  const players = run.dim.getPlayers({ location: fr.at(0, 0, 10), maxDistance: 40 }).filter((p) => Doors.inside(run, p.location, 1));
+  // in the hotel everyone plays, wherever they had got to
+  const players = d.floor ? Doors.livePlayers(run)
+    : run.dim.getPlayers({ location: fr.at(0, 0, 10), maxDistance: 40 }).filter((p) => Doors.inside(run, p.location, 1));
   players.forEach((p, i) => {
     Doors.join(run, p);
     // everyone just inside the door, facing into the library
@@ -685,22 +726,20 @@ function intro(run, now) {
   const fig = Doors.spawnFor(run, Fig.FIGURE, fr.at(FIGURE_START.r, FIGURE_START.u, FIGURE_START.f),
     { spawnEvent: "zt:as_level", yaw: fr.yawOf("l") });
   d.figureId = fig.id;
-  Fig.attachLevel(fig, run, d.nav);
+  Fig.attachLevel(fig, run, d.nav, fr);
   Fig.scriptAct(fig, "stumble", 60);
   // it lurches out from behind the shelves into the aisle
   Fig.scriptMove(fig, { r: 1.5, u: 0, f: 18.5 }, 1.8, 1);
 }
 
-/** The opening scene: it roars, stumbles toward you, then a lamp crashes and it runs at the sound. @param {Run} run */
-function introTick(run, now) {
-  /** @type {LibraryData} */
-  const d = run.data;
-  const fr = run.frame;
+/** The opening scene: it roars, stumbles toward you, then a lamp crashes and it runs at the sound. @param {Run} run @param {LibraryData} d */
+function introTick(run, d, now) {
+  const fr = d.fr;
   const t = now - d.introAt;
   const fig = d.figureId ? world.getEntity(d.figureId) : undefined;
   const players = Doors.livePlayers(run);
   if (!isValid(fig)) {
-    finishIntro(run, players, fig);
+    finishIntro(run, d, players, fig);
     return;
   }
   if (t === 40) {
@@ -734,14 +773,12 @@ function introTick(run, now) {
     for (const p of players) Doors.camera(p, fr.at(-0.5, 2.6, 9.4), fig, 0.4);
   }
   if (t === 150) Fig.scriptAct(fig, "listen", 60);
-  if (t >= 165) finishIntro(run, players, fig);
+  if (t >= 165) finishIntro(run, d, players, fig);
 }
 
-/** @param {Run} run */
-function finishIntro(run, players, fig) {
-  /** @type {LibraryData} */
-  const d = run.data;
-  run.phase = "live";
+/** @param {Run} run @param {LibraryData} d */
+function finishIntro(run, d, players, fig) {
+  d.phase = "live";
   for (const p of players) {
     Doors.lockInput(p, false);
     Doors.cameraClear(p);
@@ -752,11 +789,9 @@ function finishIntro(run, players, fig) {
   if (isValid(fig)) Fig.release(fig, "search", { r: LAMP.r + 0.5, u: 0, f: LAMP.f + 2.3 });
 }
 
-/** @param {Run} run */
-function liveTick(run, now) {
-  /** @type {LibraryData} */
-  const d = run.data;
-  const fr = run.frame;
+/** @param {Run} run @param {LibraryData} d */
+function liveTick(run, d, now) {
+  const fr = d.fr;
   const players = Doors.livePlayers(run);
   // the books shimmer faintly
   if (now >= d.glintAt) {
@@ -782,7 +817,7 @@ function liveTick(run, now) {
       if (l.f > DOOR51.f + 1.2 && l.u > BAL_U - 1.5) d.escaped.add(p.id);
     }
     const inHall = players.filter((p) => !d.escaped.has(p.id));
-    if (d.escaped.size && !inHall.length) escape(run, now);
+    if (d.escaped.size && !inHall.length) escape(run, d, now);
   }
 }
 
@@ -804,11 +839,9 @@ export function hintLine(d) {
   return "§fBooks: §e" + [...d.found].map((s) => NAME[s] + " = " + d.digits[s]).join(", ") + "§7  (the paper is on the desk)";
 }
 
-/** Door 51 slams behind the last one out. @param {Run} run */
-function escape(run, now) {
-  /** @type {LibraryData} */
-  const d = run.data;
-  run.phase = "ending";
+/** Door 51 slams behind the last one out. @param {Run} run @param {LibraryData} d */
+function escape(run, d, now) {
+  d.phase = d.floor ? "escaped" : "ending";
   d.endAt = now + 70;
   Doors.closeDoor(run, d.door51, true);
   const fig = d.figureId ? world.getEntity(d.figureId) : undefined;
@@ -816,7 +849,7 @@ function escape(run, now) {
   for (const id of d.escaped) {
     const p = world.getEntity(id);
     if (!isValid(p)) continue;
-    Doors.clearMeter(/** @type {Player} */ (p));
+    Doors.clearMeter(/** @type {Player} */ (p), "figure");
     Doors.title(/** @type {Player} */ (p), "§aYou escaped the Library!", "§7Door 51", 60);
     try {
       /** @type {Player} */ (p).playSound("zt.doors.escape", { volume: 1.0 });
@@ -826,25 +859,48 @@ function escape(run, now) {
   }
 }
 
-// ---- interactions ----------------------------------------------------------------------------
-/** A player tapped one of the Library's things. @param {Player} p @param {Entity} target */
-export function onInteract(p, target) {
-  const run = Doors.runOf(p);
-  if (!run || run.kind !== "library" || run.phase !== "live") {
-    if (target.typeId === "zt:hotel_door" && run?.kind === "library") p.sendMessage("§7Not yet...");
-    return;
+/** The Library's Figure is let go (its run ends, or the hotel moves on). @param {LibraryData} d */
+export function libraryEnd(d) {
+  if (d.figureId) {
+    Fig.detach(d.figureId);
+    const fig = world.getEntity(d.figureId);
+    if (isValid(fig)) fig.remove();
   }
-  /** @type {LibraryData} */
-  const d = run.data;
-  if (target.typeId === "zt:library_book" && d.books.has(target.id)) takeBook(run, p, target);
-  else if (target.typeId === "zt:library_paper" && target.id === d.paperId) takePaper(run, p, target);
-  else if (target.typeId === "zt:hotel_door" && d.door51 && target.id === d.door51.id) padlock(run, p);
 }
 
-/** @param {Run} run @param {Player} p @param {Entity} book */
-function takeBook(run, p, book) {
-  /** @type {LibraryData} */
-  const d = run.data;
+// ---- interactions ----------------------------------------------------------------------------
+/** The Library a player is playing: a Door 50 run, or the hotel's while it is on. @param {Player} p */
+function libraryOf(p) {
+  const run = Doors.runOf(p);
+  if (!run) return undefined;
+  /** @type {LibraryData | undefined} */
+  const d = run.kind === "library" ? run.data : run.data?.lib;
+  return d && d.built ? { run, d } : undefined;
+}
+
+/**
+ * A player tapped one of the Library's things. Returns true when it was the Library's.
+ * @param {Player} p @param {Entity} target
+ */
+export function onInteract(p, target) {
+  const found = libraryOf(p);
+  if (!found) return false;
+  const { run, d } = found;
+  const mine = d.books.has(target.id) || target.id === d.paperId || (d.door51 && target.id === d.door51.id) ||
+    (d.door50 && target.id === d.door50.id);
+  if (!mine) return false;
+  if (d.phase !== "live") {
+    if (target.typeId === "zt:hotel_door") p.sendMessage("§7Not yet...");
+    return true;
+  }
+  if (target.typeId === "zt:library_book" && d.books.has(target.id)) takeBook(run, d, p, target);
+  else if (target.typeId === "zt:library_paper" && target.id === d.paperId) takePaper(run, d, p, target);
+  else if (target.typeId === "zt:hotel_door" && d.door51 && target.id === d.door51.id) padlock(run, d, p);
+  return true;
+}
+
+/** @param {Run} run @param {LibraryData} d @param {Player} p @param {Entity} book */
+function takeBook(run, d, p, book) {
   const shape = d.books.get(book.id);
   d.books.delete(book.id);
   book.remove();
@@ -862,10 +918,8 @@ function takeBook(run, p, book) {
   p.sendMessage("§7You found a book: §9" + NAME[shape] + " = " + digit + " §8(" + d.found.size + "/10)");
 }
 
-/** @param {Run} run @param {Player} p @param {Entity} paper */
-function takePaper(run, p, paper) {
-  /** @type {LibraryData} */
-  const d = run.data;
+/** @param {Run} run @param {LibraryData} d @param {Player} p @param {Entity} paper */
+function takePaper(run, d, p, paper) {
   d.paperTaken = true;
   paper.remove();
   d.paperId = undefined;
@@ -873,13 +927,11 @@ function takePaper(run, p, paper) {
   Fig.makeNoise(run.dim, p.location, 5, p);
   Doors.giveRunItem(p, Doors.PAPER, undefined, ["§7The padlock's code, as shapes:", "§e" + d.code.map((s) => NAME[s]).join(", ")]);
   for (const q of Doors.livePlayers(run)) if (q.id !== p.id) q.sendMessage("§7" + p.name + " took the solution paper.");
-  showPaper(run, p);
+  showPaper(d, p);
 }
 
-/** The solution paper: the five shapes in order, with the digits you know. @param {Run} run @param {Player} p */
-export function showPaper(run, p) {
-  /** @type {LibraryData} */
-  const d = run.data;
+/** The solution paper: the five shapes in order, with the digits you know. @param {LibraryData} d @param {Player} p */
+export function showPaper(d, p) {
   const form = new ActionFormData()
     .title("Solution Paper")
     .body("The padlock on door 51 takes five digits. These are the shapes that make the code, in this order. Each book you find tells you which digit a shape stands for.");
@@ -891,10 +943,8 @@ export function showPaper(run, p) {
   });
 }
 
-/** The padlock: making noise while you fiddle with it. @param {Run} run @param {Player} p */
-function padlock(run, p) {
-  /** @type {LibraryData} */
-  const d = run.data;
+/** The padlock: making noise while you fiddle with it. @param {Run} run @param {LibraryData} d @param {Player} p */
+function padlock(run, d, p) {
   if (d.unlocked) return;
   const door = Doors.doorEntity(d.door51);
   Doors.sound(run.dim, "zt.doors.padlock", door?.location ?? p.location, 1.0, 1.0);
@@ -910,10 +960,10 @@ function padlock(run, p) {
     .textField("Enter the 5-digit code", "00000");
   form.show(p).then((res) => {
     if (res.canceled || !res.formValues) return;
-    if (run.phase !== "live" || d.unlocked) return;
+    if (d.phase !== "live" || d.unlocked) return;
     const entered = String(res.formValues[res.formValues.length - 1] ?? "").replace(/\D/g, "");
     const code = d.code.map((s) => d.digits[s]).join("");
-    if (entered === code) unlock(run, p);
+    if (entered === code) unlock(run, d, p);
     else {
       Doors.sound(run.dim, "zt.doors.wrong", door?.location ?? p.location, 1.0, 1.0);
       Fig.makeNoise(run.dim, p.location, 16, p);
@@ -924,10 +974,8 @@ function padlock(run, p) {
   });
 }
 
-/** @param {Run} run @param {Player} p */
-function unlock(run, p) {
-  /** @type {LibraryData} */
-  const d = run.data;
+/** @param {Run} run @param {LibraryData} d @param {Player} p */
+function unlock(run, d, p) {
   d.unlocked = true;
   Doors.unlockDoor(d.door51);
   Doors.openDoor(run, d.door51);
@@ -943,14 +991,13 @@ function unlock(run, p) {
 
 /** Using a book or the paper from the inventory. @param {Player} p */
 export function onItemUse(p, typeId) {
-  const run = Doors.runOf(p);
-  if (!run || run.kind !== "library") {
+  const found = libraryOf(p);
+  if (!found) {
     p.sendMessage("§7It's just paper now.");
     return;
   }
-  /** @type {LibraryData} */
-  const d = run.data;
-  if (typeId === Doors.PAPER) showPaper(run, p);
+  const { d } = found;
+  if (typeId === Doors.PAPER) showPaper(d, p);
   else {
     const shape = typeId.slice(Doors.BOOK_PREFIX.length);
     Doors.title(p, "§9" + NAME[shape] + " = " + d.digits[shape], "", 40);
@@ -959,9 +1006,7 @@ export function onItemUse(p, typeId) {
 
 /** @param {Run} run */
 function end(run) {
-  /** @type {LibraryData} */
-  const d = run.data;
-  if (d.figureId) Fig.detach(d.figureId);
+  libraryEnd(run.data);
 }
 
 Doors.registerKind("library", { tick, end });

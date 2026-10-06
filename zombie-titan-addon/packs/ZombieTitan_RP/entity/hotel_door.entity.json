@@ -7,29 +7,13 @@
 				"default": "entity_alphatest"
 			},
 			"textures": {
-				"default": "textures/entity/doors/hotel_door",
-				"plate_blank": "textures/entity/doors/plates/plate_blank",
-				"plate_30": "textures/entity/doors/plates/plate_30",
-				"plate_31": "textures/entity/doors/plates/plate_31",
-				"plate_32": "textures/entity/doors/plates/plate_32",
-				"plate_33": "textures/entity/doors/plates/plate_33",
-				"plate_34": "textures/entity/doors/plates/plate_34",
-				"plate_35": "textures/entity/doors/plates/plate_35",
-				"plate_36": "textures/entity/doors/plates/plate_36",
-				"plate_37": "textures/entity/doors/plates/plate_37",
-				"plate_38": "textures/entity/doors/plates/plate_38",
-				"plate_39": "textures/entity/doors/plates/plate_39",
-				"plate_40": "textures/entity/doors/plates/plate_40",
-				"plate_50": "textures/entity/doors/plates/plate_50",
-				"plate_51": "textures/entity/doors/plates/plate_51"
+				"default": "textures/entity/doors/hotel_door"
 			},
 			"geometry": {
-				"default": "geometry.zt.hotel_door",
-				"plate": "geometry.zt.hotel_door_plate"
+				"default": "geometry.zt.hotel_door"
 			},
 			"render_controllers": [
-				"controller.render.zt.hotel_door",
-				"controller.render.zt.hotel_door_plate"
+				"controller.render.zt.hotel_door"
 			],
 			"scripts": {
 				"animate": [

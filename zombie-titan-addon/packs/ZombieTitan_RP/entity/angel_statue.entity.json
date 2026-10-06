@@ -1,0 +1,28 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:angel_statue",
+			"materials": {
+				"default": "entity_alphatest"
+			},
+			"textures": {
+				"default": "textures/entity/hotel/angel_statue"
+			},
+			"geometry": {
+				"default": "geometry.zt.angel_statue"
+			},
+			"render_controllers": [
+				"controller.render.zt.default"
+			],
+			"scripts": {
+				"animate": [
+					"face"
+				]
+			},
+			"animations": {
+				"face": "animation.zt.prop.face"
+			}
+		}
+	}
+}

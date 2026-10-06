@@ -1,0 +1,28 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:switch_pickup",
+			"materials": {
+				"default": "entity_alphatest"
+			},
+			"textures": {
+				"default": "textures/entity/hotel/breaker_lever"
+			},
+			"geometry": {
+				"default": "geometry.zt.switch_pickup"
+			},
+			"render_controllers": [
+				"controller.render.zt.default"
+			],
+			"scripts": {
+				"animate": [
+					"face"
+				]
+			},
+			"animations": {
+				"face": "animation.zt.prop.face"
+			}
+		}
+	}
+}

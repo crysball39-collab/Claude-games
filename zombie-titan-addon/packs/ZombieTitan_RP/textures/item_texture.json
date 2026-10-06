@@ -139,6 +139,33 @@
 		},
 		"zt_spider_minion_egg": {
 			"textures": "textures/items/zt_spider_minion_egg"
+		},
+		"zt_doors_floor1": {
+			"textures": "textures/items/zt_doors_floor1"
+		},
+		"zt_room_key": {
+			"textures": "textures/items/zt_room_key"
+		},
+		"zt_electrical_key": {
+			"textures": "textures/items/zt_electrical_key"
+		},
+		"zt_lighter": {
+			"textures": "textures/items/zt_lighter"
+		},
+		"zt_flashlight": {
+			"textures": "textures/items/zt_flashlight"
+		},
+		"zt_skeleton_key": {
+			"textures": "textures/items/zt_skeleton_key"
+		},
+		"zt_crucifix": {
+			"textures": "textures/items/zt_crucifix"
+		},
+		"zt_herb_of_viridis": {
+			"textures": "textures/items/zt_herb_of_viridis"
+		},
+		"zt_breaker_switch": {
+			"textures": "textures/items/zt_breaker_switch"
 		}
 	}
 }
