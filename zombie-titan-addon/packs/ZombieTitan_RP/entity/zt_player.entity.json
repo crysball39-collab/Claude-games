@@ -1,0 +1,118 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:player",
+			"materials": {
+				"default": "entity_alphatest"
+			},
+			"textures": {
+				"skin_0": "textures/entity/zt_player/skin_0",
+				"skin_1": "textures/entity/zt_player/skin_1",
+				"skin_2": "textures/entity/zt_player/skin_2",
+				"skin_3": "textures/entity/zt_player/skin_3",
+				"skin_4": "textures/entity/zt_player/skin_4",
+				"skin_5": "textures/entity/zt_player/skin_5",
+				"skin_6": "textures/entity/zt_player/skin_6",
+				"skin_7": "textures/entity/zt_player/skin_7",
+				"skin_8": "textures/entity/zt_player/skin_8",
+				"skin_9": "textures/entity/zt_player/skin_9",
+				"skin_10": "textures/entity/zt_player/skin_10",
+				"skin_11": "textures/entity/zt_player/skin_11",
+				"skin_12": "textures/entity/zt_player/skin_12",
+				"skin_13": "textures/entity/zt_player/skin_13",
+				"skin_14": "textures/entity/zt_player/skin_14",
+				"skin_15": "textures/entity/zt_player/skin_15"
+			},
+			"geometry": {
+				"default": "geometry.zt.player"
+			},
+			"spawn_egg": {
+				"texture": "zt_player_egg"
+			},
+			"enable_attachables": true,
+			"scripts": {
+				"scale": "0.9375",
+				"initialize": [
+					"v.look_x = 0.0;",
+					"v.look_y = 0.0;",
+					"v.swing_t = 1.0;",
+					"v.last_swing = q.property('zt:swing');"
+				],
+				"pre_animation": [
+					"v.look_x = math.lerp(v.look_x, q.property('zt:look_x'), 0.35);",
+					"v.look_y = math.lerp(v.look_y, q.property('zt:look_y'), 0.35);",
+					"v.swing_t = (q.property('zt:swing') != v.last_swing) ? 0.0 : v.swing_t + q.delta_time;",
+					"v.last_swing = q.property('zt:swing');",
+					"v.swing_p = math.clamp(v.swing_t / 0.3, 0.0, 1.0);",
+					"v.tcos0 = math.cos(q.modified_distance_moved * 38.17) * math.min(q.modified_move_speed, 1.0) * 57.3;"
+				],
+				"animate": [
+					"base",
+					"look",
+					"hold",
+					{
+						"walk": "q.property('zt:pose') == 0 || q.property('zt:pose') == 1"
+					},
+					{
+						"sneak": "q.property('zt:pose') == 1"
+					},
+					{
+						"swim": "q.property('zt:pose') == 2"
+					},
+					{
+						"sleep": "q.property('zt:pose') == 3"
+					},
+					{
+						"sit": "q.property('zt:pose') == 4"
+					},
+					{
+						"swing": "v.swing_t < 0.3"
+					},
+					{
+						"eat": "q.property('zt:use') == 1"
+					},
+					{
+						"bow": "q.property('zt:use') == 2"
+					},
+					{
+						"shield": "q.property('zt:use') == 3"
+					},
+					{
+						"work": "q.property('zt:use') == 4"
+					},
+					{
+						"throw": "q.property('zt:use') == 5"
+					},
+					{
+						"think": "q.property('zt:use') == 6"
+					},
+					{
+						"wave": "q.property('zt:use') == 7"
+					}
+				]
+			},
+			"animations": {
+				"base": "animation.zt.player.base",
+				"look": "animation.zt.player.look",
+				"walk": "animation.zt.player.walk",
+				"sneak": "animation.zt.player.sneak",
+				"swim": "animation.zt.player.swim",
+				"sleep": "animation.zt.player.sleep",
+				"sit": "animation.zt.player.sit",
+				"swing": "animation.zt.player.swing",
+				"eat": "animation.zt.player.eat",
+				"bow": "animation.zt.player.bow",
+				"shield": "animation.zt.player.shield",
+				"work": "animation.zt.player.work",
+				"throw": "animation.zt.player.throw",
+				"think": "animation.zt.player.think",
+				"wave": "animation.zt.player.wave",
+				"hold": "animation.zt.player.hold"
+			},
+			"render_controllers": [
+				"controller.render.zt.player"
+			]
+		}
+	}
+}

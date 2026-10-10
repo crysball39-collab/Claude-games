@@ -1,0 +1,29 @@
+{
+	"format_version": "1.21.90",
+	"minecraft:item": {
+		"description": {
+			"identifier": "zt:player_api",
+			"menu_category": {
+				"category": "items"
+			}
+		},
+		"components": {
+			"minecraft:icon": "zt_player_api",
+			"minecraft:display_name": {
+				"value": "item.zt:player_api.name"
+			},
+			"minecraft:max_stack_size": 1,
+			"minecraft:can_destroy_in_creative": false,
+			"minecraft:rarity": "rare",
+			"minecraft:use_modifiers": {
+				"use_duration": 0.25,
+				"movement_modifier": 1.0
+			},
+			"minecraft:cooldown": {
+				"category": "zt_player_api",
+				"duration": 0.5,
+				"type": "use"
+			}
+		}
+	}
+}

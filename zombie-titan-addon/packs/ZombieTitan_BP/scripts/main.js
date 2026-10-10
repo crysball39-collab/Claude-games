@@ -1,5 +1,11 @@
-// Titans add-on: wires game events to the titan, minion and item logic.
+// Titans add-on: wires game events to the titan, minion and item logic, and the Players.
 import { system, world } from "@minecraft/server";
+import * as Bot from "./bot.js";
+import * as Chat from "./bot_chat.js";
+import * as Sense from "./bot_senses.js";
+import * as BotSkills from "./bot_skills.js";
+import * as BotUI from "./bot_ui.js";
+import * as BotWorld from "./bot_world.js";
 import * as DF from "./darkfists.js";
 import * as Doors from "./doors_common.js";
 import * as Floor from "./doors_floor1.js";
@@ -32,7 +38,46 @@ function safe(fn) {
 
 world.afterEvents.entitySpawn.subscribe(
   safe(({ entity, cause }) => {
-    if (Titan.isTitan(entity.typeId)) Titan.onTitanSpawned(entity, cause);
+    const type = entity.typeId;
+    if (Titan.isTitan(type)) Titan.onTitanSpawned(entity, cause);
+    else if (type === Bot.TYPE) Bot.onSpawn(entity, cause);
+    else if (type === "minecraft:eye_of_ender_signal") BotWorld.onEyeThrown(entity);
+  }),
+);
+
+// the Players: deaths (theirs, and what they kill), hurts, the dragon
+world.afterEvents.entityDie.subscribe(
+  safe(({ deadEntity, damageSource }) => {
+    const type = deadEntity.typeId;
+    if (type === Bot.TYPE) Bot.onDeath(deadEntity, damageSource);
+    if (damageSource.damagingEntity?.typeId === Bot.TYPE) Bot.onKill(damageSource.damagingEntity, deadEntity);
+    if (type === "minecraft:ender_dragon") BotWorld.remember("dragon", "minecraft:the_end", { x: 0, y: 64, z: 0 }, { dead: true }, 300);
+  }),
+);
+world.afterEvents.entityHurt.subscribe(safe(({ hurtEntity, damage, damageSource }) => Bot.onHurt(hurtEntity, damageSource, damage)));
+world.afterEvents.dataDrivenEntityTrigger.subscribe(
+  safe(({ entity, eventId }) => {
+    if (eventId === "zt:shield_block") Bot.onShieldBlock(entity);
+  }),
+  { entityTypes: [Bot.TYPE] },
+);
+// what Players hear: blocks broken and placed, doors and chests, explosions
+world.afterEvents.playerPlaceBlock.subscribe(
+  safe(({ block, dimension }) => {
+    BotSkills.playerPlaced.add(BotSkills.placedKey(dimension, block.location));
+    Sense.soundAt(Bot.live(), dimension, block.location, "place");
+  }),
+);
+world.afterEvents.playerInteractWithBlock.subscribe(
+  safe(({ block }) => {
+    const id = block.typeId;
+    if (/door|gate|chest|barrel/.test(id)) Sense.soundAt(Bot.live(), block.dimension, block.location, /chest|barrel/.test(id) ? "chest" : "door");
+  }),
+);
+world.afterEvents.explosion.subscribe(
+  safe((ev) => {
+    const at = ev.getImpactedBlocks()[0]?.location ?? ev.source?.location;
+    if (at) Sense.soundAt(Bot.live(), ev.dimension, at, "explosion");
   }),
 );
 
@@ -109,7 +154,12 @@ const HOTEL_ITEMS = new Set(["zt:lighter", "zt:flashlight", "zt:crucifix", "zt:s
 /** @param {import("@minecraft/server").ItemUseAfterEvent | import("@minecraft/server").ItemStartUseAfterEvent} ev */
 function itemUsed({ source, itemStack }) {
   const id = itemStack?.typeId;
-  if (id === DF.ITEM) DF.onUse(source);
+  if (id === "zt:player_api") {
+    const now = system.currentTick;
+    if (now - (doorsUsedAt.get(source.id) ?? -99) < 10) return;
+    doorsUsedAt.set(source.id, now);
+    BotUI.openApi(source);
+  } else if (id === DF.ITEM) DF.onUse(source);
   else if (id === Obsidian.SWORD) Obsidian.onUse(source);
   else if (id && Gum.ABILITY_IDS.includes(id)) Gum.onUse(source, id);
   else if (id === Library.ITEM || id === Seek.ITEM || id === Lobby.ITEM || id === Doors.PAPER || id?.startsWith(Doors.BOOK_PREFIX) ||
@@ -136,7 +186,12 @@ world.afterEvents.itemCompleteUse.subscribe(
 
 // one leaf block in 100,000 drops a Gum Gum Fruit
 world.afterEvents.playerBreakBlock.subscribe(
-  safe(({ player, block, brokenBlockPermutation }) => Gum.onBlockBroken(player, brokenBlockPermutation.type.id, block.location)),
+  safe(({ player, block, brokenBlockPermutation }) => {
+    Gum.onBlockBroken(player, brokenBlockPermutation.type.id, block.location);
+    const dim = player.dimension;
+    BotSkills.playerPlaced.delete(BotSkills.placedKey(dim, block.location));
+    Sense.soundAt(Bot.live(), dim, block.location, "break", player);
+  }),
 );
 
 world.afterEvents.playerSpawn.subscribe(
@@ -151,6 +206,10 @@ world.afterEvents.playerSpawn.subscribe(
 world.afterEvents.playerInteractWithEntity.subscribe(
   safe(({ player, target }) => {
     if (!target.typeId.startsWith("zt:")) return;
+    if (target.typeId === Bot.TYPE) {
+      BotUI.openMenu(player, target);
+      return;
+    }
     if (Library.onInteract(player, target)) return;
     Floor.onInteract(player, target);
   }),
@@ -169,8 +228,14 @@ world.afterEvents.playerLeave.subscribe(
 );
 
 // /scriptevent zt:natural_spawns off|on   - turn natural titan spawns off or on
+// (zt:ai_reply and zt:ai_pong come from the Player AI Bridge pack)
 system.afterEvents.scriptEventReceive.subscribe(
   safe(({ id, message, sourceEntity }) => {
+    if (id === "zt:ai_reply") return Chat.onAiReply(message);
+    if (id === "zt:ai_pong") {
+      Chat.bridge.seen = system.currentTick;
+      return;
+    }
     if (id !== "zt:natural_spawns") return;
     const on = !/^(off|false|0|no)$/i.test(message.trim());
     Titan.setNaturalSpawns(on);
@@ -183,8 +248,23 @@ system.afterEvents.scriptEventReceive.subscribe(
   { namespaces: ["zt"] },
 );
 
+let playersReady = false;
 system.runInterval(() => {
   const tick = system.currentTick;
+  if (!playersReady) {
+    playersReady = true;
+    try {
+      Bot.loadRespawns();
+      BotWorld.loadPlaced(BotSkills.playerPlaced);
+    } catch (err) {
+      console.warn("[Titans] Players: " + err);
+    }
+  }
+  try {
+    Bot.playersTick(tick);
+  } catch (err) {
+    console.warn("[Titans] Players: " + err);
+  }
   try {
     if (tick % 20 === 0) Titan.scanForTitans();
     Titan.titanTick(tick);

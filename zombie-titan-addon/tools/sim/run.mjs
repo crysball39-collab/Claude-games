@@ -55,6 +55,7 @@ for (const f of readdirSync(entitiesDir).filter((n) => n.endsWith(".json"))) {
     health: comps["minecraft:health"]?.max ?? comps["minecraft:health"]?.value,
     collision: comps["minecraft:collision_box"],
     sensor: [comps["minecraft:damage_sensor"]?.triggers ?? []].flat(),
+    inventory: comps["minecraft:inventory"]?.inventory_size,
   };
 }
 writeFileSync(join(work, "entities.json"), JSON.stringify(entities));

@@ -172,6 +172,12 @@
 		},
 		"zt_silverfish_minion_egg": {
 			"textures": "textures/items/zt_silverfish_minion_egg"
+		},
+		"zt_player_egg": {
+			"textures": "textures/items/zt_player_egg"
+		},
+		"zt_player_api": {
+			"textures": "textures/items/zt_player_api"
 		}
 	}
 }

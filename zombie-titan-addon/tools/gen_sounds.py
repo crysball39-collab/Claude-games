@@ -416,6 +416,20 @@ def entity_sounds():
                         "step": {"sound": "mob.silverfish.step", "volume": 0.35, "pitch": 1.0},
                     },
                 },
+                # the Players sound like players
+                "zt:player": {
+                    "volume": 1.0,
+                    "pitch": [0.8, 1.2],
+                    "events": {
+                        "hurt": "game.player.hurt",
+                        "hurt.in.water": "game.player.hurt",
+                        "death": "game.player.die",
+                        "death.in.water": "game.player.die",
+                        "attack.strong": "game.player.attack.strong",
+                        "attack.nodamage": "game.player.attack.nodamage",
+                        "splash": {"sound": "entity.generic.splash", "pitch": [0.6, 1.4]},
+                    },
+                },
                 "zt:figure": {"volume": 1.0, "pitch": 1.0, "events": {"ambient": "zt.figure.ambient"}},
                 "zt:seek": {"volume": 1.0, "pitch": 1.0, "events": {"ambient": "zt.seek.ambient"}},
                 "zt:zombie_minion": {

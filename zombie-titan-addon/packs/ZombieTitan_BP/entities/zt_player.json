@@ -1,0 +1,186 @@
+{
+	"format_version": "1.21.90",
+	"minecraft:entity": {
+		"description": {
+			"identifier": "zt:player",
+			"is_spawnable": true,
+			"is_summonable": true,
+			"spawn_category": "creature",
+			"properties": {
+				"zt:skin": {
+					"type": "int",
+					"range": [
+						0,
+						15
+					],
+					"default": 0,
+					"client_sync": true
+				},
+				"zt:pose": {
+					"type": "int",
+					"range": [
+						0,
+						4
+					],
+					"default": 0,
+					"client_sync": true
+				},
+				"zt:use": {
+					"type": "int",
+					"range": [
+						0,
+						7
+					],
+					"default": 0,
+					"client_sync": true
+				},
+				"zt:swing": {
+					"type": "int",
+					"range": [
+						0,
+						7
+					],
+					"default": 0,
+					"client_sync": true
+				},
+				"zt:look_x": {
+					"type": "float",
+					"range": [
+						-90.0,
+						90.0
+					],
+					"default": 0.0,
+					"client_sync": true
+				},
+				"zt:look_y": {
+					"type": "float",
+					"range": [
+						-90.0,
+						90.0
+					],
+					"default": 0.0,
+					"client_sync": true
+				},
+				"zt:blocking": {
+					"type": "bool",
+					"default": false,
+					"client_sync": false
+				}
+			}
+		},
+		"components": {
+			"minecraft:type_family": {
+				"family": [
+					"player",
+					"zt_player",
+					"mob"
+				]
+			},
+			"minecraft:health": {
+				"value": 20,
+				"max": 20
+			},
+			"minecraft:attack": {
+				"damage": 1
+			},
+			"minecraft:collision_box": {
+				"width": 0.6,
+				"height": 1.8
+			},
+			"minecraft:physics": {},
+			"minecraft:pushable": {
+				"is_pushable": true,
+				"is_pushable_by_piston": true
+			},
+			"minecraft:movement": {
+				"value": 0.1
+			},
+			"minecraft:movement.basic": {},
+			"minecraft:jump.static": {},
+			"minecraft:can_climb": {},
+			"minecraft:variable_max_auto_step": {
+				"base_value": 0.5625,
+				"jump_prevented_value": 0.5625
+			},
+			"minecraft:breathable": {
+				"total_supply": 15,
+				"suffocate_time": -1,
+				"breathes_air": true,
+				"breathes_water": false,
+				"generates_bubbles": true
+			},
+			"minecraft:nameable": {
+				"always_show": true,
+				"allow_name_tag_renaming": false
+			},
+			"minecraft:persistent": {},
+			"minecraft:inventory": {
+				"container_type": "inventory",
+				"inventory_size": 36,
+				"private": true
+			},
+			"minecraft:damage_sensor": {
+				"triggers": [
+					{
+						"cause": "entity_attack",
+						"on_damage": {
+							"filters": {
+								"test": "bool_property",
+								"domain": "zt:blocking",
+								"value": true
+							},
+							"event": "zt:shield_block"
+						},
+						"deals_damage": "no"
+					},
+					{
+						"cause": "projectile",
+						"on_damage": {
+							"filters": {
+								"test": "bool_property",
+								"domain": "zt:blocking",
+								"value": true
+							},
+							"event": "zt:shield_block"
+						},
+						"deals_damage": "no"
+					},
+					{
+						"cause": "entity_explosion",
+						"on_damage": {
+							"filters": {
+								"test": "bool_property",
+								"domain": "zt:blocking",
+								"value": true
+							},
+							"event": "zt:shield_block"
+						},
+						"deals_damage": "no"
+					}
+				]
+			},
+			"minecraft:interact": {
+				"interactions": [
+					{
+						"on_interact": {
+							"filters": {
+								"test": "is_family",
+								"subject": "other",
+								"value": "player"
+							},
+							"event": "zt:player_tap",
+							"target": "self"
+						},
+						"swing": true,
+						"interact_text": "action.interact.zt_player"
+					}
+				]
+			},
+			"minecraft:conditional_bandwidth_optimization": {}
+		},
+		"events": {
+			"zt:player_tap": {},
+			"zt:shield_block": {}
+		}
+	}
+}

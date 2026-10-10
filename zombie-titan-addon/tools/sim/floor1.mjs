@@ -539,7 +539,8 @@ world.afterEvents.itemUse.fire({ source: player, itemStack: lighter });
 runTicks(4);
 check(headLight().startsWith("minecraft:light_block"), "use it again: lit");
 runTicks(41);
-check(lighter.getComponent("minecraft:durability").damage >= 2, "...burning its fuel");
+// (the game hands out copies of items: read the one in the hand)
+check(player.components["minecraft:equippable"].slots.Mainhand.getComponent("minecraft:durability").damage >= 2, "...burning its fuel");
 player.components["minecraft:equippable"].slots.Mainhand = undefined;
 runTicks(4);
 check(!headLight().startsWith("minecraft:light_block"), "put it away and it goes out");
