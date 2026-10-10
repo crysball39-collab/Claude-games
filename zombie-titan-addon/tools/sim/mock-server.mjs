@@ -757,10 +757,19 @@ function badProperty(typeId, id, v) {
   return undefined;
 }
 
-const PROJECTILES = new Set(["zt:proto_ball", "zt:titan_arrow", "zt:growth_serum", "minecraft:fireball", "minecraft:arrow", "minecraft:ender_pearl"]);
-/** Arrows (the Player tests): they fly, drop, stick in blocks and hurt what they hit. */
+const PROJECTILES = new Set(["zt:proto_ball", "zt:titan_arrow", "zt:growth_serum", "minecraft:fireball", "minecraft:arrow", "minecraft:ender_pearl",
+  "minecraft:small_fireball"]);
+/**
+ * Arrows (the Player tests): they fly, drop, stick in blocks and hurt what they hit. A blaze's
+ * fireball flies straight (no gravity), burns what it hits for 5, sets it alight, and is gone.
+ */
 function arrowTick(dim, e) {
   const v = e.velocity;
+  const fireball = e.typeId === "minecraft:small_fireball";
+  if (fireball && tickCounter - (e.spawnTick ?? tickCounter) > 100) {
+    e.valid = false;
+    return;
+  }
   const steps = Math.max(1, Math.ceil(Math.hypot(v.x, v.y, v.z) / 0.5));
   const owner = e.components["minecraft:projectile"]?.owner;
   for (let k = 0; k < steps; k++) {
@@ -774,21 +783,26 @@ function arrowTick(dim, e) {
     }
     for (const t of dim.entities) {
       if (!t.valid || t === e || t === owner || !t.components["minecraft:health"] || t.typeId === "minecraft:item") continue;
+      if (fireball && t.typeId === owner?.typeId) continue;
       const { w, h } = bodyBox(t);
       const l = t.location;
       if (Math.abs(e.location.x - l.x) <= w / 2 + 0.3 && Math.abs(e.location.z - l.z) <= w / 2 + 0.3 && e.location.y >= l.y - 0.3 && e.location.y <= l.y + h + 0.3) {
         e.flying = false;
-        const dmg = Math.ceil(Math.hypot(v.x, v.y, v.z) * 2);
-        t.applyDamage(dmg, { cause: "projectile", damagingEntity: owner });
+        const dmg = fireball ? 5 : Math.ceil(Math.hypot(v.x, v.y, v.z) * 2);
+        // (a shot a shield stops sets nothing alight)
+        const hurt = t.applyDamage(dmg, { cause: "projectile", damagingEntity: owner });
+        if (fireball && hurt && !FIRE_PROOF.has(t.typeId)) t.onFire = Math.max(t.onFire ?? 0, 5);
         world.afterEvents.projectileHitEntity.fire({ projectile: e, dimension: dim, location: { ...e.location }, hitVector: { ...v }, source: owner, getEntityHit: () => ({ entity: t }) });
         e.valid = false;
         return;
       }
     }
   }
-  v.x *= 0.99;
-  v.z *= 0.99;
-  v.y = v.y * 0.99 - 0.05;
+  if (!fireball) {
+    v.x *= 0.99;
+    v.z *= 0.99;
+    v.y = v.y * 0.99 - 0.05;
+  }
   if (e.location.y < dim.heightRange.min) e.valid = false;
 }
 
@@ -902,6 +916,8 @@ export class Entity {
     world.afterEvents.dataDrivenEntityTrigger.fire({ entity: this, eventId: id, getModifiers: () => [] });
   }
   getComponent(id) {
+    // the game gives a burning entity an onfire component
+    if (id === "minecraft:onfire") return (this.onFire ?? 0) > 0 ? { onFireTicksRemaining: this.onFire * 20 } : undefined;
     return this.components[id];
   }
   applyDamage(amount, opts) {
@@ -1355,7 +1371,9 @@ const MOB_AI = {
   "minecraft:skeleton": { kind: "ranged", speed: 0.12, dmg: 3, range: 15, cooldown: 40 },
   "minecraft:stray": { kind: "ranged", speed: 0.12, dmg: 3, range: 15, cooldown: 40 },
   "minecraft:creeper": { kind: "creeper", speed: 0.1 },
-  "minecraft:blaze": { kind: "ranged", speed: 0.08, dmg: 5, range: 16, cooldown: 60, fire: true, hover: 3 },
+  // as its behaviour file has it: bursts of three fireballs 0.3 s apart every 3 to 5 s, and a
+  // hit (6) when something is within 2 blocks
+  "minecraft:blaze": { kind: "blaze", speed: 0.05, dmg: 6, range: 24, cooldown: 60, hover: 3 },
   "minecraft:enderman": { kind: "neutral", speed: 0.15, dmg: 7, reach: 2.2 },
   "minecraft:zombie_pigman": { kind: "neutral", speed: 0.12, dmg: 5, reach: 1.7 },
   "minecraft:zombified_piglin": { kind: "neutral", speed: 0.12, dmg: 5, reach: 1.7 },
@@ -1434,6 +1452,7 @@ function mobTick(dim, e) {
   const d = Math.hypot(dx, dy, dz);
   const flat = Math.hypot(dx, dz) || 1;
   e.rotation = { x: 0, y: (Math.atan2(-dx, dz) * 180) / Math.PI };
+  if (ai.kind === "blaze") return blazeTick(dim, e, ai, target, d);
   const keepAway = ai.kind === "ranged" && d < 8;
   const sp = keepAway ? -ai.speed : d > (ai.reach ?? 1.2) * 0.8 ? ai.speed : 0;
   e.velocity.x = (dx / flat) * sp;
@@ -1457,6 +1476,8 @@ function mobTick(dim, e) {
   if (e.cool > 0) return;
   if (ai.kind === "ranged" && d <= ai.range) {
     e.cool = ai.cooldown;
+    // a shot takes time to fly: the farther, the likelier it misses
+    if (Math.random() > (d < 8 ? 0.8 : 0.55)) return;
     // (a shot a shield stops sets nothing alight)
     const hurt = target.applyDamage(ai.dmg, { cause: "projectile", damagingEntity: e });
     if (ai.fire && hurt) target.onFire = Math.max(target.onFire ?? 0, 5);
@@ -1464,6 +1485,44 @@ function mobTick(dim, e) {
     e.cool = 20;
     target.applyDamage(ai.dmg, { cause: "entityAttack", damagingEntity: e });
   }
+}
+/**
+ * A blaze: it hangs in the air a few blocks above its target, drifting in when it's far off;
+ * bursts of three fireballs (each a real projectile that can miss, or be blocked) with seconds
+ * between, and a hit for anything that comes within 2 blocks.
+ */
+function blazeTick(dim, e, ai, target, d) {
+  const dx = target.location.x - e.location.x;
+  const dz = target.location.z - e.location.z;
+  const flat = Math.hypot(dx, dz) || 1;
+  const sp = d > 12 ? ai.speed : d < 2 ? ai.speed : 0;
+  e.wobble = (e.wobble ?? Math.random() * 6) + 0.02;
+  e.velocity.x = (dx / flat) * sp + Math.cos(e.wobble) * 0.02;
+  e.velocity.z = (dz / flat) * sp + Math.sin(e.wobble) * 0.02;
+  e.velocity.y = Math.max(-0.08, Math.min(0.08, (target.location.y + ai.hover - e.location.y) * 0.05));
+  if (e.cool > 0) return;
+  if (d < 2) {
+    e.cool = 20;
+    target.applyDamage(ai.dmg, { cause: "entityAttack", damagingEntity: e });
+    return;
+  }
+  if (d > ai.range) return;
+  // a burst: three shots six ticks apart, then 60 to 100 ticks before the next
+  e.burst = e.burst > 0 ? e.burst - 1 : 2;
+  e.cool = e.burst > 0 ? 6 : 60 + Math.floor(Math.random() * 41);
+  const from = { x: e.location.x, y: e.location.y + 1.2, z: e.location.z };
+  const to = { x: target.location.x, y: target.location.y + 0.9, z: target.location.z };
+  const len = Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z) || 1;
+  // its aim wanders a little (the behaviour file's uncertainty)
+  const g = () => (Math.random() + Math.random() + Math.random() - 1.5) * 0.12;
+  const dir = { x: (to.x - from.x) / len + g(), y: (to.y - from.y) / len + g(), z: (to.z - from.z) / len + g() };
+  const n = Math.hypot(dir.x, dir.y, dir.z);
+  const ball = new Entity(dim, "minecraft:small_fireball", { x: from.x + (dir.x / n) * 0.8, y: from.y + (dir.y / n) * 0.8, z: from.z + (dir.z / n) * 0.8 });
+  ball.spawnTick = tickCounter;
+  ball.components["minecraft:projectile"].owner = e;
+  ball.components["minecraft:projectile"].shoot({ x: (dir.x / n) * 1.3, y: (dir.y / n) * 1.3, z: (dir.z / n) * 1.3 });
+  dim.entities.push(ball);
+  dim.playSound("mob.blaze.shoot", e.location);
 }
 /** The dragon circles the island, now and then perches on the fountain, and the crystals heal it. */
 function dragonTick(dim, e) {
@@ -1650,7 +1709,7 @@ class Dimension {
         if (e.valid) stepBody(this, e);
         continue;
       }
-      const arrow = e.flying && sim.mobs && (e.typeId === "minecraft:arrow" || e.typeId === "minecraft:ender_pearl");
+      const arrow = e.flying && sim.mobs && (e.typeId === "minecraft:arrow" || e.typeId === "minecraft:ender_pearl" || e.typeId === "minecraft:small_fireball");
       if (!arrow) {
         e.location.x += e.velocity.x;
         e.location.y += e.velocity.y;

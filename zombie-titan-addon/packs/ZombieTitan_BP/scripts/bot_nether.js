@@ -136,14 +136,17 @@ function* atFortress(bot, fort, goals) {
     return d >= 7 && d <= 12 && Math.abs(y - spawner.y) <= 3;
   } }, { tries: 2, maxNodes: 2500, digAny: true });
   if (!ok) return false;
-  const start = system.currentTick;
+  let gained = system.currentTick;
   let lastRods = Inv.count(bot, m("blaze_rod"));
   while (Inv.count(bot, m("blaze_rod")) < goals[m("blaze_rod")]) {
     if (bot.abort || shouldLeave(bot)) return false;
     const rods = Inv.count(bot, m("blaze_rod"));
-    if (rods > lastRods) lastRods = rods;
-    // nothing for three minutes: this spawner isn't working for it
-    if (system.currentTick - start > 3600 && rods === lastRods) return false;
+    if (rods > lastRods) {
+      lastRods = rods;
+      gained = system.currentTick;
+    }
+    // no new rod for five minutes: this spawner isn't working for it
+    if (system.currentTick - gained > 6000) return false;
     B.lookAt(bot, { x: spawner.x + 0.5, y: spawner.y + 1, z: spawner.z + 0.5 }, 20, 1);
     yield* S.collect(bot, { x: spawner.x + 0.5, y: spawner.y, z: spawner.z + 0.5 }, 12, 20);
     // waiting: shield up toward the spawner

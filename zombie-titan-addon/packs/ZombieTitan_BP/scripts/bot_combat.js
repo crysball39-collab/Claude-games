@@ -193,14 +193,54 @@ export function aim(from, to, speed = 3) {
   return { pitch, ticks: r.t, ok: r.y > -1e8 && Math.abs(r.y - dy) < 1.5 };
 }
 
+/** Things shot or thrown that a shield stops. */
+const MISSILES = new Set(["minecraft:small_fireball", "minecraft:fireball", "minecraft:arrow", "minecraft:shulker_bullet", "minecraft:wither_skull",
+  "minecraft:wither_skull_dangerous"]);
+/**
+ * Something shot or thrown coming straight at it and about to arrive (a blaze's fireball, an
+ * arrow): what a player sees coming and raises a shield against.
+ * @param {any} bot
+ */
+export function incoming(bot) {
+  const e = bot.entity;
+  const eye = B.eye(bot);
+  const mid = { x: eye.x, y: eye.y - 0.6, z: eye.z };
+  let list;
+  try {
+    list = e.dimension.getEntities({ location: mid, maxDistance: 24 });
+  } catch {
+    return undefined;
+  }
+  for (const p of list) {
+    if (!MISSILES.has(p.typeId)) continue;
+    let v;
+    try {
+      if (p.getComponent("minecraft:projectile")?.owner?.id === e.id) continue;
+      v = p.getVelocity();
+    } catch {
+      continue;
+    }
+    const sp2 = v.x * v.x + v.y * v.y + v.z * v.z;
+    // (an arrow stuck in something isn't coming)
+    if (sp2 < 0.01) continue;
+    const r = { x: mid.x - p.location.x, y: mid.y - p.location.y, z: mid.z - p.location.z };
+    // ticks until it passes nearest, and how near
+    const t = (r.x * v.x + r.y * v.y + r.z * v.z) / sp2;
+    if (t <= 0 || t > 30) continue;
+    if (Math.hypot(r.x - v.x * t, r.y - v.y * t, r.z - v.z * t) < 1.6) return p;
+  }
+  return undefined;
+}
+
 /** Has it a bow and arrows? @param {any} bot */
 export function canShoot(bot) {
   return Inv.has(bot, "minecraft:bow") && Inv.has(bot, "minecraft:arrow");
 }
 
 /**
- * Draw the bow, aim (leading a moving target) and loose an arrow. True if it shot.
- * @param {any} bot @param {Entity} t @param {{draw?: number}} [o]
+ * Draw the bow, aim (leading a moving target) and loose an arrow. True if it shot. Wary, it
+ * lets the draw go when it sees something coming at it (to get its shield up).
+ * @param {any} bot @param {Entity} t @param {{draw?: number, wary?: boolean}} [o]
  */
 export function* shoot(bot, t, o = {}) {
   if (!canShoot(bot) || !Inv.hold(bot, "minecraft:bow")) return false;
@@ -208,7 +248,7 @@ export function* shoot(bot, t, o = {}) {
   B.setUse(bot, 2);
   const draw = o.draw ?? 20;
   for (let i = 0; i < draw; i++) {
-    if (!alive(t)) {
+    if (!alive(t) || (o.wary && incoming(bot))) {
       B.setUse(bot, 0);
       return false;
     }
@@ -305,8 +345,29 @@ export function* fight(bot, t, o = {}) {
         yield;
         continue;
       }
-      // out of a sword's reach: a bow if it's up in the air (or across a gap), else close in
+      // out of a sword's reach: a bow if it's up in the air (or across a gap, or it shoots back),
+      // else close in
       const above = c.y - l.y > 3.5;
+      const shooter = (t.typeId === "minecraft:blaze" || t.typeId === "minecraft:ghast") && canShoot(bot);
+      // a blaze or a ghast: its shield up to what it throws (a blaze's come in threes), and the
+      // bow in the seconds between
+      if (shooter && d > REACH - 0.3) {
+        const shield = hasShield(bot);
+        const thrown = now - Math.max(bot.blockedAt ?? -1e9, bot.shotAt ?? -1e9);
+        if (shield && (thrown < 14 || incoming(bot))) {
+          if (bot.use !== 3) B.setUse(bot, 3);
+          B.stop(bot);
+          yield;
+          continue;
+        }
+        const shot = yield* shoot(bot, t, { draw: 16, wary: shield });
+        armUp(bot);
+        if (!shot) {
+          if (shield) B.setUse(bot, 3);
+          yield;
+        }
+        continue;
+      }
       if ((FLYING.has(t.typeId) || above || o.bow) && canShoot(bot) && d > 4) {
         yield* shoot(bot, t);
         armUp(bot);

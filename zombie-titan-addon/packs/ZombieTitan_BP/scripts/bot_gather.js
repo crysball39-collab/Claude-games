@@ -605,7 +605,8 @@ export function findPrey(bot, types, r = 32) {
  */
 export function* hunt(bot, types, item, n, o) {
   const kind = nice(types[0]);
-  doing(bot, "hunting " + (/sheep|fish|cod|salmon/.test(kind) ? kind : kind + "s") + " for " + nice(item));
+  const plural = /sheep|fish|cod|salmon/.test(kind) ? kind : /man$/.test(kind) ? kind.replace(/man$/, "men") : kind + "s";
+  doing(bot, "hunting " + plural + " for " + nice(item));
   let fails = 0;
   while (Inv.count(bot, item) < n) {
     if (timeUp(o) || bot.abort) return false;

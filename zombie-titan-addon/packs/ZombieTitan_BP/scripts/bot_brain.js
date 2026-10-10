@@ -217,9 +217,14 @@ function flee(bot) {
   if (dread.length) return { name: "flee", prio: PRIO.flee, gen: () => C.flee(bot, dread.map((s) => s.entity.location), 30), ttl: 400 };
   // hurt: away from what's attacking (out of a skeleton's sight)
   const hp = B.health(bot);
-  if (hp < 12) {
+  if (hp < 14) {
     const shooters = Sense.seenWhere(bot, (s) => C.RANGED.has(s.typeId) && Sense.isThreat(bot, s) && B.dist(s.entity.location, bot.entity.location) < 18, 60);
-    if (shooters.length >= 2) {
+    const fiery = shooters.filter((s) => /blaze|ghast/.test(s.typeId)).length;
+    // hurt: two skeletons, or one blaze or ghast, are enough to run from; with a shield to hide
+    // behind it holds its ground, unless it's badly hurt
+    const shield = Inv.getEquip(bot, "Offhand")?.typeId === m("shield");
+    if (shield ? hp < 8 && (shooters.length >= 2 || fiery > 0) : shooters.length >= 2 || fiery > 0) {
+      bot.cautious = true;
       return { name: "flee", prio: PRIO.flee, ttl: 400, gen: () => C.flee(bot, shooters.map((s) => s.entity.location), 28) };
     }
   }
@@ -259,10 +264,14 @@ export function target(bot, now) {
   }
   // something going for a friend
   if (bot.defend && ok(bot.defend) && B.dist(bot.defend.location, l) < 20) return bot.defend;
-  // badly hurt: it only fights what's on top of it
-  const weak = B.health(bot) < 10;
+  // badly hurt: it only fights what's on top of it; hurt, it leaves things that shoot alone
+  // (once it has run from them, until it's healed up)
+  const hp = B.health(bot);
+  const weak = hp < 10;
+  if (bot.cautious && hp >= 18) bot.cautious = false;
+  const shy = (hp < 14 && Inv.getEquip(bot, "Offhand")?.typeId !== m("shield")) || bot.cautious;
   const seen = Sense.seenWhere(bot, (s) => Sense.isThreat(bot, s) && !Sense.DREAD.has(s.typeId) && s.typeId !== "minecraft:ender_dragon" &&
-    ok(s.entity) && B.dist(s.entity.location, l) < (weak ? 3.5 : C.RANGED.has(s.typeId) ? 18 : 12), 60);
+    ok(s.entity) && B.dist(s.entity.location, l) < (weak || (shy && C.RANGED.has(s.typeId)) ? 3.5 : C.RANGED.has(s.typeId) ? 18 : 12), 60);
   // a creeper is for hitting and backing off, unless it's hurt
   const pick = seen.find((s) => s.typeId !== "minecraft:creeper" || B.health(bot) > 8);
   return pick?.entity;
@@ -294,14 +303,16 @@ function heal(bot) {
     burning = false;
   }
   if ((hp <= 6 || (hp <= 9 && burning)) && Inv.has(bot, m("golden_apple"))) {
-    return { name: "heal", prio: PRIO.heal, gen: () => S.eat(bot, m("golden_apple")), ttl: 60 };
+    // burning and hurt: the apple comes before running (the fire won't wait)
+    return { name: "heal", prio: burning ? PRIO.flee + 2 : PRIO.heal, gen: () => S.eat(bot, m("golden_apple")), ttl: 60 };
   }
   return undefined;
 }
 /** @param {any} bot @param {number} now @returns {Offer | undefined} */
 function eat(bot, now) {
   const hp = B.health(bot);
-  const want = bot.hunger <= 14 || (bot.hunger < 20 && hp < 14 && bot.hunger <= 17);
+  // hungry; or hurt, and too hungry to heal (it heals from 18 up, fastest when full)
+  const want = bot.hunger <= 14 || (hp < 20 && bot.hunger < 18) || (hp < 14 && bot.hunger < 20);
   if (!want) return undefined;
   const food = Inv.bestFood(bot, 20 - bot.hunger, bot.hunger <= 6);
   if (!food) return undefined;
@@ -735,9 +746,9 @@ function choose(bot, now) {
   // only what could beat the current task is worth asking about
   const floor = cur ? cur.prio : -1;
   if (floor < PRIO.danger) consider(danger(bot));
+  if (floor < PRIO.flee + 2) consider(heal(bot));
   if (floor < PRIO.flee) consider(flee(bot));
   if (floor < PRIO.fight) consider(fight(bot, now));
-  if (floor < PRIO.heal) consider(heal(bot));
   if (floor < PRIO.eat) consider(eat(bot, now));
   if (floor < PRIO.request) consider(social(bot, now));
   if (floor < PRIO.sleep) consider(sleep(bot, now));

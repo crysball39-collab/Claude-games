@@ -268,7 +268,7 @@ function settingsForm(player) {
     // is the bridge there?
     const before = Chat.bridge.seen;
     try {
-      system.sendScriptEvent("zt:ai_ping", "");
+      system.sendScriptEvent("zt:ai_ping", "ping");
     } catch {
       /* ignore */
     }

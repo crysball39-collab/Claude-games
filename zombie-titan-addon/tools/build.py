@@ -1,11 +1,12 @@
-"""Builds dist/ZombieTitan.mcaddon from the two packs.
+"""Builds dist/ZombieTitan.mcaddon from the two packs, and dist/PlayerAI_Bridge.mcpack (the
+optional pack that lets Players chat through an AI, for dedicated servers).
 
     python3 tools/build.py              regenerate textures/animations/particles/sounds, then package
     python3 tools/build.py --no-gen     package the packs as they are
 
-The .mcaddon is a zip with one folder per pack (ZombieTitan_BP/, ZombieTitan_RP/).
-Entries are written in a fixed order with a fixed timestamp, so rebuilding
-unchanged packs gives a byte-identical file.
+The .mcaddon is a zip with one folder per pack (ZombieTitan_BP/, ZombieTitan_RP/); the .mcpack
+has its pack's files at the top. Entries are written in a fixed order with a fixed timestamp,
+so rebuilding unchanged packs gives byte-identical files.
 """
 import json
 import os
@@ -19,6 +20,8 @@ PACKS = os.path.join(ROOT, "packs")
 DIST = os.path.join(ROOT, "dist")
 OUT = os.path.join(DIST, "ZombieTitan.mcaddon")
 PACK_DIRS = ("ZombieTitan_BP", "ZombieTitan_RP")
+BRIDGE = "PlayerAI_Bridge_BP"
+BRIDGE_OUT = os.path.join(DIST, "PlayerAI_Bridge.mcpack")
 GENERATORS = (
     "gen_textures.py",
     "gen_models.py",  # skeleton geometry; gen_skeleton_art.py paints its UV layout
@@ -71,24 +74,27 @@ def check_json(path):
     json.loads(re.sub(r"(?m)^\s*//[^\n]*$", "", text))
 
 
-def package():
-    os.makedirs(DIST, exist_ok=True)
+def pack_files(pack, inside):
+    """(name in the zip, path) for each file of a pack; `inside` puts them under the pack's folder."""
+    base = os.path.join(PACKS, pack)
+    if not os.path.isfile(os.path.join(base, "manifest.json")):
+        sys.exit(f"{pack} has no manifest.json")
     files = []
-    for pack in PACK_DIRS:
-        base = os.path.join(PACKS, pack)
-        if not os.path.isfile(os.path.join(base, "manifest.json")):
-            sys.exit(f"{pack} has no manifest.json")
-        for dirpath, dirnames, filenames in os.walk(base):
-            dirnames.sort()
-            for name in sorted(filenames):
-                path = os.path.join(dirpath, name)
-                arc = os.path.relpath(path, PACKS).replace(os.sep, "/")
-                if SKIP.search(arc):
-                    continue
-                if name.endswith(".json"):
-                    check_json(path)
-                files.append((arc, path))
-    tmp = OUT + ".tmp"
+    for dirpath, dirnames, filenames in os.walk(base):
+        dirnames.sort()
+        for name in sorted(filenames):
+            path = os.path.join(dirpath, name)
+            arc = os.path.relpath(path, PACKS if inside else base).replace(os.sep, "/")
+            if SKIP.search(arc):
+                continue
+            if name.endswith(".json"):
+                check_json(path)
+            files.append((arc, path))
+    return files
+
+
+def write_zip(out, files):
+    tmp = out + ".tmp"
     with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
         for arc, path in files:
             info = zipfile.ZipInfo(arc, STAMP)
@@ -96,8 +102,14 @@ def package():
             info.external_attr = 0o644 << 16
             with open(path, "rb") as f:
                 z.writestr(info, f.read())
-    os.replace(tmp, OUT)
-    print(f"wrote {os.path.relpath(OUT, ROOT)}: {len(files)} files, {os.path.getsize(OUT) // 1024} KB")
+    os.replace(tmp, out)
+    print(f"wrote {os.path.relpath(out, ROOT)}: {len(files)} files, {os.path.getsize(out) // 1024} KB")
+
+
+def package():
+    os.makedirs(DIST, exist_ok=True)
+    write_zip(OUT, [f for pack in PACK_DIRS for f in pack_files(pack, True)])
+    write_zip(BRIDGE_OUT, pack_files(BRIDGE, False))
 
 
 if __name__ == "__main__":

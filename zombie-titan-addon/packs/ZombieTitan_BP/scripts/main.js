@@ -51,7 +51,10 @@ world.afterEvents.entityDie.subscribe(
     const type = deadEntity.typeId;
     if (type === Bot.TYPE) Bot.onDeath(deadEntity, damageSource);
     if (damageSource.damagingEntity?.typeId === Bot.TYPE) Bot.onKill(damageSource.damagingEntity, deadEntity);
-    if (type === "minecraft:ender_dragon") BotWorld.remember("dragon", "minecraft:the_end", { x: 0, y: 64, z: 0 }, { dead: true }, 300);
+    if (type === "minecraft:ender_dragon") {
+      BotWorld.remember("dragon", "minecraft:the_end", { x: 0, y: 64, z: 0 }, { dead: true }, 300);
+      Bot.onDragonDied();
+    }
   }),
 );
 world.afterEvents.entityHurt.subscribe(safe(({ hurtEntity, damage, damageSource }) => Bot.onHurt(hurtEntity, damageSource, damage)));

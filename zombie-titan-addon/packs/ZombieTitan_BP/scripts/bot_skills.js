@@ -695,33 +695,26 @@ export function spotNear(bot, r = 3) {
   const dim = bot.entity.dimension;
   const f = B.feet(bot);
   const fw = B.forward(bot.yaw);
-  /** @type {Vector3[]} */
+  /** @type {{p: Vector3, score: number}[]} */
   const cands = [];
   for (let dx = -r; dx <= r; dx++) {
     for (let dz = -r; dz <= r; dz++) {
       for (let dy = -1; dy <= 1; dy++) {
         const p = { x: f.x + dx, y: f.y + dy, z: f.z + dz };
         if (dx === 0 && dz === 0) continue;
-        if (Math.abs(dx) <= 0 && Math.abs(dz) <= 0) continue;
         const here = B.blockAt(dim, p);
         const below = B.blockAt(dim, { ...p, y: p.y - 1 });
         if (!here || !["air", "pass"].includes(D.blockInfo(here.typeId).kind) || !below || !D.isFloor(below.typeId)) continue;
         // not where it would block its own way out
         const above = B.blockAt(dim, { ...p, y: p.y + 1 });
-        p.score = above?.isAir ? 0 : 1.5;
-        cands.push(p);
+        // in front of it first
+        const score = Math.abs(dx) + Math.abs(dz) - (dx * fw.x + dz * fw.z) * 0.6 + (above?.isAir ? 0 : 1.5);
+        cands.push({ p, score });
       }
     }
   }
-  // in front of it first
-  cands.sort((a, b) => {
-    const sa = Math.abs(a.x - f.x) + Math.abs(a.z - f.z) - ((a.x - f.x) * fw.x + (a.z - f.z) * fw.z) * 0.6 + a.score;
-    const sb = Math.abs(b.x - f.x) + Math.abs(b.z - f.z) - ((b.x - f.x) * fw.x + (b.z - f.z) * fw.z) * 0.6 + b.score;
-    return sa - sb;
-  });
-  const best = cands[0];
-  if (best) delete best.score;
-  return best;
+  cands.sort((a, b) => a.score - b.score);
+  return cands[0]?.p;
 }
 
 // ---------------------------------------------------------------- crafting

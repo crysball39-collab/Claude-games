@@ -342,8 +342,10 @@ export function* dragonFight(bot) {
   if (!dragonDead()) return false;
   // the experience it drops
   yield* S.collect(bot, f, 14, 120);
-  bot.progress.dragon = true;
-  bot.events.push({ kind: "dragon_dead", at: system.currentTick });
+  if (!bot.progress.dragon) {
+    bot.progress.dragon = true;
+    bot.events.push({ kind: "dragon_dead", at: system.currentTick });
+  }
   return true;
 }
 
@@ -501,10 +503,18 @@ export function* afterDragon(bot) {
     return true;
   }
   const f = fountain(dim);
+  // blocks to bridge out to the outer islands with: the island is made of them
+  if (!bot.progress.cities && bot.persona.curious > 0.45 && S.scaffoldCount(bot) < 48) {
+    G.doing(bot, "digging end stone to bridge with");
+    yield* G.obtain(bot, m("end_stone"), Inv.count(bot, m("end_stone")) + 64 - S.scaffoldCount(bot), { deadline: system.currentTick + 2400 });
+  }
   if (!bot.progress.cities && bot.persona.curious > 0.45 && S.scaffoldCount(bot) >= 32) {
-    bot.progress.cities = true;
+    // (a few goes at it: something may need dealing with on the way)
+    bot.progress.cityTries = (bot.progress.cityTries ?? 0) + 1;
+    if (bot.progress.cityTries >= 3) bot.progress.cities = true;
     const trip = yield* throughGateway(bot);
     if (trip) {
+      bot.progress.cities = true;
       for (let leg = 0; leg < 16; leg++) {
         if (bot.abort) return false;
         const city = yield* spotCity(bot);

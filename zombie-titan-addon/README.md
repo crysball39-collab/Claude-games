@@ -1,6 +1,6 @@
-# Titans: Zombie, Skeleton, Creeper and Spider Titans, the Omegafish, Dark Fists, Obsidian gear, Gum Gum Fruit, Doors
+# Titans: Zombie, Skeleton, Creeper and Spider Titans, the Omegafish, Dark Fists, Obsidian gear, Gum Gum Fruit, Doors, Players
 
-**Version 1.6.0**
+**Version 1.7.0**
 
 A Minecraft Bedrock (Pocket Edition) add-on that brings the **Zombie Titan**, the
 **Skeleton Titan**, the **Creeper Titan**, the **Spider Titan** and the **Omegafish**
@@ -14,6 +14,9 @@ bar. It also adds:
 - the Roblox horror game **DOORS**: the **Lobby** and all of **Floor 1** (the Hotel,
   doors 0 to 100, with Rush, Screech, Hide, Seek, the Figure and Jeff's shop), and
   **Door 50** (the Library) and **Door 30** (the Seek chase) on their own
+- **Players**: mobs that play Minecraft like a person, from punching a tree to the
+  Ender Dragon, and the **Player API** item to manage them (and to let them chat
+  through an AI)
 
 Made for Minecraft Bedrock **1.26.50** on Android. It works on 1.21.90 and newer and
 needs **no experimental toggles**. The Compact Obsidian block needs 1.26.20 or newer.
@@ -23,7 +26,7 @@ needs **no experimental toggles**. The Compact Obsidian block needs 1.26.20 or n
 1. Download **[`dist/ZombieTitan.mcaddon`](dist/ZombieTitan.mcaddon)**.
 2. Open **Files → Downloads** and tap `ZombieTitan.mcaddon`. Minecraft opens and
    imports two packs: *Zombie Titan BP* and *Zombie Titan RP*. Their descriptions
-   start with the version number (*Version 1.6.0*).
+   start with the version number (*Version 1.7.0*).
 3. Create a world, or edit one. Under **Behavior Packs**, activate
    **Zombie Titan BP**. Minecraft adds the resource pack with it.
 4. Play. Here is where everything is in the creative inventory:
@@ -37,6 +40,7 @@ needs **no experimental toggles**. The Compact Obsidian block needs 1.26.20 or n
    - **The Figure** and **Seek** spawn eggs: with the other spawn eggs.
    - The **hotel blocks** (wallpaper, wainscoting, floor, crates...): in the Construction
      tab. Lamps, paintings and signs: in the Items tab.
+   - **Spawn Player**: with the other spawn eggs. The **Player API**: in the Items tab.
 
 If tapping the file does nothing, long-press it, choose **Open with**, and pick
 **Minecraft**.
@@ -46,7 +50,7 @@ If tapping the file does nothing, long-press it, choose **Open with**, and pick
   Storage**, delete the old *Zombie Titan BP* and *Zombie Titan RP*, and import
   again.
 - If the world still acts like the old version, check under **Behavior Packs**
-  that Zombie Titan BP is active and that its description says *Version 1.6.0*.
+  that Zombie Titan BP is active and that its description says *Version 1.7.0*.
 
 ## The Zombie Titan
 
@@ -797,6 +801,152 @@ The Library and the Seek chase stay in your world after you play, with their doo
 left open so you can walk around them. Floor 1's rooms are taken down behind you as
 you go; the Lobby stays.
 
+## Players
+
+A **Player** is a mob that plays Minecraft the way a person does. It looks like a
+player (one of 16 skins, with its name over its head) and has what a player has: 20
+health, a hunger bar, a 36-slot inventory, armor and an off-hand slot. It starts with
+nothing. It punches a tree, makes a crafting table, and works its way up to the Ender
+Dragon.
+
+Players are mobs, not real player accounts: an add-on can't add real players (only
+the GameTest framework can, and it needs Beta APIs). Monsters still treat a Player
+as a player, so zombies, skeletons and creepers go after it.
+
+### Getting Players
+
+- **Spawn Player** (with the other spawn eggs). The Player "joins the game" with a
+  chat message, as a player does.
+- At most **4 Players** at once by default. Change it with the Player API.
+- The **Player API** item opens the control panel: the Players in your world, and
+  the settings. It's in the Items tab, or craft it:
+
+  | | | |
+  |---|---|---|
+  | | Glass Pane | |
+  | Redstone | Book | Redstone |
+  | | Redstone | |
+
+### What a Player does
+
+- **Moves like a player.** It walks, sprints, jumps, swims, climbs ladders, and opens
+  doors and gates (and closes them behind it). It finds its way around, digs through
+  what's in the way, bridges gaps (sneaking at the edge) and pillars up. It looks
+  around as it goes.
+- **Sees and hears.** It sees clearly within about 60° of where it's looking. Out to
+  about 110° (its peripheral vision) it only notices things that move, and then turns
+  to look. It sees nothing behind it, or through blocks.
+  - By day it sees 48 blocks; at night 20; in a dark cave 10. A torch helps.
+  - It hears footsteps (not if you sneak), fights, blocks breaking, doors, chests and
+    explosions, even out of sight.
+- **Survives.** It gets wood, then wooden and stone tools, then food (it hunts animals
+  and cooks the meat in a furnace), coal and torches. Then it gets wool for a bed and
+  builds a small house with a door and a chest, and sleeps at night. Then it mines for
+  iron, makes iron tools and armor, a shield, a bucket and a bow, and digs for
+  diamonds.
+  - It eats when it's hungry, and when it's hurt so it heals.
+  - It swims up for air, gets out of lava, and can land a fall with a water bucket.
+- **Fights.** It jumps for critical hits with its sword. It shoots its bow at what it
+  can't reach, aiming ahead of moving targets. It raises its shield against arrows,
+  blasts and the fireballs it sees coming. It hits a creeper and backs off, runs when
+  it's losing, and helps its friends.
+- **Uses blocks properly.** Crafting tables, furnaces, smokers and blast furnaces;
+  chests (it stores things and takes them back out); the enchanting table (power from
+  the bookshelves around it, levels and lapis); the anvil (repairs, combining, naming);
+  the smithing table (diamond to netherite); the brewing stand (it brews real
+  potions); the grindstone, stonecutter, composter, cauldron, bell and beds.
+- **Trades.** With villagers, by their job and level, for emeralds and what it
+  needs. It barters gold with piglins.
+- **Handles its things.** You see what it's holding in its hand. It drinks potions
+  (healing, fire resistance...) when it needs them, picks up what it wants, and drops
+  junk when its inventory gets full.
+- **Stops to think** now and then, like a player deciding what to do next.
+- **Goes to the End**, one step at a time:
+  1. It builds a Nether portal (it makes obsidian from lava and water if it must) and
+     lights it.
+  2. In the Nether it finds a fortress. It fights blazes at their spawner: it blocks
+     their fireballs with its shield and shoots back between them. It comes home
+     with blaze rods.
+  3. It gets ender pearls from endermen, clerics or piglins, and makes eyes of ender.
+  4. It throws eyes of ender and follows them to the stronghold, and digs down to
+     the portal room.
+  5. It fills the frame and jumps in. It shoots or climbs to the End crystals,
+     then fights the dragon, and says "gg" when it dies.
+  6. Then it either goes home through the exit portal, or (if it's the curious type)
+     throws a pearl through an End gateway to look for end cities. There it loots the
+     chests and takes the elytra from the ship.
+- **Dies and respawns.** You get the death message, and its things drop. It respawns
+  3 seconds later at its bed (or at the world spawn), and goes back for its things.
+  It remembers everything: its home, its friends, where it's been, how far it got.
+- **Keeps going when you're away.** A Player far from everyone keeps a small ticking
+  area around itself, so its part of the world keeps running. You can turn this off.
+
+### Talking to a Player
+
+Tap a Player for its menu. It shows its health, hunger, armor, level and what it's
+doing. The buttons:
+
+| Button | What it does |
+|---|---|
+| Talk | Say something to it. It answers in the chat. |
+| Befriend | Ask to be friends. It thinks about it. |
+| Follow me / Stop following me | It follows you around, or stops. |
+| Wait here / You can go | It stays put, or goes back to what it was doing. |
+| Give it what you're holding | It takes the item (and likes you more for it). |
+| Ask it for something | Pick something it has. A friend gives you some; a stranger may not. |
+| Its inventory | See everything it carries and wears. |
+| Ask it to... | Come here, go home, build a house, sleep, trade with villagers, enchant its gear, fix its gear, or drop its junk. |
+
+- **Friends.** Gifts, kind words and befriending make a Player like you more.
+  Friends share their things, do what you ask, and fight for you. Insults make it
+  like you less.
+- **It chats by itself** about what happens: diamonds, creepers, dying, the Nether,
+  the dragon. How much it talks is a setting.
+- An add-on can't read the normal chat box without Beta APIs, so talk to a Player with
+  **Talk** in its menu.
+
+### Letting a Player talk through an AI
+
+By itself, a Player answers with lines of its own. It can answer through an AI
+instead. Use the **Player API** → **Settings and AI key**:
+
+1. Pick the AI: **Claude (Anthropic)**, **OpenAI**, **Gemini (Google)**, or **Other**
+   (any server that speaks OpenAI's chat completions, such as a local one).
+2. Paste your API key. If you like, type a model name and, for Other, the server's
+   URL.
+
+Minecraft can't send web requests from a phone or a normal world. The requests go
+through a second pack, the **Player AI Bridge**, which needs a **Bedrock Dedicated
+Server (BDS)**:
+
+1. Download **[`dist/PlayerAI_Bridge.mcpack`](dist/PlayerAI_Bridge.mcpack)**.
+2. Add it to the server's world with the two Zombie Titan packs, and turn on **Beta
+   APIs** in the world's experiments.
+3. In the server's `config/default/permissions.json`, add `"@minecraft/server-net"`
+   to `allowed_modules`.
+4. Restart the server. Save the key in the Player API again: it tells you **"The AI
+   bridge is running"** when it finds the bridge.
+
+Notes:
+
+- Without the bridge, Players answer by themselves. Nothing breaks.
+- The default models are `claude-opus-5-5` for Claude, `gpt-5-mini` for OpenAI and
+  `gemini-3.6-flash` for Gemini. To use another model, type its name.
+- The AI knows who the Player is, what it's doing, what it has and what's been said,
+  and can make it follow you, stay, come over, go home, build, sleep, trade, drop
+  its junk or give you something.
+- Your key is saved in the world. **Anyone with the world file can read it.** Each
+  answer uses your API account.
+
+### Limits
+
+- **Finding a stronghold takes time.** An add-on can't look up where structures are,
+  so a Player throws eyes of ender and follows them, as a player does. Strongholds
+  are hundreds of blocks out, so the trip can be long.
+- **Lag.** Every Player thinks every tick. On a phone, 2 to 4 Players is plenty.
+- **Ticking areas.** Minecraft allows 10 per world. Each Player far from everyone
+  uses one, so you can run out if you also use your own.
+
 ## Building from source
 
 The models, textures, animations, particles, sound definitions and the obsidian
@@ -805,6 +955,7 @@ items are all generated by scripts in `tools/`. To build:
 ```
 pip install numpy pillow
 python3 tools/build.py        # regenerates everything, writes dist/ZombieTitan.mcaddon
+                              # and dist/PlayerAI_Bridge.mcpack
 ```
 
 The Seek chase's music is synthesized by `tools/gen_doors_audio.py`, and the elevator
@@ -818,7 +969,10 @@ Development checks:
   `python3 tools/validate.py <bedrock-samples>/metadata/json_schemas`
   (needs `pip install jsonschema`).
 - **Simulation.** Runs the behaviour pack scripts against a mock of the
-  `@minecraft/server` and `@minecraft/server-ui` APIs: `node tools/sim/run.mjs`.
+  `@minecraft/server`, `@minecraft/server-ui` and `@minecraft/server-net` APIs:
+  `node tools/sim/run.mjs`. The Player tests play whole games: `botcraft` from
+  nothing to an iron pickaxe, `botend` from a Nether portal to the dragon and the end
+  cities, and `botai` runs the AI bridge against fake AI services.
   Random numbers are seeded so runs repeat; set `ZT_SEED=<number>` to try others.
   The mock refuses blocks and block states the game would refuse, using Mojang's
   block lists in `tools/sim/vanilla-blocks.json` (made by
@@ -830,6 +984,15 @@ Development checks:
 
 ## Version history
 
+- **1.7.0**
+  - New: **Players**, mobs that play Minecraft like a person. They gather, craft,
+    smelt, build, mine, fight, trade, brew, enchant and use chests, and work their way
+    to the Nether, the End, the dragon and the end cities. They see with peripheral
+    vision and hear what's going on.
+  - New: the **Spawn Player** egg, and the **Player API** item (Players, settings, and
+    an AI key).
+  - New: the **Player AI Bridge** pack, for dedicated servers. It lets Players chat
+    through Claude, OpenAI, Gemini or any OpenAI-compatible server.
 - **1.6.0**
   - New: the **Omegafish**, the silverfish titan, with its own boss bar, silverfish
     minions, burrowing, lightning, explosions at your feet and its arrow weak spot.

@@ -48,6 +48,10 @@ export function foodCount(bot) {
 function hasOrHome(bot, id) {
   return Inv.has(bot, id) || !!bot.home?.stations?.[D.bare(id)];
 }
+/** Still on its way to the dragon (it's alive, and this one hasn't beaten it). @param {any} bot */
+function toTheEnd(bot) {
+  return !bot.progress.dragon && !End.dragonDead();
+}
 /** Eyes it could have: eyes, plus pearls with blaze powder (or rods) to make them. @param {any} bot */
 function eyesPossible(bot) {
   const powder = Inv.count(bot, m("blaze_powder")) + Inv.count(bot, m("blaze_rod")) * 2;
@@ -135,17 +139,17 @@ export const STEPS = [
   },
   {
     id: "blaze", say: "going to the Nether for blaze rods", nether: true,
-    need: (b) => Inv.count(b, m("blaze_rod")) * 2 + Inv.count(b, m("blaze_powder")) + Inv.count(b, m("ender_eye")) < eyesWanted(b),
+    need: (b) => toTheEnd(b) && Inv.count(b, m("blaze_rod")) * 2 + Inv.count(b, m("blaze_powder")) + Inv.count(b, m("ender_eye")) < eyesWanted(b),
     go: (b) => N.netherTrip(b, { [m("blaze_rod")]: Math.ceil((eyesWanted(b) - Inv.count(b, m("ender_eye")) - Inv.count(b, m("blaze_powder"))) / 2) + 1,
       [m("nether_wart")]: 2 }),
   },
   {
     id: "pearls", say: "hunting for ender pearls",
-    need: (b) => Inv.count(b, m("ender_pearl")) + Inv.count(b, m("ender_eye")) < eyesWanted(b),
+    need: (b) => toTheEnd(b) && Inv.count(b, m("ender_pearl")) + Inv.count(b, m("ender_eye")) < eyesWanted(b),
     go: (b) => getPearls(b, eyesWanted(b) - Inv.count(b, m("ender_eye"))),
   },
   {
-    id: "eyes", say: "making eyes of ender", need: (b) => Inv.count(b, m("ender_eye")) < eyesWanted(b) && eyesPossible(b) > Inv.count(b, m("ender_eye")),
+    id: "eyes", say: "making eyes of ender", need: (b) => toTheEnd(b) && Inv.count(b, m("ender_eye")) < eyesWanted(b) && eyesPossible(b) > Inv.count(b, m("ender_eye")),
     go: (b) => G.obtain(b, m("ender_eye"), Math.min(eyesWanted(b), eyesPossible(b))),
   },
   { id: "prepare", say: "getting ready for the End", need: (b) => !b.progress.dragon && Inv.count(b, m("cobblestone")) < 64, go: (b) => prepare(b), cool: 6000 },

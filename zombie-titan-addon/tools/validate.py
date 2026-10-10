@@ -18,6 +18,12 @@ from referencing import Registry, Resource
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 BP = os.path.join(ROOT, "packs", "ZombieTitan_BP")
 RP = os.path.join(ROOT, "packs", "ZombieTitan_RP")
+BRIDGE = os.path.join(ROOT, "packs", "PlayerAI_Bridge_BP")
+
+
+def bpm_module(manifest, name):
+    """The version of a script module a manifest depends on."""
+    return next((d.get("version") for d in manifest["dependencies"] if d.get("module_name") == name), None)
 
 problems = []
 
@@ -317,7 +323,12 @@ def main():
     events = set()
     for p in glob.glob(os.path.join(BP, "entities", "*.json")):
         events |= set(load(p)["minecraft:entity"].get("events", {}).keys())
-    dynamic = {"zt:run", "zt:keep", "zt:gap", "zt:fake", "zt:doors_mode", "zt:doors_death", "zt:doors_home", "zt:lobbies"}
+    dynamic = {"zt:run", "zt:keep", "zt:gap", "zt:fake", "zt:doors_mode", "zt:doors_death", "zt:doors_home", "zt:lobbies",
+               # the Players: what they are and know, the world they share, their settings, their potions and work
+               "zt:bot", "zt:bot_world", "zt:bot_placed", "zt:players", "zt:players_respawn", "zt:ai", "zt:potion", "zt:work",
+               "zt:trades",
+               # script events to and from the Player AI Bridge pack
+               "zt:ai_ping", "zt:ai_pong", "zt:ai_request", "zt:ai_reply"}
     for pid in set(re.findall(r'"(zt:[a-z_]*[a-z])"', scripts)):  # (ids built from a prefix like "zt:gum_" skipped)
         if pid.startswith("zt:") and pid not in pids and pid not in bp_ids and pid not in item_ids:
             if not pid.startswith("zt:as_") and pid not in ("zt:start_birth", "zt:end_birth", "zt:natural_spawns",
@@ -376,7 +387,17 @@ def main():
         problem("BP does not depend on the RP uuid")
     elif dep[0]["version"] != rpm["header"]["version"]:
         problem(f"BP depends on RP version {dep[0]['version']}, but the RP is {rpm['header']['version']}")
-    uuids = [bpm["header"]["uuid"], rpm["header"]["uuid"]] + [m["uuid"] for m in bpm["modules"] + rpm["modules"]]
+    # the AI bridge: a script pack of its own, with the web module only dedicated servers have
+    brm = load(os.path.join(BRIDGE, "manifest.json"))
+    mods = {d.get("module_name"): d.get("version") for d in brm["dependencies"]}
+    if mods.get("@minecraft/server") != bpm_module(bpm, "@minecraft/server"):
+        problem(f"the bridge uses @minecraft/server {mods.get('@minecraft/server')}, the add-on {bpm_module(bpm, '@minecraft/server')}")
+    if mods.get("@minecraft/server-net") != "1.0.0-beta":
+        problem("the bridge should depend on @minecraft/server-net 1.0.0-beta")
+    for m in brm["modules"]:
+        if m["type"] == "script" and not os.path.isfile(os.path.join(BRIDGE, m["entry"])):
+            problem(f"the bridge's script {m['entry']} is missing")
+    uuids = [bpm["header"]["uuid"], rpm["header"]["uuid"], brm["header"]["uuid"]] + [m["uuid"] for m in bpm["modules"] + rpm["modules"] + brm["modules"]]
     if len(set(uuids)) != len(uuids):
         problem("duplicate uuids in manifests")
     print()

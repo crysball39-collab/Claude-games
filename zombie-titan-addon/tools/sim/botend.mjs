@@ -29,12 +29,12 @@ function overworld(x, y, z) {
   if (y >= 60 && y < 63) return "minecraft:dirt";
   return undefined;
 }
-// the Nether: a floor of netherrack, a fortress bridge with a blaze spawner
+// the Nether: a floor of netherrack, a fortress with a blaze spawner on a fenced platform
 function nether(x, y, z) {
   if (y >= 127 || y <= 0) return "minecraft:bedrock";
-  if (x >= 20 && x <= 60 && z >= -3 && z <= 3) {
+  if (x >= 20 && x <= 60 && z >= -8 && z <= 8) {
     if (y === 40) return "minecraft:nether_brick";
-    if (y === 41 && (z === -3 || z === 3)) return "minecraft:nether_brick_fence";
+    if (y === 41 && (z === -8 || z === 8) && x > 21) return "minecraft:nether_brick_fence";
     if (y === 41 && x === 40 && z === 0) return "minecraft:mob_spawner";
     if (y > 40) return "minecraft:air";
   }
@@ -115,6 +115,12 @@ function until(test, ticks, label) {
     if (bot.dead) return false;
     const now = `${bot.progress.stage} | ${bot.doing} | ${bot.entity.dimension.id.replace("minecraft:", "")}`;
     if (now !== last && process.env.ZT_TRACE) process.stderr.write(`${t} ${now} @ ${B.feet(bot).x},${B.feet(bot).y},${B.feet(bot).z} hp ${B.health(bot)}\n`);
+    if (process.env.ZT_TRACE === "2" && t % 200 === 0) {
+      const blazes = bot.entity.dimension.getEntities({ type: "minecraft:blaze" }).map((b) => `${b.location.x.toFixed(0)},${b.location.y.toFixed(0)},${b.location.z.toFixed(0)}`);
+      const rods = bot.entity.dimension.getEntities({ type: "minecraft:item" }).filter((i) => i.getComponent("minecraft:item")?.itemStack?.typeId === "minecraft:blaze_rod")
+        .map((i) => `${i.location.x.toFixed(1)},${i.location.y.toFixed(1)},${i.location.z.toFixed(1)}`);
+      process.stderr.write(`  .. ${t} task ${bot.task?.name} kills ${bot.stats.kills} arrows ${Inv.count(bot, "minecraft:arrow")} rods ${Inv.count(bot, "minecraft:blaze_rod")} hp ${B.health(bot).toFixed(1)} hunger ${bot.hunger} @ ${B.feet(bot).x},${B.feet(bot).y},${B.feet(bot).z} blazes ${blazes.join(" ")} rods on the ground ${rods.join(" ")} rods dropped ${log.items.filter(([id]) => id === "minecraft:blaze_rod").length}\n`);
+    }
     last = now;
     return test();
   });
@@ -124,7 +130,10 @@ function until(test, ticks, label) {
 }
 if (process.env.ZT_TRACE) {
   world.afterEvents.entityHurt.subscribe((ev) => {
-    if (ev.hurtEntity.typeId === "zt:player") process.stderr.write(`HURT ${system.currentTick} ${ev.damage.toFixed(1)} ${ev.damageSource.cause} by ${ev.damageSource.damagingEntity?.typeId} hp ${B.health(bot).toFixed(1)} task ${bot.task?.name} @ ${JSON.stringify(B.feet(bot))}\n`);
+    if (ev.hurtEntity.typeId === "zt:player") process.stderr.write(`HURT ${system.currentTick} ${ev.damage.toFixed(1)} ${ev.damageSource.cause} by ${ev.damageSource.damagingEntity?.typeId} hp ${B.health(bot).toFixed(1)} task ${bot.task?.name} use ${bot.use} @ ${JSON.stringify(B.feet(bot))}\n`);
+  });
+  world.afterEvents.dataDrivenEntityTrigger.subscribe((ev) => {
+    if (ev.eventId === "zt:shield_block") process.stderr.write(`BLOCK ${system.currentTick} task ${bot.task?.name}\n`);
   });
   world.afterEvents.entityDie.subscribe((ev) => {
     if (ev.deadEntity.typeId === "zt:player") process.stderr.write(`DIED ${system.currentTick} ${ev.damageSource.cause} by ${ev.damageSource.damagingEntity?.typeId}\n`);
@@ -174,7 +183,8 @@ const c2 = en.spawnEntity("minecraft:ender_crystal", { x: 0.5, y: 69, z: -29.5 }
 check(until(() => !c1.isValid && !c2.isValid, 20000, "crystals"), "destroys the End crystals");
 check(until(() => !dragon.isValid, 30000, "dragon"), "and kills the Ender Dragon");
 check(bot.progress.dragon, "it knows it beat the dragon");
-check(log.messages.some((m) => m.startsWith(`<${bot.name}> `) && /gg|dragon/i.test(m)), "and says so");
+// (it takes a moment to type it)
+check(until(() => log.messages.some((m) => m.startsWith(`<${bot.name}> `) && /gg|dragon/i.test(m)), 400, "gg"), "and says so");
 
 console.log("after");
 check(until(() => Inv.has(bot, "minecraft:elytra"), 40000, "end city"), "through the gateway to the outer islands, it finds the ship's elytra");

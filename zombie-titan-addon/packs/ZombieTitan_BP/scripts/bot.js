@@ -278,6 +278,8 @@ export function playersTick(now) {
     }
     bot.goneTicks = 0;
     try {
+      // (was it already burning before anything that hits it this tick?)
+      bot.burning = !!e.getComponent("minecraft:onfire");
       B.bodyTick(bot, now);
       B.vitalsTick(bot, now);
       if ((now + bot.phase) % 5 === 0) Sense.senseTick(bot, now);
@@ -559,8 +561,8 @@ function spawnerTick(bot, dim, sp) {
   } catch {
     return;
   }
-  // (a wave of one or two: a Player alone can't take on four blazes at once)
-  if (near >= 4) return;
+  // (a wave of one or two, and no more than two about: a Player alone can't take on four blazes)
+  if (near >= (type === "minecraft:blaze" ? 2 : 4)) return;
   const n = 1 + Math.floor(Math.random() * 2);
   for (let i = 0; i < n; i++) spawnAround(dim, { x: sp.x + 0.5, y: sp.y, z: sp.z + 0.5 }, type, 1, 4);
   try {
@@ -626,6 +628,7 @@ export function onHurt(hurt, source, damage) {
   const bot = botOf(hurt);
   if (!bot) return;
   bot.hurtAt = now;
+  if (/projectile|fireball/i.test(String(source?.cause))) bot.shotAt = now;
   bot.exhaust += 0.1;
   if (by && by.id !== hurt.id) {
     bot.lastAttacker = by;
@@ -672,10 +675,32 @@ export function onKill(killer, dead) {
   bot.events.push({ kind: "killed", typeId: type, at: system.currentTick });
 }
 
+/**
+ * The dragon died: every Player in the End beat it (whoever struck the last blow, as players
+ * there all get "Free the End"), and says so.
+ */
+export function onDragonDied() {
+  const now = system.currentTick;
+  for (const b of live()) {
+    if (b.entity.dimension.id !== "minecraft:the_end" || b.progress.dragon) continue;
+    b.progress.dragon = true;
+    b.events.push({ kind: "dragon_dead", at: now });
+  }
+}
+
 /** Its raised shield took a hit. @param {Entity} e */
 export function onShieldBlock(e) {
   const bot = botOf(e);
   if (!bot) return;
+  bot.blockedAt = system.currentTick;
+  // a blocked fireball sets nothing alight (as for a player)
+  if (!bot.burning) {
+    try {
+      e.extinguishFire(false);
+    } catch {
+      /* ignore */
+    }
+  }
   try {
     e.dimension.playSound("item.shield.block", e.location, { volume: 0.8, pitch: 0.9 + Math.random() * 0.2 });
   } catch {

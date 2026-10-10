@@ -306,7 +306,8 @@ me.friends.Steve = 0;
 me.persona.friendly = 0;
 n0 = log.messages.length;
 await tap(button("Ask it for something"), button("diamond"));
-runTicks(60);
+// (a longer line takes longer to type)
+runTicks(120);
 check(Inv.count(me, "minecraft:diamond") === 2 && said(me, n0).length === 1, `a stranger asking for its diamonds gets "${said(me, n0)[0] ?? ""}"`);
 me.persona.friendly = 0.8;
 await tap(button("Befriend"));

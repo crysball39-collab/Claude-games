@@ -1,0 +1,29 @@
+{
+	"format_version": 2,
+	"header": {
+		"name": "Player AI Bridge",
+		"description": "Version 1.0.0 | Lets the Players from the Zombie Titan add-on chat through an AI (Claude, OpenAI, Gemini or any OpenAI-compatible server) using the key typed into the Player API item. Needs a Bedrock Dedicated Server with Beta APIs on and @minecraft/server-net allowed. Made with Claude.",
+		"uuid": "5b579a94-4785-4fca-8630-f7bfbe39a472",
+		"version": [1, 0, 0],
+		"min_engine_version": [1, 21, 90]
+	},
+	"modules": [
+		{
+			"type": "script",
+			"language": "javascript",
+			"uuid": "a35a2f95-52a5-4ca2-a647-eb0d9c2e64a4",
+			"version": [1, 0, 0],
+			"entry": "scripts/bridge.js"
+		}
+	],
+	"dependencies": [
+		{
+			"module_name": "@minecraft/server",
+			"version": "2.0.0"
+		},
+		{
+			"module_name": "@minecraft/server-net",
+			"version": "1.0.0-beta"
+		}
+	]
+}

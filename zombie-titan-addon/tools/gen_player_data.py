@@ -1,5 +1,5 @@
 """Writes the Player's behaviour and client files: the Player (a mob that lives like a Minecraft
-player: player.js runs it), its spawn egg, and the Player API item (a control panel for the
+player: bot.js runs it), its spawn egg, and the Player API item (a control panel for the
 Players, and where you type in an AI's key).
 
 A Player is player-sized (0.6 x 1.8), has 20 health, 15 seconds of air, a 36-slot inventory and
