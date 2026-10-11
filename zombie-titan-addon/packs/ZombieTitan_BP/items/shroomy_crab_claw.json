@@ -1,0 +1,18 @@
+{
+	"format_version": "1.21.90",
+	"minecraft:item": {
+		"description": {
+			"identifier": "zt:shroomy_crab_claw",
+			"menu_category": {
+				"category": "items"
+			}
+		},
+		"components": {
+			"minecraft:icon": "zt_shroomy_crab_claw",
+			"minecraft:display_name": {
+				"value": "item.zt:shroomy_crab_claw.name"
+			},
+			"minecraft:max_stack_size": 64
+		}
+	}
+}

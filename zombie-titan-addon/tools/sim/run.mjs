@@ -11,11 +11,12 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 // the Doors levels place many kinds of blocks: build them with older block lists too
-// (glowite: the ore, furnace, armor, the Glowshroom caverns, their blocks, mobs and berries)
+// (glowite: the ore, furnace, armor, the Glowshroom caverns, their blocks, mobs and berries;
+// crabs: the caverns' ponds and the Shroomy Crabs)
 // (the Players: bot is its senses, chat and menus; botpath getting about; botcraft a game from
 // nothing; botstations the blocks it uses; botend the way to the dragon; botai the AI bridge)
 const TESTS = ["smoke", "skeleton", "creeper", "spider", "omegafish", "items", "gumgum", "library", "seek", "library@1.21.90", "seek@1.21.90",
-  "library@1.26.20", "floor1", "floor1@1.21.90", "bot", "botpath", "botstations", "botai", "botcraft", "botend", "botfight", "botblaze", "botreal", "glowite"];
+  "library@1.26.20", "floor1", "floor1@1.21.90", "bot", "botpath", "botstations", "botai", "botcraft", "botend", "botfight", "botblaze", "botreal", "glowite", "crabs", "crabulon", "everest"];
 
 const here = dirname(fileURLToPath(import.meta.url));
 const work = mkdtempSync(join(tmpdir(), "zt-sim-"));
@@ -107,7 +108,8 @@ for (const name of wanted) {
   const [file, mc] = name.split("@");
   cpSync(join(here, file + ".mjs"), join(work, file + ".mjs"));
   console.log("=== " + name);
-  const env = { ...process.env };
+  // (the pack itself, for tests that read its files)
+  const env = { ...process.env, ZT_ROOT: join(here, "..", "..") };
   if (mc) env.ZT_MC = mc;
   else delete env.ZT_MC;
   const r = spawnSync(process.execPath, ["--import", "./seed.mjs", join(work, file + ".mjs")], { stdio: "inherit", cwd: work, env });

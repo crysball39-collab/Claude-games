@@ -1,0 +1,189 @@
+{
+	"format_version": "1.21.90",
+	"minecraft:entity": {
+		"description": {
+			"identifier": "zt:crabulon",
+			"is_spawnable": true,
+			"is_summonable": true,
+			"spawn_category": "monster",
+			"properties": {
+				"zt:anim": {
+					"type": "int",
+					"range": [
+						0,
+						15
+					],
+					"default": 0,
+					"client_sync": true
+				},
+				"zt:moving": {
+					"type": "bool",
+					"default": false,
+					"client_sync": true
+				},
+				"zt:enraged": {
+					"type": "bool",
+					"default": false,
+					"client_sync": true
+				},
+				"zt:intro": {
+					"type": "bool",
+					"default": false,
+					"client_sync": false
+				}
+			}
+		},
+		"components": {
+			"minecraft:type_family": {
+				"family": [
+					"crabulon",
+					"shroom",
+					"boss",
+					"monster",
+					"mob"
+				]
+			},
+			"minecraft:health": {
+				"value": 3000,
+				"max": 3000
+			},
+			"minecraft:boss": {
+				"name": "Crabulon",
+				"should_darken_sky": false,
+				"hud_range": 64
+			},
+			"minecraft:collision_box": {
+				"width": 9.0,
+				"height": 6.0
+			},
+			"minecraft:physics": {
+				"has_gravity": false,
+				"has_collision": false
+			},
+			"minecraft:knockback_resistance": {
+				"value": 1.0
+			},
+			"minecraft:pushable": {
+				"is_pushable": false,
+				"is_pushable_by_piston": false
+			},
+			"minecraft:fire_immune": {},
+			"minecraft:movement": {
+				"value": 0.0
+			},
+			"minecraft:movement.basic": {},
+			"minecraft:persistent": {},
+			"minecraft:nameable": {
+				"allow_name_tag_renaming": false,
+				"always_show": false
+			},
+			"minecraft:breathable": {
+				"breathes_air": true,
+				"breathes_water": true,
+				"total_supply": 15,
+				"suffocate_time": 0
+			},
+			"minecraft:mob_effect_immunity": {
+				"mob_effects": [
+					"poison",
+					"fatal_poison",
+					"wither",
+					"slowness",
+					"weakness",
+					"levitation",
+					"blindness",
+					"darkness",
+					"nausea",
+					"mining_fatigue",
+					"hunger",
+					"slow_falling",
+					"infested",
+					"oozing",
+					"weaving",
+					"wind_charged"
+				]
+			},
+			"minecraft:damage_sensor": {
+				"triggers": [
+					{
+						"on_damage": {
+							"filters": {
+								"test": "bool_property",
+								"domain": "zt:intro",
+								"value": true
+							}
+						},
+						"deals_damage": "no"
+					},
+					{
+						"cause": "fall",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "fire",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "fire_tick",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "lava",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "drowning",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "suffocation",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "falling_block",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "freezing",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "contact",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "stalactite",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "stalagmite",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "fly_into_wall",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "temperature",
+						"deals_damage": "no"
+					},
+					{
+						"cause": "anvil",
+						"deals_damage": "no"
+					},
+					{
+						"on_damage": {
+							"filters": {
+								"test": "is_family",
+								"subject": "other",
+								"value": "shroom"
+							}
+						},
+						"deals_damage": "no"
+					}
+				]
+			}
+		},
+		"events": {}
+	}
+}

@@ -223,6 +223,24 @@
 		},
 		"zt_glowite_boots": {
 			"textures": "textures/items/zt_glowite_boots"
+		},
+		"zt_shroom_patch": {
+			"textures": "textures/items/zt_shroom_patch"
+		},
+		"zt_shroomy_crab_claw": {
+			"textures": "textures/items/zt_shroomy_crab_claw"
+		},
+		"zt_crab_totem": {
+			"textures": "textures/items/zt_crab_totem"
+		},
+		"zt_spore_scroll": {
+			"textures": "textures/items/zt_spore_scroll"
+		},
+		"zt_shroomed_eye": {
+			"textures": "textures/items/zt_shroomed_eye"
+		},
+		"zt_everest": {
+			"textures": "textures/items/zt_everest"
 		}
 	}
 }

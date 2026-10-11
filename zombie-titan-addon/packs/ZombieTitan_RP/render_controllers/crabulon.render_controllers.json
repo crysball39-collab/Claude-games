@@ -1,0 +1,22 @@
+{
+	"format_version": "1.8.0",
+	"render_controllers": {
+		"controller.render.zt.crabulon": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			],
+			"overlay_color": {
+				"r": "q.property('zt:enraged') ? 0.35 : this",
+				"g": "q.property('zt:enraged') ? 0.8 : this",
+				"b": "q.property('zt:enraged') ? 1.0 : this",
+				"a": "q.property('zt:enraged') ? (0.15 + math.max(0, math.sin(q.life_time * 240.0)) * 0.3) : this"
+			}
+		}
+	}
+}

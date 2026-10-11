@@ -16,6 +16,7 @@ await import("./scripts/main.js");
 const Glowite = await import("./scripts/glowite.js");
 const Glow = await import("./scripts/glowshroom.js");
 const Shroom = await import("./scripts/shroom.js");
+const Bullets = await import("./scripts/bullets.js");
 const ow = world.getDimension("overworld");
 let failures = 0;
 function check(cond, msg) {
@@ -360,7 +361,7 @@ n = log.messages.length;
 runTicks(30);
 check(log.messages.slice(n).some((m) => m.includes("Glowshroom Biome")), "walking in shows the Glowshroom Biome's title");
 runTicks(1200);
-const mobs = ow.getEntities({ families: ["shroom"] });
+const mobs = ow.getEntities({ families: ["shroom"] }).filter((m) => m.typeId !== Glow.CRAB);
 check(mobs.length >= 1 && mobs.length <= 4, `Shroom Zombies and Skeletons turn up (${mobs.map((m) => m.typeId.slice(3)).join(", ")})`);
 check(mobs.every((m) => blockId(ow, Math.floor(m.location.x), Math.floor(m.location.y) - 1, Math.floor(m.location.z)) === Glow.GRASS),
   "on its spore grass");
@@ -368,7 +369,7 @@ check(mobs.every((m) => Math.hypot(m.location.x - player.location.x, m.location.
 for (const m of mobs) m.remove();
 world.difficulty = "Peaceful";
 runTicks(800);
-check(ow.getEntities({ families: ["shroom"] }).length === 0, "none in peaceful");
+check(ow.getEntities({ families: ["shroom"] }).filter((m) => m.typeId !== Glow.CRAB).length === 0, "none in peaceful");
 world.difficulty = "Normal";
 
 // one where something was built: left alone
@@ -415,9 +416,9 @@ const before = bullets().length;
 runTicks(10);
 const fired = bullets();
 check(fired.length - before === 4, `a player too far off gets a burst of four spore bullets (${fired.length - before})`);
-const dirs = fired.map((b) => Math.round(Math.atan2(b.velocity.z, b.velocity.x) * 180 / Math.PI));
+const dirs = Bullets.flying().map((b) => Math.round(Math.atan2(b.vel.z, b.vel.x) * 180 / Math.PI));
 check(dirs.includes(0) && dirs.some((d) => Math.abs(Math.abs(d) - 180) < 1) && dirs.includes(90) && dirs.includes(-90), `four ways, one at the player (${dirs.join(" ")})`);
-check(fired.every((b) => b.components["minecraft:projectile"].owner === sz), "fired by the zombie");
+check(Bullets.flying().every((b) => b.owner === sz), "fired by the zombie");
 const hpBefore = hp.currentValue;
 runTicks(20);
 check(hp.currentValue < hpBefore, `the one aimed at the player hits (${(hpBefore - hp.currentValue).toFixed(0)} damage)`);
@@ -434,6 +435,47 @@ for (let y = Z.y; y < Z.y + 4; y++) for (let dz = -2; dz <= 2; dz++) setBlock(ow
 runTicks(100);
 check(bullets().length === 0, "nor one behind a wall");
 sz.remove();
+
+console.log("spore bullets hit hard");
+const SB = { x: 500, y: 64, z: 500 };
+player.teleport({ x: SB.x + 10, y: SB.y, z: SB.z });
+hp.setCurrentValue(20);
+const skel = ow.spawnEntity(Shroom.SKELETON, { x: SB.x, y: SB.y, z: SB.z });
+// its bow looses a spore arrow: it becomes a spore bullet the moment it's fired
+const arrow = ow.spawnEntity(Shroom.ARROW, { x: SB.x + 0.6, y: SB.y + 1.5, z: SB.z });
+arrow.components["minecraft:projectile"].owner = skel;
+arrow.components["minecraft:projectile"].shoot({ x: 1.5, y: 0, z: 0 });
+runTicks(1);
+const shot = Bullets.flying().find((b) => b.owner === skel);
+check(!arrow.valid && !!shot && shot.type === Shroom.BULLET, "a Shroom Skeleton's arrow turns into a spore bullet");
+check(!!shot && shot.vel.x > 1 && Math.abs(shot.vel.z) < 1e-6, "flying the way the bow aimed");
+runTicks(12);
+check(Math.abs(hp.currentValue - (20 - Shroom.BULLET_DAMAGE)) < 1e-6, `and hits the player for ${20 - hp.currentValue} (2 hearts)`);
+check(skel.angryAt === undefined, "the skeleton isn't hit by its own bullet");
+// a bullet passes over the Glowshroom Biome's own and hits a player behind
+hp.setCurrentValue(20);
+const friend = ow.spawnEntity(Shroom.ZOMBIE, { x: SB.x + 5, y: SB.y, z: SB.z });
+const friendHp = friend.getComponent("minecraft:health").currentValue;
+Bullets.fire(ow, Shroom.BULLET, { x: SB.x + 1, y: SB.y + 1, z: SB.z }, { x: 1, y: 0, z: 0 }, 1.1, skel, Shroom.BULLET_DAMAGE);
+runTicks(15);
+check(friend.getComponent("minecraft:health").currentValue === friendHp && hp.currentValue < 20, "spore bullets fly through shroom mobs to the player");
+// a player in creative mode isn't hurt, a wall stops a bullet
+player.setGameMode("Creative");
+hp.setCurrentValue(20);
+Bullets.fire(ow, Shroom.BULLET, { x: SB.x + 1, y: SB.y + 1, z: SB.z }, { x: 1, y: 0, z: 0 }, 1.1, skel, Shroom.BULLET_DAMAGE);
+runTicks(15);
+check(hp.currentValue === 20, "a player in creative isn't hurt (they fly on by)");
+player.setGameMode("Survival");
+for (let y = SB.y; y < SB.y + 3; y++) setBlock(ow, SB.x + 3, y, SB.z, "minecraft:stone");
+hp.setCurrentValue(20);
+const pops = log.particles.filter((p) => p === "zt:spore_pop").length;
+Bullets.fire(ow, Shroom.BULLET, { x: SB.x + 1, y: SB.y + 1, z: SB.z }, { x: 1, y: 0, z: 0 }, 1.1, skel, Shroom.BULLET_DAMAGE);
+runTicks(15);
+check(hp.currentValue === 20 && log.particles.filter((p) => p === "zt:spore_pop").length === pops + 1, "and a wall stops one, bursting");
+runTicks(80);
+check(Bullets.flying().length === 0 && ow.getEntities({ type: Shroom.BULLET }).length === 0, "bullets that hit nothing fade after 4 seconds");
+skel.remove();
+friend.remove();
 
 console.log("Shroom Berries and Shroomy");
 const P2 = { x: 400, y: 64, z: 400 };

@@ -1,0 +1,396 @@
+{
+	"format_version": "1.10.0",
+	"animation_controllers": {
+		"controller.animation.zt.shroomy_crab.move": {
+			"initial_state": "still",
+			"states": {
+				"still": {
+					"animations": [
+						"idle"
+					],
+					"transitions": [
+						{
+							"moving": "q.ground_speed > 0.4"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"moving": {
+					"animations": [
+						"walk",
+						{
+							"sidle": "v.attack_time > 0 ? 0 : 1"
+						}
+					],
+					"transitions": [
+						{
+							"still": "q.ground_speed < 0.2"
+						}
+					],
+					"blend_transition": 0.25
+				}
+			}
+		},
+		"controller.animation.zt.crabulon.main": {
+			"initial_state": "default",
+			"states": {
+				"default": {
+					"animations": [
+						"idle",
+						{
+							"walk": "q.property('zt:moving') ? 1 : 0"
+						}
+					],
+					"transitions": [
+						{
+							"barrage": "q.property('zt:anim') == 1"
+						},
+						{
+							"crouch": "q.property('zt:anim') == 2"
+						},
+						{
+							"air": "q.property('zt:anim') == 3"
+						},
+						{
+							"land": "q.property('zt:anim') == 4"
+						},
+						{
+							"summon": "q.property('zt:anim') == 5"
+						},
+						{
+							"rain": "q.property('zt:anim') == 6"
+						},
+						{
+							"claw": "q.property('zt:anim') == 7"
+						},
+						{
+							"roar": "q.property('zt:anim') == 8"
+						},
+						{
+							"descend": "q.property('zt:anim') == 9"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"barrage": {
+					"animations": [
+						"barrage",
+						"idle"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') == 0"
+						},
+						{
+							"crouch": "q.property('zt:anim') == 2"
+						},
+						{
+							"air": "q.property('zt:anim') == 3"
+						},
+						{
+							"land": "q.property('zt:anim') == 4"
+						},
+						{
+							"summon": "q.property('zt:anim') == 5"
+						},
+						{
+							"rain": "q.property('zt:anim') == 6"
+						},
+						{
+							"claw": "q.property('zt:anim') == 7"
+						},
+						{
+							"roar": "q.property('zt:anim') == 8"
+						},
+						{
+							"descend": "q.property('zt:anim') == 9"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"crouch": {
+					"animations": [
+						"crouch"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') == 0"
+						},
+						{
+							"barrage": "q.property('zt:anim') == 1"
+						},
+						{
+							"air": "q.property('zt:anim') == 3"
+						},
+						{
+							"land": "q.property('zt:anim') == 4"
+						},
+						{
+							"summon": "q.property('zt:anim') == 5"
+						},
+						{
+							"rain": "q.property('zt:anim') == 6"
+						},
+						{
+							"claw": "q.property('zt:anim') == 7"
+						},
+						{
+							"roar": "q.property('zt:anim') == 8"
+						},
+						{
+							"descend": "q.property('zt:anim') == 9"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"air": {
+					"animations": [
+						"air"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') == 0"
+						},
+						{
+							"barrage": "q.property('zt:anim') == 1"
+						},
+						{
+							"crouch": "q.property('zt:anim') == 2"
+						},
+						{
+							"land": "q.property('zt:anim') == 4"
+						},
+						{
+							"summon": "q.property('zt:anim') == 5"
+						},
+						{
+							"rain": "q.property('zt:anim') == 6"
+						},
+						{
+							"claw": "q.property('zt:anim') == 7"
+						},
+						{
+							"roar": "q.property('zt:anim') == 8"
+						},
+						{
+							"descend": "q.property('zt:anim') == 9"
+						}
+					],
+					"blend_transition": 0.12
+				},
+				"land": {
+					"animations": [
+						"land"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') == 0"
+						},
+						{
+							"barrage": "q.property('zt:anim') == 1"
+						},
+						{
+							"crouch": "q.property('zt:anim') == 2"
+						},
+						{
+							"air": "q.property('zt:anim') == 3"
+						},
+						{
+							"summon": "q.property('zt:anim') == 5"
+						},
+						{
+							"rain": "q.property('zt:anim') == 6"
+						},
+						{
+							"claw": "q.property('zt:anim') == 7"
+						},
+						{
+							"roar": "q.property('zt:anim') == 8"
+						},
+						{
+							"descend": "q.property('zt:anim') == 9"
+						}
+					],
+					"blend_transition": 0.12
+				},
+				"summon": {
+					"animations": [
+						"summon",
+						"idle"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') == 0"
+						},
+						{
+							"barrage": "q.property('zt:anim') == 1"
+						},
+						{
+							"crouch": "q.property('zt:anim') == 2"
+						},
+						{
+							"air": "q.property('zt:anim') == 3"
+						},
+						{
+							"land": "q.property('zt:anim') == 4"
+						},
+						{
+							"rain": "q.property('zt:anim') == 6"
+						},
+						{
+							"claw": "q.property('zt:anim') == 7"
+						},
+						{
+							"roar": "q.property('zt:anim') == 8"
+						},
+						{
+							"descend": "q.property('zt:anim') == 9"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"rain": {
+					"animations": [
+						"rain",
+						"idle"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') == 0"
+						},
+						{
+							"barrage": "q.property('zt:anim') == 1"
+						},
+						{
+							"crouch": "q.property('zt:anim') == 2"
+						},
+						{
+							"air": "q.property('zt:anim') == 3"
+						},
+						{
+							"land": "q.property('zt:anim') == 4"
+						},
+						{
+							"summon": "q.property('zt:anim') == 5"
+						},
+						{
+							"claw": "q.property('zt:anim') == 7"
+						},
+						{
+							"roar": "q.property('zt:anim') == 8"
+						},
+						{
+							"descend": "q.property('zt:anim') == 9"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"claw": {
+					"animations": [
+						"claw"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') == 0"
+						},
+						{
+							"barrage": "q.property('zt:anim') == 1"
+						},
+						{
+							"crouch": "q.property('zt:anim') == 2"
+						},
+						{
+							"air": "q.property('zt:anim') == 3"
+						},
+						{
+							"land": "q.property('zt:anim') == 4"
+						},
+						{
+							"summon": "q.property('zt:anim') == 5"
+						},
+						{
+							"rain": "q.property('zt:anim') == 6"
+						},
+						{
+							"roar": "q.property('zt:anim') == 8"
+						},
+						{
+							"descend": "q.property('zt:anim') == 9"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"roar": {
+					"animations": [
+						"roar"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') == 0"
+						},
+						{
+							"barrage": "q.property('zt:anim') == 1"
+						},
+						{
+							"crouch": "q.property('zt:anim') == 2"
+						},
+						{
+							"air": "q.property('zt:anim') == 3"
+						},
+						{
+							"land": "q.property('zt:anim') == 4"
+						},
+						{
+							"summon": "q.property('zt:anim') == 5"
+						},
+						{
+							"rain": "q.property('zt:anim') == 6"
+						},
+						{
+							"claw": "q.property('zt:anim') == 7"
+						},
+						{
+							"descend": "q.property('zt:anim') == 9"
+						}
+					],
+					"blend_transition": 0.25
+				},
+				"descend": {
+					"animations": [
+						"descend"
+					],
+					"transitions": [
+						{
+							"default": "q.property('zt:anim') == 0"
+						},
+						{
+							"barrage": "q.property('zt:anim') == 1"
+						},
+						{
+							"crouch": "q.property('zt:anim') == 2"
+						},
+						{
+							"air": "q.property('zt:anim') == 3"
+						},
+						{
+							"land": "q.property('zt:anim') == 4"
+						},
+						{
+							"summon": "q.property('zt:anim') == 5"
+						},
+						{
+							"rain": "q.property('zt:anim') == 6"
+						},
+						{
+							"claw": "q.property('zt:anim') == 7"
+						},
+						{
+							"roar": "q.property('zt:anim') == 8"
+						}
+					],
+					"blend_transition": 0.25
+				}
+			}
+		}
+	}
+}

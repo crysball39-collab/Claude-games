@@ -1,0 +1,49 @@
+{
+	"format_version": "1.26.20",
+	"minecraft:block": {
+		"description": {
+			"identifier": "zt:shroomy_crab_spawner",
+			"menu_category": {
+				"category": "items"
+			}
+		},
+		"components": {
+			"minecraft:geometry": "geometry.zt.crab_spawner",
+			"minecraft:material_instances": {
+				"*": {
+					"texture": "zt_crab_spawner",
+					"render_method": "alpha_test"
+				},
+				"crab": {
+					"texture": "zt_crab_spawner_crab",
+					"render_method": "opaque"
+				},
+				"eye": {
+					"texture": "zt_crab_spawner_eye",
+					"render_method": "opaque"
+				}
+			},
+			"minecraft:light_dampening": 0,
+			"minecraft:light_emission": 4,
+			"minecraft:tags": [
+				"minecraft:is_pickaxe_item_destructible"
+			],
+			"minecraft:destructible_by_mining": {
+				"seconds_to_destroy": 5
+			},
+			"minecraft:destructible_by_explosion": {
+				"explosion_resistance": 5
+			},
+			"minecraft:loot": "loot_tables/blocks/shroomy_crab_spawner.json",
+			"minecraft:map_color": "#24304a",
+			"minecraft:tick": {
+				"interval_range": [
+					10,
+					10
+				],
+				"looping": true
+			},
+			"zt:crab_spawner": {}
+		}
+	}
+}

@@ -1,0 +1,29 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:crab_totem_display",
+			"materials": {
+				"default": "entity_alphatest"
+			},
+			"textures": {
+				"default": "textures/entity/zt_crab_totem"
+			},
+			"geometry": {
+				"default": "geometry.zt.crab_totem"
+			},
+			"scripts": {
+				"scale": "1.4",
+				"animate": [
+					"rise"
+				]
+			},
+			"animations": {
+				"rise": "animation.zt.crab_totem.rise"
+			},
+			"render_controllers": [
+				"controller.render.zt.glowite_default"
+			]
+		}
+	}
+}

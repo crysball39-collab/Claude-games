@@ -1,5 +1,5 @@
-// Titans add-on: wires game events to the titan, minion and item logic, the Players, and Glowite
-// and the Glowshroom Biome.
+// Titans add-on: wires game events to the titan, minion and item logic, the Players, Glowite
+// and the Glowshroom Biome, the Shroom Fortress, Crabulon and Everest.
 import { system, world } from "@minecraft/server";
 import * as Bot from "./bot.js";
 import * as Chat from "./bot_chat.js";
@@ -7,8 +7,10 @@ import * as Sense from "./bot_senses.js";
 import * as BotSkills from "./bot_skills.js";
 import * as BotUI from "./bot_ui.js";
 import * as BotWorld from "./bot_world.js";
+import * as Crabulon from "./crabulon.js";
 import * as DF from "./darkfists.js";
 import * as Doors from "./doors_common.js";
+import * as Everest from "./everest.js";
 import * as Floor from "./doors_floor1.js";
 import * as Items from "./doors_items.js";
 import * as Library from "./doors_library.js";
@@ -16,6 +18,7 @@ import * as Lobby from "./doors_lobby.js";
 import * as Seek from "./doors_seek.js";
 import * as FallGuard from "./fallguard.js";
 import * as Fig from "./figure.js";
+import * as Fortress from "./fortress.js";
 import * as Glow from "./glowshroom.js";
 import * as Glowite from "./glowite.js";
 import * as Gum from "./gumgum.js";
@@ -45,6 +48,7 @@ world.afterEvents.entitySpawn.subscribe(
     const type = entity.typeId;
     if (Titan.isTitan(type)) Titan.onTitanSpawned(entity, cause);
     else if (type === Bot.TYPE) Bot.onSpawn(entity, cause);
+    else if (type === Shroom.ARROW) Shroom.onArrowSpawned(entity);
     else if (type === "minecraft:eye_of_ender_signal") BotWorld.onEyeThrown(entity);
   }),
 );
@@ -94,6 +98,11 @@ world.afterEvents.entityDie.subscribe(
   { entityTypes: Titan.TITAN_IDS },
 );
 
+world.afterEvents.entityDie.subscribe(
+  safe(({ deadEntity, damageSource }) => Crabulon.onDied(deadEntity, damageSource)),
+  { entityTypes: [Crabulon.BOSS] },
+);
+
 world.afterEvents.entityHurt.subscribe(
   safe(({ hurtEntity, damageSource }) => Titan.onTitanHurt(hurtEntity, damageSource.damagingEntity)),
   { entityTypes: Titan.TITAN_IDS },
@@ -139,7 +148,7 @@ function projectileHit(ev, hit) {
     return;
   }
   if (type === Serum.SERUM) Serum.onSerumHit(ev.dimension, ev.location, hit, ev.source);
-  else if (type === Shroom.BULLET || type === Shroom.FRIENDLY) Shroom.onBulletHit(type, ev.dimension, ev.location, hit, ev.source);
+  else if (type === Shroom.ARROW) Shroom.onArrowHit(ev.dimension, ev.location);
   else Titan.onProjectileHit(ev.projectile, ev.dimension, ev.location);
   if (hit && Titan.isTitan(hit.typeId) && ev.source?.typeId === "minecraft:player") {
     Titan.onTitanShot(hit, /** @type {import("@minecraft/server").Player} */ (ev.source), ev.location, type);
@@ -173,6 +182,7 @@ function itemUsed({ source, itemStack }) {
     BotUI.openApi(source);
   } else if (id === DF.ITEM) DF.onUse(source);
   else if (id === Obsidian.SWORD) Obsidian.onUse(source);
+  else if (id === Everest.ITEM) Everest.onUse(source);
   else if (id && Gum.ABILITY_IDS.includes(id)) Gum.onUse(source, id);
   else if (id === Library.ITEM || id === Seek.ITEM || id === Lobby.ITEM || id === Doors.PAPER || id?.startsWith(Doors.BOOK_PREFIX) ||
     HOTEL_ITEMS.has(id)) {
@@ -215,6 +225,7 @@ world.afterEvents.playerSpawn.subscribe(
   safe(({ player, initialSpawn }) => {
     Gum.onSpawn(player);
     Doors.onPlayerSpawn(player, initialSpawn);
+    Crabulon.restore(player);
   }),
 );
 
@@ -242,6 +253,8 @@ world.afterEvents.playerLeave.subscribe(
     Fig.forgetPlayer(playerId);
     Shroom.forget(playerId);
     Glow.forgetPlayer(playerId);
+    Fortress.forgetPlayer(playerId);
+    Everest.forgetPlayer(playerId);
     doorsUsedAt.delete(playerId);
   }),
 );
@@ -302,6 +315,9 @@ system.runInterval(() => {
   try {
     Glowite.furnaceTick(tick);
     Glow.glowshroomTick(tick);
+    Fortress.fortressTick(tick);
+    Crabulon.crabulonTick(tick);
+    Everest.everestTick(tick);
     Shroom.shroomTick(tick);
   } catch (err) {
     console.warn("[Titans] Glowite: " + err);

@@ -1,0 +1,46 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:crabulon",
+			"materials": {
+				"default": "entity_emissive_alpha"
+			},
+			"textures": {
+				"default": "textures/entity/zt_crabulon"
+			},
+			"geometry": {
+				"default": "geometry.zt.crabulon"
+			},
+			"spawn_egg": {
+				"base_color": "#1d4fae",
+				"overlay_color": "#eef3ff"
+			},
+			"scripts": {
+				"scale": "10.0",
+				"should_update_bones_and_effects_offscreen": "1.0",
+				"should_update_effects_offscreen": "1.0",
+				"animate": [
+					"controller"
+				]
+			},
+			"animations": {
+				"idle": "animation.zt.crabulon.idle",
+				"walk": "animation.zt.crabulon.walk",
+				"barrage": "animation.zt.crabulon.barrage",
+				"crouch": "animation.zt.crabulon.crouch",
+				"air": "animation.zt.crabulon.air",
+				"land": "animation.zt.crabulon.land",
+				"summon": "animation.zt.crabulon.summon",
+				"rain": "animation.zt.crabulon.rain",
+				"claw": "animation.zt.crabulon.claw",
+				"roar": "animation.zt.crabulon.roar",
+				"descend": "animation.zt.crabulon.descend",
+				"controller": "controller.animation.zt.crabulon.main"
+			},
+			"render_controllers": [
+				"controller.render.zt.crabulon"
+			]
+		}
+	}
+}

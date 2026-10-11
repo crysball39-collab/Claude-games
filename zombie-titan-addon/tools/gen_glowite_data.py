@@ -13,7 +13,7 @@
                they make sticks, crafting tables and wooden tools).
   Spores       spore seeds, the four-stage spore crop and its Shroom Berries.
   Mobs         the Shroom Zombie and Shroom Skeleton, and the glowing spore bullets they fire
-               (and the friendly ones Shroomy fires: shroom.js).
+               (and the friendly ones Shroomy fires), which bullets.js flies and lands.
 
 Blocks use their own geometry (models/blocks/glowshroom.geo.json) and custom components that
 glowshroom.js registers: zt:spore_grass, zt:spore_crop, zt:slab, zt:door, zt:trapdoor,
@@ -912,22 +912,36 @@ def mob_common(health, loot_table, families):
     }
 
 
-def bullet(ident, damage):
-    """A glowing spore bullet: flies straight (no gravity), fades after five seconds."""
-    on_hit = {"remove_on_hit": {}}
-    if damage:
-        on_hit = {"impact_damage": {"damage": damage, "knockback": True, "destroy_on_hit": True}, "remove_on_hit": {}}
+def bullet(ident):
+    """A glowing spore bullet. bullets.js flies it and lands its hits, so it's no projectile: it
+    takes no damage, doesn't fall or collide, and fades after six seconds if left behind."""
     return {"format_version": ENTITY_FORMAT, "minecraft:entity": {
         "description": {"identifier": ident, "is_spawnable": False, "is_summonable": True},
         "component_groups": {"zt:fade": {"minecraft:instant_despawn": {}}},
         "components": {
+            "minecraft:type_family": {"family": ["spore_bullet", "inanimate"]},
+            "minecraft:collision_box": {"width": 0.25, "height": 0.25},
+            "minecraft:physics": {"has_gravity": False, "has_collision": False},
+            "minecraft:pushable": {"is_pushable": False, "is_pushable_by_piston": False},
+            "minecraft:damage_sensor": {"triggers": [{"cause": "all", "deals_damage": "no"}]},
+            "minecraft:timer": {"looping": False, "time": 6, "time_down_event": {"event": "zt:fade"}},
+        },
+        "events": {"zt:fade": {"add": {"component_groups": ["zt:fade"]}}},
+    }}
+
+
+def spore_arrow():
+    """What a Shroom Skeleton's bow looses: shroom.js swaps it for a spore bullet as it's fired."""
+    return {"format_version": ENTITY_FORMAT, "minecraft:entity": {
+        "description": {"identifier": "zt:spore_arrow", "is_spawnable": False, "is_summonable": True},
+        "components": {
             "minecraft:type_family": {"family": ["projectile", "spore_bullet"]},
-            "minecraft:collision_box": {"width": 0.3, "height": 0.3},
+            "minecraft:collision_box": {"width": 0.25, "height": 0.25},
             "minecraft:physics": {},
             "minecraft:pushable": {"is_pushable": False, "is_pushable_by_piston": True},
             "minecraft:projectile": {
-                "on_hit": on_hit,
-                "power": 1.3,
+                "on_hit": {"remove_on_hit": {}},
+                "power": 1.4,
                 "gravity": 0.0,
                 "inertia": 1.0,
                 "liquid_inertia": 1.0,
@@ -936,9 +950,8 @@ def bullet(ident, damage):
                 "uncertainty_base": 4,
                 "uncertainty_multiplier": 2,
             },
-            "minecraft:timer": {"looping": False, "time": 5, "time_down_event": {"event": "zt:fade"}},
         },
-        "events": {"zt:fade": {"add": {"component_groups": ["zt:fade"]}}},
+        "events": {},
     }}
 
 
@@ -954,7 +967,7 @@ def mobs():
     skeleton = mob_common(22, "loot_tables/entities/shroom_skeleton.json", ["skeleton", "shroom_skeleton"])
     skeleton.update({
         "minecraft:movement": {"value": 0.25},
-        "minecraft:shooter": {"def": "zt:spore_bullet"},
+        "minecraft:shooter": {"def": "zt:spore_arrow"},
         "minecraft:equipment": {"table": "loot_tables/entities/shroom_skeleton_gear.json"},
         "minecraft:behavior.ranged_attack": {"priority": 3, "attack_interval": {"min": 1.5, "max": 2.5},
                                              "attack_range": {"min": 0.0, "max": 16.0}},
@@ -962,8 +975,9 @@ def mobs():
     dump(BP, "entities/shroom_skeleton.json", {"format_version": ENTITY_FORMAT, "minecraft:entity": {
         "description": {"identifier": "zt:shroom_skeleton", "is_spawnable": True, "is_summonable": True, "spawn_category": "monster"},
         "components": skeleton, "events": {}}})
-    dump(BP, "entities/spore_bullet.json", bullet("zt:spore_bullet", 4))
-    dump(BP, "entities/shroomy_bullet.json", bullet("zt:shroomy_bullet", 0))
+    dump(BP, "entities/spore_bullet.json", bullet("zt:spore_bullet"))
+    dump(BP, "entities/shroomy_bullet.json", bullet("zt:shroomy_bullet"))
+    dump(BP, "entities/spore_arrow.json", spore_arrow())
 
     looting = {"function": "looting_enchant", "count": {"min": 0, "max": 1}}
 
@@ -1044,7 +1058,7 @@ def client_files():
         "zt:shroom_skeleton", "zt_shroom_skeleton", "geometry.zt.shroom_skeleton", ("#c9ccd6", "#3fb6ff"),
         {"skeleton_attack": "animation.skeleton.attack"},
         [{"skeleton_attack": "controller.animation.skeleton.attack"}]))
-    for ident in ("zt:spore_bullet", "zt:shroomy_bullet"):
+    for ident in ("zt:spore_bullet", "zt:shroomy_bullet", "zt:spore_arrow"):
         dump(RP, "entity/%s.entity.json" % ident.split(":")[1], {"format_version": "1.10.0", "minecraft:client_entity": {"description": {
             "identifier": ident,
             "materials": {"default": "entity_emissive_alpha"},
@@ -1183,6 +1197,7 @@ NAMES = {
     "entity.zt:shroom_skeleton.name": "Shroom Skeleton",
     "entity.zt:spore_bullet.name": "Spore Bullet",
     "entity.zt:shroomy_bullet.name": "Shroomy Bullet",
+    "entity.zt:spore_arrow.name": "Spore Bullet",
     "item.spawn_egg.entity.zt:shroom_zombie.name": "Spawn Shroom Zombie",
     "item.spawn_egg.entity.zt:shroom_skeleton.name": "Spawn Shroom Skeleton",
 }

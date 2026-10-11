@@ -23,7 +23,7 @@ const listeners = () => {
   };
 };
 
-export const log = { sounds: [], particles: [], messages: [], commands: [], items: [], errors: [], explosions: [], animations: [], teleports: [] };
+export const log = { sounds: [], particles: [], particleAt: [], messages: [], commands: [], items: [], errors: [], explosions: [], animations: [], teleports: [] };
 
 export const GameMode = { Survival: "Survival", Creative: "Creative", Adventure: "Adventure", Spectator: "Spectator" };
 export const Difficulty = { Peaceful: "Peaceful", Easy: "Easy", Normal: "Normal", Hard: "Hard" };
@@ -31,6 +31,7 @@ export const EquipmentSlot = { Mainhand: "Mainhand", Offhand: "Offhand", Head: "
 export const ItemLockMode = { inventory: "inventory", none: "none", slot: "slot" };
 export const EasingType = { InOutSine: "InOutSine", Linear: "Linear", OutQuad: "OutQuad" };
 export const InputPermissionCategory = { Camera: 1, Movement: 2, LateralMovement: 4, Sneak: 5, Jump: 6 };
+export const HudVisibility = { Hide: "Hide", Reset: "Reset" };
 
 let nextId = 1;
 let tickCounter = 0;
@@ -416,6 +417,8 @@ export function setRedstone(dim, x, y, z, power) {
 }
 /** every block a script placed: "x,y,z" -> permutation ("n|x,y,z" in the Nether, "e|x,y,z" in the End) */
 export const placed = new Map();
+/** Blocks with water in them as well ("x,y,z", as placed). */
+export const waterlogged = new Set();
 function blockAt(dim, x, y, z) {
   const key = keyOf(dim, x, y, z);
   if (blockOverrides.has(key)) return blockOverrides.get(key);
@@ -464,6 +467,7 @@ export function blockContainer(dim, loc) {
 function placeBlock(dim, loc, perm) {
   const key = keyOf(dim, loc.x, loc.y, loc.z);
   blockOverrides.delete(key);
+  waterlogged.delete(key);
   const before = placed.get(key)?.type.id;
   placed.set(key, perm);
   // a block entity goes with its block (a lit furnace keeps its contents)
@@ -525,7 +529,15 @@ class Block {
     return true;
   }
   get isWaterlogged() {
-    return false;
+    return waterlogged.has(keyOf(this.dimension, this.x, this.y, this.z));
+  }
+  setWaterlogged(on) {
+    if (typeof on !== "boolean") throw new Error("setWaterlogged takes a boolean");
+    if (chunkUnloaded(this.x, this.z)) throw new LocationInUnloadedChunkError("location is in an unloaded chunk");
+    if (on && (this.isAir || this.isLiquid)) throw new Error("can't waterlog " + this.typeId);
+    const key = keyOf(this.dimension, this.x, this.y, this.z);
+    if (on) waterlogged.add(key);
+    else waterlogged.delete(key);
   }
   get isAir() {
     return /^minecraft:(air|cave_air|void_air)$/.test(this.typeId) || this.typeId.startsWith("minecraft:light_block");
@@ -790,9 +802,9 @@ function badProperty(typeId, id, v) {
 }
 
 const PROJECTILES = new Set(["zt:proto_ball", "zt:titan_arrow", "zt:growth_serum", "minecraft:fireball", "minecraft:arrow", "minecraft:ender_pearl",
-  "minecraft:small_fireball", "zt:spore_bullet", "zt:shroomy_bullet"]);
-/** Bullets that fly straight and fade (the Glowshroom Biome's): how much they hurt (the friendly ones: their script's business). */
-const STRAIGHT = { "minecraft:small_fireball": 5, "zt:spore_bullet": 4, "zt:shroomy_bullet": 0 };
+  "minecraft:small_fireball", "zt:spore_arrow"]);
+/** Projectiles that fly straight and fade: how much they hurt (a Shroom Skeleton's arrow: nothing, it's swapped for a bullet). */
+const STRAIGHT = { "minecraft:small_fireball": 5, "zt:spore_arrow": 0 };
 /**
  * Arrows (the Player tests): they fly, drop, stick in blocks and hurt what they hit. A blaze's
  * fireball flies straight (no gravity), burns what it hits for 5, sets it alight, and is gone.
@@ -952,6 +964,10 @@ export class Entity {
   getComponent(id) {
     // the game gives a burning entity an onfire component
     if (id === "minecraft:onfire") return (this.onFire ?? 0) > 0 ? { onFireTicksRemaining: this.onFire * 20 } : undefined;
+    if (id === "minecraft:type_family") {
+      const fams = FAMILIES[this.typeId] ?? [];
+      return { getTypeFamilies: () => [...fams], hasTypeFamily: (f) => fams.includes(f) };
+    }
     return this.components[id];
   }
   applyDamage(amount, opts) {
@@ -1063,6 +1079,24 @@ export class Entity {
   getEffect(id) {
     return this.effectInfo[id];
   }
+  getEntitiesFromViewDirection(opts) {
+    const from = this.getHeadLocation();
+    const dir = this.getViewDirection();
+    const max = opts?.maxDistance ?? 64;
+    const out = [];
+    for (const e of this.dimension.entities) {
+      if (!e.valid || e === this || e.typeId === "minecraft:item") continue;
+      const box = bodyBox(e);
+      for (let d = 0; d <= max; d += 0.25) {
+        const p = { x: from.x + dir.x * d, y: from.y + dir.y * d, z: from.z + dir.z * d };
+        if (Math.abs(p.x - e.location.x) <= box.w / 2 && Math.abs(p.z - e.location.z) <= box.w / 2 && p.y >= e.location.y && p.y <= e.location.y + box.h) {
+          out.push({ entity: e, distance: d });
+          break;
+        }
+      }
+    }
+    return out.sort((a, b) => a.distance - b.distance);
+  }
   getBlockFromViewDirection(opts) {
     const from = this.getHeadLocation();
     const dir = this.getViewDirection();
@@ -1127,9 +1161,17 @@ export class Player extends Entity {
     this.xp = 0;
     this.components["minecraft:equippable"] = new Equippable(this);
     this.components["minecraft:inventory"] = { container: new Container(36) };
+    this.hud = "Reset";
     this.onScreenDisplay = {
       setActionBar: (t) => log.messages.push("[actionbar] " + t),
       setTitle: (t, o) => log.messages.push("[title] " + t + (o?.subtitle ? " / " + o.subtitle : "")),
+      setHudVisibility: (v) => {
+        if (v !== "Hide" && v !== "Reset") throw new Error("bad hud visibility " + v);
+        this.hud = v;
+      },
+      resetHudElementsVisibility: () => {
+        this.hud = "Reset";
+      },
     };
   }
   get held() {
@@ -1778,7 +1820,7 @@ class Dimension {
         continue;
       }
       const arrow = e.flying && ((sim.mobs && (e.typeId === "minecraft:arrow" || e.typeId === "minecraft:ender_pearl" || e.typeId === "minecraft:small_fireball")) ||
-        e.typeId === "zt:spore_bullet" || e.typeId === "zt:shroomy_bullet");
+        e.typeId === "zt:spore_arrow");
       if (!arrow) {
         e.location.x += e.velocity.x;
         e.location.y += e.velocity.y;
@@ -1852,6 +1894,7 @@ class Dimension {
   spawnParticle(id, loc, vars) {
     if (![loc.x, loc.y, loc.z].every(Number.isFinite)) throw new Error("bad particle location " + id);
     log.particles.push(id);
+    log.particleAt.push({ id, x: loc.x, y: loc.y, z: loc.z, vars: vars?.vars ?? {}, tick: tickCounter });
   }
   playSound(id, loc, o) {
     if (![loc.x, loc.y, loc.z].every(Number.isFinite)) throw new Error("bad sound location " + id);

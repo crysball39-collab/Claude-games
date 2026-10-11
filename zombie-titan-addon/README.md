@@ -1,6 +1,6 @@
-# Titans: Zombie, Skeleton, Creeper and Spider Titans, the Omegafish, Dark Fists, Obsidian gear, Gum Gum Fruit, Doors, Players, Glowite
+# Titans: Zombie, Skeleton, Creeper and Spider Titans, the Omegafish, Dark Fists, Obsidian gear, Gum Gum Fruit, Doors, Players, Glowite, Crabulon
 
-**Version 1.8.0**
+**Version 1.9.0**
 
 A Minecraft Bedrock (Pocket Edition) add-on that brings the **Zombie Titan**, the
 **Skeleton Titan**, the **Creeper Titan**, the **Spider Titan** and the **Omegafish**
@@ -21,17 +21,21 @@ bar. It also adds:
   and armor a step above netherite; and the **Glowshroom Biome**, glowing mushroom
   caverns with giant spore trees, a new wood, the spore crop, Shroom Berries (and the
   **Shroomy** effect), and Shroom Zombies and Shroom Skeletons
+- **Crabulon**: the **Shroom Fortress** beside the Glowshroom caverns, **Shroomy Crabs**
+  in their ponds, and **Crabulon**, a giant crab boss you summon at the fortress's altar.
+  Beat it for the parts of **Everest**, a lance with four abilities
 
 Made for Minecraft Bedrock **1.26.50** on Android. It works on 1.21.90 and newer and
-needs **no experimental toggles**. The Compact Obsidian block and the Glowite and
-Glowshroom blocks need 1.26.20 or newer, and the Glowshroom Door 1.26.40 or newer.
+needs **no experimental toggles**. The Compact Obsidian block, the Glowite and
+Glowshroom blocks and the Shroom Fortress's blocks need 1.26.20 or newer, and the
+Glowshroom Door 1.26.40 or newer.
 
 ## Installing on Android
 
 1. Download **[`dist/ZombieTitan.mcaddon`](dist/ZombieTitan.mcaddon)**.
 2. Open **Files → Downloads** and tap `ZombieTitan.mcaddon`. Minecraft opens and
    imports two packs: *Zombie Titan BP* and *Zombie Titan RP*. Their descriptions
-   start with the version number (*Version 1.8.0*).
+   start with the version number (*Version 1.9.0*).
 3. Create a world, or edit one. Under **Behavior Packs**, activate
    **Zombie Titan BP**. Minecraft adds the resource pack with it.
 4. Play. Here is where everything is in the creative inventory:
@@ -52,6 +56,10 @@ Glowshroom blocks need 1.26.20 or newer, and the Glowshroom Door 1.26.40 or newe
      the Nature tab. The Glowite blocks and the Glowshroom planks, stairs, slab, fence,
      gate, door, trapdoor, button and pressure plate: in the Construction tab.
    - **Shroom Zombie** and **Shroom Skeleton**: with the other spawn eggs.
+   - **Shroomy Crab** and **Crabulon**: with the other spawn eggs. Shroom Patches, Shroomy
+     Crab Claws, the Crab Totem, the Spore Scroll, the Shroomed Eye and the Shroomy Crab
+     Spawner: in the Items tab. **Everest**: in the Equipment tab. Shroomed Brick, the
+     Shroomed Brick Wall and the Shroomed Altar: in the Construction tab.
 
 If tapping the file does nothing, long-press it, choose **Open with**, and pick
 **Minecraft**.
@@ -61,7 +69,7 @@ If tapping the file does nothing, long-press it, choose **Open with**, and pick
   Storage**, delete the old *Zombie Titan BP* and *Zombie Titan RP*, and import
   again.
 - If the world still acts like the old version, check under **Behavior Packs**
-  that Zombie Titan BP is active and that its description says *Version 1.8.0*.
+  that Zombie Titan BP is active and that its description says *Version 1.9.0*.
 
 ## The Zombie Titan
 
@@ -1038,7 +1046,11 @@ A cavern has:
 - **Spore Trees**: giant mushrooms with white-and-dark-white striped trunks of
   **Glowshroom Logs** and a cap of **Mushed Spore Cap**
 - Glowite Ore in its roof (Glowite is a little more common there)
-- **Shroom Zombies** and **Shroom Skeletons**
+- small **ponds** in its floor, with a glowing sea pickle on the bottom
+- **Shroom Zombies** and **Shroom Skeletons**, and **Shroomy Crabs** in the ponds
+- in one cavern of two, the gate of a **Shroom Fortress** in its wall (see below)
+
+Caverns from before 1.9.0 get their ponds (and maybe a fortress) the next time you walk in.
 
 Spore grass spreads over maroon dirt near it, and turns back to maroon dirt under a
 block. A hoe turns spore grass or maroon dirt into farmland. Bone meal on spore grass
@@ -1083,6 +1095,99 @@ you're full) gives:
   starts the 20 seconds over. Endermen, piglins and zombified piglins are left alone
   unless they attack you, and so are animals.
 
+## Crabulon and the Shroom Fortress
+
+### Shroomy Crabs
+
+Blue crabs with white spots and glowing mushrooms growing on their backs. They live in
+the **ponds of the Glowshroom caverns** (they walk along the bottom) and come out of the
+spawners in the Shroom Fortress. They scuttle sideways, like crabs do.
+
+They're **neutral**: they leave you alone until you hit one. Then it, and the crabs
+around it, fight back (a pinch is 1.5 hearts). They have 7 hearts and drop:
+- **1 or 2 Shroom Patches** (more with Looting)
+- a **Shroomy Crab Claw** (1 time in 2, more often with Looting)
+
+### The Shroom Fortress
+
+One Glowshroom cavern in two has a **Shroom Fortress** built into the rock beside it,
+made of **Shroomed Brick** and **Shroomed Brick Walls**. Its gate opens on the cavern
+between two towers. Inside:
+- a **hall** with two **Shroomy Crab Spawners**. While you're within 16 blocks, crabs
+  come out of them now and then (up to 6 around each). Breaking a spawner gives XP. The
+  hall also has a **chest** of loot.
+- the **arena**: a great hall 41 blocks across and 22 high, lit by sea lanterns, with the
+  **Shroomed Altar** on a dais in the middle and a shaft up into the roof. The altar
+  can't be broken (except in creative).
+
+Shroomed Brick is mined with a pickaxe. 6 Shroomed Brick make 6 Shroomed Brick Walls.
+
+### Summoning Crabulon
+
+1. Craft a **Crab Totem**: **2 Shroomy Crab Claws and 4 Shroom Patches** in a crafting
+   table (any arrangement).
+2. Hold it and **use it on the Shroomed Altar** (tap the altar).
+
+The totem stands on the altar, floats up, and bursts in a **flash of blue light**.
+**Crabulon** comes down out of the shaft in the roof, lands, and **roars**. During this
+short cutscene your camera is moved and you can't move or be hurt. Then the fight
+starts, with Crabulon's boss bar at the top of the screen.
+
+You can also set an altar down anywhere in creative and summon Crabulon there.
+
+### Crabulon
+
+A giant crab, **10 blocks tall**, with a white belly, a blue white-spotted shell, glowing
+eyes and big glowing mushrooms on its back. It has **3,000 health** and scuttles
+sideways around you. Its attacks, by turns:
+
+| Attack | What it does |
+|---|---|
+| **Bullet Barrage** | For 5 seconds it shoots spore bullets in **7 directions** at once, the 7 turning as it fires. Each bullet does 2.5 hearts. Move between the streams. |
+| **Jump** | It crouches, leaps to another part of the arena (often right next to you) and lands with a crash (up to 9 hearts if you're underneath). A **shockwave** runs out over the floor from where it lands: **jump over it**, or it throws you and does 4 hearts. |
+| **Summon** | It beats the floor and **5 Shroomy Crabs** come up and attack you (no more than 10 at once). |
+| **Shroom Rain** | For 5 seconds, small glowing mushrooms fall from the roof. A **red circle** on the floor shows where each one will land, a second before it does. One hitting you does 3.5 hearts. |
+| **Claw snap** | If you're close in front of it, it snaps its claw at you (6 hearts). |
+
+Below **half its health** it's **enraged**: it glows blue, moves faster, rests less
+between attacks, fires faster and makes the rain heavier.
+
+If nobody is in the arena for **30 seconds**, Crabulon climbs back up into the roof and
+leaves the Crab Totem on the altar, so you can try again.
+
+**Tips:** keep moving during the Barrage; watch the floor during the Rain; jump when it
+lands; kill the crabs it summons before they swarm you; and bring good armor
+(Glowite armor's toughness helps against the big hits).
+
+### Death and loot
+
+Crabulon slumps, then bursts in spores and leaves:
+- a **Spore Scroll**
+- a **Shroomed Eye** (an Eye of Ender from the Glowshroom Biome)
+- **500 XP** for whoever killed it
+
+### Everest
+
+Put a **Glowite Sword**, a **Shroomed Eye** and a **Spore Scroll** in a crafting table (any
+arrangement) to make **Everest**: a 3D metal lance with a glowing blue tip. Three
+rings of glowing runes turn around its guard, and two glowing squares beside it show
+the Chinese characters **珠** and **峰** (*Zhūfēng*, the Chinese name for Mount Everest).
+
+It hits for **+15** damage, has 4,000 durability, can be enchanted like a sword, and is
+repaired with Glowite Ingots. It also has **4 abilities**:
+- **Crouch and use it** to switch ability. The one you're on shows on screen and in the
+  lance's tooltip.
+- **Use it** (tap, or hold use) to unleash the ability.
+
+| Ability | What it does | Rest after |
+|---|---|---|
+| **Electro-Beam** | You aim the lance forward and **lightning** shoots out of its tip for **7 seconds**, wherever you look (up to 32 blocks, stopped by walls). **10 damage** per hit to anything it strikes. | 8 s |
+| **Barrage** | **10 portals** open around the mob you're looking at (or the nearest one), and for **7 seconds** you go through them one after another, **stabbing** it again and again: **15 damage** a stab. Nothing can hurt you meanwhile, and afterwards you're back where you started. | 10 s |
+| **Slam** | You slam the lance into the ground and a **surge of blue light** bursts out of the ground in a line ahead of you (24 blocks): **100 damage** to everything it reaches. | 4 s |
+| **Supernova** | You hold the lance up and a **ball of blue light** forms above you, growing to **50 blocks** across over **10 seconds** (you move slowly meanwhile). Then it **explodes**: a blue flash fills the screen and every mob within **100 blocks** takes **1,500 damage**. Players, tamed pets, villagers and golems are spared. | 60 s |
+
+Switching to another item stops the ability that's running.
+
 ## Building from source
 
 The models, textures, animations, particles, sound definitions and the obsidian
@@ -1113,7 +1218,10 @@ Development checks:
   `botend` from a Nether portal to the dragon and the end cities, and `botai` runs the
   AI bridge against fake AI services. `glowite` covers Glowite (its ore, the furnace,
   the armor) and the Glowshroom Biome: its blocks, a whole cavern grown round its
-  heart, its mobs, and Shroom Berries with Shroomy.
+  heart, its mobs, and Shroom Berries with Shroomy. `crabs` covers the caverns' ponds
+  and the Shroomy Crabs, and a whole Shroom Fortress built beside a cavern with its
+  spawners and chest; `crabulon` the summoning, Crabulon's attacks, its rage, its
+  leaving and its death; `everest` the lance's four abilities.
   Random numbers are seeded so runs repeat; set `ZT_SEED=<number>` to try others.
   The mock refuses blocks and block states the game would refuse, using Mojang's
   block lists in `tools/sim/vanilla-blocks.json` (made by
@@ -1125,6 +1233,24 @@ Development checks:
 
 ## Version history
 
+- **1.9.0** (Crabulon)
+  - Fixed: the glowing spore bullets (the Shroom Zombie's and Skeleton's, and Shroomy's)
+    did no damage. Bullets are now flown and landed by the add-on itself, so every hit
+    counts: 2 hearts each.
+  - Fixed: the Obsidian and Glowite tool and armor textures looked wrong. The tools
+    have the classic shapes, and the armor covers what vanilla armor covers (the
+    helmet no longer hides your face).
+  - New: **Shroomy Crabs**, neutral blue crabs that live in new small **ponds** in the
+    Glowshroom caverns. They drop Shroom Patches and Shroomy Crab Claws.
+  - New: the **Shroom Fortress**, built of **Shroomed Brick** and **Shroomed Brick Walls**
+    beside one Glowshroom cavern in two, with **Shroomy Crab Spawners**, a loot chest and
+    an arena with the **Shroomed Altar**.
+  - New: **Crabulon**, a 10-block-tall crab boss with 3,000 health, summoned by setting a
+    **Crab Totem** on the altar (with a cutscene). Bullet Barrage, Jump with a shockwave,
+    Summon, Shroom Rain with warning circles, and a claw snap. It drops a **Spore Scroll**
+    and a **Shroomed Eye**.
+  - New: **Everest**, a lance made from a Glowite Sword, a Shroomed Eye and a Spore
+    Scroll: +15 damage and four abilities (Electro-Beam, Barrage, Slam, Supernova).
 - **1.8.0** (Glowite)
   - New: **Glowite**, a blue glowing ore found at y -30 and below, rarer than ancient
     debris. It drops Glowing Particles; 4 of them and 4 diamonds make a Raw Glowite

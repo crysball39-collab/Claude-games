@@ -1,0 +1,257 @@
+{
+	"format_version": "1.10.0",
+	"animations": {
+		"animation.zt.everest.first_person": {
+			"loop": true,
+			"bones": {
+				"lance": {
+					"position": [
+						-7.0,
+						-3.0,
+						-2.0
+					],
+					"rotation": [
+						152.0,
+						-9.0,
+						25.0
+					]
+				}
+			}
+		},
+		"animation.zt.everest.third_person": {
+			"loop": true,
+			"bones": {
+				"lance": {
+					"position": [
+						1.5,
+						-2.5,
+						-10.5
+					],
+					"rotation": [
+						97.0,
+						-1.5,
+						-49.0
+					]
+				}
+			}
+		},
+		"animation.zt.everest.spin": {
+			"loop": true,
+			"bones": {
+				"ring0_spin": {
+					"rotation": [
+						0,
+						"q.life_time * 90",
+						0
+					]
+				},
+				"ring1_spin": {
+					"rotation": [
+						0,
+						"-q.life_time * 120",
+						0
+					]
+				},
+				"ring2_spin": {
+					"rotation": [
+						0,
+						"q.life_time * 70",
+						0
+					]
+				},
+				"glyphs": {
+					"position": [
+						0,
+						"math.sin(q.life_time * 120) * 0.6",
+						0
+					]
+				},
+				"tip": {
+					"scale": "1 + math.sin(q.life_time * 300) * 0.06"
+				}
+			}
+		},
+		"animation.zt.everest.aim": {
+			"animation_length": 7.0,
+			"bones": {
+				"rightArm": {
+					"rotation": [
+						"(v.is_first_person ? -90 : (-90 + q.target_x_rotation))",
+						"(v.is_first_person ? 0 : q.target_y_rotation)",
+						0
+					]
+				},
+				"leftArm": {
+					"rotation": [
+						"(v.is_first_person ? 0 : (-70 + q.target_x_rotation))",
+						"(v.is_first_person ? 0 : 30)",
+						0
+					]
+				}
+			}
+		},
+		"animation.zt.everest.stab": {
+			"animation_length": 0.35,
+			"bones": {
+				"rightArm": {
+					"rotation": {
+						"0.0": [
+							"(v.is_first_person ? -90 : (-90 + q.target_x_rotation))",
+							"(v.is_first_person ? 0 : q.target_y_rotation)",
+							0
+						],
+						"0.12": [
+							"(v.is_first_person ? -90 : (-90 + q.target_x_rotation)) - 15",
+							"(v.is_first_person ? 0 : q.target_y_rotation)",
+							0
+						],
+						"0.35": [
+							"(v.is_first_person ? -90 : (-90 + q.target_x_rotation))",
+							"(v.is_first_person ? 0 : q.target_y_rotation)",
+							0
+						]
+					},
+					"position": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"0.12": [
+							0,
+							0,
+							-3
+						],
+						"0.35": [
+							0,
+							0,
+							0
+						]
+					}
+				}
+			}
+		},
+		"animation.zt.everest.slam": {
+			"animation_length": 0.8,
+			"bones": {
+				"rightArm": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"0.25": [
+							-170,
+							0,
+							8
+						],
+						"0.42": [
+							-30,
+							0,
+							0
+						],
+						"0.8": [
+							0,
+							0,
+							0
+						]
+					}
+				},
+				"leftArm": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"0.25": [
+							-150,
+							0,
+							-8
+						],
+						"0.42": [
+							-35,
+							0,
+							0
+						],
+						"0.8": [
+							0,
+							0,
+							0
+						]
+					}
+				},
+				"body": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"0.25": [
+							-6,
+							0,
+							0
+						],
+						"0.42": [
+							12,
+							0,
+							0
+						],
+						"0.8": [
+							0,
+							0,
+							0
+						]
+					}
+				}
+			}
+		},
+		"animation.zt.everest.raise": {
+			"animation_length": 10.0,
+			"bones": {
+				"rightArm": {
+					"rotation": [
+						"v.is_first_person ? -120 : -175",
+						0,
+						"v.is_first_person ? 0 : 8"
+					]
+				},
+				"leftArm": {
+					"rotation": [
+						"v.is_first_person ? 0 : -160",
+						0,
+						"v.is_first_person ? 0 : -10"
+					]
+				}
+			}
+		},
+		"animation.zt.everest_portal.turn": {
+			"loop": true,
+			"bones": {
+				"portal": {
+					"rotation": [
+						0,
+						0,
+						"q.life_time * 240"
+					],
+					"scale": "math.min(1, q.life_time * 4)"
+				}
+			}
+		},
+		"animation.zt.supernova.grow": {
+			"loop": true,
+			"bones": {
+				"ball": {
+					"rotation": [
+						"q.life_time * 40",
+						"q.life_time * 55",
+						0
+					],
+					"scale": "math.max(0.3, math.min(q.life_time, 10.0) * 5.0) * (1 + math.sin(q.life_time * 500) * 0.03)"
+				}
+			}
+		}
+	}
+}

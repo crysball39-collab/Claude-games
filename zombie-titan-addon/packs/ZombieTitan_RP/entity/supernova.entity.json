@@ -1,0 +1,29 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:supernova",
+			"materials": {
+				"default": "entity_beam_additive"
+			},
+			"textures": {
+				"default": "textures/entity/zt_supernova"
+			},
+			"geometry": {
+				"default": "geometry.zt.supernova"
+			},
+			"scripts": {
+				"animate": [
+					"main"
+				],
+				"should_update_bones_and_effects_offscreen": "1.0"
+			},
+			"animations": {
+				"main": "animation.zt.supernova.grow"
+			},
+			"render_controllers": [
+				"controller.render.zt.glowite_default"
+			]
+		}
+	}
+}

@@ -1,0 +1,47 @@
+{
+	"pools": [
+		{
+			"rolls": 1,
+			"entries": [
+				{
+					"type": "item",
+					"name": "zt:shroom_patch",
+					"weight": 1,
+					"functions": [
+						{
+							"function": "set_count",
+							"count": {
+								"min": 1,
+								"max": 2
+							}
+						},
+						{
+							"function": "looting_enchant",
+							"count": {
+								"min": 0,
+								"max": 1
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"rolls": 1,
+			"conditions": [
+				{
+					"condition": "random_chance_with_looting",
+					"chance": 0.5,
+					"looting_multiplier": 0.1
+				}
+			],
+			"entries": [
+				{
+					"type": "item",
+					"name": "zt:shroomy_crab_claw",
+					"weight": 1
+				}
+			]
+		}
+	]
+}

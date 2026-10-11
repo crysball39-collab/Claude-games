@@ -113,6 +113,10 @@ export function bodySize(e) {
       return { r: 14, h: 16 };
     case "zt:omegafish":
       return { r: 6, h: 8 };
+    case "zt:crabulon":
+      return { r: 4.5, h: 6.5 };
+    case "zt:shroomy_crab":
+      return { r: 0.45, h: 0.6 };
     case "minecraft:ender_dragon":
       return { r: 6, h: 6 };
     case "minecraft:wither":

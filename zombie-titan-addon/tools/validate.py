@@ -336,8 +336,10 @@ def main():
                # the Players: what they are and know, the world they share, their settings, their potions and work
                "zt:bot", "zt:bot_world", "zt:bot_placed", "zt:players", "zt:players_respawn", "zt:ai", "zt:potion", "zt:work",
                "zt:trades",
-               # the Glowshroom caverns grown so far
-               "zt:glowshroom_caverns",
+               # the Glowshroom caverns grown so far, and the Shroom Fortresses beside them
+               "zt:glowshroom_caverns", "zt:shroom_fortresses",
+               # the tag on players watching Crabulon's summoning
+               "zt:crab_cutscene",
                # script events to and from the Player AI Bridge pack
                "zt:ai_ping", "zt:ai_pong", "zt:ai_request", "zt:ai_reply"}
     for pid in set(re.findall(r'"(zt:[a-z_]*[a-z])"', scripts)):  # (ids built from a prefix like "zt:gum_" skipped)

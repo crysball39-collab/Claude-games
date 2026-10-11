@@ -17,7 +17,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(__file__))
 from geobuild import Geo, geometry_file  # noqa: E402
-from gen_items_art import ARMOR_BOXES, ARMOR_ICONS, armor_mask  # noqa: E402
+import gearart as G  # noqa: E402
 from texlib import Canvas, Painter, box_faces, fbm  # noqa: E402
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -486,134 +486,19 @@ def glowite_ingot():
     outline(c, GL_OUT).save(out("textures", "items", "zt_glowite_ingot.png"))
 
 
-TOOL_MAPS = {
-    "sword": [
-        "..............LG",
-        ".............LML",
-        "............LMD.",
-        "...........LMD..",
-        "..........LMD...",
-        ".........LMD....",
-        "........LMD.....",
-        ".......LMD......",
-        "......LMD.......",
-        "..D..LMD........",
-        "...DLMD.........",
-        "....DD..........",
-        "...WHD..........",
-        "..Wh..D.........",
-        ".LM.............",
-        "................",
-    ],
-    "pickaxe": [
-        "................",
-        ".......LLG......",
-        ".....LMMMMML....",
-        "...LMMD..DMMML..",
-        "..LMD....hHDML..",
-        "..MD....hW..DM..",
-        "..M....hH....M..",
-        "......hW.....D..",
-        ".....hH.........",
-        "....hW..........",
-        "...hH...........",
-        "..hW............",
-        ".hH.............",
-        "................",
-        "................",
-        "................",
-    ],
-    "axe": [
-        "................",
-        ".....LMMh.......",
-        "....LMMMhh......",
-        "...LMMMMhH......",
-        "...GMMMMhW......",
-        "...LMMMMhH......",
-        "....LMMMhW......",
-        ".....DDhH.......",
-        "......hW........",
-        ".....hH.........",
-        "....hW..........",
-        "...hH...........",
-        "..hW............",
-        ".hH.............",
-        "................",
-        "................",
-    ],
-    "shovel": [
-        "................",
-        "...........LLG..",
-        "..........LMMML.",
-        "..........MMMMD.",
-        "..........LMMMD.",
-        "...........DMD..",
-        "..........hD....",
-        ".........hW.....",
-        "........hH......",
-        ".......hW.......",
-        "......hH........",
-        ".....hW.........",
-        "....hH..........",
-        "...hW...........",
-        "..hH............",
-        "................",
-    ],
-    "hoe": [
-        "................",
-        "......LLGMM.....",
-        "......DDDhMD....",
-        ".........hWD....",
-        "........hH......",
-        ".......hW.......",
-        "......hH........",
-        ".....hW.........",
-        "....hH..........",
-        "...hW...........",
-        "..hH............",
-        ".hW.............",
-        "................",
-        "................",
-        "................",
-        "................",
-    ],
-}
-TOOL_PALETTE = {"L": GL_L, "M": GL_M, "D": GL_D, "G": GL_GLINT, "H": STICK_M, "h": STICK_D, "W": STICK_L}
+GLOWITE_GEAR = {"outline": GL_OUT, "deep": (10, 30, 70), "dark": GL_D, "mid": GL_M, "light": GL_L, "glint": GL_GLINT}
+TOOLS = ("sword", "pickaxe", "axe", "shovel", "hoe")
+ARMOR = ("helmet", "chestplate", "leggings", "boots")
 
 
-def tool_icon(name):
-    c = Canvas(16, 16, CLEAR)
-    for y, row in enumerate(TOOL_MAPS[name]):
-        for x, ch in enumerate(row):
-            if ch in TOOL_PALETTE:
-                c.px(x, y, TOOL_PALETTE[ch])
-    outline(c, GL_OUT).save(out("textures", "items", "zt_glowite_%s.png" % name))
-
-
-def armor_icon(name):
-    c = Canvas(16, 16, CLEAR)
-    rows = ARMOR_ICONS[name]
-    noise = fbm(16, 16, 5600 + len(name), cell=3, octaves=2)
-    for y, row in enumerate(rows):
-        for x, ch in enumerate(row):
-            if ch != "#":
-                continue
-            top = y == 0 or rows[y - 1][x] != "#"
-            left = x == 0 or row[x - 1] != "#"
-            bottom = y == 15 or rows[y + 1][x] != "#"
-            col = tone(GLOWITE, 0.45 + noise[y, x] * 0.3)
-            if top or left:
-                col = GL_L
-            if bottom:
-                col = GL_D
-            c.px(x, y, col)
-    # a glowing seam across the middle of each piece
-    mid = [y for y, row in enumerate(rows) if "#" in row]
-    y = mid[len(mid) // 2]
-    for x, ch in enumerate(rows[y]):
-        if ch == "#" and x % 2 == 0:
-            c.px(x, y, GL_GLINT)
-    outline(c, GL_OUT).save(out("textures", "items", "zt_glowite_%s.png" % name))
+def gear():
+    """Glowite tools and armor in the classic shapes (gearart.py), with glowing cyan seams."""
+    for name in TOOLS:
+        G.tool_icon(name, GLOWITE_GEAR).save(out("textures", "items", "zt_glowite_%s.png" % name))
+    for name in ARMOR:
+        G.armor_icon(name, GLOWITE_GEAR).save(out("textures", "items", "zt_glowite_%s.png" % name))
+    for layer in (1, 2):
+        G.armor_layer(layer, GLOWITE_GEAR, 5700 + layer, accent=(150, 240, 255)).save(out("textures", "models", "armor", "zt_glowite_%d.png" % layer))
 
 
 def spore_seeds():
@@ -650,42 +535,6 @@ def door_icon():
             c.px(x, y, col)
     c.px(10, 9, (40, 40, 48))
     outline(c, (60, 60, 74)).save(out("textures", "items", "zt_glowshroom_door.png"))
-
-
-# =============================================================================
-# Worn armor layers (64 x 32, standard armor UV layout)
-# =============================================================================
-def armor_layer(layer):
-    mask = armor_mask(layer)
-    c = Canvas(64, 32, CLEAR)
-    noise = fbm(64, 32, 5700 + layer, cell=4, octaves=3)
-    rng = np.random.default_rng(5710 + layer)
-    for y in range(32):
-        for x in range(64):
-            if mask[y, x]:
-                c.px(x, y, tone(GLOWITE, 0.3 + noise[y, x] * 0.45 + rng.random() * 0.05))
-    for _, u, v, w, h, d in ARMOR_BOXES[layer]:
-        for k, (x, y, fw, fh) in box_faces(u, v, w, h, d).items():
-            x, y, fw, fh = int(x), int(y), int(fw), int(fh)
-            for i in range(fw):
-                if mask[y, x + i]:
-                    c.px(x + i, y, GL_L)
-                if mask[y + fh - 1, x + i]:
-                    c.px(x + i, y + fh - 1, GL_DEEP)
-            # a glowing seam down the middle of the front and back faces
-            if k in ("front", "back") and fh > 4:
-                for j in range(1, fh - 1, 2):
-                    if mask[y + j, x + fw // 2]:
-                        c.px(x + fw // 2, y + j, GL_GLINT)
-    for _ in range(20):
-        ys, xs = np.nonzero(mask)
-        i = rng.integers(0, len(xs))
-        c.px(xs[i], ys[i], GL_GLINT)
-    if layer == 1:
-        for x in range(9, 15):           # a cyan visor on the helmet's front
-            if mask[11, x]:
-                c.px(x, 11, (150, 244, 255))
-    c.save(out("textures", "models", "armor", "zt_glowite_%d.png" % layer))
 
 
 # =============================================================================
@@ -900,15 +749,10 @@ def main():
     glowing_particles()
     raw_glowite()
     glowite_ingot()
-    for name in TOOL_MAPS:
-        tool_icon(name)
-    for name in ARMOR_ICONS:
-        armor_icon(name)
+    gear()
     spore_seeds()
     shroom_berries()
     door_icon()
-    for layer in (1, 2):
-        armor_layer(layer)
     geos = [shroom_zombie(), shroom_skeleton(), spore_bullet()]
     with open(out("models", "entity", "shroom_mobs.geo.json"), "w") as f:
         json.dump(geometry_file(*geos), f, indent="\t")

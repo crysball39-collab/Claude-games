@@ -140,5 +140,17 @@
 	},
 	"zt:glowshroom_pressure_plate": {
 		"sound": "wood"
+	},
+	"zt:shroomed_bricks": {
+		"sound": "deepslate_bricks"
+	},
+	"zt:shroomed_brick_wall": {
+		"sound": "deepslate_bricks"
+	},
+	"zt:shroomed_altar": {
+		"sound": "deepslate_bricks"
+	},
+	"zt:shroomy_crab_spawner": {
+		"sound": "trial_spawner"
 	}
 }

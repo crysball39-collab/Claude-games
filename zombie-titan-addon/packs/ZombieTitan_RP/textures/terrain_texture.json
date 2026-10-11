@@ -174,6 +174,24 @@
 		},
 		"zt_spore_crop_3": {
 			"textures": "textures/blocks/zt_spore_crop_3"
+		},
+		"zt_shroomed_bricks": {
+			"textures": "textures/blocks/zt_shroomed_bricks"
+		},
+		"zt_shroomed_altar_side": {
+			"textures": "textures/blocks/zt_shroomed_altar_side"
+		},
+		"zt_shroomed_altar_top": {
+			"textures": "textures/blocks/zt_shroomed_altar_top"
+		},
+		"zt_crab_spawner": {
+			"textures": "textures/blocks/zt_crab_spawner"
+		},
+		"zt_crab_spawner_crab": {
+			"textures": "textures/blocks/zt_crab_spawner_crab"
+		},
+		"zt_crab_spawner_eye": {
+			"textures": "textures/blocks/zt_crab_spawner_eye"
 		}
 	}
 }

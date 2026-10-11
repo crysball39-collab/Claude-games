@@ -1,0 +1,59 @@
+{
+	"format_version": "1.21.90",
+	"minecraft:item": {
+		"description": {
+			"identifier": "zt:everest",
+			"menu_category": {
+				"category": "equipment",
+				"group": "minecraft:itemGroup.name.sword"
+			}
+		},
+		"components": {
+			"minecraft:icon": "zt_everest",
+			"minecraft:display_name": {
+				"value": "item.zt:everest.name"
+			},
+			"minecraft:max_stack_size": 1,
+			"minecraft:hand_equipped": true,
+			"minecraft:damage": 15,
+			"minecraft:durability": {
+				"max_durability": 4000
+			},
+			"minecraft:enchantable": {
+				"slot": "sword",
+				"value": 20
+			},
+			"minecraft:repairable": {
+				"repair_items": [
+					{
+						"items": [
+							"zt:glowite_ingot"
+						],
+						"repair_amount": "query.max_durability * 0.25"
+					},
+					{
+						"items": [
+							"zt:everest"
+						],
+						"repair_amount": "context.other->query.remaining_durability + 0.05 * context.other->query.max_durability"
+					}
+				]
+			},
+			"minecraft:tags": {
+				"tags": [
+					"minecraft:is_sword",
+					"minecraft:is_tool",
+					"minecraft:netherite_tier"
+				]
+			},
+			"minecraft:fire_resistant": {
+				"value": true
+			},
+			"minecraft:rarity": "epic",
+			"minecraft:use_modifiers": {
+				"use_duration": 0.5,
+				"movement_modifier": 1.0
+			}
+		}
+	}
+}

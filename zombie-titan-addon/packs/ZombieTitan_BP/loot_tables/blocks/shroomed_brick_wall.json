@@ -1,0 +1,22 @@
+{
+	"pools": [
+		{
+			"rolls": 1,
+			"conditions": [
+				{
+					"condition": "match_tool",
+					"minecraft:match_tool_filter_any": [
+						"minecraft:is_pickaxe"
+					]
+				}
+			],
+			"entries": [
+				{
+					"type": "item",
+					"name": "zt:shroomed_brick_wall",
+					"weight": 1
+				}
+			]
+		}
+	]
+}

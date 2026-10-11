@@ -187,6 +187,7 @@ entity.zt:shroom_zombie.name=Shroom Zombie
 entity.zt:shroom_skeleton.name=Shroom Skeleton
 entity.zt:spore_bullet.name=Spore Bullet
 entity.zt:shroomy_bullet.name=Shroomy Bullet
+entity.zt:spore_arrow.name=Spore Bullet
 item.spawn_egg.entity.zt:shroom_zombie.name=Spawn Shroom Zombie
 item.spawn_egg.entity.zt:shroom_skeleton.name=Spawn Shroom Skeleton
 item.zt:glowite_sword.name=Glowite Sword
@@ -199,3 +200,26 @@ item.zt:glowite_chestplate.name=Glowite Chestplate
 item.zt:glowite_leggings.name=Glowite Leggings
 item.zt:glowite_boots.name=Glowite Boots
 ## glowite end
+## crabulon begin
+tile.zt:shroomed_bricks.name=Shroomed Brick
+tile.zt:shroomed_brick_wall.name=Shroomed Brick Wall
+tile.zt:shroomed_altar.name=Shroomed Altar
+tile.zt:shroomy_crab_spawner.name=Shroomy Crab Spawner
+entity.zt:shroomy_crab.name=Shroomy Crab
+item.spawn_egg.entity.zt:shroomy_crab.name=Spawn Shroomy Crab
+item.zt:shroom_patch.name=Shroom Patch
+item.zt:shroomy_crab_claw.name=Shroomy Crab Claw
+entity.zt:crabulon.name=Crabulon
+item.spawn_egg.entity.zt:crabulon.name=Spawn Crabulon
+entity.zt:crabulon_corpse.name=Crabulon
+entity.zt:crab_totem_display.name=Crab Totem
+entity.zt:falling_shroom.name=Falling Shroom
+item.zt:crab_totem.name=Crab Totem
+item.zt:spore_scroll.name=Spore Scroll
+item.zt:shroomed_eye.name=Shroomed Eye
+## crabulon end
+## everest begin
+item.zt:everest.name=Everest
+entity.zt:everest_portal.name=Everest Portal
+entity.zt:supernova.name=Supernova
+## everest end

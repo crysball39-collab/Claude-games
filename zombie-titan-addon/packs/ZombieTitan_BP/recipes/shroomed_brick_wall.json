@@ -1,0 +1,29 @@
+{
+	"format_version": "1.20.10",
+	"minecraft:recipe_shaped": {
+		"description": {
+			"identifier": "zt:shroomed_brick_wall"
+		},
+		"tags": [
+			"crafting_table"
+		],
+		"pattern": [
+			"###",
+			"###"
+		],
+		"key": {
+			"#": {
+				"item": "zt:shroomed_bricks"
+			}
+		},
+		"unlock": [
+			{
+				"item": "zt:shroomed_bricks"
+			}
+		],
+		"result": {
+			"item": "zt:shroomed_brick_wall",
+			"count": 6
+		}
+	}
+}

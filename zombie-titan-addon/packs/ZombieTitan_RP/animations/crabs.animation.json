@@ -1,0 +1,1869 @@
+{
+	"format_version": "1.10.0",
+	"animations": {
+		"animation.zt.shroomy_crab.walk": {
+			"loop": true,
+			"bones": {
+				"leg_l0": {
+					"rotation": [
+						0,
+						0,
+						"-1 * math.max(0, math.sin(q.anim_time * 900 + 0)) * 20"
+					]
+				},
+				"hip_l0": {
+					"rotation": [
+						0,
+						"math.cos(q.anim_time * 900 + 0) * 12",
+						0
+					]
+				},
+				"leg_r1": {
+					"rotation": [
+						0,
+						0,
+						"1 * math.max(0, math.sin(q.anim_time * 900 + 0)) * 20"
+					]
+				},
+				"hip_r1": {
+					"rotation": [
+						0,
+						"math.cos(q.anim_time * 900 + 0) * 12",
+						0
+					]
+				},
+				"leg_l2": {
+					"rotation": [
+						0,
+						0,
+						"-1 * math.max(0, math.sin(q.anim_time * 900 + 0)) * 20"
+					]
+				},
+				"hip_l2": {
+					"rotation": [
+						0,
+						"math.cos(q.anim_time * 900 + 0) * 12",
+						0
+					]
+				},
+				"leg_r3": {
+					"rotation": [
+						0,
+						0,
+						"1 * math.max(0, math.sin(q.anim_time * 900 + 0)) * 20"
+					]
+				},
+				"hip_r3": {
+					"rotation": [
+						0,
+						"math.cos(q.anim_time * 900 + 0) * 12",
+						0
+					]
+				},
+				"leg_r0": {
+					"rotation": [
+						0,
+						0,
+						"1 * math.max(0, math.sin(q.anim_time * 900 + 180)) * 20"
+					]
+				},
+				"hip_r0": {
+					"rotation": [
+						0,
+						"math.cos(q.anim_time * 900 + 180) * 12",
+						0
+					]
+				},
+				"leg_l1": {
+					"rotation": [
+						0,
+						0,
+						"-1 * math.max(0, math.sin(q.anim_time * 900 + 180)) * 20"
+					]
+				},
+				"hip_l1": {
+					"rotation": [
+						0,
+						"math.cos(q.anim_time * 900 + 180) * 12",
+						0
+					]
+				},
+				"leg_r2": {
+					"rotation": [
+						0,
+						0,
+						"1 * math.max(0, math.sin(q.anim_time * 900 + 180)) * 20"
+					]
+				},
+				"hip_r2": {
+					"rotation": [
+						0,
+						"math.cos(q.anim_time * 900 + 180) * 12",
+						0
+					]
+				},
+				"leg_l3": {
+					"rotation": [
+						0,
+						0,
+						"-1 * math.max(0, math.sin(q.anim_time * 900 + 180)) * 20"
+					]
+				},
+				"hip_l3": {
+					"rotation": [
+						0,
+						"math.cos(q.anim_time * 900 + 180) * 12",
+						0
+					]
+				},
+				"body": {
+					"position": [
+						0,
+						"math.abs(math.sin(q.anim_time * 900)) * 0.35",
+						0
+					],
+					"rotation": [
+						0,
+						0,
+						"math.sin(q.anim_time * 900) * 2"
+					]
+				}
+			}
+		},
+		"animation.zt.shroomy_crab.sidle": {
+			"loop": true,
+			"bones": {
+				"root": {
+					"rotation": [
+						0,
+						90,
+						0
+					]
+				}
+			}
+		},
+		"animation.zt.shroomy_crab.idle": {
+			"loop": true,
+			"bones": {
+				"rightPincer": {
+					"rotation": [
+						"-6 - math.sin(q.life_time * 110) * 8",
+						0,
+						0
+					]
+				},
+				"leftPincer": {
+					"rotation": [
+						"-6 - math.sin(q.life_time * 110 + 70) * 8",
+						0,
+						0
+					]
+				},
+				"eyes": {
+					"rotation": [
+						"math.sin(q.life_time * 80) * 4",
+						"math.sin(q.life_time * 50) * 6",
+						0
+					]
+				},
+				"shrooms": {
+					"rotation": [
+						0,
+						0,
+						"math.sin(q.life_time * 60) * 2"
+					]
+				},
+				"body": {
+					"position": [
+						0,
+						"math.sin(q.life_time * 90) * 0.12",
+						0
+					]
+				}
+			}
+		},
+		"animation.zt.shroomy_crab.attack": {
+			"loop": true,
+			"bones": {
+				"rightArm": {
+					"rotation": [
+						"-math.sin(v.attack_time * 180) * 40",
+						"math.sin(v.attack_time * 180) * 10",
+						0
+					]
+				},
+				"rightPincer": {
+					"rotation": [
+						"v.attack_time < 0.6 ? -30 : 0",
+						0,
+						0
+					]
+				},
+				"leftArm": {
+					"rotation": [
+						"-math.sin(v.attack_time * 180) * 15",
+						0,
+						0
+					]
+				},
+				"body": {
+					"rotation": [
+						"-math.sin(v.attack_time * 180) * 6",
+						0,
+						0
+					]
+				}
+			}
+		},
+		"animation.zt.crabulon.idle": {
+			"loop": true,
+			"bones": {
+				"rightPincer": {
+					"rotation": [
+						"-8 - math.sin(q.life_time * 70) * 10",
+						0,
+						0
+					]
+				},
+				"leftPincer": {
+					"rotation": [
+						"-8 - math.sin(q.life_time * 70 + 90) * 10",
+						0,
+						0
+					]
+				},
+				"eyes": {
+					"rotation": [
+						"math.sin(q.life_time * 50) * 5",
+						"math.sin(q.life_time * 30) * 10",
+						0
+					]
+				},
+				"shrooms": {
+					"rotation": [
+						0,
+						0,
+						"math.sin(q.life_time * 40) * 2"
+					],
+					"scale": "1 + math.sin(q.life_time * 120) * 0.03"
+				},
+				"body": {
+					"position": [
+						0,
+						"math.sin(q.life_time * 60) * 0.18",
+						0
+					]
+				}
+			}
+		},
+		"animation.zt.crabulon.walk": {
+			"loop": true,
+			"anim_time_update": "q.anim_time + q.delta_time * (q.property('zt:enraged') ? 1.4 : 1.0)",
+			"bones": {
+				"leg_l0": {
+					"rotation": [
+						0,
+						0,
+						"-1 * math.max(0, math.sin(q.anim_time * 640 + 0)) * 22"
+					]
+				},
+				"hip_l0": {
+					"rotation": [
+						0,
+						"math.cos(q.anim_time * 640 + 0) * 14",
+						0
+					]
+				},
+				"leg_r1": {
+					"rotation": [
+						0,
+						0,
+						"1 * math.max(0, math.sin(q.anim_time * 640 + 0)) * 22"
+					]
+				},
+				"hip_r1": {
+					"rotation": [
+						0,
+						"math.cos(q.anim_time * 640 + 0) * 14",
+						0
+					]
+				},
+				"leg_l2": {
+					"rotation": [
+						0,
+						0,
+						"-1 * math.max(0, math.sin(q.anim_time * 640 + 0)) * 22"
+					]
+				},
+				"hip_l2": {
+					"rotation": [
+						0,
+						"math.cos(q.anim_time * 640 + 0) * 14",
+						0
+					]
+				},
+				"leg_r3": {
+					"rotation": [
+						0,
+						0,
+						"1 * math.max(0, math.sin(q.anim_time * 640 + 0)) * 22"
+					]
+				},
+				"hip_r3": {
+					"rotation": [
+						0,
+						"math.cos(q.anim_time * 640 + 0) * 14",
+						0
+					]
+				},
+				"leg_r0": {
+					"rotation": [
+						0,
+						0,
+						"1 * math.max(0, math.sin(q.anim_time * 640 + 180)) * 22"
+					]
+				},
+				"hip_r0": {
+					"rotation": [
+						0,
+						"math.cos(q.anim_time * 640 + 180) * 14",
+						0
+					]
+				},
+				"leg_l1": {
+					"rotation": [
+						0,
+						0,
+						"-1 * math.max(0, math.sin(q.anim_time * 640 + 180)) * 22"
+					]
+				},
+				"hip_l1": {
+					"rotation": [
+						0,
+						"math.cos(q.anim_time * 640 + 180) * 14",
+						0
+					]
+				},
+				"leg_r2": {
+					"rotation": [
+						0,
+						0,
+						"1 * math.max(0, math.sin(q.anim_time * 640 + 180)) * 22"
+					]
+				},
+				"hip_r2": {
+					"rotation": [
+						0,
+						"math.cos(q.anim_time * 640 + 180) * 14",
+						0
+					]
+				},
+				"leg_l3": {
+					"rotation": [
+						0,
+						0,
+						"-1 * math.max(0, math.sin(q.anim_time * 640 + 180)) * 22"
+					]
+				},
+				"hip_l3": {
+					"rotation": [
+						0,
+						"math.cos(q.anim_time * 640 + 180) * 14",
+						0
+					]
+				},
+				"body": {
+					"position": [
+						0,
+						"math.abs(math.sin(q.anim_time * 640)) * 0.4",
+						0
+					],
+					"rotation": [
+						0,
+						0,
+						"math.sin(q.anim_time * 640) * 2"
+					]
+				}
+			}
+		},
+		"animation.zt.crabulon.barrage": {
+			"loop": true,
+			"bones": {
+				"rightArm": {
+					"rotation": [
+						"-38",
+						38,
+						0
+					]
+				},
+				"leftArm": {
+					"rotation": [
+						"-38",
+						-38,
+						0
+					]
+				},
+				"rightPincer": {
+					"rotation": [
+						-35,
+						0,
+						0
+					]
+				},
+				"leftPincer": {
+					"rotation": [
+						-35,
+						0,
+						0
+					]
+				},
+				"body": {
+					"position": [
+						"math.sin(q.anim_time * 2200) * 0.12",
+						0,
+						0
+					]
+				},
+				"shrooms": {
+					"scale": "1.05 + math.sin(q.anim_time * 900) * 0.08"
+				},
+				"eyes": {
+					"rotation": [
+						-10,
+						0,
+						0
+					]
+				}
+			}
+		},
+		"animation.zt.crabulon.crouch": {
+			"loop": "hold_on_last_frame",
+			"animation_length": 0.6,
+			"bones": {
+				"leg_l0": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							-18
+						],
+						"0.6": [
+							0,
+							0,
+							-18
+						]
+					}
+				},
+				"shin_l0": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							26
+						],
+						"0.6": [
+							0,
+							0,
+							26
+						]
+					}
+				},
+				"leg_l1": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							-18
+						],
+						"0.6": [
+							0,
+							0,
+							-18
+						]
+					}
+				},
+				"shin_l1": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							26
+						],
+						"0.6": [
+							0,
+							0,
+							26
+						]
+					}
+				},
+				"leg_l2": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							-18
+						],
+						"0.6": [
+							0,
+							0,
+							-18
+						]
+					}
+				},
+				"shin_l2": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							26
+						],
+						"0.6": [
+							0,
+							0,
+							26
+						]
+					}
+				},
+				"leg_l3": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							-18
+						],
+						"0.6": [
+							0,
+							0,
+							-18
+						]
+					}
+				},
+				"shin_l3": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							26
+						],
+						"0.6": [
+							0,
+							0,
+							26
+						]
+					}
+				},
+				"leg_r0": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							18
+						],
+						"0.6": [
+							0,
+							0,
+							18
+						]
+					}
+				},
+				"shin_r0": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							-26
+						],
+						"0.6": [
+							0,
+							0,
+							-26
+						]
+					}
+				},
+				"leg_r1": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							18
+						],
+						"0.6": [
+							0,
+							0,
+							18
+						]
+					}
+				},
+				"shin_r1": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							-26
+						],
+						"0.6": [
+							0,
+							0,
+							-26
+						]
+					}
+				},
+				"leg_r2": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							18
+						],
+						"0.6": [
+							0,
+							0,
+							18
+						]
+					}
+				},
+				"shin_r2": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							-26
+						],
+						"0.6": [
+							0,
+							0,
+							-26
+						]
+					}
+				},
+				"leg_r3": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							18
+						],
+						"0.6": [
+							0,
+							0,
+							18
+						]
+					}
+				},
+				"shin_r3": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							-26
+						],
+						"0.6": [
+							0,
+							0,
+							-26
+						]
+					}
+				},
+				"body": {
+					"position": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"0.6": [
+							0,
+							-2.6,
+							0
+						]
+					}
+				},
+				"rightArm": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"0.6": [
+							18,
+							0,
+							0
+						]
+					}
+				},
+				"leftArm": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"0.6": [
+							18,
+							0,
+							0
+						]
+					}
+				}
+			}
+		},
+		"animation.zt.crabulon.air": {
+			"loop": true,
+			"bones": {
+				"leg_l0": {
+					"rotation": [
+						0,
+						0,
+						34
+					]
+				},
+				"shin_l0": {
+					"rotation": [
+						0,
+						0,
+						-22
+					]
+				},
+				"leg_l1": {
+					"rotation": [
+						0,
+						0,
+						34
+					]
+				},
+				"shin_l1": {
+					"rotation": [
+						0,
+						0,
+						-22
+					]
+				},
+				"leg_l2": {
+					"rotation": [
+						0,
+						0,
+						34
+					]
+				},
+				"shin_l2": {
+					"rotation": [
+						0,
+						0,
+						-22
+					]
+				},
+				"leg_l3": {
+					"rotation": [
+						0,
+						0,
+						34
+					]
+				},
+				"shin_l3": {
+					"rotation": [
+						0,
+						0,
+						-22
+					]
+				},
+				"leg_r0": {
+					"rotation": [
+						0,
+						0,
+						-34
+					]
+				},
+				"shin_r0": {
+					"rotation": [
+						0,
+						0,
+						22
+					]
+				},
+				"leg_r1": {
+					"rotation": [
+						0,
+						0,
+						-34
+					]
+				},
+				"shin_r1": {
+					"rotation": [
+						0,
+						0,
+						22
+					]
+				},
+				"leg_r2": {
+					"rotation": [
+						0,
+						0,
+						-34
+					]
+				},
+				"shin_r2": {
+					"rotation": [
+						0,
+						0,
+						22
+					]
+				},
+				"leg_r3": {
+					"rotation": [
+						0,
+						0,
+						-34
+					]
+				},
+				"shin_r3": {
+					"rotation": [
+						0,
+						0,
+						22
+					]
+				},
+				"rightArm": {
+					"rotation": [
+						"-50",
+						20,
+						0
+					]
+				},
+				"leftArm": {
+					"rotation": [
+						"-50",
+						-20,
+						0
+					]
+				},
+				"rightPincer": {
+					"rotation": [
+						-30,
+						0,
+						0
+					]
+				},
+				"leftPincer": {
+					"rotation": [
+						-30,
+						0,
+						0
+					]
+				},
+				"eyes": {
+					"rotation": [
+						12,
+						0,
+						0
+					]
+				}
+			}
+		},
+		"animation.zt.crabulon.land": {
+			"loop": "hold_on_last_frame",
+			"animation_length": 0.5,
+			"bones": {
+				"leg_l0": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							-28.0
+						],
+						"0.5": [
+							0,
+							0,
+							0
+						]
+					}
+				},
+				"shin_l0": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0.0
+						],
+						"0.5": [
+							0,
+							0,
+							0
+						]
+					}
+				},
+				"leg_l1": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							-28.0
+						],
+						"0.5": [
+							0,
+							0,
+							0
+						]
+					}
+				},
+				"shin_l1": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0.0
+						],
+						"0.5": [
+							0,
+							0,
+							0
+						]
+					}
+				},
+				"leg_l2": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							-28.0
+						],
+						"0.5": [
+							0,
+							0,
+							0
+						]
+					}
+				},
+				"shin_l2": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0.0
+						],
+						"0.5": [
+							0,
+							0,
+							0
+						]
+					}
+				},
+				"leg_l3": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							-28.0
+						],
+						"0.5": [
+							0,
+							0,
+							0
+						]
+					}
+				},
+				"shin_l3": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0.0
+						],
+						"0.5": [
+							0,
+							0,
+							0
+						]
+					}
+				},
+				"leg_r0": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							28.0
+						],
+						"0.5": [
+							0,
+							0,
+							0
+						]
+					}
+				},
+				"shin_r0": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0.0
+						],
+						"0.5": [
+							0,
+							0,
+							0
+						]
+					}
+				},
+				"leg_r1": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							28.0
+						],
+						"0.5": [
+							0,
+							0,
+							0
+						]
+					}
+				},
+				"shin_r1": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0.0
+						],
+						"0.5": [
+							0,
+							0,
+							0
+						]
+					}
+				},
+				"leg_r2": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							28.0
+						],
+						"0.5": [
+							0,
+							0,
+							0
+						]
+					}
+				},
+				"shin_r2": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0.0
+						],
+						"0.5": [
+							0,
+							0,
+							0
+						]
+					}
+				},
+				"leg_r3": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							28.0
+						],
+						"0.5": [
+							0,
+							0,
+							0
+						]
+					}
+				},
+				"shin_r3": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0.0
+						],
+						"0.5": [
+							0,
+							0,
+							0
+						]
+					}
+				},
+				"body": {
+					"position": {
+						"0.0": [
+							0,
+							-2.2,
+							0
+						],
+						"0.5": [
+							0,
+							0,
+							0
+						]
+					}
+				},
+				"rightArm": {
+					"rotation": {
+						"0.0": [
+							26,
+							0,
+							0
+						],
+						"0.5": [
+							0,
+							0,
+							0
+						]
+					}
+				},
+				"leftArm": {
+					"rotation": {
+						"0.0": [
+							26,
+							0,
+							0
+						],
+						"0.5": [
+							0,
+							0,
+							0
+						]
+					}
+				}
+			}
+		},
+		"animation.zt.crabulon.summon": {
+			"loop": true,
+			"bones": {
+				"rightArm": {
+					"rotation": [
+						"10 + math.sin(q.anim_time * 600) * 32",
+						10,
+						0
+					]
+				},
+				"leftArm": {
+					"rotation": [
+						"10 + math.sin(q.anim_time * 600 + 180) * 32",
+						-10,
+						0
+					]
+				},
+				"body": {
+					"position": [
+						0,
+						"-math.abs(math.sin(q.anim_time * 600)) * 0.6",
+						0
+					]
+				}
+			}
+		},
+		"animation.zt.crabulon.rain": {
+			"loop": true,
+			"bones": {
+				"rightArm": {
+					"rotation": [
+						"-82 + math.sin(q.anim_time * 1700) * 4",
+						14,
+						0
+					]
+				},
+				"leftArm": {
+					"rotation": [
+						"-82 + math.sin(q.anim_time * 1700) * 4",
+						-14,
+						0
+					]
+				},
+				"rightPincer": {
+					"rotation": [
+						-40,
+						0,
+						0
+					]
+				},
+				"leftPincer": {
+					"rotation": [
+						-40,
+						0,
+						0
+					]
+				},
+				"body": {
+					"rotation": [
+						-9,
+						0,
+						0
+					],
+					"position": [
+						0,
+						0.8,
+						0
+					]
+				},
+				"eyes": {
+					"rotation": [
+						-22,
+						0,
+						0
+					]
+				},
+				"shrooms": {
+					"scale": "1.08 + math.sin(q.anim_time * 700) * 0.06"
+				}
+			}
+		},
+		"animation.zt.crabulon.claw": {
+			"loop": "hold_on_last_frame",
+			"animation_length": 0.9,
+			"bones": {
+				"rightArm": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"0.35": [
+							-55,
+							25,
+							0
+						],
+						"0.5": [
+							14,
+							-12,
+							0
+						],
+						"0.9": [
+							0,
+							0,
+							0
+						]
+					}
+				},
+				"rightPincer": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"0.35": [
+							-45,
+							0,
+							0
+						],
+						"0.47": [
+							-45,
+							0,
+							0
+						],
+						"0.52": [
+							4,
+							0,
+							0
+						],
+						"0.9": [
+							0,
+							0,
+							0
+						]
+					}
+				},
+				"body": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"0.35": [
+							-5,
+							8,
+							0
+						],
+						"0.5": [
+							4,
+							-6,
+							0
+						],
+						"0.9": [
+							0,
+							0,
+							0
+						]
+					}
+				}
+			}
+		},
+		"animation.zt.crabulon.roar": {
+			"loop": true,
+			"bones": {
+				"rightArm": {
+					"rotation": [
+						"-70 + math.sin(q.anim_time * 1700) * 3",
+						45,
+						0
+					]
+				},
+				"leftArm": {
+					"rotation": [
+						"-70 + math.sin(q.anim_time * 1700) * 3",
+						-45,
+						0
+					]
+				},
+				"rightPincer": {
+					"rotation": [
+						-48,
+						0,
+						0
+					]
+				},
+				"leftPincer": {
+					"rotation": [
+						-48,
+						0,
+						0
+					]
+				},
+				"body": {
+					"rotation": [
+						-15,
+						0,
+						0
+					],
+					"position": [
+						"math.sin(q.anim_time * 2600) * 0.1",
+						1.2,
+						0
+					]
+				},
+				"eyes": {
+					"rotation": [
+						18,
+						0,
+						0
+					]
+				},
+				"shrooms": {
+					"scale": "1.1 + math.sin(q.anim_time * 1100) * 0.05"
+				}
+			}
+		},
+		"animation.zt.crabulon.descend": {
+			"loop": true,
+			"bones": {
+				"leg_l0": {
+					"rotation": [
+						0,
+						0,
+						40
+					]
+				},
+				"shin_l0": {
+					"rotation": [
+						0,
+						0,
+						-14
+					]
+				},
+				"leg_l1": {
+					"rotation": [
+						0,
+						0,
+						40
+					]
+				},
+				"shin_l1": {
+					"rotation": [
+						0,
+						0,
+						-14
+					]
+				},
+				"leg_l2": {
+					"rotation": [
+						0,
+						0,
+						40
+					]
+				},
+				"shin_l2": {
+					"rotation": [
+						0,
+						0,
+						-14
+					]
+				},
+				"leg_l3": {
+					"rotation": [
+						0,
+						0,
+						40
+					]
+				},
+				"shin_l3": {
+					"rotation": [
+						0,
+						0,
+						-14
+					]
+				},
+				"leg_r0": {
+					"rotation": [
+						0,
+						0,
+						-40
+					]
+				},
+				"shin_r0": {
+					"rotation": [
+						0,
+						0,
+						14
+					]
+				},
+				"leg_r1": {
+					"rotation": [
+						0,
+						0,
+						-40
+					]
+				},
+				"shin_r1": {
+					"rotation": [
+						0,
+						0,
+						14
+					]
+				},
+				"leg_r2": {
+					"rotation": [
+						0,
+						0,
+						-40
+					]
+				},
+				"shin_r2": {
+					"rotation": [
+						0,
+						0,
+						14
+					]
+				},
+				"leg_r3": {
+					"rotation": [
+						0,
+						0,
+						-40
+					]
+				},
+				"shin_r3": {
+					"rotation": [
+						0,
+						0,
+						14
+					]
+				},
+				"rightArm": {
+					"rotation": [
+						"-60",
+						22,
+						0
+					]
+				},
+				"leftArm": {
+					"rotation": [
+						"-60",
+						-22,
+						0
+					]
+				},
+				"rightPincer": {
+					"rotation": [
+						-20,
+						0,
+						0
+					]
+				},
+				"leftPincer": {
+					"rotation": [
+						-20,
+						0,
+						0
+					]
+				},
+				"body": {
+					"rotation": [
+						0,
+						0,
+						"math.sin(q.anim_time * 200) * 3"
+					]
+				}
+			}
+		},
+		"animation.zt.crabulon.death": {
+			"loop": "hold_on_last_frame",
+			"animation_length": 2.5,
+			"bones": {
+				"leg_l0": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"1.6": [
+							0,
+							0,
+							55
+						]
+					}
+				},
+				"shin_l0": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"1.6": [
+							0,
+							0,
+							-40
+						]
+					}
+				},
+				"leg_l1": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"1.6": [
+							0,
+							0,
+							55
+						]
+					}
+				},
+				"shin_l1": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"1.6": [
+							0,
+							0,
+							-40
+						]
+					}
+				},
+				"leg_l2": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"1.6": [
+							0,
+							0,
+							55
+						]
+					}
+				},
+				"shin_l2": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"1.6": [
+							0,
+							0,
+							-40
+						]
+					}
+				},
+				"leg_l3": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"1.6": [
+							0,
+							0,
+							55
+						]
+					}
+				},
+				"shin_l3": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"1.6": [
+							0,
+							0,
+							-40
+						]
+					}
+				},
+				"leg_r0": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"1.6": [
+							0,
+							0,
+							-55
+						]
+					}
+				},
+				"shin_r0": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"1.6": [
+							0,
+							0,
+							40
+						]
+					}
+				},
+				"leg_r1": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"1.6": [
+							0,
+							0,
+							-55
+						]
+					}
+				},
+				"shin_r1": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"1.6": [
+							0,
+							0,
+							40
+						]
+					}
+				},
+				"leg_r2": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"1.6": [
+							0,
+							0,
+							-55
+						]
+					}
+				},
+				"shin_r2": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"1.6": [
+							0,
+							0,
+							40
+						]
+					}
+				},
+				"leg_r3": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"1.6": [
+							0,
+							0,
+							-55
+						]
+					}
+				},
+				"shin_r3": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"1.6": [
+							0,
+							0,
+							40
+						]
+					}
+				},
+				"body": {
+					"position": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"1.0": [
+							0,
+							1.0,
+							0
+						],
+						"2.0": [
+							0,
+							-3.0,
+							0
+						]
+					},
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"1.0": [
+							-12,
+							0,
+							0
+						],
+						"2.0": [
+							6,
+							0,
+							22
+						]
+					}
+				},
+				"rightArm": {
+					"rotation": {
+						"0.0": [
+							-60,
+							30,
+							0
+						],
+						"1.0": [
+							-70,
+							30,
+							0
+						],
+						"2.0": [
+							35,
+							10,
+							0
+						]
+					}
+				},
+				"leftArm": {
+					"rotation": {
+						"0.0": [
+							-60,
+							-30,
+							0
+						],
+						"1.0": [
+							-70,
+							-30,
+							0
+						],
+						"2.0": [
+							35,
+							-10,
+							0
+						]
+					}
+				},
+				"eyes": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"2.0": [
+							55,
+							0,
+							0
+						]
+					}
+				},
+				"shrooms": {
+					"scale": {
+						"0.0": [
+							1,
+							1,
+							1
+						],
+						"2.5": [
+							0.85,
+							0.7,
+							0.85
+						]
+					}
+				}
+			}
+		},
+		"animation.zt.crab_totem.rise": {
+			"loop": true,
+			"bones": {
+				"totem": {
+					"position": [
+						0,
+						"math.min(q.life_time, 3.0) * 16",
+						0
+					],
+					"rotation": [
+						0,
+						"q.life_time * q.life_time * 60",
+						0
+					],
+					"scale": "1 + math.max(0, q.life_time - 2.5) * 1.6"
+				}
+			}
+		},
+		"animation.zt.falling_shroom.spin": {
+			"loop": true,
+			"bones": {
+				"shroom": {
+					"rotation": [
+						"math.sin(q.life_time * 400) * 8",
+						"q.life_time * 200",
+						0
+					]
+				}
+			}
+		}
+	}
+}

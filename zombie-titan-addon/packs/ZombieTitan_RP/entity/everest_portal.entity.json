@@ -1,0 +1,29 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:everest_portal",
+			"materials": {
+				"default": "entity_beam_additive"
+			},
+			"textures": {
+				"default": "textures/entity/zt_everest_portal"
+			},
+			"geometry": {
+				"default": "geometry.zt.everest_portal"
+			},
+			"scripts": {
+				"animate": [
+					"main"
+				],
+				"should_update_bones_and_effects_offscreen": "1.0"
+			},
+			"animations": {
+				"main": "animation.zt.everest_portal.turn"
+			},
+			"render_controllers": [
+				"controller.render.zt.glowite_default"
+			]
+		}
+	}
+}

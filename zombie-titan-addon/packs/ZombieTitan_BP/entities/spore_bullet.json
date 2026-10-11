@@ -14,44 +14,33 @@
 		"components": {
 			"minecraft:type_family": {
 				"family": [
-					"projectile",
-					"spore_bullet"
+					"spore_bullet",
+					"inanimate"
 				]
 			},
 			"minecraft:collision_box": {
-				"width": 0.3,
-				"height": 0.3
+				"width": 0.25,
+				"height": 0.25
 			},
-			"minecraft:physics": {},
+			"minecraft:physics": {
+				"has_gravity": false,
+				"has_collision": false
+			},
 			"minecraft:pushable": {
 				"is_pushable": false,
-				"is_pushable_by_piston": true
+				"is_pushable_by_piston": false
 			},
-			"minecraft:projectile": {
-				"on_hit": {
-					"impact_damage": {
-						"damage": 4,
-						"knockback": true,
-						"destroy_on_hit": true
-					},
-					"remove_on_hit": {}
-				},
-				"power": 1.3,
-				"gravity": 0.0,
-				"inertia": 1.0,
-				"liquid_inertia": 1.0,
-				"anchor": 1,
-				"offset": [
-					0,
-					-0.1,
-					0
-				],
-				"uncertainty_base": 4,
-				"uncertainty_multiplier": 2
+			"minecraft:damage_sensor": {
+				"triggers": [
+					{
+						"cause": "all",
+						"deals_damage": "no"
+					}
+				]
 			},
 			"minecraft:timer": {
 				"looping": false,
-				"time": 5,
+				"time": 6,
 				"time_down_event": {
 					"event": "zt:fade"
 				}

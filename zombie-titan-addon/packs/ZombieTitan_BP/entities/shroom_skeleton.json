@@ -119,7 +119,7 @@
 				"priority": 9
 			},
 			"minecraft:shooter": {
-				"def": "zt:spore_bullet"
+				"def": "zt:spore_arrow"
 			},
 			"minecraft:equipment": {
 				"table": "loot_tables/entities/shroom_skeleton_gear.json"

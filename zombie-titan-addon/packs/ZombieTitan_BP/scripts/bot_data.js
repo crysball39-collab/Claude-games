@@ -173,6 +173,10 @@ zrule("glowshroom_button|glowshroom_pressure_plate", { h: 0.5, tool: "axe", kind
 zrule("glowshroom_fence|glowshroom_fence_gate", { h: 2, tool: "axe", kind: "fence" });
 zrule("glowshroom_planks|glowshroom_stairs|glowshroom_slab|glowshroom_door|glowshroom_trapdoor", { h: 2, tool: "axe" });
 zrule("raw_glowite_block|glowite_block", { h: 50, tool: "pickaxe", tier: 4 });
+zrule("shroomed_bricks", { h: 2, tool: "pickaxe", tier: 1 });
+zrule("shroomed_brick_wall", { h: 2, tool: "pickaxe", tier: 1, kind: "fence" });
+zrule("shroomed_altar", { h: -1, drop: null });
+zrule("shroomy_crab_spawner", { h: 5, tool: "pickaxe", drop: null });
 
 /** A block from a newer Minecraft that no rule names: plants and such are walked through, the rest is solid. */
 const PLANTISH = /(grass|fern|flower|blossom|bush|petals|sprout|roots$|lichen|sapling|propagule|seagrass|kelp|_coral$|coral_fan|pickle|moss_carpet|torch|_crop$|_stem$|_bud$|vine)/;

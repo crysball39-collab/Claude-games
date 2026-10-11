@@ -1,0 +1,35 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:attachable": {
+		"description": {
+			"identifier": "zt:everest",
+			"materials": {
+				"default": "entity_alphatest",
+				"enchanted": "entity_alphatest_glint",
+				"glow": "entity_beam_additive"
+			},
+			"textures": {
+				"default": "textures/entity/zt_everest",
+				"enchanted": "textures/misc/enchanted_item_glint"
+			},
+			"geometry": {
+				"default": "geometry.zt.everest"
+			},
+			"animations": {
+				"wield": "controller.animation.zt.everest.wield",
+				"first_person": "animation.zt.everest.first_person",
+				"third_person": "animation.zt.everest.third_person",
+				"spin": "animation.zt.everest.spin"
+			},
+			"scripts": {
+				"animate": [
+					"wield",
+					"spin"
+				]
+			},
+			"render_controllers": [
+				"controller.render.zt.everest"
+			]
+		}
+	}
+}

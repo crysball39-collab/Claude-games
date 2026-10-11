@@ -2,7 +2,7 @@
 	"namespace": "hud",
 
 	// Every boss bar goes through this panel. A bar whose name contains "Zombie Titan",
-	// "Skeleton Titan", "Creeper Titan", "Spider Titan" or "Omegafish" (the minecraft:boss names in
+	// "Skeleton Titan", "Creeper Titan", "Spider Titan", "Omegafish" or "Crabulon" (the minecraft:boss names in
 	// the titans' behaviour files), "The Figure" (its danger meter), "Seek" (the chase's progress) or "Breaker
 	// Switches" (door 100's switches found) gets its own bar;
 	// all others keep the vanilla look. The panel is 36 tall (vanilla: 20) so a second boss bar
@@ -45,7 +45,7 @@
 						},
 						{
 							"binding_type": "view",
-							"source_property_name": "(((#bossName - 'Zombie Titan') = #bossName) and ((#bossName - 'Skeleton Titan') = #bossName) and ((#bossName - 'Creeper Titan') = #bossName) and ((#bossName - 'Spider Titan') = #bossName) and ((#bossName - 'Omegafish') = #bossName) and ((#bossName - 'The Figure') = #bossName) and ((#bossName - 'Seek') = #bossName) and ((#bossName - 'Breaker Switches') = #bossName))",
+							"source_property_name": "(((#bossName - 'Zombie Titan') = #bossName) and ((#bossName - 'Skeleton Titan') = #bossName) and ((#bossName - 'Creeper Titan') = #bossName) and ((#bossName - 'Spider Titan') = #bossName) and ((#bossName - 'Omegafish') = #bossName) and ((#bossName - 'Crabulon') = #bossName) and ((#bossName - 'The Figure') = #bossName) and ((#bossName - 'Seek') = #bossName) and ((#bossName - 'Breaker Switches') = #bossName))",
 							"target_property_name": "#visible"
 						}
 					]
@@ -65,6 +65,9 @@
 			},
 			{
 				"zt_omegafish_bar@hud.zt_omegafish_bar": {}
+			},
+			{
+				"zt_crabulon_bar@hud.zt_crabulon_bar": {}
 			},
 			{
 				"zt_figure_bar@hud.zt_figure_bar": {}
@@ -881,6 +884,106 @@
 			{
 				"binding_type": "view",
 				"source_property_name": "(not ((#bossName - 'Breaker Switches') = #bossName))",
+				"target_property_name": "#visible"
+			}
+		]
+	},
+	"zt_crabulon_bar": {
+		"type": "panel",
+		"size": [
+			200,
+			34
+		],
+		"anchor_from": "top_middle",
+		"anchor_to": "top_middle",
+		"controls": [
+			{
+				"crabulon_name@hud.boss_name_panel": {}
+			},
+			{
+				"crabulon_frame_panel": {
+					"type": "panel",
+					"size": [
+						200,
+						26
+					],
+					"offset": [
+						0,
+						8
+					],
+					"anchor_from": "top_middle",
+					"anchor_to": "top_middle",
+					"controls": [
+						{
+							"crabulon_back": {
+								"type": "image",
+								"texture": "textures/ui/zt/crabulon_bar_back",
+								"size": [
+									182,
+									6
+								],
+								"offset": [
+									0,
+									13
+								],
+								"anchor_from": "top_middle",
+								"anchor_to": "top_middle",
+								"layer": 1
+							}
+						},
+						{
+							"crabulon_fill": {
+								"type": "image",
+								"texture": "textures/ui/zt/crabulon_bar_fill",
+								"size": [
+									182,
+									6
+								],
+								"offset": [
+									0,
+									13
+								],
+								"anchor_from": "top_middle",
+								"anchor_to": "top_middle",
+								"layer": 2,
+								"clip_direction": "left",
+								"clip_pixelperfect": false,
+								"bindings": [
+									{
+										"binding_name": "#progress_percentage",
+										"binding_name_override": "#clip_ratio",
+										"binding_type": "collection",
+										"binding_collection_name": "boss_bars"
+									}
+								]
+							}
+						},
+						{
+							"crabulon_frame": {
+								"type": "image",
+								"texture": "textures/ui/zt/crabulon_bar_frame",
+								"size": [
+									200,
+									26
+								],
+								"anchor_from": "top_middle",
+								"anchor_to": "top_middle",
+								"layer": 3
+							}
+						}
+					]
+				}
+			}
+		],
+		"bindings": [
+			{
+				"binding_type": "collection",
+				"binding_collection_name": "boss_bars",
+				"binding_name": "#bossName"
+			},
+			{
+				"binding_type": "view",
+				"source_property_name": "(not ((#bossName - 'Crabulon') = #bossName))",
 				"target_property_name": "#visible"
 			}
 		]

@@ -2,12 +2,14 @@
 // chunk in forty, at y -36); when a player comes near, the cavern is grown round it a little at
 // a time: carved out of the deepslate, floored with spore grass on maroon dirt, planted with spore
 // grass plants and spore mushrooms, and shaded by giant spore trees, with a few Glowite ores in
-// its roof. Shroom Zombies and Shroom Skeletons live there.
+// its roof, and small ponds in its floor. Shroom Zombies and Shroom Skeletons live there, and
+// Shroomy Crabs in the ponds. (Caverns grown before the ponds were get theirs when a player
+// next comes in.)
 //
 // Also the biome's blocks: spore grass spreading over maroon dirt, the spore crop growing, bone
 // meal and hoes on them, and the Glowshroom door, trapdoor, fence gate, slab, button and pressure
 // plate (custom components registered at startup).
-import { GameMode, system, world } from "@minecraft/server";
+import { BlockPermutation, GameMode, system, world } from "@minecraft/server";
 import * as U from "./util.js";
 
 /** @typedef {import("@minecraft/server").Block} Block */
@@ -32,7 +34,9 @@ export const TRAPDOOR = "zt:glowshroom_trapdoor";
 export const GATE = "zt:glowshroom_fence_gate";
 export const BUTTON = "zt:glowshroom_button";
 export const PLATE = "zt:glowshroom_pressure_plate";
+export const CRAB = "zt:shroomy_crab";
 const AIR = "minecraft:air";
+const WATER = "minecraft:water";
 const MOBS = ["zt:shroom_zombie", "zt:shroom_zombie", "zt:shroom_zombie", "zt:shroom_skeleton", "zt:shroom_skeleton"];
 
 // ---------------------------------------------------------------- small helpers
@@ -531,7 +535,7 @@ system.beforeEvents.startup.subscribe((ev) => {
 /** Natural blocks a cavern is carved out of. */
 const CARVE = /^minecraft:(stone|deepslate|tuff|granite|diorite|andesite|calcite|dirt|coarse_dirt|rooted_dirt|gravel|clay|smooth_basalt|basalt|dripstone_block|pointed_dripstone|amethyst_block|budding_amethyst|.*amethyst_bud|amethyst_cluster|glow_lichen|moss_block|moss_carpet|cave_vines.*|hanging_roots|azalea|flowering_azalea|big_dripleaf.*|small_dripleaf_block|spore_blossom|sculk|sculk_vein|.*_ore|infested_.*|obsidian|magma|lava|flowing_lava|water|flowing_water)$/;
 /** Blocks something was built of (an ancient city, a mineshaft, a trial chamber, a dungeon): a cavern leaves those alone. */
-const BUILT = /^minecraft:(.*planks|.*_fence|rail|.*_rail|web|cobweb|chest|mob_spawner|trial_spawner|vault|deepslate_bricks|deepslate_tiles|cracked_deepslate.*|chiseled_deepslate|polished_deepslate|reinforced_deepslate|tuff_bricks|polished_tuff|chiseled_tuff.*|.*copper.*|.*_wool|.*lantern|.*candle|stone_bricks|mossy_stone_bricks|cracked_stone_bricks|cobblestone|mossy_cobblestone|end_portal_frame|bookshelf|.*_door|iron_bars|sculk_shrieker|sculk_catalyst)$/;
+const BUILT = /^minecraft:(.*planks|.*_fence|rail|.*_rail|web|cobweb|chest|mob_spawner|trial_spawner|vault|deepslate_bricks|deepslate_tiles|cracked_deepslate.*|chiseled_deepslate|polished_deepslate|reinforced_deepslate|tuff_bricks|polished_tuff|chiseled_tuff.*|.*copper.*|.*_wool|.*lantern|.*candle|stone_bricks|mossy_stone_bricks|cracked_stone_bricks|cobblestone|mossy_cobblestone|end_portal_frame|bookshelf|.*_door|iron_bars|sculk_shrieker|sculk_catalyst)$|^zt:(shroomed_bricks|shroomed_brick_wall|shroomed_altar|shroomy_crab_spawner)$/;
 
 /** A small seeded random number generator. @param {number} seed */
 function rng(seed) {
@@ -590,7 +594,12 @@ export function inside(P, x, y, z) {
 }
 
 const CAVERNS_KEY = "zt:glowshroom_caverns";
-/** @type {Array<{d: string, x: number, y: number, z: number, r: number}> | null} */
+/**
+ * A cavern: its dimension, middle and radius; v 2 once it has its ponds, and p the ponds (the
+ * middle of each one's surface).
+ * @typedef {{d: string, x: number, y: number, z: number, r: number, v?: number, p?: number[][]}} Cavern
+ */
+/** @type {Cavern[] | null} */
 let caverns = null;
 /** The caverns grown so far (kept in the world). */
 export function cavernList() {
@@ -603,18 +612,27 @@ export function cavernList() {
   }
   return /** @type {any} */ (caverns);
 }
-/** @param {{d: string, x: number, y: number, z: number, r: number}} c */
-function remember(c) {
-  const list = cavernList();
-  list.push(c);
-  while (list.length > 150) list.shift();
+function saveCaverns() {
   try {
-    world.setDynamicProperty(CAVERNS_KEY, JSON.stringify(list));
+    world.setDynamicProperty(CAVERNS_KEY, JSON.stringify(cavernList()));
   } catch {
     /* ignore */
   }
 }
-/** The cavern a point is in. @param {string} dimId @param {Vector3} l */
+/** @param {Cavern} c */
+function remember(c) {
+  const list = cavernList();
+  list.push(c);
+  while (list.length > 150) list.shift();
+  saveCaverns();
+}
+/** Called with each cavern as it's finished (the Shroom Fortress module listens). @type {Array<(dim: Dimension, c: Cavern) => void>} */
+export const cavernHooks = [];
+/** @param {Dimension} dim @param {Cavern} c */
+function finished(dim, c) {
+  for (const h of cavernHooks) safe(() => h(dim, c));
+}
+/** The cavern a point is in. @param {string} dimId @param {Vector3} l @returns {Cavern | undefined} */
 export function cavernAt(dimId, l) {
   for (const c of cavernList()) {
     if (c.d === dimId && Math.hypot(l.x - c.x, l.z - c.z) <= c.r + 1 && l.y >= c.y - 9 && l.y <= c.y + 11) return c;
@@ -625,7 +643,7 @@ export function cavernAt(dimId, l) {
 /** Hearts being built or waiting their turn ("dim|x,y,z"), and when a heart may be tried again. */
 const pending = new Set();
 const retryAt = new Map();
-/** @type {Array<{dim: string, at: Vector3, key: string}>} */
+/** @type {Array<{dim: string, at: Vector3, key: string, upgrade?: Cavern}>} */
 const queue = [];
 let building = false;
 /** Builds finished (for tests): heart -> how it went. */
@@ -639,17 +657,26 @@ export function request(dim, at) {
   queue.push({ dim: dim.id, at: { x: at.x, y: at.y, z: at.z }, key });
   next();
 }
+/** A cavern grown before the ponds were: it gets them now. @param {Cavern} c */
+function requestUpgrade(c) {
+  const key = `${c.d}|${c.x},${c.y},${c.z}`;
+  if (pending.has(key) || system.currentTick < (retryAt.get(key) ?? 0)) return;
+  pending.add(key);
+  queue.push({ dim: c.d, at: { x: c.x, y: c.y, z: c.z }, key, upgrade: c });
+  next();
+}
 function next() {
   if (building || !queue.length) return;
-  const job = /** @type {{dim: string, at: Vector3, key: string}} */ (queue.shift());
+  const job = /** @type {{dim: string, at: Vector3, key: string, upgrade?: Cavern}} */ (queue.shift());
   building = true;
-  system.runJob(build(job.dim, job.at, (/** @type {string} */ how) => {
+  const done = (/** @type {string} */ how) => {
     building = false;
     pending.delete(job.key);
     results.set(job.key, how);
     if (how === "unloaded") retryAt.set(job.key, system.currentTick + 200);
     next();
-  }));
+  };
+  system.runJob(job.upgrade ? upgrade(job.dim, job.upgrade, done) : build(job.dim, job.at, done));
 }
 
 /**
@@ -767,8 +794,134 @@ function* build(dimId, c, done) {
     if (++ops % 150 === 0) yield;
   }
   if (idAt(dim, c.x, c.y, c.z) === HEART) setAt(dim, c.x, c.y, c.z, AIR);
-  remember({ d: dimId, x: P.cx, y: P.cy, z: P.cz, r: Math.round(Math.max(P.rx, P.rz)) });
+  const cav = { d: dimId, x: P.cx, y: P.cy, z: P.cz, r: Math.round(Math.max(P.rx, P.rz)), v: 2, p: /** @type {number[][]} */ ([]) };
+  // small ponds in the floor, clear of the trees and of anyone standing about
+  cav.p = yield* digPonds(dim, cav, floor, rnd, [
+    ...grown.map((g) => ({ x: g.x, z: g.z, r: 5 })), ...players.map((l) => ({ x: l.x, z: l.z, r: 4 }))]);
+  remember(cav);
+  finished(dim, cav);
   done("built");
+}
+
+/** Solid enough to hold a pond's water in. @param {string | undefined} id */
+const holds = (id) => !!id && id !== AIR && !/water|lava/.test(id) && !open(id);
+
+/**
+ * Digs one to three small ponds into a cavern's floor where it's level and grassed: water where
+ * the grass was, two deep in the middle over maroon dirt, a glowing sea pickle on the bottom.
+ * @param {Dimension} dim @param {Cavern} c @param {Array<{x: number, y: number, z: number, head: number}>} floor
+ * @param {() => number} rnd @param {Array<{x: number, z: number, r: number}>} avoid
+ * @returns {Generator<void, number[][], void>} each pond: the middle of its surface
+ */
+function* digPonds(dim, c, floor, rnd, avoid) {
+  const at = new Map(floor.map((f) => [f.x + "," + f.z, f]));
+  const want = 1 + Math.floor(rnd() * 3);
+  /** @type {number[][]} */
+  const ponds = [];
+  const spots = floor.filter((f) => {
+    const d = Math.hypot(f.x - c.x, f.z - c.z);
+    return d > 4 && d < c.r - 4 && f.head >= 3;
+  }).sort(() => rnd() - 0.5);
+  let tries = 0;
+  for (const f of spots) {
+    if (ponds.length >= want || ++tries > 80) break;
+    if (ponds.some((q) => Math.hypot(q[0] - f.x, q[2] - f.z) < 9)) continue;
+    if (avoid.some((a) => Math.hypot(a.x - f.x, a.z - f.z) < a.r)) continue;
+    const rx = 1.6 + rnd() * 1.4;
+    const rz = 1.6 + rnd() * 1.4;
+    /** @type {Array<[number, number, boolean]>} */
+    const cells = [];
+    let ok = true;
+    for (let dx = -4; dx <= 4 && ok; dx++) {
+      for (let dz = -4; dz <= 4 && ok; dz++) {
+        const ring = (dx / (rx + 1.2)) ** 2 + (dz / (rz + 1.2)) ** 2;
+        if (ring > 1) continue;
+        const x = f.x + dx;
+        const z = f.z + dz;
+        const g = at.get(x + "," + z);
+        // level spore grass all round, and something solid under it
+        if (!g || g.y !== f.y || idAt(dim, x, f.y - 1, z) !== GRASS || !holds(idAt(dim, x, f.y - 2, z))) ok = false;
+        else {
+          const e = (dx / rx) ** 2 + (dz / rz) ** 2;
+          if (e <= 1) cells.push([x, z, e <= 0.4]);
+        }
+      }
+    }
+    if (!ok || cells.length < 6) continue;
+    yield;
+    for (const [x, z, deep] of cells) {
+      if (open(idAt(dim, x, f.y, z))) setAt(dim, x, f.y, z, AIR);
+      setAt(dim, x, f.y - 1, z, WATER);
+      if (deep) {
+        setAt(dim, x, f.y - 2, z, WATER);
+        const under = idAt(dim, x, f.y - 3, z);
+        if (under === AIR || (under && CARVE.test(under))) setAt(dim, x, f.y - 3, z, DIRT);
+      } else setAt(dim, x, f.y - 2, z, DIRT);
+    }
+    const deep = cells.filter((k) => k[2]);
+    if (deep.length) {
+      const [x, z] = deep[Math.floor(rnd() * deep.length)];
+      seaPickle(dim, x, f.y - 2, z, 1 + Math.floor(rnd() * 3));
+    }
+    ponds.push([f.x, f.y - 1, f.z]);
+    yield;
+  }
+  return ponds;
+}
+
+/** Sea pickles under water (they glow while they're wet). @param {Dimension} dim @param {number} x @param {number} y @param {number} z @param {number} n */
+function seaPickle(dim, x, y, z, n) {
+  try {
+    const b = dim.getBlock({ x, y, z });
+    if (!b) return;
+    b.setPermutation(BlockPermutation.resolve("minecraft:sea_pickle", { cluster_count: n - 1, dead_bit: false }));
+    b.setWaterlogged(true);
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * Gives a cavern grown before the ponds were its ponds: finds its floor again, then digs them.
+ * @param {string} dimId @param {Cavern} c @param {(how: string) => void} done
+ */
+function* upgrade(dimId, c, done) {
+  const dim = world.getDimension(dimId);
+  /** @type {Array<{x: number, y: number, z: number, head: number}>} */
+  const floor = [];
+  let ops = 0;
+  for (let x = c.x - c.r; x <= c.x + c.r; x++) {
+    for (let z = c.z - c.r; z <= c.z + c.r; z++) {
+      if (Math.hypot(x - c.x, z - c.z) > c.r) continue;
+      for (let y = c.y + 6; y >= c.y - 9; y--) {
+        const id = idAt(dim, x, y, z);
+        if (id === undefined) {
+          done("unloaded");
+          return;
+        }
+        if (id !== GRASS) continue;
+        if (!open(idAt(dim, x, y + 1, z))) break;
+        let head = 1;
+        while (head < 12 && idAt(dim, x, y + 1 + head, z) === AIR) head++;
+        floor.push({ x, y: y + 1, z, head });
+        break;
+      }
+      if (++ops % 40 === 0) yield;
+    }
+  }
+  /** @type {Vector3[]} */
+  let players = [];
+  try {
+    players = dim.getPlayers({ location: { x: c.x, y: c.y, z: c.z }, maxDistance: 40 }).map((p) => p.location);
+  } catch {
+    players = [];
+  }
+  const rnd = rng(Math.floor(hash3(c.x, c.y, c.z, 4243) * 2147483647));
+  c.p = yield* digPonds(dim, c, floor, rnd, players.map((l) => ({ x: l.x, z: l.z, r: 4 })));
+  c.v = 2;
+  saveCaverns();
+  finished(dim, c);
+  done("upgraded");
 }
 
 /** Chunks looked at for a heart ("cx,cz"), and where in a chunk a heart can be. */
@@ -828,7 +981,7 @@ export function spawnShroomMob(p, c) {
   const dim = p.dimension;
   let near = 0;
   try {
-    near = dim.getEntities({ location: p.location, maxDistance: 40, families: ["shroom"] }).length;
+    near = dim.getEntities({ location: p.location, maxDistance: 40, families: ["shroom"] }).filter((e) => MOBS.includes(e.typeId)).length;
   } catch {
     return undefined;
   }
@@ -850,6 +1003,40 @@ export function spawnShroomMob(p, c) {
     }
   }
   return undefined;
+}
+
+/**
+ * Brings a Shroomy Crab or two up out of a pond near a player in a cavern (a few at most about
+ * them). @param {Player} p @param {Cavern} c @returns {import("@minecraft/server").Entity[]}
+ */
+export function spawnCrabs(p, c) {
+  if (!c.p?.length) return [];
+  const dim = p.dimension;
+  let near = 0;
+  try {
+    near = dim.getEntities({ location: p.location, maxDistance: 32, type: CRAB }).length;
+  } catch {
+    return [];
+  }
+  if (near >= 5) return [];
+  const l = p.location;
+  const close = c.p.filter((q) => {
+    const d = Math.hypot(q[0] + 0.5 - l.x, q[2] + 0.5 - l.z);
+    return d < 32 && d > 5 && Math.abs(q[1] - l.y) < 12;
+  });
+  if (!close.length) return [];
+  const q = close[Math.floor(Math.random() * close.length)];
+  // (a pond that was drained or built over has no crabs)
+  if (idAt(dim, q[0], q[1], q[2]) !== WATER) return [];
+  const out = [];
+  for (let i = Math.random() < 0.35 ? 2 : 1; i > 0; i--) {
+    try {
+      out.push(dim.spawnEntity(CRAB, { x: q[0] + 0.5 + U.rand(-0.8, 0.8), y: q[1], z: q[2] + 0.5 + U.rand(-0.8, 0.8) }));
+    } catch {
+      break;
+    }
+  }
+  return out;
 }
 
 /** @param {number} tick */
@@ -876,8 +1063,10 @@ export function glowshroomTick(tick) {
         /* ignore */
       }
     }
+    if (!c.v) requestUpgrade(c);
     if (tick % 40 === 10) U.particle(p.dimension, "zt:spore_dust", { x: p.location.x, y: p.location.y + 1.5, z: p.location.z });
     if (tick % 200 === 10) spawnShroomMob(p, c);
+    if (tick % 200 === 110 && Math.random() < 0.5) spawnCrabs(p, c);
   }
 }
 

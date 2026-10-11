@@ -1,0 +1,40 @@
+{
+	"format_version": "1.20.10",
+	"minecraft:recipe_shapeless": {
+		"description": {
+			"identifier": "zt:crab_totem"
+		},
+		"tags": [
+			"crafting_table"
+		],
+		"ingredients": [
+			{
+				"item": "zt:shroomy_crab_claw"
+			},
+			{
+				"item": "zt:shroomy_crab_claw"
+			},
+			{
+				"item": "zt:shroom_patch"
+			},
+			{
+				"item": "zt:shroom_patch"
+			},
+			{
+				"item": "zt:shroom_patch"
+			},
+			{
+				"item": "zt:shroom_patch"
+			}
+		],
+		"unlock": [
+			{
+				"item": "zt:shroomy_crab_claw"
+			}
+		],
+		"result": {
+			"item": "zt:crab_totem",
+			"count": 1
+		}
+	}
+}

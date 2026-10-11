@@ -3,6 +3,7 @@
 // Berries give Regeneration II for 5 seconds and Shroomy for 20: four glowing bullets circle the
 // one who ate them and shoot themselves at hostile mobs that come close.
 import { system, world } from "@minecraft/server";
+import * as Bullets from "./bullets.js";
 import * as U from "./util.js";
 
 /** @typedef {import("@minecraft/server").Entity} Entity */
@@ -12,8 +13,12 @@ import * as U from "./util.js";
 
 export const ZOMBIE = "zt:shroom_zombie";
 export const SKELETON = "zt:shroom_skeleton";
-export const BULLET = "zt:spore_bullet";
-export const FRIENDLY = "zt:shroomy_bullet";
+export const BULLET = Bullets.HOSTILE;
+export const FRIENDLY = Bullets.FRIENDLY;
+/** What a Shroom Skeleton's bow fires: turned into a spore bullet the moment it's loosed. */
+export const ARROW = "zt:spore_arrow";
+/** How hard a spore bullet hits. */
+export const BULLET_DAMAGE = 4;
 export const BERRIES = "zt:shroom_berries";
 const DIMS = ["minecraft:overworld", "minecraft:nether", "minecraft:the_end"];
 
@@ -35,27 +40,40 @@ const REGEN_TICKS = 100;
 const NEUTRAL = new Set(["minecraft:enderman", "minecraft:zombie_pigman", "minecraft:piglin"]);
 
 /**
- * Fires a bullet (its owner gets the credit for what it hits).
- * @param {Dimension} dim @param {string} type @param {Vector3} at @param {Vector3} dir @param {number} speed @param {Entity} [owner]
+ * A Shroom Skeleton loosed its bow: the arrow becomes a spore bullet flying the same way (at
+ * the nearest player it could be aiming at, if the arrow hasn't picked up its speed yet).
+ * @param {Entity} arrow
  */
-export function shoot(dim, type, at, dir, speed, owner) {
-  let b;
+export function onArrowSpawned(arrow) {
+  let owner;
+  let at;
+  let v;
   try {
-    b = dim.spawnEntity(type, at);
+    owner = arrow.getComponent("minecraft:projectile")?.owner;
+    at = arrow.location;
+    v = arrow.getVelocity();
   } catch {
-    return undefined;
+    return;
   }
-  const v = { x: dir.x * speed, y: dir.y * speed, z: dir.z * speed };
+  const dim = arrow.dimension;
   try {
-    const pc = b.getComponent("minecraft:projectile");
-    if (pc) {
-      if (owner) pc.owner = owner;
-      pc.shoot(v);
-    } else b.applyImpulse(v);
+    arrow.remove();
   } catch {
     /* ignore */
   }
-  return b;
+  let dir = U.len(v) > 0.05 ? U.norm(v) : undefined;
+  if (!dir) {
+    const from = owner && U.isValid(owner) ? owner.location : at;
+    let aim;
+    try {
+      aim = dim.getPlayers({ location: from, maxDistance: 24 }).filter((p) => U.isVulnerablePlayer(p))[0];
+    } catch {
+      aim = undefined;
+    }
+    if (!aim) return;
+    dir = U.norm(U.sub(U.centerOf(aim), at));
+  }
+  Bullets.fire(dim, BULLET, at, dir, BULLET_SPEED * 1.2, owner && U.isValid(owner) ? owner : undefined, BULLET_DAMAGE);
 }
 
 // ---------------------------------------------------------------- the Shroom Zombie's bursts
@@ -110,7 +128,7 @@ export function burst(z, target) {
   for (let k = 0; k < 4; k++) {
     const ang = a + (k * Math.PI) / 2;
     const dir = U.norm({ x: Math.cos(ang), y: k === 0 ? rise : 0, z: Math.sin(ang) });
-    shoot(dim, BULLET, { x: from.x + dir.x * 0.7, y: from.y + dir.y * 0.7, z: from.z + dir.z * 0.7 }, dir, BULLET_SPEED, z);
+    Bullets.fire(dim, BULLET, { x: from.x + dir.x * 0.7, y: from.y + dir.y * 0.7, z: from.z + dir.z * 0.7 }, dir, BULLET_SPEED, z, BULLET_DAMAGE);
   }
   U.particle(dim, "zt:spore_pop", from);
   U.sound(dim, "mob.shulker.shoot", from, 1, 1.4);
@@ -141,15 +159,12 @@ function zombieTick(tick) {
 
 // ---------------------------------------------------------------- bullets landing
 /**
- * A spore bullet hit something: it bursts in spores. Shroomy's bullets hurt what they hit (the
- * hostile spore bullets do their damage themselves), never a player.
- * @param {string} type @param {Dimension} dim @param {Vector3} at @param {Entity} [hit] @param {Entity} [source]
+ * A skeleton's arrow landed before it was turned into a bullet: it bursts in spores (its hit,
+ * if any, the game has dealt).
+ * @param {Dimension} dim @param {Vector3} at
  */
-export function onBulletHit(type, dim, at, hit, source) {
+export function onArrowHit(dim, at) {
   U.particle(dim, "zt:spore_pop", at);
-  if (type !== FRIENDLY || !hit || !U.isValid(hit)) return;
-  if (hit.typeId === "minecraft:player" || hit.typeId === "zt:player" || (source && hit.id === source.id)) return;
-  U.hurt(hit, SHROOMY_DAMAGE, source, "projectile");
 }
 
 // ---------------------------------------------------------------- Shroom Berries and Shroomy
@@ -235,7 +250,7 @@ function shroomyTick(tick) {
       if (target) {
         const aim = U.centerOf(target);
         const from = orbs[k];
-        shoot(dim, FRIENDLY, from, U.norm(U.sub(aim, from)), 1.4, p);
+        Bullets.fire(dim, FRIENDLY, from, U.norm(U.sub(aim, from)), 1.4, p, SHROOMY_DAMAGE);
         s.orbs[k] = tick + ORB_RECHARGE;
         s.lastShot = tick;
         U.sound(dim, "mob.shulker.shoot", from, 0.5, 1.8);
@@ -257,4 +272,5 @@ export function forget(id) {
 export function shroomTick(tick) {
   zombieTick(tick);
   shroomyTick(tick);
+  Bullets.bulletTick(tick);
 }
