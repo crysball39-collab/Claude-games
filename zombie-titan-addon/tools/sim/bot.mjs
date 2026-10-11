@@ -209,11 +209,14 @@ check(log.messages.slice(n0).some((m) => m === `${bot.name} was slain by Zombie`
 check(log.items.slice(items0).some(([id]) => id === "minecraft:cobblestone") && log.items.slice(items0).some(([id]) => id === "minecraft:stone_sword"),
   "everything it had falls where it died");
 check(bot.dead && bot.level === 0, "dead, its experience gone");
-runTicks(80);
+runTicks(80, () => !bot.dead);
 const body = bot.entity;
+// (where it comes back: it soon sets off for its things)
+const back = { ...body.location };
+runTicks(80 - (system.currentTick % 80));
 check(!bot.dead && body !== egg && body.isValid, "a few seconds later it respawns");
 check(Inv.stacks(bot).length === 0 && bot.hunger === 20, "with nothing, and full");
-check(B.flat(body.location, { x: 0, z: 0 }) < 4, "at the world spawn (it has no bed)");
+check(B.flat(back, { x: 0, z: 0 }) < 4, `at the world spawn (it has no bed) (${back.x.toFixed(1)}, ${back.z.toFixed(1)})`);
 check(Bot.botOf(body) === bot && bot.stats.deaths === 1, "the same Player (it remembers its death)");
 runTicks(100);
 check(said(bot, n0).length > 0, `says something about it: "${said(bot, n0)[0] ?? ""}"`);
@@ -234,7 +237,7 @@ body.remove();
 runTicks(3);
 const again = Bot.botOf(reloaded);
 check(again && again.name === bot.name && again.progress.stage === "iron" && again.friends.Alex === 4 && again.skin === bot.skin,
-  "after a reload it's the same Player, where it left off");
+  `after a reload it's the same Player, where it left off (${again?.name} ${again?.progress.stage} ${again?.friends.Alex} ${again?.skin === bot.skin})`);
 const me = again;
 me.events.length = 0;
 

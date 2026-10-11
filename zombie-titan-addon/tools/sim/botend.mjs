@@ -119,8 +119,14 @@ function until(test, ticks, label) {
       const blazes = bot.entity.dimension.getEntities({ type: "minecraft:blaze" }).map((b) => `${b.location.x.toFixed(0)},${b.location.y.toFixed(0)},${b.location.z.toFixed(0)}`);
       const rods = bot.entity.dimension.getEntities({ type: "minecraft:item" }).filter((i) => i.getComponent("minecraft:item")?.itemStack?.typeId === "minecraft:blaze_rod")
         .map((i) => `${i.location.x.toFixed(1)},${i.location.y.toFixed(1)},${i.location.z.toFixed(1)}`);
-      process.stderr.write(`  .. ${t} task ${bot.task?.name} kills ${bot.stats.kills} arrows ${Inv.count(bot, "minecraft:arrow")} rods ${Inv.count(bot, "minecraft:blaze_rod")} hp ${B.health(bot).toFixed(1)} hunger ${bot.hunger} @ ${B.feet(bot).x},${B.feet(bot).y},${B.feet(bot).z} blazes ${blazes.join(" ")} rods on the ground ${rods.join(" ")} rods dropped ${log.items.filter(([id]) => id === "minecraft:blaze_rod").length}\n`);
+      process.stderr.write(`  .. ${t} task ${bot.task?.name} kills ${bot.stats.kills} arrows ${Inv.count(bot, "minecraft:arrow")} rods ${Inv.count(bot, "minecraft:blaze_rod")} hp ${B.health(bot).toFixed(1)} hunger ${bot.hunger} @ ${B.feet(bot).x},${B.feet(bot).y},${B.feet(bot).z} blazes ${blazes.join(" ")} rods on the ground ${rods.join(" ")} rods dropped ${log.items.filter(([id]) => id === "minecraft:blaze_rod").length} now ${bot.now} last ${bot.lastTask} ${bot.lastResult} cool ${JSON.stringify(bot.driveCool)} stepCool ${JSON.stringify(bot.stepCool)}\n`);
     }
+    if (process.env.ZT_FROM && t >= Number(process.env.ZT_FROM) && t <= Number(process.env.ZT_TO ?? 1e9) && t % Number(process.env.ZT_EVERY ?? 5) === 0) {
+      const l = bot.entity.location;
+      const v = bot.entity.getVelocity();
+      process.stderr.write(`   ${t} at ${l.x.toFixed(2)},${l.y.toFixed(2)},${l.z.toFixed(2)} v ${v.y.toFixed(2)} ground ${bot.onGround} task ${bot.task?.name} now ${bot.now} step ${JSON.stringify(bot.stepNow)} blocks ${Inv.count(bot, "minecraft:cobblestone")}c ${Inv.count(bot, "minecraft:end_stone")}e ${Inv.count(bot, "minecraft:dirt")}d\n`);
+    }
+    if (process.env.ZT_STOP && t >= Number(process.env.ZT_STOP)) process.exit(2);
     last = now;
     return test();
   });

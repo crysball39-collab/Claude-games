@@ -1,6 +1,6 @@
 # Titans: Zombie, Skeleton, Creeper and Spider Titans, the Omegafish, Dark Fists, Obsidian gear, Gum Gum Fruit, Doors, Players
 
-**Version 1.7.0**
+**Version 1.7.1**
 
 A Minecraft Bedrock (Pocket Edition) add-on that brings the **Zombie Titan**, the
 **Skeleton Titan**, the **Creeper Titan**, the **Spider Titan** and the **Omegafish**
@@ -26,7 +26,7 @@ needs **no experimental toggles**. The Compact Obsidian block needs 1.26.20 or n
 1. Download **[`dist/ZombieTitan.mcaddon`](dist/ZombieTitan.mcaddon)**.
 2. Open **Files → Downloads** and tap `ZombieTitan.mcaddon`. Minecraft opens and
    imports two packs: *Zombie Titan BP* and *Zombie Titan RP*. Their descriptions
-   start with the version number (*Version 1.7.0*).
+   start with the version number (*Version 1.7.1*).
 3. Create a world, or edit one. Under **Behavior Packs**, activate
    **Zombie Titan BP**. Minecraft adds the resource pack with it.
 4. Play. Here is where everything is in the creative inventory:
@@ -50,7 +50,7 @@ If tapping the file does nothing, long-press it, choose **Open with**, and pick
   Storage**, delete the old *Zombie Titan BP* and *Zombie Titan RP*, and import
   again.
 - If the world still acts like the old version, check under **Behavior Packs**
-  that Zombie Titan BP is active and that its description says *Version 1.7.0*.
+  that Zombie Titan BP is active and that its description says *Version 1.7.1*.
 
 ## The Zombie Titan
 
@@ -831,8 +831,12 @@ as a player, so zombies, skeletons and creepers go after it.
 
 - **Moves like a player.** It walks, sprints, jumps, swims, climbs ladders, and opens
   doors and gates (and closes them behind it). It finds its way around, digs through
-  what's in the way, bridges gaps (sneaking at the edge) and pillars up. It looks
-  around as it goes.
+  what's in the way (leaves, berry bushes), bridges gaps (sneaking at the edge) and
+  pillars up. It looks around as it goes.
+  - It measures how high its jumps go and pushes harder until a jump clears a block,
+    so it gets up steps however the game's physics treats it. If it still can't get
+    up a step, it climbs it. When there's no way forward it picks another way instead
+    of jumping on the spot.
 - **Sees and hears.** It sees clearly within about 60° of where it's looking. Out to
   about 110° (its peripheral vision) it only notices things that move, and then turns
   to look. It sees nothing behind it, or through blocks.
@@ -844,12 +848,20 @@ as a player, so zombies, skeletons and creepers go after it.
   builds a small house with a door and a chest, and sleeps at night. Then it mines for
   iron, makes iron tools and armor, a shield, a bucket and a bow, and digs for
   diamonds.
+  - It leaves its crafting table and furnace where it put them, and goes back to them.
+  - For stone, coal and iron it digs a staircase down (or straight down onto solid
+    ground) to where they are, or goes into a cave, starting on dry ground. It only
+    mines what it can see. If coal won't turn up, it makes charcoal.
   - It eats when it's hungry, and when it's hurt so it heals.
   - It swims up for air, gets out of lava, and can land a fall with a water bucket.
-- **Fights.** It jumps for critical hits with its sword. It shoots its bow at what it
-  can't reach, aiming ahead of moving targets. It raises its shield against arrows,
-  blasts and the fireballs it sees coming. It hits a creeper and backs off, runs when
-  it's losing, and helps its friends.
+- **Fights.** It keeps a step outside a zombie's reach and hits it as it comes in, steps
+  away from a second attacker, and jumps for critical hits now and then. It shoots its
+  bow at what it can't reach, aiming ahead of moving targets. It raises its shield
+  against arrows, blasts and the fireballs it sees coming, whatever it's doing (unless
+  it's eating or has its bow drawn). It hears a creeper's hiss,
+  hits it once and runs out of its range before it goes off, then comes back for
+  another hit. It gets out of water to fight, runs when it's losing (out of sight of
+  what's shooting it before it eats), and helps its friends.
 - **Uses blocks properly.** Crafting tables, furnaces, smokers and blast furnaces;
   chests (it stores things and takes them back out); the enchanting table (power from
   the bookshelves around it, levels and lapis); the anvil (repairs, combining, naming);
@@ -971,8 +983,11 @@ Development checks:
 - **Simulation.** Runs the behaviour pack scripts against a mock of the
   `@minecraft/server`, `@minecraft/server-ui` and `@minecraft/server-net` APIs:
   `node tools/sim/run.mjs`. The Player tests play whole games: `botcraft` from
-  nothing to an iron pickaxe, `botend` from a Nether portal to the dragon and the end
-  cities, and `botai` runs the AI bridge against fake AI services.
+  nothing to an iron pickaxe, `botreal` the same in a world like the game's (hills,
+  taiga, rivers, caves, ores at their heights; `ZT_WORLD`, `ZT_BIOME`, `ZT_NIGHT`),
+  `botfight` zombies and creepers there, `botblaze` blazes at a fortress spawner,
+  `botend` from a Nether portal to the dragon and the end cities, and `botai` runs the
+  AI bridge against fake AI services.
   Random numbers are seeded so runs repeat; set `ZT_SEED=<number>` to try others.
   The mock refuses blocks and block states the game would refuse, using Mojang's
   block lists in `tools/sim/vanilla-blocks.json` (made by
@@ -984,6 +999,30 @@ Development checks:
 
 ## Version history
 
+- **1.7.1** (Players)
+  - Fixed: Players jumped on the spot, or not high enough to get up a block. A jump
+    now measures how high it went and pushes harder next time (under trees too), a
+    step it still can't get up it climbs, and with no way forward it finds another
+    way instead of jumping in place.
+  - Fixed: a Player hunting an animal walked past the one right beside it.
+  - Fixed: Players picked their crafting tables back up. They leave them (and their
+    furnaces) where they are and use them again.
+  - Fixed: Players didn't dig down or use caves. For stone they dig a staircase down
+    to it; for coal (torches) and iron they dig down to where they are, or use a cave,
+    and only mine blocks they can see. If coal won't turn up they make charcoal. They
+    dig down from dry ground, never into a lake or river.
+  - Fixed: Players got stuck on a pillar between berry bushes and leaves, walked into
+    bushes, mined while swimming in a river (very slowly), and left the blocks they
+    mined lying in holes.
+  - Better fighting: Players keep out of a zombie's reach, take on two at once, and
+    beat creepers (a hit, then out of range) instead of being blown up. They raise
+    their shield at any fireball or arrow they see coming, whatever they're doing, so
+    blazes no longer burn them down at the spawner; they don't pillar up after blazes
+    or falling drops, flee sooner when hurt and eat out of sight. Without a weapon
+    they run.
+  - Players go back for their things after dying once whatever killed them has gone,
+    remember the portal they came through, put a bed in their house when they have
+    one, and climb all the way up to an end city's ship instead of wandering off.
 - **1.7.0**
   - New: **Players**, mobs that play Minecraft like a person. They gather, craft,
     smelt, build, mine, fight, trade, brew, enchant and use chests, and work their way

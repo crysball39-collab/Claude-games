@@ -64,7 +64,7 @@ function check(cond, msg) {
 
 // animals about
 for (const [type, x, z] of [["cow", 10, 6], ["cow", 12, 9], ["pig", -6, 10], ["sheep", 6, -10], ["sheep", 8, -12], ["sheep", -10, -6],
-  ["cow", -14, 4], ["pig", 14, -4], ["chicken", 3, 12]]) {
+  ["cow", -14, 4], ["pig", 14, -4], ["chicken", 3, 12], ["sheep", -30, 24], ["sheep", -32, 26], ["sheep", 34, 30], ["sheep", 36, -34]]) {
   ow.spawnEntity("minecraft:" + type, { x: x + 0.5, y: 64, z: z + 0.5 });
 }
 const egg = ow.spawnEntity("zt:player", { x: 0.5, y: 64, z: 0.5 });
@@ -85,6 +85,15 @@ function until(test, ticks, label) {
     if (now !== last && process.env.ZT_TRACE) process.stderr.write(`${t} ${now} @ ${B.feet(bot).x},${B.feet(bot).y},${B.feet(bot).z}\n`);
     if (process.env.ZT_TRACE === "2" && t % 400 === 0) {
       process.stderr.write(`  .. ${t} task ${bot.task?.name} mined ${bot.stats.mined} @ ${B.feet(bot).x},${B.feet(bot).y},${B.feet(bot).z} hp ${B.health(bot)} hunger ${bot.hunger} free ${Inv.freeSlots(bot)}\n`);
+    }
+    if (process.env.ZT_FROM && t >= Number(process.env.ZT_FROM) && t <= Number(process.env.ZT_TO ?? 1e9)) {
+      const c = Inv.count(bot, "minecraft:cobblestone");
+      if (c !== bot.dbgCobble) process.stderr.write(`   COBBLE ${t} ${bot.dbgCobble} -> ${c} now ${bot.now} step ${JSON.stringify(bot.stepNow)} use ${bot.use}\n`);
+      bot.dbgCobble = c;
+    }
+    if (process.env.ZT_FROM && t >= Number(process.env.ZT_FROM) && t <= Number(process.env.ZT_TO ?? 1e9) && t % 10 === 0) {
+      const l = bot.entity.location;
+      process.stderr.write(`   ${t} at ${l.x.toFixed(2)},${l.y.toFixed(2)},${l.z.toFixed(2)} ground ${bot.onGround} move ${bot.move ? `${bot.move.to.x.toFixed(1)},${bot.move.to.y.toFixed(1)},${bot.move.to.z.toFixed(1)}` : "-"} doing ${bot.doing} now ${bot.now ?? ""} task ${bot.task?.name} stage ${bot.progress.stage} fails ${JSON.stringify(bot.stepFails)} cobble ${Inv.count(bot, "minecraft:cobblestone")} sticks ${Inv.count(bot, "minecraft:stick")} planks ${Inv.count(bot, "planks")} picks ${G.pickTier(bot)}\n`);
     }
     last = now;
     return test();
@@ -121,7 +130,8 @@ console.log("a bed and a house");
 check(until(() => !!bot.home, 30000, "house"), "builds a house");
 if (bot.home) {
   const h = bot.home;
-  check(/bed/.test(blockId(ow, h.bed.x, h.bed.y, h.bed.z)), "with a bed in it");
+  // (the bed may come a little after the house, once it has the wool)
+  check(until(() => !!bot.home.bed && /bed/.test(blockId(ow, bot.home.bed.x, bot.home.bed.y, bot.home.bed.z)), 12000, "bed"), "with a bed in it");
   check(blockId(ow, h.chests[0].x, h.chests[0].y, h.chests[0].z) === "minecraft:chest", "and a chest");
   check(/door/.test(blockId(ow, h.door.x, h.door.y, h.door.z)), "and a door");
   let walls = 0;

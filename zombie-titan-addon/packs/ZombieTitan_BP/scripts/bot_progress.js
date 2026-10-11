@@ -108,6 +108,9 @@ export const STEPS = [
   { id: "torches", say: "making torches", need: (b) => Inv.count(b, m("torch")) < 8, go: (b) => G.obtain(b, m("torch"), 20), cool: 4800 },
   { id: "bed", say: "making a bed", need: (b) => !b.home && !Inv.has(b, (id) => /bed$/.test(id)), go: (b) => G.obtain(b, m("bed")), cool: 4800 },
   { id: "home", say: "building a house", need: (b) => !b.home && b.world.build, go: (b) => Build.buildHome(b), cool: 4800 },
+  // (a house built without one gets its bed once it has a bed, or the wool for one)
+  { id: "bed_home", say: "putting a bed in its house", need: (b) => !!b.home && !b.spawn && b.world.build &&
+    (Inv.has(b, (id) => /bed$/.test(id)) || Inv.count(b, "wool") >= 3), go: (b) => Build.bedAtHome(b), cool: 4800 },
   { id: "iron", say: "getting iron", need: (b) => G.pickTier(b) < 3, go: (b) => G.obtain(b, m("iron_pickaxe")) },
   { id: "iron_sword", say: "making an iron sword", need: (b) => swordTier(b) < 3, go: (b) => G.obtain(b, m("iron_sword")) },
   { id: "shield", say: "making a shield", need: (b) => !Inv.has(b, m("shield")), go: (b) => G.obtain(b, m("shield")) },

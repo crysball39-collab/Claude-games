@@ -80,8 +80,12 @@ function danger(bot) {
   const feet = B.idAt(dim, l);
   const head = B.idAt(dim, { x: l.x, y: l.y + 1.5, z: l.z });
   if (/lava/.test(feet) || /lava/.test(head)) return { name: "lava", prio: PRIO.danger, gen: () => escapeLava(bot), ttl: 200 };
-  const hk = D.blockInfo(head).kind;
-  if ((hk === "solid") && bot.pose !== 3 && D.blockInfo(head).h >= 0) return { name: "unstuck", prio: PRIO.danger, gen: () => unstuck(bot, B.blockPos({ x: l.x, y: l.y + 1.5, z: l.z })), ttl: 300 };
+  // a block where its body is (its head, or its middle: squeezed into one)
+  for (const dy of [1.5, 0.6]) {
+    const p = { x: l.x, y: l.y + dy, z: l.z };
+    const info = D.blockInfo(dy === 1.5 ? head : B.idAt(dim, p));
+    if (info.kind === "solid" && bot.pose !== 3 && info.h >= 0) return { name: "unstuck", prio: PRIO.danger, gen: () => unstuck(bot, B.blockPos(p)), ttl: 300 };
+  }
   bot.underwater = bot.headInWater ? (bot.underwater ?? 0) + 10 : 0;
   if (bot.underwater > 180) return { name: "air", prio: PRIO.danger, gen: () => surface(bot), ttl: 300 };
   // falling far with water to hand: a bucket clutch
@@ -222,15 +226,36 @@ function flee(bot) {
     const fiery = shooters.filter((s) => /blaze|ghast/.test(s.typeId)).length;
     // hurt: two skeletons, or one blaze or ghast, are enough to run from; with a shield to hide
     // behind it holds its ground, unless it's badly hurt
+    // (fire throwers come in bursts and set it alight: away from them sooner)
     const shield = Inv.getEquip(bot, "Offhand")?.typeId === m("shield");
-    if (shield ? hp < 8 && (shooters.length >= 2 || fiery > 0) : shooters.length >= 2 || fiery > 0) {
+    if (shield ? (hp < 8 && shooters.length >= 2) || (hp < 11 && fiery > 0) : shooters.length >= 2 || fiery > 0) {
       bot.cautious = true;
       return { name: "flee", prio: PRIO.flee, ttl: 400, gen: () => C.flee(bot, shooters.map((s) => s.entity.location), 28) };
     }
   }
-  if (hp <= 6 || (hp < 10 && bot.lastAttacker && C.RANGED.has(bot.lastAttacker.typeId) && system.currentTick - (bot.lastAttackerAt ?? 0) < 100)) {
+  // nothing to fight with: away from what's after it (a sprinting player outruns a zombie)
+  const weapon = Inv.bestWeapon(bot);
+  const unarmed = !weapon || D.toolInfo(weapon).damage < 4;
+  // a creeper coming at it when it's too hurt (or has nothing) to fight it: away, out of its range
+  if (hp <= 8 || unarmed) {
+    const boom = Sense.seenWhere(bot, (s) => s.typeId === m("creeper") && B.dist(s.entity.location, bot.entity.location) < 6, 40);
+    if (boom.length) return { name: "flee", prio: PRIO.flee, ttl: 200, gen: () => C.flee(bot, boom.map((s) => s.entity.location), 12) };
+  }
+  if (unarmed && hp < 18) {
+    const after = Sense.seenWhere(bot, (s) => Sense.isThreat(bot, s) && !C.RANGED.has(s.typeId) && s.typeId !== "minecraft:creeper" &&
+      /zombie|husk|drowned|spider|skeleton|stray|vindicator|piglin_brute|zoglin|hoglin/.test(s.typeId) && B.dist(s.entity.location, bot.entity.location) < 8, 40);
+    if (after.length) return { name: "flee", prio: PRIO.flee, ttl: 300, gen: () => C.flee(bot, after.map((s) => s.entity.location), 24) };
+  }
+  // shot at with no shield and hurt: out of its sight
+  const shield = Inv.getEquip(bot, "Offhand")?.typeId === m("shield");
+  const shotLately = bot.lastAttacker && C.RANGED.has(bot.lastAttacker.typeId) && system.currentTick - (bot.lastAttackerAt ?? 0) < 100;
+  if (hp <= 6 || (hp < 10 && shotLately) || (hp < 12 && shotLately && !shield)) {
     const near = Sense.seenWhere(bot, (s) => Sense.isThreat(bot, s) && B.dist(s.entity.location, bot.entity.location) < (C.RANGED.has(s.typeId) ? 18 : 10), 40);
-    if (near.length) {
+    // no running from what it can't outrun (a zombie, swimming), or from one a blow or two
+    // will finish: it fights on
+    const melee = near.every((s) => !C.RANGED.has(s.typeId));
+    const finishable = near.length === 1 && C.hpOf(near[0].entity) <= 2 * D.toolInfo(weapon).damage;
+    if (near.length && !(melee && (bot.inWater || finishable))) {
       return { name: "flee", prio: PRIO.flee, gen: function* () {
         // cornered with blocks to hand: up out of reach; else run
         if (S.scaffoldCount(bot) >= 4 && near.every((s) => !C.RANGED.has(s.typeId)) && near.length > 1) {
@@ -252,7 +277,8 @@ export function target(bot, now) {
   bot.ignore ??= new Map();
   const ok = (e) => {
     try {
-      return e && e.isValid && C.alive(e) && (bot.ignore.get(e.id) ?? 0) < now && e.dimension.id === bot.entity.dimension.id;
+      return e && e.isValid && C.alive(e) && e.dimension.id === bot.entity.dimension.id &&
+        ((bot.ignore.get(e.id) ?? 0) < now || B.dist(e.location, l) < 3.5);
     } catch {
       return false;
     }
@@ -282,7 +308,8 @@ function fight(bot, now) {
   if (!t) return undefined;
   return { name: "fight", prio: PRIO.fight, ttl: 1200, gen: function* () {
     const r = yield* C.fight(bot, t);
-    if (r === "killed" && bot.lastTargetPos) yield* S.collect(bot, bot.lastTargetPos, 5, 40);
+    // what it dropped (not with others still shooting at it: later)
+    if (r === "killed" && bot.lastTargetPos && !C.shootersNear(bot, 20)) yield* S.collect(bot, bot.lastTargetPos, 5, 40);
     else if (r === "lost" || r === "timeout") bot.ignore.set(t.id, system.currentTick + 400);
     else if (r === "flee") yield* C.flee(bot, [bot.lastTargetPos ?? t.location], 24);
     if (bot.defend === t) bot.defend = undefined;
@@ -303,8 +330,11 @@ function heal(bot) {
     burning = false;
   }
   if ((hp <= 6 || (hp <= 9 && burning)) && Inv.has(bot, m("golden_apple"))) {
-    // burning and hurt: the apple comes before running (the fire won't wait)
-    return { name: "heal", prio: burning ? PRIO.flee + 2 : PRIO.heal, gen: () => S.eat(bot, m("golden_apple")), ttl: 60 };
+    // burning and hurt: the apple comes before running (the fire won't wait), unless something
+    // is shooting at it: out of its sight first (standing still to eat, it'd be hit again), the
+    // apple once it's in cover, or at once if it's about to die
+    const shot = bot.lastAttacker && C.RANGED.has(bot.lastAttacker.typeId) && system.currentTick - (bot.lastAttackerAt ?? -1e9) < 60;
+    return { name: "heal", prio: burning && (!shot || hp <= 3) ? PRIO.flee + 2 : PRIO.heal, gen: () => S.eat(bot, m("golden_apple")), ttl: 60 };
   }
   return undefined;
 }
@@ -576,8 +606,23 @@ function chores(bot, now) {
   }
   // its things where it died, before they vanish (five minutes)
   const ds = bot.deathSpot;
+  // (killed by something: not straight back with nothing to fight it with while it's still
+  // there; once it's gone, or dead, or burned up in the morning, back for them)
+  const armedNow = () => {
+    const w = Inv.bestWeapon(bot);
+    return !!w && D.toolInfo(w).damage >= 4;
+  };
+  const killerThere = () => {
+    if (!ds?.byId) return !!ds?.by;
+    try {
+      const k = world.getEntity(ds.byId);
+      return !!k && k.isValid && C.alive(k) && B.dist(k.location, ds.pos) < 16;
+    } catch {
+      return false;
+    }
+  };
   if (ds && ds.dim === dim.id && world.getAbsoluteTime() - ds.at < 5400 && !bot.recovered && B.dist(ds.pos, e.location) < 200 &&
-    !/lava|void/.test(String(ds.cause))) {
+    !/lava|void/.test(String(ds.cause)) && (!ds.by || armedNow() || !killerThere())) {
     bot.recovered = true;
     return { name: "recover", prio: PRIO.recover, ttl: 3000, gen: function* () {
       G.doing(bot, "going back for its things");
@@ -709,11 +754,18 @@ function dress(bot) {
 export function brainTick(bot, now) {
   const dimId = bot.entity.dimension.id;
   if (bot.lastDim && bot.lastDim !== dimId) {
-    // through a portal: whatever it was doing is done with
+    // through a portal: whatever it was doing is done with. The portal it came out of is its
+    // way back
     stopTask(bot);
     bot.events.push({ kind: "dimension", dim: dimId, at: now });
+    const back = dimId === "minecraft:the_end" ? undefined : T.portalHere(bot);
+    if (back) {
+      W.remember("portal", dimId, back, {}, 8);
+      if (dimId === "minecraft:nether") bot.known.netherPortal = { dim: dimId, pos: back };
+    }
   }
   bot.lastDim = dimId;
+  if ((now + bot.phase) % 2 === 0) shieldReflex(bot, now);
   if ((now + bot.phase) % 40 === 0) dress(bot);
   if ((now + bot.phase) % 100 === 25) survey(bot);
   // a task running too long is stuck at something: let it go
@@ -730,6 +782,23 @@ export function brainTick(bot, now) {
     return;
   }
   if (r.done && bot.task === t) finishTask(bot, !!r.value, now);
+}
+
+/**
+ * A reflex: its shield up to what it sees coming at it (a fireball, an arrow), whatever it's
+ * busy with (not mid-bite or with its bow drawn), and down again once it's past.
+ * @param {any} bot @param {number} now
+ */
+function shieldReflex(bot, now) {
+  if (bot.reflexUntil && now >= bot.reflexUntil) {
+    bot.reflexUntil = 0;
+    if (bot.use === 3) B.setUse(bot, 0);
+  }
+  if (bot.use !== 0 && bot.use !== 4 && bot.use !== 6 && bot.use !== 7 && !bot.reflexUntil) return;
+  if (bot.pose === 3 || Inv.getEquip(bot, "Offhand")?.typeId !== m("shield")) return;
+  if (!C.incoming(bot)) return;
+  if (bot.use !== 3) B.setUse(bot, 3);
+  bot.reflexUntil = now + 5;
 }
 
 /** Weigh what to do, and switch to it if it's more urgent than what it's doing. @param {any} bot @param {number} now */

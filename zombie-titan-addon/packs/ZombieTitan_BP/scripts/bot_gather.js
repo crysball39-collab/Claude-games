@@ -27,7 +27,8 @@ export const SOURCES = {
   // stone is a few blocks under the grass: a staircase down finds it
   [m("cobblestone")]: { blocks: list("stone", "cobblestone", "mossy_cobblestone"), depth: 5 },
   [m("cobbled_deepslate")]: { blocks: list("deepslate"), y: -8 },
-  [m("coal")]: { blocks: list("coal_ore", "deepslate_coal_ore"), y: 40 },
+  // coal is all through the rock from the surface down: a tunnel a few blocks under the ground finds it
+  [m("coal")]: { blocks: list("coal_ore", "deepslate_coal_ore"), depth: 8 },
   [m("raw_iron")]: { blocks: list("iron_ore", "deepslate_iron_ore"), y: 16 },
   [m("raw_copper")]: { blocks: list("copper_ore", "deepslate_copper_ore"), y: 40 },
   [m("raw_gold")]: { blocks: list("gold_ore", "deepslate_gold_ore"), y: -16 },
@@ -130,7 +131,10 @@ export function* obtain(bot, want, n = 1, o = {}) {
   }
   if (id === "coal") {
     const more = n - Inv.count(bot, "coal");
-    if (yield* gatherBlocks(bot, m("coal"), Inv.count(bot, m("coal")) + more, { ...SOURCES[m("coal")], noStrip: depth > 2 }, sub)) return true;
+    // a few minutes digging for coal, then charcoal from logs (as players do when coal won't show)
+    const dig = { ...sub, deadline: Math.min(sub.deadline, system.currentTick + 6000) };
+    if (yield* gatherBlocks(bot, m("coal"), Inv.count(bot, m("coal")) + more, { ...SOURCES[m("coal")], noStrip: depth > 2 }, dig)) return true;
+    if (Inv.count(bot, "coal") >= n) return true;
     return yield* obtain(bot, m("charcoal"), Inv.count(bot, m("charcoal")) + n - Inv.count(bot, "coal"), sub);
   }
   if (id === "wool" || id === m("white_wool")) {
@@ -180,7 +184,7 @@ function* makePlanks(bot, n, o) {
 
 /**
  * Craft until it has n: get each ingredient (crafting sub-parts first), a table if the recipe
- * needs one, then craft. A table it put down away from home it picks back up.
+ * needs one (one it knows nearby, or a new one), then craft.
  * @param {any} bot @param {D.Recipe} rec @param {number} n @param {any} o
  */
 function* craftUp(bot, rec, n, o) {
@@ -194,33 +198,20 @@ function* craftUp(bot, rec, n, o) {
     }
   }
   if (S.missingFor(bot, rec, times).length) return false;
-  if (rec.table && !nearStation(bot, "minecraft:crafting_table") && !Inv.has(bot, m("crafting_table"))) {
+  if (rec.table && !nearStation(bot, "minecraft:crafting_table") && !Inv.has(bot, m("crafting_table")) &&
+      !(S.knownStations(bot, "minecraft:crafting_table", 24).length && (yield* S.station(bot, "minecraft:crafting_table")))) {
     // keep enough for the recipe when making the table
     if (!(yield* obtain(bot, m("crafting_table"), 1, o))) return false;
     if (S.missingFor(bot, rec, times).length) return yield* craftUp(bot, rec, n, o);
   }
-  const before = bot.stats.placed;
+  // (a table it puts down stays where it is, for next time)
   const ok = yield* S.craft(bot, rec, times);
-  if (rec.table && bot.stats.placed > before) yield* pickBackUp(bot, ["minecraft:crafting_table"]);
   return ok && Inv.count(bot, rec.out) >= n;
 }
 
 /** Is there a station within reach (or close by)? @param {any} bot @param {string} id */
 export function nearStation(bot, id) {
   return S.findBlocks(bot.entity.dimension, bot.entity.location, [id], 6, 3).length > 0;
-}
-
-/**
- * Pick up a table or furnace it put down here for the moment (not at its home).
- * @param {any} bot @param {string[]} ids
- */
-export function* pickBackUp(bot, ids) {
-  if (bot.home && bot.home.dim === bot.entity.dimension.id && B.dist(bot.home.pos, bot.entity.location) < 24) return;
-  const dim = bot.entity.dimension;
-  for (const p of S.findBlocks(dim, bot.entity.location, ids, 6, 3)) {
-    if (!bot.placed.has(S.placedKey(dim, p))) continue;
-    yield* S.mineBlock(bot, p);
-  }
 }
 
 /**
@@ -246,7 +237,8 @@ function* smeltUp(bot, out, n, o) {
     }
   }
   if (!input) return false;
-  if (!nearStation(bot, "minecraft:furnace") && !nearStation(bot, "minecraft:lit_furnace") && !Inv.has(bot, m("furnace"))) {
+  if (!nearStation(bot, "minecraft:furnace") && !nearStation(bot, "minecraft:lit_furnace") && !Inv.has(bot, m("furnace")) &&
+      !(S.knownStations(bot, "minecraft:furnace", 24).length && (yield* S.station(bot, "minecraft:furnace")))) {
     if (!(yield* obtain(bot, m("furnace"), 1, o))) return false;
   }
   // fuel: coal it has, or planks (a plank smelts one and a half items)
@@ -254,7 +246,6 @@ function* smeltUp(bot, out, n, o) {
   if (coal * 8 < need && Inv.count(bot, "planks") * 1.5 < need && Inv.count(bot, "log") * 1.5 < need) {
     if (!(yield* obtain(bot, "planks", Math.ceil(need / 1.5) + 1, o))) return false;
   }
-  const before = bot.stats.placed;
   let left = need;
   for (let k = 0; k < 4 && left > 0; k++) {
     const batch = Math.min(left, 64, Inv.count(bot, input));
@@ -263,7 +254,6 @@ function* smeltUp(bot, out, n, o) {
     if (!(yield* S.smelt(bot, input, batch))) break;
     left -= Inv.count(bot, out) - had;
   }
-  if (bot.stats.placed > before) yield* pickBackUp(bot, ["minecraft:furnace", "minecraft:lit_furnace"]);
   return Inv.count(bot, out) >= n;
 }
 
@@ -342,7 +332,7 @@ export function nextBlock(bot, ids, r, rv = Math.min(8, r)) {
     if (p.x === f.x && p.z === f.z && p.y < f.y) continue;
     const id = B.idAt(dim, p);
     if (protect(p.x, p.y, p.z, id)) continue;
-    if (!noticed(bot, p)) continue;
+    if (!noticed(bot, p) || !S.canSee(bot, p)) continue;
     // a bot can't harvest it: don't bother
     if (!Inv.canHarvestWith(bot, id) && D.blockInfo(id).tier) continue;
     return p;
@@ -436,11 +426,15 @@ function* restOfTree(bot, p, ids) {
   yield* S.collect(bot, { x: p.x + 0.5, y: p.y, z: p.z + 0.5 }, 6, 80);
 }
 
-/** Mine every good ore it can see right now. True when it has n of item. @param {any} bot @param {any} spec @param {string} item @param {number} n */
+/**
+ * Mine every good ore it can see right now (further off in a cave, where the walls show more).
+ * True when it has n of item.
+ * @param {any} bot @param {any} spec @param {string} item @param {number} n
+ */
 function* mineSeen(bot, spec, item, n) {
   for (let k = 0; k < 12; k++) {
     if (Inv.count(bot, item) >= n) return true;
-    const p = nextBlock(bot, [...new Set([...spec.blocks, ...GOOD_ORES])], 5, 4);
+    const p = nextBlock(bot, [...new Set([...spec.blocks, ...GOOD_ORES])], 9, 5);
     if (!p) break;
     if (!(yield* S.mineBlock(bot, p))) bad(bot, p);
   }
@@ -464,14 +458,24 @@ export function* stripMine(bot, spec, item, n, o) {
     if (G_TIER(bot) >= Math.max(1, tierFor(spec.blocks))) return true;
     return yield* toolFor(bot, [...spec.blocks, m("stone")], o);
   };
-  // down (or up) the staircase
-  for (let leg = 0; leg < 20 && Math.abs(B.feet(bot).y - y) > 1; leg++) {
+  // down (or up) the staircase, to the very height (a tunnel a block too high runs through dirt)
+  for (let leg = 0; leg < 20 && B.feet(bot).y !== y; leg++) {
     if (timeUp(o) || bot.abort) return false;
     if (!(yield* tools())) return false;
-    const f = B.feet(bot);
-    const dir = CARD[bot.mineDir];
+    let f = B.feet(bot);
     const dy = Math.max(-10, Math.min(10, y - f.y));
-    const goal = { x: f.x + dir.x * (Math.abs(dy) + 1), y: f.y + dy, z: f.z + dir.z * (Math.abs(dy) + 1), r: 1 };
+    // not down into a lake or a river (it would be digging under water, out of air): a way down
+    // that stays dry, from dry ground
+    if (dy < 0) {
+      for (let k = 0; k < 4 && !dryWay(bot, f, CARD[bot.mineDir], dy); k++) bot.mineDir = (bot.mineDir + 1) % 4;
+      if (bot.inWater || !dryWay(bot, f, CARD[bot.mineDir], dy)) {
+        if (!(yield* toDryGround(bot)) || ++fails > 4) return false;
+        continue;
+      }
+    }
+    f = B.feet(bot);
+    const dir = CARD[bot.mineDir];
+    const goal = { x: f.x + dir.x * (Math.abs(dy) + 1), y: f.y + dy, z: f.z + dir.z * (Math.abs(dy) + 1), r: Math.abs(dy) <= 2 ? 0.5 : 1 };
     const ok = yield* S.goTo(bot, goal, { tries: 2, weight: 5, maxNodes: 2500 });
     if (yield* mineSeen(bot, spec, item, n)) return true;
     if (!ok && B.feet(bot).y === f.y) {
@@ -494,6 +498,42 @@ export function* stripMine(bot, spec, item, n, o) {
     if (seg % 2 === 1 && Inv.has(bot, m("torch"))) yield* torchHere(bot);
   }
   return Inv.count(bot, item) >= n;
+}
+
+/**
+ * Does a staircase down from f, along dir, for dy blocks start out of water (none where it
+ * would dig, or just over it)?
+ * @param {any} bot @param {Vector3} f @param {{x: number, z: number}} dir @param {number} dy
+ */
+function dryWay(bot, f, dir, dy) {
+  const dim = bot.entity.dimension;
+  // (the first steps: further down, the way-finding steers round water itself)
+  for (let k = 1; k <= Math.min(Math.abs(dy) + 1, 5); k++) {
+    for (let h = 0; h <= 2; h++) {
+      if (/water/.test(B.idAt(dim, { x: f.x + dir.x * k, y: f.y - k + h, z: f.z + dir.z * k }))) return false;
+    }
+  }
+  return true;
+}
+/** Away from the water about it, to dry ground a dozen blocks off. @param {any} bot */
+function* toDryGround(bot) {
+  const dim = bot.entity.dimension;
+  const f = B.feet(bot);
+  const wet = S.findBlocks(dim, f, list("water", "flowing_water"), 8, 4);
+  let ax = 0;
+  let az = 0;
+  for (const p of wet) {
+    ax += f.x - p.x;
+    az += f.z - p.z;
+  }
+  const n = Math.hypot(ax, az);
+  const dir = n > 0.01 ? { x: ax / n, z: az / n } : CARD[Math.floor(Math.random() * 4)];
+  doing(bot, "looking for dry ground to dig down");
+  const goal = { x: Math.floor(f.x + dir.x * 12), z: Math.floor(f.z + dir.z * 12), r: 4,
+    test: (x, y, z) => Math.hypot(x - (f.x + dir.x * 12), z - (f.z + dir.z * 12)) <= 4 && !/water/.test(B.idAt(dim, { x, y, z })) };
+  const ok = yield* S.goTo(bot, goal, { tries: 2, maxNodes: 2000 });
+  if (!ok) bot.mineDir = ((bot.mineDir ?? 0) + 1) % 4;
+  return ok;
 }
 
 /** Put a torch on the floor beside it if it's dark here (no light within 7 blocks). @param {any} bot */
@@ -588,13 +628,16 @@ export function findPrey(bot, types, r = 32) {
   near.sort((a, b) => B.dist(a.location, e.location) - B.dist(b.location, e.location));
   const now = system.currentTick;
   for (const t of near) {
-    if ((bot.ignore?.get(t.id) ?? 0) > now) continue;
+    // one it gave up on is worth another go once it's right there
+    if ((bot.ignore?.get(t.id) ?? 0) > now && B.dist(t.location, e.location) > 4) continue;
     try {
       if (t.getComponent("minecraft:is_baby") || t.getComponent("minecraft:is_tamed") || t.nameTag) continue;
     } catch {
       continue;
     }
-    if (bot.seen.has(t.id) || Sense.clearSight(e.dimension, B.eye(bot), t.location)) return t;
+    // one right beside it it can hear and smell; else it looks for its body (not its feet, which
+    // the ground in between can hide)
+    if (B.dist(t.location, e.location) < 3 || bot.seen.has(t.id) || Sense.clearSight(e.dimension, B.eye(bot), { ...t.location, y: t.location.y + 0.6 })) return t;
   }
   return undefined;
 }
@@ -625,8 +668,8 @@ export function* hunt(bot, types, item, n, o) {
     if (r === "killed" || r === "gone") yield* S.collect(bot, at, 6, 60);
     else if (r === "flee") return false;
     else {
-      // that one got away (or can't be reached): another
-      (bot.ignore ??= new Map()).set(prey.id, system.currentTick + 2400);
+      // that one got away (or can't be reached): another, for now
+      (bot.ignore ??= new Map()).set(prey.id, system.currentTick + 1200);
       fails++;
     }
     if (fails > 8) return false;

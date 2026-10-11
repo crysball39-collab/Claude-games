@@ -14,6 +14,7 @@ import * as B from "./bot_body.js";
 import * as D from "./bot_data.js";
 import * as Inv from "./bot_inv.js";
 import * as P from "./bot_path.js";
+import * as W from "./bot_world.js";
 import { perm } from "./doors_build.js";
 /** @typedef {import("@minecraft/server").Vector3} Vector3 */
 /** @typedef {import("@minecraft/server").Dimension} Dimension */
@@ -146,8 +147,9 @@ export function mineTimer(bot) {
 }
 
 /** Blocks a Player uses to bridge and pillar, cheapest first. */
-export const SCAFFOLD = ["minecraft:dirt", "minecraft:cobblestone", "minecraft:netherrack", "minecraft:cobbled_deepslate", "minecraft:andesite",
-  "minecraft:diorite", "minecraft:granite", "minecraft:tuff", "minecraft:blackstone", "minecraft:end_stone", "minecraft:stone"];
+// (the cheapest first: cobblestone last, it's what tools and furnaces are made of)
+export const SCAFFOLD = ["minecraft:dirt", "minecraft:netherrack", "minecraft:andesite", "minecraft:diorite", "minecraft:granite", "minecraft:tuff",
+  "minecraft:cobbled_deepslate", "minecraft:end_stone", "minecraft:blackstone", "minecraft:stone", "minecraft:cobblestone"];
 /** @param {any} bot */
 export function scaffoldCount(bot) {
   let n = 0;
@@ -163,15 +165,19 @@ export function scaffoldCount(bot) {
 export function* plan(bot, goal, o = {}) {
   const dim = bot.entity.dimension;
   const build = bot.world.build && !o.noBuild;
+  bot.now = `planning a way to ${goal.x ?? "?"},${goal.y ?? "?"},${goal.z ?? "?"}`;
   const gen = P.search(dim, B.feet(bot), goal, {
     mine: build ? mineTimer(bot) : undefined,
-    blocks: build ? scaffoldCount(bot) : 0,
+    blocks: build && !o.noPlace ? scaffoldCount(bot) : 0,
     protect: o.digAny ? structureProtector(bot) : protector(bot),
     maxNodes: o.maxNodes ?? 3000,
     weight: o.weight,
     maxDrop: B.health(bot) > 14 ? 3 : 2,
     avoidWater: o.avoidWater,
     portal: o.portal,
+    blocked: blockedNow(bot),
+    // on its way down it may dig straight down (onto a floor it can see), where a staircase won't do
+    digDown: build && goal.y !== undefined && goal.y < B.feet(bot).y - 1,
   });
   for (;;) {
     for (let k = 0; k < 3; k++) {
@@ -180,6 +186,13 @@ export function* plan(bot, goal, o = {}) {
     }
     yield;
   }
+}
+
+/** Is its body inside a block (squeezed in, a block landed on it)? @param {any} bot */
+export function wedged(bot) {
+  const l = bot.entity.location;
+  const dim = bot.entity.dimension;
+  return [0.6, 1.5].some((dy) => D.isFloor(B.idAt(dim, { x: l.x, y: l.y + dy, z: l.z })));
 }
 
 /** Is it at (or close enough to) a goal? @param {any} bot @param {any} goal */
@@ -197,22 +210,27 @@ export function atGoal(bot, goal) {
  * Go somewhere: plan, follow, re-plan when the way is blocked or the plan only got part way.
  * goal: {x, y, z, r} in block coordinates (leave out y for any height), or {test}.
  * @param {any} bot @param {any} goal
- * @param {{tries?: number, speed?: string, maxNodes?: number, weight?: number, noBuild?: boolean, portal?: boolean, digAny?: boolean}} [o]
+ * @param {{tries?: number, speed?: string, maxNodes?: number, weight?: number, noBuild?: boolean, noPlace?: boolean, portal?: boolean, digAny?: boolean}} [o]
  */
 export function* goTo(bot, goal, o = {}) {
   const tries = o.tries ?? 5;
   let fails = 0;
+  let nowhere = 0;
   for (let attempt = 0; attempt < tries * 3 && fails < tries; attempt++) {
     if (atGoal(bot, goal)) {
       B.stop(bot);
       return true;
     }
-    const r = yield* plan(bot, goal, o);
+    // the second time it finds nowhere nearer to go, it looks harder (further, less straight)
+    const r = yield* plan(bot, goal, nowhere ? { ...o, maxNodes: (o.maxNodes ?? 3000) * 2, weight: 1.1 } : o);
     if (!r.path.length) {
       fails++;
-      // nowhere to go from here: jump, step aside, try again
-      B.jump(bot);
-      yield* wait(10);
+      // wedged in a block: a jump frees it. Else there's no way nearer from here, and jumping on
+      // the spot gets it nowhere: once it has looked harder, that's that
+      if (wedged(bot)) {
+        B.jump(bot);
+        yield* wait(10);
+      } else if (++nowhere > 1) break;
       continue;
     }
     const ok = yield* follow(bot, r.path, o);
@@ -281,6 +299,7 @@ export function closeDoor(bot, p) {
 /** @param {any} bot @param {P.Step} s @param {number} left @param {any} o */
 function* walkStep(bot, s, left, o) {
   const target = { x: s.x + 0.5, y: s.y, z: s.z + 0.5 };
+  bot.stepNow = s;
   const e = bot.entity;
   const speed = o.speed ?? (left > 6 && bot.hunger > 6 && s.how === "walk" ? "sprint" : "walk");
   const far = B.dist(e.location, target);
@@ -288,12 +307,17 @@ function* walkStep(bot, s, left, o) {
   let best = far;
   let still = 0;
   for (let t = 0; t < limit; t++) {
+    // (something more pressing come up: a creeper creeping up mid-fight)
+    if (o.interrupt?.()) return false;
     const l = e.location;
     const h = B.flat(l, target);
     const dy = l.y - s.y;
     if (h < 0.35 && Math.abs(dy) < (s.how === "down" ? 0.6 : 0.9) && (bot.onGround || bot.inWater || s.how === "climb" || s.how === "swim")) return true;
     B.moveTo(bot, target, { speed, tol: 0.15 });
-    if (s.how === "up" && h < 1.3 && bot.onGround && dy < -0.3) B.jump(bot);
+    if (s.how === "up" && h < 1.3 && (bot.onGround || bot.inWater) && dy < -0.3 && !bot.jumpRec) {
+      B.jump(bot);
+      bot.stepJump = true;
+    }
     if (s.how === "swim" && dy < -0.4) B.jump(bot);
     const d = B.dist(l, target);
     if (d < best - 0.05) {
@@ -302,11 +326,43 @@ function* walkStep(bot, s, left, o) {
     } else if (++still > 30) {
       // stuck: one jump, then give up and re-plan
       if (still === 31) B.jump(bot);
-      if (still > 50) return false;
+      if (still > 50) {
+        // a one-block step it can't get up however it jumps: up it goes, as the jump should have
+        // taken it (the game's physics can fall short of a player's)
+        if (s.how === "up" && h < 1.5 && dy < -0.5 && dy > -1.5 && bot.onGround && roomAt(bot, s)) {
+          try {
+            e.teleport(target);
+            bot.hops = (bot.hops ?? 0) + 1;
+            return true;
+          } catch {
+            return false;
+          }
+        }
+        // right beside a block it took for open and can't get into: it isn't open (a plant
+        // with a body to it, say). The next way it plans goes through it or round it.
+        if (h < 1.4 && (s.how === "walk" || s.how === "down")) {
+          bot.blocked ??= new Map();
+          for (const y of [s.y, s.y + 1]) {
+            if (D.blockInfo(idAt(bot, { x: s.x, y, z: s.z })).kind === "pass") bot.blocked.set(`${s.x},${y},${s.z}`, system.currentTick + 2400);
+          }
+        }
+        return false;
+      }
     }
     yield;
   }
   return false;
+}
+/** The blocks it has found it can't walk through, though it took them for open. @param {any} bot */
+function blockedNow(bot) {
+  if (!bot.blocked?.size) return undefined;
+  const now = system.currentTick;
+  for (const [k, t] of bot.blocked) if (t <= now) bot.blocked.delete(k);
+  return new Set(bot.blocked.keys());
+}
+/** Room to stand at a step: nothing in the way of its body, and a floor under it. @param {any} bot @param {Vector3} p */
+function roomAt(bot, p) {
+  return D.isPassable(idAt(bot, p)) && D.isPassable(idAt(bot, { ...p, y: p.y + 1 })) && D.isFloor(idAt(bot, { ...p, y: p.y - 1 }));
 }
 
 /** Bridge: crouch at the edge, look down at its side, place a block, step onto it. @param {any} bot @param {P.Step} s */
@@ -349,7 +405,8 @@ function* pillarStep(bot, s) {
   }
   B.stop(bot);
   B.lookAt(bot, { x: c.x, y: place.y - 1, z: c.z }, 30, 3);
-  if (!Inv.hold(bot, (id) => SCAFFOLD.includes(id))) return false;
+  const pick = SCAFFOLD.find((id) => Inv.has(bot, id));
+  if (!pick || !Inv.hold(bot, pick)) return false;
   yield* until(() => bot.onGround, 10);
   B.jump(bot);
   // at the top of the jump its feet clear the block: place it under itself
@@ -437,14 +494,23 @@ export function* mineBlock(bot, p, o = {}) {
   let b = blockAt(bot, pos);
   if (!b) return false;
   const id = b.typeId;
+  bot.now = `mining ${id.replace("minecraft:", "")} at ${pos.x},${pos.y},${pos.z}`;
   const info = D.blockInfo(id);
   if (info.kind === "air" || info.kind === "liquid" || info.kind === "lava") return true;
   if (info.h < 0) return false;
   if (!bot.world.build) return false;
-  // close enough to reach (4.5 blocks, as a player's reach)
-  if (B.dist(B.eye(bot), mid(pos)) > 4.6) {
+  // in water it digs at a crawl (a fifth the speed, and a fifth again off the ground): out onto
+  // dry land within reach of it first, if there's any
+  if (bot.inWater && !o.pathing) {
+    const dry = (x, y, z) => !/water/.test(B.idAt(dim, { x, y, z })) && D.isFloor(B.idAt(dim, { x, y: y - 1, z })) &&
+      B.dist({ x: x + 0.5, y: y + B.EYE, z: z + 0.5 }, mid(pos)) <= 4.3;
+    yield* goTo(bot, { test: dry, x: pos.x, z: pos.z, r: 4 }, { tries: 2, maxNodes: 800 });
+  }
+  // close enough to reach (4.5 blocks, as a player's reach), and in sight: no mining through
+  // the ground it stands on to a block it can't see
+  if (B.dist(B.eye(bot), mid(pos)) > 4.6 || (!o.pathing && !canSee(bot, pos))) {
     if (o.pathing) return false;
-    const ok = yield* goTo(bot, { ...pos, r: 3 }, { tries: 3 });
+    const ok = yield* goTo(bot, { ...pos, r: 2.2 }, { tries: 3 });
     if (!ok) return false;
   }
   const tool = Inv.bestTool(bot, id);
@@ -541,9 +607,16 @@ export function onToolBroke(bot, id) {
   bot.events.push({ kind: "tool_broke", id, at: system.currentTick });
 }
 
-/** Walk over the items lying around a point to pick them up. @param {any} bot @param {Vector3} at @param {number} r @param {number} [ticks] */
+/**
+ * Walk over the items lying around a point to pick them up (leaving any it can't get to, fallen
+ * somewhere walled off).
+ * @param {any} bot @param {Vector3} at @param {number} r @param {number} [ticks]
+ */
 export function* collect(bot, at, r = 6, ticks = 120) {
   const dim = bot.entity.dimension;
+  let chasing;
+  let best = Infinity;
+  let still = 0;
   for (let t = 0; t < ticks; t++) {
     let items = [];
     try {
@@ -560,8 +633,34 @@ export function* collect(bot, at, r = 6, ticks = 120) {
     items.sort((a, b) => B.dist(a.location, bot.entity.location) - B.dist(b.location, bot.entity.location));
     const it = items[0];
     const l = it.location;
-    if (B.dist(l, bot.entity.location) > 6) {
-      yield* goTo(bot, { ...B.blockPos(l), r: 1 }, { tries: 1, maxNodes: 600 });
+    const d = B.dist(l, bot.entity.location);
+    if (it.id !== chasing) {
+      chasing = it.id;
+      best = d;
+      still = 0;
+    } else if (d < best - 0.1) {
+      best = d;
+      still = 0;
+    } else if (++still > 20) {
+      // it isn't getting any closer: leave that one
+      bot.tossed.set(it.id, now + 1200);
+      continue;
+    }
+    // still falling: under it, and wait for it to land
+    let falling = false;
+    try {
+      falling = Math.abs(it.getVelocity().y) > 0.05 && !D.isFloor(idAt(bot, { ...l, y: l.y - 0.3 }));
+    } catch {
+      falling = false;
+    }
+    // far off, or down a hole (or up on a ledge) it can't just walk to: it finds a way there
+    // (on foot or digging: never a pillar up for a thing)
+    const y = bot.entity.location.y;
+    if (falling) {
+      B.moveTo(bot, { x: l.x, y, z: l.z }, { tol: 0.3, noFall: true });
+      still = 0;
+    } else if (d > 6 || l.y < y - 1.2 || l.y > y + 1.5) {
+      if (!(yield* goTo(bot, { ...B.blockPos(l), r: 1 }, { tries: 1, maxNodes: 600, noPlace: true }))) bot.tossed.set(it.id, now + 1200);
     } else {
       B.moveTo(bot, l, { tol: 0.1 });
       if (l.y > bot.entity.location.y + 0.8 && bot.onGround) B.jump(bot);
@@ -569,6 +668,36 @@ export function* collect(bot, at, r = 6, ticks = 120) {
     yield;
   }
   B.stop(bot);
+}
+
+const FACES = [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
+/**
+ * Can it see a block from where its eyes are: a face of it open to the air and turned its way,
+ * with nothing solid between? A player only notices, and mines, what it can see.
+ * @param {any} bot @param {Vector3} p
+ */
+export function canSee(bot, p) {
+  const eye = B.eye(bot);
+  const c = { x: p.x + 0.5, y: p.y + 0.5, z: p.z + 0.5 };
+  if (B.dist(eye, c) < 1.8) return true;
+  const dim = bot.entity.dimension;
+  for (const [dx, dy, dz] of FACES) {
+    const k = D.blockInfo(idAt(bot, { x: p.x + dx, y: p.y + dy, z: p.z + dz })).kind;
+    if (k !== "air" && k !== "pass" && k !== "liquid" && k !== "climb") continue;
+    const f = { x: c.x + dx * 0.5, y: c.y + dy * 0.5, z: c.z + dz * 0.5 };
+    if ((eye.x - f.x) * dx + (eye.y - f.y) * dy + (eye.z - f.z) * dz <= 0) continue;
+    const d = B.dist(eye, f);
+    let hit;
+    try {
+      hit = dim.getBlockFromRay(eye, { x: (f.x - eye.x) / d, y: (f.y - eye.y) / d, z: (f.z - eye.z) / d },
+        { maxDistance: d + 0.6, includeLiquidBlocks: false, includePassableBlocks: false });
+    } catch {
+      continue;
+    }
+    const b = hit?.block?.location;
+    if (b && b.x === p.x && b.y === p.y && b.z === p.z) return true;
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------- placing
@@ -608,8 +737,9 @@ export function* placeBlock(bot, p, want, o = {}) {
   const dim = bot.entity.dimension;
   const pos = B.blockPos(p);
   if (!bot.world.build) return false;
-  const test = Array.isArray(want) ? (id) => want.includes(id) : want;
-  if (!Inv.hold(bot, /** @type {any} */ (test))) return false;
+  // a list: the first of them it has (the list says which it would rather use)
+  const pick = Array.isArray(want) ? want.find((id) => Inv.has(bot, id)) : want;
+  if (!pick || !Inv.hold(bot, /** @type {any} */ (pick))) return false;
   const item = Inv.held(bot);
   if (!item) return false;
   const here = idAt(bot, pos);
@@ -735,6 +865,14 @@ export function* station(bot, blockId, item = blockId) {
     const ok = yield* goTo(bot, { ...p, r: 2.5 }, { tries: 2, maxNodes: 1500 });
     if (ok) return p;
   }
+  // one it put down a little way off (players leave their tables and furnaces about)
+  for (const known of knownStations(bot, blockId, 32)) {
+    if (!ids.includes(B.idAt(dim, known.pos))) {
+      W.forget("station", known);
+      continue;
+    }
+    if (yield* goTo(bot, { ...known.pos, r: 2.5 }, { tries: 1, maxNodes: 2000 })) return known.pos;
+  }
   if (!Inv.has(bot, item)) return undefined;
   let spot = spotNear(bot);
   if (!spot) {
@@ -753,7 +891,17 @@ export function* station(bot, blockId, item = blockId) {
   const ok = yield* placeBlock(bot, spot, item);
   if (!ok) return undefined;
   if (bot.home && B.dist(spot, bot.home.pos) < 16) bot.home.stations[D.bare(blockId)] = spot;
+  W.remember("station", dim.id, spot, { id: blockId }, 0);
   return spot;
+}
+
+/**
+ * Tables, furnaces and the like it remembers putting down within `r` blocks, nearest first.
+ * @param {any} bot @param {string} blockId @param {number} r
+ */
+export function knownStations(bot, blockId, r) {
+  const here = bot.entity.location;
+  return W.recall("station", bot.entity.dimension.id, here).filter((s) => s.id === blockId && B.dist(s.pos, here) <= r);
 }
 
 /** Make sure it has the items a recipe needs, by id (groups resolved to what it has). @param {any} bot @param {D.Recipe} rec @param {number} times */

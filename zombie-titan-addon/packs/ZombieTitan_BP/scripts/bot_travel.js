@@ -27,7 +27,8 @@ export function* travel(bot, to, o = {}) {
     if (bot.abort) return false;
     const l = bot.entity.location;
     const d = B.flat(l, to);
-    if (d <= r && (to.y === undefined || Math.abs(l.y - to.y) < 3)) return true;
+    // there (within r, as the way-finding counts it: a tower's top within reach counts)
+    if (d <= r && (to.y === undefined || Math.abs(l.y - to.y) < Math.max(3, r))) return true;
     const k = Math.min(1, 44 / Math.max(d, 1));
     /** @type {any} */
     let goal;

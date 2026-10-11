@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 // (the Players: bot is its senses, chat and menus; botpath getting about; botcraft a game from
 // nothing; botstations the blocks it uses; botend the way to the dragon; botai the AI bridge)
 const TESTS = ["smoke", "skeleton", "creeper", "spider", "omegafish", "items", "gumgum", "library", "seek", "library@1.21.90", "seek@1.21.90",
-  "library@1.26.20", "floor1", "floor1@1.21.90", "bot", "botpath", "botstations", "botai", "botcraft", "botend"];
+  "library@1.26.20", "floor1", "floor1@1.21.90", "bot", "botpath", "botstations", "botai", "botcraft", "botend", "botfight", "botblaze", "botreal"];
 
 const here = dirname(fileURLToPath(import.meta.url));
 const work = mkdtempSync(join(tmpdir(), "zt-sim-"));
@@ -32,6 +32,8 @@ cpSync(join(here, "mock-server-net.mjs"), join(netPkg, "index.mjs"));
 writeFileSync(join(netPkg, "package.json"), JSON.stringify({ name: "@minecraft/server-net", type: "module", main: "index.mjs" }));
 writeFileSync(join(work, "package.json"), JSON.stringify({ type: "module" }));
 cpSync(join(here, "..", "..", "packs", "ZombieTitan_BP", "scripts"), join(work, "scripts"), { recursive: true });
+// the world like the game's, for the Players' tests
+cpSync(join(here, "realworld.mjs"), join(work, "realworld.mjs"));
 // the Player AI Bridge pack's script
 cpSync(join(here, "..", "..", "packs", "PlayerAI_Bridge_BP", "scripts"), join(work, "bridge"), { recursive: true });
 // the blocks the game knows: vanilla ones (per version) and the pack's own, with their states

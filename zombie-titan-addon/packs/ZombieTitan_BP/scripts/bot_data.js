@@ -47,7 +47,7 @@ rule("portal|end_portal|end_gateway", { h: -1, kind: "portal", drop: null });
 rule("bedrock|barrier|end_portal_frame|command_block|structure_block|light_block.*|invisible_bedrock|border_block|allow|deny", { h: -1, kind: "solid" });
 // air and liquids
 rule("air|cave_air|void_air", { h: 0, kind: "air", drop: null });
-rule("water|flowing_water", { h: -1, kind: "liquid", drop: null });
+rule("water|flowing_water|bubble_column", { h: -1, kind: "liquid", drop: null });
 rule("lava|flowing_lava", { h: -1, kind: "lava", drop: null });
 // stone and the ores in it
 rule("stone", { h: 1.5, tool: "pickaxe", tier: 1, drop: "cobblestone", natural: true });
@@ -98,8 +98,13 @@ rule(".*_leaves|azalea_leaves.*", {
   h: 0.2, tool: "hoe", natural: true,
   drop: (r) => (r() < 0.05 ? [[mc("oak_sapling"), 1]] : r() < 0.03 ? [[mc("stick"), 1 + Math.floor(r() * 2)]] : r() < 0.01 ? [[mc("apple"), 1]] : []),
 });
-rule("short_grass|tall_grass|grass_tall|fern|large_fern|deadbush|dead_bush|seagrass", { h: 0, kind: "pass", drop: (r) => (r() < 0.125 ? [[mc("wheat_seeds"), 1]] : []), natural: true });
-rule("dandelion|poppy|.*_tulip|blue_orchid|allium|azure_bluet|oxeye_daisy|cornflower|lily_of_the_valley|sunflower|lilac|rose_bush|peony|.*_sapling|sapling|pink_petals|wildflowers|leaf_litter|brown_mushroom|red_mushroom|crimson_fungus|warped_fungus|crimson_roots|warped_roots|nether_sprouts|glow_lichen|hanging_roots|kelp|.*_coral_fan|sweet_berry_bush", { h: 0, kind: "pass", natural: true });
+rule("short_grass|tall_grass|grass_tall|tallgrass|fern|large_fern|deadbush|dead_bush|seagrass|bush|short_dry_grass|tall_dry_grass", { h: 0, kind: "pass", drop: (r) => (r() < 0.125 ? [[mc("wheat_seeds"), 1]] : []), natural: true });
+// flowers and small plants a body walks through (a sweet berry bush is a danger: see below)
+rule("dandelion|golden_dandelion|poppy|red_flower|yellow_flower|.*_tulip|blue_orchid|allium|azure_bluet|oxeye_daisy|cornflower|lily_of_the_valley|sunflower|lilac|rose_bush|peony|double_plant|" +
+  ".*_sapling|sapling|pink_petals|wildflowers|leaf_litter|brown_mushroom|red_mushroom|crimson_fungus|warped_fungus|crimson_roots|warped_roots|nether_sprouts|glow_lichen|hanging_roots|" +
+  "kelp|.*_coral_fan|.*_coral_wall_fan|(dead_)?(brain|bubble|fire|horn|tube)_coral|cactus_flower|closed_eyeblossom|open_eyeblossom|torchflower|pitcher_plant|firefly_bush|mangrove_propagule|" +
+  "pale_hanging_moss|spore_blossom|sea_pickle|frog_spawn|small_dripleaf_block|red_shrub|shelf_mushroom|sculk_vein|resin_clump", { h: 0, kind: "pass", natural: true });
+rule("beetroot|carrots|potatoes|torchflower_crop|pitcher_crop|melon_stem|pumpkin_stem|cocoa", { h: 0, kind: "pass", drop: null });
 rule("vine|twisting_vines|weeping_vines|cave_vines.*", { h: 0.2, kind: "climb", drop: null, natural: true });
 rule("reeds|sugar_cane", { h: 0, kind: "pass", drop: "sugar_cane", natural: true });
 rule("wheat", { h: 0, kind: "pass", drop: null });
@@ -107,8 +112,21 @@ rule("nether_wart", { h: 0, kind: "pass", drop: ore("nether_wart", 2, 4), natura
 rule("melon_block", { h: 1, tool: "axe", drop: ore("melon_slice", 3, 7), natural: true });
 rule("pumpkin", { h: 1, tool: "axe", natural: true });
 rule("cactus", { h: 0.4, kind: "danger", natural: true });
+rule("pointed_dripstone", { h: 1.5, tool: "pickaxe", kind: "danger", natural: true });
+// more of what the land is made of
+rule("moss_block|pale_moss_block", { h: 0.1, tool: "hoe", natural: true });
+rule("dirt_with_roots", { h: 0.5, tool: "shovel", drop: "dirt", natural: true });
+rule("azalea|flowering_azalea|big_dripleaf|waterlily", { h: 0, tool: "axe", natural: true });
+rule("bamboo", { h: 1, tool: "axe", natural: true });
+rule("infested_.*", { h: 0.75, tool: "pickaxe", drop: null, natural: true });
+rule("small_amethyst_bud|medium_amethyst_bud|large_amethyst_bud|amethyst_cluster", { h: 1.5, tool: "pickaxe", kind: "pass", drop: null, natural: true });
+rule("budding_amethyst", { h: 1.5, tool: "pickaxe", drop: null, natural: true });
+rule("amethyst_block", { h: 1.5, tool: "pickaxe", natural: true });
+rule("sculk|sculk_catalyst|sculk_sensor|calibrated_sculk_sensor|sculk_shrieker", { h: 0.6, tool: "hoe", natural: true });
 rule("web|cobweb", { h: 4, tool: "sword", drop: "string", kind: "pass", natural: true });
-rule("wither_rose|fire|soul_fire|campfire|soul_campfire|sweet_berry_bush|powder_snow", { h: 0, kind: "danger", drop: null });
+rule("wither_rose|campfire|soul_campfire", { h: 0, kind: "danger", drop: null });
+// (a berry bush in its way gets broken, as a player would, rather than walked through)
+rule("fire|soul_fire|sweet_berry_bush|powder_snow", { h: 0, kind: "danger", drop: null, natural: true });
 rule("bee_nest|beehive|mushroom_stem|brown_mushroom_block|red_mushroom_block|nether_wart_block|warped_wart_block|shroomlight", { h: 0.5, natural: true });
 // what people make
 const WD = "oak|spruce|birch|jungle|acacia|dark_oak|mangrove|cherry|pale_oak|crimson|warped|bamboo";
@@ -128,19 +146,25 @@ rule(".*_pressure_plate|.*_button", { h: 0.5, tool: "pickaxe", kind: "pass" });
 rule("furnace|lit_furnace|blast_furnace|lit_blast_furnace|smoker|lit_smoker|stonecutter_block|grindstone|brewing_stand|cauldron|dispenser|dropper|observer|piston|sticky_piston|hopper", { h: 3.5, tool: "pickaxe", tier: 1 });
 rule("anvil|chipped_anvil|damaged_anvil|enchanting_table|iron_block|diamond_block|gold_block|emerald_block|netherite_block", { h: 5, tool: "pickaxe", tier: 2 });
 rule("bed", { h: 0.2, drop: "bed" });
-rule("torch|redstone_torch|soul_torch|lantern|soul_lantern|redstone_wire|rail|.*_rail|lever|tripwire|tripWire|tripwire_hook|frame|glow_frame|.*_carpet|carpet|.*_banner|standing_banner|wall_banner|flower_pot|candle|.*_candle", { h: 0, kind: "pass" });
+rule("torch|redstone_torch|soul_torch|copper_torch|underwater_torch|colored_torch_.*|unlit_redstone_torch|lantern|soul_lantern|redstone_wire|rail|.*_rail|lever|tripwire|tripWire|trip_wire|tripwire_hook|" +
+  "frame|glow_frame|.*_carpet|carpet|.*_banner|standing_banner|wall_banner|flower_pot|candle|.*_candle|(un)?powered_repeater|(un)?powered_comparator|daylight_detector(_inverted)?|structure_void", { h: 0, kind: "pass" });
+// thin things a body can't get through
+rule("iron_chain|chain|.*copper_chain|end_rod|.*lightning_rod|lightning_rod|.*copper_bars|copper_bars", { h: 2, tool: "pickaxe", kind: "fence" });
 rule("glass|.*_glass|glass_pane|.*_glass_pane", { h: 0.3, drop: null });
 rule(".*_wool|wool", { h: 0.8, tool: "shears" });
 rule("stone_bricks|mossy_stone_bricks|cracked_stone_bricks|chiseled_stone_bricks|bricks|nether_brick|red_nether_brick|nether_bricks|purpur_block|purpur_pillar|end_bricks|prismarine|polished_.*", { h: 1.5, tool: "pickaxe", tier: 1 });
 rule("mob_spawner|spawner", { h: 5, tool: "pickaxe", drop: null });
 rule("dragon_egg", { h: 3, drop: null });
 
+/** A block from a newer Minecraft that no rule names: plants and such are walked through, the rest is solid. */
+const PLANTISH = /(grass|fern|flower|blossom|bush|petals|sprout|roots$|lichen|sapling|propagule|seagrass|kelp|_coral$|coral_fan|pickle|moss_carpet|torch|_crop$|_stem$|_bud$|vine)/;
+
 const INFO_CACHE = new Map();
 /** What a Player knows about a block. @param {string} id @returns {BlockInfo} */
 export function blockInfo(id) {
   let info = INFO_CACHE.get(id);
   if (info) return info;
-  info = { h: 1.5, tool: "pickaxe", kind: "solid" };
+  info = PLANTISH.test(id) ? { h: 0, kind: "pass", natural: true } : { h: 1.5, tool: "pickaxe", kind: "solid" };
   for (const [re, i] of RULES) {
     if (re.test(id)) {
       info = { kind: "solid", ...i };

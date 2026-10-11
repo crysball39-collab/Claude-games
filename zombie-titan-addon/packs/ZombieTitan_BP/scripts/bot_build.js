@@ -89,8 +89,11 @@ export function* buildHome(bot) {
   if (!(yield* G.obtain(bot, mat, HUT_BLOCKS))) return false;
   for (const [id, n] of /** @type {Array<[string, number]>} */ ([[m("wooden_door"), 1], [m("bed"), 1], [m("chest"), 1], [m("crafting_table"), 1],
     [m("furnace"), 1], [m("torch"), 3]])) {
-    if (Inv.count(bot, id) < n && !(yield* G.obtain(bot, id, n))) {
-      if (id === m("torch")) continue;
+    // a bed if it can get one soon (no sheep about: the house first, the bed when it finds some)
+    const bed = id === m("bed");
+    if (bed && Inv.has(bot, (x) => /bed$/.test(x))) continue;
+    if (Inv.count(bot, id) < n && !(yield* G.obtain(bot, id, n, bed ? { deadline: system.currentTick + 3600 } : undefined))) {
+      if (id === m("torch") || bed) continue;
       return false;
     }
   }
@@ -167,6 +170,31 @@ export function* buildHome(bot) {
   if (B.idAt(dim, bed).includes("bed")) bot.spawn = { dim: dim.id, pos: bed };
   bot.events.push({ kind: "built_home", at: system.currentTick });
   return true;
+}
+
+/**
+ * A house with no bed in it yet: get one (wool from sheep), take it home and put it by the wall.
+ * @param {any} bot
+ */
+export function* bedAtHome(bot) {
+  const h = bot.home;
+  if (!h || !bot.world.build) return false;
+  if (!Inv.has(bot, (id) => /bed$/.test(id)) && !(yield* G.obtain(bot, m("bed"), 1))) return false;
+  G.doing(bot, "putting a bed in its house");
+  if (bot.entity.dimension.id !== h.dim) return false;
+  if (!(yield* S.goTo(bot, { ...h.pos, r: 1.5 }, { tries: 3 }))) return false;
+  const dim = bot.entity.dimension;
+  // where it planned the bed, or any free spot by the wall inside
+  const spots = [h.bed, ...[[1, 1], [1, 3], [3, 1], [2, 2]].map(([x, z]) => add(h.corner, x, 0, z))];
+  for (const p of spots) {
+    if (!D.isPassable(B.idAt(dim, p)) || !D.isPassable(B.idAt(dim, { ...p, z: p.z + 1 }))) continue;
+    if (yield* S.placeBlock(bot, p, (id) => id === m("bed") || /_bed$/.test(id), { yaw: 0 })) {
+      h.bed = p;
+      if (B.idAt(dim, p).includes("bed")) bot.spawn = { dim: dim.id, pos: p };
+      return true;
+    }
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------- the Nether portal

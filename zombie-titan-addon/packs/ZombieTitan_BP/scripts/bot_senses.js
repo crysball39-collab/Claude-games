@@ -113,6 +113,11 @@ export function senseTick(bot, now) {
     const angle = Math.acos(Math.max(-1, Math.min(1, dir.x * to.x + dir.y * to.y + dir.z * to.z))) * 180 / Math.PI;
     let seen = false;
     if (d <= 2.2) seen = true;                                   // close enough to feel
+    else if (t.typeId === "minecraft:creeper" && B.dist(t.location, e.location) <= 4.5) {
+      // close enough to light its fuse: it hears the hiss, wherever it's looking
+      seen = true;
+      hear(bot, t.location, "hiss", t, now);
+    }
     else if (angle <= 60 && d <= range) seen = (checked++, clearSight(dim, eyeP, head));
     else if (angle <= 110 && d <= Math.min(24, range) && isMoving(t)) {
       seen = (checked++, clearSight(dim, eyeP, head));
@@ -151,13 +156,13 @@ function remember(bot, t, d, now) {
 export function hear(bot, pos, kind, source, now) {
   bot.heard.push({ pos: { ...pos }, kind, source, at: now });
   if (bot.heard.length > 20) bot.heard.shift();
-  const loud = kind === "explosion" || kind === "hurt";
+  const loud = kind === "explosion" || kind === "hurt" || kind === "hiss";
   if (bot.busyLook && !loud) return;
   if (Math.random() < (loud ? 1 : 0.35)) B.lookAt(bot, { x: pos.x, y: pos.y + 1.4, z: pos.z }, loud ? 30 : 20, loud ? 2 : 1);
 }
 
 /** How far each kind of sound carries. */
-export const HEARING = { footsteps: 12, hurt: 16, break: 16, place: 12, explosion: 64, door: 12, chest: 12, chat: 32 };
+export const HEARING = { footsteps: 12, hurt: 16, break: 16, place: 12, explosion: 64, door: 12, chest: 12, chat: 32, hiss: 16 };
 
 /** A sound somewhere: every Player in earshot hears it. @param {Iterable<any>} bots @param {any} dim @param {Vector3} pos @param {string} kind @param {Entity} [source] */
 export function soundAt(bots, dim, pos, kind, source) {

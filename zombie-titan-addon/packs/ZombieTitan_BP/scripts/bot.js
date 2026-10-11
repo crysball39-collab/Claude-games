@@ -344,7 +344,13 @@ export function onDeath(dead, source) {
   bot.level = 0;
   bot.xp = 0;
   bot.stats.deaths++;
-  bot.deathSpot = { dim: dim.id, pos: loc, at: world.getAbsoluteTime(), cause: source?.cause, by };
+  let byId;
+  try {
+    byId = killer?.id;
+  } catch {
+    byId = undefined;
+  }
+  bot.deathSpot = { dim: dim.id, pos: loc, at: world.getAbsoluteTime(), cause: source?.cause, by, byId };
   bot.recovered = false;
   Brain.stopTask(bot);
   bot.dead = true;

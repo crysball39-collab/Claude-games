@@ -47,6 +47,14 @@ export function alive(t) {
     return false;
   }
 }
+/** A mob's health (20 if it can't be told). @param {Entity} t */
+export function hpOf(t) {
+  try {
+    return t.getComponent("minecraft:health")?.currentValue ?? 20;
+  } catch {
+    return 20;
+  }
+}
 /** The point of a mob's body nearest to a spot. @param {Entity} t @param {Vector3} from */
 export function nearestPoint(t, from) {
   const [w, h] = SIZE[t.typeId] ?? [0.3, 1.8];
@@ -232,6 +240,15 @@ export function incoming(bot) {
   return undefined;
 }
 
+/** Is anything that shoots or throws (a blaze, a skeleton) about and after it? @param {any} bot @param {number} r */
+export function shootersNear(bot, r) {
+  try {
+    return bot.entity.dimension.getEntities({ location: bot.entity.location, maxDistance: r }).some((e) => RANGED.has(e.typeId) && alive(e));
+  } catch {
+    return false;
+  }
+}
+
 /** Has it a bow and arrows? @param {any} bot */
 export function canShoot(bot) {
   return Inv.has(bot, "minecraft:bow") && Inv.has(bot, "minecraft:arrow");
@@ -311,18 +328,76 @@ function hasShield(bot) {
 export function* fight(bot, t, o = {}) {
   const limit = o.ticks ?? 900;
   const fleeHp = o.fleeHp ?? (bot.persona.brave > 0.7 ? 4 : 7);
-  const id = t.id;
+  let id = t.id;
   armUp(bot);
   bot.busyLook = true;
-  let near = 0;
-  let backOff = 0;
+  // a creeper's fuse, as near as it can tell (when it came close enough to light it), and
+  // whether it got its blow in this time
+  let lit = 0;
+  let struck = false;
+  // times it came in on a creeper and couldn't land a blow (one down a hole it can't reach)
+  let misses = 0;
+  /** where it's backing off to (kept a few ticks, so it doesn't dither) */
+  let retreat;
+  let retreatUntil = 0;
+  let lastPos;
+  let stillFor = 0;
   let stuck = 0;
   let lastD = Infinity;
+  // a fight going nowhere: shot again and again, no blow landed
+  const hp0 = B.health(bot);
+  let tHp0;
+  try {
+    tHp0 = t.getComponent("minecraft:health")?.currentValue;
+  } catch {
+    tHp0 = undefined;
+  }
+  // arrows that did it no harm: after twenty (stuck in a wall, out of true range) it gives up,
+  // unless things are shooting at it (a blaze is hard to hit, but it has to be fought)
+  let shots = 0;
+  let hpAtShot = tHp0;
+  const futile = () => {
+    let hp;
+    try {
+      hp = t.getComponent("minecraft:health")?.currentValue;
+    } catch {
+      hp = undefined;
+    }
+    if (hp === undefined || hpAtShot === undefined || hp < hpAtShot) {
+      hpAtShot = hp;
+      shots = 0;
+      return false;
+    }
+    const underFire = bot.lastAttacker && RANGED.has(bot.lastAttacker.typeId) && system.currentTick - (bot.lastAttackerAt ?? -1e9) < 200;
+    return shots >= 20 && !underFire;
+  };
+  const started = system.currentTick;
   try {
     for (let i = 0; i < limit; i++) {
       const now = system.currentTick;
       if (!alive(t)) return bot.lastKill === id ? "killed" : t.isValid ? "killed" : "gone";
       if (B.health(bot) <= fleeHp && !o.fleeHp) return "flee";
+      if (RANGED.has(t.typeId) && now - started > 120 && hp0 - B.health(bot) >= 7) {
+        let tHp;
+        try {
+          tHp = t.getComponent("minecraft:health")?.currentValue;
+        } catch {
+          tHp = undefined;
+        }
+        if (tHp !== undefined && tHp0 !== undefined && tHp >= tHp0) return "lost";
+      }
+      // a creeper creeping up on it while it fights something else: that first
+      if (t.typeId !== "minecraft:creeper") {
+        const boom = creeperNear(bot, 4.5);
+        if (boom) {
+          t = boom;
+          id = t.id;
+          lit = 0;
+          struck = false;
+          hpAtShot = undefined;
+          continue;
+        }
+      }
       bot.lastTargetPos = { ...t.location };
       const l = bot.entity.location;
       const c = centre(t);
@@ -330,20 +405,52 @@ export function* fight(bot, t, o = {}) {
       if (d > (o.giveUp ?? 24) || t.dimension.id !== bot.entity.dimension.id) return "lost";
       B.lookAt(bot, c, 6, 5);
       const creeper = t.typeId === "minecraft:creeper";
-      near = d < 3.2 ? near + 1 : Math.max(0, near - 2);
-      // a creeper that's been close a while is about to go: get away, shield up if it can't
-      if (creeper && (near > 14 || backOff > 0)) {
-        if (backOff === 0) backOff = 26;
-        backOff--;
-        const away = { x: l.x + (l.x - c.x) * 3, y: l.y, z: l.z + (l.z - c.z) * 3 };
-        B.moveTo(bot, away, { speed: "sprint", noFall: true });
-        if (d < 2.5 && hasShield(bot)) B.setUse(bot, 3);
-        if (backOff === 0) {
-          near = 0;
-          B.setUse(bot, 0);
+      // a creeper lights its fuse when it gets within about three blocks, and it goes off a
+      // second and a half later unless what it's after gets more than six or seven away. So:
+      // one blow as it comes in (it knocks it back), then away out of its range, and again
+      if (creeper) {
+        const fd = B.dist(l, t.location);
+        if (fd < 3.3 && !lit) {
+          lit = now;
+          if (!inReach(bot, t) && ++misses >= 3) return "lost";
+        } else if (fd > 7.2) lit = 0;
+        // in water it can't get away fast enough: out onto dry land first
+        if (lit || (bot.inWater && fd < 7.5)) {
+          if (!struck && lit && now - lit < 6 && (bot.onGround || bot.inWater)) {
+            struck = hit(bot, t, now);
+            if (struck) misses = 0;
+          }
+          // which way (the same way a few ticks, unless it's got nowhere)
+          const moved = lastPos ? B.flat(lastPos, l) : 1;
+          if (!retreat || now >= retreatUntil || (moved < 0.03 && now - retreatUntil > -6)) {
+            // (away from whatever else is at it too)
+            retreat = awayFrom(bot, [t.location, ...closeBy(bot, t)], 5);
+            retreatUntil = now + 10;
+          }
+          // one more blow finishes it, or it's cornered (nowhere to go, or not getting anywhere):
+          // hit it, and again (each blow knocks it back)
+          stillFor = moved < 0.03 ? stillFor + 1 : 0;
+          lastPos = { ...l };
+          let left = 20;
+          try {
+            left = t.getComponent("minecraft:health")?.currentValue ?? 20;
+          } catch {
+            left = 20;
+          }
+          const finish = left <= D.toolInfo(Inv.held(bot)?.typeId).damage;
+          if ((finish || !retreat || stillFor > 8) && inReach(bot, t)) {
+            hit(bot, t, now);
+            if (finish || !retreat) B.stop(bot);
+          } else if (retreat) B.moveTo(bot, retreat, { speed: "sprint" });
+          // it can't get clear in time: its shield between them
+          if (fd < 4.5 && now - lit > 16 && hasShield(bot)) B.setUse(bot, 3);
+          else if (bot.use === 3) B.setUse(bot, 0);
+          yield;
+          continue;
         }
-        yield;
-        continue;
+        struck = false;
+        retreat = undefined;
+        if (bot.use === 3) B.setUse(bot, 0);
       }
       // out of a sword's reach: a bow if it's up in the air (or across a gap, or it shoots back),
       // else close in
@@ -360,7 +467,9 @@ export function* fight(bot, t, o = {}) {
           yield;
           continue;
         }
+        if (futile()) return "lost";
         const shot = yield* shoot(bot, t, { draw: 16, wary: shield });
+        if (shot) shots++;
         armUp(bot);
         if (!shot) {
           if (shield) B.setUse(bot, 3);
@@ -368,8 +477,10 @@ export function* fight(bot, t, o = {}) {
         }
         continue;
       }
-      if ((FLYING.has(t.typeId) || above || o.bow) && canShoot(bot) && d > 4) {
+      if ((FLYING.has(t.typeId) || above || o.bow || (creeper && d > 5)) && canShoot(bot) && d > 4) {
+        if (futile()) return "lost";
         yield* shoot(bot, t);
+        shots++;
         armUp(bot);
         // between shots, its shield up against what the thing throws back
         if (RANGED.has(t.typeId) && hasShield(bot)) B.setUse(bot, 3);
@@ -389,8 +500,12 @@ export function* fight(bot, t, o = {}) {
         if (d > 7 || stuck > 20) {
           // a proper way round whatever's between
           bot.slow = false;
-          const r = yield* S.plan(bot, { ...B.blockPos(t.location), r: 1.5 }, { maxNodes: 700 });
-          if (r.path.length) yield* S.follow(bot, r.path.slice(0, 4), { speed: "sprint" });
+          // (on foot: no pillaring up to a thing in the air, no bridging; under it will do)
+          const p = B.blockPos(t.location);
+          const air = FLYING.has(t.typeId) || t.typeId === "minecraft:blaze" || c.y - l.y > 2.5;
+          const r = yield* S.plan(bot, air ? { x: p.x, z: p.z, r: 2.5 } : { ...p, r: 1.5 }, { maxNodes: 700, noPlace: true });
+          const watch = t.typeId === "minecraft:creeper" ? undefined : () => !!creeperNear(bot, 4.5);
+          if (r.path.length) yield* S.follow(bot, r.path.slice(0, 4), { speed: "sprint", interrupt: watch });
           else if (++stuck > 60) return "lost";
           if (r.path.length) stuck = 0;
         } else {
@@ -405,8 +520,13 @@ export function* fight(bot, t, o = {}) {
       }
       bot.slow = false;
       if (bot.use === 3) B.setUse(bot, 0);
-      // in reach: a jump for a critical hit now and then, or a step to the side
-      if (bot.onGround && Math.random() < 0.3 && !creeper && now - (bot.lastHit ?? 0) > 4) B.jump(bot);
+      // in reach. Others closing in on it too (a second zombie at its side)?
+      const crowd = closeBy(bot, t);
+      const fd = B.flat(l, t.location);
+      // a jump for a critical hit now and then, timed to come down as the next blow is due (not
+      // with others about: it keeps its feet, to step away)
+      const due = now - (bot.lastHit ?? -99) >= (bot.hitGap ?? 10) - 7;
+      if (bot.onGround && due && !crowd.length && fd > 2 && Math.random() < 0.08) B.jump(bot);
       const falling = !bot.onGround && !bot.inWater;
       let vy = 0;
       try {
@@ -414,15 +534,18 @@ export function* fight(bot, t, o = {}) {
       } catch {
         vy = 0;
       }
-      if (!falling || vy < -0.05) {
-        const landed = hit(bot, t, now);
-        if (landed && creeper) backOff = 18;
-      }
-      if (Math.random() < 0.15) {
+      if (!falling || vy < -0.05) hit(bot, t, now);
+      // a step outside its reach, as good players keep (its own knockback holds it there), and
+      // away from any other closing in; else a step to the side now and then
+      const narrow = (SIZE[t.typeId]?.[0] ?? 0.3) <= 0.35;
+      const pressing = [...(narrow && fd < 2.4 ? [t.location] : []), ...crowd.filter((p) => B.flat(l, p) < 2.6)];
+      if (pressing.length || d < 1.2) {
+        const to = awayFrom(bot, pressing.length ? pressing : [t.location], 2);
+        if (to) B.moveTo(bot, to, { speed: "walk" });
+        else B.stop(bot);
+      } else if (Math.random() < 0.1) {
         const side = Math.random() < 0.5 ? 1 : -1;
         B.moveTo(bot, { x: l.x + (c.z - l.z) * 0.4 * side, y: l.y, z: l.z - (c.x - l.x) * 0.4 * side }, { speed: "walk", noFall: true });
-      } else if (d < 1.2) {
-        B.moveTo(bot, { x: l.x + (l.x - c.x), y: l.y, z: l.z + (l.z - c.z) }, { noFall: true });
       } else B.stop(bot);
       yield;
     }
@@ -433,6 +556,106 @@ export function* fight(bot, t, o = {}) {
     if (bot.use === 3 || bot.use === 2) B.setUse(bot, 0);
     B.stop(bot);
   }
+}
+
+/** The nearest creeper within r blocks. @param {any} bot @param {number} r @returns {Entity | undefined} */
+function creeperNear(bot, r) {
+  try {
+    const near = bot.entity.dimension.getEntities({ type: "minecraft:creeper", location: bot.entity.location, maxDistance: r }).filter(alive);
+    near.sort((a, b) => B.dist(a.location, bot.entity.location) - B.dist(b.location, bot.entity.location));
+    return near[0];
+  } catch {
+    return undefined;
+  }
+}
+
+/** Where the other hostile mobs closing in on it are (not the one it's fighting). @param {any} bot @param {Entity} t */
+function closeBy(bot, t) {
+  /** @type {Vector3[]} */
+  const out = [];
+  try {
+    for (const e of bot.entity.dimension.getEntities({ location: bot.entity.location, maxDistance: 4 })) {
+      if (e.id === t.id || !HOSTILE_MELEE.test(e.typeId) || !alive(e)) continue;
+      out.push(e.location);
+    }
+  } catch {
+    /* ignore */
+  }
+  return out;
+}
+const HOSTILE_MELEE = /^minecraft:(zombie|husk|drowned|zombie_villager|zombie_villager_v2|spider|cave_spider|creeper|vindicator|piglin_brute|zoglin|hoglin|wither_skeleton|silverfish|endermite|slime|magma_cube)$|^zt:.*_minion$/;
+
+/**
+ * A spot a few blocks away from some threats it can get to on foot: straight away from them if
+ * the ground allows (no wall, no drop of more than two blocks), else off to one side.
+ * @param {any} bot @param {Vector3[]} from @param {number} [far]
+ */
+function awayFrom(bot, from, far = 4) {
+  const l = bot.entity.location;
+  const dim = bot.entity.dimension;
+  let ax = 0;
+  let az = 0;
+  for (const p of from) {
+    const k = 1 / Math.max(0.5, B.flat(l, p));
+    ax += (l.x - p.x) * k;
+    az += (l.z - p.z) * k;
+  }
+  const n = Math.hypot(ax, az);
+  if (n < 1e-6) {
+    // right on top of it: back the way it faces
+    const f = B.forward(bot.yaw);
+    ax = -f.x;
+    az = -f.z;
+  } else {
+    ax /= n;
+    az /= n;
+  }
+  // each way it could go: straight away best, then off to the sides; dry land over water
+  let best;
+  let bestScore = Infinity;
+  for (const turn of [0, 0.6, -0.6, 1.2, -1.2, 1.7, -1.7]) {
+    const cs = Math.cos(turn);
+    const sn = Math.sin(turn);
+    const dx = ax * cs - az * sn;
+    const dz = ax * sn + az * cs;
+    let y = Math.floor(l.y);
+    let px = Math.floor(l.x);
+    let pz = Math.floor(l.z);
+    let ok = true;
+    let wet = 0;
+    for (let k = 1; k <= Math.ceil(far) && ok; k++) {
+      const x = Math.floor(l.x + dx * k);
+      const z = Math.floor(l.z + dz * k);
+      if (x === px && z === pz) continue;
+      const at = (yy) => B.idAt(dim, { x, y: yy, z });
+      const open = (yy) => D.isPassable(at(yy)) || /water/.test(at(yy));
+      ok = false;
+      if (open(y) && open(y + 1)) {
+        // in at this height, then down to the ground (two blocks at most) or into water
+        let yy = y;
+        while (yy > y - 3 && !/water/.test(at(yy)) && open(yy - 1)) yy--;
+        if (yy >= y - 2 && (D.isFloor(at(yy - 1)) || /water/.test(at(yy)))) {
+          y = yy;
+          ok = true;
+        }
+      } else if (D.isFloor(at(y)) && open(y + 1) && open(y + 2) && D.isPassable(B.idAt(dim, { x: px, y: y + 2, z: pz }))) {
+        // a step up (with room over its head to jump)
+        y += 1;
+        ok = true;
+      }
+      if (ok && /water/.test(at(y))) wet++;
+      ok = ok && !/lava|fire|magma|cactus|sweet_berry/.test(at(y) + at(y - 1));
+      px = x;
+      pz = z;
+    }
+    if (!ok) continue;
+    const score = Math.abs(turn) + wet * 0.8;
+    if (score < bestScore) {
+      bestScore = score;
+      best = { x: l.x + dx * far, y, z: l.z + dz * far };
+    }
+  }
+  return best;
 }
 
 /**

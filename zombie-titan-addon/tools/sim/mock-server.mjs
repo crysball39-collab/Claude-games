@@ -465,7 +465,7 @@ function liquidsMeet(dim, loc, id) {
 }
 
 /** Blocks a body passes through (everything else is a full cube to the physics here). */
-const PASSABLE = /^minecraft:(air|cave_air|void_air|light_block.*|water|flowing_water|lava|flowing_lava|short_grass|tall_grass|grass|fern|large_fern|deadbush|dead_bush|seagrass|kelp|vine|ladder|torch|wall_torch|soul_torch|redstone_torch|lantern|fire|soul_fire|portal|end_portal|end_gateway|snow_layer|.*_carpet|carpet|rail|.*_rail|redstone_wire|.*pressure_plate|.*_button|lever|.*_sign|.*standing_sign|.*wall_sign|.*_banner|standing_banner|wall_banner|.*_sapling|sapling|dandelion|poppy|.*_tulip|blue_orchid|allium|azure_bluet|oxeye_daisy|cornflower|lily_of_the_valley|sunflower|lilac|rose_bush|peony|.*_mushroom|wheat|carrots|potatoes|beetroot|sweet_berry_bush|web|cobweb|tripwire|string|nether_wart|crimson_roots|warped_roots|nether_sprouts|twisting_vines|weeping_vines|glow_lichen|hanging_roots|cave_vines.*|pink_petals|leaf_litter|wildflowers)$/;
+const PASSABLE = /^minecraft:(air|cave_air|void_air|light_block.*|water|flowing_water|lava|flowing_lava|short_grass|tall_grass|grass|fern|large_fern|deadbush|dead_bush|seagrass|kelp|vine|ladder|torch|wall_torch|soul_torch|redstone_torch|lantern|fire|soul_fire|portal|end_portal|end_gateway|snow_layer|.*_carpet|carpet|rail|.*_rail|redstone_wire|.*pressure_plate|.*_button|lever|.*_sign|.*standing_sign|.*wall_sign|.*_banner|standing_banner|wall_banner|.*_sapling|sapling|dandelion|poppy|.*_tulip|blue_orchid|allium|azure_bluet|oxeye_daisy|cornflower|lily_of_the_valley|sunflower|lilac|rose_bush|peony|.*_mushroom|wheat|carrots|potatoes|beetroot|sweet_berry_bush|web|cobweb|tripwire|string|nether_wart|crimson_roots|warped_roots|nether_sprouts|twisting_vines|weeping_vines|glow_lichen|hanging_roots|cave_vines.*|pink_petals|leaf_litter|wildflowers|bush|firefly_bush|short_dry_grass|tall_dry_grass|cactus_flower|closed_eyeblossom|open_eyeblossom|torchflower|pitcher_plant|golden_dandelion|reeds)$/;
 const OPENABLE = /door|trapdoor|fence_gate/;
 function collides(id, perm, dim, x, y, z) {
   if (PASSABLE.test(id)) return false;
@@ -985,6 +985,9 @@ export class Entity {
     }
   }
   getVelocity() {
+    // (sim.groundVyHidden: as some engines do, a body standing on the ground reads no fall speed,
+    // though gravity is still pulling it down; a jump worked out from it comes out short)
+    if (sim.groundVyHidden && this.physOnGround) return { x: this.velocity.x, y: 0, z: this.velocity.z };
     return { ...this.velocity };
   }
   setOnFire(seconds) {
@@ -1423,10 +1426,39 @@ function playerTargets(dim, e, range) {
   }
   return best;
 }
+/** Undead that burn in sunlight (a husk doesn't). */
+const SUN_BURNS = new Set(["minecraft:zombie", "minecraft:skeleton", "minecraft:stray", "minecraft:drowned", "minecraft:zombie_villager",
+  "minecraft:zombie_villager_v2", "minecraft:phantom"]);
+/** Nothing that blocks the sky above a spot (leaves shade as well as solid blocks do). */
+function underSky(dim, x, y, z) {
+  for (let yy = Math.floor(y) + 2; yy < Math.min(dim.heightRange.max, Math.floor(y) + 60); yy++) {
+    const id = blockAt(dim, x, yy, z);
+    if (id === "minecraft:air" || PASSABLE.test(id)) continue;
+    return false;
+  }
+  return true;
+}
+/** Can a mob at `from` see `to` (nothing solid between)? */
+function lineOfSight(dim, from, to) {
+  const d = Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z);
+  for (let k = 0.5; k < d - 0.5; k += 0.25) {
+    const x = from.x + ((to.x - from.x) * k) / d;
+    const y = from.y + ((to.y - from.y) * k) / d;
+    const z = from.z + ((to.z - from.z) * k) / d;
+    const id = blockAt(dim, Math.floor(x), Math.floor(y), Math.floor(z));
+    if (id !== "minecraft:air" && !PASSABLE.test(id)) return false;
+  }
+  return true;
+}
 function mobTick(dim, e) {
   const ai = MOB_AI[e.typeId];
   if (!ai || e.dead) return;
   e.cool = Math.max(0, (e.cool ?? 0) - 1);
+  // by day, out under the sky, the undead burn
+  if (SUN_BURNS.has(e.typeId) && dim.id === "minecraft:overworld" && tickCounter % 20 === 0 && !e.isInWater) {
+    const t = world.timeOfDay % 24000;
+    if (t < 12500 && underSky(dim, Math.floor(e.location.x), e.location.y, Math.floor(e.location.z))) e.onFire = Math.max(e.onFire ?? 0, 8);
+  }
   if (ai.kind === "dragon") return dragonTick(dim, e);
   if (ai.kind === "passive") {
     if (tickCounter % 60 === 0) e.wander = { x: (Math.random() - 0.5) * 0.08, z: (Math.random() - 0.5) * 0.08 };
@@ -1475,6 +1507,8 @@ function mobTick(dim, e) {
   }
   if (e.cool > 0) return;
   if (ai.kind === "ranged" && d <= ai.range) {
+    // it has to see what it shoots at
+    if (!lineOfSight(dim, { x: e.location.x, y: e.location.y + 1.5, z: e.location.z }, { x: target.location.x, y: target.location.y + 1.4, z: target.location.z })) return;
     e.cool = ai.cooldown;
     // a shot takes time to fly: the farther, the likelier it misses
     if (Math.random() > (d < 8 ? 0.8 : 0.55)) return;

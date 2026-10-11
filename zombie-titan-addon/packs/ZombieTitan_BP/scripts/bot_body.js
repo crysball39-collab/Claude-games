@@ -12,6 +12,13 @@ import * as Inv from "./bot_inv.js";
 
 // player speeds, blocks a tick
 export const SPEED = { walk: 0.2158, sprint: 0.2806, sneak: 0.0655, swim: 0.1, slow: 0.13 };
+/**
+ * The upward push of a jump. A player's jump rises about 1.25 blocks; how high a push really
+ * goes is up to the game's physics, so the Players measure their jumps and adjust this (shared
+ * by all of them) until a jump clears a block. It starts a little strong: a jump too high does
+ * no harm, one too low gets it nowhere.
+ */
+export const JUMP = { power: 0.5 };
 export const EYE = 1.62;
 const DEG = Math.PI / 180;
 
@@ -209,7 +216,32 @@ export function bodyTick(bot, now) {
   if (bot.pose === 1 && !inWater) speed = Math.min(speed, SPEED.sneak);
 
   // ---------------------------------------------------------------- velocity
-  const accel = onGround ? 1.0 : inWater ? 0.35 : 0.12;
+  // how high its last jump went: too low to clear a block, push harder next time
+  const jr = bot.jumpRec;
+  if (jr) {
+    jr.top = Math.max(jr.top, loc.y);
+    const over = (onGround && now - jr.at > 3) || inWater || climbing || now - jr.at > 30;
+    if (over) {
+      if (jr.top + 1.8 < jr.ceil - 0.05 && !inWater && !climbing && now - jr.at <= 30) {
+        const rise = jr.top - jr.y0;
+        if (rise < 1.15) JUMP.power = Math.min(0.7, JUMP.power + Math.min(0.08, (1.25 - rise) * 0.3));
+        else if (rise > 1.5) JUMP.power = Math.max(0.42, JUMP.power - 0.02);
+      }
+      // a jump at a step that didn't get it up: after a few, stop trying that one
+      if (jr.step) {
+        if (loc.y - jr.y0 < 0.5) bot.missedSteps = (bot.missedSteps ?? 0) + 1;
+        else bot.missedSteps = 0;
+        if (bot.missedSteps >= 4) {
+          bot.missedSteps = 0;
+          bot.noStepUntil = now + 60;
+        }
+      }
+      bot.jumpRec = undefined;
+    }
+  }
+  // in the air on its way up a step, it keeps going for the step (as a player holding forward)
+  const stepping = !!(bot.jumpRec?.step && now - bot.jumpRec.at < 14);
+  const accel = onGround ? 1.0 : inWater ? 0.35 : stepping ? 0.5 : 0.12;
   let iy = 0;
   const jumpAsked = bot.jumpReq && now - bot.jumpReq < 3;
   if (inWater) {
@@ -217,13 +249,43 @@ export function bodyTick(bot, now) {
     if (wantUp || (bot.headInWater && !wantDown) || jumpAsked) iy = Math.max(0, Math.min(0.06, 0.12 - v.y));
     else if (wantDown) iy = -0.02;
     if (bot.headInWater && !wantUp && !wantDown && v.y < 0) iy = Math.max(iy, 0.04 - v.y * 0.5);
+    // at the bank, swimming toward it: up and out, as a swimmer pulls itself out (and if the
+    // water won't let it, a moment later it climbs out)
+    const bank = m && !wantDown && bankAhead(dim, loc, want);
+    if (bank) {
+      iy = Math.max(iy, 0.3 - v.y);
+      bot.bankTicks = (bot.bankTicks ?? 0) + 1;
+      if (bot.bankTicks > 8) {
+        bot.bankTicks = 0;
+        try {
+          e.teleport({ x: bank.x + 0.5, y: bank.y, z: bank.z + 0.5 });
+          bot.hops = (bot.hops ?? 0) + 1;
+        } catch {
+          /* ignore */
+        }
+      }
+    } else bot.bankTicks = 0;
   } else if (climbing && (wantUp || jumpAsked)) {
     iy = 0.12 - v.y;
   } else if (climbing && !wantDown && v.y < -0.1) {
     iy = -0.1 - v.y;
   } else if (jumpAsked && onGround) {
-    iy = 0.42 - v.y;
+    iy = JUMP.power - v.y;
     bot.jumpReq = 0;
+    // the first block over its head (a jump that stops short of it tells how high a jump goes;
+    // one that hits it doesn't)
+    let ceil = Infinity;
+    for (const [ox, oz] of [[-0.29, -0.29], [0.29, -0.29], [-0.29, 0.29], [0.29, 0.29]]) {
+      for (let k = 2; k <= 3; k++) {
+        const yy = Math.floor(loc.y) + k;
+        if (!D.isPassable(idAt(dim, { x: loc.x + ox, y: yy, z: loc.z + oz }))) {
+          ceil = Math.min(ceil, yy);
+          break;
+        }
+      }
+    }
+    bot.jumpRec = { y0: loc.y, top: loc.y, at: now, step: !!bot.stepJump, ceil };
+    bot.stepJump = false;
     bot.exhaust += m?.speed === "sprint" ? 0.2 : 0.05;
     // a sprint jump carries it a little further
     if (m?.speed === "sprint" && Math.hypot(want.x, want.z) > 0.05) {
@@ -240,13 +302,14 @@ export function bodyTick(bot, now) {
       /* ignore */
     }
   }
-  // auto-jump up a one-block step, as players do
-  if (onGround && !inWater && Math.hypot(want.x, want.z) > 0.03 && m) {
+  // auto-jump up a one-block step, as players do (with room to stand on it)
+  if (onGround && !inWater && Math.hypot(want.x, want.z) > 0.03 && m && !bot.jumpRec && now >= (bot.noStepUntil ?? 0)) {
     const f = Math.hypot(want.x, want.z);
     const ahead = { x: loc.x + (want.x / f) * 0.6, y: loc.y + 0.5, z: loc.z + (want.z / f) * 0.6 };
-    if (D.isFloor(idAt(dim, ahead)) && !D.isFloor(idAt(dim, { ...ahead, y: loc.y + 1.5 })) &&
-        !D.isFloor(idAt(dim, { x: loc.x, y: loc.y + 2.2, z: loc.z })) && m.to.y > loc.y - 0.5) {
+    if (D.isFloor(idAt(dim, ahead)) && D.isPassable(idAt(dim, { ...ahead, y: loc.y + 1.5 })) && D.isPassable(idAt(dim, { ...ahead, y: loc.y + 2.5 })) &&
+        D.isPassable(idAt(dim, { x: loc.x, y: loc.y + 2.2, z: loc.z })) && m.to.y > loc.y - 0.5) {
       jump(bot);
+      bot.stepJump = true;
     }
   }
 
@@ -279,6 +342,26 @@ export function bodyTick(bot, now) {
 
   // ---------------------------------------------------------------- picking things up
   if (now % 4 === bot.phase % 4) pickUp(bot, now);
+}
+
+/**
+ * The dry ground at a bank in front of it (where it means to go): a block at the water's top or
+ * one above it, with room to stand on it. Returns where it would stand, or undefined.
+ * @param {Dimension} dim @param {Vector3} loc @param {{x: number, z: number}} want
+ */
+function bankAhead(dim, loc, want) {
+  const f = Math.hypot(want.x, want.z);
+  if (f < 0.01) return undefined;
+  const x = loc.x + (want.x / f) * 0.6;
+  const z = loc.z + (want.z / f) * 0.6;
+  if (Math.floor(x) === Math.floor(loc.x) && Math.floor(z) === Math.floor(loc.z)) return undefined;
+  for (const by of [Math.floor(loc.y), Math.floor(loc.y) + 1]) {
+    if (D.isFloor(idAt(dim, { x, y: by, z })) && D.isPassable(idAt(dim, { x, y: by + 1, z })) && D.isPassable(idAt(dim, { x, y: by + 2, z })) &&
+        !/water/.test(idAt(dim, { x, y: by + 1, z }))) {
+      return { x: Math.floor(x), y: by + 1, z: Math.floor(z) };
+    }
+  }
+  return undefined;
 }
 
 /** @param {Dimension} dim @param {Vector3} loc */

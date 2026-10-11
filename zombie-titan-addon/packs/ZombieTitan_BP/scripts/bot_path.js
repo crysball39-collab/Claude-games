@@ -99,10 +99,11 @@ export function blockView(dim) {
  *   reach within r of (x, y, z); leave out y for "any height"; or a test (with x, z and r saying
  *   roughly where the places that pass it are, if they're far)
  * @param {{mine?: (id: string) => number, blocks?: number, maxNodes?: number, protect?: (x: number, y: number, z: number, id: string) => boolean,
- *   maxDrop?: number, digDown?: boolean, avoidWater?: boolean, weight?: number, portal?: boolean}} o
+ *   maxDrop?: number, digDown?: boolean, avoidWater?: boolean, weight?: number, portal?: boolean, blocked?: Set<string>}} o
  *   mine: ticks to break a block with its tools (Infinity: it can't); blocks: blocks it can place;
  *   weight: how much to trust the straight-line distance (above 1 is faster, a little less direct);
- *   portal: it may step into a portal (it means to go through)
+ *   portal: it may step into a portal (it means to go through); blocked: "x,y,z" of blocks it found it
+ *   couldn't walk through though it took them for open
  * @returns {Generator<undefined, {path: Step[], complete: boolean, expanded: number}>}
  */
 export function* search(dim, start, goal, o = {}) {
@@ -126,9 +127,12 @@ export function* search(dim, start, goal, o = {}) {
   };
   const kindOf = (b) => (b ? D.blockInfo(b.id).kind : "unloaded");
   // a body passes it
+  // blocks it walked into that it took for open: solid this time (and broken if they're in the way)
+  const stuck = (x, y, z) => !!o.blocked?.has(x + "," + y + "," + z);
   const free = (x, y, z) => {
     const m = modAt(x, y, z);
     if (m) return m === "air";
+    if (stuck(x, y, z)) return false;
     const b = info(x, y, z);
     if (!b) return false;
     const k = kindOf(b);
@@ -160,13 +164,15 @@ export function* search(dim, start, goal, o = {}) {
     const b = info(x, y, z);
     if (!b) return Infinity;
     const k = kindOf(b);
-    if (k === "air" || k === "pass" || k === "liquid" || k === "lava" || k === "portal") return Infinity;
+    if (k === "air" || (k === "pass" && !stuck(x, y, z)) || k === "liquid" || k === "lava" || k === "portal") return Infinity;
     if (o.protect?.(x, y, z, b.id)) return Infinity;
     // never let lava (or a lake) in
     if (lava(x, y + 1, z) || lava(x + 1, y, z) || lava(x - 1, y, z) || lava(x, y, z + 1) || lava(x, y, z - 1)) return Infinity;
     const t = mineTicks(b.id);
     if (!Number.isFinite(t) || t > 600) return Infinity;
-    return t + (water(x, y + 1, z) ? 60 : 0) + (/sand|gravel/.test(info(x, y + 1, z)?.id ?? "") ? 20 : 0);
+    // (water next to it floods in: it'd be digging in water, at a crawl. Another way, if any)
+    const wet = water(x, y + 1, z) || water(x + 1, y, z) || water(x - 1, y, z) || water(x, y, z + 1) || water(x, y, z - 1);
+    return t + (wet ? 200 : 0) + (/sand|gravel/.test(info(x, y + 1, z)?.id ?? "") ? 20 : 0);
   };
   /** cells that must be clear: [cells], -> {cost, mine} or null */
   const clear = (cells) => {
@@ -276,10 +282,20 @@ export function* search(dim, start, goal, o = {}) {
           }
         }
       } else if (mineTicks && !inWater) {
+        const c = clear([[nx, y + 1, nz], [nx, y, nz]]);
         // tunnel through
-        if (floor(nx, y - 1, nz)) {
-          const c = clear([[nx, y + 1, nz], [nx, y, nz]]);
-          if (c) consider(cur, nx, y, nz, 1 + c.cost, { x: nx, y, z: nz, how: "dig", mine: c.mine });
+        if (c && floor(nx, y - 1, nz)) consider(cur, nx, y, nz, 1 + c.cost, { x: nx, y, z: nz, how: "dig", mine: c.mine });
+        else if (c) {
+          // or break what's in the way (leaves at head height, a bush) and drop down past it
+          let k2 = 1;
+          for (; k2 <= maxDrop; k2++) {
+            if (!room(nx, y - k2, nz)) break;
+            if (water(nx, y - k2, nz) || floor(nx, y - k2 - 1, nz)) break;
+          }
+          const landY = y - k2;
+          if (k2 <= maxDrop && room(nx, landY, nz) && (floor(nx, landY - 1, nz) || water(nx, landY, nz))) {
+            consider(cur, nx, landY, nz, 1 + k2 * 0.5 + c.cost, { x: nx, y: landY, z: nz, how: "down", mine: c.mine });
+          }
         }
       }
       // step up a block
