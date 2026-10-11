@@ -57,6 +57,8 @@ GENERATORS = (
     "gen_player_art.py",
     "gen_player_anims.py",
     "gen_player_data.py",  # after the others: it adds to item_texture.json and the render controllers
+    "gen_glowite_art.py",
+    "gen_glowite_data.py",  # last: it adds to the texture lists, blocks.json, sounds.json and the language files
 )
 SKIP = re.compile(r"(^|/)(\.|__pycache__|Thumbs\.db$)")
 STAMP = (2026, 1, 1, 0, 0, 0)

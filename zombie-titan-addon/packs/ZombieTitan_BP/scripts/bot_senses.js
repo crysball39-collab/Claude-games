@@ -16,7 +16,8 @@ export const HOSTILE = new Set(["minecraft:zombie", "minecraft:husk", "minecraft
   "minecraft:hoglin", "minecraft:zoglin", "minecraft:phantom", "minecraft:vindicator", "minecraft:pillager", "minecraft:evoker",
   "minecraft:vex", "minecraft:endermite", "minecraft:silverfish", "minecraft:guardian", "minecraft:shulker",
   "minecraft:zombie_villager", "minecraft:zombie_villager_v2", "minecraft:breeze", "minecraft:creaking", "minecraft:ender_dragon",
-  "zt:zombie_minion", "zt:skeleton_minion", "zt:creeper_minion", "zt:spider_minion", "zt:silverfish_minion"]);
+  "zt:zombie_minion", "zt:skeleton_minion", "zt:creeper_minion", "zt:spider_minion", "zt:silverfish_minion", "zt:shroom_zombie",
+  "zt:shroom_skeleton"]);
 /** Neutral until provoked (an enderman you look at, a piglin when you wear no gold). */
 export const NEUTRAL = new Set(["minecraft:enderman", "minecraft:zombie_pigman", "minecraft:zombified_piglin", "minecraft:piglin",
   "minecraft:wolf", "minecraft:iron_golem", "minecraft:bee", "minecraft:polar_bear", "minecraft:llama", "minecraft:panda"]);
@@ -25,7 +26,7 @@ export const DREAD = new Set(["minecraft:warden", "minecraft:wither", "minecraft
   "zt:zombie_titan", "zt:skeleton_titan", "zt:creeper_titan", "zt:spider_titan", "zt:omegafish", "zt:figure", "zt:seek", "zt:rush"]);
 export const FOOD_ANIMALS = new Set(["minecraft:cow", "minecraft:pig", "minecraft:sheep", "minecraft:chicken", "minecraft:mooshroom",
   "minecraft:rabbit"]);
-const IGNORE = /^minecraft:(item|xp_orb|arrow|snowball|egg|ender_pearl|thrown_trident|fireball|small_fireball|dragon_fireball|wither_skull|lightning_bolt|area_effect_cloud|fishing_hook|painting|armor_stand|leash_knot|falling_block|tnt|minecart|boat|chest_boat|splash_potion|lingering_potion|xp_bottle|eye_of_ender_signal|ender_crystal|shulker_bullet|llama_spit|evocation_fang|wind_charge_projectile|breeze_wind_charge_projectile)$/;
+const IGNORE = /^minecraft:(item|xp_orb|arrow|snowball|egg|ender_pearl|thrown_trident|fireball|small_fireball|dragon_fireball|wither_skull|lightning_bolt|area_effect_cloud|fishing_hook|painting|armor_stand|leash_knot|falling_block|tnt|minecart|boat|chest_boat|splash_potion|lingering_potion|xp_bottle|eye_of_ender_signal|ender_crystal|shulker_bullet|llama_spit|evocation_fang|wind_charge_projectile|breeze_wind_charge_projectile)$|^zt:(spore_bullet|shroomy_bullet)$/;
 const LIGHTS = ["minecraft:torch", "minecraft:lantern", "minecraft:glowstone", "minecraft:lava", "minecraft:fire", "minecraft:sea_lantern",
   "minecraft:shroomlight", "minecraft:lit_pumpkin", "minecraft:campfire", "minecraft:soul_torch", "minecraft:soul_lantern",
   "minecraft:redstone_lamp", "minecraft:lit_redstone_lamp", "minecraft:end_rod", "minecraft:jack_o_lantern"];

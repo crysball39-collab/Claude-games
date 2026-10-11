@@ -1,0 +1,40 @@
+{
+	"format_version": "1.26.20",
+	"minecraft:block": {
+		"description": {
+			"identifier": "zt:spore_grass",
+			"menu_category": {
+				"category": "nature"
+			}
+		},
+		"components": {
+			"minecraft:geometry": "minecraft:geometry.full_block",
+			"minecraft:material_instances": {
+				"*": {
+					"texture": "zt_spore_grass_side",
+					"render_method": "opaque"
+				},
+				"up": {
+					"texture": "zt_spore_grass_top",
+					"render_method": "opaque"
+				},
+				"down": {
+					"texture": "zt_maroon_dirt",
+					"render_method": "opaque"
+				}
+			},
+			"minecraft:destructible_by_mining": {
+				"seconds_to_destroy": 0.6
+			},
+			"minecraft:light_emission": 4,
+			"minecraft:tags": [
+				"minecraft:is_shovel_item_destructible",
+				"minecraft:dirt",
+				"minecraft:grass"
+			],
+			"minecraft:map_color": "#2a78d0",
+			"minecraft:loot": "loot_tables/blocks/spore_grass.json",
+			"zt:spore_grass": {}
+		}
+	}
+}

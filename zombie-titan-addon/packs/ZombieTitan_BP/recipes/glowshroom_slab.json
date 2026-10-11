@@ -1,0 +1,29 @@
+{
+	"format_version": "1.20.10",
+	"minecraft:recipe_shaped": {
+		"description": {
+			"identifier": "zt:glowshroom_slab"
+		},
+		"tags": [
+			"crafting_table"
+		],
+		"pattern": [
+			"###"
+		],
+		"key": {
+			"#": {
+				"item": "zt:glowshroom_planks"
+			}
+		},
+		"unlock": [
+			{
+				"item": "zt:glowshroom_planks"
+			}
+		],
+		"result": {
+			"item": "zt:glowshroom_slab",
+			"count": 6
+		},
+		"group": "wooden_slab"
+	}
+}

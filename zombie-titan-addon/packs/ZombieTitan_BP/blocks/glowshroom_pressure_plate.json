@@ -1,0 +1,96 @@
+{
+	"format_version": "1.26.20",
+	"minecraft:block": {
+		"description": {
+			"identifier": "zt:glowshroom_pressure_plate",
+			"menu_category": {
+				"category": "construction",
+				"group": "minecraft:itemGroup.name.pressurePlate"
+			},
+			"states": {
+				"zt:pressed": {
+					"values": {
+						"min": 0,
+						"max": 1
+					}
+				}
+			}
+		},
+		"components": {
+			"minecraft:geometry": {
+				"identifier": "geometry.zt.glowshroom_pressure_plate",
+				"bone_visibility": {
+					"up": "q.block_state('zt:pressed') == 0",
+					"down": "q.block_state('zt:pressed') == 1"
+				}
+			},
+			"minecraft:material_instances": {
+				"*": {
+					"texture": "zt_glowshroom_planks",
+					"render_method": "opaque"
+				}
+			},
+			"minecraft:destructible_by_mining": {
+				"seconds_to_destroy": 0.5
+			},
+			"minecraft:collision_box": {
+				"origin": [
+					-7,
+					0,
+					-7
+				],
+				"size": [
+					14,
+					1,
+					14
+				]
+			},
+			"minecraft:selection_box": {
+				"origin": [
+					-7,
+					0,
+					-7
+				],
+				"size": [
+					14,
+					1,
+					14
+				]
+			},
+			"minecraft:light_dampening": 0,
+			"minecraft:placement_filter": {
+				"conditions": [
+					{
+						"allowed_faces": [
+							"up"
+						]
+					}
+				]
+			},
+			"zt:pressure_plate": {},
+			"minecraft:tags": [
+				"minecraft:is_axe_item_destructible",
+				"minecraft:wood"
+			],
+			"minecraft:map_color": "#c8cad6"
+		},
+		"permutations": [
+			{
+				"condition": "q.block_state('zt:pressed') == 1",
+				"components": {
+					"minecraft:redstone_producer": {
+						"power": 15,
+						"strongly_powered_face": "down"
+					},
+					"minecraft:tick": {
+						"interval_range": [
+							10,
+							10
+						],
+						"looping": true
+					}
+				}
+			}
+		]
+	}
+}

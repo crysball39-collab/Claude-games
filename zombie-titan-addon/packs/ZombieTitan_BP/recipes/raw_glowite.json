@@ -1,0 +1,30 @@
+{
+	"format_version": "1.20.10",
+	"minecraft:recipe_shapeless": {
+		"description": {
+			"identifier": "zt:raw_glowite"
+		},
+		"tags": [
+			"crafting_table"
+		],
+		"ingredients": [
+			{
+				"item": "zt:glowing_particles",
+				"count": 4
+			},
+			{
+				"item": "minecraft:diamond",
+				"count": 4
+			}
+		],
+		"unlock": [
+			{
+				"item": "zt:glowing_particles"
+			}
+		],
+		"result": {
+			"item": "zt:raw_glowite",
+			"count": 1
+		}
+	}
+}

@@ -1,0 +1,33 @@
+{
+	"format_version": "1.13.0",
+	"minecraft:single_block_feature": {
+		"description": {
+			"identifier": "zt:glowshroom_heart_feature"
+		},
+		"places_block": "zt:glowshroom_heart",
+		"enforce_placement_rules": false,
+		"enforce_survivability_rules": false,
+		"may_replace": [
+			"minecraft:deepslate",
+			"minecraft:tuff",
+			"minecraft:stone",
+			"minecraft:air",
+			"minecraft:water",
+			"minecraft:lava",
+			"minecraft:gravel",
+			"minecraft:dirt",
+			"minecraft:andesite",
+			"minecraft:diorite",
+			"minecraft:granite",
+			"minecraft:deepslate_coal_ore",
+			"minecraft:deepslate_iron_ore",
+			"minecraft:deepslate_copper_ore",
+			"minecraft:deepslate_gold_ore",
+			"minecraft:deepslate_redstone_ore",
+			"minecraft:deepslate_lapis_ore",
+			"minecraft:deepslate_diamond_ore",
+			"minecraft:calcite",
+			"minecraft:smooth_basalt"
+		]
+	}
+}

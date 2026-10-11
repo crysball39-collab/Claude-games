@@ -178,6 +178,51 @@
 		},
 		"zt_player_api": {
 			"textures": "textures/items/zt_player_api"
+		},
+		"zt_glowing_particles": {
+			"textures": "textures/items/zt_glowing_particles"
+		},
+		"zt_raw_glowite": {
+			"textures": "textures/items/zt_raw_glowite"
+		},
+		"zt_glowite_ingot": {
+			"textures": "textures/items/zt_glowite_ingot"
+		},
+		"zt_spore_seeds": {
+			"textures": "textures/items/zt_spore_seeds"
+		},
+		"zt_shroom_berries": {
+			"textures": "textures/items/zt_shroom_berries"
+		},
+		"zt_glowshroom_door": {
+			"textures": "textures/items/zt_glowshroom_door"
+		},
+		"zt_glowite_sword": {
+			"textures": "textures/items/zt_glowite_sword"
+		},
+		"zt_glowite_pickaxe": {
+			"textures": "textures/items/zt_glowite_pickaxe"
+		},
+		"zt_glowite_axe": {
+			"textures": "textures/items/zt_glowite_axe"
+		},
+		"zt_glowite_shovel": {
+			"textures": "textures/items/zt_glowite_shovel"
+		},
+		"zt_glowite_hoe": {
+			"textures": "textures/items/zt_glowite_hoe"
+		},
+		"zt_glowite_helmet": {
+			"textures": "textures/items/zt_glowite_helmet"
+		},
+		"zt_glowite_chestplate": {
+			"textures": "textures/items/zt_glowite_chestplate"
+		},
+		"zt_glowite_leggings": {
+			"textures": "textures/items/zt_glowite_leggings"
+		},
+		"zt_glowite_boots": {
+			"textures": "textures/items/zt_glowite_boots"
 		}
 	}
 }

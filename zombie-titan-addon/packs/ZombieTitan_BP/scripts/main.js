@@ -1,4 +1,5 @@
-// Titans add-on: wires game events to the titan, minion and item logic, and the Players.
+// Titans add-on: wires game events to the titan, minion and item logic, the Players, and Glowite
+// and the Glowshroom Biome.
 import { system, world } from "@minecraft/server";
 import * as Bot from "./bot.js";
 import * as Chat from "./bot_chat.js";
@@ -15,10 +16,13 @@ import * as Lobby from "./doors_lobby.js";
 import * as Seek from "./doors_seek.js";
 import * as FallGuard from "./fallguard.js";
 import * as Fig from "./figure.js";
+import * as Glow from "./glowshroom.js";
+import * as Glowite from "./glowite.js";
 import * as Gum from "./gumgum.js";
 import { minionTick } from "./minions.js";
 import * as Obsidian from "./obsidian.js";
 import * as Serum from "./serum.js";
+import * as Shroom from "./shroom.js";
 import * as Titan from "./titan.js";
 
 /**
@@ -73,6 +77,7 @@ world.afterEvents.playerPlaceBlock.subscribe(
 );
 world.afterEvents.playerInteractWithBlock.subscribe(
   safe(({ block }) => {
+    Glowite.onInteract(block);
     const id = block.typeId;
     if (/door|gate|chest|barrel/.test(id)) Sense.soundAt(Bot.live(), block.dimension, block.location, /chest|barrel/.test(id) ? "chest" : "door");
   }),
@@ -96,7 +101,9 @@ world.afterEvents.entityHurt.subscribe(
 
 world.afterEvents.entityHurt.subscribe(
   safe(({ hurtEntity, damage, damageSource }) => {
-    if (damageSource.cause === "fall") FallGuard.onFall(/** @type {import("@minecraft/server").Player} */ (hurtEntity), damage);
+    const p = /** @type {import("@minecraft/server").Player} */ (hurtEntity);
+    if (damageSource.cause === "fall") FallGuard.onFall(p, damage);
+    Glowite.onPlayerHurt(p, damage, damageSource);
   }),
   { entityTypes: ["minecraft:player"] },
 );
@@ -106,6 +113,7 @@ world.afterEvents.entityDie.subscribe(
     const p = /** @type {import("@minecraft/server").Player} */ (deadEntity);
     Gum.onDeath(p);
     Doors.onPlayerDeath(p);
+    Shroom.forget(p.id);
   }),
   { entityTypes: ["minecraft:player"] },
 );
@@ -131,6 +139,7 @@ function projectileHit(ev, hit) {
     return;
   }
   if (type === Serum.SERUM) Serum.onSerumHit(ev.dimension, ev.location, hit, ev.source);
+  else if (type === Shroom.BULLET || type === Shroom.FRIENDLY) Shroom.onBulletHit(type, ev.dimension, ev.location, hit, ev.source);
   else Titan.onProjectileHit(ev.projectile, ev.dimension, ev.location);
   if (hit && Titan.isTitan(hit.typeId) && ev.source?.typeId === "minecraft:player") {
     Titan.onTitanShot(hit, /** @type {import("@minecraft/server").Player} */ (ev.source), ev.location, type);
@@ -180,16 +189,21 @@ function itemUsed({ source, itemStack }) {
 world.afterEvents.itemUse.subscribe(safe(itemUsed));
 world.afterEvents.itemStartUse.subscribe(safe(itemUsed));
 
-// eating the Gum Gum Fruit
+// eating the Gum Gum Fruit, or Shroom Berries
 world.afterEvents.itemCompleteUse.subscribe(
   safe(({ source, itemStack }) => {
     if (itemStack?.typeId === Gum.FRUIT) Gum.onEat(source);
+    else if (itemStack?.typeId === Shroom.BERRIES) Shroom.onEat(source);
   }),
 );
 
+// hoes and bone meal on the Glowshroom Biome's blocks
+world.beforeEvents.playerInteractWithBlock.subscribe(safe((ev) => Glow.beforeInteract(ev)));
+
 // one leaf block in 100,000 drops a Gum Gum Fruit
 world.afterEvents.playerBreakBlock.subscribe(
-  safe(({ player, block, brokenBlockPermutation }) => {
+  safe(({ player, block, brokenBlockPermutation, itemStackBeforeBreak }) => {
+    if (brokenBlockPermutation.type.id === Glowite.ORE) Glowite.onOreBroken(player, block.location, itemStackBeforeBreak);
     Gum.onBlockBroken(player, brokenBlockPermutation.type.id, block.location);
     const dim = player.dimension;
     BotSkills.playerPlaced.delete(BotSkills.placedKey(dim, block.location));
@@ -226,6 +240,8 @@ world.afterEvents.playerLeave.subscribe(
     Doors.onPlayerLeave(playerId);
     Items.forget(playerId);
     Fig.forgetPlayer(playerId);
+    Shroom.forget(playerId);
+    Glow.forgetPlayer(playerId);
     doorsUsedAt.delete(playerId);
   }),
 );
@@ -282,5 +298,12 @@ system.runInterval(() => {
     if (tick % 600 === 300) Titan.naturalSpawnTick();
   } catch (err) {
     console.warn("[Titans] tick: " + err);
+  }
+  try {
+    Glowite.furnaceTick(tick);
+    Glow.glowshroomTick(tick);
+    Shroom.shroomTick(tick);
+  } catch (err) {
+    console.warn("[Titans] Glowite: " + err);
   }
 }, 1);

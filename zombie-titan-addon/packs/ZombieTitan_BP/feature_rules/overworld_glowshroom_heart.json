@@ -1,0 +1,29 @@
+{
+	"format_version": "1.13.0",
+	"minecraft:feature_rules": {
+		"description": {
+			"identifier": "zt:overworld_glowshroom_heart",
+			"places_feature": "zt:glowshroom_heart_feature"
+		},
+		"conditions": {
+			"placement_pass": "underground_pass",
+			"minecraft:biome_filter": [
+				{
+					"test": "has_biome_tag",
+					"operator": "==",
+					"value": "overworld"
+				}
+			]
+		},
+		"distribution": {
+			"iterations": 1,
+			"scatter_chance": {
+				"numerator": 1,
+				"denominator": 40
+			},
+			"x": 0,
+			"y": -36,
+			"z": 0
+		}
+	}
+}

@@ -1,0 +1,17 @@
+{
+	"format_version": "1.10.0",
+	"animations": {
+		"animation.zt.spore_bullet.spin": {
+			"loop": true,
+			"bones": {
+				"orb": {
+					"rotation": [
+						"q.life_time * 540",
+						"q.life_time * 360",
+						0
+					]
+				}
+			}
+		}
+	}
+}

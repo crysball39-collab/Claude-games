@@ -1,0 +1,32 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:shroomy_bullet",
+			"materials": {
+				"default": "entity_emissive_alpha"
+			},
+			"textures": {
+				"default": "textures/entity/zt_spore_bullet"
+			},
+			"geometry": {
+				"default": "geometry.zt.spore_bullet"
+			},
+			"scripts": {
+				"animate": [
+					"controller"
+				]
+			},
+			"animations": {
+				"spin": "animation.zt.spore_bullet.spin",
+				"controller": "controller.animation.zt.spore_bullet"
+			},
+			"particle_effects": {
+				"trail": "zt:spore_trail"
+			},
+			"render_controllers": [
+				"controller.render.zt.glowite_default"
+			]
+		}
+	}
+}

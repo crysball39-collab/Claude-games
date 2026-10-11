@@ -1,6 +1,6 @@
-# Titans: Zombie, Skeleton, Creeper and Spider Titans, the Omegafish, Dark Fists, Obsidian gear, Gum Gum Fruit, Doors, Players
+# Titans: Zombie, Skeleton, Creeper and Spider Titans, the Omegafish, Dark Fists, Obsidian gear, Gum Gum Fruit, Doors, Players, Glowite
 
-**Version 1.7.1**
+**Version 1.8.0**
 
 A Minecraft Bedrock (Pocket Edition) add-on that brings the **Zombie Titan**, the
 **Skeleton Titan**, the **Creeper Titan**, the **Spider Titan** and the **Omegafish**
@@ -17,16 +17,21 @@ bar. It also adds:
 - **Players**: mobs that play Minecraft like a person, from punching a tree to the
   Ender Dragon, and the **Player API** item to manage them (and to let them chat
   through an AI)
+- **Glowite**: a blue glowing ore deep underground, rarer than netherite, with tools
+  and armor a step above netherite; and the **Glowshroom Biome**, glowing mushroom
+  caverns with giant spore trees, a new wood, the spore crop, Shroom Berries (and the
+  **Shroomy** effect), and Shroom Zombies and Shroom Skeletons
 
 Made for Minecraft Bedrock **1.26.50** on Android. It works on 1.21.90 and newer and
-needs **no experimental toggles**. The Compact Obsidian block needs 1.26.20 or newer.
+needs **no experimental toggles**. The Compact Obsidian block and the Glowite and
+Glowshroom blocks need 1.26.20 or newer, and the Glowshroom Door 1.26.40 or newer.
 
 ## Installing on Android
 
 1. Download **[`dist/ZombieTitan.mcaddon`](dist/ZombieTitan.mcaddon)**.
 2. Open **Files → Downloads** and tap `ZombieTitan.mcaddon`. Minecraft opens and
    imports two packs: *Zombie Titan BP* and *Zombie Titan RP*. Their descriptions
-   start with the version number (*Version 1.7.1*).
+   start with the version number (*Version 1.8.0*).
 3. Create a world, or edit one. Under **Behavior Packs**, activate
    **Zombie Titan BP**. Minecraft adds the resource pack with it.
 4. Play. Here is where everything is in the creative inventory:
@@ -41,6 +46,12 @@ needs **no experimental toggles**. The Compact Obsidian block needs 1.26.20 or n
    - The **hotel blocks** (wallpaper, wainscoting, floor, crates...): in the Construction
      tab. Lamps, paintings and signs: in the Items tab.
    - **Spawn Player**: with the other spawn eggs. The **Player API**: in the Items tab.
+   - **Glowite** tools and armor: in the Equipment tab. Glowing Particles, the Glowite
+     ingots, Shroom Berries: in the Items tab. Glowite Ore, spore grass, maroon dirt,
+     the plants, spore mushrooms, Glowshroom logs, Mushed Spore Cap and Spore Seeds: in
+     the Nature tab. The Glowite blocks and the Glowshroom planks, stairs, slab, fence,
+     gate, door, trapdoor, button and pressure plate: in the Construction tab.
+   - **Shroom Zombie** and **Shroom Skeleton**: with the other spawn eggs.
 
 If tapping the file does nothing, long-press it, choose **Open with**, and pick
 **Minecraft**.
@@ -50,7 +61,7 @@ If tapping the file does nothing, long-press it, choose **Open with**, and pick
   Storage**, delete the old *Zombie Titan BP* and *Zombie Titan RP*, and import
   again.
 - If the world still acts like the old version, check under **Behavior Packs**
-  that Zombie Titan BP is active and that its description says *Version 1.7.1*.
+  that Zombie Titan BP is active and that its description says *Version 1.8.0*.
 
 ## The Zombie Titan
 
@@ -959,6 +970,119 @@ Notes:
 - **Ticking areas.** Minecraft allows 10 per world. Each Player far from everyone
   uses one, so you can run out if you also use your own.
 
+## Glowite and the Glowshroom Biome
+
+**Glowite** is a blue glowing ore found deep underground, at **y -30 and below**. It is
+rarer than ancient debris, and its tools and armor are a step above netherite. Deep
+down there are also **Glowshroom Biomes**: caverns full of glowing blue grass and
+giant mushrooms, with mobs of their own.
+
+### Getting Glowite
+
+1. Mine **Glowite Ore** with a **diamond or netherite pickaxe** (a Glowite or Obsidian
+   pickaxe works too). It drops **1 or 2 Glowing Particles**, more with Fortune. Silk
+   Touch gives you the ore itself. A weaker pickaxe gets nothing.
+2. Put **4 Glowing Particles and 4 Diamonds** in a crafting table (any arrangement)
+   to get a **Raw Glowite Ingot**.
+3. Smelt it in a **Blast Furnace** to get a **Glowite Ingot**.
+
+**Don't use a normal furnace.** Once a furnace with Raw Glowite in it is lit (or has
+fuel), it **blows up**. The Raw Glowite is thrown out unharmed, so you can take it to a
+blast furnace. If the furnace has no fuel yet, it only rattles as a warning.
+
+9 Raw Glowite Ingots make a **Block of Raw Glowite**, and 9 Glowite Ingots make a
+**Block of Glowite**, which glows. Both craft back into ingots. You need a diamond or
+better pickaxe to mine either block.
+
+### Glowite gear
+
+Put a **netherite** tool or armor piece and a **Glowite Ingot** in a crafting table to
+get the Glowite piece. (A smithing table only takes netherite ingots for upgrades, so
+this is done at a crafting table. Enchantments on the netherite piece don't carry over.)
+
+| Tool | Attack damage | Durability |
+|---|---|---|
+| **Glowite Sword** | **+9** | 2,800 |
+| Glowite Pickaxe | +7 | 2,800 |
+| Glowite Axe | +8 | 2,800 |
+| Glowite Shovel | +6 | 2,800 |
+| Glowite Hoe | +6 | 2,800 |
+
+Netherite tools have 2,031 durability. Glowite tools also mine a little faster.
+
+| Armor | Armor points | Durability |
+|---|---|---|
+| Glowite Helmet | 4 | 500 |
+| Glowite Chestplate | 9 | 730 |
+| Glowite Leggings | 6 | 680 |
+| Glowite Boots | 3 | 590 |
+
+Glowite armor also has:
+- **Toughness**: each piece cuts hits of 2 hearts or more by 5% (and hits of 5 hearts
+  or more by 7.5%). With all four pieces, that's 20% (or 30%).
+- **Knockback resistance**: each piece takes 15% off the knockback from hits (netherite
+  takes 10%). With all four pieces, you're knocked back 60% less.
+
+All Glowite gear can be enchanted, survives lava and fire, and is repaired with
+Glowite Ingots at an anvil.
+
+### The Glowshroom Biome
+
+About one chunk in forty has a Glowshroom cavern deep below it, around y -36. Caverns
+appear in **newly generated chunks**, so explore new land to find them. When you walk
+into one, its name comes up on screen.
+
+A cavern has:
+- a floor of **Spore Grass** (glowing blue grass) over **Maroon Dirt**
+- **Spore Grass Plants** and **Spore Mushrooms** (with glowing blue spots)
+- **Spore Trees**: giant mushrooms with white-and-dark-white striped trunks of
+  **Glowshroom Logs** and a cap of **Mushed Spore Cap**
+- Glowite Ore in its roof (Glowite is a little more common there)
+- **Shroom Zombies** and **Shroom Skeletons**
+
+Spore grass spreads over maroon dirt near it, and turns back to maroon dirt under a
+block. A hoe turns spore grass or maroon dirt into farmland. Bone meal on spore grass
+grows plants and mushrooms around it. Bone meal on a spore mushroom planted on soil
+sometimes (2 times in 5) grows it into a giant spore tree, if there's room.
+
+### Shroom Zombies and Shroom Skeletons
+
+Glowing blue zombies and skeletons covered in Glowshroom moss, with spore mushrooms
+growing on them.
+- **Shroom Zombie**: bites like a zombie. If you get **too far** from it (more than 7
+  blocks), it shoots **glowing blue bullets in 4 directions**, one of them at you.
+- **Shroom Skeleton**: shoots **glowing blue bullets** from its bow.
+
+They drop what zombies and skeletons drop (rotten flesh; bones and arrows), plus
+**1 or 2 Spore Seeds**.
+
+### Glowshroom wood
+
+A Glowshroom Log makes **4 Glowshroom Planks**. The planks work like any other planks,
+so they make sticks, crafting tables, wooden tools, chests and so on. They also make
+**Glowshroom Stairs, Slabs, Fences, Fence Gates, Doors, Trapdoors, Buttons and
+Pressure Plates**, with the same recipes as the vanilla ones.
+- Doors, trapdoors and fence gates open with a tap or with redstone. A door placed
+  next to another makes a double door.
+- Buttons and pressure plates give off redstone power.
+- Stairs join at corners, and two slabs stack into a double slab.
+
+### Spore Seeds and Shroom Berries
+
+Plant **Spore Seeds** on farmland (or on maroon dirt or spore grass). The crop has
+**4 growth stages** and glows brighter as it grows. Bone meal speeds it up. Break it
+when it's fully grown to get **2 to 4 Shroom Berries** and 1 or 2 seeds. Break it
+earlier and you just get the seed back.
+
+**Shroom Berries** are glowing blue berries. Eating them (you can eat them even when
+you're full) gives:
+- **Regeneration II** for 5 seconds
+- **Shroomy** for 20 seconds: four glowing blue bullets circle you. When a hostile mob
+  comes within 7 blocks, they fly off and hit it (2 hearts each). Each bullet comes
+  back after 1.5 seconds. The time left shows above your hotbar, and eating more berries
+  starts the 20 seconds over. Endermen, piglins and zombified piglins are left alone
+  unless they attack you, and so are animals.
+
 ## Building from source
 
 The models, textures, animations, particles, sound definitions and the obsidian
@@ -987,7 +1111,9 @@ Development checks:
   taiga, rivers, caves, ores at their heights; `ZT_WORLD`, `ZT_BIOME`, `ZT_NIGHT`),
   `botfight` zombies and creepers there, `botblaze` blazes at a fortress spawner,
   `botend` from a Nether portal to the dragon and the end cities, and `botai` runs the
-  AI bridge against fake AI services.
+  AI bridge against fake AI services. `glowite` covers Glowite (its ore, the furnace,
+  the armor) and the Glowshroom Biome: its blocks, a whole cavern grown round its
+  heart, its mobs, and Shroom Berries with Shroomy.
   Random numbers are seeded so runs repeat; set `ZT_SEED=<number>` to try others.
   The mock refuses blocks and block states the game would refuse, using Mojang's
   block lists in `tools/sim/vanilla-blocks.json` (made by
@@ -999,6 +1125,25 @@ Development checks:
 
 ## Version history
 
+- **1.8.0** (Glowite)
+  - New: **Glowite**, a blue glowing ore found at y -30 and below, rarer than ancient
+    debris. It drops Glowing Particles; 4 of them and 4 diamonds make a Raw Glowite
+    Ingot, which smelts into a Glowite Ingot in a blast furnace (a normal furnace blows
+    up). Blocks of Raw Glowite and of Glowite.
+  - New: **Glowite tools and armor**, made from netherite gear and a Glowite Ingot. The
+    sword does +9 damage. Tools and armor last longer than netherite, and the armor has
+    more armor points, toughness and knockback resistance.
+  - New: the **Glowshroom Biome**, rare caverns deep underground: spore grass, maroon
+    dirt, spore grass plants, spore mushrooms, giant spore trees (Glowshroom logs and
+    Mushed Spore Cap) and a little more Glowite.
+  - New: **Glowshroom wood**: planks, stairs, slab, fence, fence gate, door, trapdoor,
+    button and pressure plate. The planks also make sticks and wooden tools.
+  - New: **Shroom Zombies** (they shoot bullets 4 ways when you're too far) and **Shroom
+    Skeletons** (they shoot bullets from their bows). Both drop Spore Seeds.
+  - New: the **spore crop** (4 stages) and **Shroom Berries**: Regeneration II for
+    5 seconds and the new **Shroomy** effect for 20 seconds, where glowing bullets circle
+    you and shoot hostile mobs that come close.
+  - Players know the new blocks and fight the new mobs.
 - **1.7.1** (Players)
   - Fixed: Players jumped on the spot, or not high enough to get up a block. A jump
     now measures how high it went and pushes harder next time (under trees too), a

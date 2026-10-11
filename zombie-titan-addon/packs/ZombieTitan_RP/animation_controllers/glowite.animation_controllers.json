@@ -1,0 +1,20 @@
+{
+	"format_version": "1.10.0",
+	"animation_controllers": {
+		"controller.animation.zt.spore_bullet": {
+			"initial_state": "default",
+			"states": {
+				"default": {
+					"animations": [
+						"spin"
+					],
+					"particle_effects": [
+						{
+							"effect": "trail"
+						}
+					]
+				}
+			}
+		}
+	}
+}

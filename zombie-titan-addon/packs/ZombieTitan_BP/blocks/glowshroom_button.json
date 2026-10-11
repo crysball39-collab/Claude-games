@@ -1,0 +1,245 @@
+{
+	"format_version": "1.26.20",
+	"minecraft:block": {
+		"description": {
+			"identifier": "zt:glowshroom_button",
+			"menu_category": {
+				"category": "construction",
+				"group": "minecraft:itemGroup.name.buttons"
+			},
+			"states": {
+				"zt:pressed": {
+					"values": {
+						"min": 0,
+						"max": 1
+					}
+				}
+			},
+			"traits": {
+				"minecraft:placement_position": {
+					"enabled_states": [
+						"minecraft:block_face"
+					]
+				}
+			}
+		},
+		"components": {
+			"minecraft:geometry": {
+				"identifier": "geometry.zt.glowshroom_button",
+				"bone_visibility": {
+					"up_up": "q.block_state('minecraft:block_face') == 'up' && q.block_state('zt:pressed') == 0",
+					"up_down": "q.block_state('minecraft:block_face') == 'up' && q.block_state('zt:pressed') == 1",
+					"down_up": "q.block_state('minecraft:block_face') == 'down' && q.block_state('zt:pressed') == 0",
+					"down_down": "q.block_state('minecraft:block_face') == 'down' && q.block_state('zt:pressed') == 1",
+					"north_up": "q.block_state('minecraft:block_face') == 'north' && q.block_state('zt:pressed') == 0",
+					"north_down": "q.block_state('minecraft:block_face') == 'north' && q.block_state('zt:pressed') == 1",
+					"south_up": "q.block_state('minecraft:block_face') == 'south' && q.block_state('zt:pressed') == 0",
+					"south_down": "q.block_state('minecraft:block_face') == 'south' && q.block_state('zt:pressed') == 1",
+					"east_up": "q.block_state('minecraft:block_face') == 'east' && q.block_state('zt:pressed') == 0",
+					"east_down": "q.block_state('minecraft:block_face') == 'east' && q.block_state('zt:pressed') == 1",
+					"west_up": "q.block_state('minecraft:block_face') == 'west' && q.block_state('zt:pressed') == 0",
+					"west_down": "q.block_state('minecraft:block_face') == 'west' && q.block_state('zt:pressed') == 1"
+				}
+			},
+			"minecraft:material_instances": {
+				"*": {
+					"texture": "zt_glowshroom_planks",
+					"render_method": "opaque"
+				}
+			},
+			"minecraft:destructible_by_mining": {
+				"seconds_to_destroy": 0.5
+			},
+			"minecraft:collision_box": false,
+			"minecraft:selection_box": {
+				"origin": [
+					-3,
+					0,
+					-2
+				],
+				"size": [
+					6,
+					2,
+					4
+				]
+			},
+			"minecraft:light_dampening": 0,
+			"zt:button": {},
+			"minecraft:tags": [
+				"minecraft:is_axe_item_destructible",
+				"minecraft:wood"
+			],
+			"minecraft:map_color": "#c8cad6"
+		},
+		"permutations": [
+			{
+				"condition": "q.block_state('minecraft:block_face') == 'up'",
+				"components": {
+					"minecraft:selection_box": {
+						"origin": [
+							-3,
+							0,
+							-2
+						],
+						"size": [
+							6,
+							2,
+							4
+						]
+					}
+				}
+			},
+			{
+				"condition": "q.block_state('minecraft:block_face') == 'up' && q.block_state('zt:pressed') == 1",
+				"components": {
+					"minecraft:redstone_producer": {
+						"power": 15,
+						"strongly_powered_face": "down"
+					}
+				}
+			},
+			{
+				"condition": "q.block_state('minecraft:block_face') == 'down'",
+				"components": {
+					"minecraft:selection_box": {
+						"origin": [
+							-3,
+							14,
+							-2
+						],
+						"size": [
+							6,
+							2,
+							4
+						]
+					}
+				}
+			},
+			{
+				"condition": "q.block_state('minecraft:block_face') == 'down' && q.block_state('zt:pressed') == 1",
+				"components": {
+					"minecraft:redstone_producer": {
+						"power": 15,
+						"strongly_powered_face": "up"
+					}
+				}
+			},
+			{
+				"condition": "q.block_state('minecraft:block_face') == 'north'",
+				"components": {
+					"minecraft:selection_box": {
+						"origin": [
+							-3,
+							6,
+							6
+						],
+						"size": [
+							6,
+							4,
+							2
+						]
+					}
+				}
+			},
+			{
+				"condition": "q.block_state('minecraft:block_face') == 'north' && q.block_state('zt:pressed') == 1",
+				"components": {
+					"minecraft:redstone_producer": {
+						"power": 15,
+						"strongly_powered_face": "south"
+					}
+				}
+			},
+			{
+				"condition": "q.block_state('minecraft:block_face') == 'south'",
+				"components": {
+					"minecraft:selection_box": {
+						"origin": [
+							-3,
+							6,
+							-8
+						],
+						"size": [
+							6,
+							4,
+							2
+						]
+					}
+				}
+			},
+			{
+				"condition": "q.block_state('minecraft:block_face') == 'south' && q.block_state('zt:pressed') == 1",
+				"components": {
+					"minecraft:redstone_producer": {
+						"power": 15,
+						"strongly_powered_face": "north"
+					}
+				}
+			},
+			{
+				"condition": "q.block_state('minecraft:block_face') == 'east'",
+				"components": {
+					"minecraft:selection_box": {
+						"origin": [
+							-8,
+							6,
+							-3
+						],
+						"size": [
+							2,
+							4,
+							6
+						]
+					}
+				}
+			},
+			{
+				"condition": "q.block_state('minecraft:block_face') == 'east' && q.block_state('zt:pressed') == 1",
+				"components": {
+					"minecraft:redstone_producer": {
+						"power": 15,
+						"strongly_powered_face": "west"
+					}
+				}
+			},
+			{
+				"condition": "q.block_state('minecraft:block_face') == 'west'",
+				"components": {
+					"minecraft:selection_box": {
+						"origin": [
+							6,
+							6,
+							-3
+						],
+						"size": [
+							2,
+							4,
+							6
+						]
+					}
+				}
+			},
+			{
+				"condition": "q.block_state('minecraft:block_face') == 'west' && q.block_state('zt:pressed') == 1",
+				"components": {
+					"minecraft:redstone_producer": {
+						"power": 15,
+						"strongly_powered_face": "east"
+					}
+				}
+			},
+			{
+				"condition": "q.block_state('zt:pressed') == 1",
+				"components": {
+					"minecraft:tick": {
+						"interval_range": [
+							30,
+							30
+						],
+						"looping": false
+					}
+				}
+			}
+		]
+	}
+}

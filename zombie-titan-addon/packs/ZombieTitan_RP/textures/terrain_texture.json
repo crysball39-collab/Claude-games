@@ -114,6 +114,66 @@
 		},
 		"zt_sign_hotel": {
 			"textures": "textures/blocks/zt_sign_hotel"
+		},
+		"zt_glowite_ore": {
+			"textures": "textures/blocks/zt_glowite_ore"
+		},
+		"zt_raw_glowite_block": {
+			"textures": "textures/blocks/zt_raw_glowite_block"
+		},
+		"zt_glowite_block": {
+			"textures": "textures/blocks/zt_glowite_block"
+		},
+		"zt_glowshroom_heart": {
+			"textures": "textures/blocks/zt_glowshroom_heart"
+		},
+		"zt_maroon_dirt": {
+			"textures": "textures/blocks/zt_maroon_dirt"
+		},
+		"zt_spore_grass_top": {
+			"textures": "textures/blocks/zt_spore_grass_top"
+		},
+		"zt_spore_grass_side": {
+			"textures": "textures/blocks/zt_spore_grass_side"
+		},
+		"zt_spore_grass_plant": {
+			"textures": "textures/blocks/zt_spore_grass_plant"
+		},
+		"zt_spore_mushroom": {
+			"textures": "textures/blocks/zt_spore_mushroom"
+		},
+		"zt_glowshroom_log": {
+			"textures": "textures/blocks/zt_glowshroom_log"
+		},
+		"zt_glowshroom_log_top": {
+			"textures": "textures/blocks/zt_glowshroom_log_top"
+		},
+		"zt_mushed_spore_cap": {
+			"textures": "textures/blocks/zt_mushed_spore_cap"
+		},
+		"zt_glowshroom_planks": {
+			"textures": "textures/blocks/zt_glowshroom_planks"
+		},
+		"zt_glowshroom_door_bottom": {
+			"textures": "textures/blocks/zt_glowshroom_door_bottom"
+		},
+		"zt_glowshroom_door_top": {
+			"textures": "textures/blocks/zt_glowshroom_door_top"
+		},
+		"zt_glowshroom_trapdoor": {
+			"textures": "textures/blocks/zt_glowshroom_trapdoor"
+		},
+		"zt_spore_crop_0": {
+			"textures": "textures/blocks/zt_spore_crop_0"
+		},
+		"zt_spore_crop_1": {
+			"textures": "textures/blocks/zt_spore_crop_1"
+		},
+		"zt_spore_crop_2": {
+			"textures": "textures/blocks/zt_spore_crop_2"
+		},
+		"zt_spore_crop_3": {
+			"textures": "textures/blocks/zt_spore_crop_3"
 		}
 	}
 }

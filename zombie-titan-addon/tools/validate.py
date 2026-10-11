@@ -305,10 +305,19 @@ def main():
             problem(f"script plays undefined sound {sid}")
     # custom blocks (and their states, which scripts set by name)
     block_ids = set()
+    custom_components = set()
     for p in glob.glob(os.path.join(BP, "blocks", "*.json")):
-        desc = load(p)["minecraft:block"]["description"]
+        b = load(p)["minecraft:block"]
+        desc = b["description"]
         block_ids.add(desc["identifier"])
         block_ids |= set(desc.get("states", {}).keys())
+        for comps in [b["components"]] + [perm["components"] for perm in b.get("permutations", [])]:
+            custom_components |= {k for k in comps if not k.startswith("minecraft:")}
+    # a block's custom components are bound in script (glowshroom.js names them)
+    for name in sorted(custom_components):
+        if f'"{name}"' not in scripts:
+            problem(f"block custom component {name} is never registered in script")
+    block_ids |= custom_components
     # items, recipes, blocks, attachables and loot tables point at things that exist
     item_ids = set()
     for p in glob.glob(os.path.join(BP, "items", "*.json")):
@@ -327,6 +336,8 @@ def main():
                # the Players: what they are and know, the world they share, their settings, their potions and work
                "zt:bot", "zt:bot_world", "zt:bot_placed", "zt:players", "zt:players_respawn", "zt:ai", "zt:potion", "zt:work",
                "zt:trades",
+               # the Glowshroom caverns grown so far
+               "zt:glowshroom_caverns",
                # script events to and from the Player AI Bridge pack
                "zt:ai_ping", "zt:ai_pong", "zt:ai_request", "zt:ai_reply"}
     for pid in set(re.findall(r'"(zt:[a-z_]*[a-z])"', scripts)):  # (ids built from a prefix like "zt:gum_" skipped)
@@ -344,7 +355,12 @@ def main():
             ident = next(iter(v for k, v in r.items() if k.startswith("minecraft:recipe")))["description"]["identifier"]
             if ref != ident and ref not in ours:
                 problem(f"{os.path.basename(p)}: unknown item {ref}")
-            if ref == ident and ref not in ours and not ref.endswith("_to_obsidian"):
+            # a recipe named after nothing (a smelting route, an item back out of its block) still
+            # has to make something that exists
+            body = next(iter(v for k, v in r.items() if k.startswith("minecraft:recipe")))
+            made = body.get("output") or (body.get("result") or {}).get("item")
+            if ref == ident and ref not in ours and not ref.endswith("_to_obsidian") and \
+                    not (made and (made in ours or not made.startswith("zt:"))):
                 problem(f"{os.path.basename(p)}: recipe {ref} has no matching item")
     terrain = {}
     tp = os.path.join(RP, "textures", "terrain_texture.json")
@@ -365,6 +381,54 @@ def main():
         loot = comps.get("minecraft:loot")
         if loot and not os.path.exists(os.path.join(BP, loot)):
             problem(f"{os.path.basename(p)}: loot table {loot} missing")
+    block_geos = {}
+    for p in glob.glob(os.path.join(RP, "models", "blocks", "*.json")):
+        for g in load(p)["minecraft:geometry"]:
+            block_geos[g["description"]["identifier"]] = {b["name"] for b in g.get("bones", [])}
+    for p in glob.glob(os.path.join(BP, "blocks", "*.json")):
+        b = load(p)["minecraft:block"]
+        name = os.path.basename(p)
+        for comps in [b["components"]] + [perm["components"] for perm in b.get("permutations", [])]:
+            g = comps.get("minecraft:geometry")
+            gid = g if isinstance(g, str) else (g or {}).get("identifier")
+            if gid and not gid.startswith("minecraft:geometry.") and gid not in block_geos:
+                problem(f"{name}: geometry {gid} missing from models/blocks")
+            for bone in ((g or {}).get("bone_visibility", {}) if isinstance(g, dict) else {}):
+                if gid in block_geos and bone not in block_geos[gid]:
+                    problem(f"{name}: bone_visibility names {bone}, which {gid} doesn't have")
+            for inst in comps.get("minecraft:material_instances", {}).values():
+                if isinstance(inst, dict) and inst.get("texture") and inst["texture"] not in terrain:
+                    problem(f"{name}: texture {inst['texture']} missing from terrain_texture.json")
+            loot = comps.get("minecraft:loot")
+            if loot and not os.path.exists(os.path.join(BP, loot)):
+                problem(f"{name}: loot table {loot} missing")
+    for p in glob.glob(os.path.join(BP, "items", "*.json")):
+        it = load(p)["minecraft:item"]
+        placer = it["components"].get("minecraft:block_placer")
+        if placer:
+            blk = placer["block"] if isinstance(placer["block"], str) else placer["block"].get("name")
+            if blk.startswith("zt:") and blk not in block_ids:
+                problem(f"{os.path.basename(p)}: places unknown block {blk}")
+            if placer.get("replace_block_item") and blk != it["description"]["identifier"]:
+                problem(f"{os.path.basename(p)}: replace_block_item needs the item named as its block {blk}")
+    features = {}
+    for p in glob.glob(os.path.join(BP, "features", "*.json")):
+        d = load(p)
+        kind, body = next((k, v) for k, v in d.items() if k.startswith("minecraft:"))
+        ident = body["description"]["identifier"]
+        features[ident] = body
+        if os.path.basename(p) != ident.split(":")[1] + ".json":
+            problem(f"features/{os.path.basename(p)} should be named after its identifier {ident}")
+        for ref in set(re.findall(r'"(zt:[a-z_]+)"', json.dumps(body))) - {ident}:
+            if ref not in block_ids:
+                problem(f"features/{os.path.basename(p)}: unknown block {ref}")
+    for p in glob.glob(os.path.join(BP, "feature_rules", "*.json")):
+        body = load(p)["minecraft:feature_rules"]
+        ident = body["description"]["identifier"]
+        if os.path.basename(p) != ident.split(":")[1] + ".json":
+            problem(f"feature_rules/{os.path.basename(p)} should be named after its identifier {ident}")
+        if body["description"]["places_feature"] not in features:
+            problem(f"feature_rules/{os.path.basename(p)}: places unknown feature {body['description']['places_feature']}")
     for p in glob.glob(os.path.join(BP, "entities", "*.json")):
         comps = load(p)["minecraft:entity"]
         text = json.dumps(comps)

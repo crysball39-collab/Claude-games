@@ -165,6 +165,41 @@
 						"pitch": 1.0
 					}
 				}
+			},
+			"zt:shroom_zombie": {
+				"volume": 1.0,
+				"pitch": [
+					0.7,
+					0.9
+				],
+				"events": {
+					"ambient": "mob.zombie.say",
+					"hurt": "mob.zombie.hurt",
+					"death": "mob.zombie.death",
+					"step": {
+						"sound": "mob.zombie.step",
+						"volume": 0.15,
+						"pitch": 1.0
+					}
+				}
+			},
+			"zt:shroom_skeleton": {
+				"volume": 1.0,
+				"pitch": [
+					0.8,
+					1.0
+				],
+				"events": {
+					"ambient": "mob.skeleton.say",
+					"hurt": "mob.skeleton.hurt",
+					"death": "mob.skeleton.death",
+					"step": {
+						"sound": "mob.skeleton.step",
+						"volume": 0.15,
+						"pitch": 1.0
+					},
+					"shoot": "random.bow"
+				}
 			}
 		}
 	}

@@ -11,10 +11,11 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 // the Doors levels place many kinds of blocks: build them with older block lists too
+// (glowite: the ore, furnace, armor, the Glowshroom caverns, their blocks, mobs and berries)
 // (the Players: bot is its senses, chat and menus; botpath getting about; botcraft a game from
 // nothing; botstations the blocks it uses; botend the way to the dragon; botai the AI bridge)
 const TESTS = ["smoke", "skeleton", "creeper", "spider", "omegafish", "items", "gumgum", "library", "seek", "library@1.21.90", "seek@1.21.90",
-  "library@1.26.20", "floor1", "floor1@1.21.90", "bot", "botpath", "botstations", "botai", "botcraft", "botend", "botfight", "botblaze", "botreal"];
+  "library@1.26.20", "floor1", "floor1@1.21.90", "bot", "botpath", "botstations", "botai", "botcraft", "botend", "botfight", "botblaze", "botreal", "glowite"];
 
 const here = dirname(fileURLToPath(import.meta.url));
 const work = mkdtempSync(join(tmpdir(), "zt-sim-"));
@@ -47,8 +48,19 @@ for (const f of readdirSync(blocksDir).filter((n) => n.endsWith(".json"))) {
     states[k] = Array.isArray(v) ? v : Array.from({ length: v.values.max - v.values.min + 1 }, (_, i) => v.values.min + i);
   }
   // states that traits add
-  const dirs = desc.traits?.["minecraft:placement_direction"]?.enabled_states ?? [];
-  if (dirs.includes("minecraft:cardinal_direction")) states["minecraft:cardinal_direction"] = ["north", "south", "east", "west"];
+  const traits = desc.traits ?? {};
+  const dirs = traits["minecraft:placement_direction"]?.enabled_states ?? [];
+  const cardinal = ["north", "south", "east", "west"];
+  if (dirs.includes("minecraft:cardinal_direction")) states["minecraft:cardinal_direction"] = cardinal;
+  if (dirs.includes("minecraft:corner_and_cardinal_direction")) {
+    states["minecraft:cardinal_direction"] = cardinal;
+    states["minecraft:corner"] = ["none", "inner_left", "inner_right", "outer_left", "outer_right"];
+  }
+  const where = traits["minecraft:placement_position"]?.enabled_states ?? [];
+  if (where.includes("minecraft:block_face")) states["minecraft:block_face"] = ["down", "up", "north", "south", "east", "west"];
+  if (where.includes("minecraft:vertical_half")) states["minecraft:vertical_half"] = ["bottom", "top"];
+  if (traits["minecraft:connection"]) for (const d of cardinal) states["minecraft:connection_" + d] = [false, true];
+  if (traits["minecraft:multi_block"]) states["minecraft:multi_block_part"] = Array.from({ length: traits["minecraft:multi_block"].parts ?? 2 }, (_, i) => i);
   custom[desc.identifier] = states;
 }
 writeFileSync(join(work, "custom-blocks.json"), JSON.stringify(custom));
@@ -75,7 +87,8 @@ const items = {};
 for (const f of readdirSync(itemsDir).filter((n) => n.endsWith(".json"))) {
   const it = JSON.parse(readFileSync(join(itemsDir, f), "utf8"))["minecraft:item"];
   const c = it.components ?? {};
-  items[it.description.identifier] = { maxStack: c["minecraft:max_stack_size"] ?? 64, durability: c["minecraft:durability"]?.max_durability };
+  items[it.description.identifier] = { maxStack: c["minecraft:max_stack_size"] ?? 64, durability: c["minecraft:durability"]?.max_durability,
+    tags: c["minecraft:tags"]?.tags ?? [] };
 }
 writeFileSync(join(work, "items.json"), JSON.stringify(items));
 // a seeded Math.random, loaded before each test (mulberry32)

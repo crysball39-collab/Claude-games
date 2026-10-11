@@ -1,0 +1,28 @@
+{
+	"format_version": "1.20.10",
+	"minecraft:recipe_shapeless": {
+		"description": {
+			"identifier": "zt:glowite_helmet"
+		},
+		"tags": [
+			"crafting_table"
+		],
+		"ingredients": [
+			{
+				"item": "minecraft:netherite_helmet"
+			},
+			{
+				"item": "zt:glowite_ingot"
+			}
+		],
+		"unlock": [
+			{
+				"item": "zt:glowite_ingot"
+			}
+		],
+		"result": {
+			"item": "zt:glowite_helmet",
+			"count": 1
+		}
+	}
+}

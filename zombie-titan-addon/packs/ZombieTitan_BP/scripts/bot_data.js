@@ -156,6 +156,24 @@ rule("stone_bricks|mossy_stone_bricks|cracked_stone_bricks|chiseled_stone_bricks
 rule("mob_spawner|spawner", { h: 5, tool: "pickaxe", drop: null });
 rule("dragon_egg", { h: 3, drop: null });
 
+// the add-on's own blocks: the Glowshroom Biome's ground and plants, its wood, and Glowite (which
+// a Player leaves for whoever finds it: not natural to it)
+/** @param {string} pattern @param {BlockInfo} info */
+function zrule(pattern, info) {
+  RULES.push([new RegExp("^zt:(" + pattern + ")$"), info]);
+}
+zrule("spore_grass", { h: 0.6, tool: "shovel", drop: "zt:maroon_dirt", natural: true });
+zrule("maroon_dirt", { h: 0.5, tool: "shovel", natural: true });
+zrule("spore_grass_plant|spore_mushroom|spore_crop", { h: 0, kind: "pass", drop: null, natural: true });
+zrule("glowshroom_log", { h: 2, tool: "axe", natural: true });
+zrule("mushed_spore_cap", { h: 0.3, tool: "axe", natural: true });
+zrule("glowite_ore", { h: 30, tool: "pickaxe", tier: 4, drop: null });
+zrule("glowshroom_heart", { h: 3, tool: "pickaxe", drop: null, natural: true });
+zrule("glowshroom_button|glowshroom_pressure_plate", { h: 0.5, tool: "axe", kind: "pass" });
+zrule("glowshroom_fence|glowshroom_fence_gate", { h: 2, tool: "axe", kind: "fence" });
+zrule("glowshroom_planks|glowshroom_stairs|glowshroom_slab|glowshroom_door|glowshroom_trapdoor", { h: 2, tool: "axe" });
+zrule("raw_glowite_block|glowite_block", { h: 50, tool: "pickaxe", tier: 4 });
+
 /** A block from a newer Minecraft that no rule names: plants and such are walked through, the rest is solid. */
 const PLANTISH = /(grass|fern|flower|blossom|bush|petals|sprout|roots$|lichen|sapling|propagule|seagrass|kelp|_coral$|coral_fan|pickle|moss_carpet|torch|_crop$|_stem$|_bud$|vine)/;
 

@@ -1,0 +1,18 @@
+{
+	"format_version": "1.20.10",
+	"minecraft:recipe_furnace": {
+		"description": {
+			"identifier": "zt:raw_glowite_furnace"
+		},
+		"unlock": [
+			{
+				"item": "zt:raw_glowite"
+			}
+		],
+		"tags": [
+			"furnace"
+		],
+		"input": "zt:raw_glowite",
+		"output": "zt:glowing_particles"
+	}
+}

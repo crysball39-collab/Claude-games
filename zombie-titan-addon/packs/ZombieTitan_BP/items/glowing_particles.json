@@ -1,0 +1,20 @@
+{
+	"format_version": "1.21.90",
+	"minecraft:item": {
+		"description": {
+			"identifier": "zt:glowing_particles",
+			"menu_category": {
+				"category": "items"
+			}
+		},
+		"components": {
+			"minecraft:icon": "zt_glowing_particles",
+			"minecraft:display_name": {
+				"value": "item.zt:glowing_particles.name"
+			},
+			"minecraft:max_stack_size": 64,
+			"minecraft:rarity": "uncommon",
+			"minecraft:glint": true
+		}
+	}
+}

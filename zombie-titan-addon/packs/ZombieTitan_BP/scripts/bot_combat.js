@@ -15,7 +15,7 @@ import * as S from "./bot_skills.js";
 export const REACH = 3;
 /** Mobs that fight from a distance (a shield is worth raising). */
 export const RANGED = new Set(["minecraft:skeleton", "minecraft:stray", "minecraft:bogged", "minecraft:pillager", "minecraft:blaze",
-  "minecraft:ghast", "minecraft:witch", "minecraft:breeze", "minecraft:shulker", "zt:skeleton_minion"]);
+  "minecraft:ghast", "minecraft:witch", "minecraft:breeze", "minecraft:shulker", "zt:skeleton_minion", "zt:shroom_skeleton"]);
 /** Mobs a sword can't reach: bow work. */
 export const FLYING = new Set(["minecraft:ghast", "minecraft:phantom", "minecraft:ender_dragon", "minecraft:ender_crystal"]);
 const UNDEAD = /zombie|husk|drowned|skeleton|stray|wither|phantom|zoglin|bogged|zombified/;
@@ -583,7 +583,7 @@ function closeBy(bot, t) {
   }
   return out;
 }
-const HOSTILE_MELEE = /^minecraft:(zombie|husk|drowned|zombie_villager|zombie_villager_v2|spider|cave_spider|creeper|vindicator|piglin_brute|zoglin|hoglin|wither_skeleton|silverfish|endermite|slime|magma_cube)$|^zt:.*_minion$/;
+const HOSTILE_MELEE = /^minecraft:(zombie|husk|drowned|zombie_villager|zombie_villager_v2|spider|cave_spider|creeper|vindicator|piglin_brute|zoglin|hoglin|wither_skeleton|silverfish|endermite|slime|magma_cube)$|^zt:(.*_minion|shroom_zombie)$/;
 
 /**
  * A spot a few blocks away from some threats it can get to on foot: straight away from them if

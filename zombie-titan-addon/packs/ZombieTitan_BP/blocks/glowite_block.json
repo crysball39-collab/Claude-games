@@ -1,0 +1,33 @@
+{
+	"format_version": "1.26.20",
+	"minecraft:block": {
+		"description": {
+			"identifier": "zt:glowite_block",
+			"menu_category": {
+				"category": "construction"
+			}
+		},
+		"components": {
+			"minecraft:geometry": "minecraft:geometry.full_block",
+			"minecraft:material_instances": {
+				"*": {
+					"texture": "zt_glowite_block",
+					"render_method": "opaque"
+				}
+			},
+			"minecraft:destructible_by_mining": {
+				"seconds_to_destroy": 50
+			},
+			"minecraft:destructible_by_explosion": {
+				"explosion_resistance": 1200
+			},
+			"minecraft:light_emission": 12,
+			"minecraft:map_color": "#3aa0f0",
+			"minecraft:tags": [
+				"minecraft:is_pickaxe_item_destructible",
+				"minecraft:diamond_tier_destructible"
+			],
+			"minecraft:loot": "loot_tables/blocks/glowite_block.json"
+		}
+	}
+}

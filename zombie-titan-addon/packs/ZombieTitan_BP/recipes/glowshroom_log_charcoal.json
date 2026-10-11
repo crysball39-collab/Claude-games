@@ -1,0 +1,18 @@
+{
+	"format_version": "1.20.10",
+	"minecraft:recipe_furnace": {
+		"description": {
+			"identifier": "zt:glowshroom_log_charcoal"
+		},
+		"unlock": [
+			{
+				"item": "zt:glowshroom_log"
+			}
+		],
+		"tags": [
+			"furnace"
+		],
+		"input": "zt:glowshroom_log",
+		"output": "minecraft:charcoal"
+	}
+}

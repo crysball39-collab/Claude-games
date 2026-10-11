@@ -1,0 +1,68 @@
+{
+	"format_version": "1.26.20",
+	"minecraft:block": {
+		"description": {
+			"identifier": "zt:spore_grass_plant",
+			"menu_category": {
+				"category": "nature",
+				"group": "minecraft:itemGroup.name.grass"
+			}
+		},
+		"components": {
+			"minecraft:geometry": "minecraft:geometry.cross",
+			"minecraft:material_instances": {
+				"*": {
+					"texture": "zt_spore_grass_plant",
+					"render_method": "alpha_test",
+					"face_dimming": false,
+					"ambient_occlusion": 0
+				}
+			},
+			"minecraft:selection_box": {
+				"origin": [
+					-6,
+					0,
+					-6
+				],
+				"size": [
+					12,
+					12,
+					12
+				]
+			},
+			"minecraft:light_emission": 5,
+			"minecraft:placement_filter": {
+				"conditions": [
+					{
+						"allowed_faces": [
+							"up"
+						],
+						"block_filter": [
+							"zt:spore_grass",
+							"zt:maroon_dirt",
+							"minecraft:grass_block",
+							"minecraft:dirt",
+							"minecraft:moss_block",
+							"minecraft:farmland",
+							"minecraft:mycelium",
+							"minecraft:podzol",
+							"minecraft:rooted_dirt"
+						]
+					}
+				]
+			},
+			"minecraft:map_color": "#3aa0f0",
+			"minecraft:loot": "loot_tables/blocks/spore_grass_plant.json",
+			"minecraft:collision_box": false,
+			"minecraft:light_dampening": 0,
+			"minecraft:replaceable": {},
+			"minecraft:destructible_by_mining": {
+				"seconds_to_destroy": 0
+			},
+			"minecraft:flammable": {
+				"catch_chance_modifier": 60,
+				"destroy_chance_modifier": 100
+			}
+		}
+	}
+}

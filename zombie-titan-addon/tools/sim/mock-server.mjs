@@ -66,7 +66,27 @@ export const system = {
 };
 const jobs = [];
 
+/**
+ * The startup event (scripts register their custom components in it): fired before the first
+ * tick, as the game fires it before the world loads. Tests find what was registered in
+ * sim.blockComponents and sim.itemComponents.
+ */
+let startedUp = false;
+export function startup() {
+  if (startedUp) return;
+  startedUp = true;
+  const registry = (map) => ({
+    registerCustomComponent(name, c) {
+      if (typeof name !== "string" || !/^[a-z0-9_]+:[a-z0-9_]+$/.test(name) || name.startsWith("minecraft:")) throw new Error("bad custom component name " + name);
+      if (map.has(name)) throw new Error("custom component registered twice: " + name);
+      map.set(name, c);
+    },
+  });
+  system.beforeEvents.startup.fire({ blockComponentRegistry: registry(sim.blockComponents), itemComponentRegistry: registry(sim.itemComponents) });
+}
+
 export function runTicks(n, each) {
+  if (!startedUp) startup();
   for (let i = 0; i < n; i++) {
     tickCounter++;
     for (const d of dims.values()) d._physics();
@@ -277,10 +297,12 @@ export class ItemStack {
     else this.dyn[k] = v;
   }
   getTags() {
-    return [];
+    const own = ITEMS[this.typeId]?.tags ?? [];
+    const m = /^minecraft:(wooden|stone|iron|golden|diamond|netherite)_(sword|pickaxe|axe|shovel|hoe)$/.exec(this.typeId);
+    return m ? [...own, `minecraft:${m[1]}_tier`, `minecraft:is_${m[2]}`, ...(m[2] === "sword" ? [] : ["minecraft:digger"])] : own;
   }
-  hasTag() {
-    return false;
+  hasTag(t) {
+    return this.getTags().includes(t);
   }
 }
 
@@ -376,7 +398,8 @@ const stoneTop = 64;
  *   portals  entities that stand in a portal go to the other dimension
  *   machines furnaces smelt, brewing stands brew, water poured on lava makes obsidian
  */
-export const sim = { terrain: null, items: false, mobs: false, portals: false, machines: false };
+export const sim = { terrain: null, items: false, mobs: false, portals: false, machines: false,
+  blockComponents: new Map(), itemComponents: new Map() };
 const DIM_PREFIX = { "minecraft:overworld": "", "minecraft:nether": "n|", "minecraft:the_end": "e|" };
 function dimIdOf(dim) {
   return typeof dim === "string" ? dim : (dim?.id ?? "minecraft:overworld");
@@ -385,6 +408,12 @@ function keyOf(dim, x, y, z) {
   return (DIM_PREFIX[dimIdOf(dim)] ?? "") + `${Math.floor(x)},${Math.floor(y)},${Math.floor(z)}`;
 }
 export const blockOverrides = new Map();
+/** Redstone power at blocks, as tests set it: "x,y,z" (dimension prefixed as in placed) -> power. */
+export const redstone = new Map();
+/** @param {any} dim @param {number} x @param {number} y @param {number} z @param {number} power */
+export function setRedstone(dim, x, y, z, power) {
+  redstone.set(keyOf(dim, x, y, z), power);
+}
 /** every block a script placed: "x,y,z" -> permutation ("n|x,y,z" in the Nether, "e|x,y,z" in the End) */
 export const placed = new Map();
 function blockAt(dim, x, y, z) {
@@ -553,6 +582,9 @@ class Block {
   }
   hasTag() {
     return false;
+  }
+  getRedstonePower() {
+    return redstone.get(keyOf(this.dimension, this.x, this.y, this.z)) ?? 0;
   }
 }
 
@@ -758,14 +790,16 @@ function badProperty(typeId, id, v) {
 }
 
 const PROJECTILES = new Set(["zt:proto_ball", "zt:titan_arrow", "zt:growth_serum", "minecraft:fireball", "minecraft:arrow", "minecraft:ender_pearl",
-  "minecraft:small_fireball"]);
+  "minecraft:small_fireball", "zt:spore_bullet", "zt:shroomy_bullet"]);
+/** Bullets that fly straight and fade (the Glowshroom Biome's): how much they hurt (the friendly ones: their script's business). */
+const STRAIGHT = { "minecraft:small_fireball": 5, "zt:spore_bullet": 4, "zt:shroomy_bullet": 0 };
 /**
  * Arrows (the Player tests): they fly, drop, stick in blocks and hurt what they hit. A blaze's
  * fireball flies straight (no gravity), burns what it hits for 5, sets it alight, and is gone.
  */
 function arrowTick(dim, e) {
   const v = e.velocity;
-  const fireball = e.typeId === "minecraft:small_fireball";
+  const fireball = e.typeId in STRAIGHT;
   if (fireball && tickCounter - (e.spawnTick ?? tickCounter) > 100) {
     e.valid = false;
     return;
@@ -788,10 +822,10 @@ function arrowTick(dim, e) {
       const l = t.location;
       if (Math.abs(e.location.x - l.x) <= w / 2 + 0.3 && Math.abs(e.location.z - l.z) <= w / 2 + 0.3 && e.location.y >= l.y - 0.3 && e.location.y <= l.y + h + 0.3) {
         e.flying = false;
-        const dmg = fireball ? 5 : Math.ceil(Math.hypot(v.x, v.y, v.z) * 2);
+        const dmg = fireball ? STRAIGHT[e.typeId] : Math.ceil(Math.hypot(v.x, v.y, v.z) * 2);
         // (a shot a shield stops sets nothing alight)
-        const hurt = t.applyDamage(dmg, { cause: "projectile", damagingEntity: owner });
-        if (fireball && hurt && !FIRE_PROOF.has(t.typeId)) t.onFire = Math.max(t.onFire ?? 0, 5);
+        const hurt = dmg > 0 && t.applyDamage(dmg, { cause: "projectile", damagingEntity: owner });
+        if (e.typeId === "minecraft:small_fireball" && hurt && !FIRE_PROOF.has(t.typeId)) t.onFire = Math.max(t.onFire ?? 0, 5);
         world.afterEvents.projectileHitEntity.fire({ projectile: e, dimension: dim, location: { ...e.location }, hitVector: { ...v }, source: owner, getEntityHit: () => ({ entity: t }) });
         e.valid = false;
         return;
@@ -1743,7 +1777,8 @@ class Dimension {
         if (e.valid) stepBody(this, e);
         continue;
       }
-      const arrow = e.flying && sim.mobs && (e.typeId === "minecraft:arrow" || e.typeId === "minecraft:ender_pearl" || e.typeId === "minecraft:small_fireball");
+      const arrow = e.flying && ((sim.mobs && (e.typeId === "minecraft:arrow" || e.typeId === "minecraft:ender_pearl" || e.typeId === "minecraft:small_fireball")) ||
+        e.typeId === "zt:spore_bullet" || e.typeId === "zt:shroomy_bullet");
       if (!arrow) {
         e.location.x += e.velocity.x;
         e.location.y += e.velocity.y;
@@ -1952,6 +1987,12 @@ const dims = new Map([
 
 const worldDyn = {};
 export const world = {
+  beforeEvents: {
+    playerInteractWithBlock: listeners(),
+    playerBreakBlock: listeners(),
+    itemUse: listeners(),
+    explosion: listeners(),
+  },
   timeOfDay: 14000,
   difficulty: Difficulty.Normal,
   gameRules: { mobGriefing: true, doMobLoot: true, pvp: true },

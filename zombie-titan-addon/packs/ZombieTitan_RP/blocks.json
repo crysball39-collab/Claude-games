@@ -80,5 +80,65 @@
 	},
 	"zt:exit_sign": {
 		"sound": "metal"
+	},
+	"zt:glowite_ore": {
+		"sound": "deepslate"
+	},
+	"zt:raw_glowite_block": {
+		"sound": "stone"
+	},
+	"zt:glowite_block": {
+		"sound": "netherite"
+	},
+	"zt:glowshroom_heart": {
+		"sound": "deepslate"
+	},
+	"zt:maroon_dirt": {
+		"sound": "gravel"
+	},
+	"zt:spore_grass": {
+		"sound": "grass"
+	},
+	"zt:spore_grass_plant": {
+		"sound": "grass"
+	},
+	"zt:spore_mushroom": {
+		"sound": "fungus"
+	},
+	"zt:glowshroom_log": {
+		"sound": "stem"
+	},
+	"zt:mushed_spore_cap": {
+		"sound": "wart_block"
+	},
+	"zt:spore_crop": {
+		"sound": "grass"
+	},
+	"zt:glowshroom_planks": {
+		"sound": "wood"
+	},
+	"zt:glowshroom_stairs": {
+		"sound": "wood"
+	},
+	"zt:glowshroom_slab": {
+		"sound": "wood"
+	},
+	"zt:glowshroom_fence": {
+		"sound": "wood"
+	},
+	"zt:glowshroom_fence_gate": {
+		"sound": "wood"
+	},
+	"zt:glowshroom_door": {
+		"sound": "wood"
+	},
+	"zt:glowshroom_trapdoor": {
+		"sound": "wood"
+	},
+	"zt:glowshroom_button": {
+		"sound": "wood"
+	},
+	"zt:glowshroom_pressure_plate": {
+		"sound": "wood"
 	}
 }

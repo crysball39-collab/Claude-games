@@ -1,0 +1,30 @@
+{
+	"format_version": "1.21.90",
+	"minecraft:item": {
+		"description": {
+			"identifier": "zt:glowshroom_log",
+			"menu_category": {
+				"category": "nature",
+				"group": "minecraft:itemGroup.name.log"
+			}
+		},
+		"components": {
+			"minecraft:block_placer": {
+				"block": "zt:glowshroom_log",
+				"replace_block_item": true
+			},
+			"minecraft:display_name": {
+				"value": "tile.zt:glowshroom_log.name"
+			},
+			"minecraft:tags": {
+				"tags": [
+					"minecraft:logs",
+					"minecraft:logs_that_burn"
+				]
+			},
+			"minecraft:fuel": {
+				"duration": 15
+			}
+		}
+	}
+}

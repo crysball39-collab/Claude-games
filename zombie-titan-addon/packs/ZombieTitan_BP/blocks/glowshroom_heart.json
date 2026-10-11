@@ -1,0 +1,36 @@
+{
+	"format_version": "1.26.20",
+	"minecraft:block": {
+		"description": {
+			"identifier": "zt:glowshroom_heart",
+			"menu_category": {
+				"category": "none"
+			}
+		},
+		"components": {
+			"minecraft:geometry": "minecraft:geometry.full_block",
+			"minecraft:material_instances": {
+				"*": {
+					"texture": "zt_glowshroom_heart",
+					"render_method": "opaque"
+				}
+			},
+			"minecraft:destructible_by_mining": {
+				"seconds_to_destroy": 3
+			},
+			"minecraft:tags": [
+				"minecraft:is_pickaxe_item_destructible"
+			],
+			"minecraft:map_color": "#3a3a42",
+			"minecraft:loot": "loot_tables/blocks/glowshroom_heart.json",
+			"minecraft:tick": {
+				"interval_range": [
+					10,
+					40
+				],
+				"looping": true
+			},
+			"zt:glowshroom_heart": {}
+		}
+	}
+}

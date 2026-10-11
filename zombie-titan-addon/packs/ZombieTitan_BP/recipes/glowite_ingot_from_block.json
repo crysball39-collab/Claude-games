@@ -1,0 +1,25 @@
+{
+	"format_version": "1.20.10",
+	"minecraft:recipe_shapeless": {
+		"description": {
+			"identifier": "zt:glowite_ingot_from_block"
+		},
+		"tags": [
+			"crafting_table"
+		],
+		"ingredients": [
+			{
+				"item": "zt:glowite_block"
+			}
+		],
+		"unlock": [
+			{
+				"item": "zt:glowite_block"
+			}
+		],
+		"result": {
+			"item": "zt:glowite_ingot",
+			"count": 9
+		}
+	}
+}
