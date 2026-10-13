@@ -1,0 +1,32 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:radiation_spit",
+			"materials": {
+				"default": "entity_emissive_alpha"
+			},
+			"textures": {
+				"default": "textures/entity/zt_radiation_spit"
+			},
+			"geometry": {
+				"default": "geometry.zt.radiation_spit"
+			},
+			"scripts": {
+				"animate": [
+					"controller"
+				]
+			},
+			"animations": {
+				"spin": "animation.zt.radiation_spit.spin",
+				"controller": "controller.animation.zt.spore_bullet"
+			},
+			"particle_effects": {
+				"trail": "zt:radiation_trail"
+			},
+			"render_controllers": [
+				"controller.render.zt.glowite_default"
+			]
+		}
+	}
+}

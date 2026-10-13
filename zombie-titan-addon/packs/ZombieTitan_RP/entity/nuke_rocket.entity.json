@@ -1,0 +1,39 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:nuke_rocket",
+			"materials": {
+				"default": "entity_emissive_alpha",
+				"flame": "entity_beam_additive"
+			},
+			"textures": {
+				"default": "textures/entity/zt_nuke_rocket"
+			},
+			"geometry": {
+				"default": "geometry.zt.nuke_rocket"
+			},
+			"scripts": {
+				"scale": "q.property('zt:falling') ? 1.6 : 1.0",
+				"should_update_bones_and_effects_offscreen": "1.0",
+				"animate": [
+					"controller"
+				]
+			},
+			"animations": {
+				"flame": "animation.zt.nuke_rocket.flame",
+				"climb": "animation.zt.nuke_rocket.climb",
+				"fall": "animation.zt.nuke_rocket.fall",
+				"controller": "controller.animation.zt.nuke_rocket.main"
+			},
+			"particle_effects": {
+				"flame": "zt:rocket_flame",
+				"flame_up": "zt:rocket_flame_up",
+				"trail": "zt:rocket_trail"
+			},
+			"render_controllers": [
+				"controller.render.zt.nuke_rocket"
+			]
+		}
+	}
+}

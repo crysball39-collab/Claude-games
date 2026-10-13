@@ -1,0 +1,32 @@
+{
+	"format_version": "1.20.10",
+	"minecraft:recipe_shaped": {
+		"description": {
+			"identifier": "zt:hazmat_boots"
+		},
+		"tags": [
+			"crafting_table"
+		],
+		"pattern": [
+			"Y Y",
+			"I I"
+		],
+		"key": {
+			"Y": {
+				"item": "minecraft:yellow_wool"
+			},
+			"I": {
+				"item": "minecraft:iron_ingot"
+			}
+		},
+		"unlock": [
+			{
+				"item": "minecraft:yellow_wool"
+			}
+		],
+		"result": {
+			"item": "zt:hazmat_boots",
+			"count": 1
+		}
+	}
+}

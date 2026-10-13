@@ -1,0 +1,19 @@
+{
+	"format_version": "1.21.90",
+	"minecraft:item": {
+		"description": {
+			"identifier": "zt:doomsday_missile",
+			"menu_category": {
+				"category": "items"
+			}
+		},
+		"components": {
+			"minecraft:icon": "zt_doomsday_missile",
+			"minecraft:display_name": {
+				"value": "item.zt:doomsday_missile.name"
+			},
+			"minecraft:max_stack_size": 1,
+			"minecraft:rarity": "epic"
+		}
+	}
+}

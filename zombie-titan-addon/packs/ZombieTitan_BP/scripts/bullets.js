@@ -1,8 +1,9 @@
 // Glowing spore bullets, moved and landed by script: each tick a bullet steps along its line,
 // bursts on the first solid block, or hits the first thing in its way that it may hurt (the
 // hostile ones: players and anything not of the Glowshroom Biome; the friendly ones: hostile
-// mobs), for damage credited to whoever fired it. (Doing it here rather than with the game's
-// projectiles makes sure every hit lands and is counted the same way everywhere.)
+// mobs; a Radiation Zombie's spit: players and anything not a monster), for damage credited to
+// whoever fired it. (Doing it here rather than with the game's projectiles makes sure every hit
+// lands and is counted the same way everywhere.)
 import { system } from "@minecraft/server";
 import * as U from "./util.js";
 
@@ -12,11 +13,13 @@ import * as U from "./util.js";
 
 export const HOSTILE = "zt:spore_bullet";
 export const FRIENDLY = "zt:shroomy_bullet";
+/** A Radiation Zombie's spit (radiation.js): it hits players and what isn't a monster. */
+export const SPIT = "zt:radiation_spit";
 /** How long a bullet flies before it fades (ticks). */
 const LIFE = 80;
 /** Things a bullet flies through. */
 const PASS = /^minecraft:(air|water|flowing_water|lava|flowing_lava|short_grass|tall_grass|fern|large_fern|.*_flower|dandelion|poppy|.*_tulip|.*_sapling|.*_mushroom|vine|glow_lichen|.*torch|.*_carpet|snow_layer|light_block.*|seagrass|kelp|.*_button|.*pressure_plate|rail|.*_rail|redstone_wire|cave_vines.*|hanging_roots|.*_sign|.*_banner)$|^zt:(spore_grass_plant|spore_mushroom|spore_crop|glowshroom_button|glowshroom_pressure_plate)$/;
-const SKIP = /^minecraft:(item|xp_orb|arrow|snowball|egg|ender_pearl|fireball|small_fireball|area_effect_cloud|armor_stand|painting|leash_knot|falling_block|tnt|minecart|boat|chest_boat|lightning_bolt)$|^zt:(spore_bullet|shroomy_bullet|spore_arrow|falling_shroom|crab_totem_display|supernova|everest_portal)$/;
+const SKIP = /^minecraft:(item|xp_orb|arrow|snowball|egg|ender_pearl|fireball|small_fireball|area_effect_cloud|armor_stand|painting|leash_knot|falling_block|tnt|minecart|boat|chest_boat|lightning_bolt)$|^zt:(spore_bullet|shroomy_bullet|spore_arrow|falling_shroom|crab_totem_display|supernova|everest_portal|radiation_spit|nuke_rocket|mushroom_cloud)$/;
 /** Hostile by family, but not to be shot unless they start it. */
 const NEUTRAL = new Set(["minecraft:enderman", "minecraft:zombie_pigman", "minecraft:piglin"]);
 
@@ -25,11 +28,12 @@ const live = new Map();
 
 /**
  * Fires a bullet.
- * @param {Dimension} dim @param {string} type HOSTILE or FRIENDLY @param {Vector3} at @param {Vector3} dir (unit)
+ * @param {Dimension} dim @param {string} type HOSTILE, FRIENDLY or SPIT @param {Vector3} at @param {Vector3} dir (unit)
  * @param {number} speed blocks a tick @param {Entity | undefined} owner credited with what it hits
  * @param {number} damage
+ * @param {{ onHit?: (hit: Entity) => void, pop?: string }} [extra] what more a hit does, and the burst it makes
  */
-export function fire(dim, type, at, dir, speed, owner, damage) {
+export function fire(dim, type, at, dir, speed, owner, damage, extra = {}) {
   let e;
   try {
     e = dim.spawnEntity(type, at);
@@ -37,7 +41,7 @@ export function fire(dim, type, at, dir, speed, owner, damage) {
     return undefined;
   }
   live.set(e.id, {
-    e, dim, type, damage, owner, ownerId: owner?.id, ownerType: owner?.typeId,
+    e, dim, type, damage, owner, ownerId: owner?.id, ownerType: owner?.typeId, onHit: extra.onHit, pop: extra.pop,
     pos: { x: at.x, y: at.y, z: at.z }, vel: { x: dir.x * speed, y: dir.y * speed, z: dir.z * speed }, until: system.currentTick + LIFE,
   });
   return e;
@@ -58,7 +62,7 @@ function target(b, t) {
       return false;
     }
   };
-  if (t.typeId === "minecraft:player") return b.type === HOSTILE && U.isVulnerablePlayer(/** @type {any} */ (t));
+  if (t.typeId === "minecraft:player") return (b.type === HOSTILE || b.type === SPIT) && U.isVulnerablePlayer(/** @type {any} */ (t));
   if (b.type === FRIENDLY) return is("monster") && !NEUTRAL.has(t.typeId);
   // (a hostile bullet spares the Glowshroom Biome's own)
   let alive = false;
@@ -67,12 +71,13 @@ function target(b, t) {
   } catch {
     alive = false;
   }
+  if (b.type === SPIT) return alive && !is("monster") && !is("inanimate");
   return alive && !is("shroom") && !is("inanimate");
 }
 
 /** @param {any} b @param {Vector3} at */
 function burst(b, at) {
-  U.particle(b.dim, "zt:spore_pop", at);
+  U.particle(b.dim, b.pop ?? "zt:spore_pop", at);
   live.delete(b.e.id);
   try {
     if (U.isValid(b.e)) b.e.remove();
@@ -93,6 +98,11 @@ function strike(b, t) {
   const v = b.vel;
   const flat = Math.hypot(v.x, v.z) || 1;
   if (t.typeId === "minecraft:player" || t.typeId === "zt:player") U.knock(t, v.x / flat, v.z / flat, 0.3, 0.15);
+  try {
+    b.onHit?.(t);
+  } catch {
+    /* ignore */
+  }
 }
 
 /** Moves every bullet a step; what it hits, it hurts. @param {number} tick */

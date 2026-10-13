@@ -1,0 +1,155 @@
+{
+	"format_version": "1.10.0",
+	"animation_controllers": {
+		"controller.animation.zt.silo.doors": {
+			"initial_state": "default",
+			"states": {
+				"default": {
+					"transitions": [
+						{
+							"opened": "q.property('zt:open')"
+						},
+						{
+							"closed": "!q.property('zt:open')"
+						}
+					]
+				},
+				"closed": {
+					"transitions": [
+						{
+							"opening": "q.property('zt:open')"
+						}
+					]
+				},
+				"opening": {
+					"animations": [
+						"doors_open"
+					],
+					"transitions": [
+						{
+							"closing": "!q.property('zt:open')"
+						},
+						{
+							"opened": "q.all_animations_finished"
+						}
+					]
+				},
+				"opened": {
+					"animations": [
+						"doors_opened"
+					],
+					"transitions": [
+						{
+							"closing": "!q.property('zt:open')"
+						}
+					]
+				},
+				"closing": {
+					"animations": [
+						"doors_close"
+					],
+					"transitions": [
+						{
+							"opening": "q.property('zt:open')"
+						},
+						{
+							"closed": "q.all_animations_finished"
+						}
+					]
+				}
+			}
+		},
+		"controller.animation.zt.silo.stage": {
+			"initial_state": "idle",
+			"states": {
+				"idle": {
+					"transitions": [
+						{
+							"armed": "q.property('zt:stage') == 1"
+						}
+					]
+				},
+				"armed": {
+					"animations": [
+						"raise"
+					],
+					"transitions": [
+						{
+							"idle": "q.property('zt:stage') != 1"
+						}
+					]
+				}
+			}
+		},
+		"controller.animation.zt.nuke_rocket.main": {
+			"initial_state": "climb",
+			"states": {
+				"climb": {
+					"animations": [
+						"flame",
+						"climb"
+					],
+					"particle_effects": [
+						{
+							"effect": "flame",
+							"locator": "nozzle"
+						},
+						{
+							"effect": "trail",
+							"locator": "nozzle"
+						}
+					],
+					"transitions": [
+						{
+							"dive": "q.property('zt:falling') && q.property('zt:kind') == 2"
+						},
+						{
+							"fall": "q.property('zt:falling') && !q.property('zt:kind') == 2"
+						}
+					]
+				},
+				"dive": {
+					"animations": [
+						"flame",
+						"fall"
+					],
+					"particle_effects": [
+						{
+							"effect": "flame_up",
+							"locator": "nozzle"
+						},
+						{
+							"effect": "trail",
+							"locator": "nozzle"
+						}
+					],
+					"transitions": [
+						{
+							"climb": "!q.property('zt:falling')"
+						}
+					]
+				},
+				"fall": {
+					"animations": [
+						"fall"
+					],
+					"transitions": [
+						{
+							"climb": "!q.property('zt:falling')"
+						}
+					]
+				}
+			}
+		},
+		"controller.animation.zt.mushroom_cloud.main": {
+			"initial_state": "default",
+			"states": {
+				"default": {
+					"animations": [
+						"grow"
+					]
+				}
+			}
+		}
+	}
+}

@@ -1,0 +1,36 @@
+{
+	"format_version": "1.20.10",
+	"minecraft:recipe_shaped": {
+		"description": {
+			"identifier": "zt:fat_man"
+		},
+		"tags": [
+			"crafting_table"
+		],
+		"pattern": [
+			"INI",
+			"TTT",
+			"INI"
+		],
+		"key": {
+			"I": {
+				"item": "minecraft:iron_block"
+			},
+			"N": {
+				"item": "minecraft:nether_star"
+			},
+			"T": {
+				"item": "minecraft:tnt"
+			}
+		},
+		"unlock": [
+			{
+				"item": "minecraft:iron_block"
+			}
+		],
+		"result": {
+			"item": "zt:fat_man",
+			"count": 1
+		}
+	}
+}

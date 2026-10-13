@@ -351,6 +351,9 @@ export const BlockTypes = {
     if (blocks) return blocks.table.has(id) ? { id } : undefined;
     return id.startsWith("minecraft:") ? { id } : undefined;
   },
+  getAll() {
+    return blocks ? [...blocks.table.keys()].map((id) => ({ id })) : [];
+  },
 };
 
 export class BlockPermutation {
@@ -943,7 +946,8 @@ export class Entity {
     if (id === "zt:anim" && (v < 0 || v > 15 || !Number.isInteger(v))) throw new Error("anim out of range " + v);
     if (["zt:yaw", "zt:plate", "zt:gait", "zt:act", "zt:state"].includes(id) && !Number.isInteger(v)) throw new Error(id + " must be whole: " + v);
     if ((id === "zt:grow" || id === "zt:fuse") && (v < 0 || v > 1)) throw new Error(id + " out of range " + v);
-    const range = PROP_RANGES[id];
+    // (the old table, for entities the pack's files don't describe)
+    const range = ENTITIES[this.typeId] ? undefined : PROP_RANGES[id];
     if (range && (v < range[0] || v > range[1])) throw new Error(id + " out of range " + v);
     if (this.typeId === "zt:seek" && id === "zt:anim" && v > 3) throw new Error("seek anim out of range " + v);
     if (this.typeId === "zt:seek_hand" && id === "zt:anim" && v > 2) throw new Error("hand anim out of range " + v);
@@ -1116,6 +1120,10 @@ export class Entity {
     const yaw = (this.rotation.y * Math.PI) / 180;
     return { x: -Math.sin(yaw), y: 0, z: Math.cos(yaw) };
   }
+  playAnimation(a, o) {
+    if (typeof a !== "string" || !a.startsWith("animation.")) throw new Error("bad animation " + a);
+    log.animations.push([this.id, a, tickCounter]);
+  }
   runCommand(cmd) {
     log.commands.push(cmd);
     return { successCount: 1 };
@@ -1215,6 +1223,24 @@ export class Player extends Entity {
     if (typeof a !== "string" || !a.startsWith("animation.")) throw new Error("bad animation " + a);
     log.commands.push("anim " + a);
     log.animations.push([this.id, a, tickCounter]);
+  }
+  /** A particle only this player sees. */
+  spawnParticle(id, loc, vars) {
+    if (![loc.x, loc.y, loc.z].every(Number.isFinite)) throw new Error("bad particle location " + id);
+    log.particles.push(id);
+    log.particleAt.push({ id, x: loc.x, y: loc.y, z: loc.z, vars: vars?.vars ?? {}, tick: tickCounter, player: this.id });
+  }
+  /** How an entity's property looks to this player alone. */
+  setPropertyOverrideForEntity(e, id, v) {
+    if (!e?.valid) throw new Error("override on a gone entity");
+    if (!(id in (PROPS[e.typeId] ?? {}))) throw new Error(`${e.typeId} has no property ${id}`);
+    const bad = badProperty(e.typeId, id, v);
+    if (bad) throw new Error(bad);
+    e.overrides ??= new Map();
+    e.overrides.set(this.id + "|" + id, v);
+  }
+  removePropertyOverrideForEntity(e, id) {
+    e.overrides?.delete(this.id + "|" + id);
   }
   addExperience(n) {
     this.xp += n;
@@ -1849,6 +1875,13 @@ class Dimension {
     if (opts.type) list = list.filter((e) => e.typeId === opts.type);
     if (opts.excludeFamilies) list = list.filter((e) => !opts.excludeFamilies.some((f) => FAMILIES[e.typeId]?.includes(f)));
     if (opts.families) list = list.filter((e) => opts.families.every((f) => FAMILIES[e.typeId]?.includes(f)));
+    if (opts.excludeTypes) list = list.filter((e) => !opts.excludeTypes.includes(e.typeId));
+    if (opts.location && opts.volume) {
+      const l = opts.location;
+      const v = opts.volume;
+      list = list.filter((e) => e.location.x >= l.x && e.location.x <= l.x + v.x && e.location.y >= l.y && e.location.y <= l.y + v.y &&
+        e.location.z >= l.z && e.location.z <= l.z + v.z);
+    }
     if (opts.location && opts.maxDistance !== undefined) {
       const l = opts.location;
       list = list.filter((e) => Math.hypot(e.location.x - l.x, e.location.y - l.y, e.location.z - l.z) <= opts.maxDistance);
@@ -1906,7 +1939,14 @@ class Dimension {
     return new Block(this, Math.floor(l.x), Math.floor(l.y), Math.floor(l.z));
   }
   getTopmostBlock(xz, minHeight) {
-    if (!sim.terrain) return new Block(this, Math.floor(xz.x), stoneTop - 1, Math.floor(xz.z));
+    if (chunkUnloaded(xz.x, xz.z)) throw new LocationInUnloadedChunkError("location is in an unloaded chunk");
+    if (!sim.terrain) {
+      for (let y = Math.min(this.heightRange.max - 1, minHeight ?? this.heightRange.max - 1); y >= stoneTop - 1; y--) {
+        const b = new Block(this, Math.floor(xz.x), y, Math.floor(xz.z));
+        if (!b.isAir) return b;
+      }
+      return new Block(this, Math.floor(xz.x), stoneTop - 1, Math.floor(xz.z));
+    }
     for (let y = this.heightRange.max - 1; y >= (minHeight ?? this.heightRange.min); y--) {
       const b = new Block(this, Math.floor(xz.x), y, Math.floor(xz.z));
       if (!b.isAir) return b;
@@ -1987,17 +2027,36 @@ class Dimension {
     const b = vol.to;
     const n = (Math.abs(b.x - a.x) + 1) * (Math.abs(b.y - a.y) + 1) * (Math.abs(b.z - a.z) + 1);
     if (n > 32768) throw new Error("fill too large: " + n);
-    if (typeof block === "string") BlockPermutation.resolve(block);
-    else if (!(block instanceof BlockPermutation)) throw new Error("not a block");
-    if (areaUnloaded(a, b)) throw new UnloadedChunksError("the area has unloaded chunks");
-    if (block instanceof BlockPermutation) {
-      for (let x = Math.min(a.x, b.x); x <= Math.max(a.x, b.x); x++) {
+    if (Math.min(a.y, b.y) < this.heightRange.min || Math.max(a.y, b.y) >= this.heightRange.max) throw new Error("fill outside the world");
+    let perm;
+    if (typeof block === "string") perm = BlockPermutation.resolve(block);
+    else if (block instanceof BlockPermutation) perm = block;
+    else throw new Error("not a block");
+    const f = opts?.blockFilter;
+    for (const list of [f?.includeTypes, f?.excludeTypes]) {
+      for (const t of list ?? []) if (blocks && !blocks.table.has(t)) throw new Error("fill filter: no block " + t);
+    }
+    if ((f?.includeTypes && !f.includeTypes.length)) throw new Error("fill filter: an empty include list");
+    const inc = f?.includeTypes ? new Set(f.includeTypes) : undefined;
+    const exc = f?.excludeTypes ? new Set(f.excludeTypes) : undefined;
+    if (!opts?.ignoreChunkBoundErrors && areaUnloaded(a, b)) throw new UnloadedChunksError("the area has unloaded chunks");
+    let filled = 0;
+    for (let x = Math.min(a.x, b.x); x <= Math.max(a.x, b.x); x++) {
+      for (let z = Math.min(a.z, b.z); z <= Math.max(a.z, b.z); z++) {
+        if (chunkUnloaded(x, z)) continue;
         for (let y = Math.min(a.y, b.y); y <= Math.max(a.y, b.y); y++) {
-          for (let z = Math.min(a.z, b.z); z <= Math.max(a.z, b.z); z++) placeBlock(this, { x, y, z }, block);
+          if (inc || exc) {
+            const id = blockAt(this, x, y, z);
+            if (inc && !inc.has(id)) continue;
+            if (exc && exc.has(id)) continue;
+          }
+          placeBlock(this, { x, y, z }, perm);
+          filled++;
         }
       }
     }
-    return {};
+    log.filled = (log.filled ?? 0) + filled;
+    return { getCapacity: () => filled };
   }
   setBlockPermutation(loc, perm) {
     if (!(perm instanceof BlockPermutation)) throw new Error("not a permutation");

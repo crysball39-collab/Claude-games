@@ -4863,6 +4863,167 @@
 					"volume": 0.9
 				}
 			]
+		},
+		"zt.nuke.siren": {
+			"category": "block",
+			"min_distance": 16.0,
+			"max_distance": 128.0,
+			"sounds": [
+				{
+					"name": "sounds/zt/nuke_siren",
+					"volume": 1.0,
+					"pitch": 1.0
+				}
+			]
+		},
+		"zt.nuke.beep": {
+			"category": "block",
+			"min_distance": 4.0,
+			"max_distance": 32.0,
+			"sounds": [
+				{
+					"name": "sounds/zt/nuke_beep",
+					"volume": 1.0,
+					"pitch": 1.0
+				}
+			]
+		},
+		"zt.silo.doors": {
+			"category": "block",
+			"min_distance": 6.0,
+			"max_distance": 40.0,
+			"sounds": [
+				{
+					"name": "sounds/zt/silo_doors",
+					"volume": 1.0,
+					"pitch": 1.0
+				}
+			]
+		},
+		"zt.nuke.launch": {
+			"category": "block",
+			"min_distance": 24.0,
+			"max_distance": 192.0,
+			"sounds": [
+				{
+					"name": "sounds/zt/nuke_launch",
+					"volume": 1.0,
+					"pitch": 1.0
+				}
+			]
+		},
+		"zt.nuke.whistle": {
+			"category": "weather",
+			"min_distance": 4.0,
+			"max_distance": 64.0,
+			"sounds": [
+				{
+					"name": "sounds/zt/nuke_whistle",
+					"volume": 1.0,
+					"pitch": 1.0
+				}
+			]
+		},
+		"zt.nuke.blast": {
+			"category": "weather",
+			"min_distance": 4.0,
+			"max_distance": 64.0,
+			"sounds": [
+				{
+					"name": "sounds/zt/nuke_blast",
+					"volume": 1.0,
+					"pitch": 1.0
+				}
+			]
+		},
+		"zt.nuke.rumble": {
+			"category": "weather",
+			"min_distance": 4.0,
+			"max_distance": 64.0,
+			"sounds": [
+				{
+					"name": "sounds/zt/nuke_rumble",
+					"volume": 1.0,
+					"pitch": 1.0
+				}
+			]
+		},
+		"zt.geiger.1": {
+			"category": "player",
+			"min_distance": 2.0,
+			"max_distance": 8.0,
+			"sounds": [
+				{
+					"name": "sounds/zt/geiger_1",
+					"volume": 0.7,
+					"pitch": 1.0
+				}
+			]
+		},
+		"zt.geiger.2": {
+			"category": "player",
+			"min_distance": 2.0,
+			"max_distance": 8.0,
+			"sounds": [
+				{
+					"name": "sounds/zt/geiger_2",
+					"volume": 0.7,
+					"pitch": 1.0
+				}
+			]
+		},
+		"zt.geiger.3": {
+			"category": "player",
+			"min_distance": 2.0,
+			"max_distance": 8.0,
+			"sounds": [
+				{
+					"name": "sounds/zt/geiger_3",
+					"volume": 0.7,
+					"pitch": 1.0
+				}
+			]
+		},
+		"zt.geiger.4": {
+			"category": "player",
+			"min_distance": 2.0,
+			"max_distance": 8.0,
+			"sounds": [
+				{
+					"name": "sounds/zt/geiger_4",
+					"volume": 0.7,
+					"pitch": 1.0
+				}
+			]
+		},
+		"zt.geiger.5": {
+			"category": "player",
+			"min_distance": 2.0,
+			"max_distance": 8.0,
+			"sounds": [
+				{
+					"name": "sounds/zt/geiger_5",
+					"volume": 0.7,
+					"pitch": 1.0
+				}
+			]
+		},
+		"zt.radiation_zombie.spit": {
+			"category": "hostile",
+			"min_distance": 6.0,
+			"max_distance": 24.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/llama/spit1",
+					"volume": 1.0,
+					"pitch": 0.6
+				},
+				{
+					"name": "sounds/mob/llama/spit2",
+					"volume": 1.0,
+					"pitch": 0.55
+				}
+			]
 		}
 	}
 }

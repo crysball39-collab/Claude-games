@@ -1,0 +1,94 @@
+{
+	"format_version": "1.21.90",
+	"minecraft:entity": {
+		"description": {
+			"identifier": "zt:mushroom_cloud",
+			"is_spawnable": false,
+			"is_summonable": true,
+			"properties": {
+				"zt:size": {
+					"type": "float",
+					"range": [
+						0,
+						128
+					],
+					"default": 1.0,
+					"client_sync": true
+				},
+				"zt:age": {
+					"type": "float",
+					"range": [
+						0,
+						1000
+					],
+					"default": 0.0,
+					"client_sync": true
+				},
+				"zt:lift": {
+					"type": "float",
+					"range": [
+						0,
+						64
+					],
+					"default": 0.0,
+					"client_sync": true
+				},
+				"zt:visible": {
+					"type": "bool",
+					"default": false,
+					"client_sync": true
+				}
+			}
+		},
+		"component_groups": {
+			"zt:fade": {
+				"minecraft:instant_despawn": {}
+			}
+		},
+		"components": {
+			"minecraft:type_family": {
+				"family": [
+					"mushroom_cloud",
+					"inanimate"
+				]
+			},
+			"minecraft:collision_box": {
+				"width": 0.1,
+				"height": 0.1
+			},
+			"minecraft:physics": {
+				"has_gravity": false,
+				"has_collision": false
+			},
+			"minecraft:pushable": {
+				"is_pushable": false,
+				"is_pushable_by_piston": false
+			},
+			"minecraft:damage_sensor": {
+				"triggers": [
+					{
+						"cause": "all",
+						"deals_damage": "no"
+					}
+				]
+			},
+			"minecraft:fire_immune": {},
+			"minecraft:timer": {
+				"looping": false,
+				"time": 240,
+				"time_down_event": {
+					"event": "zt:fade"
+				}
+			}
+		},
+		"events": {
+			"zt:fade": {
+				"add": {
+					"component_groups": [
+						"zt:fade"
+					]
+				}
+			}
+		}
+	}
+}

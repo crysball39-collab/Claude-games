@@ -1,0 +1,257 @@
+{
+	"format_version": "1.10.0",
+	"animations": {
+		"animation.zt.silo.doors_open": {
+			"animation_length": 3.0,
+			"bones": {
+				"door_r": {
+					"rotation": [
+						0,
+						0,
+						"-110 * (math.clamp(q.anim_time / 3, 0, 1) * math.clamp(q.anim_time / 3, 0, 1) * (3 - 2 * math.clamp(q.anim_time / 3, 0, 1)))"
+					]
+				},
+				"door_l": {
+					"rotation": [
+						0,
+						0,
+						"110 * (math.clamp(q.anim_time / 3, 0, 1) * math.clamp(q.anim_time / 3, 0, 1) * (3 - 2 * math.clamp(q.anim_time / 3, 0, 1)))"
+					]
+				},
+				"silo": {
+					"position": [
+						"(q.anim_time < 0.3 || (q.anim_time > 2.8)) ? math.sin(q.anim_time * 4000) * 0.12 : 0",
+						0,
+						0
+					]
+				}
+			}
+		},
+		"animation.zt.silo.doors_opened": {
+			"loop": true,
+			"bones": {
+				"door_r": {
+					"rotation": [
+						0,
+						0,
+						-110
+					]
+				},
+				"door_l": {
+					"rotation": [
+						0,
+						0,
+						110
+					]
+				}
+			}
+		},
+		"animation.zt.silo.doors_close": {
+			"animation_length": 3.0,
+			"bones": {
+				"door_r": {
+					"rotation": [
+						0,
+						0,
+						"-110 * (1 - (math.clamp(q.anim_time / 3, 0, 1) * math.clamp(q.anim_time / 3, 0, 1) * (3 - 2 * math.clamp(q.anim_time / 3, 0, 1))))"
+					]
+				},
+				"door_l": {
+					"rotation": [
+						0,
+						0,
+						"110 * (1 - (math.clamp(q.anim_time / 3, 0, 1) * math.clamp(q.anim_time / 3, 0, 1) * (3 - 2 * math.clamp(q.anim_time / 3, 0, 1))))"
+					]
+				},
+				"silo": {
+					"position": [
+						"(q.anim_time < 0.3 || (q.anim_time > 2.8)) ? math.sin(q.anim_time * 4000) * 0.12 : 0",
+						0,
+						0
+					]
+				}
+			}
+		},
+		"animation.zt.silo.raise": {
+			"loop": "hold_on_last_frame",
+			"animation_length": 12.0,
+			"bones": {
+				"payload": {
+					"position": [
+						"q.anim_time > 7 ? math.sin(q.anim_time * 3000) * 0.25 : 0",
+						"12 * (math.clamp(q.anim_time / 2.5, 0, 1) * math.clamp(q.anim_time / 2.5, 0, 1) * (3 - 2 * math.clamp(q.anim_time / 2.5, 0, 1)))",
+						"q.anim_time > 7 ? math.cos(q.anim_time * 2700) * 0.25 : 0"
+					]
+				}
+			}
+		},
+		"animation.zt.nuke_rocket.flame": {
+			"loop": true,
+			"bones": {
+				"flame": {
+					"scale": [
+						"0.9 + math.sin(q.life_time * 2400) * 0.15",
+						"1.1 + math.sin(q.life_time * 1900) * 0.3",
+						"0.9 + math.cos(q.life_time * 2600) * 0.15"
+					]
+				}
+			}
+		},
+		"animation.zt.nuke_rocket.climb": {
+			"loop": true,
+			"bones": {
+				"rocket": {
+					"rotation": [
+						"math.sin(q.life_time * 500) * 1.5",
+						0,
+						"math.cos(q.life_time * 430) * 1.5"
+					]
+				}
+			}
+		},
+		"animation.zt.nuke_rocket.fall": {
+			"loop": true,
+			"bones": {
+				"rocket": {
+					"rotation": [
+						"180 + math.sin(q.life_time * 300) * 4",
+						"q.life_time * 120",
+						"math.cos(q.life_time * 270) * 4"
+					]
+				}
+			}
+		},
+		"animation.zt.mushroom_cloud.grow": {
+			"loop": true,
+			"bones": {
+				"base": {
+					"position": [
+						0,
+						"-q.property('zt:lift') * 16",
+						0
+					]
+				},
+				"cloud": {
+					"scale": "q.property('zt:size')"
+				},
+				"fireball": {
+					"position": [
+						0,
+						"math.min(v.age * 3, 34)",
+						0
+					],
+					"scale": "(v.age < 1.5 ? 0.3 + v.age / 1.5 * 1.2 : math.max(0, 1.5 - (v.age - 1.5) / 12.5 * 1.5))",
+					"rotation": [
+						"v.age * 40",
+						"v.age * 55",
+						0
+					]
+				},
+				"stem": {
+					"scale": [
+						"(0.5 + 0.5 * math.clamp(v.age / 8, 0, 1) + 0.1 * math.clamp((v.age - 14) / 106, 0, 1)) * (1 - 0.8 * math.clamp((v.age - 150) / 30, 0, 1))",
+						"math.clamp((v.age - 0.5) / 10, 0, 1)",
+						"(0.5 + 0.5 * math.clamp(v.age / 8, 0, 1) + 0.1 * math.clamp((v.age - 14) / 106, 0, 1)) * (1 - 0.8 * math.clamp((v.age - 150) / 30, 0, 1))"
+					]
+				},
+				"cap": {
+					"position": [
+						0,
+						"-28 + 28 * (math.clamp(v.age / 12, 0, 1) * math.clamp(v.age / 12, 0, 1) * (3 - 2 * math.clamp(v.age / 12, 0, 1)))",
+						0
+					],
+					"rotation": [
+						0,
+						"v.age * 3",
+						0
+					],
+					"scale": [
+						"(0.3 + 0.7 * (math.clamp(v.age / 14, 0, 1) * math.clamp(v.age / 14, 0, 1) * (3 - 2 * math.clamp(v.age / 14, 0, 1))) + 0.25 * math.clamp((v.age - 14) / 106, 0, 1)) * (1 + 0.5 * math.clamp((v.age - 150) / 30, 0, 1))",
+						"(0.3 + 0.7 * (math.clamp(v.age / 14, 0, 1) * math.clamp(v.age / 14, 0, 1) * (3 - 2 * math.clamp(v.age / 14, 0, 1))) + 0.25 * math.clamp((v.age - 14) / 106, 0, 1)) * (1 - 0.7 * math.clamp((v.age - 150) / 30, 0, 1))",
+						"(0.3 + 0.7 * (math.clamp(v.age / 14, 0, 1) * math.clamp(v.age / 14, 0, 1) * (3 - 2 * math.clamp(v.age / 14, 0, 1))) + 0.25 * math.clamp((v.age - 14) / 106, 0, 1)) * (1 + 0.5 * math.clamp((v.age - 150) / 30, 0, 1))"
+					]
+				},
+				"skirt": {
+					"scale": [
+						"1.5 * (math.clamp((v.age - 1) / 14, 0, 1) * math.clamp((v.age - 1) / 14, 0, 1) * (3 - 2 * math.clamp((v.age - 1) / 14, 0, 1)))",
+						"(1 - 0.6 * math.clamp((v.age - 15) / 60, 0, 1)) * (1 - math.clamp((v.age - 150) / 30, 0, 1))",
+						"1.5 * (math.clamp((v.age - 1) / 14, 0, 1) * math.clamp((v.age - 1) / 14, 0, 1) * (3 - 2 * math.clamp((v.age - 1) / 14, 0, 1)))"
+					]
+				},
+				"ring": {
+					"scale": [
+						"math.clamp((v.age - 3) / 3, 0, 1) * (1 + (v.age - 3) * 0.03) * (1 - math.clamp((v.age - 14) / 6, 0, 1))",
+						1,
+						"math.clamp((v.age - 3) / 3, 0, 1) * (1 + (v.age - 3) * 0.03) * (1 - math.clamp((v.age - 14) / 6, 0, 1))"
+					]
+				}
+			}
+		},
+		"animation.zt.radiation_spit.spin": {
+			"loop": true,
+			"bones": {
+				"orb": {
+					"rotation": [
+						"q.life_time * 480",
+						"q.life_time * 300",
+						0
+					],
+					"scale": "1 + math.sin(q.life_time * 1500) * 0.12"
+				}
+			}
+		},
+		"animation.zt.radiation_zombie.spit": {
+			"animation_length": 0.6,
+			"bones": {
+				"head": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"0.3": [
+							-35,
+							0,
+							0
+						],
+						"0.42": [
+							25,
+							0,
+							0
+						],
+						"0.6": [
+							0,
+							0,
+							0
+						]
+					}
+				},
+				"body": {
+					"rotation": {
+						"0.0": [
+							0,
+							0,
+							0
+						],
+						"0.3": [
+							-8,
+							0,
+							0
+						],
+						"0.42": [
+							10,
+							0,
+							0
+						],
+						"0.6": [
+							0,
+							0,
+							0
+						]
+					}
+				}
+			}
+		}
+	}
+}

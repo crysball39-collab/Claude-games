@@ -1,0 +1,143 @@
+{
+	"format_version": "1.21.90",
+	"minecraft:entity": {
+		"description": {
+			"identifier": "zt:radiation_zombie",
+			"is_spawnable": true,
+			"is_summonable": true,
+			"spawn_category": "monster"
+		},
+		"components": {
+			"minecraft:type_family": {
+				"family": [
+					"zombie",
+					"radiation_zombie",
+					"undead",
+					"monster",
+					"mob"
+				]
+			},
+			"minecraft:health": {
+				"value": 30,
+				"max": 30
+			},
+			"minecraft:attack": {
+				"damage": 4
+			},
+			"minecraft:movement": {
+				"value": 0.24
+			},
+			"minecraft:collision_box": {
+				"width": 0.6,
+				"height": 1.9
+			},
+			"minecraft:physics": {},
+			"minecraft:pushable": {
+				"is_pushable": true,
+				"is_pushable_by_piston": true
+			},
+			"minecraft:movement.basic": {},
+			"minecraft:jump.static": {},
+			"minecraft:can_climb": {},
+			"minecraft:nameable": {},
+			"minecraft:follow_range": {
+				"value": 35,
+				"max": 35
+			},
+			"minecraft:fire_immune": {},
+			"minecraft:breathable": {
+				"breathes_air": true,
+				"breathes_water": true,
+				"total_supply": 15,
+				"suffocate_time": 0
+			},
+			"minecraft:navigation.walk": {
+				"can_path_over_water": true,
+				"can_pass_doors": true,
+				"can_open_doors": false,
+				"avoid_water": true
+			},
+			"minecraft:despawn": {
+				"despawn_from_distance": {}
+			},
+			"minecraft:experience_reward": {
+				"on_death": "query.last_hit_by_player ? 8 : 0"
+			},
+			"minecraft:loot": {
+				"table": "loot_tables/entities/radiation_zombie.json"
+			},
+			"minecraft:conditional_bandwidth_optimization": {},
+			"minecraft:behavior.float": {
+				"priority": 0
+			},
+			"minecraft:behavior.hurt_by_target": {
+				"priority": 1
+			},
+			"minecraft:behavior.nearest_attackable_target": {
+				"priority": 2,
+				"must_see": true,
+				"reselect_targets": true,
+				"within_radius": 25,
+				"entity_types": [
+					{
+						"filters": {
+							"any_of": [
+								{
+									"test": "is_family",
+									"subject": "other",
+									"value": "player"
+								},
+								{
+									"test": "is_family",
+									"subject": "other",
+									"value": "irongolem"
+								},
+								{
+									"test": "is_family",
+									"subject": "other",
+									"value": "snowgolem"
+								}
+							]
+						},
+						"max_dist": 35
+					},
+					{
+						"filters": {
+							"any_of": [
+								{
+									"test": "is_family",
+									"subject": "other",
+									"value": "villager"
+								},
+								{
+									"test": "is_family",
+									"subject": "other",
+									"value": "wandering_trader"
+								}
+							]
+						},
+						"max_dist": 35,
+						"must_see": false
+					}
+				]
+			},
+			"minecraft:behavior.melee_box_attack": {
+				"priority": 3,
+				"speed_multiplier": 1.0,
+				"track_target": true
+			},
+			"minecraft:behavior.random_stroll": {
+				"priority": 7,
+				"speed_multiplier": 1.0
+			},
+			"minecraft:behavior.look_at_player": {
+				"priority": 8,
+				"look_distance": 8
+			},
+			"minecraft:behavior.random_look_around": {
+				"priority": 9
+			}
+		},
+		"events": {}
+	}
+}

@@ -62,7 +62,12 @@ GENERATORS = (
     "gen_crab_art.py",
     "gen_crab_anims.py",
     "gen_crab_data.py",  # it adds to the same files as gen_glowite_data.py
-    "gen_everest.py",  # last: it adds to item_texture.json and the language files
+    "gen_everest.py",  # it adds to item_texture.json and the language files
+    "gen_nuke_art.py",
+    "gen_radiation_art.py",  # it borrows the radiation sign from gen_nuke_art.py
+    "gen_nuke_anims.py",
+    "gen_nuke_audio.py",
+    "gen_nuke_data.py",  # last: it adds to the texture lists, blocks.json, both sound files and the language files
 )
 SKIP = re.compile(r"(^|/)(\.|__pycache__|Thumbs\.db$)")
 STAMP = (2026, 1, 1, 0, 0, 0)

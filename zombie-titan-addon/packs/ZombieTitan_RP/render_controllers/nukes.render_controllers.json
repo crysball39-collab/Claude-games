@@ -1,0 +1,83 @@
+{
+	"format_version": "1.8.0",
+	"render_controllers": {
+		"controller.render.zt.silo": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			],
+			"part_visibility": [
+				{
+					"little_boy": "q.property('zt:payload') == 1"
+				},
+				{
+					"fat_man": "q.property('zt:payload') == 2"
+				},
+				{
+					"doomsday": "q.property('zt:payload') == 3"
+				},
+				{
+					"lights": "q.property('zt:stage') == 1 ? math.mod(q.life_time * 4, 1) < 0.5 : q.property('zt:open')"
+				}
+			]
+		},
+		"controller.render.zt.nuke_rocket": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				},
+				{
+					"flame": "Material.flame"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			],
+			"part_visibility": [
+				{
+					"little_boy": "q.property('zt:kind') == 0"
+				},
+				{
+					"fat_man": "q.property('zt:kind') == 1"
+				},
+				{
+					"doomsday": "q.property('zt:kind') == 2"
+				},
+				{
+					"flame": "!q.property('zt:falling') || q.property('zt:kind') == 2"
+				}
+			]
+		},
+		"controller.render.zt.mushroom_cloud": {
+			"geometry": "Geometry.default",
+			"materials": [
+				{
+					"*": "Material.default"
+				},
+				{
+					"fireball": "Material.fire"
+				}
+			],
+			"textures": [
+				"Texture.default"
+			],
+			"part_visibility": [
+				{
+					"*": "q.property('zt:visible')"
+				}
+			],
+			"overlay_color": {
+				"r": 0.42,
+				"g": 0.4,
+				"b": 0.38,
+				"a": "math.clamp((v.age - 6) / 40, 0, 0.55)"
+			}
+		}
+	}
+}

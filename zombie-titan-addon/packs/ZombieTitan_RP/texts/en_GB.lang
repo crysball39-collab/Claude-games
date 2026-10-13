@@ -223,3 +223,24 @@ item.zt:everest.name=Everest
 entity.zt:everest_portal.name=Everest Portal
 entity.zt:supernova.name=Supernova
 ## everest end
+## nukes begin
+item.zt:little_boy.name=Little Boy
+item.zt:fat_man.name=Fat Man
+item.zt:doomsday_missile.name=Doomsday Missile
+item.zt:nuke_silo.name=Nuke Silo
+item.zt:missile_silo.name=Missile Silo
+entity.zt:nuke_silo.name=Nuke Silo
+entity.zt:missile_silo.name=Missile Silo
+action.interact.zt_silo=Controls
+entity.zt:nuke_rocket.name=Nuke
+entity.zt:mushroom_cloud.name=Mushroom Cloud
+tile.zt:ash.name=Ash
+item.zt:radiation_detector.name=Radiation Detector
+item.zt:hazmat_helmet.name=Hazmat Helmet
+item.zt:hazmat_chestplate.name=Hazmat Chestplate
+item.zt:hazmat_leggings.name=Hazmat Leggings
+item.zt:hazmat_boots.name=Hazmat Boots
+entity.zt:radiation_zombie.name=Radiation Zombie
+item.spawn_egg.entity.zt:radiation_zombie.name=Spawn Radiation Zombie
+entity.zt:radiation_spit.name=Radiation Spit
+## nukes end

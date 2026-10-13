@@ -1,0 +1,35 @@
+{
+	"format_version": "1.20.10",
+	"minecraft:recipe_shaped": {
+		"description": {
+			"identifier": "zt:hazmat_helmet"
+		},
+		"tags": [
+			"crafting_table"
+		],
+		"pattern": [
+			"YIY",
+			"YGY"
+		],
+		"key": {
+			"Y": {
+				"item": "minecraft:yellow_wool"
+			},
+			"I": {
+				"item": "minecraft:iron_ingot"
+			},
+			"G": {
+				"item": "minecraft:glass_pane"
+			}
+		},
+		"unlock": [
+			{
+				"item": "minecraft:yellow_wool"
+			}
+		],
+		"result": {
+			"item": "zt:hazmat_helmet",
+			"count": 1
+		}
+	}
+}

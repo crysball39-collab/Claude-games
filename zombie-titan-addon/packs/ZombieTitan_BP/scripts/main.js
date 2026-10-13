@@ -1,5 +1,6 @@
 // Titans add-on: wires game events to the titan, minion and item logic, the Players, Glowite
-// and the Glowshroom Biome, the Shroom Fortress, Crabulon and Everest.
+// and the Glowshroom Biome, the Shroom Fortress, Crabulon and Everest, and the nukes and their
+// fallout.
 import { system, world } from "@minecraft/server";
 import * as Bot from "./bot.js";
 import * as Chat from "./bot_chat.js";
@@ -23,7 +24,9 @@ import * as Glow from "./glowshroom.js";
 import * as Glowite from "./glowite.js";
 import * as Gum from "./gumgum.js";
 import { minionTick } from "./minions.js";
+import * as Nukes from "./nukes.js";
 import * as Obsidian from "./obsidian.js";
+import * as Radiation from "./radiation.js";
 import * as Serum from "./serum.js";
 import * as Shroom from "./shroom.js";
 import * as Titan from "./titan.js";
@@ -63,9 +66,16 @@ world.afterEvents.entityDie.subscribe(
       BotWorld.remember("dragon", "minecraft:the_end", { x: 0, y: 64, z: 0 }, { dead: true }, 300);
       Bot.onDragonDied();
     }
+    // (a zombie radiation killed may rise again)
+    Radiation.onDeath(deadEntity, damageSource);
   }),
 );
-world.afterEvents.entityHurt.subscribe(safe(({ hurtEntity, damage, damageSource }) => Bot.onHurt(hurtEntity, damageSource, damage)));
+world.afterEvents.entityHurt.subscribe(
+  safe(({ hurtEntity, damage, damageSource }) => {
+    Bot.onHurt(hurtEntity, damageSource, damage);
+    Radiation.onHurt(hurtEntity, damageSource);
+  }),
+);
 world.afterEvents.dataDrivenEntityTrigger.subscribe(
   safe(({ entity, eventId }) => {
     if (eventId === "zt:shield_block") Bot.onShieldBlock(entity);
@@ -123,6 +133,7 @@ world.afterEvents.entityDie.subscribe(
     Gum.onDeath(p);
     Doors.onPlayerDeath(p);
     Shroom.forget(p.id);
+    Radiation.onPlayerDeath(p.id);
   }),
   { entityTypes: ["minecraft:player"] },
 );
@@ -183,6 +194,12 @@ function itemUsed({ source, itemStack }) {
   } else if (id === DF.ITEM) DF.onUse(source);
   else if (id === Obsidian.SWORD) Obsidian.onUse(source);
   else if (id === Everest.ITEM) Everest.onUse(source);
+  else if (id === Radiation.DETECTOR) {
+    const now = system.currentTick;
+    if (now - (doorsUsedAt.get(source.id) ?? -99) < 10) return;
+    doorsUsedAt.set(source.id, now);
+    Radiation.onUse(source);
+  }
   else if (id && Gum.ABILITY_IDS.includes(id)) Gum.onUse(source, id);
   else if (id === Library.ITEM || id === Seek.ITEM || id === Lobby.ITEM || id === Doors.PAPER || id?.startsWith(Doors.BOOK_PREFIX) ||
     HOTEL_ITEMS.has(id)) {
@@ -230,7 +247,8 @@ world.afterEvents.playerSpawn.subscribe(
 );
 
 // the Library's books, its solution paper and door 51's padlock; the Hotel's closets, beds,
-// drawers, keys, locked doors, Jeff's shop and door 100's lever, breaker box and switches
+// drawers, keys, locked doors, Jeff's shop and door 100's lever, breaker box and switches; the
+// nuke and missile silos
 world.afterEvents.playerInteractWithEntity.subscribe(
   safe(({ player, target }) => {
     if (!target.typeId.startsWith("zt:")) return;
@@ -238,6 +256,7 @@ world.afterEvents.playerInteractWithEntity.subscribe(
       BotUI.openMenu(player, target);
       return;
     }
+    if (Nukes.onInteract(player, target)) return;
     if (Library.onInteract(player, target)) return;
     Floor.onInteract(player, target);
   }),
@@ -255,17 +274,24 @@ world.afterEvents.playerLeave.subscribe(
     Glow.forgetPlayer(playerId);
     Fortress.forgetPlayer(playerId);
     Everest.forgetPlayer(playerId);
+    Nukes.forgetPlayer(playerId);
+    Radiation.forgetPlayer(playerId);
     doorsUsedAt.delete(playerId);
   }),
 );
 
 // /scriptevent zt:natural_spawns off|on   - turn natural titan spawns off or on
+// /scriptevent zt:nuke list|clear          - where the nukes went off; forget them (and their fallout)
 // (zt:ai_reply and zt:ai_pong come from the Player AI Bridge pack)
 system.afterEvents.scriptEventReceive.subscribe(
   safe(({ id, message, sourceEntity }) => {
     if (id === "zt:ai_reply") return Chat.onAiReply(message);
     if (id === "zt:ai_pong") {
       Chat.bridge.seen = system.currentTick;
+      return;
+    }
+    if (id === "zt:nuke") {
+      Nukes.command(message, sourceEntity?.typeId === "minecraft:player" ? /** @type {import("@minecraft/server").Player} */ (sourceEntity) : undefined);
       return;
     }
     if (id !== "zt:natural_spawns") return;
@@ -321,5 +347,11 @@ system.runInterval(() => {
     Shroom.shroomTick(tick);
   } catch (err) {
     console.warn("[Titans] Glowite: " + err);
+  }
+  try {
+    Nukes.nukesTick(tick);
+    Radiation.radiationTick(tick);
+  } catch (err) {
+    console.warn("[Titans] nukes: " + err);
   }
 }, 1);

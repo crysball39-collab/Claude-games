@@ -1,0 +1,36 @@
+{
+	"format_version": "1.20.10",
+	"minecraft:recipe_shaped": {
+		"description": {
+			"identifier": "zt:little_boy"
+		},
+		"tags": [
+			"crafting_table"
+		],
+		"pattern": [
+			"ITI",
+			"TNT",
+			"ITI"
+		],
+		"key": {
+			"I": {
+				"item": "minecraft:iron_block"
+			},
+			"T": {
+				"item": "minecraft:tnt"
+			},
+			"N": {
+				"item": "minecraft:nether_star"
+			}
+		},
+		"unlock": [
+			{
+				"item": "minecraft:iron_block"
+			}
+		],
+		"result": {
+			"item": "zt:little_boy",
+			"count": 1
+		}
+	}
+}

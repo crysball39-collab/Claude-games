@@ -340,6 +340,8 @@ def main():
                "zt:glowshroom_caverns", "zt:shroom_fortresses",
                # the tag on players watching Crabulon's summoning
                "zt:crab_cutscene",
+               # where the nukes went off and the ones on their way; a silo's target; the nukes' command
+               "zt:nuke_sites", "zt:nuke_flights", "zt:target", "zt:nuke",
                # script events to and from the Player AI Bridge pack
                "zt:ai_ping", "zt:ai_pong", "zt:ai_request", "zt:ai_reply"}
     for pid in set(re.findall(r'"(zt:[a-z_]*[a-z])"', scripts)):  # (ids built from a prefix like "zt:gum_" skipped)

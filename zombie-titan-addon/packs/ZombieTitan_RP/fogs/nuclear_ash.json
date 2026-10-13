@@ -1,0 +1,22 @@
+{
+	"format_version": "1.16.100",
+	"minecraft:fog_settings": {
+		"description": {
+			"identifier": "zt:nuclear_ash"
+		},
+		"distance": {
+			"air": {
+				"fog_start": 6.0,
+				"fog_end": 80.0,
+				"fog_color": "#5d5650",
+				"render_distance_type": "fixed"
+			},
+			"weather": {
+				"fog_start": 4.199999999999999,
+				"fog_end": 60.0,
+				"fog_color": "#5d5650",
+				"render_distance_type": "fixed"
+			}
+		}
+	}
+}

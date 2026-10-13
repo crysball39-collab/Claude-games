@@ -1,0 +1,37 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:mushroom_cloud",
+			"materials": {
+				"default": "entity_emissive_alpha",
+				"fire": "entity_beam_additive"
+			},
+			"textures": {
+				"default": "textures/entity/zt_mushroom_cloud"
+			},
+			"geometry": {
+				"default": "geometry.zt.mushroom_cloud"
+			},
+			"scripts": {
+				"pre_animation": [
+					"v.sent = q.property('zt:age');",
+					"v.since = (v.sent != v.last_sent) ? q.life_time : v.since;",
+					"v.last_sent = v.sent;",
+					"v.age = v.sent + math.clamp(q.life_time - v.since, 0, 0.75);"
+				],
+				"should_update_bones_and_effects_offscreen": "1.0",
+				"animate": [
+					"controller"
+				]
+			},
+			"animations": {
+				"grow": "animation.zt.mushroom_cloud.grow",
+				"controller": "controller.animation.zt.mushroom_cloud.main"
+			},
+			"render_controllers": [
+				"controller.render.zt.mushroom_cloud"
+			]
+		}
+	}
+}

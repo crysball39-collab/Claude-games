@@ -1,0 +1,33 @@
+{
+	"format_version": "1.20.10",
+	"minecraft:recipe_shaped": {
+		"description": {
+			"identifier": "zt:hazmat_chestplate"
+		},
+		"tags": [
+			"crafting_table"
+		],
+		"pattern": [
+			"Y Y",
+			"IYI",
+			"YYY"
+		],
+		"key": {
+			"Y": {
+				"item": "minecraft:yellow_wool"
+			},
+			"I": {
+				"item": "minecraft:iron_ingot"
+			}
+		},
+		"unlock": [
+			{
+				"item": "minecraft:yellow_wool"
+			}
+		],
+		"result": {
+			"item": "zt:hazmat_chestplate",
+			"count": 1
+		}
+	}
+}

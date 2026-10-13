@@ -192,6 +192,9 @@
 		},
 		"zt_crab_spawner_eye": {
 			"textures": "textures/blocks/zt_crab_spawner_eye"
+		},
+		"zt_ash": {
+			"textures": "textures/blocks/zt_ash"
 		}
 	}
 }

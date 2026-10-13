@@ -1,6 +1,6 @@
-# Titans: Zombie, Skeleton, Creeper and Spider Titans, the Omegafish, Dark Fists, Obsidian gear, Gum Gum Fruit, Doors, Players, Glowite, Crabulon
+# Titans: Zombie, Skeleton, Creeper and Spider Titans, the Omegafish, Dark Fists, Obsidian gear, Gum Gum Fruit, Doors, Players, Glowite, Crabulon, Nukes
 
-**Version 1.9.0**
+**Version 1.10.0**
 
 A Minecraft Bedrock (Pocket Edition) add-on that brings the **Zombie Titan**, the
 **Skeleton Titan**, the **Creeper Titan**, the **Spider Titan** and the **Omegafish**
@@ -24,6 +24,10 @@ bar. It also adds:
 - **Crabulon**: the **Shroom Fortress** beside the Glowshroom caverns, **Shroomy Crabs**
   in their ponds, and **Crabulon**, a giant crab boss you summon at the fortress's altar.
   Beat it for the parts of **Everest**, a lance with four abilities
+- **Nukes**: the **Nuke Silo** and the **Missile Silo**, and **Little Boy**, **Fat Man** and
+  the **Doomsday Missile**, launched at any x y z. Mushroom clouds, shockwaves that run
+  out for thousands of blocks, a wasteland of **Ash** round a crater, and **radiation**:
+  the **Radiation Detector**, the **Hazmat** suit, and **Radiation Zombies**
 
 Made for Minecraft Bedrock **1.26.50** on Android. It works on 1.21.90 and newer and
 needs **no experimental toggles**. The Compact Obsidian block, the Glowite and
@@ -35,7 +39,7 @@ Glowshroom Door 1.26.40 or newer.
 1. Download **[`dist/ZombieTitan.mcaddon`](dist/ZombieTitan.mcaddon)**.
 2. Open **Files → Downloads** and tap `ZombieTitan.mcaddon`. Minecraft opens and
    imports two packs: *Zombie Titan BP* and *Zombie Titan RP*. Their descriptions
-   start with the version number (*Version 1.9.0*).
+   start with the version number (*Version 1.10.0*).
 3. Create a world, or edit one. Under **Behavior Packs**, activate
    **Zombie Titan BP**. Minecraft adds the resource pack with it.
 4. Play. Here is where everything is in the creative inventory:
@@ -60,6 +64,10 @@ Glowshroom Door 1.26.40 or newer.
      Crab Claws, the Crab Totem, the Spore Scroll, the Shroomed Eye and the Shroomy Crab
      Spawner: in the Items tab. **Everest**: in the Equipment tab. Shroomed Brick, the
      Shroomed Brick Wall and the Shroomed Altar: in the Construction tab.
+   - The **Nuke Silo**, the **Missile Silo**, **Little Boy**, **Fat Man** and the **Doomsday
+     Missile**: in the Items tab. The **Radiation Detector** and the **Hazmat** suit: in the
+     Equipment tab. **Ash**: in the Nature tab. **Radiation Zombie**: with the other spawn
+     eggs.
 
 If tapping the file does nothing, long-press it, choose **Open with**, and pick
 **Minecraft**.
@@ -69,7 +77,7 @@ If tapping the file does nothing, long-press it, choose **Open with**, and pick
   Storage**, delete the old *Zombie Titan BP* and *Zombie Titan RP*, and import
   again.
 - If the world still acts like the old version, check under **Behavior Packs**
-  that Zombie Titan BP is active and that its description says *Version 1.9.0*.
+  that Zombie Titan BP is active and that its description says *Version 1.10.0*.
 
 ## The Zombie Titan
 
@@ -1188,6 +1196,192 @@ repaired with Glowite Ingots. It also has **4 abilities**:
 
 Switching to another item stops the ability that's running.
 
+## Nukes
+
+### The silos
+
+A silo is a concrete well with two hatch doors on top and a control panel on the front.
+Place it from its item (use it on the ground), then **tap it** to open its controls.
+
+- The **Nuke Silo** (yellow and black, with the radiation sign) launches **nukes**: Little
+  Boy and Fat Man.
+- The **Missile Silo** (red and white, *DOOMSDAY* on its sides) launches **missiles**: the
+  Doomsday Missile.
+
+A silo can't be broken. To take it back, empty it, shut its doors and choose **Pick Up
+Silo** in its controls.
+
+### The payloads
+
+| | Little Boy | Fat Man | Doomsday Missile |
+|---|---|---|---|
+| Kind | nuke | nuke | missile (no fallout) |
+| Silo | Nuke Silo | Nuke Silo | Missile Silo |
+| Blast radius (the shockwave hurts) | **2,500 blocks** | **4,000 blocks** | **1,500 blocks** |
+| Everything turns to ash within | 500 blocks | 500 blocks | 200 blocks |
+| Crater (radius, depth) | 28 and 14 blocks | 36 and 18 | 20 and 10 |
+| Radiation reaches | 3,000 blocks | 5,000 blocks | none |
+| Mushroom cloud | 260 blocks tall | 320 blocks tall | 180 blocks tall |
+
+### Launching
+
+1. **Load it.** Use Little Boy or Fat Man on a Nuke Silo (or the Doomsday Missile on a
+   Missile Silo), or choose **Load** in its controls. A nuke won't go in a Missile Silo,
+   nor a missile in a Nuke Silo. **Unload** gives it back.
+2. **Set the target**: any **X, Y and Z**. Type numbers, or `~` for the silo's own
+   (`~100` is 100 blocks east of it for X, or south for Z). For Y, type **ground** (the
+   default) to have it go off on the ground wherever the ground is there; a number makes
+   it go off at that height (high above the ground it's an air burst, with no crater),
+   unless it hits the ground first.
+3. **Open the doors.** They swing open over three seconds.
+4. **ACTIVATE.** It asks first, showing the target, how far it is, the blast radius, and
+   whether *you* are inside it. Choose **LAUNCH**: a siren sounds, warning lights flash,
+   the payload rises, and it counts down from **10** on the screen of everyone nearby.
+   **ABORT LAUNCH** stops it.
+
+At zero the rocket roars out of the silo in a cloud of smoke and climbs out of sight. It
+reaches its target after **8 seconds to a minute**, depending on how far it is (6 seconds
+plus 1 for every 120 blocks). Anyone within 256 blocks of the target hears a **whistle**
+and sees the bomb falling.
+
+### When it hits
+
+- **A flash** whites out the screen of everyone within twice the blast radius. Close
+  enough, it blinds you for a few seconds.
+- **The shockwave** runs out at the speed of sound (340 blocks a second), so far away
+  you see the flash and the cloud first, and the **boom** arrives seconds later (7 seconds
+  at 2,500 blocks). It hurts and throws everything it reaches inside the blast radius and
+  sets what's in the nearer part of it on fire. Inside the ash zone nothing survives;
+  farther out the damage falls off: from Little Boy, 57 hearts at 1,000 blocks, 26.5 at
+  1,500, 8 at 2,000 and 2 at the edge. Armor and Blast Protection help (it counts as an explosion);
+  creative players are spared.
+- **The mushroom cloud** rises over ground zero: a fireball, then a stem and a cap
+  rolling over, a ring of cloud round the stem, and smoke rolling out from its foot. It
+  grows for two minutes, then drifts apart. Everyone within 8,000 blocks sees it on the
+  horizon, far past the normal render distance (each player is shown their own copy,
+  drawn nearer and smaller so it looks just as it should).
+- **Ash:** within 500 blocks of a nuke (200 of the missile) everything turns to **Ash**,
+  from 8 blocks under the ground (24 near ground zero) up: the ground, trees, buildings.
+  Leaves, grass, flowers and plants burn away. Only air, water, lava, bedrock and the
+  game's unbreakable blocks are left. At ground zero there's a **crater**, lined with ash
+  (not for an air burst).
+- **Burning:** out to half the blast radius, leaves, grass, flowers and crops burn away,
+  grass blocks turn to dirt, and glass shatters. To the edge of the blast radius, glass
+  shatters.
+
+Minecraft only keeps the land near players loaded, so places far from everyone change
+when someone first comes near them after the blast (each piece of land only once; the
+add-on remembers which). Mobs that were there then die (or are hurt) as they would have.
+In the ash zone this can take a few seconds as you arrive.
+
+Ash is mined with a shovel. **2 Ash make 1 Bone Meal.**
+
+### Radiation
+
+Nukes leave **radiation** behind (the Doomsday Missile doesn't). It's strongest at ground
+zero and **lower the farther you are**. Right after the blast:
+
+| Level | Little Boy | Fat Man |
+|---|---|---|
+| **DANGER** | under 300 blocks | under 500 blocks |
+| **Extreme** | 300 to 600 | 500 to 1,000 |
+| **High** | 600 to 1,100 | 1,000 to 1,835 |
+| **Medium** | 1,100 to 1,800 | 1,835 to 3,000 |
+| **Low** | 1,800 to 3,000 | 3,000 to 5,000 |
+| **None** | farther | farther |
+
+It fades over **10 Minecraft days** (a little over 3 hours of play): the zones shrink back
+toward ground zero until it's gone. Where the fallout of two blasts overlaps it's
+**worse** than either alone.
+
+The more radiation, the worse it is:
+
+| Level | What it does to you |
+|---|---|
+| **Low** | Hunger |
+| **Medium** | Hunger II, Weakness; half a heart every 6 seconds |
+| **High** | Hunger III, Weakness II, Mining Fatigue, Nausea; a heart every 4 seconds |
+| **Extreme** | Hunger IV, Weakness III, Mining Fatigue II, Nausea, Slowness, Wither; 1.5 hearts every 2 seconds |
+| **DANGER** | Hunger V, Weakness IV, Mining Fatigue III, Nausea, Slowness II, Wither II, Blindness; 2 hearts every second |
+
+It hurts mobs too (from Medium up). Where it's High or worse a green-grey haze hangs in
+the air with green motes in it; in the ash zone the air is thick with falling ash.
+
+### The Radiation Detector
+
+Hold it (in either hand) and it shows the **radiation level** where you stand, and clicks
+like a Geiger counter, faster the higher it is. **Use it** for more: the level, the
+nearest blast (which, how far, which way, how long ago, and when its fallout fades), and
+how much your Hazmat suit keeps off.
+
+Craft it from **6 Iron Ingots, a Glass Pane, Redstone Dust and a Copper Ingot**:
+
+```
+Iron  Glass Pane  Iron
+Iron  Redstone    Iron
+Iron  Copper      Iron
+```
+
+### The Hazmat suit
+
+A yellow suit with a hood and visor, black gloves and boots. It protects like **iron
+armor** (and lasts as long), and keeps radiation off:
+- **The whole suit:** nothing gets through up to **High**. In Extreme you feel only Low,
+  in DANGER Medium; and there it wears out (a point of durability a piece every 3
+  seconds in Extreme, every second in DANGER).
+- **3 pieces** keep 2 levels off, **2 pieces** 1 level, **1 piece** nothing.
+
+It's made of Yellow Wool and Iron Ingots (repair it with either):
+
+```
+Helmet:      Wool Iron Wool      Chestplate:  Wool  .   Wool
+             Wool Pane Wool                   Iron Wool Iron
+                                              Wool Wool Wool
+Leggings:    Wool Iron Wool      Boots:       Wool  .   Wool
+             Wool  .   Wool                   Iron  .   Iron
+             Wool  .   Wool
+```
+
+### Radiation Zombies
+
+A zombie (or husk, drowned or zombie villager) that **radiation kills** may rise again,
+3 times in 5, as a **Radiation Zombie**: a rotting green zombie with glowing eyes and
+veins and glowing boils. It has 15 hearts, isn't hurt by radiation, doesn't burn in the
+sun and is immune to fire.
+- Its hits do 2 hearts and **leave radiation in you**: High for 6 seconds, wherever you
+  are (a Hazmat suit helps).
+- At anything **6 to 24 blocks away** it can see, it **spits radiation**: a glowing green
+  glob that does 1.5 hearts and leaves High radiation in you for 8 seconds. It spits
+  every 3.5 seconds.
+
+It attacks players, villagers and golems, and drops Rotten Flesh (and sometimes Glowstone
+Dust). It has its own spawn egg.
+
+### Crafting (crafting table)
+
+```
+Nuke Silo:                     Missile Silo:
+Obsidian  Redstone Block  Obsidian      Smooth Stone  Redstone Block  Smooth Stone
+Iron Block  Dispenser  Iron Block       Iron Ingot    Dispenser       Iron Ingot
+Obsidian  Obsidian  Obsidian            Smooth Stone  Smooth Stone    Smooth Stone
+
+Little Boy:                    Fat Man:
+Iron Block  TNT  Iron Block             Iron Block  Nether Star  Iron Block
+TNT  Nether Star  TNT                   TNT         TNT          TNT
+Iron Block  TNT  Iron Block             Iron Block  Nether Star  Iron Block
+
+Doomsday Missile:
+   .         Iron Block     .
+  TNT           TNT        TNT
+Fire Charge  Redstone Block  Fire Charge
+```
+
+### Commands
+
+- `/scriptevent zt:nuke list` lists where the nukes went off.
+- `/scriptevent zt:nuke clear` forgets them all: the radiation is gone at once (the ash
+  stays).
+
 ## Building from source
 
 The models, textures, animations, particles, sound definitions and the obsidian
@@ -1199,9 +1393,11 @@ python3 tools/build.py        # regenerates everything, writes dist/ZombieTitan.
                               # and dist/PlayerAI_Bridge.mcpack
 ```
 
-The Seek chase's music is synthesized by `tools/gen_doors_audio.py`, and the elevator
-music, door 100's chase, Screech's whisper and Rush's roar by `tools/gen_floor1_audio.py`. They are
-encoded with `ffmpeg` (libvorbis). Without ffmpeg, the build keeps the existing files.
+The Seek chase's music is synthesized by `tools/gen_doors_audio.py`, the elevator
+music, door 100's chase, Screech's whisper and Rush's roar by `tools/gen_floor1_audio.py`,
+and the nukes' sounds (the siren, the launch, the whistle, the blast, the rumble, the silo's
+doors and the Geiger counter) by `tools/gen_nuke_audio.py`. They are encoded with `ffmpeg`
+(libvorbis). Without ffmpeg, the build keeps the existing files.
 
 Development checks:
 
@@ -1221,7 +1417,9 @@ Development checks:
   heart, its mobs, and Shroom Berries with Shroomy. `crabs` covers the caverns' ponds
   and the Shroomy Crabs, and a whole Shroom Fortress built beside a cavern with its
   spawners and chest; `crabulon` the summoning, Crabulon's attacks, its rage, its
-  leaving and its death; `everest` the lance's four abilities.
+  leaving and its death; `everest` the lance's four abilities; `nukes` the silos, the
+  launch, the blast, the clouds, the ash and the fallout with its detector, suit and
+  Radiation Zombies.
   Random numbers are seeded so runs repeat; set `ZT_SEED=<number>` to try others.
   The mock refuses blocks and block states the game would refuse, using Mojang's
   block lists in `tools/sim/vanilla-blocks.json` (made by
@@ -1232,6 +1430,22 @@ Development checks:
   poses to PNG.
 
 ## Version history
+
+- **1.10.0** (Nukes)
+  - New: the **Nuke Silo** and the **Missile Silo**, with hatch doors that swing open and
+    controls to load, aim at any x y z, open and activate (a siren and a 10-second
+    countdown, which can be aborted).
+  - New: **Little Boy** (blast radius 2,500 blocks), **Fat Man** (4,000) and the
+    **Doomsday Missile** (1,500; missile silos only, no fallout). A flash, a shockwave at
+    the speed of sound, a mushroom cloud with smoke rolling out from its foot (seen from
+    up to 8,000 blocks away), a crater, everything within 500 blocks turned to **Ash**
+    (200 for the missile), and leaves burnt and glass shattered farther out.
+  - New: **radiation** round where a nuke went off, for thousands of blocks, lower the
+    farther out (None, Low, Medium, High, Extreme, DANGER), worse effects the more of it,
+    fading over 10 days.
+  - New: the **Radiation Detector**, the **Hazmat** suit (iron's protection; safe up to
+    High), and **Radiation Zombies**, risen from zombies radiation killed: their hits and
+    their spit carry radiation.
 
 - **1.9.0** (Crabulon)
   - Fixed: the glowing spore bullets (the Shroom Zombie's and Skeleton's, and Shroomy's)

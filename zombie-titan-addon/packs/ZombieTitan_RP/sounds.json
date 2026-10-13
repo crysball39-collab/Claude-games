@@ -234,6 +234,23 @@
 						"pitch": 0.6
 					}
 				}
+			},
+			"zt:radiation_zombie": {
+				"volume": 1.0,
+				"pitch": [
+					0.6,
+					0.75
+				],
+				"events": {
+					"ambient": "mob.zombie.say",
+					"hurt": "mob.zombie.hurt",
+					"death": "mob.zombie.death",
+					"step": {
+						"sound": "mob.zombie.step",
+						"volume": 0.15,
+						"pitch": 0.8
+					}
+				}
 			}
 		}
 	}

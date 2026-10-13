@@ -241,6 +241,36 @@
 		},
 		"zt_everest": {
 			"textures": "textures/items/zt_everest"
+		},
+		"zt_little_boy": {
+			"textures": "textures/items/zt_little_boy"
+		},
+		"zt_fat_man": {
+			"textures": "textures/items/zt_fat_man"
+		},
+		"zt_doomsday_missile": {
+			"textures": "textures/items/zt_doomsday_missile"
+		},
+		"zt_nuke_silo": {
+			"textures": "textures/items/zt_nuke_silo"
+		},
+		"zt_missile_silo": {
+			"textures": "textures/items/zt_missile_silo"
+		},
+		"zt_radiation_detector": {
+			"textures": "textures/items/zt_radiation_detector"
+		},
+		"zt_hazmat_helmet": {
+			"textures": "textures/items/zt_hazmat_helmet"
+		},
+		"zt_hazmat_chestplate": {
+			"textures": "textures/items/zt_hazmat_chestplate"
+		},
+		"zt_hazmat_leggings": {
+			"textures": "textures/items/zt_hazmat_leggings"
+		},
+		"zt_hazmat_boots": {
+			"textures": "textures/items/zt_hazmat_boots"
 		}
 	}
 }

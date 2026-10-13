@@ -152,5 +152,8 @@
 	},
 	"zt:shroomy_crab_spawner": {
 		"sound": "trial_spawner"
+	},
+	"zt:ash": {
+		"sound": "sand"
 	}
 }
