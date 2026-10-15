@@ -8,7 +8,11 @@
     "start": "python3 -m http.server 8080",
     "build": "node tools/build-single-file.mjs",
     "verify": "node tools/verify.mjs",
-    "verify:file": "node tools/verify-file.mjs"
+    "verify:file": "node tools/verify-file.mjs",
+    "build:stickfights": "node tools/build-stickfights.mjs",
+    "verify:stickfights": "node tools/verify-stickfights.mjs",
+    "verify:stickfights:file": "node tools/verify-stickfights.mjs --file",
+    "poses:stickfights": "node tools/stickfights-posesheet.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.24.0",

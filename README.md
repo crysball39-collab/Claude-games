@@ -4,6 +4,13 @@ A 3D, first person, mobile-first physics sandbox that runs in a browser. Landsca
 orientation, touch controls, no install, no build step, no assets on disk — every
 texture in the game is drawn procedurally onto a canvas at load time.
 
+> This repository also holds **STICKFIGHTS**, a 2D sandbox on a grey background
+> and a black floor where you spawn stickmen, brass knuckles and crates, and the
+> stickmen think, feel, talk, fight, get hurt and die on their own - animated
+> frame by frame, not ragdolled. The single-file build is `dist/stickfights.html`,
+> the source lives in `stickfights/`, and
+> [`stickfights/README.md`](stickfights/README.md) has the details.
+
 ## Getting it onto a phone
 
 **`dist/gorebox.html` is the whole game in one file.** Download it, open it, play —

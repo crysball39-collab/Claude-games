@@ -1,0 +1,100 @@
+/* =============================================================================
+   The things you can spawn that are not people: a wooden crate and a set of
+   brass knuckles. Each one is a rigid body in the physics world while it is
+   lying about; a crate someone is carrying turns kinematic and goes where
+   their hands go, and knuckles someone is wearing leave the world altogether
+   and are drawn on the hand.
+   ========================================================================== */
+import { Body } from '../physics/rigid.js';
+
+let nextId = 1;
+
+export const CRATE_SIZE = 0.78;
+// drawn a good deal bigger than real ones, so they can be seen at all
+export const KNUCKLES_W = 0.26;
+export const KNUCKLES_H = 0.11;
+export const CRATE_MASS = 22;
+
+export class Crate {
+  constructor(sandbox, x, y, rot = 0) {
+    this.id = nextId++;
+    this.kind = 'crate';
+    this.name = 'Crate';
+    this.sandbox = sandbox;
+    this.size = CRATE_SIZE;
+    this.body = sandbox.phys.add(new Body(CRATE_SIZE, CRATE_SIZE, CRATE_MASS, {
+      x, y, rot, owner: this, friction: 0.65, restitution: 0.08, angularDamping: 0.35,
+    }));
+    this.stains = [];
+    this.carriedBy = null;   // a stickman holding it overhead
+    this.thrownBy = null;    // who threw it last, so a hit can be blamed on them
+    this.thrownAt = -99;
+    this.lastSound = -99;
+    this.removed = false;
+  }
+
+  get pos() { return this.body.pos; }
+
+  /** Blood that lands on it stays where it landed, in the crate's own frame. */
+  stain(wx, wy, r) {
+    const l = this.body.toLocal(wx, wy);
+    const h = this.size / 2;
+    l.x = Math.max(-h, Math.min(h, l.x));
+    l.y = Math.max(-h, Math.min(h, l.y));
+    if (this.stains.length > 60) this.stains.shift();
+    this.stains.push({ x: l.x, y: l.y, r, a: Math.random() * Math.PI, flat: 0.6 + Math.random() * 0.4, dark: Math.random() < 0.3 });
+  }
+
+  /** Picked up overhead: it follows the hands and stops being pushed about. */
+  carry(by) {
+    this.carriedBy = by;
+    this.body.setKinematic(true);
+    this.body.rot = 0;
+    this.body.angVel = 0;
+  }
+
+  release(vx, vy, spin = 0) {
+    this.carriedBy = null;
+    this.body.setKinematic(false, CRATE_MASS);
+    this.body.vel.x = vx;
+    this.body.vel.y = vy;
+    this.body.angVel = spin;
+  }
+}
+
+export class Knuckles {
+  constructor(sandbox, x, y, rot = 0) {
+    this.id = nextId++;
+    this.kind = 'knuckles';
+    this.name = 'Brass Knuckles';
+    this.sandbox = sandbox;
+    this.body = new Body(KNUCKLES_W, KNUCKLES_H, 0.4, {
+      x, y, rot, owner: this, friction: 0.55, restitution: 0.32, angularDamping: 0.8,
+    });
+    sandbox.phys.add(this.body);
+    this.wornBy = null;
+    this.blood = 0;
+    this.thrownBy = null;
+    this.thrownAt = -99;
+    this.lastSound = -99;
+    this.removed = false;
+  }
+
+  get pos() { return this.body.pos; }
+
+  wear(by) {
+    this.wornBy = by;
+    this.sandbox.phys.remove(this.body);
+  }
+
+  /** Off the hand and back into the world, moving the way the hand was. */
+  drop(x, y, vx = 0, vy = 0) {
+    this.wornBy = null;
+    const b = this.body;
+    b.pos.x = x; b.pos.y = y;
+    b.vel.x = vx; b.vel.y = vy;
+    b.rot = Math.random() * Math.PI;
+    b.angVel = (Math.random() - 0.5) * 10;
+    this.sandbox.phys.add(b);
+  }
+}
