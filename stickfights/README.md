@@ -143,7 +143,10 @@ Six parts take damage separately: head, torso, both arms, both legs (see
 - **Pain** - spikes with every hit and settles back to what the injuries
   still ache. It slows people down, makes them sit down, and frightens them.
 - **Consciousness** - a few clean shots to the head knock anyone out, long
-  before they would kill. Lose too much blood and you pass out too.
+  before they would kill, and a head that has already taken a beating cannot
+  be fully awake, so the next good hit puts it out again. Lose too much blood
+  and you pass out too. Coming round after a knockout is frightening: most
+  people want nothing more to do with whoever did it.
 - **Broken bones** - a broken arm cannot punch, carry or block; a broken leg
   cannot stand, so they crawl.
 - **Dizziness** - stars go round the head, and the head will not keep still.
@@ -244,9 +247,11 @@ whoever they put down, and - only the truly furious - keep going.
 `src/physics/rigid.js` is a 2D rigid body engine: Box2D-lite (Erin Catto's
 teaching version of Box2D) carried over to JavaScript, with restitution, a
 soft grab joint for the hand, and kinematic bodies. Crates stack, topple,
-slide and tumble; knuckles bounce and clatter. Every stickman has a kinematic
-stand-in among them, so a crate can land on someone, rest on a body - pinning
-them - or bounce off a head, and the contact says how hard it hit.
+slide and tumble; knuckles bounce and clatter. Every stickman has a stand-in
+among them - moved by the game, but as heavy as a person to anything it
+meets - so a crate can land on someone, rest on a body (pinning them) or
+bounce off a head. What hurts is how fast the crate was going at them, not
+how fast they walked into it.
 
 ### The hand
 

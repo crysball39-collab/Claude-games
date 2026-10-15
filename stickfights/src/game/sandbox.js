@@ -71,7 +71,7 @@ export class Sandbox {
     const sy = y ?? this.surfaceBelow(x, 0.15, 100).y;
     const man = new Stickman(this, x, sy + 0.01, person);
     man.traits = person.traits;
-    man.proxy = this.phys.add(new Body(0.28, 1.6, Infinity, { kinematic: true, owner: man, friction: 0.5 }));
+    man.proxy = this.phys.add(new Body(0.28, 1.6, Infinity, { kinematic: true, pushMass: 160, owner: man, friction: 0.5 }));
     man.brain = this.makeBrain ? this.makeBrain(man, person.traits) : null;
     this.people.push(man);
     // one step, so the body has a pose and a place before anyone looks at it
@@ -193,20 +193,33 @@ export class Sandbox {
 
   /** Which body pairs are allowed to touch. */
   collides(a, b) {
+    // a crate up in someone's hands is held clear of everything
+    if ((a.owner && a.owner.carriedBy) || (b.owner && b.owner.carriedBy)) return false;
     const ma = a.owner && a.owner.kind === 'stickman' ? a.owner : null;
     const mb = b.owner && b.owner.kind === 'stickman' ? b.owner : null;
     if (!ma && !mb) return true;
     const man = ma || mb, other = ma ? b : a;
     const thing = other.owner;
     if (!thing) return true;
+    // The stand-in is there for things that come at someone, or come to rest
+    // on them. Anything slow beside them is the character controller's to
+    // deal with: a stand-in has infinite mass, and a crate squeezed between
+    // two of them, or a set of knuckles between one and the floor, would be
+    // crushed with impossible force.
     const speed = Math.hypot(other.vel.x, other.vel.y);
-    if (thing.kind === 'knuckles') return speed > 3;
+    if (thing.kind === 'knuckles') return speed > 3 && !man.lying;
     if (thing.kind === 'crate') {
       if (other === man.support) return false;
       if (man.climbing && man.climbing.crate === thing) return false;
-      if (man.lying) return other.pos.y > man.proxy.pos.y + 0.1 || speed > 2.5;
+      if (man.lying) return other.aabb().minY > man.proxy.pos.y || speed > 2.5;
+      return speed > 2.5 || this.touching(a, b);
     }
     return true;
+  }
+
+  touching(a, b) {
+    const b1 = a.id < b.id ? a : b, b2 = b1 === a ? b : a;
+    return this.phys.arbiters.has(b1.id * 65536 + b2.id);
   }
 
   /** Impacts on people, and things clattering, from this step's contacts. */
@@ -217,8 +230,16 @@ export class Sandbox {
       if (man) {
         const body = man === oa ? arb.b2 : arb.b1;
         if (!body.owner || man.removed) continue;
+        // only the thing's own speed at them counts: walking into a crate is not being hit by one
         const o = arb.other(man.proxy);
-        if (arb.approach > 2.2) man.impactFrom(body, arb.approach, arb.point(), { x: o.nx, y: o.ny });
+        const into = man === oa ? arb.into2 : arb.into1;
+        if (into > 2.2 && into < 30) man.impactFrom(body, into, arb.point(), { x: o.nx, y: o.ny });
+        // a body swung or flung into a crate shoves it - hard, but not into orbit,
+        // the way a stand-in of infinite mass otherwise would
+        if ((man.state === 'held' || man.state === 'thrown') && body.invMass > 0) {
+          const sp = Math.hypot(body.vel.x, body.vel.y);
+          if (sp > 6) { body.vel.x *= 6 / sp; body.vel.y *= 6 / sp; }
+        }
         if (man.lying && body.invMass > 0 && body.pos.y > man.proxy.pos.y + 0.05 && body.mass > 5) {
           man.pinnedBy = body.owner;
           man.pinT = this.time;

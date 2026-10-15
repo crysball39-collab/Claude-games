@@ -38,6 +38,11 @@ export class Body {
     this.friction = o.friction ?? 0.6;
     this.restitution = o.restitution ?? 0;
     this.kinematic = !!o.kinematic;       // moved from outside, never by contacts
+    // How heavy a kinematic body is to anything it runs into. 0 is immovable;
+    // anything else lets it give a little in the solver (it is put back where
+    // it belongs next step anyway), so whatever it squeezes against the floor
+    // is not crushed with infinite force.
+    this.pushMass = o.pushMass || 0;
     this.owner = o.owner || null;
     this.linearDamping = o.linearDamping ?? 0.04;
     this.angularDamping = o.angularDamping ?? 0.25;
@@ -56,6 +61,10 @@ export class Body {
       this.I = Infinity;
       this.invI = 0;
     }
+    // what the contact solver uses: the real thing, or the push mass of a
+    // kinematic body (which never turns)
+    this.sim = this.kinematic && this.pushMass ? 1 / this.pushMass : this.invMass;
+    this.siI = this.kinematic ? 0 : this.invI;
   }
 
   /** Turns a body kinematic (carried, held still by a hand) or back to dynamic. */
@@ -294,6 +303,8 @@ class Arbiter {
     this.restitution = Math.max(b1.restitution, b2.restitution);
     this.fresh = true;       // touched for the first time this step
     this.approach = 0;       // how fast the two were closing, m/s
+    this.into1 = 0;          // how fast b1 itself was moving at b2, and b2 at b1:
+    this.into2 = 0;          // a crate thrown at someone, not someone running into one
     this.impulse = 0;        // the normal impulse this step, N s
   }
 
@@ -315,17 +326,23 @@ class Arbiter {
   preStep(invDt) {
     const b1 = this.b1, b2 = this.b2;
     this.approach = 0;
+    this.into1 = 0;
+    this.into2 = 0;
     for (const c of this.contacts) {
       const r1x = c.x - b1.pos.x, r1y = c.y - b1.pos.y;
       const r2x = c.x - b2.pos.x, r2y = c.y - b2.pos.y;
       const rn1 = r1x * c.nx + r1y * c.ny, rn2 = r2x * c.nx + r2y * c.ny;
-      let kN = b1.invMass + b2.invMass;
-      kN += b1.invI * (r1x * r1x + r1y * r1y - rn1 * rn1) + b2.invI * (r2x * r2x + r2y * r2y - rn2 * rn2);
+      const v1n = (b1.vel.x - b1.angVel * r1y) * c.nx + (b1.vel.y + b1.angVel * r1x) * c.ny;
+      const v2n = (b2.vel.x - b2.angVel * r2y) * c.nx + (b2.vel.y + b2.angVel * r2x) * c.ny;
+      if (v1n > this.into1) this.into1 = v1n;
+      if (-v2n > this.into2) this.into2 = -v2n;
+      let kN = b1.sim + b2.sim;
+      kN += b1.siI * (r1x * r1x + r1y * r1y - rn1 * rn1) + b2.siI * (r2x * r2x + r2y * r2y - rn2 * rn2);
       c.massN = 1 / kN;
       const tx = c.ny, ty = -c.nx;
       const rt1 = r1x * tx + r1y * ty, rt2 = r2x * tx + r2y * ty;
-      let kT = b1.invMass + b2.invMass;
-      kT += b1.invI * (r1x * r1x + r1y * r1y - rt1 * rt1) + b2.invI * (r2x * r2x + r2y * r2y - rt2 * rt2);
+      let kT = b1.sim + b2.sim;
+      kT += b1.siI * (r1x * r1x + r1y * r1y - rt1 * rt1) + b2.siI * (r2x * r2x + r2y * r2y - rt2 * rt2);
       c.massT = 1 / kT;
 
       // how fast they are closing, before any of this step's impulses
@@ -347,10 +364,10 @@ class Arbiter {
       const r2x = c.x - b2.pos.x, r2y = c.y - b2.pos.y;
       const tx = c.ny, ty = -c.nx;
       const px = c.Pn * c.nx + c.Pt * tx, py = c.Pn * c.ny + c.Pt * ty;
-      b1.vel.x -= b1.invMass * px; b1.vel.y -= b1.invMass * py;
-      b1.angVel -= b1.invI * (r1x * py - r1y * px);
-      b2.vel.x += b2.invMass * px; b2.vel.y += b2.invMass * py;
-      b2.angVel += b2.invI * (r2x * py - r2y * px);
+      b1.vel.x -= b1.sim * px; b1.vel.y -= b1.sim * py;
+      b1.angVel -= b1.siI * (r1x * py - r1y * px);
+      b2.vel.x += b2.sim * px; b2.vel.y += b2.sim * py;
+      b2.angVel += b2.siI * (r2x * py - r2y * px);
     }
   }
 
@@ -368,10 +385,10 @@ class Arbiter {
       c.Pn = Math.max(Pn0 + dPn, 0);
       dPn = c.Pn - Pn0;
       let px = dPn * c.nx, py = dPn * c.ny;
-      b1.vel.x -= b1.invMass * px; b1.vel.y -= b1.invMass * py;
-      b1.angVel -= b1.invI * (r1x * py - r1y * px);
-      b2.vel.x += b2.invMass * px; b2.vel.y += b2.invMass * py;
-      b2.angVel += b2.invI * (r2x * py - r2y * px);
+      b1.vel.x -= b1.sim * px; b1.vel.y -= b1.sim * py;
+      b1.angVel -= b1.siI * (r1x * py - r1y * px);
+      b2.vel.x += b2.sim * px; b2.vel.y += b2.sim * py;
+      b2.angVel += b2.siI * (r2x * py - r2y * px);
 
       dvx = b2.vel.x - b2.angVel * r2y - b1.vel.x + b1.angVel * r1y;
       dvy = b2.vel.y + b2.angVel * r2x - b1.vel.y - b1.angVel * r1x;
@@ -383,10 +400,10 @@ class Arbiter {
       c.Pt = Math.max(-maxPt, Math.min(maxPt, Pt0 + dPt));
       dPt = c.Pt - Pt0;
       px = dPt * tx; py = dPt * ty;
-      b1.vel.x -= b1.invMass * px; b1.vel.y -= b1.invMass * py;
-      b1.angVel -= b1.invI * (r1x * py - r1y * px);
-      b2.vel.x += b2.invMass * px; b2.vel.y += b2.invMass * py;
-      b2.angVel += b2.invI * (r2x * py - r2y * px);
+      b1.vel.x -= b1.sim * px; b1.vel.y -= b1.sim * py;
+      b1.angVel -= b1.siI * (r1x * py - r1y * px);
+      b2.vel.x += b2.sim * px; b2.vel.y += b2.sim * py;
+      b2.angVel += b2.siI * (r2x * py - r2y * px);
     }
   }
 
@@ -474,7 +491,7 @@ export class GrabJoint {
 /*                                    world                                   */
 /* -------------------------------------------------------------------------- */
 
-const MAX_SPEED = 45;
+const MAX_SPEED = 30;
 
 export class World {
   constructor({ gravity = -18, iterations = 10 } = {}) {

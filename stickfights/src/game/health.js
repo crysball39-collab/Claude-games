@@ -63,9 +63,9 @@ export class Health {
 
     // Cuts: anything sharp, or a hard enough blow to the face
     let wound = false;
-    const cutChance = sharp * (dmg / 12) + (part === 'head' ? dmg / 28 : dmg / 70);
+    const cutChance = sharp * (dmg / 12) + (part === 'head' ? dmg / 40 : dmg / 80);
     if (dmg > 5 && Math.random() < cutChance) {
-      p.bleed += dmg * (0.00032 + sharp * 0.00045);
+      p.bleed += dmg * (0.0002 + sharp * 0.0003);
       p.cuts++;
       wound = true;
     }
@@ -139,7 +139,11 @@ export class Health {
 
     // there has to be blood for the brain to stay awake on, and a knock to
     // the head takes a few seconds to start clearing
-    const cap = this.blood < 0.56 ? clamp((this.blood - 0.38) / 0.18, 0, 1) : 1;
+    // and a badly hurt head cannot be fully awake: it is knocked out again
+    // by the next good hit, rather than killed by it
+    const head = this.parts.head;
+    const cap = Math.min(this.blood < 0.56 ? clamp((this.blood - 0.38) / 0.18, 0, 1) : 1,
+      0.25 + 0.75 * clamp(head.hp / 70, 0, 1));
     const clearing = this.time - this.headT > 2.5 ? 0.03 + this.toughness * 0.02 : 0;
     this.conscious = Math.min(cap, this.conscious + dt * clearing);
     this.dizzy = Math.max(0, this.dizzy - dt);

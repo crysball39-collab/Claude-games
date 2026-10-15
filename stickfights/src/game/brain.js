@@ -102,6 +102,8 @@ export class Brain {
     this.saidDying = false;
     this.grabbedCount = 0;
     this.downTalk = rand(1, 3);
+    // a quirk rather than a trait: some people just like throwing things
+    this.throwy = Math.random();
     this.note('Where am I? Grey sky, black ground.');
   }
 
@@ -367,8 +369,13 @@ export class Brain {
         break;
       case 'knockdown':
       case 'ko':
-        if (ev.by === me) { E.bump('joy', 0.06 * (0.3 + T.aggression)); this.victory = Math.min(1, this.victory + 0.3 * T.aggression); }
-        else E.bump('surprise', 0.15);
+        if (ev.by === me) {
+          // putting them down takes the edge off; out cold takes most of it
+          E.bump('joy', 0.06 * (0.3 + T.aggression));
+          this.victory = Math.min(1, this.victory + 0.3 * T.aggression);
+          const r = this.rel(ev.who);
+          r.anger *= ev.type === 'ko' ? 0.45 : 0.8;
+        } else E.bump('surprise', 0.15);
         break;
       case 'pickup':
         if (seen && ev.who) this.things.delete(ev.item);
@@ -503,12 +510,22 @@ export class Brain {
         this.note('Everything went black.');
         this.clearBehaviour();
         break;
-      case 'wake':
+      case 'wake': {
+        // coming round after being knocked out is frightening, and humbling
         E.bump('surprise', 0.4);
-        E.bump('fear', 0.18);
+        E.bump('fear', 0.18 + 0.3 * (1.2 - T.bravery));
+        const by = me.lastHit && me.lastHit.by && !me.lastHit.by.removed ? me.lastHit.by : null;
+        if (by) {
+          const r = this.rel(by);
+          r.fear = clamp01(r.fear + 0.4 * (1.2 - T.bravery));
+          r.anger *= 0.5 + T.temper * 0.3;
+          this.note(`${by.name} knocked me out.`);
+        } else {
+          this.note('I woke up on the floor.');
+        }
         this.speak('wake', {}, 0.8);
-        this.note('I woke up on the floor.');
         break;
+      }
       case 'up':
         this.thinkT = 0;
         this.speak('getUp', {}, 0.25);
@@ -723,7 +740,10 @@ export class Brain {
       if (score > 0.03) out.push({ kind, target, score, why, extra, urgent });
     };
     const health = me.health.overall;
-    const canFight = me.strikes().length > 0;
+    // hands full of crate count as armed: the crate is the weapon
+    const canFight = me.strikes().length > 0 || !!me.carrying;
+    // a cracked head and a battered body do not want another round
+    const fit = clamp(me.health.parts.head.hp / 60, 0.15, 1) * clamp(health * 1.4, 0.25, 1);
     let threat = null, threatScore = 0;
     // someone coming for them right now crowds out everything casual
     let danger = 0;
@@ -760,7 +780,8 @@ export class Brain {
       if (o.brain && o.brain.begging) f *= 1 - T.empathy * 0.8;
       if (r.like > 0.4 && !hostile) f *= 0.35;
       if (!canFight) f *= 0.1;
-      f *= 1 / (1 + Math.max(0, d - 4) / 6);
+      f *= fit;
+      f *= 1 / (1 + Math.max(0, d - 3) / 4);
       add('fight', o, f,
         r.killed ? `${o.name} killed ${r.killed.name}. They'll pay.` : hostile ? `${o.name} is coming for me. I'll fight.` : `${o.name} has it coming.`,
         null, hostile && d < 3);
@@ -772,6 +793,7 @@ export class Brain {
         const menace = hostile ? 1 : r.violent > 1 ? 0.65 : 0.3;
         let fl = danger * (1.15 - T.bravery * 0.65) * menace * near;
         if (hostile && health < 0.4) fl += 0.35 * (1.2 - T.bravery);
+        if (hostile) fl += (1 - fit) * 0.4;
         if (hostile && !canFight) fl += 0.4;
         if (fl > threatScore) { threatScore = fl; threat = o; }
         add('flee', o, fl, `${o.name} scares me. I have to get away!`, null, hostile && d < 4);
@@ -805,10 +827,20 @@ export class Brain {
           `${o.name} is hurt. I should help.`);
       }
 
-      // throw something heavy at them
-      if (r.anger > 0.45 && d > 2.5 && d < 9 && !me.carrying && me.health.canUse('armA') && me.health.canUse('armB') && o.conscious) {
+      // throw something heavy at them: better than walking over, if they are
+      // running away, up out of reach, or not someone to take on up close
+      const throwing = this.behaviour && this.behaviour.kind === 'throw' && this.behaviour.target === o;
+      if (me.carrying && throwing) {
+        add('throw', o, 0.4 + r.anger * 0.6, `I'll throw this crate at ${o.name}!`, { crate: me.carrying });
+      } else if (r.anger > 0.45 && d > 2.5 && d < 9 && !me.carrying && me.health.canUse('armA') && me.health.canUse('armB') && o.conscious) {
         const c = this.crateToThrow(o);
-        if (c) add('throw', o, r.anger * (0.18 + T.aggression * 0.35) * (0.5 + conf * 0.5), `I'll throw a crate at ${o.name}!`, { crate: c });
+        if (c) {
+          const cd = Math.abs(c.pos.x - me.pos.x);
+          let t = r.anger * (0.35 + T.aggression * 0.5) * (1.25 - conf * 0.5) * (0.6 + this.throwy * 0.8) / (1 + cd / 3);
+          if (o.brain && o.brain.fleeing) t += 0.3 * r.anger;
+          if (o.pos.y > me.pos.y + 0.6) t += 0.3 * r.anger;
+          add('throw', o, t * fit, `I'll throw a crate at ${o.name}!`, { crate: c });
+        }
       }
     }
 

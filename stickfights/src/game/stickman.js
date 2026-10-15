@@ -644,7 +644,7 @@ export class Stickman {
     if (this.state === 'held') this.placeHeld();
     this.toWorld();
     this.updateStrike(dt);
-    this.updateCarried();
+    this.updateCarried(dt);
     this.updateFace(dt);
     this.updateBleeding(dt);
 
@@ -960,7 +960,7 @@ export class Stickman {
       if (this.state === 'thrown' && sp > 7) this.landHard(sp * 0.8, 'side');
       this.vel.x = this.state === 'thrown' ? -this.vel.x * 0.25 : 0;
     }
-    if (!lying) nx = this.bumpCrates(nx, hw, dt);
+    if (!lying || this.state === 'crawl') nx = this.bumpCrates(nx, hw, dt);
     this.pos.x = nx;
 
     const reach = this.onGround ? STEP_UP : 0.04;
@@ -1219,16 +1219,21 @@ export class Stickman {
     }
   }
 
-  /** The crate overhead goes where the hands go. */
-  updateCarried() {
+  /**
+   * The crate overhead goes where the hands go - easing there from wherever
+   * it was picked up, rather than jumping, and moving no faster than hands do.
+   */
+  updateCarried(dt) {
     const c = this.carrying;
     if (!c) return;
     const a = this.wj.handA, b = this.wj.handB;
     const x = (a.x + b.x) / 2, y = (a.y + b.y) / 2 + c.size / 2 - 0.03;
-    c.body.vel.x = (x - c.body.pos.x) * 60;
-    c.body.vel.y = (y - c.body.pos.y) * 60;
-    c.body.pos.x = x;
-    c.body.pos.y = y;
+    const k = 1 - Math.exp(-dt * 22);
+    const nx = lerp(c.body.pos.x, x, k), ny = lerp(c.body.pos.y, y, k);
+    c.body.vel.x = clamp((nx - c.body.pos.x) / dt, -8, 8);
+    c.body.vel.y = clamp((ny - c.body.pos.y) / dt, -8, 8);
+    c.body.pos.x = nx;
+    c.body.pos.y = ny;
     c.body.rot = 0;
   }
 
@@ -1339,9 +1344,12 @@ export class Stickman {
       w = Math.min(w, HALF_W * 2 * this.scale - 0.06);
       cx = this.pos.x + f * (this.joints.hip.x * 0.5);
     }
-    b.setSize(Math.max(0.12, w - 0.04), Math.max(0.12, lb.maxY - lb.minY - 0.02));
+    // from just above the soles up: a stand-in that reached under the feet
+    // would sit inside whatever they stand on
+    const lo = Math.max(lb.minY, 0) + 0.03;
+    b.setSize(Math.max(0.12, w - 0.04), Math.max(0.12, lb.maxY - lo));
     b.pos.x = cx;
-    b.pos.y = this.pos.y + (lb.minY + lb.maxY) / 2;
+    b.pos.y = this.pos.y + (lo + lb.maxY) / 2;
     b.rot = 0;
     b.vel.x = this.vel.x;
     b.vel.y = this.state === 'stand' ? 0 : this.vel.y;
