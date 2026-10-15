@@ -90,6 +90,7 @@ export class Brain {
     this.lonely = 0;
     this.victory = 0;
     this.guilt = 0;
+    this.restedT = -99;       // when they last got up from a sit
     this.begging = false;
     this.stayDown = false;
     this.calledHelp = -99;
@@ -224,14 +225,15 @@ export class Brain {
   /*                                    sense                                   */
   /* -------------------------------------------------------------------------- */
 
-  canSee(x, y) {
+  /** Can they see a point? `own` is the body the point is on, which does not hide itself. */
+  canSee(x, y, own = null) {
     const me = this.man;
     if (!me.conscious) return false;
     const eye = me.wj.head;
     const dx = x - eye.x, d = Math.abs(dx);
     if (d > SIGHT || Math.abs(y - eye.y) > 9) return false;
     if (d > BEHIND && sign(dx) !== me.facing && !me.lying) return false;
-    return this.sb.lineOfSight(eye.x, eye.y, x, y);
+    return this.sb.lineOfSight(eye.x, eye.y, x, y, own);
   }
 
   sees(o) { return this.visible.includes(o); }
@@ -262,7 +264,7 @@ export class Brain {
       if (k.wornBy) this.things.delete(k);
       else if (this.canSee(k.pos.x, k.pos.y + 0.1)) this.things.set(k, now);
     }
-    for (const c of sb.crates) if (this.canSee(c.pos.x, c.pos.y)) this.things.set(c, now);
+    for (const c of sb.crates) if (this.canSee(c.pos.x, c.pos.y, c.body)) this.things.set(c, now);
     for (const t of this.things.keys()) if (t.removed) this.things.delete(t);
     this.updateMood();
   }
@@ -352,7 +354,7 @@ export class Brain {
     const x = ev.x ?? (src && src.pos ? src.pos.x : me.pos.x);
     const y = ev.y ?? (src && src.pos ? src.pos.y + 1 : 1);
     const d = Math.abs(x - me.pos.x);
-    const seen = this.canSee(x, y);
+    const seen = this.canSee(x, y, src && src.kind === 'crate' ? src.body : null);
     const heard = d < (HEAR[ev.type] || 6) * (ev.loud ? 1.7 : 1);
     if (!seen && !heard) return;
     const E = this.emo, T = this.traits, now = this.sb.time;
@@ -594,6 +596,13 @@ export class Brain {
         this.note(`${by.name} hit me! I thought we were friends.`);
       } else {
         this.note(`${by.name} hit me${d.part === 'head' ? ' in the head' : ''}.`);
+      }
+    } else if (d.kind === 'impact' && d.object && d.object.kind === 'stickman') {
+      const o = d.object;
+      if (me.state === 'thrown' || me.state === 'held') this.speak('sorry', { other: o.name }, 0.7, o, true);
+      else {
+        this.speak('bodyHit', { other: o.name }, 0.8, o, true);
+        this.note(`${o.name} came flying through the air and crashed into me.`);
       }
     } else if (d.kind === 'impact') {
       this.speak('crateHit', {}, 0.6, null, true);
@@ -867,6 +876,11 @@ export class Brain {
       if (!this.inspected.has(c)) add('inspect', c, (0.08 + T.curiosity * 0.3) * (1 - E.fear) * calm / (1 + d / 8), 'A crate. What is that doing here?');
       else if (E.joy > 0.4 && E.fear < 0.3 && me.health.mobility > 0.8) {
         add('play', c, T.curiosity * E.joy * 0.32 * (0.5 + this.boredom) * calm / (1 + d / 5), 'I bet I can climb that crate.');
+      }
+      // somewhere to sit, for the ones who would rather not wander
+      if (this.inspected.has(c) && E.fear < 0.3 && E.anger < 0.4 && me.health.mobility > 0.7 && d < 6 && B.seatSide(this.sb, me, c)) {
+        const rested = clamp01((now - this.restedT) / 40);
+        add('rest', c, (0.08 + this.boredom * 0.14 + (1 - T.curiosity) * 0.06) * rested * calm / (1 + d / 6), 'I could sit on that crate for a bit.');
       }
     }
 

@@ -101,21 +101,77 @@ export class Wander extends Behaviour {
   }
 }
 
+/**
+ * Which edge of crate c is free for me to sit on: -1 or 1, the one nearer me
+ * first, or 0 if it is no good for sitting (up on a stack, tipped, sliding,
+ * something on it, both edges taken).
+ */
+export function seatSide(sb, me, c) {
+  if (!c || c.removed || c.carriedBy || c.pos.y > c.size * 0.65) return 0;
+  // (crateOnTop names a crate before any person, so a person here means no crate)
+  const on = sb.crateOnTop(c);
+  if (on && on.kind === 'crate') return 0;
+  const q = Math.PI / 2, r = ((c.body.rot % q) + q) % q;
+  // (someone else hopping up jogs it a little; only a crate on the move is no seat)
+  if (Math.min(r, q - r) > 0.12 || Math.hypot(c.body.vel.x, c.body.vel.y) > 1.5) return 0;
+  const taken = new Set();
+  for (const p of sb.people) {
+    if (p !== me && !p.removed && p.support === c.body) taken.add(Math.sign(p.pos.x - c.pos.x) || 1);
+  }
+  const near = Math.sign(me.pos.x - c.pos.x) || 1;
+  return !taken.has(near) ? near : !taken.has(-near) ? -near : 0;
+}
+
+/** Sitting down for a while: on the floor, or up on the edge of a crate if one is handy. */
 export class Rest extends Behaviour {
   get kind() { return 'rest'; }
-  get label() { return 'Resting'; }
+  get label() { return this.crate ? 'Sitting on a crate' : 'Resting'; }
   start() {
     this.dur = rand(6, 11);
-    this.brain.speak('rest', {}, 0.6);
+    const me = this.me, sb = this.sb;
+    // a crate on the floor with nothing on it, close by, and legs good enough to get up there
+    this.crate = null;
+    if (me.health.mobility > 0.7 && me.health.canUse('armA') && me.health.canUse('armB')) {
+      const t = this.target;
+      this.crate = t && t.kind === 'crate' ? (seatSide(sb, me, t) ? t : null)
+        : sb.crates.find((c) => Math.abs(c.pos.x - me.pos.x) < 3.5 && seatSide(sb, me, c)) || null;
+    }
+    if (!this.crate || me.health.pain > 30) this.brain.speak('rest', {}, 0.6);
+    this.sat = 0;
   }
   update(dt) {
     this.t += dt;
-    const me = this.me;
-    if (me.ready && me.posture !== 'sit') me.setPosture('sit');
-    if (me.posture === 'sit') me.health.pain = Math.max(0, me.health.pain - dt * 1.5);
-    return this.t < this.dur;
+    const me = this.me, c = this.crate;
+    if (c && (c.removed || c.carriedBy)) return false;
+    // knocked off their perch: that is the end of that
+    if (this.perched && me.posture !== 'sitEdge') return false;
+    if (me.posture === 'sitEdge') this.perched = true;
+    if (c && me.posture !== 'sitEdge') {
+      if (this.t > 10) { this.crate = null; return true; }
+      if (!(me.onGround && me.support === c.body)) { me.goTo(c.pos.x, 'walk', { climb: true }); return true; }
+      // up there: shuffle to a free edge, the one they came up by if they can, and sit on it, legs over the side
+      const side = seatSide(this.sb, me, c);
+      if (!side) {
+        if ((this.noSeat = (this.noSeat || 0) + dt) > 1) this.crate = null;
+        return true;
+      }
+      this.noSeat = 0;
+      if (!arrive(me, c.pos.x + side * (c.size / 2 - 0.13), 'walk', 0.05)) return true;
+      me.facing = side;
+      if (me.ready) me.setPosture('sitEdge');
+      return true;
+    }
+    if (!c && me.ready && me.posture !== 'sit') me.setPosture('sit');
+    if (me.posture === 'sit' || me.posture === 'sitEdge') {
+      this.sat += dt;
+      me.health.pain = Math.max(0, me.health.pain - dt * 1.5);
+    }
+    return this.sat < this.dur;
   }
-  end() { if (this.me.posture === 'sit') this.me.setPosture(null); }
+  end() {
+    if (this.me.posture === 'sit' || this.me.posture === 'sitEdge') this.me.setPosture(null);
+    if (this.sat > 2) this.brain.restedT = this.now;
+  }
 }
 
 export class Celebrate extends Behaviour {

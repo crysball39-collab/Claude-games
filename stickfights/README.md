@@ -155,7 +155,8 @@ Six parts take damage separately: head, torso, both arms, both legs (see
   bleeding into a pool for a while.
 
 Damage comes from fists and feet, thrown crates and knuckles, crates dropped
-on people, falls, and being thrown into the floor, a wall or a crate. A blow
+on people, falls, being thrown into the floor, a wall or a crate, and other
+people being thrown into them. A blow
 lands on whichever part it touches, knocks the body back, and drains its
 balance: a small hit is a flinch, a bigger one a stagger, and running out of
 balance puts them on the floor, on their back if hit from the front.
@@ -183,6 +184,8 @@ examples:
   doubly so if they were friends
 - hit by a crate from nowhere: "Who threw that?!" - and a hot head may blame
   whoever is standing nearest
+- bowled over by someone flying through the air: "Watch it!" - while the one
+  doing the flying says sorry
 - watching a friend get hit: angry with the attacker; watching a stranger get
   hit by someone who started it: wary of them
 - watching someone die: shocked and afraid; heartbroken and out for revenge
@@ -215,7 +218,8 @@ but not against something urgent, like someone coming at them. The options:
 | **Look at** a crate or a body | curious |
 | **Climb** a crate | happy and curious: up, look around, jump off |
 | **Investigate** a noise | curious, not scared |
-| **Rest** | in pain: sits down |
+| **Rest** | in pain: sits down - up on the edge of a crate, legs over the side, if one is handy |
+| **Sit on a crate** | calm, bored, and not one for wandering: climbs up and sits on the edge for a while (two can share, one on each side) |
 | **Celebrate** | just won |
 | **Panic** | terrified and has no idea why |
 | **Wander**, **stand around** | nothing better to do |
@@ -260,7 +264,9 @@ point you took hold of it. A stickman hangs from wherever you grabbed them -
 by the scruff of the neck, or upside down by an ankle - kicking and shouting,
 and swings like a pendulum as you move them; the dead and the knocked-out
 just hang. Let go while moving and it is a throw: stickmen tumble through the
-air and land hurt.
+air and land hurt. Fling one at a crowd and they bowl into whoever is in the
+way: both get hurt, and a hard enough hit sends the one they hit flying too,
+into the next.
 
 ### Blood
 
@@ -341,6 +347,9 @@ screen and checks:
   with them do about twice the damage
 - crates stack and stay stacked, people bump into them, and a stickman
   walking at one jumps up onto it
+- a stickman looking at a crate sees it, and a calm, bored one climbs onto it
+  and sits on its edge
+- a stickman thrown into another knocks into them, and both get hurt
 - a broken arm cannot punch, a broken leg puts them on the floor crawling
 - enough damage kills; the dead lie on the floor with crosses for eyes; a
   friend who saw it is saddened and goes to mourn

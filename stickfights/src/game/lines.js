@@ -60,6 +60,8 @@ export const LINES = {
   crateTop: ['King of the crate!', 'I can see everything from up here!', 'Woo!', 'Look at me!'],
   jumpOff: ['Wheee!', 'Geronimo!', 'Woo!'],
   crateHit: ['Who threw that?!', 'Where did that come from?!', 'OW! A crate?!', 'What was THAT?!'],
+  bodyHit: ['Watch it!', 'Hey! Get off me!', 'Ow! Where did you come from?!', 'Look where you are flying!'],
+  sorry: ['Sorry!', "It wasn't me!", 'Oof, sorry!'],
   blame: ['{other}! Did you throw that?!', 'Was that you, {other}?!', 'Very funny, {other}!'],
   throwCrate: ['Catch!', 'Heads up, {other}!', 'Eat crate!'],
   grabbed: ['Whoa! Put me down!', 'AAAH!', "I'm flying!", 'Help!', 'What is happening?!', 'Let go of me!'],

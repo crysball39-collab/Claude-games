@@ -40,7 +40,9 @@ resize();
 
 const SCREAMS = new Set(['panic', 'hurtBig', 'flee', 'grabbed', 'grabbedAgain', 'broken']);
 sb.on('hit', (e) => {
-  if (e.kind === 'impact') {
+  if (e.kind === 'impact' && e.object && e.object.kind === 'stickman') {
+    sound.punch(e.power * 0.7, false, e.x);
+  } else if (e.kind === 'impact') {
     sound.wood(e.power * 3, e.x);
     sound.punch(e.power * 0.6, false, e.x);
   } else {
@@ -56,6 +58,7 @@ sb.on('clatter', (e) => {
   if (e.what.kind === 'crate' && e.speed > 9) cam.shake(0.15);
 });
 sb.on('thud', (e) => sound.thud(e.speed, e.x));
+sb.on('collide', (e) => { sound.thud(e.speed * 0.8, e.x); cam.shake(Math.min(0.4, e.speed * 0.025)); });
 sb.on('land', (e) => { if (e.speed > 5) sound.thud(e.speed * 0.5, e.who.pos.x); });
 sb.on('knock', (e) => sound.wood(e.loud ? 5 : 2.5, e.who.pos.x));
 sb.on('break', (e) => sound.crack(e.who.pos.x));

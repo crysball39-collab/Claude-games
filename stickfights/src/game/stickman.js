@@ -49,7 +49,7 @@ const NOMINAL = { walk: strideSpeed('walk'), run: strideSpeed('run'), runScared:
 
 const LYING = new Set(['down', 'ko', 'crawl', 'dead']);
 const HIT_REACTIONS = new Set(['hitHead', 'hitBody', 'hitLow', 'flinch']);
-const STILL_POSTURES = new Set(['sit', 'kneel', 'cry', 'beg', 'cower']);
+const STILL_POSTURES = new Set(['sit', 'sitEdge', 'kneel', 'cry', 'beg', 'cower']);
 
 let nextId = 1;
 
@@ -662,6 +662,8 @@ export class Stickman {
   }
 
   updateStand(dt) {
+    // sitting on the edge of something needs something under them
+    if (this.posture === 'sitEdge' && !(this.onGround && this.support)) this.posture = null;
     if (!this.onGround) { this.setState('air'); return; }
     if (this.health.legsBroken >= 1 && !this.held) { this.knockDown(0, 0.5); return; }
     const it = this.intent;
@@ -728,6 +730,7 @@ export class Stickman {
       case 'cry': return 'cry';
       case 'beg': return 'beg';
       case 'sit': return this.health.pain > 40 ? 'sitHurt' : 'sit';
+      case 'sitEdge': return 'sitEdge';
       case 'dance': return 'dance';
       case 'talk': return 'talk';
       case 'clutch': return 'clutchHead';

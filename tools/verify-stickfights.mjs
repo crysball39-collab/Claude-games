@@ -373,6 +373,49 @@ const climb = await ev(() => {
 });
 check('a stickman walking at a crate jumps up onto it', climb.onIt, `stood at ${climb.top.toFixed(2)} m`);
 
+await fresh();
+const seat = await ev(() => {
+  const sb = window.__sf.sb;
+  const c = sb.spawnCrate(0, 0.4);
+  const p = sb.spawnStickman(-2.5, null, { name: 'Rae', traits: { curiosity: 0.15, aggression: 0.2, sociability: 0.1 } });
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  p.facing = 1;
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  const saw = p.brain.things.has(c);
+  // they have had a good look at it already, and are bored stiff
+  p.brain.inspected.add(c);
+  p.brain.boredom = 0.95;
+  let sat = false, x = 0;
+  for (let i = 0; i < 120 * 25 && !sat; i++) {
+    sb.step(1 / 120);
+    if (p.posture === 'sitEdge' && p.support === c.body) { sat = true; x = p.pos.x - c.pos.x; }
+  }
+  return { saw, sat, x, label: p.brain.behaviour ? p.brain.behaviour.label : '' };
+});
+check('a stickman looking at a crate sees it', seat.saw);
+check('a calm, bored stickman climbs onto a crate and sits on its edge', seat.sat && Math.abs(seat.x) > 0.15, `${seat.label}, ${seat.x.toFixed(2)} m from the middle`);
+
+await fresh();
+const bowl = await ev(() => {
+  const sb = window.__sf.sb;
+  const a = sb.spawnStickman(-6.2, null, { name: 'Sid' });
+  const b = sb.spawnStickman(0, null, { name: 'Tam' });
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  let hit = null;
+  sb.on('collide', (e) => { if (!hit) hit = { who: e.who.name, what: e.what.name, speed: e.speed }; });
+  // swung along at chest height and let go just short of Tam
+  const n = a.wj.neck;
+  a.grab(n.x, n.y);
+  let x = n.x;
+  for (let i = 0; i < 40; i++) { x += 14 / 120; a.holdAt(x, 1.5); sb.step(1 / 120); }
+  a.release();
+  const hp = b.health.overall;
+  for (let i = 0; i < 120 * 1.5; i++) sb.step(1 / 120);
+  return { hit, hurtB: hp - b.health.overall, hurtA: 1 - a.health.overall, bState: b.state };
+});
+check('a stickman thrown into another knocks into them, and both get hurt', !!bowl.hit && bowl.hurtB > 0.01 && bowl.hurtA > 0.01,
+  bowl.hit ? `${bowl.hit.what} into ${bowl.hit.who} at ${bowl.hit.speed.toFixed(1)} m/s, ${bowl.hit.who} ${bowl.bState}` : 'no collision');
+
 /* ----------------------------- injuries, death ---------------------------- */
 
 await fresh();

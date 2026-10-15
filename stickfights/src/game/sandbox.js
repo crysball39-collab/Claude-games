@@ -152,6 +152,7 @@ export class Sandbox {
     for (const p of this.people) if (p.brain) p.brain.update(dt);
     for (const p of this.people) p.update(dt);
     this.separate(dt);
+    this.bodiesCollide();
     for (const p of this.people) p.syncProxy();
     if (this.hand) this.hand.step(dt);
     this.phys.step(dt);
@@ -187,6 +188,37 @@ export class Sandbox {
         const s = dx === 0 ? (a.id < b.id ? -1 : 1) : Math.sign(dx);
         if (a.intent.x === null) a.pos.x -= s * push;
         if (b.intent.x === null) b.pos.x += s * push;
+      }
+    }
+  }
+
+  /**
+   * Someone flung through the air, or swung by the hand, knocks into whoever
+   * is in the way: both of them get hurt, and the one hit may go flying too.
+   */
+  bodiesCollide() {
+    for (const p of this.people) {
+      if (p.state !== 'thrown' && p.state !== 'held' && !(p.dead && p.thrownDead)) continue;
+      const sp = Math.hypot(p.vel.x, p.vel.y);
+      if (sp < 5) continue;
+      const c = p.wj.neck, h = p.wj.hip;
+      const cx = (c.x + h.x) / 2, cy = (c.y + h.y) / 2;
+      for (const q of this.people) {
+        if (q === p || q.removed || q.state === 'held' || q.lying) continue;
+        if (cx < q.box.minX - 0.25 || cx > q.box.maxX + 0.25 || cy < q.box.minY - 0.2 || cy > q.box.maxY + 0.2) continue;
+        const last = p.impactCool.get(q) || -99;
+        if (this.time - last < 0.6) continue;
+        p.impactCool.set(q, this.time);
+        q.impactCool.set(p, this.time);
+        const hit = q.nearestPart(cx, cy);
+        // a body is softer than a crate: it bowls them over more than it breaks them
+        const power = Math.min(3, (sp - 4) * 0.32);
+        const dir = Math.sign(p.vel.x) || 1;
+        q.takeHit({ by: null, part: hit.part, x: cx, y: cy, dir, power, kind: 'impact', object: p });
+        if (power > 1.6 && (q.state === 'stand' || q.state === 'stagger')) q.launch(p.vel.x * 0.45, 2 + power);
+        if (p.alive) p.takeHit({ by: null, part: 'torso', x: cx, y: cy, dir: -dir, power: power * 0.5, kind: 'impact', object: q });
+        p.vel.x *= 0.45;
+        this.emit('collide', { who: q, what: p, x: cx, y: cy, speed: sp });
       }
     }
   }
