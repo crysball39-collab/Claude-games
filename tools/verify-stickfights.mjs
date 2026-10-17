@@ -10,7 +10,9 @@
    Most checks set something up and then run the simulation forward in fixed
    steps inside the page, so they do not depend on how fast the machine is.
    The mods are checked too: off until installed from the MODS screen, the
-   storage it shows, and everything the Murder Drones mod adds.
+   storage each shows, and everything the Murder Drones and Minecraft mods
+   add - Steve, crafting a Wither Totem, and the Wither from its first
+   skull to its Nether Star.
 
    Needs playwright and a chromium build:
      npm install -D playwright && npx playwright install chromium
@@ -1088,6 +1090,42 @@ const bye = await ev(() => {
 });
 check('good friends part with a hug or a high five', bye.includes('hug') || bye.includes('highFive'), bye.join(', '));
 
+// a padlock on a feeling: then it stays where it is, whatever happens to them
+await fresh();
+await ev(() => {
+  const sb = window.__sf.sb;
+  window.__l = sb.spawnStickman(-1, null, { name: 'Lou' });
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  window.__sf.ui.select(window.__l);
+});
+await page.waitForTimeout(300);
+const lockAt = await ev(() => {
+  const row = [...document.querySelectorAll('#ins-emotions .meter')].find((m) => m.firstChild.textContent === 'Anger');
+  row.scrollIntoView({ block: 'center' });
+  window.__l.brain.emo.set('anger', 0.7);
+  const r = row.querySelector('.lock-btn').getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+});
+await tapAt(lockAt.x, lockAt.y);
+await page.waitForTimeout(250);
+const lockHeld = await ev(() => {
+  const sb = window.__sf.sb, e = window.__l.brain.emo, at = e.anger, joy0 = e.joy;
+  // calming down, and cheering up, as hard as it goes: none of it reaches a locked feeling
+  for (let i = 0; i < 120 * 6; i++) { if (i % 60 === 0) { e.bump('anger', -0.3); e.bump('joy', 0.1); } sb.step(1 / 120); }
+  const row = [...document.querySelectorAll('#ins-emotions .meter')].find((m) => m.firstChild.textContent === 'Anger');
+  return { at: +at.toFixed(4), after: +e.anger.toFixed(4), locked: e.isLocked('anger'), shown: row.classList.contains('locked'), joyMoved: Math.abs(e.joy - joy0) > 0.01 };
+});
+check('the padlock on a feeling locks it: nothing that happens moves it up or down (and the others still move)', lockHeld.locked && lockHeld.shown && lockHeld.at === lockHeld.after && lockHeld.joyMoved, JSON.stringify(lockHeld));
+await tapAt(lockAt.x, lockAt.y);
+await page.waitForTimeout(150);
+const freed = await ev(() => {
+  const e = window.__l.brain.emo, at = e.anger;
+  e.bump('anger', -0.2);
+  return { locked: e.isLocked('anger'), moved: e.anger < at - 0.1 };
+});
+check('...and tapped again, it is free to change', !freed.locked && freed.moved, JSON.stringify(freed));
+await ev(() => window.__sf.ui.select(null));
+
 /* ---------------------------------- mods --------------------------------- */
 
 await fresh();
@@ -1253,6 +1291,22 @@ const rail = await ev(() => {
 });
 check('the railgun charges, then goes through everyone in its way', rail.charged !== null && rail.charged >= 0.85 && rail.a && rail.b, JSON.stringify(rail));
 
+const peace = await ev(() => {
+  const sb = window.__sf.sb, M = window.__sf.mods;
+  sb.clear();
+  const sp = (k, x) => M.findSpawnable(k).spawn(sb, x);
+  const u = sp('md-uzi', -2), v = sp('md-v', 3), n = sp('md-n', 6);
+  let hits = 0, fights = 0;
+  sb.on('hit', (e) => { if (e.by === u && (e.who === v || e.who === n)) hits++; });
+  for (let i = 0; i < 120 * 40; i++) {
+    sb.step(1 / 120);
+    const b = u.brain.behaviour;
+    if (b && b.kind === 'fight' && (b.target === v || b.target === n)) fights++;
+  }
+  return { hits, fights };
+});
+check('Uzi leaves V (and N) alone when they have done nothing to her', peace.hits === 0 && peace.fights === 0, JSON.stringify(peace));
+
 // the inspector: what they are, and buttons for what they can do
 await fresh();
 await ev(() => {
@@ -1302,6 +1356,278 @@ const removed = await ev(() => ({
 }));
 check('REMOVE asks once more, then takes the mod out of the spawn menu and everything of it out of the world',
   armedRemove === 'TAP TO REMOVE' && removed.people.join() === 'Keeper' && !removed.guns.length && removed.cards === 6 && !removed.stored.length, JSON.stringify(removed));
+await page.tap('#mods-close');
+await ev(() => window.__sf.ui.toggleDrawer(false));
+await page.waitForTimeout(250);
+
+/* ------------------------------- Minecraft ------------------------------- */
+
+await fresh();
+await ev(() => { window.__sf.ui.toggleDrawer(true); });
+await page.waitForTimeout(300);
+await page.tap('#btn-mods');
+await page.waitForTimeout(300);
+const mcItem = await ev(() => {
+  const el = document.querySelector('.mod-item[data-mod="minecraft"]');
+  return el && {
+    name: el.querySelector('.mod-name').textContent,
+    size: el.querySelector('.mod-size').textContent,
+    adds: [...el.querySelectorAll('.mod-adds .chip')].map((c) => c.textContent),
+    btn: el.querySelector('.mod-btn').textContent,
+  };
+});
+check('the MODS screen has Minecraft too: Steve, the blocks for a Wither Totem, the Wither, its skeletons and its Nether Star',
+  !!mcItem && mcItem.name === 'Minecraft' && mcItem.btn === 'INSTALL' &&
+  ['Steve', 'Crafting Table', 'Soul Sand', 'Wither Skull', 'Wither Totem', 'The Wither', 'Wither Skeletons', 'Nether Star'].every((n) => mcItem.adds.includes(n)), JSON.stringify(mcItem));
+const mcKB = (measureMods().minecraft / 1024).toFixed(1) + ' KB';
+check('...and shows the storage it needs, too', !!mcItem && mcItem.size === 'Storage needed: ' + mcKB, `${mcItem && mcItem.size} (its folder: ${mcKB})`);
+await page.tap('.mod-item[data-mod="minecraft"] .mod-btn');
+await page.waitForFunction(() => window.__sf.mods.isInstalled('minecraft'), null, { timeout: 8000 }).catch(() => {});
+await page.waitForTimeout(150);
+await page.tap('#mods-close');
+await page.waitForTimeout(250);
+const mcCards = await ev(() => {
+  window.__sf.ui.toggleDrawer(true);
+  const c = document.querySelector('.card[data-spawn="mc-totem"]');
+  return { cards: [...document.querySelectorAll('.card')].map((k) => k.dataset.spawn), locked: !!c && c.classList.contains('locked'), badge: c && c.querySelector('.card-badge').textContent };
+});
+check('installed, Steve, a Crafting Table, Soul Sand, a Wither Skull and a Wither Totem are in the spawn menu - the totem locked until one is crafted',
+  mcCards.cards.length === 11 && ['mc-steve', 'mc-table', 'mc-soul', 'mc-skull', 'mc-totem'].every((k) => mcCards.cards.includes(k)) && mcCards.locked && mcCards.badge === 'CRAFT',
+  `${mcCards.cards.join(', ')}; the totem says ${mcCards.badge}`);
+await page.waitForTimeout(300);
+await ev(() => document.querySelector('.card[data-spawn="mc-totem"]').scrollIntoView({ block: 'center' }));
+await page.tap('.card[data-spawn="mc-totem"]');
+await page.waitForTimeout(200);
+const lockedTap = await ev(() => ({ open: document.querySelector('#drawer').classList.contains('open'), kind: window.__sf.ui.spawnKind, toast: document.querySelector('#toast').textContent }));
+check('...and tapping it says how to make one, instead of arming the spawn tool', lockedTap.open && lockedTap.kind !== 'mc-totem' && /Craft one first/.test(lockedTap.toast), JSON.stringify(lockedTap));
+
+// Steve, from his card
+await ev(() => document.querySelector('.card[data-spawn="mc-steve"]').scrollIntoView({ block: 'center' }));
+await page.tap('.card[data-spawn="mc-steve"]');
+await page.waitForTimeout(300);
+await tapAt(220, 200);
+await sim(0.6);
+const steve = await ev(() => {
+  const s = window.__sf.sb.people.find((p) => p.name === 'Steve');
+  window.__s = s;
+  return s && { kind: s.species && s.species.label, holding: s.innate, apples: s.mc.apples, onFloor: Math.abs(s.pos.y) < 0.05 };
+});
+check('Steve spawns from his card, with his diamond sword and three golden apples', !!steve && steve.kind === 'Minecraft Player' && steve.holding === 'diamondSword' && steve.apples === 3 && steve.onFloor, JSON.stringify(steve));
+const kit = await ev(() => {
+  const sb = window.__sf.sb, s = window.__s;
+  const steps = (n, each) => { for (let i = 0; i < n; i++) { if (each) each(); sb.step(1 / 120); } };
+  s.brain = null;
+  s.pos.x = -6; s.vel.x = 0; s.facing = 1;
+  const d = sb.spawnStickman(1, null, { name: 'Target', traits: { toughness: 1 } });
+  d.brain = null;
+  d.facing = -1;
+  steps(60);
+  s.species.abilities(s).find((a) => a.id === 'bow').pick();
+  steps(120);
+  const form = s.mc.form;
+  let shots = 0, hits = 0;
+  sb.on('bowShoot', (e) => { if (e.who === s) shots++; });
+  sb.on('arrowHit', (e) => { if (e.who === d) hits++; });
+  steps(120 * 4, () => { s.aimAt(d); s.fire(); });
+  // and, hurt, an apple
+  s.health.parts.torso.hp *= 0.5;
+  const hp0 = s.health.overall;
+  s.lowerGun();
+  steps(30);
+  const ate = s.species.abilities(s).find((a) => a.id === 'apple').pick();
+  steps(120 * 2.5);
+  return { form, shots, hits, ate, apples: s.mc.apples, healed: s.health.overall > hp0, regen: s.afflictions.some((a) => a.label === 'Regeneration') };
+});
+check('Steve swaps to his bow, draws it, and his arrows arc over and hit', kit.form === 'bow' && kit.shots >= 2 && kit.hits >= 1, JSON.stringify(kit));
+check('...and a golden apple mends him, and leaves him regenerating', kit.ate && kit.apples === 2 && kit.healed && kit.regen, JSON.stringify(kit));
+
+// crafting: the blocks next to a table, the table tapped, CRAFT
+await fresh();
+const tableAt = await ev(() => {
+  const sf = window.__sf, sb = sf.sb, M = sf.mods, cam = sf.cam;
+  const sp = (k, x, y = 0.4) => M.findSpawnable(k).spawn(sb, x, y);
+  sf.ui.toggleDrawer(false);
+  cam.home();
+  const t = sp('mc-table', 0);
+  for (const x of [1.0, 1.8, 1.4, -1.2]) sp('mc-soul', x, x === 1.4 ? 1.3 : 0.4);
+  for (const x of [-0.6, -1.9, 0.6]) sp('mc-skull', x, 1.2);
+  for (let i = 0; i < 240; i++) sb.step(1 / 120);
+  window.__table = t;
+  sf.ui.setTool('hand');
+  const s = cam.toScreen(t.pos.x, t.pos.y);
+  return { x: s.x, y: s.y };
+});
+await page.waitForTimeout(300);
+await tapAt(tableAt.x, tableAt.y);
+await page.waitForTimeout(300);
+const panel = await ev(() => {
+  const b = document.querySelector('#panel-buttons .panel-btn');
+  return {
+    open: !document.querySelector('#thing-panel').classList.contains('hidden'),
+    title: document.querySelector('#panel-title').textContent,
+    text: document.querySelector('#panel-text').textContent,
+    craft: b && { label: b.textContent, enabled: !b.disabled },
+  };
+});
+check('tapping the Crafting Table opens its crafting grid, which sees the 4 Soul Sand and 3 Wither Skulls by it',
+  panel.open && panel.title === 'CRAFTING' && /4\/4 Soul Sand, 3\/3 Wither Skulls/.test(panel.text) && !!panel.craft && panel.craft.label === 'CRAFT' && panel.craft.enabled, JSON.stringify(panel));
+await shot('crafting');
+await page.tap('#panel-buttons .panel-btn');
+await page.waitForTimeout(300);
+const crafted = await ev(() => {
+  const sb = window.__sf.sb, c = document.querySelector('.card[data-spawn="mc-totem"]');
+  window.__sf.ui.updateBadges();
+  return {
+    sand: sb.crates.filter((k) => k.block === 'soul').length, skulls: sb.items.filter((i) => i.kind === 'witherSkull').length,
+    closed: document.querySelector('#thing-panel').classList.contains('hidden'), badge: c.querySelector('.card-badge').textContent, locked: c.classList.contains('locked'),
+  };
+});
+check('CRAFT uses them up, and a Wither Totem is waiting in the spawn menu', crafted.sand === 0 && crafted.skulls === 0 && crafted.closed && crafted.badge === '×1' && !crafted.locked, JSON.stringify(crafted));
+
+// the totem, placed and activated
+await ev(() => { window.__sf.ui.toggleDrawer(true); document.querySelector('.card[data-spawn="mc-totem"]').scrollIntoView({ block: 'center' }); });
+await page.waitForTimeout(300);
+await page.tap('.card[data-spawn="mc-totem"]');
+await page.waitForTimeout(300);
+const placeAt = await ev(() => { const s = window.__sf.cam.toScreen(-3, 0.5); return { x: s.x, y: s.y }; });
+await tapAt(placeAt.x, placeAt.y);
+await ev(() => window.__sf.ui.setTool('hand'));
+await sim(0.3);
+await page.waitForTimeout(250);
+const placed = await ev(() => {
+  const sb = window.__sf.sb, t = sb.items.find((i) => i.kind === 'witherTotem');
+  window.__totem = t;
+  const b = document.querySelector('#world-buttons .world-btn');
+  return { totem: !!t, x: t && +t.pos.x.toFixed(2), badge: document.querySelector('.card[data-spawn="mc-totem"] .card-badge').textContent, button: b && b.textContent, shown: !!b && b.style.display !== 'none' };
+});
+check('the Wither Totem goes down where it is tapped, with an ACTIVATE button over it', placed.totem && Math.abs(placed.x + 3) < 0.2 && placed.button === 'ACTIVATE' && placed.shown && placed.badge === 'CRAFT', JSON.stringify(placed));
+await shot('totem');
+await page.tap('#world-buttons .world-btn');
+await page.waitForTimeout(100);
+const charge = await ev(() => {
+  const sb = window.__sf.sb, t = window.__totem, y0 = t.pos.y;
+  const out = { charging: t.charging };
+  let wither = null, bang = 0;
+  sb.on('mcExplosion', () => { bang++; });
+  sb.on('witherSpawn', (e) => { wither = e.who; });
+  const xs = [];
+  for (let i = 0; i < 120 * 3.3; i++) { sb.step(1 / 120); if (i > 120 * 2.8) xs.push(t.pos.x); }
+  out.rose = +(t.pos.y - y0).toFixed(2);
+  out.glow = +t.glow.toFixed(2);
+  out.shake = +(Math.max(...xs) - Math.min(...xs)).toFixed(3);
+  out.whole = !t.removed && !wither;
+  for (let i = 0; i < 120; i++) sb.step(1 / 120);
+  out.gone = t.removed;
+  out.bang = bang > 0;
+  out.wither = !!wither;
+  window.__w = wither;
+  return out;
+});
+check('ACTIVATE: the totem floats up, glows white and shakes - then explodes into the Wither',
+  charge.charging && charge.rose > 1 && charge.glow > 0.8 && charge.shake > 0.02 && charge.whole && charge.gone && charge.bang && charge.wither, JSON.stringify(charge));
+await page.waitForTimeout(300);
+const boss = await ev(() => {
+  const w = window.__w, bars = [...document.querySelectorAll('#bossbars .bossbar')];
+  return { name: w && w.name, hp: w && +w.health.bossHp.toFixed(1), max: w && w.health.bossMax, bars: bars.map((b) => b.querySelector('.boss-name').textContent), fill: bars[0] && bars[0].querySelector('.boss-fill').style.width };
+});
+check('the Wither has a boss bar along the top, and 600 health', boss.name === 'Wither' && boss.max === 600 && boss.hp > 590 && boss.bars.length === 1 && boss.bars[0] === 'Wither' && parseFloat(boss.fill) > 98, JSON.stringify(boss));
+await shot('wither');
+
+const p1 = await ev(() => {
+  const sb = window.__sf.sb, w = window.__w;
+  sb.spawnStickman(-6, null, { name: 'Ash', traits: { toughness: 1, bravery: 1 } });
+  sb.spawnStickman(5, null, { name: 'Bo', traits: { toughness: 1, bravery: 1 } });
+  let black = 0, blue = 0, high = 0;
+  const withered = new Set();
+  sb.on('witherShoot', (e) => { if (e.who === w) { if (e.blue) blue++; else black++; } });
+  sb.on('withered', (e) => withered.add(e.who.name));
+  for (let i = 0; i < 120 * 16; i++) { sb.step(1 / 120); high = Math.max(high, w.pos.y); }
+  return { black, blue, withered: [...withered], high: +high.toFixed(2), outOfReach: !w.species.reachable(w), phase: w.mc.phase };
+});
+check('phase 1: up out of reach, it spits black skulls and blue ones, and whoever they catch withers',
+  p1.black >= 4 && p1.blue >= 1 && p1.withered.length >= 1 && p1.high > 2 && p1.outOfReach && p1.phase === 1, JSON.stringify(p1));
+
+const p2 = await ev(() => {
+  const sb = window.__sf.sb, w = window.__w;
+  w.health.bossHp = 300;
+  let armour = 0, summoned = 0, low = 9;
+  sb.on('witherArmor', () => { armour++; });
+  sb.on('skeletonSummoned', (e) => { if (e.by === w) summoned++; });
+  for (let i = 0; i < 120 * 3; i++) sb.step(1 / 120);
+  const sk = sb.people.filter((p) => p.species && p.species.kind === 'witherSkeleton');
+  window.__skSpecies = sk.length ? sk[0].species : null;
+  for (let i = 0; i < 120 * 4; i++) { sb.step(1 / 120); low = Math.min(low, w.pos.y); }
+  return {
+    phase: w.mc.phase, armored: w.mc.armored, armour, summoned, swords: sk.map((s) => s.innate), low: +low.toFixed(2),
+    shotsBounce: ['arrow', 'bullet', 'rail'].map((k) => w.species.deflects(w, k)), swordBounces: w.species.deflects(w, 'diamondSword'),
+  };
+});
+check('half way, its armour comes up, and wither skeletons with stone swords stand up out of soul fire around it',
+  p2.phase === 2 && p2.armored && p2.armour === 1 && p2.summoned >= 2 && p2.swords.length >= 2 && p2.swords.every((k) => k === 'stoneSword'), JSON.stringify(p2));
+check('...then it comes down low, where a sword can reach it - arrows and bullets bounce off the armour, a sword does not',
+  p2.low < 1.2 && p2.shotsBounce.every(Boolean) && !p2.swordBounces, JSON.stringify(p2));
+await page.waitForTimeout(300);
+const armourBar = await ev(() => { const b = document.querySelector('#bossbars .bossbar'); return b && { name: b.querySelector('.boss-name').textContent, armored: b.querySelector('.boss-track').classList.contains('armored') }; });
+check('...and its boss bar says so', !!armourBar && armourBar.name === 'Wither - Wither Armour' && armourBar.armored, JSON.stringify(armourBar));
+await shot('wither-armour');
+
+const fall = await ev(() => {
+  const sb = window.__sf.sb, w = window.__w, t0 = sb.time, glow = [];
+  let roar = null, bang = null;
+  sb.on('witherRoar', () => { if (roar === null) roar = +(sb.time - t0).toFixed(2); });
+  sb.on('witherDeath', () => { if (bang === null) bang = +(sb.time - t0).toFixed(2); });
+  w.health.bossHp = 0;
+  for (let i = 0; i < 120 * 4; i++) { sb.step(1 / 120); if (!w.removed) glow.push(w.mc.glow); }
+  const star = sb.items.find((i) => i.kind === 'netherStar');
+  return { roar, bang, glow: +Math.max(...glow).toFixed(2), gone: w.removed && !sb.people.includes(w), star: star ? star.name : null };
+});
+check('beaten, it roars, glows white - then explodes, and drops a Nether Star', fall.roar !== null && fall.roar < 0.2 && fall.bang > 2 && fall.glow > 0.9 && fall.gone && fall.star === 'Nether Star', JSON.stringify(fall));
+await page.waitForTimeout(300);
+const barsLeft = await ev(() => document.querySelectorAll('#bossbars .bossbar').length);
+check('...and its boss bar goes with it', barsLeft === 0, String(barsLeft));
+
+const cut = await ev(() => {
+  const sb = window.__sf.sb, S = window.__skSpecies;
+  sb.clear();
+  const k = sb.spawnStickman(-1, null, { name: 'Wither Skeleton', species: S, scale: 1.24 });
+  const d = sb.spawnStickman(0.6, null, { name: 'Dot', traits: { toughness: 1 } });
+  let cuts = 0;
+  sb.on('hit', (e) => { if (e.by === k && e.who === d && e.weapon === 'stoneSword' && !e.blocked) cuts++; });
+  for (let i = 0; i < 120 * 15 && !cuts; i++) sb.step(1 / 120);
+  sb.step(1 / 120);
+  const w = d.afflictions.find((a) => a.withering);
+  return { cuts, withering: w ? w.label : null, byIt: !!w && w.by === k, fear: k.brain.emo.fear, fearLocked: k.brain.emo.isLocked('fear') };
+});
+check('a wither skeleton goes for the living, and its stone sword withers whoever it cuts - and nothing frightens it',
+  cut.cuts >= 1 && !!cut.withering && cut.byIt && cut.fear === 0 && cut.fearLocked, JSON.stringify(cut));
+
+// out again
+await fresh();
+await ev(() => {
+  const sb = window.__sf.sb, M = window.__sf.mods;
+  M.findSpawnable('mc-steve').spawn(sb, -4);
+  M.findSpawnable('mc-table').spawn(sb, 2, 0.4);
+  M.findSpawnable('mc-skull').spawn(sb, 3, 0.3);
+  sb.spawnStickman(7, null, { name: 'Keeper' });
+  for (let i = 0; i < 120; i++) sb.step(1 / 120);
+});
+await ev(() => { window.__sf.ui.toggleDrawer(true); });
+await page.waitForTimeout(300);
+await page.tap('#btn-mods');
+await page.waitForTimeout(300);
+await page.tap('.mod-item[data-mod="minecraft"] .mod-btn');
+await page.waitForTimeout(150);
+await page.tap('.mod-item[data-mod="minecraft"] .mod-btn');
+await page.waitForTimeout(250);
+const mcGone = await ev(() => ({
+  people: window.__sf.sb.people.map((p) => p.name),
+  crates: window.__sf.sb.crates.length,
+  items: window.__sf.sb.items.length,
+  cards: document.querySelectorAll('.card').length,
+  stored: JSON.parse(localStorage.getItem('sf.mods') || '[]'),
+}));
+check('removing Minecraft takes Steve, the blocks and everything else of it out of the world and the menu',
+  mcGone.people.join() === 'Keeper' && !mcGone.crates && !mcGone.items && mcGone.cards === 6 && !mcGone.stored.length, JSON.stringify(mcGone));
 await page.tap('#mods-close');
 await ev(() => window.__sf.ui.toggleDrawer(false));
 await page.waitForTimeout(250);

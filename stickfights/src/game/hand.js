@@ -25,7 +25,10 @@ export class Hand {
   grab(thing, x, y) {
     this.release();
     const sb = this.sb;
+    if (thing.grabbable === false) return false;
     if (thing.kind === 'stickman') {
+      // some things will not be picked up (a mod's)
+      if (thing.steadfast) return false;
       thing.grab(x, y);
     } else {
       if (thing.kind === 'crate' && thing.carriedBy) thing.carriedBy.dropCarried();

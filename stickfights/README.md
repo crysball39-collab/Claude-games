@@ -12,8 +12,9 @@ And you can get inside their heads: drag their feelings up and down, change
 their personality, change who they count as a friend or an enemy, and send
 them off to fight someone.
 
-**Mods** add things that are not part of the game itself: the first,
-**Murder Drones**, brings Uzi, N and V (see [Mods](#mods)).
+**Mods** add things that are not part of the game itself: **Murder Drones**
+brings Uzi, N and V, and **Minecraft** brings Steve - and the Wither, a boss
+with 600 health that you craft a totem to summon (see [Mods](#mods)).
 
 While a stickman is in charge of their own body, every move they make is a
 hand-keyed animation, played frame by frame. The moment they are not -
@@ -99,7 +100,10 @@ The inspector is also where you change their mind:
 - **Feelings** - each of the five emotions is a bar: drag it to make them as
   happy, sad, angry, frightened or surprised as you like. Feelings settle back
   over time, as feelings do, but what they do in the meantime is up to how
-  they feel.
+  they feel. The **padlock** at the end of a bar **locks** that feeling where
+  it is: nothing that happens to them moves it up or down - not time, not a
+  punch, not a hug - until it is tapped again. Dragging a locked bar still
+  sets it, and it stays wherever it is put.
 - **People** - everyone else in the sandbox, under what this one thinks of
   them: **Friends**, **Knows**, **Dislikes**, **Enemies**, and anyone they
   have not met yet. Each row has a menu to move that person to another group
@@ -136,8 +140,9 @@ built). **INSTALL** fills a bar as it goes in, and then what it adds turns up
 at the bottom of the spawn menu in a section of its own, tagged MOD. The
 device remembers which mods are installed. **REMOVE** asks once more, then
 takes the mod out of the spawn menu and everything of it out of the world:
-its people and weapons, whatever was cut off them, and whatever of it is
-still going on - a missile in the air, acid in somebody.
+its people, weapons and blocks, whatever was cut off them, and whatever of
+it is still going on - a missile or a skull in the air, acid or withering in
+somebody.
 
 ### Murder Drones
 
@@ -146,9 +151,9 @@ skills of their own.
 
 | | Who they are | How they arrive | What they can do |
 | - | ------------ | --------------- | ---------------- |
-| **Uzi** | A worker drone: small, brave, sarcastic, quick to anger and not one for company. Murder drones are what she most wants to shoot. Purple visor eyes, a beanie, purple hair. | Walks in with the **railgun** she built already in her hands. | The railgun charges for nearly a second with a rising whine, then goes through everything in a line out to the wall - people, crates, drones - knocking people off their feet and often taking a limb with it. Then it needs a few seconds to charge again. It kicks, and she is light: sometimes it staggers her. Tapped where it lies, it charges and goes off by itself. |
+| **Uzi** | A worker drone: small, brave, sarcastic, quick to anger and not one for company. She does not trust murder drones - V least of all - and says so, but she does not start fights with N or V: the railgun only comes round on them if they come at her, or have just hurt her. Purple visor eyes, a beanie, purple hair. | Walks in with the **railgun** she built already in her hands. | The railgun charges for nearly a second with a rising whine, then goes through everything in a line out to the wall - people, crates, drones - knocking people off their feet and often taking a limb with it. Then it needs a few seconds to charge again. It kicks, and she is light: sometimes it staggers her. Tapped where it lies, it charges and goes off by itself. |
 | **N** | A disassembly drone who would really rather be friends: kind, keen, nervous, apologetic - and very dangerous when he has to be. Yellow eyes, a cap, a white collar. | Comes down out of the sky and **crash-lands** on one knee with his **wings out**, cracking the floor; whoever is right there goes over. | Hands that turn into a **chainsaw** (pushed in and held there, biting again and again), a **gun** (quick bursts), a **sword** (long reach, deep cuts, takes limbs off), **claws** (three cuts at once), a **laser** (a beam that burns whatever it stays on) or **missiles** (salvos of three that home in and explode). A **tail** with a needle full of **nanite acid**, that comes over the shoulder at whoever is close. **Wings**, to fly at someone. |
-| **V** | Another disassembly drone, who enjoys the work far too much: fearless, vicious and playful about it. She hunts anyone who is not one of hers, worker drones above all. Blonde hair over one eye, an apron. | The same: out of the sky, a crash landing, wings out. | Every one of N's abilities. She likes the chainsaw, and flying at people. |
+| **V** | Another disassembly drone, who enjoys the work far too much: fearless, vicious and playful about it. She hunts anyone who is not a drone; Uzi she likes to remind that she *could*. Blonde hair over one eye, an apron. | The same: out of the sky, a crash landing, wings out. | Every one of N's abilities. She likes the chainsaw, and flying at people. |
 
 What being a drone means:
 
@@ -170,19 +175,96 @@ What being a drone means:
   pointed at him. V hunts. Uzi fights like anyone with a gun - with that gun.
   With nothing to do, a disassembly drone may turn a hand into something
   just to have a look at it.
-- **Who they know.** A worker drone fears and hates murder drones on sight;
-  N likes everyone, and he and V go back a long way; people who have never
-  seen a drone are frightened of the wings, the tail and the glowing eyes,
-  and say so when a hand turns into a chainsaw.
-- **What they say.** Each of the three has their own things to say - most of
-  what they say is theirs - and everyone else has new things to say about
-  them: being sawn, clawed, stung, burned or blown up, and watching it.
+- **Who they know.** Uzi is wary of murder drones - N she half trusts, V
+  not at all - but she keeps her railgun for whoever starts it, and the
+  names V calls her are not enough to start it either; N likes everyone, and
+  he and V go back a long way; people who have never seen a drone are
+  frightened of the wings, the tail and the glowing eyes, and say so when a
+  hand turns into a chainsaw.
+- **What they say.** Each of the three has a great deal of their own to say -
+  nearly everything they say is theirs - and much of it is said to one of
+  the other two in particular: Uzi needling V, V teasing N, N trying to keep
+  the peace. Everyone else has new things to say about them: being sawn,
+  clawed, stung, burned or blown up, and watching it.
 - **In the inspector** a chip says what they are (*Worker Drone* or
   *Disassembly Drone*), and what their hands are is listed under BODY. A
   disassembly drone has an **ABILITIES** section: **Hands** - *Auto* (they
   choose), *Hands*, *Chainsaw*, *Gun*, *Sword*, *Claws*, *Laser*, *Missiles*,
   which locks their hands to that until it is changed back - and **Do** -
   *Tail strike* and *Fly*.
+
+### Minecraft
+
+Things out of a world made of blocks.
+
+| | What it is |
+| - | ---------- |
+| **Steve** | A blocky man with a cube for a head: calm, brave, curious, a man of few words. He keeps his own kit: a **diamond sword** (long, sharp, it hacks, and can take a limb off), a **bow**, and **three golden apples**. |
+| **Crafting Table** | A block. Tap it to see its crafting grid. |
+| **Soul Sand** | A block of dark sand full of faces. |
+| **Wither Skull** | A wither skeleton's skull. |
+| **Wither Totem** | Four Soul Sand in a T with three Wither Skulls on top - crafted, not spawned. The Wither comes out of it. |
+
+The blocks are crates as far as the world is concerned: they fall, stack,
+get climbed, sat on and thrown.
+
+**Steve.** He fights monsters on sight and gets on with people. Close in, the
+sword. For anything far off or up in the air, he swaps to the bow: he draws
+it back, takes a moment to aim and lets go, and the arrow drops as it flies
+(he lobs it to make up for that) and stays in whatever it hits - and it can
+miss, and hit whoever is in the way. Hurt, or withering, he eats a golden
+apple: a good part of it mended at once, and **Regeneration** for a few
+seconds after. He says *oof* when he is hit. In the inspector his
+**ABILITIES** are **Hands** - *Auto*, *Diamond sword*, *Bow* - and **Do** -
+*Eat a golden apple*. Healed, he gets his three apples back.
+
+**Crafting a Wither Totem.** Put **4 Soul Sand** and **3 Wither Skulls**
+within 3 m of a **Crafting Table** (or on top of it) and tap the table: its
+grid shows what it can see. **CRAFT** turns them into a Wither Totem, which
+goes into the spawn menu. Its card says how many there are to place - until
+one is crafted it says CRAFT and is locked, and tapping it says how.
+
+**Summoning the Wither.** Placed from the spawn menu, the totem stands on
+the floor with an **ACTIVATE** button over it. Press it, and the totem floats
+up, glows whiter and whiter and shakes harder and harder - a bar fills along
+the top as it does - then explodes. Out of the blast comes the Wither.
+
+**The Wither** is a boss: three heads on a spine and a tail, with a **boss
+bar** along the top and **600 health**, which mends by 1 a second. It has no
+mind to look into - the inspector shows what it is doing, its health and its
+phase - and nothing knocks it down, cuts anything off it or picks it up. Its
+inspector has buttons to make it shoot either skull, charge, call up
+skeletons, or go straight to its second phase.
+
+- **Phase 1.** It hangs up in the air, out of reach of anyone without a gun
+  or a bow. The middle head spits black **wither skulls** at whoever it is
+  after (whoever is nearest, or whoever has just hurt it); the side heads at
+  anyone else about; and every so often comes a slow **blue skull**, which
+  goes off in a far bigger blast.
+- **Withering.** Everything it does - skulls, blasts, charges - **withers**
+  whoever it catches: they darken and their health drains away for some
+  seconds (worse, *Withering II*, from a blue skull), and it can kill them.
+  The inspector shows it under BODY, with the seconds left.
+- **Half way** it stops, shakes, glows - and goes off like a bomb, coming out
+  of it in **Wither Armour**, with **wither skeletons** standing up out of
+  soul fire around it. The boss bar says so.
+- **Phase 2.** Arrows, bullets and the railgun bounce off the armour. It
+  comes down low, where swords and fists can reach it, **charges** at people
+  and rams through them, and calls up more skeletons now and then.
+- **Beaten**, it roars, shakes, glows white - and explodes. Where it was,
+  there is a **Nether Star**.
+
+**Wither skeletons** are tall and nearly black, with a **stone sword** each,
+and every cut from one withers. Nothing frightens them (their fear is locked
+at nothing), they never say a word - only rattle - and they go for anything
+alive that is not undead. They and the Wither never hurt each other. Killed,
+one lies a moment, then is gone in a puff of smoke, sometimes leaving its
+skull: enough of those, and there is another totem.
+
+**Everyone else** treats the Wither and its skeletons as what they are: they
+fight them or run from them, but never make friends, chat, or mourn them -
+and they have plenty to say about them, about withering, and about Steve's
+head.
 
 ### Making one
 
@@ -210,7 +292,24 @@ The game has a few ways in that change nothing until a mod uses them:
   beam, a missile, acid in a wound - drawn by the renderer
 - `addLines()` (`game/lines.js`) and a person's own `lines`, `defineClip()`
   (`game/clips.js`) and `KINDS` (`game/behaviours.js`) for new things to
-  say, animations and behaviours
+  say, animations and behaviours; a line under `kind@key` is said in place
+  of `kind` to someone whose look has that key
+- for monsters and bosses: a species can be `mindless` (no brain - its own
+  hooks do the thinking, and `inspect` says what the inspector shows),
+  `steadfast` (nothing knocks it down or cuts anything off), a `monster`
+  (fought or fled, never befriended), `mute`; it can `pose` its own joints,
+  give a `proxy` box to bump into, say who it is `hostileTo`, whether it is
+  `reachable`, what it `deflects` and whose blows it `spares`, draw its whole
+  body itself (`skin.full`), and put up a `bossbar`; any species can weigh a
+  fight against someone (`fightScale`) and hear what is said to it
+  (`spokenTo`)
+- `sandbox.items`: things that are neither a body nor a crate - a skull on
+  the floor, a totem - with their own drawing and updating, and optionally a
+  `panel` (tapped, like a crafting table's grid), a world `button` (ACTIVATE)
+  or a `bossbar`; a crate with a `drawShape` draws itself
+- a thing in the spawn menu can have a `badge` and be `locked`, with `why`
+  it is; a mod's `cleanup` runs when it is removed
+- `brain.lockEmotion()`: a feeling held where it is
 
 ---
 
@@ -622,8 +721,11 @@ stickfights/
       registry.js     what a mod is; installing, removing, the storage each needs
       sizes.js        written by tools/mod-sizes.mjs: each mod's size
       index.js        every mod there is
-      murder-drones/  Uzi, N and V: characters, species, ai, looks, the railgun,
-                      beams, missiles, acid, animations and sounds
+      murder-drones/  Uzi, N and V: characters, species, ai, looks, lines, the
+                      railgun, beams, missiles, acid, animations and sounds
+      minecraft/      Steve, the blocks, crafting, the totem, the Wither and its
+                      skeletons: pixel art, skulls, arrows, explosions,
+                      withering, lines, animations and sounds
 ```
 
 ## Verifying it
@@ -695,6 +797,9 @@ screen and checks:
   it so; dragging a feeling's bar sets it; the personality sliders change the
   traits; the Fight button sends them after that person, and they can be
   called off
+- the padlock on a feeling locks it - six seconds of being calmed down and
+  cheered up do not move it, while the others move - and tapped again it is
+  free to change
 - there are over a hundred and ten clips and over seven hundred lines, and
   good friends part with a hug or a high five
 - no mod is in the game until it is installed; the MODS screen lists
@@ -706,9 +811,30 @@ screen and checks:
   N's hands - chainsaw, gun, sword, claws, laser, missiles - does damage;
   V's tail puts nanite acid in someone, and it eats at them; the railgun
   charges, then goes through two people in a line
+- Uzi, N and V together for forty seconds: Uzi never goes for V or N
 - tapping N shows a Disassembly Drone with a button for every ability, and
   tapping one locks his hands to it; REMOVE asks again, then takes the mod
   and everything of it out of the menu, the world and the device
+- the MODS screen lists Minecraft, with what it adds and the storage it
+  needs; installed, it puts Steve, the three blocks and the Wither Totem in
+  the spawn menu, the totem locked (and saying how to craft one) until one
+  is crafted
+- Steve spawns with his diamond sword and three golden apples; he swaps to
+  his bow and his arrows hit; an apple mends him and leaves him regenerating
+- tapping a Crafting Table with 4 Soul Sand and 3 Wither Skulls by it opens
+  its grid; CRAFT uses them up and the totem card shows one to place
+- the totem goes down where it is tapped with ACTIVATE over it; activated it
+  floats up, glows white and shakes, then explodes into the Wither, which
+  has a boss bar and 600 health
+- in phase 1 it stays up out of reach and spits black and blue skulls that
+  wither whoever they catch; half way its armour comes up and wither
+  skeletons with stone swords appear; then it comes down low, and arrows and
+  bullets bounce off it while a sword does not, and the boss bar says so
+- beaten, it roars, glows white, explodes and leaves a Nether Star, and its
+  boss bar goes
+- a wither skeleton's cut withers whoever it lands on, and its fear is
+  locked at nothing
+- removing Minecraft takes all of it out of the world and the menu
 - ten stickmen, six crates, knuckles, knives, machetes and a pistol for 45
   seconds: nothing turns into NaN, and they get up to many different things
 - the console stays clean, and the single file fetches nothing

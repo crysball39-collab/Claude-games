@@ -14,7 +14,8 @@
    Nothing of it is in the game until it is installed from the MODS screen.
 
      index.js       this: the mod, as the game's mod registry sees it
-     characters.js  who they are, what they say, how they arrive
+     characters.js  who they are and how they arrive
+     lines.js       what they say, and what everybody says about them
      species.js     what a drone is to the game: its hooks on a stickman
      ai.js          how a disassembly drone fights
      look.js        how they are drawn

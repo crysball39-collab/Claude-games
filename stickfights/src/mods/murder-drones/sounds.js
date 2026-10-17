@@ -49,6 +49,8 @@ function rev(sound, dur, gain) {
   o.stop(t + dur + 0.05); lfo.stop(t + dur + 0.05);
 }
 
+const OURS = new Set(['sword', 'claw', 'chainsaw', 'gunArm', 'laser', 'missile', 'blast', 'needle', 'rail']);
+
 export function setupSounds(sb, sound, cam) {
   const ok = () => sound.ready;
   const near = (x) => sound.near(x);
@@ -90,9 +92,10 @@ export function setupSounds(sb, sound, cam) {
     sound.tone('sawtooth', 220, 160, 0.08, 0.06 * v);
   });
   sb.on('hit', (e) => {
-    // blades that are hands make blade noises (the game's own handler leaves them to us)
+    // blades that are hands make blade noises (the game's own handler leaves them to us -
+    // and another mod's weapons to that mod)
     const spec = armOf(e.weapon);
-    if (!spec || !ok()) return;
+    if (!spec || !OURS.has(e.weapon) || !ok()) return;
     if (e.weapon === 'sword' || e.weapon === 'chainsaw') sound.chop(e.power, e.x);
     else if (e.weapon === 'claw') { sound.slash(e.x); sound.stab(e.power * 0.6, e.x); }
     else if (e.weapon === 'needle') sound.stab(1.4, e.x);

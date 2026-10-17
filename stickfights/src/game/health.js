@@ -160,7 +160,7 @@ export class Health {
    *   bone         which bone it landed on, if that is known (skeleton.js)
    *   breakChance  extra chance of a break on top of what the force gives
    */
-  hit(part, amount, { sharp = 0, deep = false, bone = null, breakChance = 0, chop = false, shot = false, strike = null, burn = false, cutBy = null, cause = null } = {}) {
+  hit(part, amount, { sharp = 0, deep = false, bone = null, breakChance = 0, chop = false, shot = false, strike = null, burn = false, cutBy = null, cause = null, instakill = true } = {}) {
     const p = this.parts[part];
     if (!p) return { damage: 0 };
     let dmg = Math.max(0, amount);
@@ -212,7 +212,7 @@ export class Health {
       this.shock = Math.min(1, this.shock + 0.3);
       // what a bullet finds on its way through
       if (part === 'head') {
-        if (dmg > 16 && Math.random() < 0.8) killedBy = cutBy ? `a ${cutBy.toLowerCase()} shot to the head` : 'a gunshot to the head';
+        if (instakill && dmg > 16 && Math.random() < 0.8) killedBy = cause ? `${cause} to the head` : cutBy ? `a ${cutBy.toLowerCase()} shot to the head` : 'a gunshot to the head';
         else this.conscious -= 0.5;
       } else if (part === 'torso') {
         this.internal += 0.0026 + Math.random() * 0.002;

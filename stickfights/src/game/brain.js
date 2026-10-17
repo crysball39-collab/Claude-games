@@ -239,14 +239,19 @@ export class Brain {
   speak(kind, vars = {}, p = 1, to = null, loud = false) {
     const me = this.man;
     if (!me.alive || !me.conscious || !chance(p)) return false;
+    // (some of what a mod adds does not talk at all)
+    if (me.species && me.species.mute) return false;
     const now = this.sb.time;
     if (now - this.spokeT < (loud ? 0.8 : 1.8)) return false;
     const said = SAID_AS[kind] || kind;
     if (REPEAT[said] && now - (this.saidT[said] ?? -99) < REPEAT[said]) return false;
     vars.me = me.name;
-    // somebody a mod made may have their own way of saying it
-    let text = line(kind, vars, me.lines);
-    if (text === this.lastLine) text = line(kind, vars, me.lines);
+    // somebody a mod made may have their own way of saying it - and lines kept
+    // for one person in particular, as kind@who (who: the key of that one's look)
+    const aimed = to && to.look && to.look.key && me.lines ? kind + '@' + to.look.key : null;
+    const which = () => (aimed && me.lines[aimed] && chance(0.6) ? aimed : kind);
+    let text = line(which(), vars, me.lines);
+    if (text === this.lastLine) text = line(which(), vars, me.lines);
     if (!text) return false;
     this.spokeT = now;
     this.saidT[said] = now;
@@ -788,6 +793,15 @@ export class Brain {
     const me = this.man, E = this.emo, T = this.traits, now = this.sb.time;
     const V = ev.who, K = ev.by && !ev.by.removed ? ev.by : null;
     if (!V) return;
+    if (V.species && V.species.monster && !(me.species && me.species.monster)) {
+      // a monster down (a mod's): relief, and for whoever did it, pride
+      E.bump('surprise', 0.35);
+      E.bump('joy', K === me ? 0.4 : 0.2);
+      E.bump('fear', -0.25);
+      this.speak(K === me ? 'killedMonster' : 'monsterDown', { victim: V.name }, 0.8, null, true);
+      if (K === me) this.victory = Math.max(this.victory, 0.6);
+      return;
+    }
     if (!seen && Math.abs(V.pos.x - me.pos.x) > 6) { E.bump('surprise', 0.15); this.heard = { x, y, t: now }; this.hearLoud(x); return; }
     const rv = this.rel(V);
     const care = Math.max(0, rv.like) + rv.fam * 0.35;
@@ -1105,6 +1119,8 @@ export class Brain {
       r.like = clamp(r.like + 0.03 + T.sociability * 0.03, -1, 1);
       E.bump('joy', 0.04);
     }
+    // what it means coming from them in particular (a mod's people have their own history)
+    if (me.species && me.species.spokenTo) me.species.spokenTo(this, from, kind, r);
     const b = this.behaviour;
     if (b && b.kind === 'chat' && b.target === from) {
       if (b.reply) b.pending = { reply, at: now + rand(1, 1.5) };
@@ -1210,7 +1226,10 @@ export class Brain {
       const d = Math.abs(o.pos.x - me.pos.x);
       const near = 1 / (1 + Math.max(0, d - 2) / 5);
 
+      // a monster (a mod's): nobody chats with one, helps one up or grieves for one
+      const monster = !!(o.species && o.species.monster) || !!(me.species && me.species.monster);
       if (o.dead) {
+        if (monster) continue;
         const g = this.griefs.get(o);
         if (g && g.care > 0.15 && g.mourned < 8) {
           add('mourn', o, (0.25 + g.care * 0.7) * (0.5 + T.empathy * 0.6) * (1 - E.fear * 0.6) * near, `${o.name} is gone. I have to go to them.`);
@@ -1233,6 +1252,10 @@ export class Brain {
       if (!canFight) f *= 0.1;
       f *= fit;
       f *= 1 / (1 + Math.max(0, d - 3) / 4);
+      // some would never start it with some people, whatever has been said (a mod's)
+      if (me.species && me.species.fightScale) f *= me.species.fightScale(this, o, r, hostile);
+      // and nobody goes for something they cannot reach, unless they can shoot it (or fly up to it)
+      if (o.species && o.species.reachable && !o.species.reachable(o, me) && !me.gunReady && !(me.species && me.species.canRange && me.species.canRange(me))) f *= 0.06;
       add('fight', o, f,
         r.killed ? `${o.name} killed ${r.killed.name}. They'll pay.` : hostile ? `${o.name} is coming for me. I'll fight.` : `${o.name} has it coming.`,
         null, hostile && d < 3);
@@ -1271,7 +1294,7 @@ export class Brain {
       }
 
       // talk to them
-      if (standing(o) && !hostile && !r.enemy && r.anger < 0.3 && r.fear < 0.35 && !(o.brain && (o.brain.fighting || o.brain.fleeing))) {
+      if (!monster && standing(o) && !hostile && !r.enemy && r.anger < 0.3 && r.fear < 0.35 && !(o.brain && (o.brain.fighting || o.brain.fleeing))) {
         const fresh = now - r.chatT > 25 ? 1 : 0.08;
         // someone already talking to somebody else is left to it
         const ob = o.brain && o.brain.behaviour;
@@ -1286,7 +1309,7 @@ export class Brain {
       const urgent = o.health.needsTourniquet.length > 0;
       const jointOut = Object.values(o.health.dislocated).some(Boolean);
       const needs = o.lying || o.state === 'crawl' || pinned || !o.conscious || o.stuck.length > 0 || o.health.bleeding > 0.003 || urgent || jointOut;
-      if (needs && !hostile && r.like > -0.2 && !o.dead) {
+      if (needs && !monster && !hostile && r.like > -0.2 && !o.dead) {
         const cried = (now - (r.cried || -99) < 8 ? 1.4 : 1) * (o.stuck.length || o.health.bleeding > 0.003 ? 1.3 : 1) * (urgent ? 1.6 : 1);
         // having done what they could, they let it be for a while - unless it is getting worse
         const helping = this.behaviour && this.behaviour.kind === 'help' && this.behaviour.target === o;
@@ -1431,6 +1454,8 @@ export class Brain {
   /** Squaring up to me, swinging at me, pointing a gun at me, or just hit me. */
   isHostile(o) {
     if (!o || o.removed || o.dead || !o.conscious) return false;
+    // something with no mind of its own to read: its species says (a boss is after everyone)
+    if (o.species && o.species.hostileTo) return o.species.hostileTo(o, this.man);
     if (o.brain && o.brain.fightTarget === this.man) return true;
     if (o.aimTarget === this.man && o.aiming) return true;
     const r = this.rels.get(o);
@@ -1810,7 +1835,10 @@ export class Brain {
     this.thinkT = 0;
   }
 
-  setEmotion(k, v) { if (k in this.emo.base) this.emo[k] = clamp01(v); }
+  setEmotion(k, v) { this.emo.set(k, v); }
+
+  /** Locks a feeling where it is: nothing that happens moves it until it is unlocked. */
+  lockEmotion(k, on = true) { this.emo.lock(k, on); }
 
   /** A trait set from the inspector: everything that grows from it follows. */
   setTrait(k, v) {

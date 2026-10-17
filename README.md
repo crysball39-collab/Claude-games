@@ -9,12 +9,16 @@ texture in the game is drawn procedurally onto a canvas at load time.
 > machetes, Glock-19 pistols and crates, and the stickmen think, feel, remember,
 > talk, fight, break bones, lose limbs and die on their own - animated frame by
 > frame while they are in charge of their bodies, and ragdolls with real joints
-> when they are not - and you can change their feelings, their personality and
-> who they count as friends and enemies, and send them to fight. Mods add what is
-> not part of the game itself: **Murder Drones** brings worker drone Uzi with her
-> railgun, and disassembly drones N and V, who crash-land out of the sky and have
-> hands that turn into chainsaws, guns, swords, claws, lasers and missiles, and
-> tails full of nanite acid. The single-file build is `dist/stickfights.html`,
+> when they are not - and you can change their feelings (or lock them where they
+> are), their personality and who they count as friends and enemies, and send
+> them to fight. Mods add what is not part of the game itself: **Murder Drones**
+> brings worker drone Uzi with her railgun, and disassembly drones N and V, who
+> crash-land out of the sky and have hands that turn into chainsaws, guns,
+> swords, claws, lasers and missiles, and tails full of nanite acid; **Minecraft**
+> brings Steve, with his diamond sword, bow and golden apples, and the Wither - a
+> boss with a boss bar and 600 health, summoned from a totem crafted out of soul
+> sand and wither skulls, with a second phase and an army of wither skeletons,
+> that leaves a Nether Star. The single-file build is `dist/stickfights.html`,
 > the source lives in `stickfights/`, and
 > [`stickfights/README.md`](stickfights/README.md) has the details.
 

@@ -52,6 +52,8 @@ const KINDS = {
 };
 const KEYS = ['stickman', 'knuckles', 'crate', 'knife', 'machete', 'glock'];
 const ARM_NAMES = { knife: 'Grab the knife', machete: 'Grab the machete', glock: 'Grab the gun', knuckles: 'Grab the brass knuckles' };
+// a padlock: the shackle drops into the body when it is locked (CSS moves it)
+const LOCK_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path class="shackle" d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/><rect x="5" y="11" width="14" height="10" rx="2.5" fill="currentColor"/></svg>';
 // the rows of buttons a mod's people have in the inspector
 const ABILITY_ROWS = { hands: 'Hands', do: 'Do' };
 
@@ -143,10 +145,17 @@ export class UI {
     });
 
     this.mods = new ModsScreen({ sb, changed: (m, on) => this.modsChanged(m, on) });
+    this.panelThing = null;
+    this.panelT = 0;
+    this.bars = new Map();
+    this.worldBtns = new Map();
+    // a mod saying something can now be placed, or used up
+    sb.on('inventory', () => this.updateBadges());
     this.bindHud();
     this.bindDrawer();
     this.bindInspector();
     this.bindSettings();
+    this.bindPanel();
     this.bindKeys();
     this.drawCardIcons();
     this.renderDrawerMods();
@@ -185,8 +194,11 @@ export class UI {
     }
     if (thing && thing.kind === 'stickman') this.select(thing === this.selected ? null : thing);
     else if (thing && isGun(thing.kind) && thing.loose) this.fireLoose(thing);
+    // a mod's thing with more to it: a panel to open, or something to say for itself
+    else if (thing && thing.panel) this.openPanel(thing);
+    else if (thing && thing.tap) { const said = thing.tap(this.sb); if (said) this.toast(said); }
     else if (thing) this.toast(thing.wornBy ? `${thing.name}, in ${thing.wornBy.name}'s hand` + (thing.kind === 'glock' ? ` (${thing.mag}/15)` : '')
-      : thing.carriedBy ? `A crate, held up by ${thing.carriedBy.name}`
+      : thing.carriedBy ? `${thing.name === 'Crate' ? 'A crate' : thing.name}, held up by ${thing.carriedBy.name}`
         : thing.kind === 'limb' ? `${thing.of}'s ${thing.name.replace('Severed ', '')}, cut clean off`
           : thing.stuckIn && thing.stuckIn.person ? `${thing.name}, stuck in ${thing.stuckIn.person.name}. Drag it to pull it out` : thing.stuckIn ? `${thing.name}, stuck fast` : thing.name);
     else this.select(null);
@@ -244,7 +256,9 @@ export class UI {
     else if (k === 'glock') made = sb.spawnGun(x, Math.max(y, 0.12), Math.random() * 0.3 - 0.15);
     if (!made) {
       const info = this.kindInfo(k);
-      this.toast(`That's as many ${info.plural} as the sandbox holds (${LIMITS[info.limit]})`);
+      // (a mod's thing may have its own reason: nothing crafted yet, say)
+      const why = mod && mod.why ? mod.why(sb) : null;
+      this.toast(why || `That's as many ${info.plural} as the sandbox holds (${LIMITS[info.limit]})`, why ? 3.2 : 2.2);
       return null;
     }
     this.sound.pop(x);
@@ -357,7 +371,7 @@ export class UI {
     const want = open === undefined ? !d.classList.contains('open') : open;
     d.classList.toggle('open', want);
     d.setAttribute('aria-hidden', want ? 'false' : 'true');
-    if (want) this.gestures.reset();
+    if (want) { this.gestures.reset(); this.updateBadges(); }
   }
 
   setSpawnKind(k) {
@@ -399,6 +413,12 @@ export class UI {
         small.textContent = sp.blurb || '';
         text.append(b, small);
         c.append(cv, text);
+        if (sp.badge) {
+          // how many there are to place, for something that has to be made first
+          const badge = document.createElement('i');
+          badge.className = 'card-badge';
+          c.appendChild(badge);
+        }
         c.addEventListener('click', () => this.cardPicked(c));
         box.appendChild(c);
         this.drawIcon(cv, sp.kind, true);
@@ -408,9 +428,25 @@ export class UI {
     for (const id of ['mods-count', 'mods-count-title']) this.$(id).textContent = n ? String(n) : '';
     this.$('drawer-get-mods').textContent = n ? 'More mods, or remove them, in MODS' : 'More things to spawn, in MODS';
     for (const c of document.querySelectorAll('.card')) c.classList.toggle('selected', c.dataset.spawn === this.spawnKind);
+    this.updateBadges();
+  }
+
+  /** The counts on the cards of things that have to be made before they can be placed. */
+  updateBadges() {
+    for (const c of document.querySelectorAll('.card.mod-card')) {
+      const sp = findSpawnable(c.dataset.spawn);
+      const badge = c.querySelector('.card-badge');
+      if (!sp || !badge) continue;
+      const t = sp.badge(this.sb);
+      badge.textContent = t || '';
+      c.classList.toggle('locked', !!(sp.locked && sp.locked(this.sb)));
+    }
   }
 
   cardPicked(c) {
+    // something that has to be made first, and has not been: what to do about it, instead
+    const sp = c.classList.contains('mod-card') ? findSpawnable(c.dataset.spawn) : null;
+    if (sp && sp.locked && sp.locked(this.sb)) { this.toast(sp.why ? sp.why(this.sb) : 'Not yet', 3.2); return; }
     this.setSpawnKind(c.dataset.spawn);
     this.setTool('spawn');
     this.toggleDrawer(false);
@@ -496,6 +532,7 @@ export class UI {
     });
     // the bars are made once and only their widths change
     this.meters = {};
+    this.locks = {};
     const rows = [...EMOTION_ROWS.map((r) => [...r, 'ins-emotions']), ['pain', 'Pain', '#ff6b6b', 'ins-vitals'], ['blood', 'Blood', '#c0182a', 'ins-vitals']];
     for (const [key, label, color, where] of rows) {
       const box = $(where);
@@ -512,7 +549,16 @@ export class UI {
       row.append(l, bar);
       box.appendChild(row);
       this.meters[key] = fill;
-      if (where === 'ins-emotions') this.editableMeter(row, bar, key);
+      if (where === 'ins-emotions') {
+        this.editableMeter(row, bar, key);
+        // and a padlock: locked, the feeling stays exactly where it is
+        const lock = document.createElement('button');
+        lock.className = 'lock-btn';
+        lock.innerHTML = LOCK_ICON;
+        lock.addEventListener('click', () => this.toggleLock(key));
+        row.appendChild(lock);
+        this.locks[key] = { row, lock };
+      }
     }
 
     // personality: a slider for each trait
@@ -596,10 +642,21 @@ export class UI {
       id = null;
       row.classList.remove('drag');
       const p = this.selected;
-      if (p && p.brain && !p.dead) this.toast(`${p.name}: ${key} ${Math.round(p.brain.emo[key] * 100)}%`, 1.2);
+      if (p && p.brain && !p.dead) this.toast(`${p.name}: ${key} ${Math.round(p.brain.emo[key] * 100)}%${p.brain.emo.isLocked(key) ? ' (locked)' : ''}`, 1.2);
     };
     bar.addEventListener('pointerup', end);
     bar.addEventListener('pointercancel', end);
+  }
+
+  /** Locks a feeling of whoever is selected where it is, or lets it go. */
+  toggleLock(key) {
+    const p = this.selected;
+    if (!p || !p.brain || p.dead) return;
+    const on = !p.brain.emo.isLocked(key);
+    p.brain.lockEmotion(key, on);
+    const pct = Math.round(p.brain.emo[key] * 100);
+    this.toast(on ? `${p.name}'s ${key} is locked at ${pct}%` : `${p.name}'s ${key} can change again`);
+    this.insT = 0;
   }
 
   /** The chips under the name: what is unusual about them. */
@@ -632,6 +689,8 @@ export class UI {
     }
     p.selected = true;
     ins.classList.remove('hidden');
+    // something with no mind of its own shows its body and its species' own say only
+    ins.classList.toggle('mindless', !p.brain);
     this.$('ins-name').textContent = p.name;
     this.showTraits(p);
     // somebody else's people
@@ -664,7 +723,9 @@ export class UI {
     const p = this.selected;
     if (!p) return;
     if (p.removed) { this.select(null); return; }
+    if (!p.brain) { this.updateMindless(p); return; }
     const b = p.brain, h = p.health, $ = this.$;
+    $('ins-boss').classList.add('hidden');
     const mood = $('ins-mood');
     mood.textContent = p.dead ? 'Dead' : !p.conscious ? 'Unconscious' : b.emo.label;
     mood.classList.toggle('dead', p.dead);
@@ -672,6 +733,13 @@ export class UI {
     for (const [k] of EMOTION_ROWS) {
       this.meters[k].style.width = (p.dead ? 0 : b.emo[k] * 100).toFixed(0) + '%';
       this.meters[k].parentNode.parentNode.classList.toggle('off', p.dead);
+      const { row, lock } = this.locks[k];
+      const on = b.emo.isLocked(k) && !p.dead;
+      row.classList.toggle('locked', on);
+      lock.classList.toggle('on', on);
+      lock.disabled = p.dead;
+      lock.setAttribute('aria-pressed', on ? 'true' : 'false');
+      lock.setAttribute('aria-label', `${on ? 'Unlock' : 'Lock'} ${p.name}'s ${k}`);
     }
     for (const [key, { input, val }] of Object.entries(this.sliders)) {
       input.disabled = p.dead;
@@ -687,7 +755,8 @@ export class UI {
     this.meters.blood.style.width = (clamp((h.blood - 0.38) / 0.62, 0, 1) * 100).toFixed(0) + '%';
     $('ins-heal').disabled = p.dead;
 
-    const conds = h.conditions();
+    // whatever is at work on them (a mod's: acid, withering) comes first
+    const conds = [...p.afflictions.filter((a) => a.label).map((a) => a.label), ...h.conditions()];
     const cb = $('ins-conds');
     cb.textContent = '';
     if (!conds.length) {
@@ -786,6 +855,187 @@ export class UI {
       row.textContent = 'Nothing worth remembering yet.';
       mb.appendChild(row);
     }
+  }
+
+  /**
+   * The inspector for something with no mind (a mod's boss): what it is doing,
+   * what its species has to say about it - bars and lines - and its body.
+   */
+  updateMindless(p) {
+    const $ = this.$, sp = p.species || {};
+    const info = sp.inspect ? sp.inspect(p) : { mood: '', doing: '', bars: [], lines: [] };
+    $('ins-mood').textContent = info.mood || '';
+    $('ins-mood').classList.toggle('dead', !!info.dead);
+    $('ins-doing').textContent = info.doing || '';
+    $('ins-order').classList.add('hidden');
+    const box = $('ins-boss');
+    box.classList.remove('hidden');
+    box.textContent = '';
+    for (const bar of info.bars || []) {
+      const row = document.createElement('div');
+      row.className = 'boss-meter';
+      const l = document.createElement('span');
+      l.textContent = bar.label;
+      const track = document.createElement('div');
+      track.className = 'bar';
+      const fill = document.createElement('div');
+      fill.className = 'fill';
+      fill.style.width = (clamp(bar.frac, 0, 1) * 100).toFixed(1) + '%';
+      fill.style.background = bar.color || '#b23cd1';
+      track.appendChild(fill);
+      const v = document.createElement('b');
+      v.textContent = bar.text || '';
+      row.append(l, track, v);
+      box.appendChild(row);
+    }
+    const cb = $('ins-conds');
+    cb.textContent = '';
+    for (const line of info.lines || []) {
+      const s = document.createElement('div');
+      s.className = line.bad ? 'bad' : line.good ? 'ok' : '';
+      s.textContent = line.text;
+      cb.appendChild(s);
+    }
+    this.updateAbilities(p);
+    $('ins-heal').disabled = !!info.dead;
+  }
+
+  /* ------------------------------ a thing's panel ----------------------------- */
+
+  bindPanel() {
+    const $ = this.$;
+    $('panel-close').addEventListener('click', () => this.closePanel());
+    $('thing-panel').addEventListener('click', (e) => { if (e.target.id === 'thing-panel') this.closePanel(); });
+  }
+
+  /** Something in the world with more to show than its name: its panel (a crafting table's grid). */
+  openPanel(thing) {
+    this.panelThing = thing;
+    this.gestures.reset();
+    this.$('thing-panel').classList.remove('hidden');
+    this.refreshPanel(true);
+  }
+
+  closePanel() {
+    this.panelThing = null;
+    this.$('thing-panel').classList.add('hidden');
+  }
+
+  refreshPanel(rebuild = false) {
+    const t = this.panelThing;
+    if (!t) return;
+    if (t.removed) { this.closePanel(); return; }
+    const p = t.panel(this.sb);
+    const $ = this.$;
+    $('panel-title').textContent = p.title || t.name;
+    const cv = $('panel-canvas');
+    if (p.draw) {
+      cv.classList.remove('hidden');
+      const ctx = cv.getContext('2d');
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      p.draw(ctx, cv.width, cv.height);
+    } else cv.classList.add('hidden');
+    $('panel-text').textContent = '';
+    for (const line of p.text || []) {
+      const d = document.createElement('div');
+      d.textContent = line;
+      $('panel-text').appendChild(d);
+    }
+    const bb = $('panel-buttons');
+    const ids = (p.buttons || []).map((b) => b.id).join(',');
+    if (rebuild || bb.dataset.ids !== ids) {
+      bb.textContent = '';
+      bb.dataset.ids = ids;
+      for (const b of p.buttons || []) {
+        const btn = document.createElement('button');
+        btn.className = 'panel-btn';
+        btn.dataset.id = b.id;
+        btn.addEventListener('click', () => this.pressPanel(b.id));
+        bb.appendChild(btn);
+      }
+    }
+    for (const b of p.buttons || []) {
+      const btn = bb.querySelector(`[data-id="${b.id}"]`);
+      btn.textContent = b.label;
+      btn.disabled = b.enabled === false;
+      btn.classList.toggle('primary', !!b.primary);
+    }
+  }
+
+  pressPanel(id) {
+    const t = this.panelThing;
+    if (!t || !t.panelPress) return;
+    const r = t.panelPress(id, this.sb) || {};
+    if (r.say) this.toast(r.say, 3);
+    if (r.close) this.closePanel();
+    else this.refreshPanel();
+  }
+
+  /* -------------------------- bosses and world buttons ------------------------- */
+
+  /** A bar along the top for each boss in the world, and while one is on its way. */
+  updateBossbars() {
+    const sb = this.sb, box = this.$('bossbars');
+    const want = [];
+    for (const p of sb.people) if (!p.removed && p.species && p.species.bossbar) { const b = p.species.bossbar(p); if (b) want.push([p, b]); }
+    for (const it of sb.items) if (!it.removed && it.bossbar) { const b = it.bossbar(); if (b) want.push([it, b]); }
+    const live = new Set(want.map(([k]) => k));
+    this.$('hud').classList.toggle('has-boss', want.length > 0);
+    for (const [k, el] of this.bars) if (!live.has(k)) { el.root.remove(); this.bars.delete(k); }
+    for (const [k, b] of want) {
+      let el = this.bars.get(k);
+      if (!el) {
+        const root = document.createElement('div');
+        root.className = 'bossbar';
+        const name = document.createElement('div');
+        name.className = 'boss-name';
+        const track = document.createElement('div');
+        track.className = 'boss-track';
+        const fill = document.createElement('div');
+        fill.className = 'boss-fill';
+        track.appendChild(fill);
+        root.append(name, track);
+        box.appendChild(root);
+        el = { root, name, fill, track };
+        this.bars.set(k, el);
+      }
+      el.name.textContent = b.name + (b.note ? ` - ${b.note}` : '');
+      el.fill.style.width = (clamp(b.frac, 0, 1) * 100).toFixed(2) + '%';
+      el.fill.style.background = b.color || '#b23cd1';
+      el.track.classList.toggle('armored', !!b.armored);
+      el.root.title = b.text || '';
+    }
+  }
+
+  /** Buttons that sit above things in the world (ACTIVATE, over a totem), kept where the thing is. */
+  updateWorldButtons() {
+    const sb = this.sb, box = this.$('world-buttons'), cam = this.cam;
+    const live = new Set();
+    for (const it of sb.items) {
+      if (it.removed || !it.button) continue;
+      const b = it.button(sb);
+      if (!b) continue;
+      live.add(it);
+      let el = this.worldBtns.get(it);
+      if (!el) {
+        el = document.createElement('button');
+        el.className = 'world-btn';
+        el.addEventListener('click', () => {
+          const said = it.press(sb);
+          if (said) this.toast(said, 2.6);
+        });
+        box.appendChild(el);
+        this.worldBtns.set(it, el);
+      }
+      const at = it.buttonAt ? it.buttonAt() : { x: it.pos.x, y: it.pos.y + 1 };
+      const s = cam.toScreen(at.x, at.y);
+      el.textContent = b.label;
+      el.disabled = b.enabled === false;
+      el.style.transform = `translate(${s.x.toFixed(1)}px, ${s.y.toFixed(1)}px) translate(-50%, -100%)`;
+      el.style.display = s.x < -60 || s.x > cam.w + 60 || s.y < -40 || s.y > cam.h + 40 ? 'none' : '';
+    }
+    for (const [it, el] of this.worldBtns) if (!live.has(it)) { el.remove(); this.worldBtns.delete(it); }
   }
 
   /**
@@ -1160,7 +1410,8 @@ export class UI {
       else if (k === '0') this.cam.home();
       else if ((k === 'Delete' || k === 'Backspace') && this.selected) this.$('ins-delete').click();
       else if (k === 'Escape') {
-        if (this.$('drawer').classList.contains('open')) this.toggleDrawer(false);
+        if (this.panelThing) this.closePanel();
+        else if (this.$('drawer').classList.contains('open')) this.toggleDrawer(false);
         else if (!this.$('settings').classList.contains('hidden')) this.toggleSettings(false);
         else if (this.selected) this.select(null);
         else this.setTool('hand');
@@ -1174,6 +1425,9 @@ export class UI {
 
   update(dt) {
     if (this.toastT > 0 && (this.toastT -= dt) <= 0) this.$('toast').classList.remove('show');
+    this.updateBossbars();
+    this.updateWorldButtons();
+    if (this.panelThing && (this.panelT -= dt) <= 0) { this.panelT = 0.25; this.refreshPanel(); }
     if (this.clearArmed > 0 && (this.clearArmed -= dt) <= 0) this.$('btn-clear').classList.remove('armed');
     if (this.selected && (this.insT -= dt) <= 0) {
       this.insT = 0.15;

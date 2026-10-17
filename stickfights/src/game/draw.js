@@ -53,6 +53,8 @@ export function drawStickman(ctx, j, o) {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.lineWidth = lw;
+  // ...or draw all of them, its own way (drawInjuries, below, puts the damage on)
+  if (skin && skin.full) { skin.full(ctx, j, o, lw); return; }
   if (skin && skin.back) skin.back(ctx, j, o);
 
   // far side first, so the near arm and leg sit in front of the body
@@ -102,6 +104,18 @@ export function drawStickman(ctx, j, o) {
 }
 
 const NO_CUTS = {};
+
+/**
+ * The damage on a body drawn some other way (a mod's full skin): stumps where
+ * things were cut off, joints out, broken bones, and the wounds.
+ */
+export function drawInjuries(ctx, j, o, lw) {
+  const cut = o.cut || NO_CUTS, tint = o.tint || null;
+  for (const k of ['armA', 'armB', 'legA', 'legB']) if (cut[k]) drawStump(ctx, j[cut[k]], lw, tint);
+  if (o.dislocated) drawDislocations(ctx, j, o.dislocated, lw);
+  if (o.broken) drawBreaks(ctx, j, o.broken, lw, cut, tint);
+  if (o.wounds && o.wounds.length) drawWounds(ctx, j, o.wounds, lw, cut, tint);
+}
 const ARM_A = ['shoulder', 'midHumA', 'elbowA', 'midForeA', 'handA'];
 const ARM_B = ['shoulder', 'midHumB', 'elbowB', 'midForeB', 'handB'];
 const LEG_A = ['hip', 'midFemA', 'kneeA', 'midTibA', 'footA', 'toeA'];

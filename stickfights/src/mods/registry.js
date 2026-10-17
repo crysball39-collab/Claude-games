@@ -19,6 +19,7 @@
                     icon(ctx, w, h, card), spawn(sb, x, y), said?(made), ghost?(ctx) }]
      options     { kind: (target) => text }   names for what its people may decide to do
      owns(thing)                  whether something in the world is the mod's
+     cleanup(sb)                  anything else to forget when it is removed
      setup({ sb, sound, cam })    once, when the game starts
    ========================================================================== */
 import { MOD_SIZES } from './sizes.js';
@@ -61,6 +62,9 @@ export function uninstall(id, sb = null) {
     sb.effects = sb.effects.filter((e) => e.mod !== id);
     for (const p of sb.people) p.afflictions = p.afflictions.filter((a) => a.mod !== id);
   }
+  // and whatever else it keeps (something crafted and not yet placed, say)
+  const m = getMod(id);
+  if (m && m.cleanup) m.cleanup(sb);
   installed.delete(id);
   save();
   return true;
@@ -85,7 +89,7 @@ export function modOption(kind) {
 export function thingsOf(id, sb) {
   const m = getMod(id);
   if (!m || !m.owns) return [];
-  return [...sb.people, ...sb.guns, ...sb.knuckles, ...sb.knives, ...sb.machetes, ...sb.limbs].filter((t) => m.owns(t));
+  return [...sb.people, ...sb.guns, ...sb.knuckles, ...sb.knives, ...sb.machetes, ...sb.limbs, ...sb.crates, ...sb.items].filter((t) => m.owns(t));
 }
 
 /** Once, as the game starts: every mod hooks itself up, installed or not, so installing needs no reload. */

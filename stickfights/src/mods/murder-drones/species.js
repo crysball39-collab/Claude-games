@@ -68,6 +68,8 @@ const STRIKES = { sword: [['chop', 5], ['hack', 3], ['stab', 3]], claw: [['slash
 const INNATE = { sword: 'sword', claw: 'claw', chainsaw: 'chainsaw', gunArm: 'gunArm', laser: 'laser', missile: 'missile' };
 const LIMB_BONES = { armA: ['humerusA', 'forearmA'], armB: ['humerusB', 'forearmB'], legA: ['femurA', 'tibiaA'], legB: ['femurB', 'tibiaB'] };
 
+const isDrone = (o) => !!(o && o.species && o.species.mod === 'murder-drones');
+
 function gauss() { return (Math.random() + Math.random() + Math.random() + Math.random() - 2) * 1.73; }
 
 /** Where a hand that is a weapon fires from: the end of whatever it has become. */
@@ -220,7 +222,10 @@ function regrow(man, limb) {
   p.broken = false;
   if (man.rag) man.rebuildRag();
   man.sandbox.emit('regrow', { who: man, limb, x: man.wj.chest.x, y: man.wj.chest.y });
-  if (man.brain) man.brain.note('It grew back. Nanites are wonderful.');
+  if (man.brain) {
+    man.brain.note('It grew back. Nanites are wonderful.');
+    man.brain.speak('regrew', { part: limb.startsWith('arm') ? 'arm' : 'leg' }, 0.9, null, true);
+  }
 }
 
 function mend(man, dt) {
@@ -324,14 +329,15 @@ function makeSpecies(kind) {
       if (md.sayT > 0 && (md.sayT -= dt) <= 0 && man.brain) man.brain.speak('crashLanded', {}, 0.9, null, true);
       if (man.look.tail) updateTail(man, dt);
       if (disassembly && man.alive) mend(man, dt);
-      // V hunts: anyone who is not one of hers, and not someone she has decided she likes
+      // V hunts: anyone who is not a drone, and not someone she has decided she likes.
+      // Drones she leaves alone - Uzi included, however much she enjoys needling her
       if (man.look.hunter && man.brain && man.alive && (md.huntT -= dt) <= 0) {
         md.huntT = 1;
         for (const o of man.brain.visible) {
-          if (o.dead || o.removed || (o.species && o.species.kind === 'disassembly')) continue;
+          if (o.dead || o.removed || (o.species && o.species.mod === 'murder-drones')) continue;
           const r = man.brain.rel(o);
           if (r.like > 0.4) continue;
-          r.anger = Math.max(r.anger, o.species && o.species.kind === 'worker' ? 0.72 : 0.5);
+          r.anger = Math.max(r.anger, 0.5);
         }
       }
     },
@@ -349,6 +355,9 @@ function makeSpecies(kind) {
       const md = man.md;
       return !!md && RANGED.has(md.form) && md.formT >= 1 && !md.morphing;
     },
+
+    /** Whether they could get at something up out of reach: a disassembly drone has gun hands, and wings. */
+    canRange() { return disassembly; },
 
     fire(man) {
       const md = man.md, sb = man.sandbox, now = sb.time;
@@ -547,25 +556,51 @@ function makeSpecies(kind) {
           r.greeted = true;
           r.like = me.look.hunter ? 0.2 : 0.45;
           if (!me.look.hunter) r.fear = Math.max(r.fear, 0.25);
+        } else if (theirs === 'worker') {
+          // a worker drone: N is delighted; V would like her to know she *could*
+          r.fam = Math.max(r.fam, 0.35);
+          if (me.look.hunter) r.like = Math.min(r.like, -0.1);
+          else r.like = Math.max(r.like, 0.55);
+          brain.speak('seeWorkerDrone', { other: o.name }, 0.8, o, true);
         } else if (me.look.hunter) {
-          r.anger = Math.max(r.anger, theirs === 'worker' ? 0.75 : 0.5);
-          r.like = Math.min(r.like, theirs === 'worker' ? -0.4 : -0.2);
-          if (theirs === 'worker') brain.speak('seeWorkerDrone', { other: o.name }, 0.8, o, true);
+          r.anger = Math.max(r.anger, 0.5);
+          r.like = Math.min(r.like, -0.2);
         } else {
           r.like = Math.max(r.like, 0.3);
-          if (theirs === 'worker') brain.speak('seeWorkerDrone', { other: o.name }, 0.7, o);
         }
       } else if (theirs === 'disassembly') {
-        // a murder drone: the thing a worker drone fears most - and Uzi wants to kill
+        // a murder drone. N is all right, really, if you ignore the claws; V she does
+        // not trust an inch - but neither of them is worth starting a fight with
         const hunter = !!o.look.hunter;
-        r.anger = Math.max(r.anger, hunter ? 0.65 : 0.4);
-        r.fear = Math.max(r.fear, hunter ? 0.5 : 0.3);
-        r.like = Math.min(r.like, hunter ? -0.6 : -0.2);
-        brain.speak('seeMurderDrone', { other: o.name }, 0.9, o, true);
+        r.fam = Math.max(r.fam, 0.35);
+        r.anger = 0;
+        if (hunter) {
+          r.fear = Math.max(r.fear, 0.35);
+          r.like = Math.min(r.like, -0.3);
+          brain.speak('seeV', { other: o.name }, 0.9, o, true);
+        } else {
+          r.fear = Math.max(r.fear, 0.1);
+          r.like = Math.max(r.like, 0.3);
+          brain.speak('seeN', { other: o.name }, 0.9, o, true);
+        }
       } else if (theirs === 'worker') {
         r.like = Math.max(r.like, 0.3);
         r.fam = Math.max(r.fam, 0.4);
       }
+    },
+
+    /**
+     * Drones bicker - V needles, Uzi bites back - but words between them never
+     * come to a fight: that takes one of them actually going for the other, or
+     * someone they care about, or being sent.
+     */
+    spokenTo(brain, from, kind, r) {
+      if ((kind === 'insult' || kind === 'grumpy') && isDrone(from)) r.anger = Math.min(r.anger, 0.25);
+    },
+
+    fightScale(brain, o, r, hostile) {
+      if (!isDrone(o) || hostile) return 1;
+      return brain.sb.time - (r.hurtT ?? -99) < 30 ? 1 : 0;
     },
 
     /** Somebody else's first sight of one of them. */

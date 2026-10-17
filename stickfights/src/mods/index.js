@@ -3,5 +3,6 @@
    loads; whether it is in the game is up to the MODS screen.
    ========================================================================== */
 import './murder-drones/index.js';
+import './minecraft/index.js';
 
 export * from './registry.js';

@@ -55,11 +55,14 @@ export class Renderer {
     ctx.fillRect(v.minX, Math.min(v.minY, -1), v.maxX - v.minX, -Math.min(v.minY, -1));
 
     this.drawSplats(ctx, v);
+    // a mod's things: the big ones that stand at the back first
+    for (const it of sb.items) if (it.behind) it.draw(ctx);
     for (const c of sb.crates) if (!c.carriedBy) this.drawCrate(ctx, c);
     for (const k of sb.knuckles) if (!k.wornBy) this.drawKnuckles(ctx, k);
     for (const k of sb.blades) if (!k.wornBy && !(k.stuckIn && k.stuckIn.person)) this.drawKnife(ctx, k);
     for (const g of sb.guns) if (!g.wornBy) this.drawGun(ctx, g);
     for (const l of sb.limbs) this.drawLimb(ctx, l);
+    for (const it of sb.items) if (!it.behind) it.draw(ctx);
     this.drawCasings(ctx, v);
 
     const order = [...sb.people].sort((a, b) => this.layer(a, ui) - this.layer(b, ui));
@@ -107,7 +110,9 @@ export class Renderer {
     ctx.save();
     ctx.translate(b.pos.x, b.pos.y);
     ctx.rotate(b.rot);
-    drawCrateShape(ctx, b.w, b.h, c.stains, c.holes);
+    // (a block from a mod draws itself)
+    if (c.drawShape) c.drawShape(ctx, b.w, b.h);
+    else drawCrateShape(ctx, b.w, b.h, c.stains, c.holes);
     ctx.restore();
   }
 
@@ -341,7 +346,8 @@ export class Renderer {
     }
 
     const hurt = this.sb.time - p.hurtT < 4;
-    if (!p.dead && (hurt || sel)) {
+    // (a boss has its bar along the top instead)
+    if (!p.dead && (hurt || sel) && !(p.species && p.species.bossbar)) {
       const hp = p.health.overall;
       const w = 34;
       ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';

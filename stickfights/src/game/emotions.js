@@ -10,6 +10,10 @@
 
    Pushes get smaller as an emotion gets stronger, so nobody is pinned at the
    top by a run of small things - but a big enough thing still gets there.
+
+   Any of them can be locked (from the inspector): then nothing moves it, up
+   or down, until it is unlocked - only set() does, which is how dragging a
+   locked bar changes where it is locked.
    ========================================================================== */
 import { clamp01, approach } from '../core/util.js';
 
@@ -17,9 +21,23 @@ export const EMOTIONS = ['joy', 'sadness', 'anger', 'fear', 'surprise'];
 
 export class Emotions {
   constructor(t) {
+    this.v = {};
+    this.locked = {};
     this.retune(t);
-    for (const e of EMOTIONS) this[e] = this.base[e];
+    for (const e of EMOTIONS) this.v[e] = this.base[e];
   }
+
+  /** Holds a feeling where it is (or lets it go again). */
+  lock(e, on = true) {
+    if (!(e in this.base)) return;
+    if (on) this.locked[e] = true;
+    else delete this.locked[e];
+  }
+
+  isLocked(e) { return !!this.locked[e]; }
+
+  /** Puts a feeling at v, locked or not. */
+  set(e, v) { if (e in this.base) this.v[e] = clamp01(v); }
 
   /** Where each emotion rests and how fast it gets back there, from who they are. */
   retune(t) {
@@ -73,4 +91,13 @@ export class Emotions {
       default: return 'Calm';
     }
   }
+}
+
+// joy, sadness, anger, fear and surprise read like plain numbers; writing one
+// that is locked does nothing
+for (const e of EMOTIONS) {
+  Object.defineProperty(Emotions.prototype, e, {
+    get() { return this.v[e]; },
+    set(x) { if (!this.locked[e]) this.v[e] = x; },
+  });
 }

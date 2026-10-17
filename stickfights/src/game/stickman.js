@@ -207,6 +207,8 @@ export class Stickman {
   /** The strike being thrown right now, if any: what other brains can see coming. */
   get attacking() { return this.strike && !this.strike.done ? this.strike : null; }
   get armedWith() { return this.weapon ? this.weapon.kind : this.innate; }
+  /** Not to be knocked down, sent flying, ragdolled or picked up: a mod's (a boss that floats). */
+  get steadfast() { return !!(this.species && this.species.steadfast); }
   /** Physics has them: flopping, flying, dangling. */
   get limp() { return !!this.rag; }
   get ragdolls() { return this.sandbox.settings.ragdoll !== false; }
@@ -600,6 +602,8 @@ export class Stickman {
       sharp: blocked ? sharp * 0.5 : sharp, deep: !!h.deep && !blocked, chop: chops && !blocked, shot: bullet || !!(spec && spec.shot),
       bone: blocked ? null : h.bone || null, breakChance: h.kind === 'stomp' ? 0.06 : 0, strike: h.kind,
       burn, cutBy: spec ? spec.wound || null : null, cause: spec ? spec.cause || null : null,
+      // (an arrow is not a bullet: one to the head does not have to be the end of them)
+      instakill: !(spec && spec.instakill === false),
     });
 
     if (h.by && h.by !== this && !blocked && (res.wound || bullet || (blade && dmg > 4))) this.woundedBy = { by: h.by, t: this.sandbox.time };
@@ -699,6 +703,7 @@ export class Stickman {
   }
 
   staggerFrom(dir, shove) {
+    if (this.steadfast) return;
     this.setState('stagger');
     this.staggerT = 0.35 + shove * 0.15;
     this.vel.x += dir * (1 + shove * 0.7);
@@ -714,7 +719,7 @@ export class Stickman {
    * their back, from behind on their front.
    */
   knockDown(dir = 0, shove = 1, at = null) {
-    if (!this.alive || this.state === 'held') return;
+    if (!this.alive || this.state === 'held' || this.steadfast) return;
     this.strike = null;
     this.dropCarried();
     if (this.weapon && chance(this.armedWith === 'knuckles' ? 0.25 : isGun(this.armedWith) ? 0.45 : 0.35)) this.dropWeapon(1);
@@ -735,7 +740,7 @@ export class Stickman {
   }
 
   knockOut(dir = 0, shove = 1, at = null) {
-    if (!this.alive) return;
+    if (!this.alive || this.steadfast) return;
     this.strike = null;
     this.dropCarried();
     if (this.weapon && chance(0.4)) this.dropWeapon(1);
@@ -758,6 +763,7 @@ export class Stickman {
 
   /** The body stops answering - a broken neck that did not kill - and down it goes. */
   collapse(dir = 0, shove = 0.5, at = null) {
+    if (this.steadfast) return;
     this.strike = null;
     this.dropCarried();
     if (this.weapon) this.dropWeapon(0.5);
@@ -798,7 +804,7 @@ export class Stickman {
   /** A machete coming down on an arm or a leg, hard enough, goes right through it. */
   trySever(h, dmg, k = 1) {
     const bone = h.bone;
-    if (!bone || !SEVERABLE.includes(bone)) return false;
+    if (!bone || !SEVERABLE.includes(bone) || this.steadfast) return false;
     const thr = SEVER_FORCE[bone.replace(/[AB]$/, '')];
     if (dmg < thr) return false;
     if (!chance(((h.kind === 'chop' ? 0.1 : 0.03) + (dmg - thr) * 0.025) * k)) return false;
@@ -811,7 +817,7 @@ export class Stickman {
    */
   sever(bone, dir = 0, power = 1) {
     const h = this.health, limb = LIMB_OF[bone], mid = BREAK_OF[bone];
-    if (!limb || h.severed[bone]) return false;
+    if (!limb || h.severed[bone] || this.steadfast) return false;
     // nothing to cut if it is already gone from further in
     if (this.cut[limb] && CHAIN_AT[this.cut[limb]] <= CHAIN_AT[mid]) return false;
     const w = this.wj, pw = this.prevWj, sb = this.sandbox;
@@ -973,7 +979,7 @@ export class Stickman {
    * ragdolls are turned off, so the caller can animate it instead.
    */
   goLimp(o = {}) {
-    if (!this.ragdolls) return false;
+    if (!this.ragdolls || this.steadfast) return false;
     if (!this.rag) {
       this.rag = makeRagdoll(this);
       this.limpT = 0;
@@ -1393,7 +1399,7 @@ export class Stickman {
 
   /** Knocked into the air by something: no control until they land. */
   launch(vx, vy) {
-    if (this.state === 'held') return;
+    if (this.state === 'held' || this.steadfast) return;
     this.dropCarried();
     this.anim.stopAction(0.05);
     if (this.goLimp({ state: 'thrown', tone: 0.35, after: 'down' })) {
@@ -1590,6 +1596,8 @@ export class Stickman {
     this.bendBreaks(this.joints);
     if (this.state === 'held') this.placeHeld();
     this.toWorld(dt);
+    // a body that is not a stickman's shape puts its joints where its own parts are (a mod's)
+    if (this.species && this.species.pose) { this.species.pose(this, dt); this.boundsFromJoints(); }
     this.updateStrike(dt);
     this.updateCarried(dt);
     this.updateFace(dt);
@@ -2120,9 +2128,12 @@ export class Stickman {
       s.tickT = 0;
       for (const o of [...s.hit]) if (o.kind === 'stickman') s.hit.delete(o);
     }
+    const spares = this.species && this.species.spares;
     for (const o of sb.people) {
       if (o === this || o.removed || s.hit.has(o) || o.state === 'held') continue;
       if (Math.abs(o.pos.x - limb.x) > 2.4) continue;
+      // (some of a mod's would never cut one of their own, even by mistake)
+      if (spares && spares(this, o)) continue;
       let hit = null;
       for (const p of pts) { hit = o.touch(p.x, p.y, r); if (hit) break; }
       if (!hit) continue;
@@ -2459,6 +2470,17 @@ export class Stickman {
   syncProxy() {
     const b = this.proxy;
     if (!b) return;
+    // a body of some other shape (a mod's) says for itself where it is
+    const own = this.species && this.species.proxy ? this.species.proxy(this) : null;
+    if (own) {
+      b.setSize(own.w, own.h);
+      b.pos.x = own.x;
+      b.pos.y = own.y;
+      b.rot = 0;
+      b.vel.x = this.vel.x;
+      b.vel.y = this.vel.y;
+      return;
+    }
     if (this.rag) {
       // limp, the ragdoll touches things itself; the stand-in waits under the floor
       b.setSize(0.12, 0.12);

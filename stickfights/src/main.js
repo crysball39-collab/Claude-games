@@ -100,7 +100,7 @@ sb.on('break', (e) => sound.crack(e.who.pos.x));
 sb.on('stuck', (e) => { if (e.into && e.into.kind === 'stickman') sound.stab(1.5, e.x); else sound.thunk(e.x); });
 sb.on('pullout', (e) => sound.stab(0.6, e.x));
 sb.on('clap', (e) => sound.clap(e.x, e.soft));
-sb.on('death', (e) => sound.death(e.who.voice, e.who.pos.x));
+sb.on('death', (e) => { if (!e.silent) sound.death(e.who.voice, e.who.pos.x); });
 sb.on('speech', (e) => {
   sound.voice(e.text, e.who.voice, e.loud, e.who.pos.x);
   if (e.loud && SCREAMS.has(e.kind)) sound.scream(e.who.voice, e.who.pos.x);

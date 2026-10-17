@@ -24,7 +24,7 @@ import { clamp, rand, chance } from '../core/util.js';
 
 export const STEP = 1 / 120;
 export const HALF_WIDTH = 20;
-export const LIMITS = { people: 24, crates: 40, knuckles: 16, knives: 16, machetes: 16, guns: 12, limbs: 40 };
+export const LIMITS = { people: 24, crates: 40, knuckles: 16, knives: 16, machetes: 16, guns: 12, limbs: 40, items: 40 };
 // how likely a bullet is to hit someone in its way who it was not aimed at
 const STRAY_HIT = 0.4;
 
@@ -85,6 +85,10 @@ export class Sandbox {
     // things a mod puts in the world that are not bodies: beams, missiles, blasts.
     // Each is { update(dt, sandbox) -> false when it is over, draw(ctx) }
     this.effects = [];
+    // things a mod adds that can be picked up, tapped or removed, but are none of
+    // the game's own: { kind, name, pos, body?, loose, contains(x, y, r), draw(ctx),
+    // update?(dt, sb), leave?(sb), behind?, grabbable? }
+    this.items = [];
     this.time = 0;
     this.acc = 0;
     this.timeScale = 1;
@@ -134,7 +138,16 @@ export class Sandbox {
     for (const k of this.machetes) if (k.loose) out.push(k);
     for (const g of this.guns) if (g.loose) out.push(g);
     for (const l of this.limbs) if (l.loose) out.push(l);
+    for (const it of this.items) if (it.loose && it.body) out.push(it);
     return out;
+  }
+
+  /** A mod's item, into the world (null when there are as many as there can be). */
+  addItem(item) {
+    if (this.items.length >= LIMITS.items) { if (item.leave) item.leave(this); return null; }
+    this.items.push(item);
+    this.emit('spawn', { what: item, x: item.pos.x, y: item.pos.y });
+    return item;
   }
 
   spawnStickman(x, y = null, o = {}) {
@@ -145,7 +158,8 @@ export class Sandbox {
     const man = new Stickman(this, x, sy + 0.01, person);
     man.traits = person.traits;
     man.proxy = this.phys.add(new Body(0.28, 1.6, Infinity, { kinematic: true, pushMass: 160, owner: man, friction: 0.5 }));
-    man.brain = this.makeBrain ? this.makeBrain(man, person.traits) : null;
+    // (a mod's mindless things - a boss - think with their species instead)
+    man.brain = this.makeBrain && !(man.species && man.species.mindless) ? this.makeBrain(man, person.traits) : null;
     this.people.push(man);
     if (man.species && man.species.spawned) man.species.spawned(man, o);
     // one step, so the body has a pose and a place before anyone looks at it
@@ -249,6 +263,12 @@ export class Sandbox {
       list.splice(list.indexOf(thing), 1);
       thing.wornBy = null;
       this.emit('vanish', { what: thing, x: at.x, y: at.y });
+    } else if (this.items.includes(thing)) {
+      thing.removed = true;
+      if (thing.leave) thing.leave(this);
+      else if (thing.body) this.phys.remove(thing.body);
+      this.items.splice(this.items.indexOf(thing), 1);
+      this.emit('vanish', { what: thing, x: thing.pos.x, y: thing.pos.y });
     }
   }
 
@@ -261,6 +281,7 @@ export class Sandbox {
     for (const g of [...this.guns]) this.remove(g);
     for (const l of [...this.limbs]) this.remove(l);
     for (const c of [...this.crates]) this.remove(c);
+    for (const it of [...this.items]) this.remove(it);
     this.fx.clear();
     this.effects.length = 0;
   }
@@ -304,6 +325,7 @@ export class Sandbox {
       const kept = running.filter((e) => e.update(dt, this) !== false);
       this.effects = kept.concat(this.effects);
     }
+    for (const it of [...this.items]) if (it.update && !it.removed) it.update(dt, this);
     // anything knocked clean out of the world comes back down inside it
     for (const c of this.crates) this.keepInside(c.body);
     for (const k of this.loose()) this.keepInside(k.body);
@@ -883,6 +905,10 @@ export class Sandbox {
     for (let i = this.knuckles.length - 1; i >= 0; i--) {
       const k = this.knuckles[i];
       if (!k.wornBy && k.body.contains(x, y, r + 0.06)) return k;
+    }
+    for (let i = this.items.length - 1; i >= 0; i--) {
+      const it = this.items[i];
+      if (!it.removed && it.contains(x, y, r)) return it;
     }
     for (let i = this.crates.length - 1; i >= 0; i--) {
       const c = this.crates[i];

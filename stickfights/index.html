@@ -78,6 +78,10 @@
 
   <div id="hint"></div>
   <div id="toast"></div>
+  <!-- a bar for every boss in the world (a mod's) -->
+  <div id="bossbars"></div>
+  <!-- buttons that sit on things in the world, like ACTIVATE on a totem (a mod's) -->
+  <div id="world-buttons"></div>
   <div id="paused-tag" class="hidden">PAUSED</div>
 
   <!-- the mind of whoever was tapped -->
@@ -99,24 +103,26 @@
         <div class="ins-section">ABILITIES <span class="ins-hint">lock their hands to one thing, or tell them what to do</span></div>
         <div id="ins-abilities"></div>
       </div>
-      <div class="ins-section">FEELINGS <span class="ins-hint">drag a bar to change it</span></div>
-      <div id="ins-emotions"></div>
+      <!-- something with no mind (a mod's boss): what there is to know about it -->
+      <div id="ins-boss" class="hidden"></div>
+      <div class="ins-section mind">FEELINGS <span class="ins-hint">drag a bar to change it, or lock it</span></div>
+      <div id="ins-emotions" class="mind"></div>
       <div class="ins-section">BODY</div>
-      <div id="ins-vitals"></div>
+      <div id="ins-vitals" class="mind"></div>
       <div class="ins-body">
-        <canvas id="ins-figure" width="104" height="136"></canvas>
+        <canvas id="ins-figure" class="mind" width="104" height="136"></canvas>
         <div class="ins-conds" id="ins-conds"></div>
       </div>
-      <div class="ins-section">PEOPLE <span class="ins-hint">change what they think of anyone, or send them to fight</span></div>
-      <div id="ins-people"></div>
-      <div class="ins-section">PERSONALITY <span class="ins-hint">drag to change who they are</span></div>
-      <div id="ins-personality"></div>
-      <div class="ins-section">WEIGHING UP</div>
-      <div id="ins-options"></div>
-      <div class="ins-section">MEMORIES</div>
-      <div id="ins-memories"></div>
-      <div class="ins-section">THOUGHTS</div>
-      <div id="ins-thoughts"></div>
+      <div class="ins-section mind">PEOPLE <span class="ins-hint">change what they think of anyone, or send them to fight</span></div>
+      <div id="ins-people" class="mind"></div>
+      <div class="ins-section mind">PERSONALITY <span class="ins-hint">drag to change who they are</span></div>
+      <div id="ins-personality" class="mind"></div>
+      <div class="ins-section mind">WEIGHING UP</div>
+      <div id="ins-options" class="mind"></div>
+      <div class="ins-section mind">MEMORIES</div>
+      <div id="ins-memories" class="mind"></div>
+      <div class="ins-section mind">THOUGHTS</div>
+      <div id="ins-thoughts" class="mind"></div>
     </div>
     <div class="ins-actions">
       <button id="ins-follow" class="small-btn">Follow</button>
@@ -187,6 +193,22 @@
     <p class="mods-intro">Things made for STICKFIGHTS that are not part of the game itself, and never will be. Install one and what it adds turns up in the spawn menu; remove it and all of it is gone again, from the menu and from the world.</p>
     <div id="mods-list"></div>
     <div class="mods-foot" id="mods-foot"></div>
+  </div>
+</div>
+
+<!-- ============================ A THING'S PANEL ============================ -->
+<!-- what something in the world shows when tapped, if it has more to it than a name: a crafting table's grid -->
+<div id="thing-panel" class="hidden" role="dialog" aria-modal="true" aria-labelledby="panel-title">
+  <div class="panel-card">
+    <div class="drawer-head">
+      <span id="panel-title"></span>
+      <button id="panel-close" class="x" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <canvas id="panel-canvas" width="560" height="240"></canvas>
+    <div id="panel-text"></div>
+    <div id="panel-buttons"></div>
   </div>
 </div>
 
