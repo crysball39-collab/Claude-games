@@ -69,6 +69,8 @@ export class Renderer {
     }
     for (const c of sb.crates) if (c.carriedBy) this.drawCrate(ctx, c);
     this.drawFx(ctx);
+    // a mod's beams, missiles and blasts
+    for (const e of sb.effects) if (e.draw) e.draw(ctx);
     if (ui.ghost) this.drawGhost(ctx, ui.ghost);
 
     // screen space from here: text and symbols stay the same size at any zoom
@@ -93,7 +95,7 @@ export class Renderer {
   drawSplats(ctx, v) {
     for (const s of this.sb.fx.splats) {
       if (s.x + s.w < v.minX || s.x - s.w > v.maxX) continue;
-      ctx.fillStyle = s.dark ? BLOOD_DARK : BLOOD;
+      ctx.fillStyle = s.tint ? s.tint[s.dark ? 1 : 0] : s.dark ? BLOOD_DARK : BLOOD;
       ctx.beginPath();
       ctx.ellipse(s.x, 0.004, s.w, s.h, 0, 0, TAU);
       ctx.fill();
@@ -129,6 +131,8 @@ export class Renderer {
   }
 
   drawGun(ctx, g) {
+    // a gun from a mod draws itself
+    if (g.draw) { g.draw(ctx); return; }
     const b = g.body;
     ctx.save();
     ctx.translate(b.pos.x, b.pos.y);
@@ -142,7 +146,7 @@ export class Renderer {
     ctx.save();
     ctx.translate(b.pos.x, b.pos.y);
     ctx.rotate(b.rot);
-    drawSeveredLimb(ctx, l.local, 0.07 * l.scale, '#1b1b1b');
+    drawSeveredLimb(ctx, l.local, 0.07 * l.scale, '#1b1b1b', l.tint || null);
     ctx.restore();
   }
 
@@ -182,7 +186,13 @@ export class Renderer {
       pale: p.dead ? 0.7 : clamp((0.86 - h.blood) / 0.42 + h.shock * 0.4, 0, 1),
       bruise: h.parts.head.bruise,
       ink: p.dead ? '#1b1b1b' : INK,
+      // what a mod adds: its species' own drawing, what they bleed, a held thing that draws itself
+      man: p,
+      skin: p.species && p.species.skin ? p.species.skin : null,
+      tint: p.tint,
+      heldDraw: p.weapon && p.weapon.drawHeld ? (c, j, s, f) => p.weapon.drawHeld(c, j, s, f, p) : null,
     });
+    for (const a of p.afflictions) if (a.draw) a.draw(ctx, p);
   }
 
   drawFx(ctx) {
@@ -232,7 +242,7 @@ export class Renderer {
     }
     ctx.globalAlpha = 1;
     for (const d of fx.drops) {
-      ctx.fillStyle = BLOOD;
+      ctx.fillStyle = d.tint ? d.tint[0] : BLOOD;
       ctx.beginPath();
       ctx.arc(d.x, d.y, d.r, 0, TAU);
       ctx.fill();
@@ -264,12 +274,14 @@ export class Renderer {
     ctx.save();
     ctx.globalAlpha = 0.45;
     ctx.translate(g.x, g.y);
-    if (g.kind === 'crate') drawCrateShape(ctx, 0.78, 0.78, null);
+    if (g.draw) g.draw(ctx);
+    else if (g.kind === 'crate') drawCrateShape(ctx, 0.78, 0.78, null);
     else if (g.kind === 'knuckles') drawKnuckleShape(ctx, 0.26, 0.11, 0);
     else if (g.kind === 'knife') drawKnifeShape(ctx, KNIFE_W, KNIFE_H, 0);
     else if (g.kind === 'machete') drawMacheteShape(ctx, MACHETE_W, MACHETE_H, 0);
     else if (g.kind === 'glock') drawGlockShape(ctx, 1, 0, 0);
-    else if (g.kind === 'stickman') {
+    else {
+      // a stickman - or anybody else a mod adds
       ctx.strokeStyle = INK;
       ctx.lineWidth = 0.07;
       ctx.lineCap = 'round';

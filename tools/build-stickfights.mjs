@@ -10,11 +10,15 @@ import { build } from 'esbuild';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { writeModSizes } from './mod-sizes.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const GAME = path.join(ROOT, 'stickfights');
 const OUT_DIR = path.join(ROOT, 'dist');
 const OUT_FILE = path.join(OUT_DIR, 'stickfights.html');
+
+// what each mod needs, measured fresh, so the MODS screen tells the truth
+writeModSizes();
 
 const result = await build({
   entryPoints: [path.join(GAME, 'src/main.js')],

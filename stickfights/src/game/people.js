@@ -31,9 +31,13 @@ export function makePerson(o = {}, taken = []) {
     scale: o.scale || rand(0.92, 1.08),
     hair: o.hair || pick(HAIR),
     voice: o.voice || rand(0.8, 1.3),
-    strength: 0.85 + traits.toughness * 0.15 + rand(0, 0.12),
+    strength: o.strength || 0.85 + traits.toughness * 0.15 + rand(0, 0.12),
     toughness: traits.toughness,
     traits,
+    // from a mod: a species, a look, lines of their own
+    species: o.species || null,
+    look: o.look || null,
+    lines: o.lines || null,
   };
 }
 

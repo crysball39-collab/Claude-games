@@ -20,6 +20,9 @@ import { lerp, lerpAngle, smooth } from '../core/util.js';
 
 export const CLIPS = {};
 
+/** For a mod: an animation of its own, defined the same way as these. */
+export function defineClip(name, def) { clip(name, def); }
+
 /**
  * @param {string} name
  * @param {object} def  { frames: [[seconds, pose, event?], ...], loop, interp, strike, mask }

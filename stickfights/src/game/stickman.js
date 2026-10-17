@@ -42,7 +42,7 @@ import { solve, makeJoints, bounds, JOINTS, BONES, DIM, HEAD_BONE, BELOW_BREAK, 
 import { Health, KO_LEVEL, SEVERABLE } from './health.js';
 import { makeRagdoll, aimMuscles, toJoints, refNear, lyingSide } from './limp.js';
 import { heldGunFrame, gunPoint, goneAt, GLOCK_MUZZLE, GLOCK_PORT } from './draw.js';
-import { isBlade } from './props.js';
+import { isBlade, isGun, armOf } from './props.js';
 import { clamp, clamp01, lerp, lerpAngle, rand, chance, moveToward, segDist, sign, smooth, wrapAngle, wobble, DEG } from '../core/util.js';
 
 export const G = 18;
@@ -170,6 +170,17 @@ export class Stickman {
     this.removed = false;
     this.proxy = null;
     this.selected = false;
+
+    // what a mod made of them: a species with a body and skills of its own,
+    // a look, and lines of their own to say (all null for an ordinary stickman)
+    this.species = o.species || null;
+    this.look = o.look || null;
+    this.lines = o.lines || null;
+    this.tint = null;         // what they bleed, if it is not blood: [colour, darker colour]
+    this.innate = null;       // a weapon that is part of them, while they have it out (props.js ARMS)
+    this.gravity = 1;         // how much of their weight they fall with: a flier holds itself up
+    this.afflictions = [];    // things at work on them over time: { update(man, dt), draw(ctx, man), label }
+    if (this.species && this.species.init) this.species.init(this, o);
   }
 
   /* -------------------------------------------------------------------------- */
@@ -195,7 +206,7 @@ export class Stickman {
   get height() { return this.box.maxY - this.box.minY; }
   /** The strike being thrown right now, if any: what other brains can see coming. */
   get attacking() { return this.strike && !this.strike.done ? this.strike : null; }
-  get armedWith() { return this.weapon ? this.weapon.kind : null; }
+  get armedWith() { return this.weapon ? this.weapon.kind : this.innate; }
   /** Physics has them: flopping, flying, dangling. */
   get limp() { return !!this.rag; }
   get ragdolls() { return this.sandbox.settings.ragdoll !== false; }
@@ -251,11 +262,11 @@ export class Stickman {
       if (w === 'knife') out.push('stab', 'slash');
       else if (w === 'machete') out.push('chop', 'hack');
       // a pistol up close is a lump of steel: a pistol-whip, no uppercuts
-      else if (w === 'glock') out.push('cross');
+      else if (isGun(w)) out.push('cross');
       else out.push('cross', 'uppercut');
     }
     if (h.canUse('legA') && h.canUse('legB')) out.push('kick', 'stomp');
-    return out;
+    return this.species && this.species.strikes ? this.species.strikes(this, out) : out;
   }
 
   /**
@@ -306,6 +317,7 @@ export class Stickman {
   /** Bends down for something on the floor in front of them: knuckles, a knife. */
   pickUp(item) {
     if (!this.ready || this.weapon || item.wornBy || this.carrying) return false;
+    if (this.species && this.species.canPickUp && !this.species.canPickUp(this, item)) return false;
     if (item.stuckIn && item.stuckIn.person) return false;
     if (!this.health.canUse('armA')) return false;
     const reach = this.handReachOf(item.pos.x);
@@ -366,7 +378,11 @@ export class Stickman {
   /* ------------------------------ the pistol ------------------------------ */
 
   /** A pistol in a hand that can still hold it. */
-  get gunReady() { return this.armedWith === 'glock' && !this.cut.armA && this.health.canUse('armA'); }
+  get gunReady() {
+    // a gun in the hand - or, from a mod, a hand that is one
+    const gun = (isGun(this.armedWith) && !!this.weapon) || (!!this.species && !!this.species.ranged && this.species.ranged(this));
+    return gun && !this.cut.armA && this.health.canUse('armA');
+  }
 
   /** Points the pistol at someone (or at a spot, { x, y }). It takes a moment to settle on them. */
   aimAt(target) {
@@ -401,6 +417,9 @@ export class Stickman {
   fire() {
     const g = this.weapon, sb = this.sandbox;
     if (!this.aiming || this.anim.acting) return false;
+    // a hand that is a gun, or a gun that works its own way
+    if (!g) return this.species && this.species.fire ? this.species.fire(this) : false;
+    if (g.fire) return g.fire(this);
     const now = sb.time;
     if (now - g.lastShot < 0.11) return false;
     const frame = heldGunFrame(this.wj, this.scale, this.facing);
@@ -433,7 +452,7 @@ export class Stickman {
     s += Math.min(1, this.health.pain / 100) * 3 + Math.min(1, this.health.dizzy / 2) * 3;
     s += Math.min(1, Math.abs(this.vel.x) / 2) * 3;
     s += (1 - this.steady) * 4;
-    const since = this.sandbox.time - this.weapon.lastShot;
+    const since = this.sandbox.time - (this.weapon ? this.weapon.lastShot : this.lastShotT ?? -99);
     if (since < 0.35) s += 3 * (1 - since / 0.35);
     if (!this.health.canUse('armB') || this.cut.armB) s *= 1.35;
     return s * DEG;
@@ -558,42 +577,60 @@ export class Stickman {
     const fromFront = h.by ? sign(h.by.pos.x - this.pos.x) === this.facing : false;
     const weapon = h.weapon || (h.armed ? 'knuckles' : null);
     const bullet = weapon === 'bullet';
-    // (a raised arm does nothing against a bullet)
-    if (!wasDead && this.blocking && this.state === 'stand' && fromFront && (part === 'head' || part === 'torso') && h.kind !== 'impact' && !bullet) {
+    // a weapon from a mod says for itself what it does (props.js ARMS)
+    const spec = armOf(weapon);
+    const burn = !!(spec && spec.burn);
+    // (a raised arm does nothing against a bullet, or a beam)
+    if (!wasDead && this.blocking && this.state === 'stand' && fromFront && (part === 'head' || part === 'torso') && h.kind !== 'impact' && !bullet && !burn) {
       blocked = true;
       part = this.cut.armA ? 'armB' : this.cut.armB ? 'armA' : chance(0.5) ? 'armA' : 'armB';
     }
-    const blade = isBlade(weapon);
-    const sharp = blade ? 1 : weapon === 'knuckles' ? 0.6 : 0;
+    const blade = isBlade(weapon) || !!(spec && spec.blade);
+    const sharp = blade ? (spec && spec.sharp !== undefined ? spec.sharp : 1) : weapon === 'knuckles' ? 0.6 : 0;
+    const chops = weapon === 'machete' || !!(spec && spec.chop);
     const MUL = { head: 1.25, torso: 1, armA: 0.7, armB: 0.7, legA: 0.75, legB: 0.75 };
     // an arm up against a fist or a knife takes the sting out of it; against a
     // machete it just puts the forearm where the blade comes down
-    const parried = blocked && weapon === 'machete';
+    const parried = blocked && (weapon === 'machete' || !!(spec && spec.sever));
     if (parried) { blocked = false; h = { ...h, bone: 'forearm' + part.slice(-1) }; }
-    const dmg = 9 * h.power * MUL[part] * (blocked ? 0.3 : parried ? 0.85 : 1) * rand(0.85, 1.15);
+    // some bodies are harder to hurt than others (a mod's)
+    const armor = this.species && this.species.armor ? this.species.armor(this, h, part, weapon) : 1;
+    const dmg = 9 * h.power * MUL[part] * (blocked ? 0.3 : parried ? 0.85 : 1) * rand(0.85, 1.15) * armor;
     const res = this.health.hit(part, dmg, {
-      sharp: blocked ? sharp * 0.5 : sharp, deep: !!h.deep && !blocked, chop: weapon === 'machete' && !blocked, shot: bullet,
+      sharp: blocked ? sharp * 0.5 : sharp, deep: !!h.deep && !blocked, chop: chops && !blocked, shot: bullet || !!(spec && spec.shot),
       bone: blocked ? null : h.bone || null, breakChance: h.kind === 'stomp' ? 0.06 : 0, strike: h.kind,
+      burn, cutBy: spec ? spec.wound || null : null, cause: spec ? spec.cause || null : null,
     });
 
     if (h.by && h.by !== this && !blocked && (res.wound || bullet || (blade && dmg > 4))) this.woundedBy = { by: h.by, t: this.sandbox.time };
     // blood, if the skin went or the face took it (a bullet's is its own: see shot())
-    const spray = !bullet && (res.wound || (part === 'head' && dmg > 10) || (weapon && dmg > 6));
+    const spray = !bullet && !burn && (res.wound || (part === 'head' && dmg > 10) || (weapon && dmg > 6));
     if (spray && !blocked) {
-      const n = Math.round(clamp(dmg * (weapon === 'machete' ? 1.3 : sharp > 0.9 ? 0.9 : 0.6), 3, 30));
+      const n = Math.round(clamp(dmg * (weapon === 'machete' ? 1.3 : spec && spec.spray ? spec.spray : sharp > 0.9 ? 0.9 : 0.6), 3, 30));
       this.sandbox.fx.blood(h.x, h.y, h.dir * (1 + h.power), 1 + h.power * 0.5, n, 1, this);
       if (h.x !== undefined) {
         this.markAt(h.x, h.y, 0.7 + dmg * 0.02);
-        // a machete leaves it open
-        if (weapon === 'machete' && res.wound) {
+        // a machete leaves it open (and a set of claws, three times over)
+        const gashes = weapon === 'machete' ? 1 : spec && spec.gash ? spec.gash : 0;
+        if (gashes && res.wound) {
           const n2 = this.nearestPart(h.x, h.y);
-          if (n2.part !== 'head') this.addWound({ bone: n2.bone, t: n2.t, r: 0.6, gash: rand(-0.5, 0.5) });
+          if (n2.part !== 'head') {
+            const tilt = rand(-0.5, 0.5);
+            for (let i = 0; i < gashes; i++) this.addWound({ bone: n2.bone, t: clamp(n2.t + (i - (gashes - 1) / 2) * 0.09, 0.05, 0.95), r: 0.6, gash: tilt });
+          }
         }
       }
       if (part === 'head') this.face.blood = Math.min(1, this.face.blood + dmg / 35);
     }
+    // a burn: a black scorch where it touched, and a wisp of smoke
+    if (burn && h.x !== undefined && !blocked) {
+      const n2 = this.nearestPart(h.x, h.y);
+      if (n2.part === 'head') this.headMark(h.x, h.y, 0.9, true);
+      else this.addWound({ bone: n2.bone, t: n2.t, r: 0.5, burn: true });
+      this.sandbox.fx.dust(h.x, h.y, 2, 0.3);
+    }
     // hard enough, a machete goes right through; a kick to the knee can put it out
-    if (weapon === 'machete' && !blocked && !this.removed) this.trySever(h, dmg);
+    if ((weapon === 'machete' || (spec && spec.sever)) && !blocked && !this.removed) this.trySever(h, dmg, spec ? spec.sever : 1);
     if ((h.kind === 'kick' || h.kind === 'stomp') && !blocked && (h.bone === 'tibiaA' || h.bone === 'tibiaB' || h.bone === 'femurA' || h.bone === 'femurB') &&
       h.power > 1.3 && chance(0.07 * h.power)) this.dislocate('knee' + h.bone.slice(-1));
     if (dmg > 3) this.sandbox.fx.burst(h.x, h.y, h.power);
@@ -608,7 +645,7 @@ export class Stickman {
     this.lastHit = { by: h.by, t: this.sandbox.time, part, power: h.power, kind: h.kind, blocked, object: h.object || null, weapon };
 
     // a blade cuts more than it shoves, and a bullet more still
-    const shove = h.power * (blocked ? 0.25 : 1) * (weapon === 'knife' ? 0.55 : weapon === 'machete' ? 0.8 : bullet ? 0.35 : 1);
+    const shove = h.power * (blocked ? 0.25 : 1) * (weapon === 'knife' ? 0.55 : weapon === 'machete' ? 0.8 : bullet ? 0.35 : spec && spec.shove !== undefined ? spec.shove : 1);
     this.balance -= shove * (part === 'head' ? 0.36 : 0.27) * (1.2 - this.health.toughness * 0.35);
     this.notify('hurt', { ...h, part, damage: dmg, blocked, res, weapon });
 
@@ -680,7 +717,7 @@ export class Stickman {
     if (!this.alive || this.state === 'held') return;
     this.strike = null;
     this.dropCarried();
-    if (this.weapon && chance(this.armedWith === 'knuckles' ? 0.25 : this.armedWith === 'glock' ? 0.45 : 0.35)) this.dropWeapon(1);
+    if (this.weapon && chance(this.armedWith === 'knuckles' ? 0.25 : isGun(this.armedWith) ? 0.45 : 0.35)) this.dropWeapon(1);
     this.downT = 1.4 + shove * 0.5 + rand(0, 0.8);
     if (this.goLimp({ state: 'thrown', tone: 0.35, at, dir, shove, after: 'down' })) {
       this.sandbox.emit('knockdown', { who: this, by: this.lastHit ? this.lastHit.by : null });
@@ -759,12 +796,12 @@ export class Stickman {
   }
 
   /** A machete coming down on an arm or a leg, hard enough, goes right through it. */
-  trySever(h, dmg) {
+  trySever(h, dmg, k = 1) {
     const bone = h.bone;
     if (!bone || !SEVERABLE.includes(bone)) return false;
     const thr = SEVER_FORCE[bone.replace(/[AB]$/, '')];
     if (dmg < thr) return false;
-    if (!chance((h.kind === 'chop' ? 0.1 : 0.03) + (dmg - thr) * 0.025)) return false;
+    if (!chance(((h.kind === 'chop' ? 0.1 : 0.03) + (dmg - thr) * 0.025) * k)) return false;
     return this.sever(bone, h.dir, h.power);
   }
 
@@ -782,7 +819,8 @@ export class Stickman {
     const pts = [mid, ...below].map((k) => ({ x: w[k].x, y: w[k].y }));
     const end = below[below.length - 1];
     const vx = clamp((w[end].x - pw[end].x) * 120, -12, 12), vy = clamp((w[end].y - pw[end].y) * 120, -12, 12);
-    sb.addLimb(pts, bone, this.name, vx + dir * (1 + power), vy + 1.2, rand(-6, 6), this.scale);
+    const piece = sb.addLimb(pts, bone, this.name, vx + dir * (1 + power), vy + 1.2, rand(-6, 6), this.scale);
+    if (piece) { piece.tint = this.tint; piece.from = this; }
     h.sever(bone);
     this.cut[limb] = mid;
     if (limb === 'armA') { if (this.weapon) this.dropWeapon(0.5); this.aimTarget = null; }
@@ -885,6 +923,7 @@ export class Stickman {
     this.bubble = null;
     this.thought = null;
     this.emote = null;
+    if (this.species && this.species.died) this.species.died(this, killer);
     this.sandbox.emit('death', { who: this, by: killer, cause });
     this.notify('dead', {});
   }
@@ -910,6 +949,8 @@ export class Stickman {
     this.face.blood = 0;
     this.cut = {};
     this.woundedBy = null;
+    this.afflictions.length = 0;
+    if (this.species && this.species.healed) this.species.healed(this);
     for (const e of [...this.stuck]) this.pullKnife(e, null);
     if (this.rag) {
       // a broken bone the ragdoll was built with has mended: rebuild it whole
@@ -1444,6 +1485,8 @@ export class Stickman {
    * slash or a chop lands with. A machete is long enough to need three.
    */
   bladePoints() {
+    // a blade that is part of them: their species knows where its edge is
+    if (!this.weapon && this.species && this.species.bladePoints) return this.species.bladePoints(this);
     const s = this.scale, w = this.weapon;
     const a = this.wj.midForeA, h = this.wj.handA;
     const d = Math.hypot(h.x - a.x, h.y - a.y) || 1;
@@ -1462,6 +1505,9 @@ export class Stickman {
     for (const k of JOINTS) { this.prevWj[k].x = this.wj[k].x; this.prevWj[k].y = this.wj[k].y; }
     this.prevWj.headAngle = this.wj.headAngle;
     this.stateT += dt;
+    // a mod's species has its own business every step, and so does whatever is eating at them
+    if (this.species && this.species.update) this.species.update(this, dt);
+    if (this.afflictions.length) this.afflictions = this.afflictions.filter((a) => a.update(this, dt) !== false);
     const h = this.health;
     const wasAlive = !h.dead;
     if (h.update(dt) && wasAlive) {
@@ -1559,7 +1605,7 @@ export class Stickman {
 
   maxSpeed(kind) {
     let s = SPEEDS[kind] || SPEEDS.walk;
-    s *= this.health.mobility;
+    s *= this.health.mobility * (this.species && this.species.speed ? this.species.speed : 1);
     if (this.carrying) s = Math.min(s, SPEEDS.walk * 0.8);
     if (this.posture === 'guard' && kind !== 'run' && kind !== 'flee') s = Math.min(s, SPEEDS.shuffle);
     return s;
@@ -1629,6 +1675,8 @@ export class Stickman {
 
   /** Fists up, or the weapon held ready. */
   guardClip() {
+    const own = this.species && this.species.guardClip ? this.species.guardClip(this) : null;
+    if (own) return own;
     return this.armedWith === 'knife' ? 'knifeGuard' : this.armedWith === 'machete' ? 'macheteGuard' : 'guard';
   }
 
@@ -1723,6 +1771,8 @@ export class Stickman {
   }
 
   updateAir(dt) {
+    // a flier flies (a mod's species)
+    if (this.species && this.species.air && this.species.air(this, dt)) return;
     this.anim.play(this.vel.y > 0.8 ? 'rise' : 'fall', { blend: 0.15 });
     this.anim.setOverlay(this.carrying ? 'carry' : null);
     if (this.intent.x !== null) {
@@ -1880,7 +1930,7 @@ export class Stickman {
     const hw = (lying ? 0.12 : HALF_W) * this.scale;
     const walking = this.state === 'stand' || this.state === 'crawl';
 
-    this.vel.y -= G * dt;
+    this.vel.y -= G * this.gravity * dt;
     if (this.onGround && !walking) this.vel.x = moveToward(this.vel.x, 0, (lying ? 9 : 6) * dt);
 
     let nx = this.pos.x + this.vel.x * dt;
@@ -1960,6 +2010,7 @@ export class Stickman {
   /** Feet (or whatever) meeting the ground after being in the air. */
   touchDown(v) {
     const sb = this.sandbox;
+    if (this.species && this.species.touchDown && this.species.touchDown(this, v)) return;
     if (this.state === 'air') {
       if (v > 9.5) {
         this.landHard(v, 'legs');
@@ -2020,7 +2071,8 @@ export class Stickman {
     sb.emit('thud', { who: this, speed: v, x: this.pos.x, y: this.pos.y });
     if (v < 6.5) return;
     const e = v - 6.5;
-    const dmg = e * e * 1.25 + e * 3;
+    // (a body built of metal takes a fall better: a mod's species says how much)
+    const dmg = (e * e * 1.25 + e * 3) * (this.species && this.species.fall !== undefined ? this.species.fall : 1);
     const spread = how === 'legs' ? [['legA', 0.38, 'tibiaA'], ['legB', 0.38, 'tibiaB'], ['torso', 0.24, 'pelvis']]
       : how === 'head' ? [['head', 0.55, 'skull'], ['torso', 0.3, null], ['armA', 0.15, null]]
       : how === 'side' ? [['torso', 0.4, 'ribs'], ['head', 0.3, 'skull'], ['armA', 0.15, null], ['legA', 0.15, null]]
@@ -2055,13 +2107,19 @@ export class Stickman {
     if (a.t > d.to) { s.done = true; return; }
     if (a.t < d.from) return;
     const sb = this.sandbox;
-    const blade = d.blade && isBlade(this.armedWith);
+    const spec = this.weapon ? null : armOf(this.innate);
+    const blade = d.blade && (isBlade(this.armedWith) || !!(spec && spec.blade));
     // what is doing the hitting: the fist or foot, or the point and edge of a blade
     const pts = blade ? this.bladePoints().pts : [this.wj[d.limb]];
     const prev = this.prevWj[d.limb], limb = this.wj[d.limb];
     const speed = Math.hypot(limb.x - prev.x, limb.y - prev.y) / dt;
-    const armed = !!this.weapon && d.limb === 'handA';
-    const r = (d.limb.startsWith('foot') ? 0.065 : blade ? (this.armedWith === 'machete' ? 0.045 : 0.035) : armed ? 0.075 : 0.06) * this.scale;
+    const armed = (!!this.weapon || !!this.innate) && d.limb === 'handA';
+    const r = (d.limb.startsWith('foot') ? 0.065 : blade ? (spec && spec.r ? spec.r : this.armedWith === 'machete' ? 0.045 : 0.035) : armed ? 0.075 : 0.06) * this.scale;
+    // something that keeps on biting for as long as it touches - a chainsaw - hits again every so often
+    if (d.ticks && (s.tickT = (s.tickT || 0) + dt) >= d.ticks) {
+      s.tickT = 0;
+      for (const o of [...s.hit]) if (o.kind === 'stickman') s.hit.delete(o);
+    }
     for (const o of sb.people) {
       if (o === this || o.removed || s.hit.has(o) || o.state === 'held') continue;
       if (Math.abs(o.pos.x - limb.x) > 2.4) continue;
@@ -2107,15 +2165,18 @@ export class Stickman {
     const limbOK = clamp(lp.hp / lp.max, 0.4, 1);
     const fury = 1 + (this.brain ? this.brain.emo.anger * 0.15 : 0);
     // brass on the fist nearly doubles a punch; so does a pistol butt
-    const mult = weapon === 'knuckles' ? 1.9 : weapon === 'glock' ? 1.5 : 1;
+    const spec = armOf(weapon);
+    const mult = weapon === 'knuckles' ? 1.9 : isGun(weapon) ? 1.5 : spec && spec.mult ? spec.mult : 1;
     const power = d.power * sp * limbOK * this.strength * fury * mult * clamp(this.health.mobility + 0.2, 0.6, 1);
     s.landed = true;
-    const bladed = isBlade(weapon);
+    const bladed = isBlade(weapon) || !!(spec && spec.blade);
     o.takeHit({
       by: this, part: hit.part, x: hit.x, y: hit.y, dir: this.facing, power, kind: s.kind,
       armed: !!weapon, weapon: bladed ? (d.blade ? weapon : null) : weapon,
-      deep: (d.blade === 'stab' && weapon === 'knife') || (d.blade === 'chop' && weapon === 'machete'), low: d.low, bone: o.boneName(hit.bone, hit.t),
+      deep: (d.blade === 'stab' && weapon === 'knife') || (d.blade === 'chop' && weapon === 'machete') || !!(spec && spec.deep && spec.deep.includes(d.blade)),
+      low: d.low, bone: o.boneName(hit.bone, hit.t),
     });
+    if (this.species && this.species.landed) this.species.landed(this, o, hit, power, s);
     this.anim.freeze = o.anim.freeze = 0.04 + Math.min(0.05, power * 0.012);
     if (weapon && this.weapon) this.weapon.blood = Math.min(1, this.weapon.blood + (bladed ? 0.25 : 0.12) * power);
     this.notify('landed', { target: o, power, part: hit.part });
@@ -2205,6 +2266,8 @@ export class Stickman {
       sb.emit('clap', { who: this, x: this.wj.handA.x, y: this.wj.handA.y });
     } else if (ev === 'slap') {
       sb.emit('clap', { who: this, x: this.wj.handA.x, y: this.wj.handA.y, soft: true });
+    } else if (this.species && this.species.animEvent) {
+      this.species.animEvent(this, ev);
     }
   }
 
@@ -2334,6 +2397,7 @@ export class Stickman {
     if (h.paralysed !== 'none' && st === 'crawl') {
       p.lAu = lerp(p.lAu, 0, 0.9); p.lAl = 0; p.lBu = lerp(p.lBu, 0, 0.9); p.lBl = 0;
     }
+    if (this.species && this.species.procedural) this.species.procedural(this, p, dt);
   }
 
   /**
@@ -2464,12 +2528,13 @@ export class Stickman {
   }
 
   /** A mark of blood on a bone: from a wound, or from blood landing on them. */
-  mark(bone, t, r, dark = false) {
+  mark(bone, t, r, dark = false, tint = undefined) {
+    const own = tint === undefined ? this.tint : tint;
     for (const w of this.wounds) {
-      if (w.bone === bone && Math.abs(w.t - t) < 0.14) { w.r = Math.min(0.95, w.r + r * 0.1); return; }
+      if (w.bone === bone && Math.abs(w.t - t) < 0.14 && w.tint === own) { w.r = Math.min(0.95, w.r + r * 0.1); return; }
     }
     if (this.wounds.length > 18) this.wounds.shift();
-    this.wounds.push({ bone, t, r: clamp(r, 0.3, 0.8), dark });
+    this.wounds.push({ bone, t, r: clamp(r, 0.3, 0.8), dark, tint: own });
   }
 
   markAt(x, y, r) {
@@ -2479,7 +2544,7 @@ export class Stickman {
   }
 
   /** Blood on the head, kept in the head's own frame so it turns with it. */
-  headMark(x, y, size) {
+  headMark(x, y, size, burn = false) {
     const j = this.wj, r = DIM.headR * this.scale;
     const ux = (x - j.head.x) * this.facing, uy = y - j.head.y;
     const c = Math.cos(j.headAngle), s = Math.sin(j.headAngle);
@@ -2487,7 +2552,7 @@ export class Stickman {
     const d = Math.hypot(lx, ly);
     if (d > 0.8) { lx *= 0.8 / d; ly *= 0.8 / d; }
     if (this.headMarks.length > 14) this.headMarks.shift();
-    this.headMarks.push({ x: lx, y: ly, r: clamp(size * 0.22, 0.12, 0.32), dark: chance(0.3) });
+    this.headMarks.push({ x: lx, y: ly, r: clamp(size * 0.22, 0.12, 0.32), dark: chance(0.3), burn, tint: this.tint });
   }
 
   updateBleeding(dt) {
@@ -2495,7 +2560,7 @@ export class Stickman {
     if (b <= 0) return;
     this.dripAcc += b * 1500 * dt;
     if (this.dead && this.onGround) {
-      this.sandbox.fx.pool(this.wj.hip.x * 0.5 + this.wj.neck.x * 0.5, this.pos.y, b * dt);
+      this.sandbox.fx.pool(this.wj.hip.x * 0.5 + this.wj.neck.x * 0.5, this.pos.y, b * dt, this.tint);
     }
     while (this.dripAcc >= 1) {
       this.dripAcc -= 1;

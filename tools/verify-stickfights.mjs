@@ -9,6 +9,8 @@
 
    Most checks set something up and then run the simulation forward in fixed
    steps inside the page, so they do not depend on how fast the machine is.
+   The mods are checked too: off until installed from the MODS screen, the
+   storage it shows, and everything the Murder Drones mod adds.
 
    Needs playwright and a chromium build:
      npm install -D playwright && npx playwright install chromium
@@ -19,6 +21,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { measureMods, writeModSizes } from './mod-sizes.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FILE_MODE = process.argv.includes('--file');
@@ -40,6 +43,8 @@ if (FILE_MODE) {
   if (!fs.existsSync(file)) { console.error('no dist/stickfights.html - run node tools/build-stickfights.mjs'); process.exit(1); }
   url = pathToFileURL(file).href;
 } else {
+  // the source needs what the build would write: how much storage each mod needs
+  writeModSizes();
   server = http.createServer((req, res) => {
     const rel = decodeURIComponent(req.url.split('?')[0]);
     const file = path.join(ROOT, rel);
@@ -881,8 +886,14 @@ const scare = await ev(() => {
   g.facing = 1;
   g.pickUp(pistol);
   steps(150);
+  // wherever the sight of the pistol sent them, they are back in front of Gus and looking at him when it comes up
+  t.brain.clearBehaviour();
+  t.stop();
+  t.pos.x = g.pos.x + 4;
+  t.vel.x = 0;
   t.facing = -1;
   g.aimAt(t);
+  t.brain.sense();
   // (giving up, or cowering: either way, up go the hands)
   const handsUp = steps(120 * 4, () => t.posture === 'handsUp' && t.brain.behaviour && (t.brain.behaviour.kind === 'surrender' || t.brain.behaviour.kind === 'cower'));
   const tSaid = (t.brain.behaviour ? t.brain.behaviour.kind + ': ' : '') + (t.bubble ? t.bubble.text : '');
@@ -1076,6 +1087,224 @@ const bye = await ev(() => {
   return [...seen];
 });
 check('good friends part with a hug or a high five', bye.includes('hug') || bye.includes('highFive'), bye.join(', '));
+
+/* ---------------------------------- mods --------------------------------- */
+
+await fresh();
+const modsOff = await ev(() => ({
+  installed: window.__sf.mods.installedMods().map((m) => m.id),
+  cards: document.querySelectorAll('.card').length,
+  section: document.getElementById('drawer-mods').children.length,
+}));
+check('mods are not in the game until they are installed', !modsOff.installed.length && modsOff.cards === 6 && !modsOff.section, JSON.stringify(modsOff));
+
+await page.tap('#btn-menu');
+await page.waitForTimeout(300);
+await page.tap('#btn-mods');
+await page.waitForTimeout(300);
+const listed = await ev(() => [...document.querySelectorAll('.mod-item')].map((el) => ({
+  id: el.dataset.mod,
+  name: el.querySelector('.mod-name').textContent,
+  size: el.querySelector('.mod-size').textContent,
+  adds: [...el.querySelectorAll('.mod-adds .chip')].map((c) => c.textContent),
+  btn: el.querySelector('.mod-btn').textContent,
+})));
+const mdItem = listed.find((m) => m.id === 'murder-drones');
+check('the MODS screen has Murder Drones, which adds Uzi, N and V', !!mdItem && mdItem.name === 'Murder Drones' && ['Uzi', 'N', 'V'].every((n) => mdItem.adds.includes(n)) && mdItem.btn === 'INSTALL',
+  JSON.stringify(mdItem));
+const realKB = (measureMods()['murder-drones'] / 1024).toFixed(1) + ' KB';
+check('...and shows the storage it needs: what its files really take up', !!mdItem && mdItem.size === 'Storage needed: ' + realKB, `${mdItem && mdItem.size} (its folder: ${realKB})`);
+await shot('mods');
+await page.tap('.mod-item[data-mod="murder-drones"] .mod-btn');
+await page.waitForTimeout(350);
+const installing = await ev(() => {
+  const it = document.querySelector('.mod-item[data-mod="murder-drones"]');
+  return { bar: !it.querySelector('.mod-progress').classList.contains('hidden'), text: it.querySelector('.mod-progress span').textContent, yet: window.__sf.mods.isInstalled('murder-drones') };
+});
+await page.waitForFunction(() => window.__sf.mods.isInstalled('murder-drones'), null, { timeout: 8000 }).catch(() => {});
+await page.waitForTimeout(150);
+const installed = await ev(() => ({
+  cards: [...document.querySelectorAll('.card')].map((c) => c.dataset.spawn),
+  stored: JSON.parse(localStorage.getItem('sf.mods') || '[]'),
+  state: document.querySelector('.mod-item[data-mod="murder-drones"] .mod-state').offsetParent !== null,
+}));
+check('INSTALL fills a bar as it goes in, then Uzi, N and V are in the spawn menu',
+  installing.bar && !installing.yet && installed.cards.length === 9 && ['md-uzi', 'md-n', 'md-v'].every((k) => installed.cards.includes(k)) && installed.state,
+  `"${installing.text}" -> ${installed.cards.join(', ')}`);
+check('...and the device remembers that it is installed', installed.stored.includes('murder-drones'), JSON.stringify(installed.stored));
+await page.tap('#mods-close');
+await page.waitForTimeout(250);
+
+// Uzi, from her card, holding her railgun
+await ev(() => { window.__sf.ui.toggleDrawer(true); });
+await page.waitForTimeout(300);
+await page.tap('.card[data-spawn="md-uzi"]');
+await page.waitForTimeout(300);
+await tapAt(420, 200);
+await sim(0.5);
+const uzi = await ev(() => {
+  const u = window.__sf.sb.people.find((p) => p.name === 'Uzi');
+  return u ? { armed: u.armedWith, kind: u.species && u.species.label, onFloor: Math.abs(u.pos.y) < 0.05, guns: window.__sf.sb.guns.map((g) => g.kind) } : null;
+});
+check('Uzi spawns from her card holding her railgun', !!uzi && uzi.armed === 'railgun' && uzi.kind === 'Worker Drone' && uzi.onFloor, JSON.stringify(uzi));
+
+const crash = await ev(() => {
+  const sb = window.__sf.sb, M = window.__sf.mods;
+  const out = {};
+  for (const k of ['n', 'v']) {
+    sb.clear();
+    let crashed = 0;
+    sb.on('crashLand', () => { crashed++; });
+    const d = M.findSpawnable('md-' + k).spawn(sb, 2);
+    const y0 = d.pos.y, wing0 = d.md.wing.open, t0 = sb.time;
+    let landed = null, wings = 0, kneel = false;
+    for (let i = 0; i < 120 * 4; i++) {
+      sb.step(1 / 120);
+      if (landed === null && d.state === 'stand') { landed = sb.time - t0; wings = d.md.wing.open; kneel = d.anim.actionName === 'crashLand'; }
+    }
+    out[k] = { y0: +y0.toFixed(1), wing0, landed: landed && +landed.toFixed(2), wings: +wings.toFixed(2), kneel, crashed: crashed > 0, cracks: sb.effects.some((e) => Array.isArray(e.lines)), fine: d.health.overall > 0.9 };
+  }
+  return out;
+});
+const crashed = (c) => c.y0 > 8 && c.wing0 > 0.9 && c.landed !== null && c.landed < 3 && c.wings > 0.8 && c.kneel && c.crashed && c.cracks && c.fine;
+check('N comes down out of the sky and crash-lands, wings out, cracking the floor', crashed(crash.n), JSON.stringify(crash.n));
+check('...and so does V', crashed(crash.v), JSON.stringify(crash.v));
+
+const forms = await ev(() => {
+  const sb = window.__sf.sb, M = window.__sf.mods;
+  const steps = (n, each) => { for (let i = 0; i < n; i++) { if (each) each(); sb.step(1 / 120); } };
+  sb.clear();
+  const n = M.findSpawnable('md-n').spawn(sb, -2);
+  steps(120 * 3);
+  n.brain = null;
+  const STRIKE = { chainsaw: 'saw', sword: 'chop', claw: 'slash' };
+  const REACH = { chainsaw: 1.05, sword: 1.25, claw: 0.95 };
+  const out = {};
+  for (const f of ['chainsaw', 'gunArm', 'sword', 'claw', 'laser', 'missile']) {
+    n.md.formLock = f;
+    n.lowerGun();
+    let t = 0;
+    while (t < 120 * 4 && !(n.md.form === f && n.md.formT >= 1 && !n.md.morphing && n.ready)) { sb.step(1 / 120); t++; }
+    const morphed = n.md.form === f && n.innate === f;
+    const melee = !!STRIKE[f];
+    n.pos.x = -2; n.vel.x = 0; n.facing = 1;
+    const dummy = sb.spawnStickman(-2 + (melee ? REACH[f] * n.scale * 0.85 : 4.5), null, { name: 'Dummy', traits: { toughness: 1 } });
+    dummy.brain = null;
+    dummy.facing = -1;
+    steps(30);
+    const hp0 = dummy.health.overall;
+    if (melee) { n.attack(STRIKE[f], dummy); steps(120 * 1.2); }
+    else { steps(120 * 0.7, () => n.aimAt(dummy)); n.fire(); steps(120 * 1.6, () => n.aimAt(dummy)); }
+    out[f] = { morphed, hurt: dummy.health.overall < hp0 - 0.01, said: dummy.health.conditions().slice(0, 2).join('; ') };
+    sb.remove(dummy);
+    n.lowerGun();
+    n.heal();
+    steps(60);
+  }
+  return out;
+});
+const formsOk = Object.values(forms).every((f) => f.morphed && f.hurt);
+check('N\'s hands turn into a chainsaw, a gun, a sword, claws, a laser and missiles, and each of them does damage', formsOk,
+  Object.entries(forms).map(([k, f]) => `${k}${f.morphed ? '' : ' (no morph)'}${f.hurt ? '' : ' (no hurt)'}: ${f.said}`).join(' | '));
+
+const tail = await ev(() => {
+  const sb = window.__sf.sb, M = window.__sf.mods;
+  const steps = (n) => { for (let i = 0; i < n; i++) sb.step(1 / 120); };
+  sb.clear();
+  const v = M.findSpawnable('md-v').spawn(sb, -2);
+  steps(120 * 3);
+  v.brain = null;
+  v.pos.x = -2; v.vel.x = 0; v.facing = 1;
+  const d = sb.spawnStickman(-1, null, { name: 'Dee', traits: { toughness: 1 } });
+  d.brain = null;
+  d.facing = -1;
+  steps(30);
+  // whatever she was in the middle of, finished
+  for (let i = 0; i < 120 * 4 && !(v.ready && (!v.md.tail || v.md.tail.phase === 'idle') && sb.time - v.md.tailCool > 3.3); i++) sb.step(1 / 120);
+  v.facing = 1;
+  const strike = v.species.abilities(v).find((a) => a.id === 'tail');
+  const did = strike.pick();
+  steps(120 * 0.8);
+  const acid = d.afflictions.map((a) => a.label);
+  steps(120 * 4);
+  return { did, acid, conds: d.health.conditions() };
+});
+check('V\'s tail stabs, and puts nanite acid in them that eats away at them', tail.did && tail.acid.length > 0 && tail.conds.some((c) => /Nanite acid/.test(c)),
+  `${tail.acid.join(', ')} -> ${tail.conds.slice(0, 3).join('; ')}`);
+
+const rail = await ev(() => {
+  const sb = window.__sf.sb, M = window.__sf.mods;
+  const steps = (n, each) => { for (let i = 0; i < n; i++) { if (each) each(); sb.step(1 / 120); } };
+  sb.clear();
+  const u = M.findSpawnable('md-uzi').spawn(sb, -5);
+  const a = sb.spawnStickman(0, null, { name: 'Ann', traits: { toughness: 1 } });
+  const b = sb.spawnStickman(2.5, null, { name: 'Bob', traits: { toughness: 1 } });
+  for (const p of [u, a, b]) p.brain = null;
+  steps(60);
+  u.facing = 1; a.facing = -1; b.facing = -1;
+  let shotAt = null;
+  sb.on('railShot', () => { if (shotAt === null) shotAt = sb.time; });
+  steps(120 * 0.7, () => u.aimAt(a));
+  const t0 = sb.time;
+  u.fire();
+  steps(120 * 1.5, () => { u.aimAt(a); u.fire(); });
+  const hit = (p) => p.dead || p.health.conditions().some((c) => /Railgun|Shot/.test(c));
+  return { charged: shotAt === null ? null : +(shotAt - t0).toFixed(2), a: hit(a), b: hit(b) };
+});
+check('the railgun charges, then goes through everyone in its way', rail.charged !== null && rail.charged >= 0.85 && rail.a && rail.b, JSON.stringify(rail));
+
+// the inspector: what they are, and buttons for what they can do
+await fresh();
+await ev(() => {
+  const sb = window.__sf.sb, M = window.__sf.mods;
+  const n = M.findSpawnable('md-n').spawn(sb, 0);
+  for (let i = 0; i < 120 * 3; i++) sb.step(1 / 120);
+  window.__n = n;
+  window.__sf.ui.select(n);
+});
+await page.waitForTimeout(300);
+const insp = await ev(() => ({
+  chips: [...document.querySelectorAll('#ins-traits .chip')].map((c) => c.textContent),
+  abilities: [...document.querySelectorAll('.abil-btn')].map((b) => b.textContent),
+}));
+check('tapping N shows a Disassembly Drone, with a button for each of his abilities',
+  insp.chips[0] === 'Disassembly Drone' && ['Chainsaw', 'Gun', 'Sword', 'Claws', 'Laser', 'Missiles', 'Tail strike', 'Fly'].every((a) => insp.abilities.includes(a)), insp.abilities.join(', '));
+await page.tap('.abil-btn[data-ability="sword"]');
+await sim(1.5);
+await page.waitForTimeout(250);
+const locked = await ev(() => ({ lock: window.__n.md.formLock, form: window.__n.md.form, on: document.querySelector('.abil-btn[data-ability="sword"]').classList.contains('on') }));
+check('...and his hands become what is tapped, and stay that way', locked.lock === 'sword' && locked.form === 'sword' && locked.on, JSON.stringify(locked));
+await shot('drone-inspector');
+await ev(() => window.__sf.ui.select(null));
+
+// out again: the menu, the world and the device all forget it
+await ev(() => {
+  const sb = window.__sf.sb, M = window.__sf.mods;
+  M.findSpawnable('md-uzi').spawn(sb, -4);
+  M.findSpawnable('md-v').spawn(sb, 4);
+  sb.spawnStickman(7, null, { name: 'Keeper' });
+  for (let i = 0; i < 120 * 2; i++) sb.step(1 / 120);
+});
+await ev(() => { window.__sf.ui.toggleDrawer(true); });
+await page.waitForTimeout(300);
+await page.tap('#btn-mods');
+await page.waitForTimeout(300);
+await page.tap('.mod-item[data-mod="murder-drones"] .mod-btn');
+await page.waitForTimeout(150);
+const armedRemove = await ev(() => document.querySelector('.mod-item[data-mod="murder-drones"] .mod-btn').textContent);
+await page.tap('.mod-item[data-mod="murder-drones"] .mod-btn');
+await page.waitForTimeout(250);
+const removed = await ev(() => ({
+  people: window.__sf.sb.people.map((p) => p.name),
+  guns: window.__sf.sb.guns.map((g) => g.kind),
+  cards: document.querySelectorAll('.card').length,
+  stored: JSON.parse(localStorage.getItem('sf.mods') || '[]'),
+}));
+check('REMOVE asks once more, then takes the mod out of the spawn menu and everything of it out of the world',
+  armedRemove === 'TAP TO REMOVE' && removed.people.join() === 'Keeper' && !removed.guns.length && removed.cards === 6 && !removed.stored.length, JSON.stringify(removed));
+await page.tap('#mods-close');
+await ev(() => window.__sf.ui.toggleDrawer(false));
+await page.waitForTimeout(250);
 
 /* --------------------------------- mayhem -------------------------------- */
 

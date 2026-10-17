@@ -8,7 +8,7 @@
    you move them (stickman.js). Letting go while moving throws it.
    ========================================================================== */
 import { GrabJoint } from '../physics/rigid.js';
-import { isBlade } from './props.js';
+import { isBlade, isGun } from './props.js';
 import { clamp } from '../core/util.js';
 
 export class Hand {
@@ -44,7 +44,7 @@ export class Hand {
       }
       const b = thing.body;
       // the light, long things are held a little stiffer, so they point where they are pulled
-      const stiff = isBlade(thing.kind) || thing.kind === 'glock';
+      const stiff = isBlade(thing.kind) || isGun(thing.kind);
       this.joint = sb.phys.addJoint(new GrabJoint(b, x, y, { hz: stiff ? 7 : 5, damping: 0.8, maxForce: 2500 * b.mass }));
     }
     this.holding = thing;

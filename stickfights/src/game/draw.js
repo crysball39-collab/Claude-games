@@ -46,34 +46,44 @@ export function drawStickman(ctx, j, o) {
   const r = DIM.headR * s;
   const ink = o.ink || INK, far = o.far || INK_FAR;
   const cut = o.cut || NO_CUTS;
+  // a mod's species can draw more of them (wings, a tail, hands that are not
+  // hands) and draw the head its own way: o.skin = { back, farArm, head, front }
+  const skin = o.skin || null;
+  const tint = o.tint || null;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.lineWidth = lw;
+  if (skin && skin.back) skin.back(ctx, j, o);
 
   // far side first, so the near arm and leg sit in front of the body
   ctx.strokeStyle = far;
+  ctx.lineWidth = lw;
   limb(ctx, j, LEG_B, cut.legB);
   limb(ctx, j, ARM_B, cut.armB);
+  if (skin && skin.farArm) skin.farArm(ctx, j, o);
 
   ctx.strokeStyle = ink;
+  ctx.lineWidth = lw;
   // the spine, then the neck up to the bottom of the head
   const ha = j.headAngle, f = o.facing || 1;
   const nx = j.head.x - Math.sin(ha) * f * r, ny = j.head.y - Math.cos(ha) * r;
   polyline(ctx, [j.hip, j.chest, j.neck, { x: nx, y: ny }]);
   limb(ctx, j, LEG_A, cut.legA);
 
-  drawHead(ctx, j, o, r, lw);
+  if (skin && skin.head) skin.head(ctx, j, o, r, lw);
+  else drawHead(ctx, j, o, r, lw);
 
   ctx.strokeStyle = ink;
   ctx.lineWidth = lw;
   limb(ctx, j, ARM_A, cut.armA);
 
-  for (const k of ['armA', 'armB', 'legA', 'legB']) if (cut[k]) drawStump(ctx, j[cut[k]], lw);
+  for (const k of ['armA', 'armB', 'legA', 'legB']) if (cut[k]) drawStump(ctx, j[cut[k]], lw, tint);
   if (o.dislocated) drawDislocations(ctx, j, o.dislocated, lw);
-  if (o.broken) drawBreaks(ctx, j, o.broken, lw, cut);
-  if (o.wounds && o.wounds.length) drawWounds(ctx, j, o.wounds, lw, cut);
+  if (o.broken) drawBreaks(ctx, j, o.broken, lw, cut, tint);
+  if (o.wounds && o.wounds.length) drawWounds(ctx, j, o.wounds, lw, cut, tint);
   if (!cut.armA) {
-    if (o.weapon === 'knuckles') drawWornKnuckles(ctx, j.elbowA, j.handA, s, o.weaponBlood || 0);
+    if (o.heldDraw) o.heldDraw(ctx, j, s, f);
+    else if (o.weapon === 'knuckles') drawWornKnuckles(ctx, j.elbowA, j.handA, s, o.weaponBlood || 0);
     else if (o.weapon === 'knife') drawHeldKnife(ctx, j.midForeA, j.handA, s, o.weaponBlood || 0);
     else if (o.weapon === 'machete') drawHeldMachete(ctx, j.midForeA, j.handA, s, f, o.weaponBlood || 0);
     else if (o.weapon === 'glock') drawHeldGun(ctx, j, s, f, o.weaponBlood || 0, o.gunSlide || 0);
@@ -88,6 +98,7 @@ export function drawStickman(ctx, j, o) {
       ctx.restore();
     }
   }
+  if (skin && skin.front) skin.front(ctx, j, o);
 }
 
 const NO_CUTS = {};
@@ -105,17 +116,17 @@ function limb(ctx, j, chain, end) {
   ctx.stroke();
 }
 
-/** The end of a limb that was cut off: raw, red, the bone showing in the middle. */
-function drawStump(ctx, p, lw) {
-  ctx.fillStyle = BLOOD;
+/** The end of a limb that was cut off: raw, red, the bone showing in the middle (or, tinted, whatever they are made of). */
+function drawStump(ctx, p, lw, tint = null) {
+  ctx.fillStyle = tint ? tint[0] : BLOOD;
   ctx.beginPath();
   ctx.arc(p.x, p.y, lw * 0.7, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = BLOOD_DARK;
+  ctx.fillStyle = tint ? tint[1] : BLOOD_DARK;
   ctx.beginPath();
   ctx.arc(p.x, p.y, lw * 0.48, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = '#efe9d8';
+  ctx.fillStyle = tint ? '#c9ced3' : '#efe9d8';
   ctx.beginPath();
   ctx.arc(p.x, p.y, lw * 0.2, 0, Math.PI * 2);
   ctx.fill();
@@ -125,7 +136,7 @@ function drawStump(ctx, p, lw) {
  * A piece of someone that came off: the bones as they were when it did, in
  * its own frame, the cut end (the first point) raw.
  */
-export function drawSeveredLimb(ctx, pts, lw, ink = INK) {
+export function drawSeveredLimb(ctx, pts, lw, ink = INK, tint = null) {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   ctx.strokeStyle = ink;
@@ -134,7 +145,7 @@ export function drawSeveredLimb(ctx, pts, lw, ink = INK) {
   ctx.moveTo(pts[0].x, pts[0].y);
   for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
   ctx.stroke();
-  drawStump(ctx, pts[0], lw);
+  drawStump(ctx, pts[0], lw, tint);
 }
 
 /** A joint out of its socket: a swollen lump where it sits wrong. */
@@ -157,8 +168,8 @@ const BREAK_AT = {
   ribs: 'chest', pelvis: 'hip', neck: 'neck',
 };
 
-function drawBreaks(ctx, j, broken, lw, cut) {
-  ctx.fillStyle = BLOOD_DARK;
+function drawBreaks(ctx, j, broken, lw, cut, tint = null) {
+  ctx.fillStyle = tint ? tint[1] : BLOOD_DARK;
   for (const [bone, on] of Object.entries(broken)) {
     if (!on) continue;
     if (bone === 'spine') {
@@ -195,8 +206,9 @@ export function goneAt(cut, b, t) {
  * Wounds on the body: blood that has run onto a bone, bullet holes (dark,
  * with a red rim), and the long open gash a machete leaves.
  */
-function drawWounds(ctx, j, wounds, lw, cut) {
+function drawWounds(ctx, j, wounds, lw, cut, tint = null) {
   const p = { x: 0, y: 0 }, q = { x: 0, y: 0 };
+  const B = tint ? tint[0] : BLOOD, BD = tint ? tint[1] : BLOOD_DARK;
   for (const w of wounds) {
     if (goneAt(cut, w.bone, w.t)) continue;
     pointOnBone(j, w.bone, w.t, p);
@@ -205,29 +217,41 @@ function drawWounds(ctx, j, wounds, lw, cut) {
       pointOnBone(j, w.bone, Math.min(1, w.t + 0.05), q);
       const a = Math.atan2(q.y - p.y, q.x - p.x) + Math.PI / 2 + w.gash;
       const L = lw * 1.25;
-      ctx.strokeStyle = BLOOD_DARK;
+      ctx.strokeStyle = BD;
       ctx.lineWidth = lw * 0.5;
       ctx.beginPath();
       ctx.moveTo(p.x - Math.cos(a) * L, p.y - Math.sin(a) * L);
       ctx.lineTo(p.x + Math.cos(a) * L, p.y + Math.sin(a) * L);
       ctx.stroke();
-      ctx.strokeStyle = BLOOD;
+      ctx.strokeStyle = B;
       ctx.lineWidth = lw * 0.25;
       ctx.stroke();
       continue;
     }
     if (w.hole) {
-      ctx.fillStyle = BLOOD;
+      ctx.fillStyle = B;
       ctx.beginPath();
       ctx.arc(p.x, p.y, lw * 0.55, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#2a0306';
+      ctx.fillStyle = tint ? '#141414' : '#2a0306';
       ctx.beginPath();
       ctx.arc(p.x, p.y, lw * 0.28, 0, Math.PI * 2);
       ctx.fill();
       continue;
     }
-    ctx.fillStyle = w.dark ? BLOOD_DARK : BLOOD;
+    if (w.burn) {
+      // a scorch: black, with an angry rim
+      ctx.fillStyle = 'rgba(214, 96, 24, 0.75)';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, lw * 0.82, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#1d1712';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, lw * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+      continue;
+    }
+    ctx.fillStyle = w.tint ? (w.dark ? w.tint[1] : w.tint[0]) : w.dark ? BLOOD_DARK : BLOOD;
     ctx.beginPath();
     ctx.arc(p.x, p.y, lw * w.r, 0, Math.PI * 2);
     ctx.fill();
@@ -280,7 +304,7 @@ function drawHead(ctx, j, o, r, lw) {
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.clip();
     for (const m of o.headMarks) {
-      ctx.fillStyle = m.dark ? BLOOD_DARK : BLOOD;
+      ctx.fillStyle = m.burn ? '#1d1712' : m.tint ? (m.dark ? m.tint[1] : m.tint[0]) : m.dark ? BLOOD_DARK : BLOOD;
       ctx.beginPath();
       ctx.ellipse(m.x * r, m.y * r, m.r * r, m.r * r * 0.8, 0.4, 0, Math.PI * 2);
       ctx.fill();
@@ -941,7 +965,7 @@ export function drawCrateShape(ctx, w, h, stains, holes = null) {
   ctx.strokeRect(-hw, -hh, w, h);
   if (stains) {
     for (const st of stains) {
-      ctx.fillStyle = st.dark ? 'rgba(110, 7, 16, 0.85)' : 'rgba(163, 16, 28, 0.8)';
+      ctx.fillStyle = st.tint ? st.tint[st.dark ? 1 : 0] : st.dark ? 'rgba(110, 7, 16, 0.85)' : 'rgba(163, 16, 28, 0.8)';
       ctx.beginPath();
       ctx.ellipse(st.x, st.y, st.r, st.r * (st.flat || 1), st.a || 0, 0, Math.PI * 2);
       ctx.fill();

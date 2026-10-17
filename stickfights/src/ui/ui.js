@@ -9,10 +9,16 @@
      ERASE  tap something to remove it
 
    Pinching zooms and pans with any tool. Keyboard: 1 to 6 pick a thing to
-   spawn (a stickman, knuckles, a crate, a knife, a machete, a Glock-19), H
-   hand, X erase, Space pause, S slow motion, F follow, Tab spawn menu, + and
-   - zoom, 0 reset the camera, M sound, Delete removes whoever is selected,
-   Esc closes things. Tapping a pistol lying on the floor fires it.
+   spawn (a stickman, knuckles, a crate, a knife, a machete, a Glock-19), 7
+   to 9 the first three things the installed mods add, H hand, X erase,
+   Space pause, S slow motion, F follow, Tab spawn menu, + and - zoom, 0
+   reset the camera, M sound, Delete removes whoever is selected, Esc closes
+   things. Tapping a gun lying on the floor fires it.
+
+   Mods (see mods/ and ui/mods-screen.js) put a section of their own in the
+   spawn menu for each one installed, and what is different about the people
+   they add shows in the inspector: what kind of thing they are, what their
+   hands are, and buttons for what they can do.
 
    The inspector is not just for looking. Their feelings are bars that can be
    dragged, their personality is eight sliders, every other person in the
@@ -31,7 +37,10 @@ import { describeTraits } from '../game/people.js';
 import { relCategory } from '../game/brain.js';
 import { STYLE } from '../game/animator.js';
 import { LIMITS } from '../game/sandbox.js';
+import { isGun } from '../game/props.js';
 import { clamp } from '../core/util.js';
+import { installedMods, findSpawnable, modSpawnables, modOption } from '../mods/index.js';
+import { ModsScreen } from './mods-screen.js';
 
 const KINDS = {
   stickman: { name: 'Stickman', short: 'STICKMAN', plural: 'stickmen', limit: 'people' },
@@ -43,6 +52,8 @@ const KINDS = {
 };
 const KEYS = ['stickman', 'knuckles', 'crate', 'knife', 'machete', 'glock'];
 const ARM_NAMES = { knife: 'Grab the knife', machete: 'Grab the machete', glock: 'Grab the gun', knuckles: 'Grab the brass knuckles' };
+// the rows of buttons a mod's people have in the inspector
+const ABILITY_ROWS = { hands: 'Hands', do: 'Do' };
 
 const OPTION_NAMES = {
   fight: (t) => 'Fight ' + t.name,
@@ -50,7 +61,7 @@ const OPTION_NAMES = {
   chat: (t) => 'Talk to ' + t.name,
   help: (t) => 'Help ' + t.name,
   mourn: (t) => 'Mourn ' + t.name,
-  arm: (t) => ARM_NAMES[t.kind] || 'Grab a weapon',
+  arm: (t) => ARM_NAMES[t.kind] || (t.name ? 'Grab the ' + t.name.toLowerCase() : 'Grab a weapon'),
   pullout: () => 'Pull the knife out',
   exercise: () => 'Do some exercise',
   throwKnife: (t) => 'Throw the knife at ' + t.name,
@@ -131,13 +142,20 @@ export class UI {
       leave: () => { this.hover = null; },
     });
 
+    this.mods = new ModsScreen({ sb, changed: (m, on) => this.modsChanged(m, on) });
     this.bindHud();
     this.bindDrawer();
     this.bindInspector();
     this.bindSettings();
     this.bindKeys();
     this.drawCardIcons();
+    this.renderDrawerMods();
     this.setSpawnKind('stickman');
+  }
+
+  /** What the HUD needs to know about a kind of thing: the game's own, or one a mod adds. */
+  kindInfo(k) {
+    return KINDS[k] || findSpawnable(k) || KINDS.stickman;
   }
 
   /* -------------------------------------------------------------------------- */
@@ -166,7 +184,7 @@ export class UI {
       return;
     }
     if (thing && thing.kind === 'stickman') this.select(thing === this.selected ? null : thing);
-    else if (thing && thing.kind === 'glock' && thing.loose) this.fireLoose(thing);
+    else if (thing && isGun(thing.kind) && thing.loose) this.fireLoose(thing);
     else if (thing) this.toast(thing.wornBy ? `${thing.name}, in ${thing.wornBy.name}'s hand` + (thing.kind === 'glock' ? ` (${thing.mag}/15)` : '')
       : thing.carriedBy ? `A crate, held up by ${thing.carriedBy.name}`
         : thing.kind === 'limb' ? `${thing.of}'s ${thing.name.replace('Severed ', '')}, cut clean off`
@@ -176,6 +194,8 @@ export class UI {
 
   /** A pistol on the floor, tapped: it goes off the way it is pointing. Empty, a fresh magazine goes in instead. */
   fireLoose(g) {
+    // a mod's gun says for itself what happened
+    if (g.fireLoose) { const said = this.sb.fireLoose(g); if (said) this.toast(said); return; }
     if (g.mag <= 0) {
       if (g.reload()) this.toast(`Fresh magazine in: ${g.mag} rounds, ${g.spare} spare`);
       else { this.sb.fireLoose(g); this.toast('Click. Out of ammo.'); }
@@ -213,19 +233,23 @@ export class UI {
 
   spawnAt(x, y) {
     const k = this.spawnKind, sb = this.sb;
+    const mod = KINDS[k] ? null : findSpawnable(k);
     let made = null;
-    if (k === 'stickman') made = sb.spawnStickman(x);
+    if (mod) made = mod.spawn(sb, x, y);
+    else if (k === 'stickman') made = sb.spawnStickman(x);
     else if (k === 'crate') made = sb.spawnCrate(x, Math.max(y, 0.4));
     else if (k === 'knuckles') made = sb.spawnKnuckles(x, Math.max(y, 0.12));
     else if (k === 'knife') made = sb.spawnKnife(x, Math.max(y, 0.1), Math.random() * 0.4 - 0.2);
     else if (k === 'machete') made = sb.spawnMachete(x, Math.max(y, 0.1), Math.random() * 0.3 - 0.15);
     else if (k === 'glock') made = sb.spawnGun(x, Math.max(y, 0.12), Math.random() * 0.3 - 0.15);
     if (!made) {
-      this.toast(`That's as many ${KINDS[k].plural} as the sandbox holds (${LIMITS[KINDS[k].limit]})`);
+      const info = this.kindInfo(k);
+      this.toast(`That's as many ${info.plural} as the sandbox holds (${LIMITS[info.limit]})`);
       return null;
     }
     this.sound.pop(x);
-    if (made.kind === 'stickman') this.toast(`${made.name} appeared`);
+    if (mod && mod.said) this.toast(mod.said(made));
+    else if (made.kind === 'stickman') this.toast(`${made.name} appeared`);
     return made;
   }
 
@@ -243,13 +267,30 @@ export class UI {
     $('btn-settings').addEventListener('click', () => this.toggleSettings(true));
     $('btn-clear').addEventListener('click', () => this.clearPressed());
     $('btn-sound').classList.toggle('off', !this.sound.on);
+    for (const id of ['btn-mods', 'btn-mods-title', 'drawer-get-mods']) $(id).addEventListener('click', () => this.openMods());
+  }
+
+  openMods() {
+    this.gestures.reset();
+    this.mods.show();
+  }
+
+  /** A mod has gone in or come out: the spawn menu, the spawn tool and the inspector catch up. */
+  modsChanged(m, on) {
+    this.renderDrawerMods();
+    if (!on && !KINDS[this.spawnKind] && !findSpawnable(this.spawnKind)) {
+      this.setSpawnKind('stickman');
+      if (this.tool === 'spawn') this.setTool('hand');
+    }
+    if (this.selected && this.selected.removed) this.select(null);
+    if (this.started) this.toast(on ? `${m.name} installed` : `${m.name} removed`);
   }
 
   setTool(t) {
     this.tool = t;
     for (const b of document.querySelectorAll('.tool')) b.classList.toggle('active', b.dataset.tool === t);
     this.drawIcon(document.querySelector('#tool-spawn .tool-icon'), this.spawnKind);
-    if (t === 'spawn') this.hint(`Tap the world to place a ${KINDS[this.spawnKind].name}`);
+    if (t === 'spawn') this.hint(`Tap the world to place ${placeName(this.kindInfo(this.spawnKind))}`);
     else if (t === 'erase') this.hint('Tap something to remove it');
     else this.hint('');
   }
@@ -308,13 +349,7 @@ export class UI {
 
   bindDrawer() {
     this.$('btn-close').addEventListener('click', () => this.toggleDrawer(false));
-    for (const c of document.querySelectorAll('.card')) {
-      c.addEventListener('click', () => {
-        this.setSpawnKind(c.dataset.spawn);
-        this.setTool('spawn');
-        this.toggleDrawer(false);
-      });
-    }
+    for (const c of document.querySelectorAll('.card')) c.addEventListener('click', () => this.cardPicked(c));
   }
 
   toggleDrawer(open) {
@@ -326,12 +361,59 @@ export class UI {
   }
 
   setSpawnKind(k) {
+    if (!KINDS[k] && !findSpawnable(k)) k = 'stickman';
     this.spawnKind = k;
     for (const c of document.querySelectorAll('.card')) c.classList.toggle('selected', c.dataset.spawn === k);
-    this.$('tool-spawn-name').textContent = KINDS[k].short;
+    this.$('tool-spawn-name').textContent = this.kindInfo(k).short;
     const cv = document.querySelector('#tool-spawn .tool-icon');
     this.drawIcon(cv, k);
-    if (this.tool === 'spawn') this.hint(`Tap the world to place a ${KINDS[k].name}`);
+    if (this.tool === 'spawn') this.hint(`Tap the world to place ${placeName(this.kindInfo(k))}`);
+  }
+
+  /** A section of the spawn menu for each installed mod, with a card for each thing it adds. */
+  renderDrawerMods() {
+    const box = this.$('drawer-mods');
+    box.textContent = '';
+    for (const m of installedMods()) {
+      const cat = document.createElement('div');
+      cat.className = 'cat mod-cat';
+      const tag = document.createElement('i');
+      tag.className = 'mod-tag';
+      tag.textContent = 'MOD';
+      cat.append(document.createTextNode(m.name.toUpperCase()), tag);
+      box.appendChild(cat);
+      for (const sp of m.spawnables || []) {
+        const c = document.createElement('button');
+        c.className = 'card mod-card';
+        c.dataset.spawn = sp.kind;
+        c.dataset.mod = m.id;
+        const cv = document.createElement('canvas');
+        cv.className = 'card-icon';
+        cv.width = 72;
+        cv.height = 72;
+        const text = document.createElement('span');
+        text.className = 'card-text';
+        const b = document.createElement('b');
+        b.textContent = sp.name;
+        const small = document.createElement('small');
+        small.textContent = sp.blurb || '';
+        text.append(b, small);
+        c.append(cv, text);
+        c.addEventListener('click', () => this.cardPicked(c));
+        box.appendChild(c);
+        this.drawIcon(cv, sp.kind, true);
+      }
+    }
+    const n = installedMods().length;
+    for (const id of ['mods-count', 'mods-count-title']) this.$(id).textContent = n ? String(n) : '';
+    this.$('drawer-get-mods').textContent = n ? 'More mods, or remove them, in MODS' : 'More things to spawn, in MODS';
+    for (const c of document.querySelectorAll('.card')) c.classList.toggle('selected', c.dataset.spawn === this.spawnKind);
+  }
+
+  cardPicked(c) {
+    this.setSpawnKind(c.dataset.spawn);
+    this.setTool('spawn');
+    this.toggleDrawer(false);
   }
 
   drawCardIcons() {
@@ -347,6 +429,12 @@ export class UI {
     if (card) {
       ctx.fillStyle = '#000';
       ctx.fillRect(0, h * 0.84, w, h * 0.16);
+    }
+    const mod = KINDS[kind] ? null : findSpawnable(kind);
+    if (mod) {
+      if (mod.icon) mod.icon(ctx, w, h, card);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      return;
     }
     if (kind === 'stickman') {
       const j = solve(STAND, 1, makeJoints());
@@ -518,6 +606,13 @@ export class UI {
   showTraits(p) {
     const chips = this.$('ins-traits');
     chips.textContent = '';
+    // what they are, when it is not a person
+    if (p.species && p.species.label) {
+      const c = document.createElement('span');
+      c.className = 'chip species';
+      c.textContent = p.species.label;
+      chips.appendChild(c);
+    }
     for (const t of describeTraits(p.brain ? p.brain.traits : p.traits || {})) {
       const c = document.createElement('span');
       c.className = 'chip';
@@ -549,6 +644,7 @@ export class UI {
       input.setAttribute('aria-label', `${p.name}'s ${key}`);
     }
     this.$('ins-follow').classList.toggle('on', this.cam.follow === p);
+    this.abil = null;
     this.insT = 0;
     this.updateInspector();
     this.keepInView(p);
@@ -585,6 +681,7 @@ export class UI {
     }
     const ord = b.ordered && !b.ordered.target.removed ? b.ordered : null;
     $('ins-order').classList.toggle('hidden', !ord || p.dead);
+    this.updateAbilities(p);
     if (ord) $('ins-order-text').textContent = `Sent to fight ${ord.target.name}`;
     this.meters.pain.style.width = (p.dead ? 0 : clamp(h.pain, 0, 100)).toFixed(0) + '%';
     this.meters.blood.style.width = (clamp((h.blood - 0.38) / 0.62, 0, 1) * 100).toFixed(0) + '%';
@@ -608,9 +705,18 @@ export class UI {
     if (p.weapon) {
       const s = document.createElement('div');
       const g = p.weapon;
-      s.textContent = p.armedWith === 'glock' ? `Holding a Glock-19 (${g.mag}/15, ${g.spare} spare)${p.reloading ? ', reloading' : ''}`
-        : WEAPON_SAID[p.armedWith] || 'Holding ' + g.name;
+      s.textContent = g.describe ? g.describe(p)
+        : p.armedWith === 'glock' ? `Holding a Glock-19 (${g.mag}/15, ${g.spare} spare)${p.reloading ? ', reloading' : ''}`
+          : WEAPON_SAID[p.armedWith] || 'Holding ' + g.name;
       cb.appendChild(s);
+    } else if (p.species && p.species.describeArms) {
+      const said = p.species.describeArms(p);
+      if (said) {
+        const s = document.createElement('div');
+        s.className = 'arms';
+        s.textContent = said;
+        cb.appendChild(s);
+      }
     }
     if (p.stuck.length) {
       const s = document.createElement('div');
@@ -631,7 +737,7 @@ export class UI {
       const row = document.createElement('div');
       row.className = 'opt' + (i === 0 ? ' top' : '');
       const l = document.createElement('span');
-      l.textContent = (OPTION_NAMES[o.kind] || (() => o.kind))(o.target || {});
+      l.textContent = (OPTION_NAMES[o.kind] || modOption(o.kind) || (() => o.kind))(o.target || {});
       const bar = document.createElement('div');
       bar.className = 'bar';
       const fill = document.createElement('div');
@@ -680,6 +786,65 @@ export class UI {
       row.textContent = 'Nothing worth remembering yet.';
       mb.appendChild(row);
     }
+  }
+
+  /**
+   * Buttons for whatever a mod's people can do that nobody else can (their
+   * species says what): made once for whoever is selected, then only lit up
+   * and greyed out as things change, so a tap is never lost to a refresh.
+   */
+  updateAbilities(p) {
+    const wrap = this.$('ins-abil-wrap');
+    const list = p.species && p.species.abilities ? p.species.abilities(p) : null;
+    wrap.classList.toggle('hidden', !list || !list.length);
+    if (!list || !list.length) { this.abil = null; return; }
+    const ids = list.map((a) => a.id).join(',');
+    if (!this.abil || this.abil.who !== p || this.abil.ids !== ids) {
+      const box = this.$('ins-abilities');
+      box.textContent = '';
+      this.abil = { who: p, ids, btns: new Map(), defs: new Map() };
+      const rows = {};
+      for (const a of list) {
+        let row = rows[a.group];
+        if (!row) {
+          row = rows[a.group] = document.createElement('div');
+          row.className = 'abil-row';
+          const t = document.createElement('span');
+          t.className = 'abil-title';
+          t.textContent = ABILITY_ROWS[a.group] || a.group;
+          row.appendChild(t);
+          box.appendChild(row);
+        }
+        const btn = document.createElement('button');
+        btn.className = 'abil-btn';
+        btn.dataset.ability = a.id;
+        btn.textContent = a.label;
+        btn.addEventListener('click', () => this.useAbility(a.id));
+        row.appendChild(btn);
+        this.abil.btns.set(a.id, btn);
+      }
+    }
+    const off = p.dead || !p.conscious;
+    for (const a of list) {
+      const btn = this.abil.btns.get(a.id);
+      btn.classList.toggle('on', !!a.on);
+      btn.disabled = off;
+      btn.setAttribute('aria-pressed', a.on ? 'true' : 'false');
+      this.abil.defs.set(a.id, a);
+    }
+  }
+
+  useAbility(id) {
+    const p = this.selected, ab = this.abil;
+    if (!p || !ab || ab.who !== p || p.dead || !p.conscious) return;
+    const a = ab.defs.get(id);
+    if (!a) return;
+    const done = a.pick();
+    if (a.group === 'hands') {
+      this.toast(id === 'auto' ? `${p.name} picks their own hands again` : id === 'hands' ? `${p.name} keeps their hands as hands`
+        : `${p.name}: ${a.label.toLowerCase()} for hands`);
+    } else this.toast(done === false ? `${p.name} can't do that right now` : `${p.name}: ${a.label.toLowerCase()}!`);
+    this.insT = 0;
   }
 
   /**
@@ -975,9 +1140,14 @@ export class UI {
 
   bindKeys() {
     window.addEventListener('keydown', (e) => {
-      if (!this.started || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+      if (e.key === 'Escape' && this.mods.isOpen) { this.mods.close(); return; }
+      if (!this.started || this.mods.isOpen || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
       const k = e.key;
       if (k >= '1' && k <= '6') { this.setSpawnKind(KEYS[+k - 1]); this.setTool('spawn'); }
+      else if (k >= '7' && k <= '9') {
+        const sp = modSpawnables()[+k - 7];
+        if (sp) { this.setSpawnKind(sp.kind); this.setTool('spawn'); }
+      }
       else if (k === 'h' || k === 'H') this.setTool('hand');
       else if (k === 'x' || k === 'X') this.setTool('erase');
       else if (k === ' ') { e.preventDefault(); this.togglePause(); }
@@ -1017,9 +1187,10 @@ export class UI {
     if (this.tool === 'spawn' && this.hover && !this.hand.active) {
       const w = this.world(this.hover.x, this.hover.y);
       const k = this.spawnKind;
-      const y = k === 'stickman' ? this.sb.surfaceBelow(w.x, 0.15, 100).y
+      const mod = KINDS[k] ? null : findSpawnable(k);
+      const y = k === 'stickman' || (mod && mod.living) ? this.sb.surfaceBelow(w.x, 0.15, 100).y
         : Math.max(w.y, k === 'crate' ? 0.39 : k === 'knife' ? 0.03 : k === 'machete' ? 0.05 : k === 'glock' ? 0.08 : 0.04);
-      ghost = { kind: this.spawnKind, x: w.x, y };
+      ghost = { kind: this.spawnKind, x: w.x, y, draw: mod && mod.ghost ? mod.ghost : null };
     }
     return {
       selected: this.selected,
@@ -1027,6 +1198,11 @@ export class UI {
       hand: { active: this.hand.active, x: this.hand.x, y: this.hand.y },
     };
   }
+}
+
+/** "a Crate" - or just "Uzi", for somebody with a name of their own. */
+function placeName(info) {
+  return info.proper ? info.name : 'a ' + info.name;
 }
 
 /** A word on how it stands with someone, beyond which group they are in. */

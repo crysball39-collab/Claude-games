@@ -40,6 +40,7 @@ import { Emotions } from './emotions.js';
 import { line } from './lines.js';
 import { BONE_SAID } from './health.js';
 import { G } from './stickman.js';
+import { isGun, armOf } from './props.js';
 import * as B from './behaviours.js';
 import { clamp, clamp01, rand, chance, pick, sign } from '../core/util.js';
 
@@ -243,8 +244,9 @@ export class Brain {
     const said = SAID_AS[kind] || kind;
     if (REPEAT[said] && now - (this.saidT[said] ?? -99) < REPEAT[said]) return false;
     vars.me = me.name;
-    let text = line(kind, vars);
-    if (text === this.lastLine) text = line(kind, vars);
+    // somebody a mod made may have their own way of saying it
+    let text = line(kind, vars, me.lines);
+    if (text === this.lastLine) text = line(kind, vars, me.lines);
     if (!text) return false;
     this.spokeT = now;
     this.saidT[said] = now;
@@ -362,17 +364,17 @@ export class Brain {
       if (first) this.firstSight(o, r);
       else if (absent) this.recall(o, r);
       if (o.dead && !this.griefs.has(o)) this.foundBody(o, r);
-      if (o.weapon && r.sawArmed !== o.armedWith) {
+      if ((o.weapon || o.innate) && r.sawArmed !== o.armedWith) {
         r.sawArmed = o.armedWith;
-        const k = o.armedWith;
+        const k = o.armedWith, spec = armOf(k);
         // a blade or a gun frightens people even from someone who has not used it yet
-        const scary = k === 'glock' ? 0.5 : k === 'machete' ? 0.42 : k === 'knife' ? 0.35 : 0;
+        const scary = isGun(k) ? 0.5 : k === 'machete' ? 0.42 : k === 'knife' ? 0.35 : spec ? spec.scary ?? 0.3 : 0;
         if (this.isHostile(o) || r.like < -0.2 || r.violent > 0.5 || (scary && r.like < 0.3)) {
           r.fear = clamp01(r.fear + (scary || 0.2) * (1.1 - this.traits.bravery));
-          const say = k === 'glock' ? 'gunFear' : k === 'machete' ? 'macheteFear' : k === 'knife' ? 'knifeFear' : 'weaponFear';
-          this.speak(say, { other: o.name }, 0.75, o, !!scary);
+          const say = isGun(k) ? 'gunFear' : k === 'machete' ? 'macheteFear' : k === 'knife' ? 'knifeFear' : spec && spec.fear ? spec.fear : 'weaponFear';
+          this.speak(say, { other: o.name, what: spec ? spec.noun || (spec.name ? spec.name.toLowerCase() : 'that') : 'that' }, 0.75, o, !!scary);
         }
-      } else if (!o.weapon) r.sawArmed = false;
+      } else if (!o.weapon && !o.innate) r.sawArmed = false;
       // a gun pointed this way
       if (o.aimTarget === me && o.aiming) {
         if (now - this.aimedT > 2) {
@@ -446,6 +448,9 @@ export class Brain {
     this.emo.bump('surprise', 0.12);
     this.note(`There's someone: ${o.name}.`);
     this.remember('met', o);
+    // who they are can matter more than anything they have done yet (a mod's species)
+    if (this.man.species && this.man.species.meet) this.man.species.meet(this, o, r);
+    if (o.species && o.species.metBy) o.species.metBy(o, this, r);
     // someone they have only heard about
     const m = this.strongestAbout(o);
     if (m && m.from && m.w > 0.2) {
@@ -502,7 +507,7 @@ export class Brain {
         if (trouble) { E.bump('fear', dt * 0.03 * (1 - T.bravery)); E.bump('sadness', dt * 0.02 * T.empathy); }
         else friends++;
       }
-      if (o.weapon && this.isHostile(o)) E.bump('fear', dt * (o.armedWith === 'knife' ? 0.06 : 0.03) * (1 - T.bravery * 0.6));
+      if ((o.weapon || o.innate) && this.isHostile(o)) E.bump('fear', dt * (o.armedWith === 'knife' || o.innate ? 0.06 : 0.03) * (1 - T.bravery * 0.6));
     }
     if (friends) E.bump('joy', dt * 0.012 * friends * (0.4 + T.sociability));
     this.lonely = anyone ? Math.max(0, this.lonely - dt * 0.05) : Math.min(1, this.lonely + dt * 0.008 * T.sociability);
@@ -695,7 +700,8 @@ export class Brain {
     }
     if (now - (this.shotSaidT || -9) > 4) {
       this.shotSaidT = now;
-      if (!seen) this.speak('gunshots', {}, 0.7, null, true);
+      // (not every bang is a gun: a mod's may say what it sounded like)
+      if (!seen) this.speak(ev.heardAs || 'gunshots', {}, 0.7, null, true);
       else if (by && ev.target && ev.target !== me) this.speak('sawShooting', { other: by.name, victim: ev.target.name }, 0.6, null, true);
       else if (by) this.speak('takeCover', { other: by.name }, 0.6, null, true);
     }
@@ -763,16 +769,19 @@ export class Brain {
       ra.like = clamp(ra.like + 0.04, -1, 1);
     } else {
       if (!defending) ra.like = clamp(ra.like - 0.04 * (0.4 + T.empathy), -1, 1);
-      const nasty = ev.weapon === 'bullet' ? 3 : ev.weapon === 'machete' ? 2.8 : ev.weapon === 'knife' ? 2.4 : A.weapon ? 1.5 : 1;
+      const sp = armOf(ev.weapon);
+      const nasty = ev.weapon === 'bullet' ? 3 : ev.weapon === 'machete' ? 2.8 : ev.weapon === 'knife' ? 2.4 : sp ? sp.nasty || 2.4 : A.weapon ? 1.5 : 1;
       E.bump('fear', ev.power * 0.035 * (1.2 - T.bravery) * nasty);
       if (ev.weapon === 'knife' && !this.fighting) this.speak('sawStab', { victim: V.name, other: A.name }, 0.5, null, true);
       else if (ev.weapon === 'machete' && !this.fighting) this.speak('sawChop', { victim: V.name, other: A.name }, 0.5, null, true);
       else if (ev.weapon === 'bullet' && !this.fighting) this.speak('sawShot', { victim: V.name, other: A.name }, 0.6, null, true);
+      else if (sp && sp.seen && !this.fighting) this.speak(sp.seen, { victim: V.name, other: A.name, what: sp.noun || 'that' }, 0.5, null, true);
       if (!this.fighting && !this.fleeing) this.speak('witnessHit', {}, 0.15);
     }
-    const nasty = ev.weapon === 'bullet' ? 3 : ev.weapon === 'machete' ? 2.8 : ev.weapon === 'knife' ? 2.6 : A.weapon ? 1.6 : 1;
+    const sp2 = armOf(ev.weapon);
+    const nasty = ev.weapon === 'bullet' ? 3 : ev.weapon === 'machete' ? 2.8 : ev.weapon === 'knife' ? 2.6 : sp2 ? sp2.nasty || 2.6 : A.weapon ? 1.6 : 1;
     ra.fear = clamp01(ra.fear + ev.power * 0.025 * (1 - T.bravery) * nasty);
-    if (ev.weapon === 'knife' || ev.weapon === 'machete' || ev.weapon === 'bullet') ra.violent += 0.5;
+    if (ev.weapon === 'knife' || ev.weapon === 'machete' || ev.weapon === 'bullet' || sp2) ra.violent += 0.5;
   }
 
   sawDeath(ev, seen, x, y) {
@@ -881,9 +890,9 @@ export class Brain {
         break;
       case 'armed': {
         const k = d.item ? d.item.kind : 'knuckles';
-        E.bump('fear', k === 'glock' ? -0.4 : k === 'knuckles' ? -0.2 : -0.28);
+        E.bump('fear', isGun(k) ? -0.4 : k === 'knuckles' ? -0.2 : -0.28);
         E.bump('joy', 0.12);
-        this.speak({ knife: 'knifeGet', machete: 'macheteGet', glock: 'gunGet' }[k] || 'weaponGet', {}, 0.8);
+        this.speak({ knife: 'knifeGet', machete: 'macheteGet' }[k] || (isGun(k) ? 'gunGet' : 'weaponGet'), {}, 0.8);
         this.note({
           knife: 'Got the knife. Now they have to listen.', machete: 'Got the machete. Stay back, everyone.',
           glock: 'Got the gun. Nobody move.',
@@ -969,9 +978,15 @@ export class Brain {
       r.anger = clamp01(r.anger + anger);
       E.bump('anger', anger * 0.8);
       const knife = d.weapon === 'knife', machete = d.weapon === 'machete', bullet = d.weapon === 'bullet';
-      const nasty = bullet ? 3 : machete ? 2.6 : knife ? 2.4 : by.weapon ? 1.6 : 1;
+      const spec = armOf(d.weapon);
+      const nasty = bullet ? 3 : machete ? 2.6 : knife ? 2.4 : spec ? spec.nasty || 2.4 : by.weapon ? 1.6 : 1;
       r.fear = clamp01(r.fear + sev * 0.28 * (1.15 - T.bravery) * nasty);
-      if (bullet) {
+      if (spec) {
+        E.bump('fear', 0.25 * (1.2 - T.bravery));
+        this.remember(spec.memory || 'hurtMe', by);
+        this.speak(spec.hurt || 'hurtBig', { other: by.name }, 0.9, by, true);
+        this.note(`${by.name} ${spec.verb || 'hurt me'}!`);
+      } else if (bullet) {
         E.bump('fear', 0.35 * (1.2 - T.bravery));
         this.remember('shotMe', by);
         this.speak('shot', { other: by.name }, 1, by, true);
@@ -1030,7 +1045,7 @@ export class Brain {
     } else if (sev > 0.7) this.speak('hurtBig', {}, 0.8, null, true);
     else if (sev > 0.2) this.speak(chance(0.3) ? 'hurtPart' : 'hurtSmall', { partKey: d.part }, 0.5, null, true);
     // cut or shot: in a moment, a look at it
-    if (d.res && d.res.wound && (d.weapon === 'bullet' || d.weapon === 'knife' || d.weapon === 'machete') && me.alive) this.checkT = this.sb.time + rand(0.7, 1.5);
+    if (d.res && d.res.wound && (d.weapon === 'bullet' || d.weapon === 'knife' || d.weapon === 'machete' || armOf(d.weapon)) && me.alive) this.checkT = this.sb.time + rand(0.7, 1.5);
     if (me.alive && me.health.blood < 0.5 && !this.saidDying) {
       this.saidDying = true;
       this.speak('dying', {}, 1);
@@ -1232,7 +1247,8 @@ export class Brain {
         if (hostile) fl += (1 - fit) * 0.4;
         if (hostile && !canFight) fl += 0.4;
         // nobody sensible squares up to a knife bare-handed
-        if (o.armedWith === 'knife' && (hostile || r.violent > 0.5) && me.armedWith !== 'knife') fl += (0.25 + E.fear * 0.3) * (1.15 - T.bravery);
+        const blade = o.armedWith === 'knife' || !!(armOf(o.armedWith) && armOf(o.armedWith).blade);
+        if (blade && (hostile || r.violent > 0.5) && me.armedWith !== 'knife') fl += (0.25 + E.fear * 0.3) * (1.15 - T.bravery);
         if (fl > threatScore) { threatScore = fl; threat = o; }
         add('flee', o, fl, `${o.name} scares me. I have to get away!`, null, hostile && d < 4);
       }
@@ -1311,7 +1327,7 @@ export class Brain {
 
     // a gun pointed at them: hands up, unless they are brave enough (and armed enough) not to
     const ab = this.aimedBy;
-    if (ab && now - this.aimedT < 0.8 && ab.alive && !ab.removed && ab.armedWith === 'glock') {
+    if (ab && now - this.aimedT < 0.8 && ab.alive && !ab.removed && ab.gunReady) {
       const d = Math.abs(ab.pos.x - me.pos.x);
       const nerve = T.bravery * (me.gunReady ? 1.7 : 1) + (this.ordered && this.ordered.target === ab ? 1 : 0);
       add('surrender', ab, (0.55 + E.fear * 0.6) * Math.max(0, 1.25 - nerve) * (d < 10 ? 1 : 0.5), `${ab.name} is pointing a gun at me!`, null, true);
@@ -1340,15 +1356,16 @@ export class Brain {
     }
 
     // weapons - grabbed first if they are on the way to someone worth hitting
-    if (!me.weapon && me.health.canUse('armA')) {
+    // (not by somebody whose hands are weapons already)
+    if (!me.weapon && !me.innate && me.health.canUse('armA') && !(me.species && me.species.noPickup)) {
       const grudge = this.maxAnger();
       const expecting = Math.min(1, threatScore + grudge * 0.6);
       let foeD = Infinity;
       for (const [o, r] of this.rels) if (r.anger > 0.45 && o.alive && !o.removed) foeD = Math.min(foeD, Math.abs(o.pos.x - me.pos.x));
       for (const [k] of this.things) {
-        if (!WEAPON_KINDS.has(k.kind) || k.wornBy || k.removed || (k.stuckIn && k.stuckIn.person)) continue;
+        if ((!WEAPON_KINDS.has(k.kind) && !isGun(k.kind)) || k.wornBy || k.removed || (k.stuckIn && k.stuckIn.person)) continue;
         if (k.pos.y - me.pos.y > 0.6) continue;
-        if (k.kind === 'glock' && k.ammo <= 0) continue;
+        if (isGun(k.kind) && k.ammo <= 0) continue;
         const d = Math.abs(k.pos.x - me.pos.x);
         const onTheWay = d < foeD ? grudge * 0.5 * (0.5 + T.aggression) : 0;
         let s = (0.08 + E.anger * 0.4 * (0.4 + T.aggression) + expecting * 0.35 * (0.3 + T.bravery) +
@@ -1358,7 +1375,7 @@ export class Brain {
           s *= (0.55 + T.aggression * 0.9) * (1.25 - T.empathy * 0.8) * (k.kind === 'machete' ? 1.05 : 1);
           add('arm', k, s, k.kind === 'machete' ? (d < 4 ? 'A machete. Right.' : 'There is a machete over there.')
             : d < 4 ? 'A knife. Nobody will mess with me now.' : 'There is a knife over there.');
-        } else if (k.kind === 'glock') {
+        } else if (isGun(k.kind)) {
           // a gun: the angry want it, and so do the brave who are frightened of someone else having it
           const guarded = this.gunThreat && now - this.gunThreat.t < 20 ? 0.35 * T.bravery : 0;
           s = (s + guarded) * (0.45 + T.aggression * 0.8 + T.bravery * 0.25) * (1.25 - T.empathy * 0.8);
@@ -1398,6 +1415,8 @@ export class Brain {
     if (me.health.pain > 30 && E.fear < 0.5) add('rest', null, (me.health.pain / 100) * 0.7 * (1 - E.fear) * calm, 'I need to sit down for a bit.');
     if (this.victory > 0.2) add('celebrate', null, this.victory * (0.35 + T.aggression * 0.4), 'Ha! I won!');
     if (E.fear > 0.8 && E.surprise > 0.35 && T.bravery < 0.4 && !threat) add('panic', null, 0.55, "I don't know what's happening!");
+    // whatever else a mod's species has in mind
+    if (me.species && me.species.consider) me.species.consider(this, add, { threat, threatScore, calm, canFight, fit });
     // (only from someone actually coming for them: someone they are just scared of gets kept at a distance)
     if (threat && E.fear > 0.6 && (health < 0.35 || this.cornered(threat)) && this.isHostile(threat)) {
       add('cower', threat, E.fear * (1.1 - T.bravery) * 0.9, "Please don't hurt me...", null, true);
@@ -1422,9 +1441,11 @@ export class Brain {
 
   power(p) {
     const skill = p.traits ? p.traits.skill : 0.5;
-    const w = p.armedWith;
-    const armed = w === 'glock' ? (p.gunReady && p.weapon.ammo > 0 ? 3 : 1.2) : w === 'machete' ? 2 : w === 'knife' ? 1.8 : w ? 1.45 : 1;
-    return p.health.overall * armed * p.strength * (0.7 + skill * 0.5) * (p.carrying ? 0.7 : 1) + 0.02;
+    const w = p.armedWith, spec = armOf(w);
+    const armed = isGun(w) ? (p.gunReady && p.weapon && p.weapon.ammo > 0 ? 3 : 1.2) : w === 'machete' ? 2 : w === 'knife' ? 1.8 : spec ? spec.power || 1.8 : w ? 1.45 : 1;
+    // some of what a mod makes is just stronger than a person (and some weaker)
+    const kind = p.species && p.species.power ? p.species.power : 1;
+    return p.health.overall * armed * kind * p.strength * (0.7 + skill * 0.5) * (p.carrying ? 0.7 : 1) + 0.02;
   }
 
   /** How it would go, as they see it: 0 hopeless, 0.5 even, 1 easy. */

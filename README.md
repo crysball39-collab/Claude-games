@@ -10,7 +10,11 @@ texture in the game is drawn procedurally onto a canvas at load time.
 > talk, fight, break bones, lose limbs and die on their own - animated frame by
 > frame while they are in charge of their bodies, and ragdolls with real joints
 > when they are not - and you can change their feelings, their personality and
-> who they count as friends and enemies, and send them to fight. The single-file build is `dist/stickfights.html`,
+> who they count as friends and enemies, and send them to fight. Mods add what is
+> not part of the game itself: **Murder Drones** brings worker drone Uzi with her
+> railgun, and disassembly drones N and V, who crash-land out of the sky and have
+> hands that turn into chainsaws, guns, swords, claws, lasers and missiles, and
+> tails full of nanite acid. The single-file build is `dist/stickfights.html`,
 > the source lives in `stickfights/`, and
 > [`stickfights/README.md`](stickfights/README.md) has the details.
 

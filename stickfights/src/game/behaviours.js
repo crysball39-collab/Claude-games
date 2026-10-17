@@ -420,7 +420,7 @@ export class Fight extends Behaviour {
     r.foughtT = this.now;
     me.lookAt = o.wj.head;
     const d = Math.abs(o.pos.x - me.pos.x), dir = side(me, o);
-    const gun = me.gunReady && me.weapon.ammo > 0;
+    const gun = me.gunReady && !!me.weapon && me.weapon.ammo > 0;
 
     // they are on the floor: stand over them, maybe finish it
     if (o.lying || !o.conscious || o.state === 'thrown' || o.state === 'held') {
@@ -462,6 +462,13 @@ export class Fight extends Behaviour {
       return true;
     }
     this.downT = 0;
+
+    // a mod's species fights its own way: hands that change, a tail, wings. It
+    // says whether it took care of things this step (true or false), or leaves it (undefined)
+    if (me.species && me.species.fight) {
+      const own = me.species.fight(this, dt, o, d, dir, r);
+      if (own !== undefined) return own;
+    }
 
     // they ran off: chase if angry enough
     if (d > 5 && o.brain && o.brain.fleeing) {
@@ -718,7 +725,7 @@ export class Cower extends Behaviour {
     const o = this.target, me = this.me, b = this.brain;
     if (!o || o.removed) return false;
     if (me.ready && me.posture !== 'cower' && me.posture !== 'beg' && me.posture !== 'handsUp' && me.posture !== 'coverHead') {
-      const gun = o.armedWith === 'glock', shooting = b.gunThreat && this.now - b.gunThreat.t < 3;
+      const gun = o.gunReady, shooting = b.gunThreat && this.now - b.gunThreat.t < 3;
       me.setPosture(gun ? (shooting && chance(0.6) ? 'coverHead' : 'handsUp')
         : o.armedWith === 'knife' && chance(0.7) ? 'handsUp' : Math.abs(o.pos.x - me.pos.x) < 2 && chance(0.5) ? 'beg' : 'cower');
       if (me.posture === 'handsUp') b.speak(gun ? 'surrenderGun' : 'surrender', { other: o.name }, 0.9, o, true);

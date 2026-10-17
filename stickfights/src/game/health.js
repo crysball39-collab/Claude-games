@@ -132,6 +132,9 @@ export class Health {
     this.bullets = [];        // the bones bullets are still in
     this.shots = {};          // part -> how many times shot there
     this.gashes = {};         // part -> how many machete wounds
+    this.gashBy = {};         // part -> what made them, if it was not a machete
+    this.shotBy = {};         // part -> what shot them there, if it was not a bullet
+    this.burns = {};          // part -> what burned it, and how many times: { by, n }
     this.face = { blackEye: [0, 0], nose: 0, noseBroken: false, lip: 0, swell: 0, brow: 0, teeth: 0 };
     this.shock = 0;
     this.paralysed = 'none';  // 'legs' after a broken back, 'all' after a broken neck
@@ -157,10 +160,22 @@ export class Health {
    *   bone         which bone it landed on, if that is known (skeleton.js)
    *   breakChance  extra chance of a break on top of what the force gives
    */
-  hit(part, amount, { sharp = 0, deep = false, bone = null, breakChance = 0, chop = false, shot = false, strike = null } = {}) {
+  hit(part, amount, { sharp = 0, deep = false, bone = null, breakChance = 0, chop = false, shot = false, strike = null, burn = false, cutBy = null, cause = null } = {}) {
     const p = this.parts[part];
     if (!p) return { damage: 0 };
     let dmg = Math.max(0, amount);
+    // a burn sears rather than cuts: no blood, but it hurts like nothing else
+    if (burn) {
+      const b0 = this.burns[part] || (this.burns[part] = { by: cutBy || 'Fire', n: 0 });
+      b0.n++;
+      p.hp = Math.max(0, p.hp - dmg);
+      p.lastHit = this.time;
+      this.pain = Math.min(130, this.pain + dmg * PAIN[part] * 1.6 * (1.3 - this.toughness * 0.55));
+      const what = cutBy ? cutBy.toLowerCase() : null;
+      if (part === 'head' && p.hp <= 0) return { damage: dmg, fatal: !!this.kill(cause || (what ? `${what} to the head` : 'a burn to the head')), wound: false, broke: null, ko: false };
+      if (part === 'torso' && p.hp <= 0) return { damage: dmg, fatal: !!this.kill(cause || what || 'burns'), wound: false, broke: null, ko: false };
+      return { damage: dmg, wound: false, broke: null, ko: this.conscious < KO_LEVEL, fatal: this.dead };
+    }
     // a cracked skull gives less protection
     if (part === 'head' && this.bones.skull.broken) dmg *= 1.3;
     p.hp = Math.max(0, p.hp - dmg);
@@ -184,16 +199,20 @@ export class Health {
         // where the blade went in matters more than how hard
         if (deep && part === 'torso') this.internal += dmg * 0.00018;
         if (b === 'neck') p.bleed += dmg * (chop ? 0.0016 : 0.0011);
-        if (chop) this.gashes[part] = (this.gashes[part] || 0) + 1;
+        if (chop) {
+          this.gashes[part] = (this.gashes[part] || 0) + 1;
+          if (cutBy) this.gashBy[part] = cutBy;
+        }
       }
     }
     let killedBy = null;
     if (shot) {
       this.shots[part] = (this.shots[part] || 0) + 1;
+      if (cutBy) this.shotBy[part] = cutBy;
       this.shock = Math.min(1, this.shock + 0.3);
       // what a bullet finds on its way through
       if (part === 'head') {
-        if (dmg > 16 && Math.random() < 0.8) killedBy = 'a gunshot to the head';
+        if (dmg > 16 && Math.random() < 0.8) killedBy = cutBy ? `a ${cutBy.toLowerCase()} shot to the head` : 'a gunshot to the head';
         else this.conscious -= 0.5;
       } else if (part === 'torso') {
         this.internal += 0.0026 + Math.random() * 0.002;
@@ -240,6 +259,8 @@ export class Health {
       if (this.conscious < KO_LEVEL) ko = true;
     }
     if (killedBy) this.kill(killedBy);
+    // something with a name for what it does to a body (an explosion, say) says so if this was the end
+    else if (cause && (this.parts.head.hp <= 0 || this.parts.torso.hp <= 0)) this.kill(cause);
     const fatal = this.checkDeath();
     return { damage: dmg, broke, wound, fatal, ko };
   }
@@ -539,6 +560,9 @@ export class Health {
     this.bullets = [];
     this.shots = {};
     this.gashes = {};
+    this.gashBy = {};
+    this.shotBy = {};
+    this.burns = {};
     this.face = { blackEye: [0, 0], nose: 0, noseBroken: false, lip: 0, swell: 0, brow: 0, teeth: 0 };
     this.shock = 0;
     this.heartShot = false;
@@ -558,10 +582,11 @@ export class Health {
     }
     for (const part of PARTS) {
       const n = this.shots[part];
-      if (n) out.push((n > 1 ? `Shot ${n} times in the ` : 'Gunshot wound to the ') + PART_NAMES[part]);
+      if (n) out.push((n > 1 ? `Shot ${n} times in the ` : `${this.shotBy[part] || 'Gunshot'} wound to the `) + PART_NAMES[part]);
     }
     if (this.bullets.length) out.push(this.bullets.length > 1 ? `${this.bullets.length} bullets still in them` : `A bullet lodged in the ${BONE_NAMES[this.bullets[0]]}`);
-    for (const part of PARTS) if (this.gashes[part]) out.push(`Machete wound to the ${PART_NAMES[part]}`);
+    for (const part of PARTS) if (this.gashes[part]) out.push(`${this.gashBy[part] || 'Machete'} wound to the ${PART_NAMES[part]}`);
+    for (const part of PARTS) if (this.burns[part]) out.push(`${this.burns[part].by} burns on the ${PART_NAMES[part]}`);
     for (const j of Object.keys(JOINT_PART)) if (this.dislocated[j]) out.push('Dislocated ' + JOINT_NAMES[j]);
     for (const part of ['armA', 'armB', 'legA', 'legB']) if (this.parts[part].artery && !this.tourniquet[part]) out.push(`Bleeding from an artery (${PART_NAMES[part]})`);
     if (this.shock > 0.45) out.push('In shock');

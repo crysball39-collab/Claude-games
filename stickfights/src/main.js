@@ -15,6 +15,8 @@ import { Sound } from './core/audio.js';
 import { UI } from './ui/ui.js';
 import { CLIPS } from './game/clips.js';
 import { LINES } from './game/lines.js';
+import { armOf } from './game/props.js';
+import * as Mods from './mods/index.js';
 
 const canvas = document.getElementById('view');
 const sb = new Sandbox();
@@ -43,6 +45,11 @@ resize();
 const SCREAMS = new Set(['panic', 'hurtBig', 'flee', 'grabbed', 'grabbedAgain', 'broken', 'shot', 'severedSelf', 'chopped', 'gunshots', 'dislocatedSelf']);
 sb.on('hit', (e) => {
   if (e.weapon === 'bullet') return;   // its own sound, from bulletHit
+  if (armOf(e.weapon)) {
+    // a mod's weapon makes its own noise (the mod listens for it); the view still jumps
+    if (!e.blocked && (e.power > 1.7 || e.fatal)) cam.shake(Math.min(0.6, 0.15 + e.power * 0.08));
+    return;
+  }
   if (e.weapon === 'knife') {
     if (e.deep) sound.stab(e.power, e.x); else sound.slash(e.x);
     if (!e.blocked) sound.punch(e.power * 0.35, false, e.x);
@@ -63,6 +70,7 @@ sb.on('swing', (e) => {
   else sound.whoosh(e.who.pos.x, e.kind === 'cross' || e.kind === 'kick' || e.kind === 'uppercut' || e.kind === 'stab' || e.kind === 'chop' || e.kind === 'hack');
 });
 sb.on('shot', (e) => {
+  if (e.silent) return;   // a gun with a noise of its own (a mod's)
   sound.gunshot(e.x);
   // the closer it is to the middle of the view, the more the view jumps
   cam.shake(0.08 + 0.18 / (1 + Math.abs(e.x - cam.x) / 4));
@@ -97,6 +105,11 @@ sb.on('speech', (e) => {
   sound.voice(e.text, e.who.voice, e.loud, e.who.pos.x);
   if (e.loud && SCREAMS.has(e.kind)) sound.scream(e.who.voice, e.who.pos.x);
 });
+
+/* ---------------------------------- mods ---------------------------------- */
+
+// every mod hooks itself up now, installed or not, so installing one later needs no reload
+Mods.setupMods({ sb, sound, cam });
 
 /* ------------------------------ behind the title -------------------------- */
 
@@ -158,4 +171,4 @@ function start() {
 document.getElementById('btn-play').addEventListener('click', start);
 
 // for tests and the curious
-window.__sf = { sb, cam, ui, hand, sound, renderer, STYLE, start, demo, CLIPS, LINES };
+window.__sf = { sb, cam, ui, hand, sound, renderer, STYLE, start, demo, CLIPS, LINES, mods: Mods };

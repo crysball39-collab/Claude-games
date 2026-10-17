@@ -22,10 +22,15 @@
     <h1 class="logo">STICK<span>FIGHTS</span></h1>
     <div class="tagline">a sandbox of stickmen with minds of their own</div>
     <button id="btn-play" class="big-btn">PLAY</button>
+    <button id="btn-mods-title" class="mods-open" aria-label="Mods">
+      <svg viewBox="0 0 24 24" width="18" height="18"><path d="M10 3.5a2 2 0 0 1 4 0V6h4v4h-1.5a2 2 0 0 0 0 4H18v4.5h-4.5V17a2 2 0 0 0-4 0v1.5H5V14h1.5a2 2 0 0 0 0-4H5V6h5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/></svg>
+      <span>MODS</span><i class="mods-count" id="mods-count-title"></i>
+    </button>
     <div class="how">
       <div><b>Spawn</b> &mdash; open the menu, pick a Stickman, a weapon or a Crate, then tap the world.</div>
       <div><b>Drag</b> anything to move it. Let go while moving to throw it.</div>
       <div><b>Tap</b> a stickman to see what they think, feel and remember &mdash; and change it: their feelings, their personality, who they like, and who they fight.</div>
+      <div><b>Mods</b> add things that are not part of the game itself. Install them from MODS and they turn up in the spawn menu.</div>
     </div>
   </div>
 </div>
@@ -90,6 +95,10 @@
       <div class="ins-doing" id="ins-doing"></div>
       <div class="ins-order hidden" id="ins-order"><span id="ins-order-text"></span><button id="ins-order-stop" class="mini-btn">Call off</button></div>
       <div class="ins-traits" id="ins-traits"></div>
+      <div id="ins-abil-wrap" class="hidden">
+        <div class="ins-section">ABILITIES <span class="ins-hint">lock their hands to one thing, or tell them what to do</span></div>
+        <div id="ins-abilities"></div>
+      </div>
       <div class="ins-section">FEELINGS <span class="ins-hint">drag a bar to change it</span></div>
       <div id="ins-emotions"></div>
       <div class="ins-section">BODY</div>
@@ -121,9 +130,15 @@
 <div id="drawer" aria-hidden="true">
   <div class="drawer-head">
     <span>SPAWN</span>
-    <button id="btn-close" class="x" aria-label="Close the spawn menu">
-      <svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>
-    </button>
+    <div class="head-btns">
+      <button id="btn-mods" class="mods-open small" aria-label="Mods">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M10 3.5a2 2 0 0 1 4 0V6h4v4h-1.5a2 2 0 0 0 0 4H18v4.5h-4.5V17a2 2 0 0 0-4 0v1.5H5V14h1.5a2 2 0 0 0 0-4H5V6h5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/></svg>
+        <span>MODS</span><i class="mods-count" id="mods-count"></i>
+      </button>
+      <button id="btn-close" class="x" aria-label="Close the spawn menu">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>
+      </button>
+    </div>
   </div>
   <div class="drawer-body">
     <div class="cat">PEOPLE</div>
@@ -153,8 +168,26 @@
       <canvas class="card-icon" width="72" height="72"></canvas>
       <span class="card-text"><b>Crate</b><small>22 kg of wood. Stack it, climb it, throw it.</small></span>
     </button>
+    <!-- whatever the installed mods add -->
+    <div id="drawer-mods"></div>
+    <button id="drawer-get-mods" class="get-mods">More things to spawn, in MODS</button>
   </div>
   <div class="drawer-foot">Pick one, then tap the world to place it. Keep tapping for more.</div>
+</div>
+
+<!-- ================================= MODS ================================= -->
+<div id="mods" class="hidden" role="dialog" aria-modal="true" aria-labelledby="mods-title">
+  <div class="mods-card">
+    <div class="drawer-head">
+      <span id="mods-title">MODS</span>
+      <button id="mods-close" class="x" aria-label="Close mods">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <p class="mods-intro">Things made for STICKFIGHTS that are not part of the game itself, and never will be. Install one and what it adds turns up in the spawn menu; remove it and all of it is gone again, from the menu and from the world.</p>
+    <div id="mods-list"></div>
+    <div class="mods-foot" id="mods-foot"></div>
+  </div>
 </div>
 
 <!-- =============================== SETTINGS =============================== -->

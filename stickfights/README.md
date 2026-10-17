@@ -12,6 +12,9 @@ And you can get inside their heads: drag their feelings up and down, change
 their personality, change who they count as a friend or an enemy, and send
 them off to fight someone.
 
+**Mods** add things that are not part of the game itself: the first,
+**Murder Drones**, brings Uzi, N and V (see [Mods](#mods)).
+
 While a stickman is in charge of their own body, every move they make is a
 hand-keyed animation, played frame by frame. The moment they are not -
 knocked off their feet, knocked out, killed, picked up, thrown - physics takes
@@ -113,9 +116,101 @@ switch on **flipbook** animation (below), and switch **ragdoll physics** off,
 for the old animated falls.
 
 Keyboard: `1` to `6` pick a stickman, knuckles, a crate, a knife, a machete
-or a Glock-19 to spawn, `H` hand, `X` erase, `Space` pause, `S` slow motion, `F` follow, `Tab`
+or a Glock-19 to spawn, `7` to `9` the first three things the installed mods
+add, `H` hand, `X` erase, `Space` pause, `S` slow motion, `F` follow, `Tab`
 spawn menu, `+` `-` zoom, `0` reset the camera, `M` sound, `Delete` removes
 whoever is selected, `Esc` closes things.
+
+---
+
+## Mods
+
+Mods are things made for STICKFIGHTS that are not part of the game itself,
+and never will be. None of them is in the game until it is installed, and
+the game is exactly the same without them.
+
+**MODS** - under PLAY on the title screen, and at the top of the spawn menu -
+lists every mod: what it is, what it adds, and the **storage it needs**,
+which is what its files really take up (measured every time the game is
+built). **INSTALL** fills a bar as it goes in, and then what it adds turns up
+at the bottom of the spawn menu in a section of its own, tagged MOD. The
+device remembers which mods are installed. **REMOVE** asks once more, then
+takes the mod out of the spawn menu and everything of it out of the world:
+its people and weapons, whatever was cut off them, and whatever of it is
+still going on - a missile in the air, acid in somebody.
+
+### Murder Drones
+
+Three drones from a cold, dark planet, each with a personality, a look and
+skills of their own.
+
+| | Who they are | How they arrive | What they can do |
+| - | ------------ | --------------- | ---------------- |
+| **Uzi** | A worker drone: small, brave, sarcastic, quick to anger and not one for company. Murder drones are what she most wants to shoot. Purple visor eyes, a beanie, purple hair. | Walks in with the **railgun** she built already in her hands. | The railgun charges for nearly a second with a rising whine, then goes through everything in a line out to the wall - people, crates, drones - knocking people off their feet and often taking a limb with it. Then it needs a few seconds to charge again. It kicks, and she is light: sometimes it staggers her. Tapped where it lies, it charges and goes off by itself. |
+| **N** | A disassembly drone who would really rather be friends: kind, keen, nervous, apologetic - and very dangerous when he has to be. Yellow eyes, a cap, a white collar. | Comes down out of the sky and **crash-lands** on one knee with his **wings out**, cracking the floor; whoever is right there goes over. | Hands that turn into a **chainsaw** (pushed in and held there, biting again and again), a **gun** (quick bursts), a **sword** (long reach, deep cuts, takes limbs off), **claws** (three cuts at once), a **laser** (a beam that burns whatever it stays on) or **missiles** (salvos of three that home in and explode). A **tail** with a needle full of **nanite acid**, that comes over the shoulder at whoever is close. **Wings**, to fly at someone. |
+| **V** | Another disassembly drone, who enjoys the work far too much: fearless, vicious and playful about it. She hunts anyone who is not one of hers, worker drones above all. Blonde hair over one eye, an apron. | The same: out of the sky, a crash landing, wings out. | Every one of N's abilities. She likes the chainsaw, and flying at people. |
+
+What being a drone means:
+
+- **Oil, not blood.** Drones bleed oil: their wounds, stumps, stains and
+  severed limbs are oil-coloured.
+- **Disassembly drones** are about twice as hard to hurt - armour plate, so
+  fists barely dent them - quicker and stronger than anyone, fall from any
+  height and land on one knee, and **mend**: wounds close, bones knit, joints
+  go back in, and a limb that was cut off **grows back** in about half a
+  minute. Nanite acid takes on them only half the time.
+- **Nanite acid** eats at the part the needle went into for about ten
+  seconds, more and more of it, spreading to the body. For a worker drone it
+  is the end of them.
+- **How they fight.** A disassembly drone picks its hands for the distance
+  and the plan - fly at them with blades out, or stand off and shoot - and
+  changes its mind, and its hands, as the fight goes on. Close in, the tail
+  comes over the shoulder. N would mostly rather not fight at all: he chats,
+  helps the hurt, ties off stumps, and puts his hands up when a gun is
+  pointed at him. V hunts. Uzi fights like anyone with a gun - with that gun.
+  With nothing to do, a disassembly drone may turn a hand into something
+  just to have a look at it.
+- **Who they know.** A worker drone fears and hates murder drones on sight;
+  N likes everyone, and he and V go back a long way; people who have never
+  seen a drone are frightened of the wings, the tail and the glowing eyes,
+  and say so when a hand turns into a chainsaw.
+- **What they say.** Each of the three has their own things to say - most of
+  what they say is theirs - and everyone else has new things to say about
+  them: being sawn, clawed, stung, burned or blown up, and watching it.
+- **In the inspector** a chip says what they are (*Worker Drone* or
+  *Disassembly Drone*), and what their hands are is listed under BODY. A
+  disassembly drone has an **ABILITIES** section: **Hands** - *Auto* (they
+  choose), *Hands*, *Chainsaw*, *Gun*, *Sword*, *Claws*, *Laser*, *Missiles*,
+  which locks their hands to that until it is changed back - and **Do** -
+  *Tail strike* and *Fly*.
+
+### Making one
+
+A mod is a folder under `src/mods/` whose `index.js` calls `registerMod()`
+(`src/mods/registry.js`) with its id (the folder's name), name, version, a
+few words about it, what it adds, a picture, the things it puts in the spawn
+menu, how to tell its things in the world, and anything it needs hooked up
+when the game starts; `src/mods/index.js` imports it. `tools/mod-sizes.mjs`
+measures every mod folder into `src/mods/sizes.js`; the build runs it first.
+
+The game has a few ways in that change nothing until a mod uses them:
+
+- a **species** on a stickman, with a hook into each part of their life it
+  does its own way: how they are made, drawn (wings, tails, heads, hands),
+  move, fly and land, what their strikes are, how hard they are to hurt,
+  what they think of people when they first meet them, what else they might
+  decide to do and how they fight, what the inspector shows of them, and
+  what its buttons do
+- `man.innate`: a weapon that is part of the body
+- `defineArm()` (`game/props.js`): how a weapon hurts - sharp, chops,
+  gashes, takes limbs off, burns, shoots - what its wounds and the deaths it
+  causes are called, and what people say and remember about it
+- `GUN_KINDS`: a gun of the mod's own, which fires, draws and describes itself
+- `sandbox.effects` and `man.afflictions`: things going on over time - a
+  beam, a missile, acid in a wound - drawn by the renderer
+- `addLines()` (`game/lines.js`) and a person's own `lines`, `defineClip()`
+  (`game/clips.js`) and `KINDS` (`game/behaviours.js`) for new things to
+  say, animations and behaviours
 
 ---
 
@@ -522,6 +617,13 @@ stickfights/
       camera.js       pan, zoom, follow
       sandbox.js      the world, the fixed step, ragdolls and knives in it, the event bus
     ui/ui.js          HUD, spawn menu, tools, inspector, settings
+    ui/mods-screen.js the MODS screen
+    mods/
+      registry.js     what a mod is; installing, removing, the storage each needs
+      sizes.js        written by tools/mod-sizes.mjs: each mod's size
+      index.js        every mod there is
+      murder-drones/  Uzi, N and V: characters, species, ai, looks, the railgun,
+                      beams, missiles, acid, animations and sounds
 ```
 
 ## Verifying it
@@ -595,6 +697,18 @@ screen and checks:
   called off
 - there are over a hundred and ten clips and over seven hundred lines, and
   good friends part with a hug or a high five
+- no mod is in the game until it is installed; the MODS screen lists
+  Murder Drones with what it adds and the storage it needs, which is what
+  its files really take up; INSTALL fills a bar and then puts Uzi, N and V in
+  the spawn menu, and the device remembers it
+- Uzi spawns from her card holding her railgun; N and V come down out of the
+  sky and crash-land with their wings out, cracking the floor; every one of
+  N's hands - chainsaw, gun, sword, claws, laser, missiles - does damage;
+  V's tail puts nanite acid in someone, and it eats at them; the railgun
+  charges, then goes through two people in a line
+- tapping N shows a Disassembly Drone with a button for every ability, and
+  tapping one locks his hands to it; REMOVE asks again, then takes the mod
+  and everything of it out of the menu, the world and the device
 - ten stickmen, six crates, knuckles, knives, machetes and a pistol for 45
   seconds: nothing turns into NaN, and they get up to many different things
 - the console stays clean, and the single file fetches nothing

@@ -82,6 +82,9 @@ export class Sandbox {
     this.guns = [];
     this.limbs = [];
     this.fx = new FX(this);
+    // things a mod puts in the world that are not bodies: beams, missiles, blasts.
+    // Each is { update(dt, sandbox) -> false when it is over, draw(ctx) }
+    this.effects = [];
     this.time = 0;
     this.acc = 0;
     this.timeScale = 1;
@@ -144,10 +147,11 @@ export class Sandbox {
     man.proxy = this.phys.add(new Body(0.28, 1.6, Infinity, { kinematic: true, pushMass: 160, owner: man, friction: 0.5 }));
     man.brain = this.makeBrain ? this.makeBrain(man, person.traits) : null;
     this.people.push(man);
+    if (man.species && man.species.spawned) man.species.spawned(man, o);
     // one step, so the body has a pose and a place before anyone looks at it
     man.update(STEP);
     man.syncProxy();
-    this.fx.dust(x, sy, 10, 0.8);
+    if (!o.airborne) this.fx.dust(x, sy, 10, 0.8);
     this.emit('spawn', { what: man, x, y: sy });
     return man;
   }
@@ -229,7 +233,7 @@ export class Sandbox {
       this.phys.remove(thing.body);
       this.limbs.splice(this.limbs.indexOf(thing), 1);
       this.emit('vanish', { what: thing, x: thing.pos.x, y: thing.pos.y });
-    } else if (thing.kind === 'knuckles' || thing.kind === 'knife' || thing.kind === 'machete' || thing.kind === 'glock') {
+    } else if (thing.kind === 'knuckles' || thing.kind === 'knife' || thing.kind === 'machete' || this.guns.includes(thing)) {
       const at = { x: thing.pos.x, y: thing.pos.y };
       if (thing.wornBy) thing.wornBy.weapon = null;
       if (thing.stuckIn && thing.stuckIn.person) {
@@ -237,9 +241,10 @@ export class Sandbox {
         p.stuck = p.stuck.filter((e) => e.knife !== thing);
       }
       thing.removed = true;
-      const list = { knuckles: this.knuckles, knife: this.knives, machete: this.machetes, glock: this.guns }[thing.kind];
+      const gun = this.guns.includes(thing);
+      const list = gun ? this.guns : { knuckles: this.knuckles, knife: this.knives, machete: this.machetes }[thing.kind];
       if (thing.kind === 'knife' || thing.kind === 'machete') thing.leaveWorld();
-      else if (thing.kind === 'glock') { if (thing.inWorld) { this.phys.remove(thing.body); thing.inWorld = false; } }
+      else if (gun) { if (thing.inWorld) { this.phys.remove(thing.body); thing.inWorld = false; } }
       else if (!thing.wornBy) this.phys.remove(thing.body);
       list.splice(list.indexOf(thing), 1);
       thing.wornBy = null;
@@ -257,6 +262,7 @@ export class Sandbox {
     for (const l of [...this.limbs]) this.remove(l);
     for (const c of [...this.crates]) this.remove(c);
     this.fx.clear();
+    this.effects.length = 0;
   }
 
   /* ---------------------------------- time ---------------------------------- */
@@ -291,6 +297,13 @@ export class Sandbox {
     for (const k of this.blades) if (k.stuckIn && k.stuckIn.crate) k.follow();
     this.bleedLimbs(dt);
     this.fx.update(dt);
+    if (this.effects.length) {
+      // whatever an effect sets off while it runs (a salvo's missiles) joins the list, and moves next step
+      const running = this.effects;
+      this.effects = [];
+      const kept = running.filter((e) => e.update(dt, this) !== false);
+      this.effects = kept.concat(this.effects);
+    }
     // anything knocked clean out of the world comes back down inside it
     for (const c of this.crates) this.keepInside(c.body);
     for (const k of this.loose()) this.keepInside(k.body);
@@ -305,7 +318,7 @@ export class Sandbox {
       while (l.dripAcc >= 1) {
         l.dripAcc -= 1;
         const e = l.end;
-        this.fx.drip(e.x, e.y, null);
+        this.fx.drip(e.x, e.y, null, l.tint || null);
       }
     }
   }
@@ -680,6 +693,7 @@ export class Sandbox {
   /** A gun lying loose, fired by the hand from above: it goes off the way it points, and kicks. */
   fireLoose(g) {
     if (!g.loose) return false;
+    if (g.fireLoose) return g.fireLoose(this);
     if (g.mag <= 0) { this.emit('dryFire', { what: g, x: g.pos.x, y: g.pos.y }); return false; }
     const m = g.muzzle();
     g.mag--;

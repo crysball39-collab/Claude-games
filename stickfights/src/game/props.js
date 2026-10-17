@@ -46,13 +46,13 @@ export class Crate {
   get pos() { return this.body.pos; }
 
   /** Blood that lands on it stays where it landed, in the crate's own frame. */
-  stain(wx, wy, r) {
+  stain(wx, wy, r, tint = null) {
     const l = this.body.toLocal(wx, wy);
     const h = this.size / 2;
     l.x = Math.max(-h, Math.min(h, l.x));
     l.y = Math.max(-h, Math.min(h, l.y));
     if (this.stains.length > 60) this.stains.shift();
-    this.stains.push({ x: l.x, y: l.y, r, a: Math.random() * Math.PI, flat: 0.6 + Math.random() * 0.4, dark: Math.random() < 0.3 });
+    this.stains.push({ x: l.x, y: l.y, r, a: Math.random() * Math.PI, flat: 0.6 + Math.random() * 0.4, dark: Math.random() < 0.3, tint });
   }
 
   /** Where a bullet went through, in the crate's own frame, so it turns with the crate. */
@@ -124,6 +124,33 @@ export const BLADES = {
   machete: { name: 'Machete', w: MACHETE_W, h: MACHETE_H, mass: 0.6, grip: MACHETE_GRIP },
 };
 export const isBlade = (kind) => kind === 'knife' || kind === 'machete';
+
+/** The kinds of thing that are guns: aimed, fired, carried by a stickman like the Glock. Mods add theirs. */
+export const GUN_KINDS = new Set(['glock']);
+export const isGun = (kind) => GUN_KINDS.has(kind);
+
+/**
+ * Weapons that are part of somebody rather than something they pick up -
+ * hands that turn into blades, from a mod - and what each one does. A spec:
+ *   blade   strikes with it cut, and land wherever its edge actually is
+ *           (the owner's species says where that is: bladePoints)
+ *   sharp   how much it cuts, 0..1          mult    how hard its blows land
+ *   deep    the strikes with it that go in deep (stab, chop...)
+ *   gash    how many open wounds a blow leaves      sever   how readily it takes limbs off
+ *   shove   how much a blow knocks someone back     spray   how much blood flies
+ *   scary   how frightening it is to see    fear    what people say when they see it
+ *   nasty   how bad it is to watch          memory  what being hurt by it is remembered as
+ *   hurt    what the one it hits says       power   how much it counts for in a fight
+ *   chop    it hacks, and leaves gashes     shot    it goes in like a bullet
+ *   burn    it burns rather than cuts: scorch marks, and no blood
+ *   r       how thick its edge is, for what it touches
+ *   name    what it is called, in the inspector      noun    what it is, in a sentence
+ *   wound   what its wounds are called      cause   what a death from it is put down to
+ *   seen    what people who watch it land say       verb    how the one it hurt puts it
+ */
+export const ARMS = {};
+export function defineArm(kind, spec) { ARMS[kind] = spec; }
+export const armOf = (kind) => (kind && ARMS[kind]) || null;
 
 export class Blade {
   constructor(sandbox, x, y, rot = 0, kind = 'knife') {

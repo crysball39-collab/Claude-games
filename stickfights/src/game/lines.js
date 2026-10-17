@@ -223,9 +223,17 @@ export const LINES = {
   exerciseDone: ['Phew! Done.', 'That\'s enough for today.', 'Look at these muscles.', 'I am SO sweaty.'],
 };
 
-/** One line of a kind, with the names filled in. */
-export function line(kind, vars = {}) {
-  let list = LINES[kind];
+/** What people say about the things a mod adds: only ever needed once the mod is in. */
+export const EXTRA_LINES = {};
+export function addLines(table) { Object.assign(EXTRA_LINES, table); }
+
+/**
+ * Something to say for `kind`, with the blanks filled in. `own` is a set of
+ * lines of the speaker's own (a mod's characters have them): used for most
+ * things they say, and for everything nobody else ever says.
+ */
+export function line(kind, vars = {}, own = null) {
+  let list = own && own[kind] && (!LINES[kind] || Math.random() < 0.8) ? own[kind] : LINES[kind] || EXTRA_LINES[kind];
   if (!list) return '';
   if (!Array.isArray(list)) list = list[vars.partKey] || Object.values(list)[0];
   let s = pick(list);
