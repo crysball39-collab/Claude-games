@@ -1,13 +1,17 @@
 # STICKFIGHTS
 
 A 2D sandbox of stickmen with minds of their own, on a grey background and a
-black floor. You spawn **stickmen**, **brass knuckles** and **crates**, and the
-stickmen get on with it: they look around, talk, make friends and enemies,
-pick things up, climb on things, fight, run, hide, help each other up, get
-hurt, and die - and the ones still standing feel it.
+black floor. You spawn **stickmen**, **brass knuckles**, **combat knives** and
+**crates**, and the stickmen get on with it: they look around, talk, make
+friends and enemies, shake hands and hug, pick things up, climb on things,
+fight, run, hide, help each other up, get hurt, break bones, and die - and the
+ones still standing feel it.
 
-The stickmen are not ragdolls. Every move they make is a hand-keyed
-animation, played frame by frame.
+While a stickman is in charge of their own body, every move they make is a
+hand-keyed animation, played frame by frame. The moment they are not -
+knocked off their feet, knocked out, killed, picked up, thrown - physics takes
+over and they go limp: a **ragdoll** with real joints, which bend only the
+ways a person's do.
 
 ## Getting it onto a phone
 
@@ -46,24 +50,26 @@ The title screen has a few stickmen already going about their business behind
 it, one of them nursing a grudge. **PLAY** clears them away and opens the
 spawn menu.
 
-The spawn menu (☰ **SPAWN**, top left) has three things in it, in three
+The spawn menu (☰ **SPAWN**, top left) has four things in it, in three
 sections, so there is room for more later:
 
 | Section | Thing | What it is |
 | ------- | ----- | ---------- |
 | People | **Stickman** | A normal human. Thinks, feels, fights back. |
 | Weapons | **Brass Knuckles** | Worn on the hand. Punches with them land about twice as hard, and cut. |
+| Weapons | **Combat Knife** | Held in the hand. Stabs and slashes; deep cuts bleed fast. Thrown point first, it sticks in. |
 | Objects | **Crate** | 22 kg of wood. Stack it, climb it, throw it - or let a stickman throw it. |
 
 Pick one and the menu closes with the **spawn tool** armed: every tap on the
-world places another. A stickman appears on whatever is under the tap; a crate
-or a set of knuckles appears exactly where you tapped and falls.
+world places another. A stickman appears on whatever is under the tap; a
+crate, a set of knuckles or a knife appears exactly where you tapped and
+falls.
 
 The three tools along the bottom:
 
 | Tool | What it does |
 | ---- | ------------ |
-| ✋ **HAND** | Drag anything to move it. Let go while moving to throw it. Tap a stickman to open their mind. Drag empty space to pan. |
+| ✋ **HAND** | Drag anything to move it. Let go while moving to throw it. Tap a stickman to open their mind. Drag empty space to pan. Drag a knife stuck in someone to pull it out. |
 | **SPAWN** (shows what is picked) | Tap the world to place it. |
 | ✖ **ERASE** | Tap something to remove it. |
 
@@ -72,31 +78,42 @@ slow motion, pause, settings, and clear everything (tap twice).
 
 **Tap a stickman** to open the inspector: their name and mood, what they are
 doing, their personality, five emotions, pain and blood, a body diagram
-coloured by injury, the options they are weighing up right now and how much
-each appeals, their recent thoughts, and how they feel about everyone they
-have met. **Follow** keeps the camera on them, **Heal** mends them (not the
-dead), **Remove** takes them away.
+coloured by injury with every broken bone marked and named, the options they
+are weighing up right now and how much each appeals, their recent thoughts,
+and how they feel about everyone they have met. **Follow** keeps the camera on
+them, **Heal** mends them (not the dead), **Remove** takes them away.
 
 **Settings** turn names, speech bubbles, thought bubbles and blood on and off,
-and switch on **flipbook** animation (below).
+switch on **flipbook** animation (below), and switch **ragdoll physics** off,
+for the old animated falls.
 
-Keyboard: `1` `2` `3` pick a stickman, knuckles or a crate to spawn, `H` hand,
-`X` erase, `Space` pause, `S` slow motion, `F` follow, `Tab` spawn menu, `+`
-`-` zoom, `0` reset the camera, `M` sound, `Delete` removes whoever is
-selected, `Esc` closes things.
+Keyboard: `1` `2` `3` `4` pick a stickman, knuckles, a crate or a knife to
+spawn, `H` hand, `X` erase, `Space` pause, `S` slow motion, `F` follow, `Tab`
+spawn menu, `+` `-` zoom, `0` reset the camera, `M` sound, `Delete` removes
+whoever is selected, `Esc` closes things.
 
 ---
 
 ## What is simulated
 
-### Animated, not ragdolled
+### A skeleton with real bones
 
-A stickman is a skeleton of twelve joints - hips, neck, head, the shoulders,
-and both elbows, hands, knees and feet - posed by angles. Every pose in the game comes
-from **hand-keyed clips** in `src/game/clips.js`: about eighty of them, from
-idling and walking to a front kick, falling on your back, getting up off your
-front, cowering, sobbing into your hands and dying. Each clip is a list of
-frames, and each frame is a pose and how long it is held.
+A stickman's skeleton (`src/game/skeleton.js`) has fifteen joints: the hips,
+a spine in two parts (the lower back up to the chest, the upper back up to the
+neck), the neck, the head, the shoulders - partway down the upper back, not
+on top of it - and both elbows, hands, knees, ankles and toes. Between them
+are thirteen named bones: the **skull**, the **neck**, the **ribs**, the
+**spine**, the **pelvis**, and a **humerus**, **forearm**, **femur** and
+**tibia** on each side. The long bones have a point halfway along, where they
+break.
+
+### Animated while they are in charge
+
+Every pose they strike on their own comes from **hand-keyed clips** in
+`src/game/clips.js`: 109 of them, from idling and walking to a front kick, a
+knife thrust, press-ups, a hug, falling on your back, getting up off your
+front, sobbing into your hands and dying. Each clip is a list of frames, and
+each frame is a pose and how long it is held.
 
 ```
 idle  idleHappy  idleSad  idleAngry  idleScared  idleHurt  talk
@@ -109,22 +126,26 @@ getUpBack  getUpFront  dieCollapse  dieBack  deadBack  deadFront
 pickup  lift  carry  throw  push  climb  knock  inspect
 kneel  cry  beg  cower  cheer  dance  laugh  wave  beckon  point  shout  shrug
 facepalm  scratchHead  stretch  sigh  clutchHead  sitDown  sit  sitHurt  sitEdge
+knifeGuard  stab  slash  knifeThrow  pullOut  brace  protectHead  handsUp
+armsCrossed  handsOnHips  tapFoot  yawn  kickDirt  lookUp  wipeBrow  flex
+shadowbox  laughPoint  highFive  hug  handshake  clap  thumbsUp  nod  bow
+pushups  squats  jumpingJacks  clutchStomach  clutchArm  shiver
 ```
 
 Clips play in three layers - a base (standing, walking, lying), an upper-body
-hold the legs carry on under (fists up, a crate overhead) and one-shots on top
-(a punch, a wave, a flinch) - and crossfade into each other, so nothing pops.
-Walking and running play at whatever speed keeps the planted foot from
-sliding. With **flipbook** on, nothing is in-between at all: each key is held
-for its time and then cut to the next.
+hold the legs carry on under (fists up, a knife held low, a crate overhead)
+and one-shots on top (a punch, a wave, a flinch) - and crossfade into each
+other, so nothing pops. Walking and running play at whatever speed keeps the
+planted foot from sliding. With **flipbook** on, nothing is in-between at all:
+each key is held for its time and then cut to the next.
 
 On top of the clip go a few things a clip cannot know: breathing, trembling
 with fear, a head that tilts to look at whoever it is watching, a punch angled
-at the head it is aimed at, a limp onto the bad leg, a dizzy wobble, a broken
-arm that hangs, and a broken knee that bends the wrong way.
+at the head it is aimed at (a stab at the middle), a limp onto the bad leg, a
+dizzy wobble, and a broken bone that bends where it broke.
 
 Whatever the pose, its lowest point rests on the floor, so a crouch sinks, a
-kneel kneels, and a fall ends lying down without any clip having to say how
+kneel kneels, and a lying pose lies down without any clip having to say how
 high the hips are.
 
 Moving about is a small character controller, not physics: walking, running,
@@ -132,14 +153,77 @@ jumping, falling, stepping onto anything shin-high, jumping up onto a crate,
 pulling themselves up onto a stack, pushing a crate they lean on, and riding
 along on one that is moving.
 
+### Ragdolls when they are not
+
+`src/physics/ragdoll.js` is a ragdoll engine: Verlet integration, the way
+Thomas Jakobsen did the bodies in Hitman. Every joint is a point with a mass
+(about 70 kg in all, most of it in the hips, chest and thighs), every bone a
+stick between two points that keeps its length, and each step a few passes
+make everything true at once: bones the right length, joints inside their
+range, nothing through the floor, the walls or a crate. `src/game/limp.js`
+turns a stickman into one and back, and holds the joint ranges, roughly a
+person's:
+
+| Joint | Bends through |
+| ----- | ------------- |
+| waist (upper back on lower) | -25° .. 55°, arched to hunched |
+| neck | -50° .. 60°, head back to chin down |
+| shoulder | -5° .. 240°, overhead to well behind |
+| elbow | 150° forward, 5° back |
+| hip | 45° .. 210°, knee to chest to leg behind |
+| knee | 150° back, 3° forward |
+| ankle | 60° .. 150° to the shin |
+| a broken bone | flops ±75° at the break |
+
+On top of the ranges, every joint has **muscles**, which pull toward the pose
+an animation wants for as long as there is someone awake inside, and the give
+of the tissue around it, which lets a limp body settle the way a limp body
+settles instead of folding up. How hard the muscles pull depends on what is
+going on:
+
+- **knocked off their feet** - half-tense, trying to catch the fall; once the
+  body comes to rest they get up, blended from wherever the ragdoll left them
+  into a get-up clip
+- **knocked out** - nothing pulls at all; out cold until they come round
+- **dying** - the muscles give out as they go, and the body crumples
+- **picked up** - an awake body kicks and flails; held by an ankle they hang
+  upside down from it; the knocked-out and the dead just hang
+- **thrown** - flailing in the air, then bracing with their arms as the
+  ground comes up
+
+The body keeps its facing: in 2D a tumbling body can turn over, but never into
+its own mirror image, so the joints stay the right way round however it lands.
+Broken limbs hang from the break, a paralysed body does not pull at all below
+the injury, and a ragdoll knows which way it is lying, so it gets up off its
+back or its front.
+
+Ragdolls touch everything: they pile up on each other, drape over crates,
+knock crates about, and stop a falling crate, which lands on the body and
+pins it there. A body that hits the floor, a wall or a crate fast enough gets
+hurt where it hit, and hard enough breaks bones.
+
 ### Bodies get hurt
 
-Six parts take damage separately: head, torso, both arms, both legs (see
-`src/game/health.js`). On top of that:
+Six parts take damage separately: head, torso, both arms, both legs, with the
+bones inside them (see `src/game/health.js`). On top of that:
 
-- **Blood** - cuts bleed, bleeding clots, and below about 40% the heart has
+- **Broken bones** - a blow hard enough for the bone it lands on can break
+  it, and so can a bad landing. Each one does what it would:
+  - **skull** - bleeds, and leaves the head easier to knock out and to kill
+  - **neck** - kills about half the time; otherwise paralyses them from the
+    neck down, awake on the floor
+  - **ribs** - hurt with every breath and slow them down; a bad enough break
+    punctures a lung, which bleeds inside
+  - **spine** - takes the legs: they drag themselves along on their arms
+  - **pelvis** - no standing on it
+  - **humerus**, **forearm** - the arm cannot punch, stab, carry or block,
+    and hangs, bent where it broke
+  - **femur**, **tibia** - the leg cannot take weight: down they go, and crawl
+- **Blood** - cuts bleed, bleeding clots, and below about 38% the heart has
   nothing left to pump. Brass knuckles cut; a hard enough blow to the face
-  splits it anyway.
+  splits it anyway; a blade cuts far deeper than a fist. A stab in the body
+  bleeds inside, where it clots slowly, and one in the neck is the worst of
+  all. Someone pressing on the wound slows it right down.
 - **Pain** - spikes with every hit and settles back to what the injuries
   still ache. It slows people down, makes them sit down, and frightens them.
 - **Consciousness** - a few clean shots to the head knock anyone out, long
@@ -147,19 +231,17 @@ Six parts take damage separately: head, torso, both arms, both legs (see
   be fully awake, so the next good hit puts it out again. Lose too much blood
   and you pass out too. Coming round after a knockout is frightening: most
   people want nothing more to do with whoever did it.
-- **Broken bones** - a broken arm cannot punch, carry or block; a broken leg
-  cannot stand, so they crawl.
 - **Dizziness** - stars go round the head, and the head will not keep still.
-- **Death** - from the head, from the torso (internal injuries), or from
-  bleeding out. The dead lie where they fall, with crosses for eyes, and keep
-  bleeding into a pool for a while.
+- **Death** - from the head, from the torso (internal injuries), a broken
+  neck, or bleeding out. The dead lie where they fall, with crosses for eyes,
+  and keep bleeding into a pool for a while.
 
-Damage comes from fists and feet, thrown crates and knuckles, crates dropped
-on people, falls, being thrown into the floor, a wall or a crate, and other
-people being thrown into them. A blow
-lands on whichever part it touches, knocks the body back, and drains its
-balance: a small hit is a flinch, a bigger one a stagger, and running out of
-balance puts them on the floor, on their back if hit from the front.
+Damage comes from fists, feet and blades, thrown crates, knuckles and knives,
+crates dropped on people, falls, being thrown into the floor, a wall or a
+crate, and other people being thrown into them. A blow lands on whichever
+bone it touches, knocks the body back, and drains its balance: a small hit is
+a flinch, a bigger one a stagger, and running out of balance knocks them off
+their feet - limp, on their back if hit from the front.
 
 ### Brains
 
@@ -171,17 +253,20 @@ are extreme.
 **Sense.** About five times a second they look around. They see what is in
 front of them, within fourteen metres, and not hidden behind a crate - so
 hiding behind one works - and notice things right behind them only when they
-are close. They remember who they have seen and where.
+are close. A blow landing, a shout or a voice right behind them makes them
+turn round to look. They remember who they have seen and where.
 
-**Feel.** Everything that happens - a punch, a scream, a crate going past, a
-death, someone vanishing into thin air - reaches every brain, and each decides
-whether it saw it or heard it. It then changes five **emotions** (joy,
+**Feel.** Everything that happens - a punch, a stab, a scream, a crate going
+past, a death, someone vanishing into thin air - reaches every brain, and each
+decides whether it saw it or heard it. It then changes five **emotions** (joy,
 sadness, anger, fear, surprise) and how they feel about **each person**: how
 much they like them, fear them, are angry with them, and know them. A few
 examples:
 
 - hit by someone: hurt, surprised, frightened, and angry with whoever did it -
   doubly so if they were friends
+- stabbed: far more frightened than a punch would make them
+- someone with a knife in their hand: frightening even before they use it
 - hit by a crate from nowhere: "Who threw that?!" - and a hot head may blame
   whoever is standing nearest
 - bowled over by someone flying through the air: "Watch it!" - while the one
@@ -191,6 +276,8 @@ examples:
 - watching someone die: shocked and afraid; heartbroken and out for revenge
   if it was a friend
 - killing someone: guilt if they are kind, pride if they are not
+- someone they cannot stand going down: funny, to the unkind, who point and
+  laugh
 - picked up into the sky: terrified
 
 Feelings settle back over time, each at its own pace (surprise in a second or
@@ -205,80 +292,94 @@ but not against something urgent, like someone coming at them. The options:
 | Behaviour | When |
 | --------- | ---- |
 | **Fight** someone | angry with them, aggressive, and fancying their chances (their health, weapons and friends counted) |
-| **Flee** / keep away | afraid of them, or of what they just watched them do |
+| **Flee** / keep away | afraid of them, or of what they just watched them do - and nobody sensible squares up to a knife bare-handed |
 | **Hide** | fleeing with a crate to get behind |
-| **Cower** and beg | terrified, hurt and cornered |
-| **Get the brass knuckles** | angry or expecting trouble - first, if they are on the way to the fight |
+| **Cower**, beg, hands up | terrified, hurt and cornered; hands up to someone with a knife |
+| **Get a weapon** | angry or expecting trouble - first, if one is on the way to the fight. The kind and the timid leave a knife where it is |
+| **Throw the knife** | at someone getting away |
+| **Pull a knife out** | there is one in them: it comes out first, whatever else is going on - then they keep it or drop it |
 | **Throw a crate** at someone | angry, with one to hand and the target out of reach |
-| **Talk** to someone | sociable and bored; greetings, small talk, compliments, insults |
-| **Help** someone | kind, and someone is down, crawling, pinned or out cold - shoves crates off them, kneels by them, helps them up |
+| **Talk** to someone | sociable and bored, and the other one is not busy talking to somebody else: greetings (a handshake from the polite), small talk, compliments, insults - and friends part with a high five, good friends with a hug |
+| **Help** someone | kind, and someone is down, crawling, pinned, bleeding or out cold - shoves crates off them, pulls the knife out and presses on the wound, kneels by them, helps them up |
 | **Mourn** someone | a friend has died: kneels by the body and cries |
 | **Stand up to** someone | they are hurting a friend |
-| **Watch** a fight | curious, from a safe distance, cheering or telling them to stop |
-| **Look at** a crate or a body | curious |
+| **Watch** a fight | curious, or a friend is in it: from a safe distance, cheering or telling them to stop |
+| **Look at** a crate, a weapon or a body | curious |
 | **Climb** a crate | happy and curious: up, look around, jump off |
 | **Investigate** a noise | curious, not scared |
+| **Exercise** | bored and full of beans: press-ups, squats or star jumps, counting them out loud |
 | **Rest** | in pain: sits down - up on the edge of a crate, legs over the side, if one is handy |
 | **Sit on a crate** | calm, bored, and not one for wandering: climbs up and sits on the edge for a while (two can share, one on each side) |
 | **Celebrate** | just won |
 | **Panic** | terrified and has no idea why |
-| **Wander**, **stand around** | nothing better to do |
+| **Wander**, **stand around** | nothing better to do: arms crossed, hands on hips, tapping a foot, yawning, kicking the dirt, stretching, shadowboxing |
 
-**React.** A punch they see coming may get a block or a step back. A crate or
-a set of knuckles flying at them may get a duck or a jump. A blow they take
-gets a flinch from the body straight away and, a beat later (longer for the
-clumsy), a decision about it. On the floor they may stay down and beg if
-someone dangerous is standing over them; trapped under a crate they shout for
-help, and friends come.
+**React.** A punch they see coming may get a block or a step back. A crate, a
+set of knuckles or a knife flying at them may get a duck or a jump. A blow
+they take gets a flinch from the body straight away and, a beat later (longer
+for the clumsy), a decision about it. On the floor they may stay down and beg
+if someone dangerous is standing over them; trapped under a crate they shout
+for help, and friends come.
 
 They also talk - out loud, in speech bubbles, with a babbling voice pitched to
-each of them - and think in pictures, in thought bubbles: a fist, a crate,
-the knuckles, a tear, a question mark.
+each of them - from 540 lines for 96 situations in `src/game/lines.js`, from
+small talk to "My leg! It's bent the wrong way!" - and think in pictures, in thought
+bubbles: a fist, a crate, the knuckles, the knife, a tear, a question mark.
 
 ### Fighting
 
-There are no hit boxes. A punch or a kick lands only if the **fist or foot
-actually touches a bone** of someone else while the strike is live, and what
-it does depends on how fast it was moving, which part it met, the
-attacker's strength and anger, how hurt the striking limb is, and whether
-brass knuckles were on that hand. Fighters close to the distance their own
-reach allows, circle in and out, throw jabs, crosses, uppercuts (from close)
-and kicks, block what they see coming, counter out of a flinch, stand over
-whoever they put down, and - only the truly furious - keep going.
+There are no hit boxes. A punch, a kick or a blade lands only if the **fist,
+foot or knife actually touches a bone** of someone else while the strike is
+live, and what it does depends on how fast it was moving, which bone it met,
+the attacker's strength and anger, how hurt the striking limb is, and what
+was in that hand. Fighters close to the distance their own reach allows,
+circle in and out, throw jabs, crosses, uppercuts (from close) and kicks -
+or, with a knife, thrust it into the body and slash - block what they see
+coming, counter out of a flinch, stand over whoever they put down, and - only
+the truly furious - keep going.
 
-### Crates and brass knuckles
+### Crates, brass knuckles and the knife
 
 `src/physics/rigid.js` is a 2D rigid body engine: Box2D-lite (Erin Catto's
 teaching version of Box2D) carried over to JavaScript, with restitution, a
 soft grab joint for the hand, and kinematic bodies. Crates stack, topple,
-slide and tumble; knuckles bounce and clatter. Every stickman has a stand-in
-among them - moved by the game, but as heavy as a person to anything it
-meets - so a crate can land on someone, rest on a body (pinning them) or
-bounce off a head. What hurts is how fast the crate was going at them, not
-how fast they walked into it.
+slide and tumble; knuckles and knives bounce and clatter. Every stickman on
+their feet has a stand-in among them - moved by the game, but as heavy as a
+person to anything it meets - so a crate can land on someone or bounce off a
+head; a ragdoll touches them itself. What hurts is how fast the thing was
+going at them, not how fast they walked into it.
+
+The **combat knife** is a 0.35 kg blade. Held, it points straight out of the
+fist. Thrown point first and fast enough - by a stickman or by you -
+it sticks: into a person, where it stays in the wound until someone pulls it
+out (they do it themselves, a friend does it for them, or you drag it out),
+into a crate, where it rides along with it, or into the floor. Thrown any
+other way, it bounces off and clatters.
 
 ### The hand
 
 Dragging grabs whatever is under your finger. A crate swings from the exact
-point you took hold of it. A stickman hangs from wherever you grabbed them -
-by the scruff of the neck, or upside down by an ankle - kicking and shouting,
-and swings like a pendulum as you move them; the dead and the knocked-out
-just hang. Let go while moving and it is a throw: stickmen tumble through the
-air and land hurt. Fling one at a crowd and they bowl into whoever is in the
-way: both get hurt, and a hard enough hit sends the one they hit flying too,
-into the next.
+point you took hold of it. A stickman goes limp in your grip and hangs from
+wherever you grabbed them - by the scruff of the neck, a hand, or upside down
+by an ankle - kicking and shouting, swinging as you move them; the dead and
+the knocked-out just hang. Let go while moving and it is a throw: they tumble
+through the air and land hurt. Fling one at a crowd and they bowl into
+whoever is in the way: both get hurt, and a hard enough hit sends the one
+they hit flying too, into the next.
 
 ### Blood
 
 Blood is simulated drop by drop until it lands, and it stays where it lands:
 on the floor as a splat (pools under the dead), on a crate as a stain that
-turns with the crate, on someone's body or face, on the knuckles that did it.
+turns with the crate, on someone's body or face, on the knuckles or the blade
+that did it.
 
 ### Sound
 
-Punches, the ring of brass knuckles, wood, bodies hitting the floor, bones
-breaking, screams and every stickman's babbling voice are synthesised with
-WebAudio on the spot. There are no sound files.
+Punches, the ring of brass knuckles, a blade going in and being drawn across,
+steel into wood, crates, bodies hitting the floor, bones breaking, claps,
+screams and every stickman's babbling voice are synthesised with WebAudio on
+the spot. There are no sound files.
 
 ---
 
@@ -293,24 +394,26 @@ stickfights/
     core/             helpers, gestures (tap, drag, pinch), sound
     physics/
       rigid.js        2D boxes: separating axes, clipping, sequential impulses
+      ragdoll.js      points, sticks, joint limits and muscles: Verlet ragdolls
     game/
-      skeleton.js     bones, poses, forward kinematics, the lowest point down
+      skeleton.js     joints, bones, poses, forward kinematics, the lowest point down
       clips.js        every animation, key by key
       animator.js     layers, crossfades, events, flipbook
-      stickman.js     the body: controller, states, strikes, hits, death
-      health.js       parts, blood, pain, consciousness, breaks
+      stickman.js     the body: controller, states, strikes, hits, ragdolls, death
+      limp.js         a stickman as a ragdoll: masses, joint ranges, and back again
+      health.js       parts, bones, blood, pain, consciousness, paralysis
       brain.js        sense, feel, think, react
       behaviours.js   what a brain can decide to do
       emotions.js     the five emotions
       lines.js        everything they can say
       people.js       names, looks and personalities
-      props.js        crate and brass knuckles
+      props.js        crate, brass knuckles and the combat knife
       hand.js         dragging and throwing
       fx.js           blood, dust, hit bursts
-      draw.js         drawing a stickman, a crate, knuckles
+      draw.js         drawing a stickman, a crate, knuckles, a knife
       render.js       the world, bubbles, symbols
       camera.js       pan, zoom, follow
-      sandbox.js      the world, the fixed step, the event bus
+      sandbox.js      the world, the fixed step, ragdolls and knives in it, the event bus
     ui/ui.js          HUD, spawn menu, tools, inspector, settings
 ```
 
@@ -328,8 +431,8 @@ screen and checks:
 
 - stickmen are already moving about behind the title, and PLAY opens an empty
   sandbox with the spawn menu
-- the spawn menu has exactly three things in it: a Stickman, Brass Knuckles
-  and a Crate
+- the spawn menu has exactly four things in it: a Stickman, Brass Knuckles, a
+  Combat Knife and a Crate
 - the background is grey and the ground is black (read off the canvas)
 - tapping the world places a stickman, a crate and a set of knuckles where it
   was tapped, and the crate falls and settles
@@ -356,8 +459,19 @@ screen and checks:
 - dragging a stickman picks them up, letting go while moving throws them, and
   they come back down
 - tapping a stickman opens the inspector; the erase tool removes things
-- ten stickmen, six crates and three knuckles for 45 seconds: nothing turns
-  into NaN, and they get up to many different things
+- knocked out, they go limp and come to rest; no ragdoll joint ever bends the
+  wrong way; picked up by an ankle they hang upside down from it; a crate
+  dropped on a body lands on it and pins it; knocked off their feet they fall
+  limp and get up again once they come to rest
+- a broken bone has its name, stops the limb working and bends where it
+  broke; a broken back paralyses the legs and they drag themselves along
+- a stickman picks up the combat knife, and a stab bleeds far harder than a
+  punch; a knife thrown point first sticks into a crate, and into a person,
+  who pulls it out
+- there are over a hundred clips and hundreds of lines, and good friends part
+  with a hug or a high five
+- ten stickmen, six crates, three knuckles and two knives for 45 seconds:
+  nothing turns into NaN, and they get up to many different things
 - the console stays clean, and the single file fetches nothing
 
 Set `CHROMIUM_PATH` to use a Chromium you already have.

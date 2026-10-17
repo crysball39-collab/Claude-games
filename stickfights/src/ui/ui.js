@@ -8,25 +8,26 @@
      SPAWN  tap the world to place whatever was picked in the spawn menu
      ERASE  tap something to remove it
 
-   Pinching zooms and pans with any tool. Keyboard: 1 2 3 pick a thing to
-   spawn, H hand, X erase, Space pause, S slow motion, F follow, Tab spawn
+   Pinching zooms and pans with any tool. Keyboard: 1 2 3 4 pick a thing to
+   spawn (a stickman, knuckles, a crate, a knife), H hand, X erase, Space pause, S slow motion, F follow, Tab spawn
    menu, + and - zoom, 0 reset the camera, M sound, Delete removes whoever is
    selected, Esc closes things.
    ========================================================================== */
 import { Gestures } from '../core/input.js';
-import { drawStickman, drawCrateShape, drawKnuckleShape, INK } from '../game/draw.js';
-import { solve, makeJoints, P } from '../game/skeleton.js';
+import { drawStickman, drawCrateShape, drawKnuckleShape, drawKnifeShape, KNIFE_W, KNIFE_H, INK } from '../game/draw.js';
+import { solve, makeJoints, P, DIM } from '../game/skeleton.js';
 import { STAND } from '../game/clips.js';
 import { describeTraits } from '../game/people.js';
-import { PARTS } from '../game/health.js';
+import { BONE_LIST } from '../game/health.js';
 import { STYLE } from '../game/animator.js';
 import { LIMITS } from '../game/sandbox.js';
 import { clamp } from '../core/util.js';
 
 const KINDS = {
-  stickman: { name: 'Stickman', short: 'STICKMAN', plural: 'stickmen' },
-  knuckles: { name: 'Brass Knuckles', short: 'KNUCKLES', plural: 'brass knuckles' },
-  crate: { name: 'Crate', short: 'CRATE', plural: 'crates' },
+  stickman: { name: 'Stickman', short: 'STICKMAN', plural: 'stickmen', limit: 'people' },
+  knuckles: { name: 'Brass Knuckles', short: 'KNUCKLES', plural: 'brass knuckles', limit: 'knuckles' },
+  knife: { name: 'Combat Knife', short: 'KNIFE', plural: 'knives', limit: 'knives' },
+  crate: { name: 'Crate', short: 'CRATE', plural: 'crates', limit: 'crates' },
 };
 
 const OPTION_NAMES = {
@@ -35,7 +36,11 @@ const OPTION_NAMES = {
   chat: (t) => 'Talk to ' + t.name,
   help: (t) => 'Help ' + t.name,
   mourn: (t) => 'Mourn ' + t.name,
-  arm: () => 'Grab the brass knuckles',
+  arm: (t) => (t.kind === 'knife' ? 'Grab the knife' : 'Grab the brass knuckles'),
+  pullout: () => 'Pull the knife out',
+  exercise: () => 'Do some exercise',
+  throwKnife: (t) => 'Throw the knife at ' + t.name,
+  surrender: (t) => 'Put their hands up to ' + t.name,
   inspect: (t) => (t.kind === 'stickman' ? "Look at " + t.name + "'s body" : 'Look at the ' + t.name.toLowerCase()),
   play: () => 'Climb a crate',
   rest: () => 'Sit down and rest',
@@ -123,7 +128,8 @@ export class UI {
       return;
     }
     if (thing && thing.kind === 'stickman') this.select(thing === this.selected ? null : thing);
-    else if (thing) this.toast(thing.wornBy ? `${thing.name}, on ${thing.wornBy.name}'s hand` : thing.carriedBy ? `A crate, held up by ${thing.carriedBy.name}` : thing.name);
+    else if (thing) this.toast(thing.wornBy ? `${thing.name}, in ${thing.wornBy.name}'s hand` : thing.carriedBy ? `A crate, held up by ${thing.carriedBy.name}`
+      : thing.stuckIn && thing.stuckIn.person ? `${thing.name}, stuck in ${thing.stuckIn.person.name}. Drag it to pull it out` : thing.stuckIn ? `${thing.name}, stuck fast` : thing.name);
     else this.select(null);
   }
 
@@ -159,8 +165,9 @@ export class UI {
     if (k === 'stickman') made = sb.spawnStickman(x);
     else if (k === 'crate') made = sb.spawnCrate(x, Math.max(y, 0.4));
     else if (k === 'knuckles') made = sb.spawnKnuckles(x, Math.max(y, 0.12));
+    else if (k === 'knife') made = sb.spawnKnife(x, Math.max(y, 0.1), Math.random() * 0.4 - 0.2);
     if (!made) {
-      this.toast(`That's as many ${KINDS[k].plural} as the sandbox holds (${LIMITS[k === 'stickman' ? 'people' : k === 'crate' ? 'crates' : 'knuckles']})`);
+      this.toast(`That's as many ${KINDS[k].plural} as the sandbox holds (${LIMITS[KINDS[k].limit]})`);
       return null;
     }
     this.sound.pop(x);
@@ -187,6 +194,7 @@ export class UI {
   setTool(t) {
     this.tool = t;
     for (const b of document.querySelectorAll('.tool')) b.classList.toggle('active', b.dataset.tool === t);
+    this.drawIcon(document.querySelector('#tool-spawn .tool-icon'), this.spawnKind);
     if (t === 'spawn') this.hint(`Tap the world to place a ${KINDS[this.spawnKind].name}`);
     else if (t === 'erase') this.hint('Tap something to remove it');
     else this.hint('');
@@ -288,9 +296,13 @@ export class UI {
     }
     if (kind === 'stickman') {
       const j = solve(STAND, 1, makeJoints());
-      const s = (h * (card ? 0.78 : 0.95)) / 1.78;
-      ctx.setTransform(s, 0, 0, -s, w / 2, card ? h * 0.84 : h * 0.98);
-      drawStickman(ctx, j, { scale: 1, facing: 1, hair: 'tuft', face: { eyes: 'normal', brow: 0, mouth: 0.4, open: 0 }, ink: card ? INK : '#111' });
+      // the whole body on a card; from the hips up on the little tool button,
+      // where a whole one would be all hairlines
+      const s = card ? (h * 0.78) / 1.78 : h;
+      ctx.setTransform(s, 0, 0, -s, w / 2, card ? h * 0.84 : h + 0.84 * s);
+      // on the button it is drawn in the button's own colour, which flips when the tool is picked
+      const ink = card ? INK : getComputedStyle(cv).color || INK;
+      drawStickman(ctx, j, { scale: 1, facing: 1, hair: 'tuft', face: { eyes: 'normal', brow: 0, mouth: 0.4, open: 0 }, ink, far: ink });
     } else if (kind === 'crate') {
       const s = (h * (card ? 0.55 : 0.85)) / 0.78;
       ctx.setTransform(s, 0, 0, -s, w / 2, card ? h * 0.84 - (0.39 * s) : h / 2);
@@ -299,6 +311,11 @@ export class UI {
       const s = (w * (card ? 0.7 : 0.9)) / 0.26;
       ctx.setTransform(s, 0, 0, -s, w / 2, card ? h * 0.62 : h / 2);
       drawKnuckleShape(ctx, 0.26, 0.11, 0);
+    } else if (kind === 'knife') {
+      const s = (w * (card ? 0.82 : 0.95)) / KNIFE_W;
+      const a = card ? 0.5 : 0.7;
+      ctx.setTransform(s * Math.cos(a), -s * Math.sin(a), -s * Math.sin(a), -s * Math.cos(a), w / 2, card ? h * 0.52 : h / 2);
+      drawKnifeShape(ctx, KNIFE_W, KNIFE_H, 0);
     }
   }
 
@@ -414,14 +431,21 @@ export class UI {
     }
     if (p.weapon) {
       const s = document.createElement('div');
-      s.textContent = 'Wearing brass knuckles';
+      s.textContent = p.armedWith === 'knife' ? 'Holding a combat knife' : 'Wearing brass knuckles';
       cb.appendChild(s);
+    }
+    if (p.stuck.length) {
+      const s = document.createElement('div');
+      s.className = 'bad';
+      s.textContent = p.stuck.length > 1 ? `${p.stuck.length} knives stuck in them` : 'A knife stuck in them';
+      cb.prepend(s);
     }
     this.drawFigure(p);
 
     const ob = $('ins-options');
     ob.textContent = '';
-    const opts = p.dead || !p.conscious ? [] : b.options.slice(0, 4);
+    const helpless = !p.dead && p.conscious && (p.state === 'down' || p.state === 'crawl' || p.state === 'held' || p.state === 'thrown' || p.state === 'getup');
+    const opts = p.dead || !p.conscious || helpless ? [] : b.options.slice(0, 4);
     const top = opts.length ? Math.max(...opts.map((o) => o.score)) : 1;
     for (let i = 0; i < opts.length; i++) {
       const o = opts[i];
@@ -441,7 +465,8 @@ export class UI {
     if (!opts.length) {
       const row = document.createElement('div');
       row.className = 'thought';
-      row.textContent = p.dead ? 'Nothing, any more.' : 'Nothing. Out cold.';
+      row.textContent = p.dead ? 'Nothing, any more.' : !p.conscious ? 'Nothing. Out cold.'
+        : p.health.paralysed === 'all' ? 'Nothing. They cannot move.' : p.state === 'held' || p.state === 'thrown' ? 'Nothing. They are not in charge of themselves.' : 'Nothing until they are back on their feet.';
       ob.appendChild(row);
     }
 
@@ -481,35 +506,120 @@ export class UI {
     }
   }
 
-  /** A little stick figure, each part coloured by how it is doing. */
+  /**
+   * An X-ray of them: every bone, white while it is sound, warming to yellow
+   * and red as the part around it takes damage, and broken bones drawn
+   * snapped, in red.
+   */
   drawFigure(p) {
     const cv = this.$('ins-figure');
     const ctx = cv.getContext('2d');
     const h = p.health;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, cv.width, cv.height);
-    const col = (k) => {
-      if (p.dead) return '#666';
-      const part = h.parts[k];
-      if (part.broken) return '#8e1b1b';
-      const f = part.hp / part.max;
-      return f > 0.66 ? '#5fd35f' : f > 0.33 ? '#f0c040' : '#e04040';
+    const part = (k) => h.parts[k];
+    const col = (bone, partKey) => {
+      if (p.dead) return '#5d6a70';
+      if (h.bones[bone] && h.bones[bone].broken) return '#ff4a3d';
+      const f = part(partKey).hp / part(partKey).max;
+      return f > 0.66 ? '#e8f1f4' : f > 0.33 ? '#f3c95a' : '#f08a3c';
     };
-    const j = solve(P({ t: 0, aA: [24, 6], aB: [-24, 6], lA: [12, 0], lB: [-12, 0] }), 1, makeJoints());
-    const s = 54;
-    ctx.setTransform(s, 0, 0, -s, cv.width / 2, cv.height - 6);
+    const j = solve(P({ t: 0, aA: [22, 8], aB: [-22, 8], lA: [10, 0], lB: [-10, 0] }), 1, makeJoints());
+    const s = 70;
+    ctx.setTransform(s, 0, 0, -s, cv.width / 2, cv.height - 5);
     ctx.lineCap = 'round';
-    ctx.lineWidth = 0.09;
-    const seg = (a, b, c) => { ctx.strokeStyle = c; ctx.beginPath(); ctx.moveTo(j[a].x, j[a].y); ctx.lineTo(j[b].x, j[b].y); ctx.stroke(); };
-    seg('hip', 'kneeA', col('legA')); seg('kneeA', 'footA', col('legA'));
-    seg('hip', 'kneeB', col('legB')); seg('kneeB', 'footB', col('legB'));
-    seg('hip', 'neck', col('torso'));
-    seg('shoulder', 'elbowA', col('armA')); seg('elbowA', 'handA', col('armA'));
-    seg('shoulder', 'elbowB', col('armB')); seg('elbowB', 'handB', col('armB'));
-    ctx.strokeStyle = col('head');
+    const bone = (a, b, c, w = 0.065, broken = false) => {
+      ctx.strokeStyle = c;
+      ctx.lineWidth = w;
+      ctx.beginPath();
+      if (!broken) { ctx.moveTo(j[a].x, j[a].y); ctx.lineTo(j[b].x, j[b].y); ctx.stroke(); return; }
+      // snapped in the middle, the two halves out of line
+      const mx = (j[a].x + j[b].x) / 2, my = (j[a].y + j[b].y) / 2;
+      const dx = j[b].x - j[a].x, dy = j[b].y - j[a].y;
+      ctx.moveTo(j[a].x, j[a].y); ctx.lineTo(mx - dx * 0.04 + dy * 0.12, my - dy * 0.04 - dx * 0.12);
+      ctx.moveTo(mx + dx * 0.04 - dy * 0.1, my + dy * 0.04 + dx * 0.1); ctx.lineTo(j[b].x - dy * 0.14, j[b].y + dx * 0.14);
+      ctx.stroke();
+    };
+    const B = (id) => !!(h.bones[id] && h.bones[id].broken);
+    // legs and arms
+    for (const side of ['B', 'A']) {
+      bone('hip', 'knee' + side, col('femur' + side, 'leg' + side), 0.075, B('femur' + side));
+      bone('knee' + side, 'foot' + side, col('tibia' + side, 'leg' + side), 0.065, B('tibia' + side));
+      bone('foot' + side, 'toe' + side, col('tibia' + side, 'leg' + side), 0.05);
+      bone('shoulder', 'elbow' + side, col('humerus' + side, 'arm' + side), 0.065, B('humerus' + side));
+      bone('elbow' + side, 'hand' + side, col('forearm' + side, 'arm' + side), 0.055, B('forearm' + side));
+    }
+    // the spine, as vertebrae
+    const sc = col('spine', 'torso');
+    ctx.fillStyle = sc;
+    for (let i = 0; i < 9; i++) {
+      const t = i / 8;
+      const x = j.hip.x + (j.neck.x - j.hip.x) * t, y = j.hip.y + (j.neck.y - j.hip.y) * t;
+      ctx.fillRect(x - 0.035, y - 0.02, 0.07, 0.034);
+    }
+    if (B('spine')) { ctx.strokeStyle = '#ff4a3d'; ctx.lineWidth = 0.035; ctx.beginPath(); ctx.moveTo(j.hip.x - 0.08, j.chest.y - 0.08); ctx.lineTo(j.hip.x + 0.08, j.chest.y - 0.02); ctx.stroke(); }
+    // the ribcage: four pairs of ribs curving round from the spine
+    ctx.strokeStyle = col('ribs', 'torso');
+    ctx.lineWidth = 0.03;
+    for (let i = 0; i < 4; i++) {
+      const y = j.chest.y + 0.18 - i * 0.055;
+      const w = 0.1 + i * 0.012;
+      for (const d of [-1, 1]) {
+        if (B('ribs') && i === 1 && d > 0) continue;
+        ctx.beginPath();
+        ctx.moveTo(j.chest.x, y);
+        ctx.quadraticCurveTo(j.chest.x + d * w * 1.2, y + 0.01, j.chest.x + d * w, y - 0.05);
+        ctx.stroke();
+      }
+    }
+    // the pelvis
+    ctx.strokeStyle = col('pelvis', 'torso');
+    ctx.lineWidth = 0.04;
     ctx.beginPath();
-    ctx.arc(j.head.x, j.head.y, 0.155, 0, Math.PI * 2);
+    ctx.moveTo(j.hip.x - 0.13, j.hip.y + 0.08);
+    ctx.quadraticCurveTo(j.hip.x, j.hip.y - 0.1, j.hip.x + 0.13, j.hip.y + 0.08);
+    if (B('pelvis')) ctx.moveTo(j.hip.x + 0.02, j.hip.y + 0.04), ctx.lineTo(j.hip.x - 0.03, j.hip.y - 0.06);
     ctx.stroke();
+    // the neck and the skull
+    ctx.strokeStyle = col('neck', 'head');
+    ctx.lineWidth = 0.05;
+    ctx.beginPath();
+    ctx.moveTo(j.neck.x, j.neck.y);
+    ctx.lineTo(j.head.x, j.head.y - DIM.headR * 0.9);
+    ctx.stroke();
+    if (B('neck')) {
+      ctx.strokeStyle = '#ff4a3d';
+      ctx.lineWidth = 0.03;
+      ctx.beginPath(); ctx.moveTo(j.neck.x - 0.06, j.neck.y + 0.04); ctx.lineTo(j.neck.x + 0.06, j.neck.y + 0.08); ctx.stroke();
+    }
+    ctx.strokeStyle = col('skull', 'head');
+    ctx.lineWidth = 0.04;
+    ctx.beginPath();
+    ctx.arc(j.head.x, j.head.y, DIM.headR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = col('skull', 'head');
+    ctx.beginPath();
+    ctx.arc(j.head.x - 0.05, j.head.y + 0.01, 0.03, 0, Math.PI * 2);
+    ctx.arc(j.head.x + 0.05, j.head.y + 0.01, 0.03, 0, Math.PI * 2);
+    ctx.fill();
+    if (B('skull')) {
+      ctx.strokeStyle = '#ff4a3d';
+      ctx.lineWidth = 0.025;
+      ctx.beginPath();
+      ctx.moveTo(j.head.x - 0.08, j.head.y + 0.12); ctx.lineTo(j.head.x - 0.02, j.head.y + 0.06); ctx.lineTo(j.head.x + 0.04, j.head.y + 0.13);
+      ctx.stroke();
+    }
+    // knives in them, where they are
+    if (p.stuck.length) {
+      ctx.fillStyle = '#ff4a3d';
+      for (const e of p.stuck) {
+        const [a, b] = [['hip', 'chest'], ['chest', 'neck'], ['neck', 'head'], ['shoulder', 'elbowA'], ['elbowA', 'handA'], ['shoulder', 'elbowB'], ['elbowB', 'handB'],
+          ['hip', 'kneeA'], ['kneeA', 'footA'], ['footA', 'toeA'], ['hip', 'kneeB'], ['kneeB', 'footB'], ['footB', 'toeB']][e.bone];
+        const x = j[a].x + (j[b].x - j[a].x) * e.t, y = j[a].y + (j[b].y - j[a].y) * e.t;
+        ctx.beginPath(); ctx.arc(x, y, 0.045, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    void BONE_LIST;
   }
 
   /* -------------------------------------------------------------------------- */
@@ -525,6 +635,7 @@ export class UI {
       'set-thoughts': (v) => { this.renderer.opts.thoughts = v; },
       'set-blood': (v) => { this.sb.settings.blood = v; },
       'set-flipbook': (v) => { STYLE.flipbook = v; },
+      'set-ragdoll': (v) => { this.sb.settings.ragdoll = v; },
     };
     for (const [id, apply] of Object.entries(map)) {
       const el = $(id);
@@ -554,7 +665,7 @@ export class UI {
     window.addEventListener('keydown', (e) => {
       if (!this.started || e.target.tagName === 'INPUT') return;
       const k = e.key;
-      if (k === '1' || k === '2' || k === '3') { this.setSpawnKind(['stickman', 'knuckles', 'crate'][+k - 1]); this.setTool('spawn'); }
+      if (k === '1' || k === '2' || k === '3' || k === '4') { this.setSpawnKind(['stickman', 'knuckles', 'crate', 'knife'][+k - 1]); this.setTool('spawn'); }
       else if (k === 'h' || k === 'H') this.setTool('hand');
       else if (k === 'x' || k === 'X') this.setTool('erase');
       else if (k === ' ') { e.preventDefault(); this.togglePause(); }
@@ -594,7 +705,7 @@ export class UI {
     if (this.tool === 'spawn' && this.hover && !this.hand.active) {
       const w = this.world(this.hover.x, this.hover.y);
       const y = this.spawnKind === 'stickman' ? this.sb.surfaceBelow(w.x, 0.15, 100).y
-        : Math.max(w.y, this.spawnKind === 'crate' ? 0.39 : 0.04);
+        : Math.max(w.y, this.spawnKind === 'crate' ? 0.39 : this.spawnKind === 'knife' ? 0.03 : 0.04);
       ghost = { kind: this.spawnKind, x: w.x, y };
     }
     return {

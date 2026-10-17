@@ -23,7 +23,7 @@
     <div class="tagline">a sandbox of stickmen with minds of their own</div>
     <button id="btn-play" class="big-btn">PLAY</button>
     <div class="how">
-      <div><b>Spawn</b> &mdash; open the menu, pick a Stickman, Brass Knuckles or a Crate, then tap the world.</div>
+      <div><b>Spawn</b> &mdash; open the menu, pick a Stickman, Brass Knuckles, a Combat Knife or a Crate, then tap the world.</div>
       <div><b>Drag</b> anything to move it. Let go while moving to throw it.</div>
       <div><b>Tap</b> a stickman to see what they think and feel.</div>
     </div>
@@ -94,7 +94,7 @@
       <div class="ins-section">BODY</div>
       <div id="ins-vitals"></div>
       <div class="ins-body">
-        <canvas id="ins-figure" width="96" height="120"></canvas>
+        <canvas id="ins-figure" width="104" height="136"></canvas>
         <div class="ins-conds" id="ins-conds"></div>
       </div>
       <div class="ins-section">WEIGHING UP</div>
@@ -131,6 +131,10 @@
       <canvas class="card-icon" width="72" height="72"></canvas>
       <span class="card-text"><b>Brass Knuckles</b><small>Punches with them land twice as hard, and cut.</small></span>
     </button>
+    <button class="card" data-spawn="knife">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Combat Knife</b><small>Stabs and slashes. Deep cuts bleed fast. Throw it point first and it sticks.</small></span>
+    </button>
     <div class="cat">OBJECTS</div>
     <button class="card" data-spawn="crate">
       <canvas class="card-icon" width="72" height="72"></canvas>
@@ -153,7 +157,9 @@
     <label class="setting"><span>Speech bubbles</span><input type="checkbox" id="set-bubbles" checked /></label>
     <label class="setting"><span>Thought bubbles</span><input type="checkbox" id="set-thoughts" checked /></label>
     <label class="setting"><span>Blood</span><input type="checkbox" id="set-blood" checked /></label>
+    <label class="setting"><span>Ragdoll physics</span><input type="checkbox" id="set-ragdoll" checked /></label>
     <label class="setting"><span>Flipbook animation</span><input type="checkbox" id="set-flipbook" /></label>
+    <p class="setting-note">Ragdoll physics takes over whenever a stickman is not in charge of their own body - knocked down, knocked out, dead, picked up or thrown. Off, those are animated too.</p>
     <p class="setting-note">Flipbook shows only the hand-drawn keys of every animation, each held and then cut to the next, with nothing in between.</p>
     <button id="btn-home" class="small-btn wide">Reset the camera</button>
   </div>

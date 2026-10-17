@@ -46,7 +46,7 @@ window.draw = (sheet) => {
       const j = solve(f.p, 1, makeJoints());
       ctx.save();
       ctx.translate(ox, oy); ctx.scale(ppm, -ppm);
-      drawStickman(ctx, j, { scale: 1, facing: 1, hair: 'tuft', weapon: 'A',
+      drawStickman(ctx, j, { scale: 1, facing: 1, hair: 'tuft', weapon: name.startsWith('knife') || name === 'stab' || name === 'slash' ? 'knife' : 'knuckles',
         face: { eyes: 'normal', brow: 0, mouth: 0.3, open: 0 } });
       ctx.restore();
     });

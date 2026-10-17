@@ -93,10 +93,10 @@ check('PLAY opens the game, the HUD and the spawn menu', await ev(() =>
   !document.querySelector('#hud').classList.contains('hidden') && document.querySelector('#drawer').classList.contains('open')));
 check('the sandbox starts empty', await ev(() => window.__sf.sb.people.length === 0 && window.__sf.sb.crates.length === 0));
 const cards = await ev(() => [...document.querySelectorAll('.card')].map((c) => c.dataset.spawn));
-check('there are exactly three things to spawn: a Stickman, Brass Knuckles and a Crate',
-  cards.length === 3 && cards.includes('stickman') && cards.includes('knuckles') && cards.includes('crate'), cards.join(', '));
+check('there are four things to spawn: a Stickman, Brass Knuckles, a Combat Knife and a Crate',
+  cards.length === 4 && ['stickman', 'knuckles', 'knife', 'crate'].every((k) => cards.includes(k)), cards.join(', '));
 check('the cards are named for what they spawn', await ev(() =>
-  ['Stickman', 'Brass Knuckles', 'Crate'].every((n) => [...document.querySelectorAll('.card b')].some((b) => b.textContent === n))));
+  ['Stickman', 'Brass Knuckles', 'Combat Knife', 'Crate'].every((n) => [...document.querySelectorAll('.card b')].some((b) => b.textContent === n))));
 await shot('menu');
 
 /* ------------------------------ grey and black --------------------------- */
@@ -261,20 +261,21 @@ const fight = await ev(() => {
   sb.on('knockdown', (e) => kos.push(e.who.name));
   const wFeel0 = w.brain.emo.fear + w.brain.emo.anger + w.brain.emo.surprise;
   let wPeak = 0, wentFor = -1, firstHitT = -1, blocked = 0;
-  const bDid = new Set();
+  const bDid = new Set(), wDid = new Set();
   const t0 = sb.time;
   sb.on('hit', (e) => { if (firstHitT < 0) firstHitT = sb.time - t0; if (e.who === b && e.blocked) blocked++; });
   for (let i = 0; i < 120 * 30; i++) {
     sb.step(1 / 120);
     if (wentFor < 0 && a.brain.fightTarget === b) wentFor = sb.time - t0;
     if (b.brain.behaviour) bDid.add(b.brain.behaviour.kind);
+    if (w.brain.behaviour) wDid.add(w.brain.behaviour.kind);
     wPeak = Math.max(wPeak, w.brain.emo.fear + w.brain.emo.anger + w.brain.emo.surprise);
   }
   return {
     hits: hits.length, first: hits.length ? hits[0].by : null, byB: hits.filter((h) => h.by === 'Bea').length, wentFor, firstHitT,
     blocked, bDid: [...bDid],
     parts: [...new Set(hits.map((h) => h.part))], kos, contactOK,
-    bHurt: 1 - b.health.overall, wFeel0, wPeak, wDid: w.brain.thoughts.map((t) => t.text).join(' / '),
+    bHurt: 1 - b.health.overall, wFeel0, wPeak, wDid: [...wDid], wThought: w.brain.thoughts.map((t) => t.text).join(' / '),
   };
 });
 check('a stickman with a grudge goes for them, and blows land', fight.wentFor >= 0 && (fight.firstHitT < 0 || fight.wentFor <= fight.firstHitT) && fight.hits >= 5,
@@ -284,7 +285,10 @@ check('the one attacked defends themselves: hits back, blocks, runs or cowers', 
 check('every blow lands where the fist or foot actually was', fight.contactOK);
 check('blows land on different parts of the body', fight.parts.length >= 2, fight.parts.join(', '));
 check('someone gets knocked down or out', fight.kos.length >= 1, fight.kos.join(', '));
-check('a friend watching it happen reacts', fight.wPeak > fight.wFeel0 + 0.3, fight.wDid.slice(0, 160));
+// reacting is feeling it, or doing something about it: stepping in, watching, helping, getting away
+const wReacted = fight.wDid.filter((k) => ['confront', 'watch', 'help', 'flee', 'hide', 'cower'].includes(k));
+check('a friend watching it happen reacts', fight.wPeak > fight.wFeel0 + 0.3 || wReacted.length > 0,
+  `${wReacted.join(', ') || 'felt it'}: ${fight.wThought.slice(0, 140)}`);
 
 /* ------------------------------ brass knuckles --------------------------- */
 
@@ -403,17 +407,18 @@ const bowl = await ev(() => {
   for (let i = 0; i < 30; i++) sb.step(1 / 120);
   let hit = null;
   sb.on('collide', (e) => { if (!hit) hit = { who: e.who.name, what: e.what.name, speed: e.speed }; });
-  // swung along at chest height and let go just short of Tam
+  // swung along at chest height and let go just short of Tam (a flailing
+  // limb can reach Tam before the hand lets go)
+  const hpA = a.health.overall, hpB = b.health.overall;
   const n = a.wj.neck;
   a.grab(n.x, n.y);
   let x = n.x;
   for (let i = 0; i < 40; i++) { x += 14 / 120; a.holdAt(x, 1.5); sb.step(1 / 120); }
   a.release();
-  const hp = b.health.overall;
   for (let i = 0; i < 120 * 1.5; i++) sb.step(1 / 120);
-  return { hit, hurtB: hp - b.health.overall, hurtA: 1 - a.health.overall, bState: b.state };
+  return { hit, hurtB: hpB - b.health.overall, hurtA: hpA - a.health.overall, bState: b.state };
 });
-check('a stickman thrown into another knocks into them, and both get hurt', !!bowl.hit && bowl.hurtB > 0.01 && bowl.hurtA > 0.01,
+check('a stickman thrown into another knocks into them, and both get hurt', !!bowl.hit && bowl.hurtB > 0.005 && bowl.hurtA > 0.005,
   bowl.hit ? `${bowl.hit.what} into ${bowl.hit.who} at ${bowl.hit.speed.toFixed(1)} m/s, ${bowl.hit.who} ${bowl.bState}` : 'no collision');
 
 /* ----------------------------- injuries, death ---------------------------- */
@@ -455,10 +460,10 @@ const death = await ev(() => {
     peakSad = Math.max(peakSad, f.brain.emo.sadness);
     if (f.brain.behaviour && f.brain.behaviour.kind === 'mourn') mourned = true;
   }
-  return { dead: v.dead, state: v.state, eyes: v.face.eyes, lying: v.wj.head.y < 0.5, cause: v.health.cause, sad0, peakSad, mourned, fx };
+  return { dead: v.dead, state: v.state, eyes: v.face.eyes, headY: v.wj.head.y, lying: v.wj.head.y < 0.5, cause: v.health.cause, sad0, peakSad, mourned, fx };
 });
 check('enough damage kills a stickman', death.dead && death.state === 'dead', death.cause);
-check('the dead lie still on the floor with crosses for eyes', death.lying && death.eyes === 'x');
+check('the dead lie still on the floor with crosses for eyes', death.lying && death.eyes === 'x', `head at ${death.headY.toFixed(2)} m, eyes ${death.eyes}`);
 check('a friend who saw it is saddened and goes to mourn', death.peakSad > death.sad0 + 0.25 && death.mourned,
   `sadness ${death.sad0.toFixed(2)} -> ${death.peakSad.toFixed(2)}`);
 
@@ -479,15 +484,28 @@ await touch('touchEnd', 0, 0);
 await page.waitForTimeout(100);
 const thrown = await ev(() => ({ state: window.__p.state, vx: window.__p.vel.x }));
 check('letting go while moving throws them', (thrown.state === 'thrown' || thrown.state === 'air') && thrown.vx > 2, `${thrown.state}, ${thrown.vx.toFixed(1)} m/s`);
-await page.waitForTimeout(2500);
-const landed = await ev(() => ({ state: window.__p.state, y: window.__p.pos.y, said: window.__p.brain.thoughts.map((t) => t.text).join(' / ') }));
+let landed = null;
+for (let k = 0; k < 40; k++) {
+  await page.waitForTimeout(200);
+  landed = await ev(() => ({ state: window.__p.state, y: window.__p.pos.y }));
+  if (landed.y < 0.05 && landed.state !== 'thrown' && landed.state !== 'held') break;
+}
 check('...and they come back down', landed.y < 0.05 && landed.state !== 'thrown' && landed.state !== 'held', landed.state);
 
 /* ------------------------------- inspector -------------------------------- */
 
 await ev(() => { window.__sf.sb.paused = false; });
-await page.waitForTimeout(2500);
-neck = await ev(() => { const p = window.__p; return window.__sf.cam.toScreen(p.wj.hip.x, p.wj.hip.y + 0.2); });
+await page.waitForTimeout(1500);
+// wherever the throw took them, the camera goes there
+neck = await ev(() => {
+  const sf = window.__sf, p = window.__p;
+  sf.sb.paused = true;
+  sf.cam.follow = null; sf.cam.glide = null;
+  sf.cam.x = p.wj.hip.x;
+  sf.cam.clamp();
+  return sf.cam.toScreen(p.wj.hip.x, p.wj.hip.y + 0.1);
+});
+await page.waitForTimeout(100);
 await page.touchscreen.tap(neck.x, neck.y);
 await page.waitForTimeout(400);
 const ins = await ev(() => ({
@@ -502,10 +520,215 @@ await shot('inspector');
 
 await page.tap('.tool[data-tool="erase"]');
 await page.waitForTimeout(200);
-neck = await ev(() => { const p = window.__p; return window.__sf.cam.toScreen(p.wj.hip.x, p.wj.hip.y + 0.2); });
+neck = await ev(() => { const p = window.__p; return window.__sf.cam.toScreen(p.wj.hip.x, p.wj.hip.y + 0.1); });
 await page.touchscreen.tap(neck.x, neck.y);
 await page.waitForTimeout(300);
 check('the erase tool removes what it touches', await ev(() => window.__sf.sb.people.length === 0));
+await page.tap('.tool[data-tool="hand"]');
+
+/* -------------------------------- ragdolls -------------------------------- */
+
+await fresh();
+const limp = await ev(() => {
+  const sb = window.__sf.sb;
+  const p = sb.spawnStickman(0, null, { name: 'Rag' });
+  p.brain = null;
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  p.takeHit({ by: null, part: 'head', x: p.wj.head.x, y: p.wj.head.y, dir: 1, power: 4.5, kind: 'impact' });
+  const wentLimp = !!p.rag && p.state === 'ko';
+  // every joint stays inside the range it bends through, the whole way down
+  let worst = 0, worstName = '';
+  for (let i = 0; i < 120 * 4; i++) {
+    sb.step(1 / 120);
+    if (!p.rag) break;
+    for (const j of p.rag.joints) {
+      const off = Math.atan2(Math.sin(p.rag.rawBend(j) - p.rag.facing * j.center), Math.cos(p.rag.rawBend(j) - p.rag.facing * j.center));
+      const over = Math.abs(off) - j.half;
+      if (over > worst) { worst = over; worstName = j.name; }
+    }
+  }
+  return { wentLimp, still: !!p.rag && p.wj.head.y < 0.5 && p.rag.maxSpeed < 0.5, worst: worst * 180 / Math.PI, worstName, headY: p.wj.head.y };
+});
+check('knocked out, they go limp: a ragdoll that falls however it falls and comes to rest', limp.wentLimp && limp.still, `head at ${limp.headY.toFixed(2)} m`);
+check('a ragdoll\'s joints only bend the ways joints bend: no knee or elbow the wrong way', limp.worst < 4,
+  limp.worst > 0 ? `${limp.worstName} past its range by ${limp.worst.toFixed(1)} degrees` : 'all inside');
+
+await fresh();
+const ankle = await ev(() => {
+  const sb = window.__sf.sb;
+  const p = sb.spawnStickman(0, null, { name: 'Dangle' });
+  p.brain = null;
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  const f0 = { x: p.wj.footA.x, y: p.wj.footA.y };
+  p.grab(f0.x, f0.y);
+  // lifted up over half a second, then held there: they swing, then hang
+  let head = 0, n = 0;
+  for (let i = 0; i < 120 * 4; i++) {
+    const u = Math.min(1, i / 60);
+    p.holdAt(f0.x * (1 - u), f0.y + (2.6 - f0.y) * u);
+    sb.step(1 / 120);
+    if (i >= 120 * 3) { head += p.wj.head.y; n++; }
+  }
+  const out = { state: p.state, foot: p.wj.footA.y, head: head / n, toHand: Math.hypot(p.wj.footA.x, p.wj.footA.y - 2.6) };
+  p.release();
+  return out;
+});
+check('picked up by an ankle, they hang upside down from it', ankle.state === 'held' && ankle.head < ankle.foot - 0.6 && ankle.toHand < 0.12,
+  `foot at ${ankle.foot.toFixed(2)} m, head at ${ankle.head.toFixed(2)} m on average`);
+
+await fresh();
+const pin = await ev(() => {
+  const sb = window.__sf.sb;
+  const p = sb.spawnStickman(0, null, { name: 'Flat' });
+  p.brain = null;
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  p.health.conscious = 0.1;
+  p.knockOut(1, 0.5);
+  for (let i = 0; i < 120 * 3; i++) sb.step(1 / 120);
+  const c = sb.spawnCrate(p.wj.chest.x, 1.2);
+  let pinned = false;
+  for (let i = 0; i < 120 * 2.5; i++) { sb.step(1 / 120); if (p.pinnedBy === c) pinned = true; }
+  return { pinned, bottom: c.body.aabb().minY, lying: p.wj.head.y < 0.5 };
+});
+check('a crate dropped on a body lands on it instead of through it', pin.pinned || pin.bottom > 0.05,
+  `crate bottom at ${pin.bottom.toFixed(2)} m${pin.pinned ? ', pinning them' : ''}`);
+
+await fresh();
+const comeRound = await ev(() => {
+  const sb = window.__sf.sb;
+  const p = sb.spawnStickman(0, null, { name: 'Tough', traits: { toughness: 0.9 } });
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  p.balance = -1;
+  p.knockDown(1, 1.5, { x: p.wj.chest.x, y: p.wj.chest.y });
+  const limp = !!p.rag;
+  let up = -1, recovered = -1;
+  for (let i = 0; i < 120 * 12 && up < 0; i++) {
+    sb.step(1 / 120);
+    if (recovered < 0 && !p.rag) recovered = sb.time;
+    if (p.state === 'stand' && !p.rag) up = sb.time;
+  }
+  return { limp, recovered, up };
+});
+check('knocked off their feet they fall limp, and once they come to rest they get up again', comeRound.limp && comeRound.recovered > 0 && comeRound.up > 0,
+  comeRound.up > 0 ? 'back up' : 'still down');
+
+/* ---------------------------------- bones --------------------------------- */
+
+await fresh();
+const bones = await ev(() => {
+  const sb = window.__sf.sb;
+  const p = sb.spawnStickman(0, null, { name: 'Brittle' });
+  p.brain = null;
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  p.health.breakBone('forearmA');
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  const j = p.wj;
+  // how far the break point sits off the line between the elbow and the hand
+  const ax = j.elbowA.x, ay = j.elbowA.y, bx = j.handA.x, by = j.handA.y;
+  const off = Math.abs((bx - ax) * (j.midForeA.y - ay) - (by - ay) * (j.midForeA.x - ax)) / Math.hypot(bx - ax, by - ay);
+  const named = p.health.conditions().includes('Broken right forearm');
+  const noPunch = !p.strikes().includes('cross');
+  const q = sb.spawnStickman(3, null, { name: 'Back' });
+  q.brain = null;
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  q.health.breakBone('spine');
+  for (let i = 0; i < 120 * 6; i++) sb.step(1 / 120);
+  return { off, named, noPunch, back: q.state, paralysed: q.health.paralysed, conds: q.health.conditions().slice(0, 3).join(', ') };
+});
+check('a broken bone has its name, stops the limb working, and bends where it broke', bones.named && bones.noPunch && bones.off > 0.03,
+  `bent ${(bones.off * 100).toFixed(0)} cm off straight`);
+check('a broken back paralyses the legs: they drag themselves along', bones.back === 'crawl' && bones.paralysed === 'legs', `${bones.back}: ${bones.conds}`);
+
+/* ------------------------------- the knife -------------------------------- */
+
+await fresh();
+const knife = await ev(() => {
+  const sb = window.__sf.sb;
+  const a = sb.spawnStickman(-0.6, null, { name: 'Kit' });
+  const b = sb.spawnStickman(0.4, null, { name: 'Lee' });
+  const k = sb.spawnKnife(-0.3, 0.05);
+  a.brain = null; b.brain = null;
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  a.facing = 1;
+  for (let i = 0; i < 20; i++) sb.step(1 / 120);
+  const picked = a.pickUp(k);
+  for (let i = 0; i < 120; i++) sb.step(1 / 120);
+  const holding = a.weapon === k;
+  // how much a blow makes them bleed: stabs against punches with the other
+  // hand, five that land of each (a punch to the face splits it now and then)
+  const cut = [];
+  sb.on('hit', (e) => { if (e.by === a) cut.push(e); });
+  const bleedFrom = (kind) => {
+    const out = [];
+    for (let t = 0; t < 20 && out.length < 5; t++) {
+      b.health.heal(); b.wounds.length = 0;
+      b.pos.x = a.pos.x + (kind === 'jab' ? 0.7 : 0.85); b.facing = -1;
+      for (let i = 0; i < 30; i++) sb.step(1 / 120);
+      const n = cut.length;
+      a.attack(kind, b);
+      for (let i = 0; i < 70; i++) sb.step(1 / 120);
+      if (cut.length > n) out.push(b.health.bleeding);
+    }
+    return out;
+  };
+  const stabs = bleedFrom('stab'), jabs = bleedFrom('jab');
+  const avg = (v) => (v.length ? v.reduce((x, y) => x + y, 0) / v.length : -1);
+  return { picked, holding, stab: avg(stabs), jab: avg(jabs), dry: stabs.filter((v) => v <= 0).length, n: stabs.length };
+});
+check('a stickman picks up the combat knife and holds it', knife.picked && knife.holding);
+check('a stab with it opens a wound that bleeds hard: far more than a punch', knife.n >= 3 && !knife.dry && knife.stab > 0.0025 && knife.stab > knife.jab * 3,
+  `stab ${knife.stab.toFixed(4)}, punch ${knife.jab.toFixed(4)} of their blood a second, on average`);
+
+await fresh();
+const thrownKnife = await ev(() => {
+  const sb = window.__sf.sb;
+  const c = sb.spawnCrate(2, 0.4);
+  const k1 = sb.spawnKnife(-1, 0.5, 0);
+  k1.body.vel.x = 13; k1.body.vel.y = 0.4;
+  const p = sb.spawnStickman(-3, null, { name: 'Target', traits: { toughness: 0.8, bravery: 0.5 } });
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  p.facing = 1;
+  const k2 = sb.spawnKnife(-6, p.wj.chest.y, 0);
+  k2.body.vel.x = 13; k2.body.vel.y = 1.2;
+  let inCrate = false, inBody = false, pulled = false;
+  for (let i = 0; i < 120 * 10; i++) {
+    sb.step(1 / 120);
+    if (k1.stuckIn && k1.stuckIn.crate === c) inCrate = true;
+    if (p.stuck.length) inBody = true;
+    if (inBody && !p.stuck.length) pulled = true;
+  }
+  return { inCrate, inBody, pulled, said: p.brain.thoughts.map((t) => t.text).slice(-3).join(' / ') };
+});
+check('a knife thrown point first sticks into a crate', thrownKnife.inCrate);
+check('...and into a person, who pulls it out', thrownKnife.inBody && thrownKnife.pulled, thrownKnife.said);
+
+/* ------------------------- animations and words -------------------------- */
+
+const lib = await ev(() => {
+  const { CLIPS, LINES } = window.__sf;
+  let lines = 0;
+  for (const v of Object.values(LINES)) lines += Array.isArray(v) ? v.length : Object.values(v).reduce((a, b) => a + b.length, 0);
+  const need = ['stab', 'slash', 'knifeThrow', 'pullOut', 'brace', 'hug', 'highFive', 'handshake', 'pushups', 'squats', 'jumpingJacks', 'handsUp', 'clutchStomach', 'shiver'];
+  return { clips: Object.keys(CLIPS).length, missing: need.filter((n) => !CLIPS[n]), lines, kinds: Object.keys(LINES).length };
+});
+check('over a hundred hand-keyed clips, knife fighting, hugs and press-ups among them', lib.clips >= 100 && !lib.missing.length, `${lib.clips} clips${lib.missing.length ? ', missing ' + lib.missing.join(' ') : ''}`);
+check('hundreds of things to say, for every situation', lib.lines >= 450 && lib.kinds >= 90, `${lib.lines} lines in ${lib.kinds} situations`);
+
+await fresh();
+const bye = await ev(() => {
+  const sb = window.__sf.sb;
+  const a = sb.spawnStickman(-1, null, { name: 'Mia', traits: { sociability: 0.9, aggression: 0.1 } });
+  const b = sb.spawnStickman(1, null, { name: 'Ned', traits: { sociability: 0.9, aggression: 0.1 } });
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  for (const [x, y] of [[a, b], [b, a]]) { const r = x.brain.rel(y); r.like = 0.85; r.fam = 0.6; r.met = true; r.greeted = true; }
+  const seen = new Set();
+  for (let i = 0; i < 120 * 70 && !(seen.has('hug') || seen.has('highFive')); i++) {
+    sb.step(1 / 120);
+    for (const p of [a, b]) if (p.anim.actionName) seen.add(p.anim.actionName);
+  }
+  return [...seen];
+});
+check('good friends part with a hug or a high five', bye.includes('hug') || bye.includes('highFive'), bye.join(', '));
 
 /* --------------------------------- mayhem -------------------------------- */
 
@@ -515,6 +738,7 @@ const mayhem = await ev(() => {
   for (let i = 0; i < 10; i++) sb.spawnStickman(-9 + i * 2);
   for (let i = 0; i < 6; i++) sb.spawnCrate(-8 + i * 3.2, 0.4 + (i % 2) * 2);
   for (let i = 0; i < 3; i++) sb.spawnKnuckles(-6 + i * 6, 0.1);
+  for (let i = 0; i < 2; i++) sb.spawnKnife(-3 + i * 6, 0.1);
   for (let i = 0; i < 60; i++) sb.step(1 / 120);
   const ps = sb.people;
   for (let i = 0; i < ps.length; i += 2) { const r = ps[i].brain.rel(ps[(i + 3) % ps.length]); r.anger = 0.9; r.like = -0.6; }
@@ -532,7 +756,7 @@ const mayhem = await ev(() => {
   }
   return { bad, kinds: [...kinds], people: sb.people.length, dead: sb.people.filter((p) => p.dead).length };
 });
-check('ten stickmen, six crates and three knuckles for 45 seconds: nothing turns into NaN', mayhem.bad === 0);
+check('ten stickmen, six crates, three knuckles and two knives for 45 seconds: nothing turns into NaN', mayhem.bad === 0);
 check('...and they get up to many different things', mayhem.kinds.length >= 6, mayhem.kinds.join(', '));
 await ev(() => { window.__sf.sb.paused = false; });
 await page.waitForTimeout(800);

@@ -13,6 +13,8 @@ import { Hand } from './game/hand.js';
 import { STYLE } from './game/animator.js';
 import { Sound } from './core/audio.js';
 import { UI } from './ui/ui.js';
+import { CLIPS } from './game/clips.js';
+import { LINES } from './game/lines.js';
 
 const canvas = document.getElementById('view');
 const sb = new Sandbox();
@@ -40,7 +42,10 @@ resize();
 
 const SCREAMS = new Set(['panic', 'hurtBig', 'flee', 'grabbed', 'grabbedAgain', 'broken']);
 sb.on('hit', (e) => {
-  if (e.kind === 'impact' && e.object && e.object.kind === 'stickman') {
+  if (e.weapon === 'knife') {
+    if (e.deep) sound.stab(e.power, e.x); else sound.slash(e.x);
+    if (!e.blocked) sound.punch(e.power * 0.35, false, e.x);
+  } else if (e.kind === 'impact' && e.object && e.object.kind === 'stickman') {
     sound.punch(e.power * 0.7, false, e.x);
   } else if (e.kind === 'impact') {
     sound.wood(e.power * 3, e.x);
@@ -50,11 +55,14 @@ sb.on('hit', (e) => {
   }
   if (!e.blocked && (e.power > 1.7 || e.fatal)) cam.shake(Math.min(0.6, 0.15 + e.power * 0.08));
 });
-sb.on('swing', (e) => sound.whoosh(e.who.pos.x, e.kind === 'cross' || e.kind === 'kick' || e.kind === 'uppercut'));
+sb.on('swing', (e) => {
+  if (e.kind === 'slash') sound.slash(e.who.pos.x);
+  else sound.whoosh(e.who.pos.x, e.kind === 'cross' || e.kind === 'kick' || e.kind === 'uppercut' || e.kind === 'stab');
+});
 sb.on('throw', (e) => sound.whoosh(e.who.pos.x, true));
 sb.on('clatter', (e) => {
   if (e.what.kind === 'crate') sound.wood(e.speed, e.x);
-  else sound.clink(e.speed, e.x);
+  else sound.clink(e.speed * (e.what.kind === 'knife' ? 0.8 : 1), e.x);
   if (e.what.kind === 'crate' && e.speed > 9) cam.shake(0.15);
 });
 sb.on('thud', (e) => sound.thud(e.speed, e.x));
@@ -62,6 +70,9 @@ sb.on('collide', (e) => { sound.thud(e.speed * 0.8, e.x); cam.shake(Math.min(0.4
 sb.on('land', (e) => { if (e.speed > 5) sound.thud(e.speed * 0.5, e.who.pos.x); });
 sb.on('knock', (e) => sound.wood(e.loud ? 5 : 2.5, e.who.pos.x));
 sb.on('break', (e) => sound.crack(e.who.pos.x));
+sb.on('stuck', (e) => { if (e.into && e.into.kind === 'stickman') sound.stab(1.5, e.x); else sound.thunk(e.x); });
+sb.on('pullout', (e) => sound.stab(0.6, e.x));
+sb.on('clap', (e) => sound.clap(e.x, e.soft));
 sb.on('death', (e) => sound.death(e.who.voice, e.who.pos.x));
 sb.on('speech', (e) => {
   sound.voice(e.text, e.who.voice, e.loud, e.who.pos.x);
@@ -75,6 +86,7 @@ function demo() {
   sb.spawnCrate(2.6, 0.4);
   sb.spawnCrate(2.65, 1.2);
   sb.spawnKnuckles(-2.6, 0.1);
+  sb.spawnKnife(5.6, 0.1, 0.3);
   const a = sb.spawnStickman(-4.2, null, { traits: { aggression: 0.85, temper: 0.85, bravery: 0.8 } });
   const b = sb.spawnStickman(-0.8, null, { traits: { sociability: 0.8, empathy: 0.7 } });
   const c = sb.spawnStickman(1.2, null, { traits: { sociability: 0.7, aggression: 0.3 } });
@@ -126,4 +138,4 @@ function start() {
 document.getElementById('btn-play').addEventListener('click', start);
 
 // for tests and the curious
-window.__sf = { sb, cam, ui, hand, sound, renderer, STYLE, start, demo };
+window.__sf = { sb, cam, ui, hand, sound, renderer, STYLE, start, demo, CLIPS, LINES };

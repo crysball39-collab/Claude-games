@@ -28,9 +28,20 @@ export class Hand {
       thing.grab(x, y);
     } else {
       if (thing.kind === 'crate' && thing.carriedBy) thing.carriedBy.dropCarried();
-      if (thing.kind === 'knuckles' && thing.wornBy) return false;
+      if ((thing.kind === 'knuckles' || thing.kind === 'knife') && thing.wornBy) return false;
+      if (thing.kind === 'knife' && thing.stuckIn) {
+        // pulled out of whatever it was stuck in, by the handle, at the angle it was in at
+        const st = thing.stuckIn;
+        if (st.person) st.person.pullKnife(st.entry, 'hand');
+        else {
+          const b = thing.body, rot = b.rot;
+          thing.drop(b.pos.x, b.pos.y, 0, 0);
+          b.rot = rot;
+          b.angVel = 0;
+        }
+      }
       const b = thing.body;
-      this.joint = sb.phys.addJoint(new GrabJoint(b, x, y, { hz: 5, damping: 0.8, maxForce: 2500 * b.mass }));
+      this.joint = sb.phys.addJoint(new GrabJoint(b, x, y, { hz: thing.kind === 'knife' ? 7 : 5, damping: 0.8, maxForce: 2500 * b.mass }));
     }
     this.holding = thing;
     this.x = x;

@@ -1,11 +1,12 @@
 /* =============================================================================
-   Drawing a stickman, a crate and a set of brass knuckles onto a canvas.
+   Drawing a stickman, a crate, a set of brass knuckles and a combat knife onto
+   a canvas.
 
    Everything here draws in world units on a canvas that has already been set
    up so y points up (see render.js). Text is never drawn here, because text
    in a y-up canvas comes out upside down.
    ========================================================================== */
-import { DIM, BONES } from './skeleton.js';
+import { DIM, pointOnBone } from './skeleton.js';
 
 export const INK = '#111111';      // the near arm and leg, the body, the head
 export const INK_FAR = '#2f2f2f';  // the far arm and leg, a touch lighter for depth
@@ -15,6 +16,9 @@ export const BLOOD_DARK = '#6e0710';
 export const BRASS = '#c9a03a';
 export const BRASS_LIGHT = '#f0d27a';
 export const BRASS_DARK = '#7d5f17';
+export const STEEL = '#b9c0c6';
+export const STEEL_LIGHT = '#eef2f4';
+export const STEEL_DARK = '#5f676d';
 
 function polyline(ctx, pts) {
   ctx.beginPath();
@@ -27,9 +31,11 @@ function polyline(ctx, pts) {
  * Draws one stickman from its world-space joints.
  *
  * @param {object} j    joints in world space, plus headAngle
- * @param {object} o    { scale, facing, hair, face, weapon ('A' when the near
- *                      hand wears brass knuckles), alpha, wounds: [{bone, t, r}],
- *                      broken: { armA, armB, legA, legB }, pale (0..1) }
+ * @param {object} o    { scale, facing, hair, face, weapon ('knuckles' or
+ *                      'knife', in the near hand), weaponBlood, alpha,
+ *                      wounds: [{bone, t, r}], broken: { boneName: true },
+ *                      stuck: [{ x, y, a, blood }] knives stuck in them,
+ *                      pale (0..1) }
  */
 export function drawStickman(ctx, j, o) {
   const s = o.scale || 1;
@@ -42,51 +48,69 @@ export function drawStickman(ctx, j, o) {
 
   // far side first, so the near arm and leg sit in front of the body
   ctx.strokeStyle = far;
-  polyline(ctx, [j.hip, j.kneeB, j.footB]);
-  polyline(ctx, [j.shoulder, j.elbowB, j.handB]);
+  polyline(ctx, [j.hip, j.midFemB, j.kneeB, j.midTibB, j.footB, j.toeB]);
+  polyline(ctx, [j.shoulder, j.midHumB, j.elbowB, j.midForeB, j.handB]);
 
   ctx.strokeStyle = ink;
-  // spine, then the neck up to the bottom of the head
+  // the spine, then the neck up to the bottom of the head
   const ha = j.headAngle, f = o.facing || 1;
   const nx = j.head.x - Math.sin(ha) * f * r, ny = j.head.y - Math.cos(ha) * r;
-  polyline(ctx, [j.hip, j.neck, { x: nx, y: ny }]);
-  polyline(ctx, [j.hip, j.kneeA, j.footA]);
+  polyline(ctx, [j.hip, j.chest, j.neck, { x: nx, y: ny }]);
+  polyline(ctx, [j.hip, j.midFemA, j.kneeA, j.midTibA, j.footA, j.toeA]);
 
   drawHead(ctx, j, o, r, lw);
 
   ctx.strokeStyle = ink;
   ctx.lineWidth = lw;
-  polyline(ctx, [j.shoulder, j.elbowA, j.handA]);
+  polyline(ctx, [j.shoulder, j.midHumA, j.elbowA, j.midForeA, j.handA]);
 
   if (o.broken) drawBreaks(ctx, j, o.broken, lw);
   if (o.wounds && o.wounds.length) drawWounds(ctx, j, o.wounds, lw);
-  if (o.weapon) drawWornKnuckles(ctx, o.weapon === 'B' ? j.elbowB : j.elbowA, o.weapon === 'B' ? j.handB : j.handA, s, o.weaponBlood || 0);
+  if (o.weapon === 'knuckles') drawWornKnuckles(ctx, j.elbowA, j.handA, s, o.weaponBlood || 0);
+  else if (o.weapon === 'knife') drawHeldKnife(ctx, j.midForeA, j.handA, s, o.weaponBlood || 0);
+  if (o.stuck) {
+    for (const k of o.stuck) {
+      ctx.save();
+      ctx.translate(k.x, k.y);
+      ctx.rotate(k.a);
+      drawKnifeShape(ctx, KNIFE_W * s, KNIFE_H * s, k.blood || 0);
+      ctx.restore();
+    }
+  }
 }
 
-/** A break shows as a dark red mark where the bone gave, so it reads at a glance. */
+/** Where each broken bone shows: a dark mark where it gave, so it reads at a glance. */
+const BREAK_AT = {
+  humerusA: 'midHumA', forearmA: 'midForeA', humerusB: 'midHumB', forearmB: 'midForeB',
+  femurA: 'midFemA', tibiaA: 'midTibA', femurB: 'midFemB', tibiaB: 'midTibB',
+  ribs: 'chest', pelvis: 'hip', neck: 'neck',
+};
+
 function drawBreaks(ctx, j, broken, lw) {
-  const at = { armA: ['elbowA', 'handA'], armB: ['elbowB', 'handB'], legA: ['kneeA', 'footA'], legB: ['kneeB', 'footB'] };
   ctx.fillStyle = BLOOD_DARK;
-  for (const [part, on] of Object.entries(broken)) {
-    if (!on || !at[part]) continue;
-    const a = j[at[part][0]], b = j[at[part][1]];
-    const x = a.x + (b.x - a.x) * 0.45, y = a.y + (b.y - a.y) * 0.45;
+  for (const [bone, on] of Object.entries(broken)) {
+    if (!on) continue;
+    if (bone === 'spine') {
+      const x = (j.hip.x + j.chest.x) / 2, y = (j.hip.y + j.chest.y) / 2;
+      ctx.beginPath(); ctx.arc(x, y, lw * 0.7, 0, Math.PI * 2); ctx.fill();
+      continue;
+    }
+    const at = j[BREAK_AT[bone]];
+    if (!at) continue;
     ctx.beginPath();
-    ctx.arc(x, y, lw * 0.75, 0, Math.PI * 2);
+    ctx.arc(at.x, at.y, lw * 0.72, 0, Math.PI * 2);
     ctx.fill();
   }
 }
 
 /** Blood that has run onto the body: dots along whichever bone it landed on. */
 function drawWounds(ctx, j, wounds, lw) {
+  const p = { x: 0, y: 0 };
   for (const w of wounds) {
-    const b = BONES[w.bone];
-    if (!b) continue;
-    const p = j[b[0]], q = j[b[1]];
-    const x = p.x + (q.x - p.x) * w.t, y = p.y + (q.y - p.y) * w.t;
+    pointOnBone(j, w.bone, w.t, p);
     ctx.fillStyle = w.dark ? BLOOD_DARK : BLOOD;
     ctx.beginPath();
-    ctx.arc(x, y, lw * w.r, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, lw * w.r, 0, Math.PI * 2);
     ctx.fill();
   }
 }
@@ -133,6 +157,17 @@ function drawHead(ctx, j, o, r, lw) {
   ctx.beginPath();
   ctx.arc(0, 0, r, 0, Math.PI * 2);
   ctx.stroke();
+  if (o.broken && o.broken.skull) {
+    // a crack across the top of the skull
+    ctx.strokeStyle = BLOOD_DARK;
+    ctx.lineWidth = lw * 0.4;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.55, r * 0.62); ctx.lineTo(-r * 0.25, r * 0.38); ctx.lineTo(-r * 0.05, r * 0.6);
+    ctx.lineTo(r * 0.2, r * 0.32); ctx.lineTo(r * 0.38, r * 0.5);
+    ctx.stroke();
+    ctx.strokeStyle = o.ink || INK;
+    ctx.lineWidth = lw;
+  }
 
   drawHair(ctx, o.hair, r, lw);
   if (o.face) drawFace(ctx, o.face, r, lw);
@@ -372,6 +407,97 @@ export function drawKnuckleShape(ctx, w, h, blood = 0) {
     ctx.fill();
   }
 }
+
+/* ---------------------------------- combat knife ---------------------------- */
+
+// drawn, like the knuckles, a good deal bigger than a real one so it reads;
+// KNIFE_H is how thick it is to the physics, and it is drawn a little deeper
+export const KNIFE_W = 0.42;
+export const KNIFE_H = 0.07;
+
+/**
+ * A combat knife w long, centred on the origin, the point toward +x: a clip-
+ * point blade with the edge underneath, a cross guard, a ridged grip and a
+ * pommel.
+ */
+export function drawKnifeShape(ctx, w, h0, blood = 0) {
+  const h = h0 * 1.3;
+  const g = -w * 0.06;              // the guard
+  const tip = w / 2, back = -w / 2;
+  const bh = h * 0.56;              // the blade's depth
+  ctx.lineJoin = 'round';
+  // the blade
+  ctx.beginPath();
+  ctx.moveTo(g, bh * 0.55);
+  ctx.lineTo(tip - w * 0.16, bh * 0.55);
+  ctx.lineTo(tip - w * 0.07, bh * 0.15);   // the clip toward the point
+  ctx.lineTo(tip, -bh * 0.05);
+  ctx.quadraticCurveTo(tip - w * 0.12, -bh * 0.6, g + w * 0.04, -bh * 0.55);
+  ctx.lineTo(g, -bh * 0.5);
+  ctx.closePath();
+  ctx.fillStyle = STEEL;
+  ctx.fill();
+  ctx.lineWidth = Math.max(w * 0.012, 0.003);
+  ctx.strokeStyle = STEEL_DARK;
+  ctx.stroke();
+  // the fuller and the bright edge
+  ctx.strokeStyle = STEEL_LIGHT;
+  ctx.lineWidth = Math.max(w * 0.01, 0.0025);
+  ctx.beginPath();
+  ctx.moveTo(g + w * 0.04, -bh * 0.38);
+  ctx.quadraticCurveTo(tip - w * 0.14, -bh * 0.42, tip - w * 0.03, -bh * 0.08);
+  ctx.stroke();
+  ctx.strokeStyle = STEEL_DARK;
+  ctx.beginPath();
+  ctx.moveTo(g + w * 0.05, bh * 0.12); ctx.lineTo(tip - w * 0.2, bh * 0.12);
+  ctx.stroke();
+  if (blood > 0) {
+    ctx.fillStyle = `rgba(150, 12, 24, ${Math.min(0.9, 0.25 + blood)})`;
+    ctx.beginPath();
+    ctx.moveTo(tip - w * 0.28 * Math.min(1, blood + 0.3), bh * 0.5);
+    ctx.lineTo(tip - w * 0.16, bh * 0.5);
+    ctx.lineTo(tip, -bh * 0.05);
+    ctx.quadraticCurveTo(tip - w * 0.12, -bh * 0.55, tip - w * 0.3 * Math.min(1, blood + 0.3), -bh * 0.5);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // the guard
+  ctx.fillStyle = '#2b2b2b';
+  ctx.fillRect(g - w * 0.025, -h * 0.5, w * 0.05, h);
+  // the grip, ridged, and the pommel
+  ctx.fillStyle = '#1c1c1c';
+  ctx.beginPath();
+  ctx.moveTo(g - w * 0.025, h * 0.27);
+  ctx.lineTo(back + w * 0.05, h * 0.24);
+  ctx.lineTo(back + w * 0.05, -h * 0.24);
+  ctx.lineTo(g - w * 0.025, -h * 0.27);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#4a4a4a';
+  ctx.lineWidth = Math.max(w * 0.008, 0.002);
+  ctx.beginPath();
+  for (let i = 1; i < 5; i++) {
+    const x = g - w * 0.025 - i * w * 0.03;
+    ctx.moveTo(x, h * 0.22); ctx.lineTo(x, -h * 0.22);
+  }
+  ctx.stroke();
+  ctx.fillStyle = '#3a3a3a';
+  ctx.beginPath();
+  ctx.ellipse(back + w * 0.04, 0, w * 0.035, h * 0.32, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/** Held in the fist, the blade carrying on the line of the forearm. */
+function drawHeldKnife(ctx, from, hand, s, blood) {
+  const a = Math.atan2(hand.y - from.y, hand.x - from.x);
+  ctx.save();
+  ctx.translate(hand.x + Math.cos(a) * KNIFE_GRIP * s, hand.y + Math.sin(a) * KNIFE_GRIP * s);
+  ctx.rotate(a);
+  drawKnifeShape(ctx, KNIFE_W * s, KNIFE_H * s, blood);
+  ctx.restore();
+}
+/** How far along the knife from its middle the fist closes on it (the middle of the grip). */
+export const KNIFE_GRIP = 0.118;
 
 /* ----------------------------------- a crate -------------------------------- */
 

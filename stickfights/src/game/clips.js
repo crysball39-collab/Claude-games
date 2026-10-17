@@ -524,6 +524,228 @@ const SIT_EDGE = P({ anchor: 'hip', hipY: 0.05, t: 4, h: 4, aA: [30, 50], aB: [2
 clip('sitEdge', { loop: true, frames: [[1.5, SIT_EDGE], [1.5, tweak(SIT_EDGE, { lA: [84, -70], lB: [80, -98] })]] });
 
 /* -------------------------------------------------------------------------- */
+/*                               with a knife                                 */
+/* -------------------------------------------------------------------------- */
+
+// knife low and forward in the near hand, the other hand up to fend off
+export const KNIFE_GUARD = P({ t: 10, h: 4, aA: [52, 58], aB: [72, 112], lA: [22, -24], lB: [-20, -26] });
+clip('knifeGuard', { loop: true, frames: [
+  [0.34, KNIFE_GUARD],
+  [0.34, tweak(KNIFE_GUARD, { t: 11, aA: [56, 52], aB: [70, 116], lA: [22, -32], lB: [-20, -34] })],
+] });
+
+// a thrust from the hip at the body, the weight going in behind it
+const STAB = P({ t: 18, h: 4, x: 0.1, aA: [86, 4], aB: [42, 104], lA: [30, -16], lB: [-28, -8] });
+clip('stab', {
+  frames: [
+    [0.1, P({ t: 4, h: 4, x: -0.03, aA: [14, 78], aB: [72, 112], lA: [22, -26], lB: [-20, -26] })],
+    [0.07, STAB], [0.08, tweak(STAB, { aA: [84, 6] })], [0.2, KNIFE_GUARD],
+  ],
+  strike: { limb: 'handA', from: 0.09, to: 0.25, power: 1.25, reach: 0.95, blade: 'stab', body: true },
+});
+
+// a slash: up over the shoulder, then down and across
+clip('slash', {
+  frames: [
+    [0.12, P({ t: -6, h: -4, aA: [162, 72], aB: [62, 104], lA: [20, -24], lB: [-20, -26] })],
+    [0.06, P({ t: 14, h: 6, x: 0.06, aA: [100, 18], aB: [42, 92], lA: [28, -18], lB: [-26, -10] })],
+    [0.07, P({ t: 18, h: 8, x: 0.06, aA: [44, 8], aB: [32, 82], lA: [28, -18], lB: [-26, -10] })],
+    [0.22, KNIFE_GUARD],
+  ],
+  strike: { limb: 'handA', from: 0.11, to: 0.25, power: 1.0, reach: 0.9, blade: 'slash', sweep: true },
+});
+
+// overarm, letting go at the top of the swing
+clip('knifeThrow', { frames: [
+  [0.18, P({ t: -14, h: -8, aA: [212, 70], aB: [62, 30], lA: [24, -12], lB: [-22, -20] })],
+  [0.07, P({ t: 22, h: 6, x: 0.05, aA: [112, 8], aB: [32, 20], lA: [30, -14], lB: [-28, -10] }), 'releaseKnife'],
+  [0.3, STAND],
+] });
+
+// a knife in them: a hand to it, a breath, and out
+clip('pullOut', { frames: [
+  [0.25, P({ t: 20, s: 6, h: 24, aA: [18, 92], aB: [12, 88], lA: [12, -20], lB: [-10, -16] })],
+  [0.35, P({ t: 24, s: 8, h: 28, aA: [20, 98], aB: [14, 92], lA: [12, -22], lB: [-10, -18] })],
+  [0.08, P({ t: 10, h: 10, aA: [96, 8], aB: [14, 90] }), 'yank'],
+  [0.35, STAND],
+] });
+
+/* -------------------------------------------------------------------------- */
+/*                         limp, but trying (ragdoll muscles)                 */
+/* -------------------------------------------------------------------------- */
+
+// going down: arms out to catch themselves, knees giving
+clip('brace', { loop: true, frames: [
+  [0.2, P({ t: 12, h: -12, aA: [104, 16], aB: [84, 24], lA: [34, -44], lB: [12, -30], fA: -10, fB: -10 })],
+  [0.2, P({ t: 14, h: -10, aA: [98, 20], aB: [90, 22], lA: [30, -40], lB: [16, -34], fA: -10, fB: -10 })],
+] });
+
+// tumbling over and over: arms round the head, knees up
+clip('protectHead', { loop: true, frames: [
+  [0.3, P({ t: 30, s: 12, h: 24, aA: [148, 142], aB: [138, 150], lA: [84, -104], lB: [72, -112] })],
+  [0.3, P({ t: 32, s: 12, h: 26, aA: [150, 138], aB: [140, 146], lA: [80, -108], lB: [76, -110] })],
+] });
+
+/* -------------------------------------------------------------------------- */
+/*                                standing about                              */
+/* -------------------------------------------------------------------------- */
+
+// don't shoot - or, here, don't stab
+clip('handsUp', { loop: true, frames: [
+  [0.1, P({ t: -3, h: 6, aA: [82, 96], aB: [72, 102], lA: [6, -6], lB: [-6, -6] })],
+  [0.1, P({ t: -3, h: 7, aA: [84, 94], aB: [74, 100], lA: [6, -7], lB: [-6, -7] })],
+] });
+
+clip('armsCrossed', { loop: true, frames: [
+  [1.4, P({ t: -1, h: -3, aA: [22, 92], aB: [28, 86], lA: [6, -2], lB: [-6, -2] })],
+  [1.4, P({ t: 0, h: -1, aA: [23, 94], aB: [29, 88], lA: [6, -3], lB: [-6, -3] })],
+] });
+
+clip('handsOnHips', { loop: true, frames: [
+  [1.3, P({ t: -2, h: -4, aA: [-28, 92], aB: [-34, 98], lA: [10, -2], lB: [-10, -2] })],
+  [1.3, P({ t: -1, h: -2, aA: [-27, 94], aB: [-33, 100], lA: [10, -3], lB: [-10, -3] })],
+] });
+
+clip('tapFoot', { frames: [
+  [0.16, P({ aA: [22, 92], aB: [28, 86], lA: [16, -6], fA: -30 })],
+  [0.14, P({ aA: [22, 92], aB: [28, 86], lA: [6, -3] })],
+  [0.16, P({ aA: [22, 92], aB: [28, 86], lA: [16, -6], fA: -30 })],
+  [0.14, P({ aA: [22, 92], aB: [28, 86], lA: [6, -3] })],
+  [0.16, P({ aA: [22, 92], aB: [28, 86], lA: [16, -6], fA: -30 })],
+  [0.25, STAND],
+] });
+
+clip('yawn', { frames: [
+  [0.4, P({ t: -4, h: -20, aA: [150, 52], aB: [140, 62] })],
+  [0.7, P({ t: -6, h: -24, aA: [160, 40], aB: [150, 50], lift: 0.01 })],
+  [0.4, STAND],
+] });
+
+clip('kickDirt', { frames: [
+  [0.2, P({ t: 2, h: 22, lA: [28, -40], fA: -10 })],
+  [0.08, P({ t: 0, h: 22, lA: [52, -8], fA: 25 })],
+  [0.3, STAND],
+] });
+
+clip('lookUp', { mask: 'upper', frames: [
+  [0.3, P({ t: -6, h: -42 })], [0.9, P({ t: -7, h: -44, aA: [10, 20] })], [0.3, STAND],
+] });
+
+clip('wipeBrow', { mask: 'upper', frames: [
+  [0.22, P({ h: 6, aA: [150, 142] })], [0.26, P({ h: 6, aA: [144, 126] })], [0.2, STAND],
+] });
+
+// showing off
+clip('flex', { frames: [
+  [0.2, P({ t: -4, h: -6, aA: [90, 92], aB: [-28, 92], lA: [12, -4], lB: [-12, -4] })],
+  [0.7, P({ t: -5, h: -10, aA: [92, 104], aB: [-28, 94], lA: [12, -4], lB: [-12, -4] })],
+  [0.25, STAND],
+] });
+
+// fists in the air at nobody
+const SB_JAB = P({ t: 12, h: 2, x: 0.04, aA: [38, 122], aB: [92, 6], lA: [24, -20], lB: [-22, -20] });
+const SB_CROSS = P({ t: 18, h: 4, x: 0.07, aA: [92, 4], aB: [40, 118], lA: [28, -16], lB: [-28, -8] });
+clip('shadowbox', { loop: true, frames: [
+  [0.16, GUARD], [0.08, SB_JAB], [0.14, GUARD], [0.09, SB_CROSS], [0.2, GUARD], [0.08, SB_JAB], [0.08, GUARD], [0.08, SB_JAB], [0.22, GUARD],
+] });
+
+// pointing at someone, and laughing at them
+clip('laughPoint', { frames: [
+  [0.12, P({ t: -4, h: -14, aA: [92, 0], aB: [20, 100] })], [0.12, P({ t: 2, h: -6, aA: [90, 4], aB: [24, 104] })],
+  [0.12, P({ t: -4, h: -14, aA: [92, 0], aB: [20, 100] })], [0.12, P({ t: 2, h: -6, aA: [90, 4], aB: [24, 104] })],
+  [0.12, P({ t: -4, h: -14, aA: [92, 0], aB: [20, 100] })], [0.22, STAND],
+] });
+
+/* -------------------------------------------------------------------------- */
+/*                                 with others                                */
+/* -------------------------------------------------------------------------- */
+
+clip('highFive', { frames: [
+  [0.2, P({ t: -2, h: -10, aA: [138, 14] })],
+  [0.1, P({ t: 3, h: -8, x: 0.03, aA: [140, 6] }), 'slap'],
+  [0.28, P({ t: 0, h: -6, aA: [136, 22] })],
+  [0.25, STAND],
+] });
+
+clip('hug', { frames: [
+  [0.25, P({ t: 8, h: 4, x: 0.04, aA: [82, 58], aB: [86, 54] })],
+  [0.35, P({ t: 10, h: 8, x: 0.05, aA: [80, 70], aB: [84, 62] })],
+  [0.25, P({ t: 10, h: 8, x: 0.05, aA: [84, 64], aB: [84, 62] })],
+  [0.35, P({ t: 10, h: 8, x: 0.05, aA: [80, 70], aB: [84, 62] })],
+  [0.3, STAND],
+] });
+
+clip('handshake', { frames: [
+  [0.18, P({ t: 6, h: 4, aA: [62, 30] })],
+  [0.12, P({ t: 6, h: 4, aA: [67, 25] })], [0.12, P({ t: 6, h: 4, aA: [57, 35] })],
+  [0.12, P({ t: 6, h: 4, aA: [67, 25] })], [0.12, P({ t: 6, h: 4, aA: [57, 35] })],
+  [0.22, STAND],
+] });
+
+clip('clap', { mask: 'upper', frames: [
+  [0.1, P({ h: -4, aA: [70, 58], aB: [76, 40] })],
+  [0.08, P({ h: -4, aA: [70, 76], aB: [72, 70] }), 'clap'], [0.1, P({ h: -4, aA: [70, 58], aB: [76, 40] })],
+  [0.08, P({ h: -4, aA: [70, 76], aB: [72, 70] }), 'clap'], [0.1, P({ h: -4, aA: [70, 58], aB: [76, 40] })],
+  [0.08, P({ h: -4, aA: [70, 76], aB: [72, 70] }), 'clap'],
+  [0.2, STAND],
+] });
+
+clip('thumbsUp', { mask: 'upper', frames: [
+  [0.15, P({ h: -4, aA: [70, 92] })], [0.6, P({ h: -6, aA: [72, 94] })], [0.2, STAND],
+] });
+
+clip('nod', { mask: 'upper', frames: [
+  [0.14, P({ h: 16 })], [0.14, P({ h: -2 })], [0.14, P({ h: 16 })], [0.2, STAND],
+] });
+
+clip('bow', { frames: [
+  [0.3, P({ t: 50, s: 10, h: 20, aA: [10, 10], aB: [-5, 10] })],
+  [0.5, P({ t: 52, s: 10, h: 22, aA: [10, 10], aB: [-5, 10] })],
+  [0.35, STAND],
+] });
+
+/* -------------------------------------------------------------------------- */
+/*                                  exercise                                  */
+/* -------------------------------------------------------------------------- */
+
+// press-ups: the body straight as a plank, arms locked out, then down
+clip('pushups', { loop: true, frames: [
+  [0.45, P({ rot: 64, t: 0, h: -16, aA: [64, 0], aB: [64, 2], lA: [0, 0], lB: [0, 0] })],
+  [0.45, P({ rot: 76, t: 0, h: -18, aA: [20, 116], aB: [22, 114], lA: [0, 0], lB: [0, 0] })],
+] });
+
+clip('squats', { loop: true, frames: [
+  [0.5, P({ t: 4, aA: [88, 2], aB: [86, 4], lA: [4, -3], lB: [-4, -3] })],
+  [0.5, P({ t: 32, h: -8, aA: [92, 0], aB: [90, 2], lA: [96, -122], lB: [90, -122] })],
+] });
+
+clip('jumpingJacks', { loop: true, frames: [
+  [0.22, P({ t: -2, h: -4, lift: 0.06, aA: [172, 8], aB: [166, 14], lA: [14, -4], lB: [-14, -4], fA: 20, fB: 20 })],
+  [0.22, P({ t: 0, h: 0, aA: [8, 10], aB: [-6, 10], lA: [2, -2], lB: [-2, -2] })],
+] });
+
+/* -------------------------------------------------------------------------- */
+/*                                   hurting                                  */
+/* -------------------------------------------------------------------------- */
+
+clip('clutchStomach', { loop: true, frames: [
+  [0.6, P({ t: 24, s: 10, h: 20, aA: [12, 76], aB: [6, 82], lA: [16, -18], lB: [-8, -12] })],
+  [0.6, P({ t: 27, s: 12, h: 23, aA: [13, 80], aB: [7, 84], lA: [16, -20], lB: [-8, -14] })],
+] });
+
+// cradling the bad arm with the good one
+clip('clutchArm', { loop: true, frames: [
+  [0.7, P({ t: 10, h: 22, aA: [6, 20], aB: [22, 64], lA: [6, -6], lB: [-6, -6] })],
+  [0.7, P({ t: 12, h: 24, aA: [7, 22], aB: [24, 66], lA: [6, -7], lB: [-6, -7] })],
+] });
+
+// cold, from losing too much blood: arms wrapped round, shaking
+clip('shiver', { loop: true, frames: [
+  [0.06, P({ t: 12, s: 6, h: 14, aA: [10, 100], aB: [16, 96], lA: [8, -10], lB: [-8, -10] })],
+  [0.06, P({ t: 13, s: 6, h: 15, aA: [11, 102], aB: [17, 98], lA: [8, -11], lB: [-8, -11] })],
+] });
+
+/* -------------------------------------------------------------------------- */
 /*                                  sampling                                  */
 /* -------------------------------------------------------------------------- */
 
@@ -594,9 +816,9 @@ export function blendInto(a, b, w, keys = POSE_KEYS) {
 
 export const MASKS = {
   full: POSE_KEYS,
-  upper: ['t', 'h', 'aAu', 'aAl', 'aBu', 'aBl'],
+  upper: ['t', 's', 'h', 'aAu', 'aAl', 'aBu', 'aBl'],
   arms: ['aAu', 'aAl', 'aBu', 'aBl'],
   armA: ['aAu', 'aAl'],
   armB: ['aBu', 'aBl'],
-  legs: ['lAu', 'lAl', 'lBu', 'lBl', 'x', 'lift'],
+  legs: ['lAu', 'lAl', 'lBu', 'lBl', 'fA', 'fB', 'x', 'lift'],
 };

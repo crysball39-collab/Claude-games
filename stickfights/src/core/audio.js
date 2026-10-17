@@ -149,6 +149,38 @@ export class Sound {
     this.tone('square', 700, 300, 0.04, 0.12 * v);
   }
 
+  /** A blade going in: a short wet thunk under a hiss. */
+  stab(power, x) {
+    if (!this.ready) return;
+    const v = this.near(x) * clamp(0.4 + power * 0.25, 0.3, 1);
+    this.tone('sine', 160, 70, 0.1, 0.45 * v);
+    this.hiss(0.09, 2400, 2.5, 0.35 * v);
+    this.hiss(0.14, 700, 1.4, 0.3 * v, 'lowpass', 0.02);
+  }
+
+  /** A blade drawn across: a thin swish and a hiss. */
+  slash(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.hiss(0.08, 4200, 3, 0.3 * v);
+    this.tone('triangle', 3100, 2400, 0.08, 0.04 * v);
+  }
+
+  /** Steel into wood. */
+  thunk(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.tone('triangle', 260, 140, 0.09, 0.5 * v);
+    this.tone('sine', 1900, 1500, 0.15, 0.06 * v, 0.01);
+    this.hiss(0.05, 1500, 2, 0.3 * v);
+  }
+
+  clap(x, soft = false) {
+    if (!this.ready) return;
+    const v = this.near(x) * (soft ? 0.5 : 0.35);
+    this.hiss(0.04, 1800, 1.2, v);
+  }
+
   pop(x) {
     if (!this.ready) return;
     this.tone('sine', 420, 760, 0.1, 0.18 * this.near(x));

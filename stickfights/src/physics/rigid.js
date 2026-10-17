@@ -33,6 +33,10 @@ export class Body {
     this.rot = o.rot || 0;
     this.vel = { x: 0, y: 0 };
     this.angVel = 0;
+    // how it was moving coming into this step, before gravity and pushes:
+    // impacts are measured from this, so something leaning on a crate is
+    // not the crate hitting the floor again every step
+    this.was = { x: 0, y: 0, w: 0 };
     this.force = { x: 0, y: 0 };
     this.torque = 0;
     this.friction = o.friction ?? 0.6;
@@ -332,8 +336,8 @@ class Arbiter {
       const r1x = c.x - b1.pos.x, r1y = c.y - b1.pos.y;
       const r2x = c.x - b2.pos.x, r2y = c.y - b2.pos.y;
       const rn1 = r1x * c.nx + r1y * c.ny, rn2 = r2x * c.nx + r2y * c.ny;
-      const v1n = (b1.vel.x - b1.angVel * r1y) * c.nx + (b1.vel.y + b1.angVel * r1x) * c.ny;
-      const v2n = (b2.vel.x - b2.angVel * r2y) * c.nx + (b2.vel.y + b2.angVel * r2x) * c.ny;
+      const v1n = (b1.was.x - b1.was.w * r1y) * c.nx + (b1.was.y + b1.was.w * r1x) * c.ny;
+      const v2n = (b2.was.x - b2.was.w * r2y) * c.nx + (b2.was.y + b2.was.w * r2x) * c.ny;
       if (v1n > this.into1) this.into1 = v1n;
       if (-v2n > this.into2) this.into2 = -v2n;
       let kN = b1.sim + b2.sim;
@@ -345,9 +349,10 @@ class Arbiter {
       kT += b1.siI * (r1x * r1x + r1y * r1y - rt1 * rt1) + b2.siI * (r2x * r2x + r2y * r2y - rt2 * rt2);
       c.massT = 1 / kT;
 
-      // how fast they are closing, before any of this step's impulses
-      const dvx = b2.vel.x - b2.angVel * r2y - b1.vel.x + b1.angVel * r1y;
-      const dvy = b2.vel.y + b2.angVel * r2x - b1.vel.y - b1.angVel * r1x;
+      // how fast they are closing, before any of this step's impulses or forces
+      const w1 = b1.was, w2 = b2.was;
+      const dvx = w2.x - w2.w * r2y - w1.x + w1.w * r1y;
+      const dvy = w2.y + w2.w * r2x - w1.y - w1.w * r1x;
       const vn = dvx * c.nx + dvy * c.ny;
       if (-vn > this.approach) this.approach = -vn;
       const bounce = vn < -BOUNCE_THRESHOLD ? -this.restitution * vn : 0;
@@ -552,6 +557,7 @@ export class World {
     this.broadPhase();
 
     for (const b of this.bodies) {
+      b.was.x = b.vel.x; b.was.y = b.vel.y; b.was.w = b.angVel;
       if (!b.invMass) continue;
       b.vel.x += dt * b.invMass * b.force.x;
       b.vel.y += dt * (this.gravity + b.invMass * b.force.y);

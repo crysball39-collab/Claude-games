@@ -36,6 +36,12 @@ const standingUp = (o) => up(o) && (o.state === 'stand' || o.state === 'air' || 
 /** Which way o is from me, never 0: two people on the same spot still pick opposite sides. */
 const side = (me, o) => Math.sign(o.pos.x - me.pos.x) || (me.id < o.id ? 1 : -1);
 
+/** Is o coming in to hug me, high five me or shake my hand? */
+const leading = (o, me) => {
+  const b = o.brain && o.brain.behaviour;
+  return !!(b && b.kind === 'chat' && b.target === me && b.gesture);
+};
+
 /** Walks to x; true once there. */
 function arrive(me, x, speed = 'walk', tol = 0.12, o = {}) {
   if (Math.abs(me.pos.x - x) <= tol) { me.stop(); return true; }
@@ -60,24 +66,36 @@ export class Idle extends Behaviour {
     me.lookAt = look ? look.wj.head : null;
     if (look && chance(dt * 0.25)) me.faceTo(look.pos.x);
     this.next -= dt;
-    if (this.next <= 0 && me.ready) {
+    // hurting, they hold whatever hurts
+    const h = me.health;
+    const sore = !h.canUse('armA') || !h.canUse('armB') ? 'clutchArm'
+      : h.blood < 0.62 ? 'shiver' : h.bones.ribs.broken || h.internal > 0.001 || h.parts.torso.hp < 70 ? 'clutchStomach' : null;
+    if (sore && me.ready && !this.pose) { me.setPosture(sore); this.pose = sore; this.poseT = rand(3, 6); this.what = sore === 'shiver' ? 'Shivering' : 'Holding where it hurts'; }
+    if (this.next <= 0 && me.ready && !this.pose) {
       this.next = rand(2.5, 5);
-      const E = b.emo, opts = ['lookAround', 'scratchHead', 'stretch'];
+      const E = b.emo, T = b.traits, opts = ['lookAround', 'scratchHead', 'stretch', 'armsCrossed', 'handsOnHips'];
       if (E.sadness > 0.4) opts.push('sigh', 'sigh');
-      if (E.joy > 0.55) opts.push('whistle', 'whistle');
+      if (E.joy > 0.55) opts.push('whistle', 'whistle', 'thumbsUp');
       if (E.joy > 0.78) opts.push('dance');
-      if (b.boredom > 0.5) opts.push('bored', 'bored');
+      if (b.boredom > 0.5) opts.push('bored', 'bored', 'yawn', 'tapFoot', 'kickDirt');
+      if (T.aggression > 0.6 && E.fear < 0.3) opts.push('shadowbox');
+      if (T.aggression > 0.5 && E.joy > 0.5) opts.push('flex');
+      if (b.sawSky && this.now - b.sawSky < 30) opts.push('lookUp', 'lookUp');
       const a = pick(opts);
       if (a === 'lookAround') { me.facing = -me.facing; this.what = 'Looking around'; }
       else if (a === 'whistle') { me.setEmote('music', 2.2); this.what = 'Whistling'; }
       else if (a === 'bored') { b.speak('bored', {}, 0.7); this.what = 'Bored'; }
-      else if (a === 'dance') { me.setPosture('dance'); this.danceT = rand(2, 4); this.what = 'Dancing'; }
+      else if (a === 'dance') { me.setPosture('dance'); this.pose = 'dance'; this.poseT = rand(2, 4); this.what = 'Dancing'; }
+      else if (a === 'armsCrossed' || a === 'handsOnHips' || a === 'shadowbox') {
+        me.setPosture(a); this.pose = a; this.poseT = rand(2.5, 5);
+        this.what = a === 'shadowbox' ? 'Shadowboxing' : 'Standing around';
+      } else if (a === 'lookUp') { me.perform('lookUp'); b.speak('lookUp', {}, 0.5); this.what = 'Looking up at the sky'; }
       else me.perform(a);
     }
-    if (this.danceT !== undefined && (this.danceT -= dt) <= 0) { me.setPosture(null); this.danceT = undefined; }
+    if (this.pose && (this.poseT -= dt) <= 0) { if (this.me.posture === this.pose) me.setPosture(null); this.pose = null; }
     return this.t < this.dur;
   }
-  end() { if (this.me.posture === 'dance') this.me.setPosture(null); }
+  end() { if (this.pose && this.me.posture === this.pose) this.me.setPosture(null); }
 }
 
 export class Wander extends Behaviour {
@@ -180,7 +198,7 @@ export class Celebrate extends Behaviour {
   get icon() { return 'sparkle'; }
   start() {
     const me = this.me;
-    me.perform(pick(['cheer', 'laugh', 'cheer']));
+    me.perform(pick(['cheer', 'laugh', 'cheer', 'flex', 'flex']));
     this.brain.speak('victory', {}, 1, null, true);
     me.setEmote('sparkle', 1.5);
     this.brain.victory = 0;
@@ -228,6 +246,18 @@ export class Chat extends Behaviour {
     const o = this.target, me = this.me, b = this.brain;
     if (!standingUp(o) || (o.brain && (o.brain.fighting || o.brain.fleeing))) return false;
     const dir = side(me, o), d = Math.abs(o.pos.x - me.pos.x);
+    // a hug or a high five gets them closer than talking does
+    if (this.gesture) return this.doGesture(dt);
+    // ...and when the other one comes in for one, they stay put for it
+    if (leading(o, me)) {
+      me.stop();
+      me.faceTo(o.pos.x);
+      me.lookAt = o.wj.head;
+      this.quiet = 0;
+      return true;
+    }
+    // they said goodbye first
+    if (this.bye) return false;
     if (d > 1.55) { me.goTo(o.pos.x - dir * 1.1, 'walk'); return this.t < 14; }
     if (d < 0.55) { me.goTo(me.pos.x - dir * 0.5, 'walk', { backpedal: true, face: o.pos.x }); return true; }
     me.stop();
@@ -250,16 +280,22 @@ export class Chat extends Behaviour {
     const r = b.rel(o);
     if (this.said >= this.turns) {
       this.talk('farewell');
-      r.chatT = this.now;
-      if (o.brain) o.brain.rel(me).chatT = this.now;
-      if (o.brain) o.brain.spokenTo(me, 'farewell');
+      // friends part with a high five, good friends with a hug - and only
+      // then is the talk over
+      const back = o.brain ? o.brain.rel(me).like : 0;
+      if (r.like > 0.62 && back > 0.5 && chance(0.6)) this.gesture = { kind: 'hug', gap: 0.4, t: 0 };
+      else if (r.like > 0.38 && back > 0.25 && chance(r.like > 0.62 ? 0.75 : 0.5)) this.gesture = { kind: 'highFive', gap: 0.72, t: 0 };
+      if (this.gesture) return true;
+      this.part();
       return false;
     }
     let kind;
     if (!r.greeted) {
       kind = r.like > 0.4 ? 'greetFriend' : r.like < -0.25 ? 'greetCold' : 'greet';
       r.greeted = true;
-      me.perform('wave');
+      // a stranger gets a handshake from the polite, a wave from everyone else
+      if (kind === 'greet' && r.fam < 0.1 && b.traits.sociability > 0.45 && chance(0.6)) this.gesture = { kind: 'handshake', gap: 0.78, t: 0, then: true };
+      else me.perform('wave');
     } else if (b.emo.anger > 0.45 || r.like < -0.25) {
       kind = chance(0.35 + b.traits.aggression * 0.4) ? 'insult' : 'grumpy';
     } else if (b.traits.aggression > 0.6 && b.traits.temper > 0.55 && chance(0.18)) {
@@ -279,14 +315,63 @@ export class Chat extends Behaviour {
     this.wait = rand(2.6, 3.6);
     return true;
   }
+  /** Two people doing something together: they get to the right distance, then both do it. */
+  doGesture(dt) {
+    const g = this.gesture, me = this.me, o = this.target;
+    g.t += dt;
+    const dir = side(me, o), d = Math.abs(o.pos.x - me.pos.x);
+    if (g.t > 4.5 || !o.ready && !g.done && g.t > 2.5) {
+      this.gesture = null;
+      me.hugging = o.hugging = null;
+      if (g.then) return true;
+      this.part();
+      return false;
+    }
+    if (!g.done) {
+      if (Math.abs(d - g.gap) > 0.06) { me.hugging = g.kind === 'hug' ? o : null; o.hugging = me.hugging ? me : null; me.goTo(o.pos.x - dir * g.gap, 'walk', { face: o.pos.x }); return true; }
+      me.stop();
+      me.faceTo(o.pos.x);
+      if (!me.ready || !o.ready) return true;
+      o.faceTo(me.pos.x);
+      me.perform(g.kind);
+      o.perform(g.kind);
+      g.done = true;
+      g.until = g.t + CLIP_TIME[g.kind];
+      this.brain.speak(g.kind, { other: o.name }, 0.8, o);
+      this.brain.emo.bump('joy', 0.12);
+      if (o.brain) { o.brain.emo.bump('joy', 0.1); o.brain.rel(me).like = clamp(o.brain.rel(me).like + 0.06, -1, 1); }
+      return true;
+    }
+    if (g.t < g.until) return true;
+    me.hugging = null;
+    o.hugging = null;
+    this.gesture = null;
+    // a handshake is a hello: the talking comes after it
+    if (g.then) return true;
+    this.part();
+    return false;
+  }
+
+  /** The talk is over: neither of them wants another one for a while. */
+  part() {
+    const o = this.target, me = this.me;
+    this.brain.rel(o).chatT = this.now;
+    if (o.brain) { o.brain.rel(me).chatT = this.now; o.brain.spokenTo(me, 'farewell'); }
+  }
+
   talk(kind, loud = false) {
     const o = this.target;
     this.brain.speak(kind, { other: o.name, absent: this.brain.missing() }, 1, o, loud);
     if (this.me.ready) this.me.setPosture('talk');
     this.talkT = 1.5;
   }
-  end() { if (this.me.posture === 'talk') this.me.setPosture(null); }
+  end() {
+    if (this.me.posture === 'talk') this.me.setPosture(null);
+    if (this.me.hugging) { this.me.hugging.hugging = null; this.me.hugging = null; }
+  }
 }
+
+const CLIP_TIME = { hug: 1.8, highFive: 0.85, handshake: 0.9 };
 
 export class Fight extends Behaviour {
   get kind() { return 'fight'; }
@@ -378,7 +463,8 @@ export class Fight extends Behaviour {
       return true;
     }
 
-    const reach = 0.86 * me.scale;
+    const knife = me.armedWith === 'knife';
+    const reach = (knife ? 0.98 : 0.86) * me.scale;
     if (d > reach + 0.2) {
       me.goTo(o.pos.x - dir * reach, d > 3 ? 'run' : 'walk', { face: o.pos.x });
     } else if (d < 0.6 * me.scale) {
@@ -398,10 +484,13 @@ export class Fight extends Behaviour {
     if (this.cool <= 0 && (me.ready || me.canCounter) && d < reach + 0.18 && me.facing === dir) {
       const can = me.strikes();
       const choices = [];
-      // with brass knuckles on the near hand, that is the hand they lead with
+      // with brass knuckles on the near hand, that is the hand they lead with;
+      // with a knife in it, they mostly use the knife
       const armed = me.weapon ? 1 : 0;
-      if (can.includes('jab')) choices.push(['jab', armed ? 1.5 : 4]);
+      if (can.includes('jab')) choices.push(['jab', knife ? 0.8 : armed ? 1.5 : 4]);
       if (can.includes('cross')) choices.push(['cross', armed ? 6 : 3]);
+      if (can.includes('stab')) choices.push(['stab', 5.5]);
+      if (can.includes('slash')) choices.push(['slash', 3]);
       if (can.includes('kick') && d > 0.75) choices.push(['kick', (1.6 + T.skill) * (armed ? 0.5 : 1)]);
       if (can.includes('uppercut') && d < 0.82) choices.push(['uppercut', armed ? 4 : 2.5]);
       if (choices.length) {
@@ -526,7 +615,10 @@ export class Cower extends Behaviour {
     this.t += dt;
     const o = this.target, me = this.me, b = this.brain;
     if (!o || o.removed) return false;
-    if (me.ready && me.posture !== 'cower' && me.posture !== 'beg') me.setPosture(Math.abs(o.pos.x - me.pos.x) < 2 && chance(0.5) ? 'beg' : 'cower');
+    if (me.ready && me.posture !== 'cower' && me.posture !== 'beg' && me.posture !== 'handsUp') {
+      me.setPosture(o.armedWith === 'knife' && chance(0.7) ? 'handsUp' : Math.abs(o.pos.x - me.pos.x) < 2 && chance(0.5) ? 'beg' : 'cower');
+      if (me.posture === 'handsUp') b.speak('surrender', { other: o.name }, 0.9, o, true);
+    }
     me.stop();
     me.facing = sign(o.pos.x - me.pos.x) || me.facing;
     const near = Math.abs(o.pos.x - me.pos.x) < 4 && o.alive && o.conscious && b.isHostile(o);
@@ -536,7 +628,7 @@ export class Cower extends Behaviour {
   }
   end() {
     this.brain.begging = false;
-    if (this.me.posture === 'cower' || this.me.posture === 'beg') this.me.setPosture(null);
+    if (this.me.posture === 'cower' || this.me.posture === 'beg' || this.me.posture === 'handsUp') this.me.setPosture(null);
   }
 }
 
@@ -585,7 +677,7 @@ export class Watch extends Behaviour {
     if ((this.next -= dt) <= 0) {
       this.next = rand(3, 5);
       const ra = b.rel(a), rf = foe ? b.rel(foe) : null;
-      if (ra.like > 0.3 && rf && rf.like < 0.1) b.speak('cheerFriend', { other: a.name }, 0.7, a, true);
+      if (ra.like > 0.3 && rf && rf.like < 0.1) { b.speak('cheerFriend', { other: a.name }, 0.7, a, true); if (chance(0.4)) me.perform('clap'); }
       else if (b.traits.empathy > 0.6) b.speak('stopFight', {}, 0.6, null, true);
       else b.speak('witnessHit', {}, 0.4);
     }
@@ -603,7 +695,8 @@ export class Help extends Behaviour {
     const o = this.target, me = this.me, b = this.brain;
     if (!o || o.removed || o.dead) return false;
     const pinned = o.pinnedBy && this.now - o.pinT < 0.5;
-    const needs = o.lying || o.state === 'crawl' || pinned || o.health.overall < 0.45;
+    const bleeding = o.health.bleeding > 0.002;
+    const needs = o.lying || o.state === 'crawl' || pinned || o.health.overall < 0.45 || o.stuck.length > 0 || bleeding;
     if (!needs && this.there > 0.5) return false;
     const side = sign(me.pos.x - o.wj.hip.x) || 1;
     if (!arrive(me, o.wj.hip.x + side * 0.62, 'run', 0.18)) return this.t < 15;
@@ -615,15 +708,26 @@ export class Help extends Behaviour {
       if (me.posture === 'kneel') me.setPosture(null);
       const c = o.pinnedBy.body;
       c.applyImpulse(-side * 55 * dt * 10, 70 * dt * 10, c.pos.x, c.pos.y);
-    } else if (o.lying && me.ready && me.posture !== 'kneel') {
+    } else if (o.stuck.length && this.there > 0.6 && me.health.canUse('armA')) {
+      // the knife comes out - carefully, and pressed on straight after
+      if (me.posture === 'kneel') me.setPosture(null);
+      if (me.ready) {
+        me.perform('pickup');
+        o.pullKnife(o.stuck[0], null);
+        b.speak('pullKnifeHelp', { other: o.name }, 0.9, o);
+        o.health.pressure = Math.max(o.health.pressure, 3);
+      }
+    } else if ((o.lying || bleeding) && me.ready && me.posture !== 'kneel') {
       me.setPosture('kneel');
     }
+    // pressing on the wounds
+    if (bleeding && this.there > 0.8) o.health.pressure = Math.max(o.health.pressure, 0.5);
     if ((this.next -= dt) <= 0) {
       this.next = rand(2.5, 3.5);
       b.speak(pinned ? 'pinned' : 'comfort', { other: o.name }, 0.9, o);
     }
     if (this.there > 1.2) {
-      if (o.state === 'down') o.downT = Math.min(o.downT, 0.3);
+      if (o.state === 'down' && !bleeding) o.downT = Math.min(o.downT, 0.3);
       if (o.state === 'ko') o.health.conscious += dt * 0.15;
       if (o.brain && !this.thanked && o.state === 'getup') { this.thanked = true; o.brain.helpedBy(me); }
     }
@@ -660,15 +764,15 @@ export class Mourn extends Behaviour {
 
 export class Arm extends Behaviour {
   get kind() { return 'arm'; }
-  get label() { return 'Going for the brass knuckles'; }
-  get icon() { return 'knuckles'; }
+  get label() { return this.target.kind === 'knife' ? 'Going for the knife' : 'Going for the brass knuckles'; }
+  get icon() { return this.target.kind === 'knife' ? 'knife' : 'knuckles'; }
   start() { this.tries = 0; }
   update(dt) {
     this.t += dt;
     const k = this.target, me = this.me, b = this.brain;
     if (me.weapon) return false;
-    if (k.removed || k.wornBy) {
-      if (k.wornBy && k.wornBy !== me) b.note(k.wornBy.name + ' got the brass knuckles first.');
+    if (k.removed || k.wornBy || (k.stuckIn && k.stuckIn.person)) {
+      if (k.wornBy && k.wornBy !== me) b.note(k.wornBy.name + (k.kind === 'knife' ? ' got the knife first.' : ' got the brass knuckles first.'));
       return false;
     }
     if (me.acting) return true;
@@ -691,7 +795,7 @@ export class Inspect extends Behaviour {
   update(dt) {
     this.t += dt;
     const th = this.target, me = this.me, b = this.brain;
-    if (th.removed || (th.kind === 'knuckles' && th.wornBy) || (th.kind === 'crate' && th.carriedBy)) return false;
+    if (th.removed || ((th.kind === 'knuckles' || th.kind === 'knife') && th.wornBy) || (th.kind === 'crate' && th.carriedBy)) return false;
     const x = th.kind === 'stickman' ? th.wj.hip.x : th.pos.x;
     const half = th.kind === 'crate' ? th.size / 2 : 0;
     const dir = sign(x - me.pos.x) || me.facing;
@@ -702,6 +806,7 @@ export class Inspect extends Behaviour {
       b.inspected.add(th);
       if (th.kind === 'crate') { me.perform('knock'); b.speak('crate', {}, 0.7); }
       else if (th.kind === 'knuckles') { me.perform('inspect'); b.speak('weaponSee', {}, 0.7); }
+      else if (th.kind === 'knife') { me.perform('inspect'); b.speak('knifeSee', {}, 0.7); }
       else { me.perform('inspect'); b.speak(b.rel(th).like > 0.2 ? 'grief' : 'scaredOfDead', { victim: th.name }, 0.8); }
       this.until = this.t + 1.8;
     }
@@ -788,11 +893,82 @@ export class Investigate extends Behaviour {
   }
 }
 
+/* ---------------------------------- knives ---------------------------------- */
+
+export class PullOut extends Behaviour {
+  get kind() { return 'pullout'; }
+  get label() { return 'Pulling the knife out'; }
+  get icon() { return 'knife'; }
+  start() { this.tries = 0; this.me.stop(); this.brain.speak('pullOut', {}, 0.9, null, true); }
+  update(dt) {
+    this.t += dt;
+    const me = this.me;
+    if (!me.stuck.length) return false;
+    if (me.acting) return true;
+    if (me.ready && this.tries < 3 && me.pullOutKnife()) this.tries++;
+    return this.t < 6 && this.tries < 3;
+  }
+}
+
+export class ThrowKnife extends Behaviour {
+  get kind() { return 'throwKnife'; }
+  get label() { return 'Throwing the knife at ' + this.target.name; }
+  get icon() { return 'knife'; }
+  start() { this.thrown = false; }
+  update(dt) {
+    this.t += dt;
+    const o = this.target, me = this.me, b = this.brain;
+    if (!o || o.removed || o.dead || (!this.thrown && me.armedWith !== 'knife')) return false;
+    if (this.thrown) return me.acting && this.t < 6;
+    const d = Math.abs(o.pos.x - me.pos.x);
+    if (d > 9) { me.goTo(o.pos.x, 'run'); return this.t < 10; }
+    me.stop();
+    me.faceTo(o.pos.x);
+    if (me.ready && me.throwKnifeAt(o.wj.chest.x + o.vel.x * 0.25, o.wj.chest.y)) {
+      this.thrown = true;
+      b.speak('throwKnife', { other: o.name }, 0.8, o, true);
+    }
+    return this.t < 8;
+  }
+}
+
+/* --------------------------------- exercise --------------------------------- */
+
+export class Exercise extends Behaviour {
+  get kind() { return 'exercise'; }
+  get label() { return { pushups: 'Doing press-ups', squats: 'Doing squats', jacks: 'Doing star jumps' }[this.what]; }
+  get icon() { return 'sparkle'; }
+  start() {
+    this.what = pick(['pushups', 'squats', 'jacks']);
+    this.dur = rand(6, 10);
+    this.count = 0;
+    this.next = 1.2;
+    this.brain.speak('exercise', {}, 0.7);
+  }
+  update(dt) {
+    this.t += dt;
+    const me = this.me, b = this.brain;
+    if (me.ready && me.posture !== this.what) me.setPosture(this.what);
+    if ((this.next -= dt) <= 0 && me.posture === this.what) {
+      this.next = rand(1.6, 2.4);
+      this.count += randInt(2, 3);
+      b.speak('exerciseCount', { n: String(this.count) }, 0.6);
+    }
+    return this.t < this.dur;
+  }
+  end() {
+    if (this.me.posture === this.what) this.me.setPosture(null);
+    this.brain.exercisedT = this.now;
+    this.brain.boredom = Math.max(0, this.brain.boredom - 0.4);
+    if (this.t > 4) { this.brain.speak('exerciseDone', {}, 0.6); this.me.perform('wipeBrow'); }
+  }
+}
+
 /** For a quick look-up of what a behaviour is called, by kind. */
 export const KINDS = {
   idle: Idle, wander: Wander, rest: Rest, celebrate: Celebrate, panic: Panic, chat: Chat,
   fight: Fight, flee: Flee, hide: Hide, cower: Cower, confront: Confront, watch: Watch,
   help: Help, mourn: Mourn, arm: Arm, inspect: Inspect, play: Play, throw: ThrowCrate,
-  investigate: Investigate,
+  investigate: Investigate, pullout: PullOut, throwKnife: ThrowKnife, exercise: Exercise,
 };
 
