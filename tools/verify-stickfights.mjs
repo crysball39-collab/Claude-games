@@ -93,10 +93,10 @@ check('PLAY opens the game, the HUD and the spawn menu', await ev(() =>
   !document.querySelector('#hud').classList.contains('hidden') && document.querySelector('#drawer').classList.contains('open')));
 check('the sandbox starts empty', await ev(() => window.__sf.sb.people.length === 0 && window.__sf.sb.crates.length === 0));
 const cards = await ev(() => [...document.querySelectorAll('.card')].map((c) => c.dataset.spawn));
-check('there are four things to spawn: a Stickman, Brass Knuckles, a Combat Knife and a Crate',
-  cards.length === 4 && ['stickman', 'knuckles', 'knife', 'crate'].every((k) => cards.includes(k)), cards.join(', '));
+check('there are six things to spawn: a Stickman, Brass Knuckles, a Combat Knife, a Machete, a Glock-19 and a Crate',
+  cards.length === 6 && ['stickman', 'knuckles', 'knife', 'machete', 'glock', 'crate'].every((k) => cards.includes(k)), cards.join(', '));
 check('the cards are named for what they spawn', await ev(() =>
-  ['Stickman', 'Brass Knuckles', 'Combat Knife', 'Crate'].every((n) => [...document.querySelectorAll('.card b')].some((b) => b.textContent === n))));
+  ['Stickman', 'Brass Knuckles', 'Combat Knife', 'Machete', 'Glock-19', 'Crate'].every((n) => [...document.querySelectorAll('.card b')].some((b) => b.textContent === n))));
 await shot('menu');
 
 /* ------------------------------ grey and black --------------------------- */
@@ -534,7 +534,8 @@ const limp = await ev(() => {
   const p = sb.spawnStickman(0, null, { name: 'Rag' });
   p.brain = null;
   for (let i = 0; i < 60; i++) sb.step(1 / 120);
-  p.takeHit({ by: null, part: 'head', x: p.wj.head.x, y: p.wj.head.y, dir: 1, power: 4.5, kind: 'impact' });
+  // (on the skull: one on the neck can break it, and that kills as often as not)
+  p.takeHit({ by: null, part: 'head', x: p.wj.head.x, y: p.wj.head.y, dir: 1, power: 4.5, kind: 'impact', bone: 'skull' });
   const wentLimp = !!p.rag && p.state === 'ko';
   // every joint stays inside the range it bends through, the whole way down
   let worst = 0, worstName = '';
@@ -702,17 +703,363 @@ const thrownKnife = await ev(() => {
 check('a knife thrown point first sticks into a crate', thrownKnife.inCrate);
 check('...and into a person, who pulls it out', thrownKnife.inBody && thrownKnife.pulled, thrownKnife.said);
 
+/* ------------------------------- the machete ------------------------------ */
+
+await fresh();
+const machete = await ev(() => {
+  const sb = window.__sf.sb;
+  const steps = (n) => { for (let i = 0; i < n; i++) sb.step(1 / 120); };
+  const a = sb.spawnStickman(-0.6, null, { name: 'Kit', traits: { skill: 0.8 } });
+  const m = sb.spawnMachete(-0.3, 0.05);
+  a.brain = null;
+  steps(30);
+  a.facing = 1;
+  steps(20);
+  const picked = a.pickUp(m);
+  steps(120);
+  const holding = a.weapon === m;
+  let chops = 0, gashes = 0, bled = 0, severed = null, victim = null;
+  sb.on('hit', (e) => { if (e.by === a && e.weapon === 'machete') chops++; });
+  // a few blows at somebody new each time, guard down: how bad the wounds are
+  for (let k = 0; k < 6; k++) {
+    victim = sb.spawnStickman(a.pos.x + 0.95, null, { name: 'Lou' + k });
+    victim.brain = null;
+    victim.facing = -1;
+    a.pos.x = victim.pos.x - 0.95; a.facing = 1;
+    steps(36);
+    const n = chops;
+    a.attack(k % 2 ? 'hack' : 'chop', victim);
+    steps(84);
+    if (chops > n) {
+      if (Object.values(victim.health.gashes).some(Boolean)) gashes++;
+      if (victim.health.bleeding > 0.002) bled++;
+    }
+    sb.remove(victim);
+  }
+  const landed = chops;
+  victim = null;
+  sb.on('sever', (e) => { if (!severed) severed = { lost: e.lost, who: e.who }; });
+  // chop at somebody new each time, until something comes off - somebody with
+  // their guard up, since an arm thrown up against a machete is what usually goes
+  for (let k = 0; k < 80 && !severed; k++) {
+    if (victim) sb.remove(victim);
+    victim = sb.spawnStickman(a.pos.x + 0.95, null, { name: 'Lee' + k });
+    victim.brain = null;
+    victim.facing = -1;
+    a.pos.x = victim.pos.x - 0.95; a.facing = 1;
+    steps(36);
+    victim.setPosture('guard');
+    if (k % 3 !== 2) victim.block(true);
+    steps(12);
+    a.attack(k % 3 === 2 ? 'hack' : 'chop', victim);
+    steps(84);
+  }
+  const v = severed && severed.who;
+  const part = v && Object.keys(v.health.missing)[0];
+  return {
+    picked, holding, landed, chops: chops - landed, gashes, bled, severed: !!severed, lost: severed && severed.lost,
+    limbs: sb.limbs.length, limbName: sb.limbs[0] && sb.limbs[0].name,
+    stump: !!(v && part && v.health.stumps[part] > 0), conds: v ? v.health.conditions().slice(0, 4).join('; ') : '',
+  };
+});
+check('a stickman picks up the machete and holds it', machete.picked && machete.holding);
+check('a machete chop leaves a gaping wound that bleeds', machete.landed >= 3 && machete.gashes >= 2 && machete.bled >= 2,
+  `${machete.landed} blows landed, ${machete.gashes} left a machete wound, ${machete.bled} left them bleeding`);
+check('a hard enough chop takes a limb clean off: it falls to the floor and the stump bleeds', machete.severed && machete.limbs >= 1 && machete.stump,
+  `${machete.limbName || 'nothing'} off after ${machete.chops} blows landed; ${machete.conds}`);
+await ev(() => { const sf = window.__sf; sf.cam.follow = null; sf.cam.glide = null; sf.cam.x = sf.sb.limbs.length ? sf.sb.limbs[0].pos.x : 0; sf.cam.clamp(); });
+await page.waitForTimeout(150);
+await shot('machete');
+
+await fresh();
+const tq = await ev(() => {
+  const sb = window.__sf.sb;
+  const steps = (n, stop) => { for (let i = 0; i < n; i++) { sb.step(1 / 120); if (stop && stop()) return true; } return false; };
+  const v = sb.spawnStickman(0, null, { name: 'Vic', traits: { toughness: 0.9 } });
+  const f = sb.spawnStickman(2.5, null, { name: 'Fay', traits: { empathy: 0.95, bravery: 0.8 } });
+  steps(60);
+  for (const [x, y] of [[v, f], [f, v]]) { const r = x.brain.rel(y); r.like = 0.8; r.fam = 0.6; r.met = true; r.greeted = true; }
+  v.sever('forearmA', 1, 1);
+  const tied = steps(120 * 40, () => v.health.tourniquet.armA);
+  const said = f.brain.thoughts.map((t) => t.text).slice(-2).join(' / ');
+  v.dislocate('shoulderB');
+  const out = !!v.health.dislocated.shoulderB && !v.health.canUse('armB');
+  const back = steps(120 * 40, () => !v.health.dislocated.shoulderB);
+  return { tied, out, back, alive: !v.dead, conds: v.health.conditions().slice(0, 3).join('; '), said, vThought: v.brain.thoughts.slice(-3).map((t) => t.text).join(' / ') };
+});
+check('a friend ties off the stump with a tourniquet', tq.tied && tq.alive, tq.conds);
+check('a joint knocked out of its socket stops the arm working, and a friend pops it back in', tq.out && tq.back, tq.vThought);
+
+await fresh();
+const face = await ev(() => {
+  const sb = window.__sf.sb;
+  const p = sb.spawnStickman(0, null, { name: 'Ida', traits: { toughness: 0.9 } });
+  p.brain = null;
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  for (let k = 0; k < 14; k++) {
+    p.health.parts.head.hp = p.health.parts.head.max;
+    p.health.conscious = 1;
+    p.takeHit({ by: null, part: 'head', x: p.wj.head.x, y: p.wj.head.y, dir: 1, power: 1.3, kind: 'cross' });
+    for (let i = 0; i < 40; i++) sb.step(1 / 120);
+  }
+  const f = p.health.face;
+  return { eye: Math.max(...f.blackEye), lip: f.lip, nose: f.nose, teeth: f.teeth, conds: p.health.conditions().filter((c) => /eye|lip|nose|tooth|teeth/i.test(c)) };
+});
+check('punches to the face leave their marks: black eyes, a split lip, a bloody nose, knocked-out teeth',
+  face.conds.length >= 2 && (face.eye > 0.25 || face.lip > 0.3 || face.nose > 0.3), face.conds.join('; '));
+
+/* ------------------------------- the Glock-19 ------------------------------ */
+
+await fresh();
+const pistol = await ev(() => {
+  const sb = window.__sf.sb;
+  const steps = (n) => { for (let i = 0; i < n; i++) sb.step(1 / 120); };
+  const a = sb.spawnStickman(-4, null, { name: 'Gus', traits: { skill: 0.9 } });
+  const b = sb.spawnStickman(3, null, { name: 'Tam' });
+  // two crates high, so the one on top is in the way of a shot at the chest
+  const c0 = sb.spawnCrate(0, 0.4);
+  const c = sb.spawnCrate(0, 1.2);
+  const g = sb.spawnGun(-3.6, 0.1);
+  a.brain = null; b.brain = null;
+  steps(30);
+  a.facing = 1;
+  steps(10);
+  const picked = a.pickUp(g);
+  steps(120);
+  const holding = a.weapon === g && a.armedWith === 'glock';
+  let shots = 0, hitTam = 0, hitCrate = 0;
+  sb.on('shot', (e) => { if (e.who === a) shots++; });
+  sb.on('bulletHit', (e) => { if (e.what === b) hitTam++; if (e.what === c || e.what === c0) hitCrate++; });
+  a.aimAt(b);
+  steps(80);
+  const mag0 = g.mag;
+  for (let i = 0; i < 4; i++) { a.fire(); steps(50); }
+  const mag1 = g.mag;
+  // empty it, then reload
+  while (g.mag > 0) { a.fire(); steps(16); }
+  const dry = g.mag;
+  const reloading = a.reload();
+  steps(240);
+  return {
+    picked, holding, shots, mag0, mag1, dry, reloading, mag2: g.mag, spare: g.spare, hitTam, hitCrate,
+    holes: c.holes.length + c0.holes.length, wounds: b.health.conditions().filter((s) => /gunshot|shot|bullet/i.test(s)).join('; '), casings: sb.fx.casings.length,
+  };
+});
+check('a stickman picks up the Glock-19 and holds it up to aim', pistol.picked && pistol.holding);
+check('each shot uses a round from the magazine and leaves a casing on the floor', pistol.mag0 - pistol.mag1 === 4 && pistol.casings >= 4,
+  `${pistol.mag0} -> ${pistol.mag1}, ${pistol.casings} casings`);
+check('the bullets go through the crate in the way and into the person behind it', pistol.hitCrate >= 2 && pistol.holes >= 4 && pistol.hitTam >= 1 && pistol.wounds,
+  `${pistol.hitCrate} through the crate (${pistol.holes} holes), ${pistol.hitTam} into Tam: ${pistol.wounds}`);
+check('empty, it is reloaded from the spare magazines', pistol.dry === 0 && pistol.reloading && pistol.mag2 === 15 && pistol.spare === 15,
+  `${pistol.mag2} in the magazine, ${pistol.spare} spare`);
+
+await fresh();
+const tapGun = await ev(() => {
+  const sf = window.__sf, sb = sf.sb;
+  const g = sb.spawnGun(0, 0.12, 0);
+  for (let i = 0; i < 120; i++) sb.step(1 / 120);
+  sf.cam.follow = null; sf.cam.glide = null; sf.cam.x = 0; sf.cam.clamp();
+  window.__g = g;
+  return { mag: g.mag, at: sf.cam.toScreen(g.pos.x, g.pos.y) };
+});
+await page.tap('.tool[data-tool="hand"]');
+await page.touchscreen.tap(tapGun.at.x, tapGun.at.y);
+await page.waitForTimeout(250);
+const tapped = await ev(() => ({ mag: window.__g.mag, toast: document.querySelector('#toast').textContent }));
+check('tapping a pistol lying on the floor fires it', tapped.mag === tapGun.mag - 1, `${tapGun.mag} -> ${tapped.mag}: "${tapped.toast}"`);
+
+await fresh();
+const scare = await ev(() => {
+  const sb = window.__sf.sb;
+  const steps = (n, stop) => { for (let i = 0; i < n; i++) { sb.step(1 / 120); if (stop && stop()) return true; } return false; };
+  const g = sb.spawnStickman(-3, null, { name: 'Gus' });
+  const t = sb.spawnStickman(1, null, { name: 'Tam', traits: { bravery: 0.2 } });
+  const w = sb.spawnStickman(-7, null, { name: 'Wes', traits: { bravery: 0.25 } });
+  const pistol = sb.spawnGun(-2.6, 0.1);
+  steps(60);
+  g.brain = null;
+  g.facing = 1;
+  g.pickUp(pistol);
+  steps(150);
+  t.facing = -1;
+  g.aimAt(t);
+  // (giving up, or cowering: either way, up go the hands)
+  const handsUp = steps(120 * 4, () => t.posture === 'handsUp' && t.brain.behaviour && (t.brain.behaviour.kind === 'surrender' || t.brain.behaviour.kind === 'cower'));
+  const tSaid = (t.brain.behaviour ? t.brain.behaviour.kind + ': ' : '') + (t.bubble ? t.bubble.text : '');
+  // and then it goes off
+  const fear0 = w.brain.emo.fear;
+  g.fire();
+  const did = new Set();
+  let wFear = 0;
+  steps(120 * 3, () => {
+    for (const p of [t, w]) {
+      if (p.brain.behaviour) did.add(p.name + ':' + p.brain.behaviour.kind);
+      if (p.posture) did.add(p.name + ':' + p.posture);
+    }
+    wFear = Math.max(wFear, w.brain.emo.fear);
+    return false;
+  });
+  return { handsUp, tSaid, did: [...did], fear0, wFear };
+});
+check('with a gun pointed at them, they put their hands up', scare.handsUp, scare.tSaid);
+check('a gunshot sends people running or diving for cover', scare.did.some((d) => /^Wes:(flee|hide|cower|surrender|coverHead|handsUp|panic)$/.test(d)) && scare.wFear > scare.fear0 + 0.15,
+  `${scare.did.join(', ')}; Wes's fear ${scare.fear0.toFixed(2)} -> ${scare.wFear.toFixed(2)}`);
+
+/* -------------------------------- remembering ------------------------------ */
+
+await fresh();
+const mem = await ev(() => {
+  const sb = window.__sf.sb;
+  const steps = (n, stop) => { for (let i = 0; i < n; i++) { sb.step(1 / 120); if (stop && stop()) return true; } return false; };
+  const a = sb.spawnStickman(-1.2, null, { name: 'Axl', traits: { aggression: 0.9, temper: 0.9 } });
+  const b = sb.spawnStickman(0.2, null, { name: 'Bea', traits: { bravery: 0.4 } });
+  steps(60);
+  a.brain = null;
+  // a punch, again if it misses
+  let m = null;
+  for (let k = 0; k < 5 && !m; k++) {
+    a.facing = 1;
+    b.facing = -1;
+    b.pos.x = a.pos.x + 0.8;
+    steps(10);
+    a.attack('cross', b);
+    steps(90);
+    m = b.brain.memories.find((x) => x.who === a && x.v < 0);
+  }
+  // Axl goes away for a while, and comes back
+  a.pos.x = -18;
+  steps(60);
+  b.brain.rel(a).lastSeen = sb.time - 30;
+  a.pos.x = b.pos.x - 2.5;
+  const recalled = steps(120 * 4, () => b.brain.thoughts.some((t) => /I remember Axl/.test(t.text)));
+  return { kept: m ? b.brain.memoryText(m) : null, recalled, thought: b.brain.thoughts.slice(-2).map((t) => t.text).join(' / ') };
+});
+check('they remember who hurt them', !!mem.kept, mem.kept || 'nothing');
+check('...and when that person comes back, it comes back to them', mem.recalled, mem.thought);
+
+await fresh();
+const gossip = await ev(() => {
+  const sb = window.__sf.sb;
+  const a = sb.spawnStickman(-17, null, { name: 'Axl' });
+  const b = sb.spawnStickman(9, null, { name: 'Bea', traits: { sociability: 0.9, aggression: 0.1 } });
+  const c = sb.spawnStickman(11, null, { name: 'Cal', traits: { sociability: 0.9, aggression: 0.1 } });
+  a.brain = null;
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  for (const [x, y] of [[b, c], [c, b]]) { const r = x.brain.rel(y); r.like = 0.7; r.fam = 0.6; r.met = true; r.greeted = true; }
+  b.brain.remember('shotMe', a);
+  const like0 = c.brain.rel(a).like;
+  for (let i = 0; i < 120 * 90; i++) {
+    sb.step(1 / 120);
+    if (c.brain.memories.some((m) => m.from === b && m.who === a)) break;
+  }
+  const m = c.brain.memories.find((x) => x.from === b && x.who === a);
+  return { told: m ? c.brain.memoryText(m) : null, like0, like1: c.brain.rel(a).like };
+});
+check('in a chat they pass on what they know: a reputation gets around', !!gossip.told && gossip.like1 < gossip.like0 - 0.1,
+  `${gossip.told || 'nothing passed on'}; Cal's liking for Axl ${gossip.like0.toFixed(2)} -> ${gossip.like1.toFixed(2)}`);
+
+/* -------------------------- editing a stickman's mind ----------------------- */
+
+await fresh();
+await ev(() => {
+  const sf = window.__sf, sb = sf.sb;
+  const a = sb.spawnStickman(-1.5, null, { name: 'Gus', traits: { aggression: 0.3, temper: 0.3 } });
+  const b = sb.spawnStickman(1.2, null, { name: 'Tam' });
+  const c = sb.spawnStickman(3.5, null, { name: 'Bea' });
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  a.brain.setRelation(b, 'friend');
+  a.brain.setRelation(c, 'dislikes');
+  window.__a = a; window.__b = b; window.__c = c;
+  sf.cam.follow = null; sf.cam.glide = null; sf.cam.x = 0; sf.cam.clamp();
+  sf.ui.select(a);
+});
+await page.waitForTimeout(400);
+const groups = await ev(() => [...document.querySelectorAll('#ins-people .ppl-group')].map((g) => ({
+  title: g.querySelector('.ppl-title').firstChild.textContent, names: [...g.querySelectorAll('.person b')].map((n) => n.textContent),
+})));
+const titles = groups.map((g) => g.title);
+check('the inspector lists everyone under Friends, Knows, Dislikes and - below Dislikes - Enemies',
+  titles.indexOf('FRIENDS') === 0 && titles.indexOf('KNOWS') === 1 && titles.indexOf('DISLIKES') === 2 && titles.indexOf('ENEMIES') === 3 &&
+  groups[0].names.includes('Tam') && groups[2].names.includes('Bea'), groups.map((g) => g.title + ': ' + g.names.join(',')).join(' | '));
+
+// make Bea an enemy, with the menu in her row
+await ev(() => {
+  const row = [...document.querySelectorAll('#ins-people .person')].find((r) => r.dataset.name === 'Bea');
+  const sel = row.querySelector('select');
+  sel.value = 'enemy';
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+});
+await page.waitForTimeout(400);
+const enemy = await ev(() => {
+  const g = document.querySelector('#ins-people .ppl-group.enemy');
+  const r = window.__a.brain.rel(window.__c);
+  return { inGroup: [...g.querySelectorAll('.person b')].map((n) => n.textContent), enemy: r.enemy, like: r.like };
+});
+check('picking Enemy for someone moves them under Enemies, and that is what they think of them now', enemy.inGroup.includes('Bea') && enemy.enemy && enemy.like < -0.6,
+  `${enemy.inGroup.join(',')}; liking ${enemy.like.toFixed(2)}`);
+
+// drag the anger bar most of the way along
+const angerBar = await ev(() => {
+  const row = [...document.querySelectorAll('#ins-emotions .meter')].find((m) => m.firstChild.textContent === 'Anger');
+  row.scrollIntoView({ block: 'center' });
+  const r = row.querySelector('.bar').getBoundingClientRect();
+  return { x0: r.left + r.width * 0.15, x1: r.left + r.width * 0.92, y: r.top + r.height / 2 };
+});
+await touch('touchStart', angerBar.x0, angerBar.y);
+for (let i = 1; i <= 6; i++) await touch('touchMove', angerBar.x0 + (angerBar.x1 - angerBar.x0) * i / 6, angerBar.y);
+await touch('touchEnd', angerBar.x1, angerBar.y);
+await page.waitForTimeout(150);
+const anger = await ev(() => window.__a.brain.emo.anger);
+check('dragging a feeling\'s bar sets how they feel', anger > 0.8, `anger ${anger.toFixed(2)}`);
+
+// and turn their bravery all the way up
+const brave = await ev(() => {
+  const input = [...document.querySelectorAll('#ins-personality .trait')].find((t) => t.firstChild.textContent === 'Bravery').querySelector('input');
+  input.value = '97';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  return { trait: window.__a.brain.traits.bravery, chips: [...document.querySelectorAll('#ins-traits .chip')].map((c) => c.textContent) };
+});
+check('the personality sliders change who they are', Math.abs(brave.trait - 0.97) < 0.001 && brave.chips.includes('Brave'), brave.chips.join(', '));
+
+// send them to fight Tam, their friend
+await ev(() => { const row = [...document.querySelectorAll('#ins-people .person')].find((r) => r.dataset.name === 'Tam'); row.scrollIntoView({ block: 'center' }); });
+await page.waitForTimeout(100);
+await page.tap('#ins-people .person[data-name="Tam"] .mini-btn');
+await page.waitForTimeout(300);
+const ordered = await ev(() => {
+  const a = window.__a, b = window.__b, sb = window.__sf.sb;
+  const before = { target: a.brain.ordered && a.brain.ordered.target.name, button: document.querySelector('#ins-people .person[data-name="Tam"] .mini-btn').textContent,
+    banner: !document.querySelector('#ins-order').classList.contains('hidden') && document.querySelector('#ins-order-text').textContent };
+  let hits = 0, after = 0, n = 0;
+  sb.on('hit', (e) => { if (e.by === a && e.who === b) hits++; });
+  for (let i = 0; i < 120 * 15 && !hits; i++) {
+    sb.step(1 / 120);
+    n++;
+    if (a.brain.fightTarget === b) after++;
+  }
+  return { ...before, after: after / Math.max(1, n), hits };
+});
+check('the Fight button sends them after that person, friend or not', ordered.target === 'Tam' && ordered.button === 'Stop' && (ordered.hits >= 1 || ordered.after > 0.9),
+  `${ordered.banner}; after Tam ${(ordered.after * 100).toFixed(0)}% of the time, ${ordered.hits} blows landed`);
+await shot('inspector-edit');
+await page.tap('#ins-order-stop');
+await page.waitForTimeout(250);
+check('...and they can be called off', await ev(() => !window.__a.brain.ordered && document.querySelector('#ins-order').classList.contains('hidden')));
+await ev(() => window.__sf.ui.select(null));
+
 /* ------------------------- animations and words -------------------------- */
 
 const lib = await ev(() => {
   const { CLIPS, LINES } = window.__sf;
   let lines = 0;
   for (const v of Object.values(LINES)) lines += Array.isArray(v) ? v.length : Object.values(v).reduce((a, b) => a + b.length, 0);
-  const need = ['stab', 'slash', 'knifeThrow', 'pullOut', 'brace', 'hug', 'highFive', 'handshake', 'pushups', 'squats', 'jumpingJacks', 'handsUp', 'clutchStomach', 'shiver'];
+  const need = ['stab', 'slash', 'knifeThrow', 'pullOut', 'brace', 'hug', 'highFive', 'handshake', 'pushups', 'squats', 'jumpingJacks', 'handsUp', 'clutchStomach', 'shiver',
+    'chop', 'hack', 'macheteGuard', 'aimPistol', 'reload', 'tourniquet', 'popJoint', 'clutchStump', 'coverHead', 'retch', 'shock'];
   return { clips: Object.keys(CLIPS).length, missing: need.filter((n) => !CLIPS[n]), lines, kinds: Object.keys(LINES).length };
 });
-check('over a hundred hand-keyed clips, knife fighting, hugs and press-ups among them', lib.clips >= 100 && !lib.missing.length, `${lib.clips} clips${lib.missing.length ? ', missing ' + lib.missing.join(' ') : ''}`);
-check('hundreds of things to say, for every situation', lib.lines >= 450 && lib.kinds >= 90, `${lib.lines} lines in ${lib.kinds} situations`);
+check('over a hundred hand-keyed clips: knife and machete fighting, aiming and reloading a pistol, tying a tourniquet, hugs, press-ups',
+  lib.clips >= 110 && !lib.missing.length, `${lib.clips} clips${lib.missing.length ? ', missing ' + lib.missing.join(' ') : ''}`);
+check('hundreds of things to say, for every situation', lib.lines >= 700 && lib.kinds >= 140, `${lib.lines} lines in ${lib.kinds} situations`);
 
 await fresh();
 const bye = await ev(() => {
@@ -739,6 +1086,8 @@ const mayhem = await ev(() => {
   for (let i = 0; i < 6; i++) sb.spawnCrate(-8 + i * 3.2, 0.4 + (i % 2) * 2);
   for (let i = 0; i < 3; i++) sb.spawnKnuckles(-6 + i * 6, 0.1);
   for (let i = 0; i < 2; i++) sb.spawnKnife(-3 + i * 6, 0.1);
+  for (let i = 0; i < 2; i++) sb.spawnMachete(-9 + i * 15, 0.1);
+  sb.spawnGun(0.5, 0.1);
   for (let i = 0; i < 60; i++) sb.step(1 / 120);
   const ps = sb.people;
   for (let i = 0; i < ps.length; i += 2) { const r = ps[i].brain.rel(ps[(i + 3) % ps.length]); r.anger = 0.9; r.like = -0.6; }
@@ -756,7 +1105,7 @@ const mayhem = await ev(() => {
   }
   return { bad, kinds: [...kinds], people: sb.people.length, dead: sb.people.filter((p) => p.dead).length };
 });
-check('ten stickmen, six crates, three knuckles and two knives for 45 seconds: nothing turns into NaN', mayhem.bad === 0);
+check('ten stickmen, six crates, knuckles, knives, machetes and a pistol for 45 seconds: nothing turns into NaN', mayhem.bad === 0);
 check('...and they get up to many different things', mayhem.kinds.length >= 6, mayhem.kinds.join(', '));
 await ev(() => { window.__sf.sb.paused = false; });
 await page.waitForTimeout(800);

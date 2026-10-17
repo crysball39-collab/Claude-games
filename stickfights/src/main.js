@@ -40,11 +40,14 @@ resize();
 
 /* --------------------------------- sound ---------------------------------- */
 
-const SCREAMS = new Set(['panic', 'hurtBig', 'flee', 'grabbed', 'grabbedAgain', 'broken']);
+const SCREAMS = new Set(['panic', 'hurtBig', 'flee', 'grabbed', 'grabbedAgain', 'broken', 'shot', 'severedSelf', 'chopped', 'gunshots', 'dislocatedSelf']);
 sb.on('hit', (e) => {
+  if (e.weapon === 'bullet') return;   // its own sound, from bulletHit
   if (e.weapon === 'knife') {
     if (e.deep) sound.stab(e.power, e.x); else sound.slash(e.x);
     if (!e.blocked) sound.punch(e.power * 0.35, false, e.x);
+  } else if (e.weapon === 'machete') {
+    sound.chop(e.power, e.x);
   } else if (e.kind === 'impact' && e.object && e.object.kind === 'stickman') {
     sound.punch(e.power * 0.7, false, e.x);
   } else if (e.kind === 'impact') {
@@ -57,8 +60,24 @@ sb.on('hit', (e) => {
 });
 sb.on('swing', (e) => {
   if (e.kind === 'slash') sound.slash(e.who.pos.x);
-  else sound.whoosh(e.who.pos.x, e.kind === 'cross' || e.kind === 'kick' || e.kind === 'uppercut' || e.kind === 'stab');
+  else sound.whoosh(e.who.pos.x, e.kind === 'cross' || e.kind === 'kick' || e.kind === 'uppercut' || e.kind === 'stab' || e.kind === 'chop' || e.kind === 'hack');
 });
+sb.on('shot', (e) => {
+  sound.gunshot(e.x);
+  // the closer it is to the middle of the view, the more the view jumps
+  cam.shake(0.08 + 0.18 / (1 + Math.abs(e.x - cam.x) / 4));
+});
+sb.on('dryFire', (e) => sound.dryFire(e.x));
+sb.on('magOut', (e) => sound.gunClick(e.x, 'magOut'));
+sb.on('magIn', (e) => sound.gunClick(e.x, 'magIn'));
+sb.on('rack', (e) => sound.gunClick(e.x, 'rack'));
+sb.on('casing', (e) => sound.casing(e.x, e.speed));
+sb.on('ricochet', (e) => sound.ricochet(e.x));
+sb.on('bulletHit', (e) => sound.bulletHit(e.what ? e.what.kind : null, e.x));
+sb.on('sever', (e) => { sound.sever(e.x); cam.shake(0.25); });
+sb.on('dislocate', (e) => sound.jointPop(e.x));
+sb.on('relocate', (e) => sound.jointPop(e.x));
+sb.on('faint', (e) => sound.thud(4, e.who.pos.x));
 sb.on('throw', (e) => sound.whoosh(e.who.pos.x, true));
 sb.on('clatter', (e) => {
   if (e.what.kind === 'crate') sound.wood(e.speed, e.x);
@@ -87,6 +106,7 @@ function demo() {
   sb.spawnCrate(2.65, 1.2);
   sb.spawnKnuckles(-2.6, 0.1);
   sb.spawnKnife(5.6, 0.1, 0.3);
+  sb.spawnMachete(-6.4, 0.1, 0.1);
   const a = sb.spawnStickman(-4.2, null, { traits: { aggression: 0.85, temper: 0.85, bravery: 0.8 } });
   const b = sb.spawnStickman(-0.8, null, { traits: { sociability: 0.8, empathy: 0.7 } });
   const c = sb.spawnStickman(1.2, null, { traits: { sociability: 0.7, aggression: 0.3 } });

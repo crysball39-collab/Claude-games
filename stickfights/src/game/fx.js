@@ -1,17 +1,20 @@
 /* =============================================================================
-   Particles: blood, dust and the little bursts that go with a hit.
+   Particles: blood, dust and the little bursts that go with a hit - and the
+   gun's: the flash at the muzzle, the streak of a bullet, sparks, splinters,
+   and the empty cases, which bounce and stay where they land.
 
    Blood is simulated until it lands, and it stays where it lands: on the
    floor as a splat that spreads, on a crate as a stain in the crate's own
    frame (so it turns with the crate), or on somebody, as a mark on whichever
    bone it hit.
    ========================================================================== */
-import { rand, segDist } from '../core/util.js';
+import { rand, segDist, clamp as clampTo } from '../core/util.js';
 import { BONES, DIM } from './skeleton.js';
 
 const G = 18;
 const MAX_DROPS = 700;
 const MAX_SPLATS = 420;
+const MAX_CASINGS = 80;
 
 export class FX {
   constructor(sandbox) {
@@ -20,6 +23,11 @@ export class FX {
     this.puffs = [];
     this.bursts = [];
     this.splats = [];
+    this.flashes = [];
+    this.tracers = [];
+    this.sparkles = [];
+    this.chips = [];
+    this.casings = [];
   }
 
   clear() {
@@ -27,6 +35,39 @@ export class FX {
     this.puffs.length = 0;
     this.bursts.length = 0;
     this.splats.length = 0;
+    this.flashes.length = 0;
+    this.tracers.length = 0;
+    this.sparkles.length = 0;
+    this.chips.length = 0;
+    this.casings.length = 0;
+  }
+
+  /** The flash at a muzzle, pointing the way the shot went (a counter-clockwise from +x). */
+  flash(x, y, a) { this.flashes.push({ x, y, a, age: 0, life: 0.05, s: rand(0.8, 1.2) }); }
+
+  /** The streak a bullet leaves along its path for an instant. */
+  tracer(x0, y0, x1, y1) { this.tracers.push({ x0, y0, x1, y1, age: 0, life: 0.07 }); }
+
+  sparks(x, y, n = 4) {
+    for (let i = 0; i < n; i++) {
+      this.sparkles.push({ x, y, vx: rand(-3, 3), vy: rand(0.5, 4), age: 0, life: rand(0.12, 0.3) });
+    }
+  }
+
+  /** Wood flying off a crate where a bullet went in or out, along (dx, dy). */
+  splinters(x, y, dx, dy, n = 5) {
+    for (let i = 0; i < n; i++) {
+      this.chips.push({
+        x, y, vx: dx * rand(1, 3) + rand(-1, 1), vy: dy * rand(1, 3) + rand(-0.5, 1.5),
+        a: rand(0, Math.PI), va: rand(-20, 20), age: 0, life: rand(0.4, 0.8),
+      });
+    }
+  }
+
+  /** An empty case, out of the ejection port: it tumbles, bounces and stays put. */
+  casing(x, y, vx, vy) {
+    if (this.casings.length >= MAX_CASINGS) this.casings.shift();
+    this.casings.push({ x, y, vx, vy, a: rand(0, Math.PI), va: rand(-30, 30), rest: false, bounces: 0 });
   }
 
   /** A spray of blood from (x, y), flung along (vx, vy). */
@@ -122,6 +163,52 @@ export class FX {
       b.age += dt;
       if (b.age > b.life) this.bursts.splice(i, 1);
     }
+    for (const list of [this.flashes, this.tracers]) {
+      for (let i = list.length - 1; i >= 0; i--) if ((list[i].age += dt) > list[i].life) list.splice(i, 1);
+    }
+    for (const list of [this.sparkles, this.chips]) {
+      for (let i = list.length - 1; i >= 0; i--) {
+        const p = list[i];
+        p.age += dt;
+        p.vy -= G * dt;
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        if (p.va) p.a += p.va * dt;
+        if (p.y < 0) { p.y = 0; p.vy *= -0.3; p.vx *= 0.5; p.va = 0; }
+        if (p.age > p.life) list.splice(i, 1);
+      }
+    }
+    for (const c of this.casings) {
+      if (c.rest) continue;
+      c.vy -= G * dt;
+      c.x += c.vx * dt; c.y += c.vy * dt;
+      c.a += c.va * dt;
+      const top = this.casingFloor(c.x, c.y);
+      if (c.y <= top) {
+        c.y = top;
+        if (Math.abs(c.vy) > 0.8 && c.bounces < 4) {
+          c.bounces++;
+          this.sb.emit('casing', { x: c.x, y: c.y, speed: -c.vy });
+          c.vy = -c.vy * 0.35;
+          c.vx *= 0.55;
+          c.va *= 0.5;
+        } else {
+          c.rest = true;
+          c.vy = 0;
+          c.a = Math.round(c.a / Math.PI) * Math.PI;
+        }
+      }
+      if (c.x < sb.left || c.x > sb.right) { c.x = clampTo(c.x, sb.left, sb.right); c.vx = -c.vx * 0.3; }
+    }
+  }
+
+  /** What an empty case lands on: the floor, or the top of a crate. */
+  casingFloor(x, y) {
+    let top = 0.006;
+    for (const c of this.sb.crates) {
+      if (c.removed || c.carriedBy || !c.body.contains(x, y - 0.02, 0.01)) continue;
+      top = Math.max(top, c.body.topAt(x) + 0.006);
+    }
+    return top;
   }
 
   /** A drop that runs into someone may stay on them, on the bone it hit. */

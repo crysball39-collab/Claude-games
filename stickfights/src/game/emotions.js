@@ -17,6 +17,12 @@ export const EMOTIONS = ['joy', 'sadness', 'anger', 'fear', 'surprise'];
 
 export class Emotions {
   constructor(t) {
+    this.retune(t);
+    for (const e of EMOTIONS) this[e] = this.base[e];
+  }
+
+  /** Where each emotion rests and how fast it gets back there, from who they are. */
+  retune(t) {
     this.base = {
       joy: 0.22 + t.sociability * 0.12 + (1 - t.temper) * 0.06,
       sadness: 0.04,
@@ -31,7 +37,6 @@ export class Emotions {
       fear: 0.09 - (1 - t.bravery) * 0.04,
       surprise: 1.1,
     };
-    for (const e of EMOTIONS) this[e] = this.base[e];
   }
 
   bump(e, amount) {

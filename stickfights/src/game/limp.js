@@ -15,9 +15,13 @@
      knee      the shin on the thigh             -3 .. 150  (it only folds back)
      ankle     the foot on the shin            -150 .. -60
      a break   either half of a broken bone     -75 .. 75   (it just flops)
+
+   A joint out of its socket bends a good way further than that, and a limb
+   that has been cut off is not part of the body any more: its points are
+   kept, for the bookkeeping, but weigh nothing and touch nothing.
    ========================================================================== */
 import { Ragdoll } from '../physics/ragdoll.js';
-import { DIM, BONES, MIDS } from './skeleton.js';
+import { DIM, BONES, MIDS, BELOW_BREAK } from './skeleton.js';
 
 // kilograms, about 70 in all; and how big each point is, for touching things
 const MASS = {
@@ -69,11 +73,15 @@ export function makeRagdoll(man, dt = 1 / 120) {
   const s = man.scale;
   const rag = new Ragdoll({ facing: man.facing, gravity: 18 });
   const w = man.wj, pw = man.prevWj;
-  const broken = man.health.broken;
+  const broken = man.health.broken, severed = man.health.severed || {}, out = man.health.dislocated || {};
+  // everything past a cut
+  const gone = new Set();
+  for (const mid of Object.values(man.cut || {})) for (const k of BELOW_BREAK[mid]) gone.add(k);
   const add = (name, mass, r) => {
     const q = w[name], o = pw[name];
     const vx = clamp((q.x - o.x) / dt, -25, 25), vy = clamp((q.y - o.y) / dt, -25, 25);
-    return rag.point(name, q.x, q.y, mass * s, r * s, vx, vy, dt);
+    const g = gone.has(name);
+    return rag.point(name, q.x, q.y, (g ? 0.02 : mass) * s, (g ? 0.004 : r) * s, vx, vy, dt);
   };
   for (const k of Object.keys(RADIUS)) add(k, MASS[k], RADIUS[k]);
   add('head', MASS.head, DIM.headR + half);
@@ -85,7 +93,7 @@ export function makeRagdoll(man, dt = 1 / 120) {
   // which long bones are snapped: they get a point at the break
   const snapped = new Set();
   for (const [from, to, , bone, mid] of BONES) {
-    if (!mid || !broken[bone]) continue;
+    if (!mid || !(broken[bone] || severed[bone])) continue;
     snapped.add(mid);
     add(mid, 1, 0.036);
     rag.link(ref(from), n[mid], boneLength(from, to, s) / 2);
@@ -102,13 +110,20 @@ export function makeRagdoll(man, dt = 1 / 120) {
     return null;
   };
   const muscles = [];
-  for (const [name, pf, pt, cf, ct, lo, hi, k, rest] of JOINTS) {
+  for (const [name, pf, pt, cf, ct, lo0, hi0, k, rest] of JOINTS) {
     const pm = midAfter(pf, pt), cm = midAfter(cf, ct);
     // the parent's direction is taken from the part of it next to the pivot
     const p0 = pm && pt === cf ? pm : ref(pf), p1 = pm && pf === cf ? pm : ref(pt);
+    // out of its socket, a joint goes a long way past where it should stop
+    let lo = lo0, hi = hi0;
+    if (out[name]) {
+      if (name.startsWith('shoulder')) { lo -= 70; hi += 50; }
+      else if (name.startsWith('elbow')) hi += 70;
+      else if (name.startsWith('knee')) lo -= 65;
+    }
     const i = rag.joint(name, p0, p1, ref(cf), cm || ref(ct), lo, hi);
     rag.joints[i].rest = rest * Math.PI / 180;
-    muscles.push({ i, k, name, arm: ARM_JOINTS.has(name), leg: LEG_JOINTS.has(name) });
+    muscles.push({ i, k, name, arm: ARM_JOINTS.has(name), leg: LEG_JOINTS.has(name), gone: gone.has(ct) || gone.has(cf) || !!out[name] });
   }
   for (const m of snapped) {
     const [from, to] = MID_BONE[m];
@@ -150,6 +165,7 @@ export function aimMuscles(rag, local, health, tone, mix = null) {
     // how much of each part of the body is trying: arms, legs, the trunk
     if (mix) k *= m.arm ? mix.arms : m.leg ? mix.legs : mix.core;
     if (m.arm && !armsOK[m.name.slice(-1)]) k = 0;
+    if (m.gone) k = 0;
     if (m.leg && !legsOK) k = 0;
     if (health.paralysed === 'all' && m.name !== 'neck') k = 0;
     rag.setTarget(m.i, bend, k);

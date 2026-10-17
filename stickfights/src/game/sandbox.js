@@ -10,22 +10,59 @@
    Each step: the brains think, the bodies move (animated ones by their
    controllers), the hand drags whatever it holds, the ragdolls fall and
    tumble, the crates and props move, and then what ran into what is sorted
-   out - bodies bowling into people, knives going in point first.
+   out - bodies bowling into people, blades going in point first.
+
+   Bullets do not fly: a shot is traced the instant it is fired, along its
+   line, into and through whatever is in the way (shoot()).
    ========================================================================== */
 import { World, Body } from '../physics/rigid.js';
 import { Stickman, G } from './stickman.js';
-import { Crate, Knuckles, Knife, CRATE_SIZE } from './props.js';
-import { KNIFE_W } from './draw.js';
+import { Crate, Knuckles, Knife, Machete, Gun, Limb, CRATE_SIZE } from './props.js';
 import { FX } from './fx.js';
 import { makePerson } from './people.js';
-import { clamp } from '../core/util.js';
+import { clamp, rand, chance } from '../core/util.js';
 
 export const STEP = 1 / 120;
 export const HALF_WIDTH = 20;
-export const LIMITS = { people: 24, crates: 40, knuckles: 16, knives: 16 };
+export const LIMITS = { people: 24, crates: 40, knuckles: 16, knives: 16, machetes: 16, guns: 12, limbs: 40 };
+// how likely a bullet is to hit someone in its way who it was not aimed at
+const STRAY_HIT = 0.4;
 
 // bodies piling on bodies: how big each heavy point is to another ragdoll
 const PILE_R = { head: 0.17, neck: 0.08, chest: 0.09, hip: 0.09, kneeA: 0.06, kneeB: 0.06 };
+
+/**
+ * Where a ray from (px, py) along the unit (dx, dy) goes into a box body,
+ * and how far it then is to where it comes out: { t, out }, or null.
+ */
+function rayBox(b, px, py, dx, dy, max) {
+  const c = Math.cos(b.rot), s = Math.sin(b.rot);
+  const rx = px - b.pos.x, ry = py - b.pos.y;
+  const ox = rx * c + ry * s, oy = -rx * s + ry * c;
+  const vx = dx * c + dy * s, vy = -dx * s + dy * c;
+  const hw = b.w / 2, hh = b.h / 2;
+  let t0 = -Infinity, t1 = Infinity;
+  for (const [o, v, h] of [[ox, vx, hw], [oy, vy, hh]]) {
+    if (Math.abs(v) < 1e-9) { if (o < -h || o > h) return null; continue; }
+    let a = (-h - o) / v, z = (h - o) / v;
+    if (a > z) [a, z] = [z, a];
+    t0 = Math.max(t0, a);
+    t1 = Math.min(t1, z);
+    if (t0 > t1) return null;
+  }
+  if (t1 < 1e-4 || t0 > max) return null;
+  const t = Math.max(t0, 0);
+  return { t, out: t1 - t };
+}
+
+/** The nearest point to (x, y) on the segment a-b, and how far it is. */
+function segPoint(x, y, ax, ay, bx, by) {
+  const vx = bx - ax, vy = by - ay;
+  const l2 = vx * vx + vy * vy || 1e-9;
+  const t = Math.max(0, Math.min(1, ((x - ax) * vx + (y - ay) * vy) / l2));
+  const qx = ax + vx * t, qy = ay + vy * t;
+  return { x: qx, y: qy, d: Math.hypot(x - qx, y - qy) };
+}
 
 export class Sandbox {
   constructor() {
@@ -41,6 +78,9 @@ export class Sandbox {
     this.crates = [];
     this.knuckles = [];
     this.knives = [];
+    this.machetes = [];
+    this.guns = [];
+    this.limbs = [];
     this.fx = new FX(this);
     this.time = 0;
     this.acc = 0;
@@ -72,16 +112,25 @@ export class Sandbox {
 
   /* -------------------------------- spawning -------------------------------- */
 
-  get count() { return { people: this.people.length, crates: this.crates.length, knuckles: this.knuckles.length, knives: this.knives.length }; }
+  get count() {
+    return { people: this.people.length, crates: this.crates.length, knuckles: this.knuckles.length, knives: this.knives.length,
+      machetes: this.machetes.length, guns: this.guns.length, limbs: this.limbs.length };
+  }
 
   /** Every weapon in the sandbox, wherever it is. */
-  get weapons() { return [...this.knuckles, ...this.knives]; }
+  get weapons() { return [...this.knuckles, ...this.knives, ...this.machetes, ...this.guns]; }
+
+  /** The knives and the machetes: the things that cut, and stick in when thrown point first. */
+  get blades() { return [...this.knives, ...this.machetes]; }
 
   /** The props lying about loose, as bodies of their own. */
   loose() {
     const out = [];
     for (const k of this.knuckles) if (k.loose) out.push(k);
     for (const k of this.knives) if (k.loose) out.push(k);
+    for (const k of this.machetes) if (k.loose) out.push(k);
+    for (const g of this.guns) if (g.loose) out.push(g);
+    for (const l of this.limbs) if (l.loose) out.push(l);
     return out;
   }
 
@@ -130,6 +179,32 @@ export class Sandbox {
     return k;
   }
 
+  spawnMachete(x, y, rot = 0) {
+    if (this.machetes.length >= LIMITS.machetes) return null;
+    x = clamp(x, this.left + 0.4, this.right - 0.4);
+    const m = new Machete(this, x, Math.max(y, 0.05), rot);
+    this.machetes.push(m);
+    this.emit('spawn', { what: m, x, y });
+    return m;
+  }
+
+  spawnGun(x, y, rot = 0) {
+    if (this.guns.length >= LIMITS.guns) return null;
+    x = clamp(x, this.left + 0.2, this.right - 0.2);
+    const g = new Gun(this, x, Math.max(y, 0.08), rot);
+    this.guns.push(g);
+    this.emit('spawn', { what: g, x, y });
+    return g;
+  }
+
+  /** A piece of someone, cut off: see Stickman.sever. */
+  addLimb(pts, bone, of, vx, vy, spin, scale) {
+    if (this.limbs.length >= LIMITS.limbs) this.remove(this.limbs[0]);
+    const l = new Limb(this, pts, bone, of, vx, vy, spin, scale);
+    this.limbs.push(l);
+    return l;
+  }
+
   remove(thing) {
     if (!thing || thing.removed) return;
     if (this.hand && this.hand.holding === thing) this.hand.release();
@@ -147,9 +222,14 @@ export class Sandbox {
       this.phys.remove(thing.body);
       this.crates.splice(this.crates.indexOf(thing), 1);
       // anything stuck in it falls out
-      for (const k of this.knives) if (k.stuckIn && k.stuckIn.crate === thing) k.drop(k.body.pos.x, k.body.pos.y, 0, 0);
+      for (const k of this.blades) if (k.stuckIn && k.stuckIn.crate === thing) k.drop(k.body.pos.x, k.body.pos.y, 0, 0);
       this.emit('vanish', { what: thing, x: thing.pos.x, y: thing.pos.y });
-    } else if (thing.kind === 'knuckles' || thing.kind === 'knife') {
+    } else if (thing.kind === 'limb') {
+      thing.removed = true;
+      this.phys.remove(thing.body);
+      this.limbs.splice(this.limbs.indexOf(thing), 1);
+      this.emit('vanish', { what: thing, x: thing.pos.x, y: thing.pos.y });
+    } else if (thing.kind === 'knuckles' || thing.kind === 'knife' || thing.kind === 'machete' || thing.kind === 'glock') {
       const at = { x: thing.pos.x, y: thing.pos.y };
       if (thing.wornBy) thing.wornBy.weapon = null;
       if (thing.stuckIn && thing.stuckIn.person) {
@@ -157,8 +237,11 @@ export class Sandbox {
         p.stuck = p.stuck.filter((e) => e.knife !== thing);
       }
       thing.removed = true;
-      if (thing.kind === 'knife') { thing.leaveWorld(); this.knives.splice(this.knives.indexOf(thing), 1); }
-      else { if (!thing.wornBy) this.phys.remove(thing.body); this.knuckles.splice(this.knuckles.indexOf(thing), 1); }
+      const list = { knuckles: this.knuckles, knife: this.knives, machete: this.machetes, glock: this.guns }[thing.kind];
+      if (thing.kind === 'knife' || thing.kind === 'machete') thing.leaveWorld();
+      else if (thing.kind === 'glock') { if (thing.inWorld) { this.phys.remove(thing.body); thing.inWorld = false; } }
+      else if (!thing.wornBy) this.phys.remove(thing.body);
+      list.splice(list.indexOf(thing), 1);
       thing.wornBy = null;
       this.emit('vanish', { what: thing, x: at.x, y: at.y });
     }
@@ -169,6 +252,9 @@ export class Sandbox {
     for (const p of [...this.people]) this.remove(p);
     for (const k of [...this.knuckles]) this.remove(k);
     for (const k of [...this.knives]) this.remove(k);
+    for (const k of [...this.machetes]) this.remove(k);
+    for (const g of [...this.guns]) this.remove(g);
+    for (const l of [...this.limbs]) this.remove(l);
     for (const c of [...this.crates]) this.remove(c);
     this.fx.clear();
   }
@@ -202,11 +288,26 @@ export class Sandbox {
     this.knivesFly(dt);
     this.phys.step(dt);
     this.contacts();
-    for (const k of this.knives) if (k.stuckIn && k.stuckIn.crate) k.follow();
+    for (const k of this.blades) if (k.stuckIn && k.stuckIn.crate) k.follow();
+    this.bleedLimbs(dt);
     this.fx.update(dt);
     // anything knocked clean out of the world comes back down inside it
     for (const c of this.crates) this.keepInside(c.body);
     for (const k of this.loose()) this.keepInside(k.body);
+  }
+
+  /** A severed piece goes on dripping from the cut end for a while. */
+  bleedLimbs(dt) {
+    for (const l of this.limbs) {
+      if (l.bleed <= 0.01) continue;
+      l.bleed *= Math.exp(-dt * 0.07);
+      l.dripAcc += l.bleed * 9 * dt;
+      while (l.dripAcc >= 1) {
+        l.dripAcc -= 1;
+        const e = l.end;
+        this.fx.drip(e.x, e.y, null);
+      }
+    }
   }
 
   keepInside(b) {
@@ -374,7 +475,7 @@ export class Sandbox {
    * sticks there). Going in any other way, it just bounces off.
    */
   knivesFly(dt) {
-    for (const k of this.knives) {
+    for (const k of this.blades) {
       if (!k.loose) continue;
       const b = k.body;
       const sp = Math.hypot(b.vel.x, b.vel.y);
@@ -431,8 +532,8 @@ export class Sandbox {
         // where the line of the knife meets the floor, and the point that far in
         const t = tip.y / Math.max(0.01, -uy);
         const ex = tip.x + ux * t;
-        b.pos.x = ex + ux * (depth - KNIFE_W / 2);
-        b.pos.y = uy * (depth - KNIFE_W / 2);
+        b.pos.x = ex + ux * (depth - k.w / 2);
+        b.pos.y = uy * (depth - k.w / 2);
         k.stickInto({ floor: true });
         if (this.hand && this.hand.holding === k) this.hand.release();
         this.emit('stuck', { what: k, into: null, x: ex, y: 0, speed: sp });
@@ -451,13 +552,147 @@ export class Sandbox {
     }
     const depth = 0.06;
     const ex = tip.x + ux * (t1 + depth), ey = tip.y + uy * (t1 + depth);
-    b.pos.x = ex - ux * KNIFE_W / 2;
-    b.pos.y = ey - uy * KNIFE_W / 2;
+    b.pos.x = ex - ux * k.w / 2;
+    b.pos.y = ey - uy * k.w / 2;
     const l = cb.toLocal(b.pos.x, b.pos.y);
     k.stickInto({ crate: c, lx: l.x, ly: l.y, lr: b.rot - cb.rot });
     if (this.hand && this.hand.holding === k) this.hand.release();
     cb.applyImpulse(b.vel.x * 0.35 + ux * 2, b.vel.y * 0.35 + uy * 2, ex, ey);
     this.emit('stuck', { what: k, into: c, x: ex, y: ey, speed: 8 });
+  }
+
+  /* ---------------------------------- guns ---------------------------------- */
+
+  /**
+   * A 9 mm bullet from (x, y), heading at angle a (counter-clockwise from +x).
+   * It goes into whatever is in its way: into a person and, as often as not,
+   * out of the other side; through a crate, splintering it on the way in and
+   * out; into the floor, or off it if it comes in shallow enough; and stops at
+   * a wall. Each thing it goes through takes some of its energy, and once that
+   * is spent it stays where it is. Everyone it passes close to hears it go by.
+   * Returns where it ended up.
+   */
+  shoot(by, x, y, a, o = {}) {
+    let dx = Math.cos(a), dy = Math.sin(a);
+    let energy = o.energy ?? 1;
+    let px = x, py = y;
+    let range = 60;
+    const hit = new Set(), passed = new Set();
+    const path = [];
+    let ricochets = 0;
+    while (energy > 0.15 && range > 0) {
+      let best = null;
+      if (dy < -1e-6) {
+        const t = -py / dy;
+        if (t > 1e-4 && t < range) best = { t, what: 'floor' };
+      }
+      const tw = dx > 0 ? (this.right - px) / dx : dx < 0 ? (this.left - px) / dx : Infinity;
+      if (tw > 1e-4 && tw < range && (!best || tw < best.t)) best = { t: tw, what: 'wall' };
+      for (const c of this.crates) {
+        if (c.removed || hit.has(c)) continue;
+        const h = rayBox(c.body, px, py, dx, dy, range);
+        if (h && (!best || h.t < best.t)) best = { t: h.t, what: 'crate', crate: c, out: h.out };
+      }
+      for (const q of this.people) {
+        if (q.removed || hit.has(q) || passed.has(q) || (q === by && !ricochets)) continue;
+        const h = q.rayHit(px, py, dx, dy, range);
+        if (h && (!best || h.t < best.t)) best = { t: h.t, what: 'person', who: q, hit: h };
+      }
+      if (!best) {
+        path.push([px, py, px + dx * range, py + dy * range]);
+        px += dx * range; py += dy * range;
+        break;
+      }
+      const hx = px + dx * best.t, hy = py + dy * best.t;
+      path.push([px, py, hx, hy]);
+      range -= best.t;
+      px = hx; py = hy;
+
+      if (best.what === 'person') {
+        const q = best.who;
+        // the world is a little deeper than the picture shows: anyone it was not
+        // aimed at may be standing a step to one side of the line, and it goes by
+        if ((o.target || hit.size) && q !== o.target && !chance(STRAY_HIT)) {
+          passed.add(q);
+          px += dx * 0.02; py += dy * 0.02;
+          continue;
+        }
+        hit.add(q);
+        energy = q.shot(by, best.hit, dx, dy, energy);
+        px += dx * 0.02; py += dy * 0.02;
+      } else if (best.what === 'crate') {
+        const c = best.crate;
+        hit.add(c);
+        const ox = hx + dx * best.out, oy = hy + dy * best.out;
+        c.hole(hx, hy);
+        c.hole(ox, oy);
+        this.fx.splinters(hx, hy, -dx, -dy);
+        this.fx.splinters(ox, oy, dx, dy);
+        c.body.applyImpulse(dx * 3.5 * energy, dy * 3.5 * energy, hx, hy);
+        this.emit('bulletHit', { what: c, x: hx, y: hy, energy });
+        // two planks and what is inside: it comes out slower, and not quite straight
+        energy -= 0.38;
+        const turn = rand(-0.05, 0.05);
+        const c2 = Math.cos(turn), s2 = Math.sin(turn);
+        const ndx = dx * c2 - dy * s2, ndy = dx * s2 + dy * c2;
+        path.push([hx, hy, ox, oy]);
+        px = ox + ndx * 0.01; py = oy + ndy * 0.01;
+        range -= best.out;
+        dx = ndx; dy = ndy;
+      } else if (best.what === 'floor') {
+        // in shallow, it skips off; any steeper and it buries itself
+        if (dy > -0.22 && ricochets < 2 && chance(0.65)) {
+          ricochets++;
+          dy = -dy * rand(0.5, 1);
+          const n = Math.hypot(dx, dy); dx /= n; dy /= n;
+          energy *= 0.45;
+          py = 0.005;
+          this.fx.sparks(hx, 0.01, 5);
+          this.emit('ricochet', { x: hx, y: 0, by });
+        } else {
+          this.fx.dust(hx, 0, 4, 0.5);
+          this.fx.sparks(hx, 0.01, 3);
+          this.emit('bulletHit', { what: null, x: hx, y: 0, energy });
+          energy = 0;
+        }
+      } else {
+        this.fx.dust(hx, hy, 3, 0.4);
+        this.emit('bulletHit', { what: null, x: hx, y: hy, energy });
+        energy = 0;
+      }
+    }
+    for (const g of path) this.fx.tracer(g[0], g[1], g[2], g[3]);
+    // everyone it passed close to without hitting hears it go by
+    for (const q of this.people) {
+      if (q.removed || hit.has(q) || q === by || !q.alive) continue;
+      let d = Infinity, at = null;
+      for (const g of path) {
+        for (const pt of [q.wj.head, q.wj.chest]) {
+          const s = segPoint(pt.x, pt.y, g[0], g[1], g[2], g[3]);
+          if (s.d < d) { d = s.d; at = s; }
+        }
+      }
+      if (d < 0.7) q.notify('nearMiss', { by, d, x: at.x, y: at.y });
+    }
+    return { x: px, y: py, path };
+  }
+
+  /** A gun lying loose, fired by the hand from above: it goes off the way it points, and kicks. */
+  fireLoose(g) {
+    if (!g.loose) return false;
+    if (g.mag <= 0) { this.emit('dryFire', { what: g, x: g.pos.x, y: g.pos.y }); return false; }
+    const m = g.muzzle();
+    g.mag--;
+    g.lastShot = this.time;
+    this.fx.flash(m.x, m.y, m.a);
+    const port = g.body.toWorld(0.01, 0.09);
+    this.fx.casing(port.x, port.y, -Math.cos(m.a) * 1.5 + rand(-0.5, 0.5), 2.5 + rand(0, 1.5));
+    this.emit('shot', { who: null, gun: g, x: m.x, y: m.y, loud: true });
+    this.shoot(null, m.x, m.y, m.a + rand(-0.01, 0.01));
+    // the recoil throws it back and up
+    g.body.applyImpulse(-Math.cos(m.a) * 2.2, -Math.sin(m.a) * 2.2 + 0.8, m.x, m.y);
+    g.body.angVel += rand(4, 9) * (Math.cos(m.a) >= 0 ? 1 : -1);
+    return true;
   }
 
   /* ------------------------------ rigid contacts ---------------------------- */
@@ -480,7 +715,7 @@ export class Sandbox {
     // two of them, or a set of knuckles between one and the floor, would be
     // crushed with impossible force.
     const speed = Math.hypot(other.vel.x, other.vel.y);
-    if (thing.kind === 'knuckles' || thing.kind === 'knife') return speed > 3 && !man.lying;
+    if (thing.kind !== 'crate') return speed > 3 && !man.lying;
     if (thing.kind === 'crate') {
       if (other === man.support) return false;
       if (man.climbing && man.climbing.crate === thing) return false;
@@ -603,23 +838,33 @@ export class Sandbox {
   }
 
   /**
-   * Anything under a point: a knife stuck in someone (by its handle) first,
-   * then people, then knives and knuckles, then crates.
+   * Anything under a point: a blade stuck in someone (by its handle) first,
+   * then people, then blades, guns, severed limbs and knuckles, then crates.
    */
   thingAt(x, y, r) {
     for (const p of this.people) {
       for (const e of p.stuck) {
         const q = p.knifePose(e);
         // the handle end is the half away from the point
-        const hx = q.x - q.ux * KNIFE_W * 0.25, hy = q.y - q.uy * KNIFE_W * 0.25;
+        const w = e.knife.w;
+        const hx = q.x - q.ux * w * 0.25, hy = q.y - q.uy * w * 0.25;
         if (Math.hypot(x - hx, y - hy) < Math.max(0.09, r * 0.6)) return e.knife;
       }
     }
     const p = this.personAt(x, y, r);
     if (p) return p.who;
-    for (let i = this.knives.length - 1; i >= 0; i--) {
-      const k = this.knives[i];
+    const blades = this.blades;
+    for (let i = blades.length - 1; i >= 0; i--) {
+      const k = blades[i];
       if (!k.wornBy && !(k.stuckIn && k.stuckIn.person) && k.body.contains(x, y, r * 0.6 + 0.04)) return k;
+    }
+    for (let i = this.guns.length - 1; i >= 0; i--) {
+      const g = this.guns[i];
+      if (!g.wornBy && g.body.contains(x, y, r * 0.6 + 0.05)) return g;
+    }
+    for (let i = this.limbs.length - 1; i >= 0; i--) {
+      const l = this.limbs[i];
+      if (l.body.contains(x, y, r * 0.6 + 0.04)) return l;
     }
     for (let i = this.knuckles.length - 1; i >= 0; i--) {
       const k = this.knuckles[i];

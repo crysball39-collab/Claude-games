@@ -23,9 +23,9 @@
     <div class="tagline">a sandbox of stickmen with minds of their own</div>
     <button id="btn-play" class="big-btn">PLAY</button>
     <div class="how">
-      <div><b>Spawn</b> &mdash; open the menu, pick a Stickman, Brass Knuckles, a Combat Knife or a Crate, then tap the world.</div>
+      <div><b>Spawn</b> &mdash; open the menu, pick a Stickman, a weapon or a Crate, then tap the world.</div>
       <div><b>Drag</b> anything to move it. Let go while moving to throw it.</div>
-      <div><b>Tap</b> a stickman to see what they think and feel.</div>
+      <div><b>Tap</b> a stickman to see what they think, feel and remember &mdash; and change it: their feelings, their personality, who they like, and who they fight.</div>
     </div>
   </div>
 </div>
@@ -88,8 +88,9 @@
     </div>
     <div class="ins-scroll">
       <div class="ins-doing" id="ins-doing"></div>
+      <div class="ins-order hidden" id="ins-order"><span id="ins-order-text"></span><button id="ins-order-stop" class="mini-btn">Call off</button></div>
       <div class="ins-traits" id="ins-traits"></div>
-      <div class="ins-section">FEELINGS</div>
+      <div class="ins-section">FEELINGS <span class="ins-hint">drag a bar to change it</span></div>
       <div id="ins-emotions"></div>
       <div class="ins-section">BODY</div>
       <div id="ins-vitals"></div>
@@ -97,12 +98,16 @@
         <canvas id="ins-figure" width="104" height="136"></canvas>
         <div class="ins-conds" id="ins-conds"></div>
       </div>
+      <div class="ins-section">PEOPLE <span class="ins-hint">change what they think of anyone, or send them to fight</span></div>
+      <div id="ins-people"></div>
+      <div class="ins-section">PERSONALITY <span class="ins-hint">drag to change who they are</span></div>
+      <div id="ins-personality"></div>
       <div class="ins-section">WEIGHING UP</div>
       <div id="ins-options"></div>
+      <div class="ins-section">MEMORIES</div>
+      <div id="ins-memories"></div>
       <div class="ins-section">THOUGHTS</div>
       <div id="ins-thoughts"></div>
-      <div class="ins-section">PEOPLE</div>
-      <div id="ins-people"></div>
     </div>
     <div class="ins-actions">
       <button id="ins-follow" class="small-btn">Follow</button>
@@ -134,6 +139,14 @@
     <button class="card" data-spawn="knife">
       <canvas class="card-icon" width="72" height="72"></canvas>
       <span class="card-text"><b>Combat Knife</b><small>Stabs and slashes. Deep cuts bleed fast. Throw it point first and it sticks.</small></span>
+    </button>
+    <button class="card" data-spawn="machete">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Machete</b><small>Chops and hacks. Leaves gaping wounds, and a hard enough blow takes off a hand, an arm or a leg.</small></span>
+    </button>
+    <button class="card" data-spawn="glock">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Glock-19</b><small>A pistol: 15 rounds and two spare magazines. Bullets go through people and crates. Tap it on the ground to fire it.</small></span>
     </button>
     <div class="cat">OBJECTS</div>
     <button class="card" data-spawn="crate">

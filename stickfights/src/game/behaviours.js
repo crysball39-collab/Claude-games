@@ -66,11 +66,16 @@ export class Idle extends Behaviour {
     me.lookAt = look ? look.wj.head : null;
     if (look && chance(dt * 0.25)) me.faceTo(look.pos.x);
     this.next -= dt;
-    // hurting, they hold whatever hurts
+    // hurting, they hold whatever hurts - and holding a wound slows the bleeding a little
     const h = me.health;
-    const sore = !h.canUse('armA') || !h.canUse('armB') ? 'clutchArm'
+    const stump = Object.keys(me.cut).length > 0 && h.bleeding > 0.001;
+    const sore = h.shock > 0.55 ? 'shock' : stump ? 'clutchStump' : !h.canUse('armA') || !h.canUse('armB') ? 'clutchArm'
       : h.blood < 0.62 ? 'shiver' : h.bones.ribs.broken || h.internal > 0.001 || h.parts.torso.hp < 70 ? 'clutchStomach' : null;
-    if (sore && me.ready && !this.pose) { me.setPosture(sore); this.pose = sore; this.poseT = rand(3, 6); this.what = sore === 'shiver' ? 'Shivering' : 'Holding where it hurts'; }
+    if (sore && me.ready && !this.pose) {
+      me.setPosture(sore); this.pose = sore; this.poseT = rand(3, 6);
+      this.what = sore === 'shiver' ? 'Shivering' : sore === 'shock' ? 'In shock' : sore === 'clutchStump' ? 'Holding the stump' : 'Holding where it hurts';
+    }
+    if (me.posture === 'clutchStump' || me.posture === 'clutchArm' || me.posture === 'clutchStomach') h.selfPress = Math.max(h.selfPress, 0.3);
     if (this.next <= 0 && me.ready && !this.pose) {
       this.next = rand(2.5, 5);
       const E = b.emo, T = b.traits, opts = ['lookAround', 'scratchHead', 'stretch', 'armsCrossed', 'handsOnHips'];
@@ -289,7 +294,7 @@ export class Chat extends Behaviour {
       this.part();
       return false;
     }
-    let kind;
+    let kind, vars = null, mem = null, mine = null;
     if (!r.greeted) {
       kind = r.like > 0.4 ? 'greetFriend' : r.like < -0.25 ? 'greetCold' : 'greet';
       r.greeted = true;
@@ -301,6 +306,16 @@ export class Chat extends Behaviour {
     } else if (b.traits.aggression > 0.6 && b.traits.temper > 0.55 && chance(0.18)) {
       // teasing that is not taken as teasing
       kind = 'insult';
+    } else if ((mem = b.gossipFor(o)) && chance(0.45)) {
+      // passing on what they know about someone else
+      kind = mem.v < 0 ? 'gossipBad' : 'gossipGood';
+      vars = { victim: mem.who.name, what: b.memoryPhrase(mem) };
+      mem.told.add(o);
+    } else if (!this.reminded && (mine = b.strongestAbout(o)) && mine.w > 0.4 && b.memoryPhrase(mine) && chance(0.35)) {
+      // something between the two of them
+      this.reminded = true;
+      kind = mine.v < 0 ? 'remindBad' : 'remindGood';
+      vars = { what: b.memoryPhrase(mine) };
     } else if (b.emo.sadness > 0.45) {
       kind = 'sadTalk';
     } else if (r.like > 0.3 && chance(0.35)) {
@@ -308,8 +323,8 @@ export class Chat extends Behaviour {
     } else {
       kind = 'smalltalk';
     }
-    this.talk(kind, kind === 'insult');
-    if (o.brain) o.brain.spokenTo(me, kind);
+    this.talk(kind, kind === 'insult', vars);
+    if (o.brain) o.brain.spokenTo(me, kind, mem ? { mem } : null);
     b.chatted(o, kind);
     this.said++;
     this.wait = rand(2.6, 3.6);
@@ -335,6 +350,7 @@ export class Chat extends Behaviour {
       o.faceTo(me.pos.x);
       me.perform(g.kind);
       o.perform(g.kind);
+      if (g.kind === 'hug') { this.brain.remember('hugged', o); if (o.brain) o.brain.remember('hugged', me); }
       g.done = true;
       g.until = g.t + CLIP_TIME[g.kind];
       this.brain.speak(g.kind, { other: o.name }, 0.8, o);
@@ -359,9 +375,9 @@ export class Chat extends Behaviour {
     if (o.brain) { o.brain.rel(me).chatT = this.now; o.brain.spokenTo(me, 'farewell'); }
   }
 
-  talk(kind, loud = false) {
+  talk(kind, loud = false, vars = null) {
     const o = this.target;
-    this.brain.speak(kind, { other: o.name, absent: this.brain.missing() }, 1, o, loud);
+    this.brain.speak(kind, { other: o.name, absent: this.brain.missing(), ...(vars || {}) }, 1, o, loud);
     if (this.me.ready) this.me.setPosture('talk');
     this.talkT = 1.5;
   }
@@ -404,10 +420,21 @@ export class Fight extends Behaviour {
     r.foughtT = this.now;
     me.lookAt = o.wj.head;
     const d = Math.abs(o.pos.x - me.pos.x), dir = side(me, o);
+    const gun = me.gunReady && me.weapon.ammo > 0;
 
     // they are on the floor: stand over them, maybe finish it
     if (o.lying || !o.conscious || o.state === 'thrown' || o.state === 'held') {
       this.downT += dt;
+      if (gun) {
+        // a gun kept on them, from out of reach
+        me.setPosture(null);
+        me.aimAt(o);
+        if (d < 2) me.goTo(o.pos.x - dir * 3, 'walk', { backpedal: true, face: o.pos.x });
+        else { me.stop(); me.faceTo(o.pos.x); }
+        if (this.downT > 1.2 && this.downT - dt <= 1.2) b.speak('taunt', { other: o.name }, 0.7, o);
+        if (this.downT > 4.5) { r.anger *= 0.55; b.won(o); return false; }
+        return true;
+      }
       // only the truly furious keep going once someone is down, and every blow
       // that lands takes some of the fury out of them
       const merciless = T.aggression > 0.72 && r.anger > 0.82 && !(o.brain && o.brain.begging && T.empathy > 0.4);
@@ -444,6 +471,7 @@ export class Fight extends Behaviour {
       return true;
     }
     if (d > 14) return false;
+    if (gun) return this.shoot(dt, o, d, dir, r);
 
     me.setPosture('guard');
     // see their punch coming and do something about it
@@ -463,10 +491,16 @@ export class Fight extends Behaviour {
       return true;
     }
 
-    const knife = me.armedWith === 'knife';
-    const reach = (knife ? 0.98 : 0.86) * me.scale;
-    if (d > reach + 0.2) {
-      me.goTo(o.pos.x - dir * reach, d > 3 ? 'run' : 'walk', { face: o.pos.x });
+    const knife = me.armedWith === 'knife', machete = me.armedWith === 'machete';
+    const reach = (machete ? 1.1 : knife ? 0.98 : 0.86) * me.scale;
+    // a gun pointed at them: standing off is the worst thing to do, so they rush it
+    const gunOnMe = o.aiming && o.aimTarget === me;
+    if (gunOnMe && !this.rushed) { this.rushed = true; b.speak('rushGun', { other: o.name }, 0.8, o, true); }
+    if (gunOnMe) this.cool = Math.min(this.cool, 0.15);
+    // (stepping in starts inside the distance a blow can land from, so there is
+    // no gap between the two where they would just stand and look at each other)
+    if (d > reach + 0.12) {
+      me.goTo(o.pos.x - dir * reach, d > 3 || gunOnMe ? 'run' : 'walk', { face: o.pos.x });
     } else if (d < 0.6 * me.scale) {
       me.goTo(me.pos.x - dir * 0.4, 'shuffle', { backpedal: true, face: o.pos.x });
     } else {
@@ -487,10 +521,12 @@ export class Fight extends Behaviour {
       // with brass knuckles on the near hand, that is the hand they lead with;
       // with a knife in it, they mostly use the knife
       const armed = me.weapon ? 1 : 0;
-      if (can.includes('jab')) choices.push(['jab', knife ? 0.8 : armed ? 1.5 : 4]);
+      if (can.includes('jab')) choices.push(['jab', knife || machete ? 0.8 : armed ? 1.5 : 4]);
       if (can.includes('cross')) choices.push(['cross', armed ? 6 : 3]);
       if (can.includes('stab')) choices.push(['stab', 5.5]);
       if (can.includes('slash')) choices.push(['slash', 3]);
+      if (can.includes('chop')) choices.push(['chop', 5]);
+      if (can.includes('hack')) choices.push(['hack', 3.5]);
       if (can.includes('kick') && d > 0.75) choices.push(['kick', (1.6 + T.skill) * (armed ? 0.5 : 1)]);
       if (can.includes('uppercut') && d < 0.82) choices.push(['uppercut', armed ? 4 : 2.5]);
       if (choices.length) {
@@ -509,8 +545,65 @@ export class Fight extends Behaviour {
     if (r.anger < 0.12 && !b.isHostile(o) && this.t > 3) return false;
     return true;
   }
+  /**
+   * Fighting with a pistol: out of reach, brought up, and fired - a few at a
+   * time, waiting for the aim to settle in between. The ones who would rather
+   * not start by pointing it and shouting, and someone who puts their hands
+   * up may be left at that. Empty, it gets reloaded, at a distance.
+   */
+  shoot(dt, o, d, dir, r) {
+    const me = this.me, b = this.brain, T = b.traits, g = me.weapon;
+    if (r.anger < 0.12 && !b.isHostile(o) && this.t > 3 && !(b.ordered && b.ordered.target === o)) return false;
+    if (me.posture === 'guard') me.setPosture(null);
+    me.lookAt = o.wj.head;
+    if (g.mag <= 0) {
+      me.lowerGun();
+      if (d < 3.5) me.goTo(me.pos.x - dir * 3, 'run');
+      else { me.stop(); me.faceTo(o.pos.x); }
+      if (!me.reloading && me.reload()) b.speak('reload', {}, 0.7, null, true);
+      return true;
+    }
+    const want = 3.5 + T.skill * 2.5;
+    const seen = b.sees(o);
+    if (d < 1.6) me.goTo(me.pos.x - dir * 2, 'walk', { backpedal: true, face: o.pos.x });
+    else if (d > 10 || !seen) me.goTo(o.pos.x - dir * want, 'walk', { face: o.pos.x });
+    else { me.stop(); me.faceTo(o.pos.x); }
+    if (!seen) { me.lowerGun(); return true; }
+    me.aimAt(o);
+    // the warning: not everyone shoots first
+    if (this.warn === undefined) {
+      const go = b.isHostile(o) || (b.ordered && b.ordered.target === o);
+      this.warn = go ? 0 : Math.max(0, (0.6 + T.empathy * 2.5 - T.aggression * 1.2) * rand(0.7, 1.3));
+      if (this.warn > 0.3) b.speak('aimAt', { other: o.name }, 1, o, true);
+      else b.speak('shootStart', { other: o.name }, 0.7, o, true);
+    }
+    if (this.warn > 0) {
+      this.warn -= dt;
+      const gaveUp = o.posture === 'handsUp' || (o.brain && o.brain.begging);
+      if (gaveUp && r.anger < 0.75 && !(b.ordered && b.ordered.target === o)) {
+        // keep it on them while their hands stay up; calm down enough, and leave it there
+        r.anger = Math.max(0, r.anger - dt * 0.12);
+        this.warn = Math.max(this.warn, 0.5);
+        if (r.anger < 0.3) { b.speak('backDown', { other: o.name }, 0.9, o, true); b.won(o); return false; }
+        return true;
+      }
+      if (!b.isHostile(o) && !(o.brain && o.brain.fleeing)) return true;
+      this.warn = 0;
+    }
+    if (!me.acting) this.cool -= dt;
+    if (this.cool <= 0 && me.steady > 0.4 + (1 - T.skill) * 0.35) {
+      if (me.fire()) {
+        this.shots = (this.shots || 0) + 1;
+        const burst = 1 + Math.round(T.aggression * 2 + b.emo.anger);
+        this.cool = this.shots % burst ? rand(0.16, 0.35) : rand(0.6, 1.3);
+      }
+    }
+    return true;
+  }
+
   end() {
     this.me.block(false);
+    this.me.lowerGun();
     if (this.me.posture === 'guard') this.me.setPosture(null);
     this.me.lookAt = null;
   }
@@ -543,6 +636,14 @@ export class Flee extends Behaviour {
     const gap = Math.abs(me.pos.x - o.pos.x);
     const room = away > 0 ? sb.right - me.pos.x : me.pos.x - sb.left;
     if (room < 1.4 && gap < 4) {
+      // backed up to the edge by someone who is not actually coming for them: they stay put and watch
+      if (!b.isHostile(o)) {
+        me.stop();
+        me.faceTo(o.pos.x);
+        me.lookAt = o.wj.head;
+        this.safe += dt;
+        return this.safe < 5;
+      }
       // cornered: slip past them, or curl up
       if (b.traits.bravery > 0.45 && !o.attacking && chance(0.5)) { me.goTo(o.pos.x - away * 5, 'flee'); return true; }
       b.force(new Cower(b, o));
@@ -607,7 +708,8 @@ export class Cower extends Behaviour {
   get icon() { return 'sweat'; }
   start() {
     this.brain.begging = true;
-    this.brain.speak('beg', { other: this.target.name }, 1, this.target, true);
+    if (this.brain.isHostile(this.target)) this.brain.speak('beg', { other: this.target.name }, 1, this.target, true);
+    else this.brain.speak('fear', {}, 0.6);
     this.next = rand(2.5, 4);
     this.calm = 0;
   }
@@ -615,9 +717,11 @@ export class Cower extends Behaviour {
     this.t += dt;
     const o = this.target, me = this.me, b = this.brain;
     if (!o || o.removed) return false;
-    if (me.ready && me.posture !== 'cower' && me.posture !== 'beg' && me.posture !== 'handsUp') {
-      me.setPosture(o.armedWith === 'knife' && chance(0.7) ? 'handsUp' : Math.abs(o.pos.x - me.pos.x) < 2 && chance(0.5) ? 'beg' : 'cower');
-      if (me.posture === 'handsUp') b.speak('surrender', { other: o.name }, 0.9, o, true);
+    if (me.ready && me.posture !== 'cower' && me.posture !== 'beg' && me.posture !== 'handsUp' && me.posture !== 'coverHead') {
+      const gun = o.armedWith === 'glock', shooting = b.gunThreat && this.now - b.gunThreat.t < 3;
+      me.setPosture(gun ? (shooting && chance(0.6) ? 'coverHead' : 'handsUp')
+        : o.armedWith === 'knife' && chance(0.7) ? 'handsUp' : Math.abs(o.pos.x - me.pos.x) < 2 && chance(0.5) ? 'beg' : 'cower');
+      if (me.posture === 'handsUp') b.speak(gun ? 'surrenderGun' : 'surrender', { other: o.name }, 0.9, o, true);
     }
     me.stop();
     me.facing = sign(o.pos.x - me.pos.x) || me.facing;
@@ -628,7 +732,39 @@ export class Cower extends Behaviour {
   }
   end() {
     this.brain.begging = false;
-    if (this.me.posture === 'cower' || this.me.posture === 'beg' || this.me.posture === 'handsUp') this.me.setPosture(null);
+    const p = this.me.posture;
+    if (p === 'cower' || p === 'beg' || p === 'handsUp' || p === 'coverHead') this.me.setPosture(null);
+  }
+}
+
+/** A gun on them: still, hands up, facing it, until it is pointed somewhere else. */
+export class Surrender extends Behaviour {
+  get kind() { return 'surrender'; }
+  get label() { return 'Hands up to ' + this.target.name; }
+  get icon() { return 'exclaim'; }
+  start() {
+    this.brain.begging = true;
+    this.brain.speak('surrenderGun', { other: this.target.name }, 1, this.target, true);
+    this.calm = 0;
+    this.next = rand(3, 5);
+  }
+  update(dt) {
+    this.t += dt;
+    const o = this.target, me = this.me, b = this.brain;
+    if (!o || o.removed || !o.alive || !o.conscious) return false;
+    me.stop();
+    me.faceTo(o.pos.x);
+    me.lookAt = o.wj.head;
+    if (me.ready && me.posture !== 'handsUp') me.setPosture('handsUp');
+    const pointed = o.aimTarget === me && o.aiming;
+    this.calm = pointed ? 0 : this.calm + dt;
+    if (pointed && (this.next -= dt) <= 0) { this.next = rand(3, 5); b.speak('surrenderGun', { other: o.name }, 0.8, o, true); }
+    if (this.calm > 2.5) b.speak('relief', {}, 0.6);
+    return this.calm < 2.5 && this.t < 25;
+  }
+  end() {
+    this.brain.begging = false;
+    if (this.me.posture === 'handsUp') this.me.setPosture(null);
   }
 }
 
@@ -689,14 +825,15 @@ export class Help extends Behaviour {
   get kind() { return 'help'; }
   get label() { return 'Helping ' + this.target.name; }
   get icon() { return 'cross'; }
-  start() { this.there = 0; this.next = 0; }
+  start() { this.there = 0; this.next = 0; this.said = 0; }
   update(dt) {
     this.t += dt;
     const o = this.target, me = this.me, b = this.brain;
     if (!o || o.removed || o.dead) return false;
     const pinned = o.pinnedBy && this.now - o.pinT < 0.5;
     const bleeding = o.health.bleeding > 0.002;
-    const needs = o.lying || o.state === 'crawl' || pinned || o.health.overall < 0.45 || o.stuck.length > 0 || bleeding;
+    const needs = o.lying || o.state === 'crawl' || pinned || o.health.overall < 0.45 || o.stuck.length > 0 || bleeding ||
+      o.health.needsTourniquet.length > 0 || !!outJoint(o);
     if (!needs && this.there > 0.5) return false;
     const side = sign(me.pos.x - o.wj.hip.x) || 1;
     if (!arrive(me, o.wj.hip.x + side * 0.62, 'run', 0.18)) return this.t < 15;
@@ -708,6 +845,22 @@ export class Help extends Behaviour {
       if (me.posture === 'kneel') me.setPosture(null);
       const c = o.pinnedBy.body;
       c.applyImpulse(-side * 55 * dt * 10, 70 * dt * 10, c.pos.x, c.pos.y);
+    } else if (o.health.needsTourniquet.length && this.there > 0.5 && me.health.canUse('armA') && me.health.canUse('armB')) {
+      // a stump or an artery: tie it off, hard, above the wound
+      if (me.posture === 'kneel') me.setPosture(null);
+      if (me.ready && !me.tying) {
+        me.tying = { who: o, part: o.health.needsTourniquet[0] };
+        me.perform('tourniquet');
+        b.speak('tourniquet', { other: o.name }, 0.9, o);
+      }
+    } else if (outJoint(o) && this.there > 0.6 && me.health.canUse('armA') && me.health.canUse('armB')) {
+      // a joint out: a grip, a brace, and a pull
+      if (me.posture === 'kneel') me.setPosture(null);
+      if (me.ready && !me.popping) {
+        me.popping = { who: o, joint: outJoint(o) };
+        me.perform('popJoint');
+        b.speak('popBack', { other: o.name }, 0.9, o);
+      }
     } else if (o.stuck.length && this.there > 0.6 && me.health.canUse('armA')) {
       // the knife comes out - carefully, and pressed on straight after
       if (me.posture === 'kneel') me.setPosture(null);
@@ -723,7 +876,8 @@ export class Help extends Behaviour {
     // pressing on the wounds
     if (bleeding && this.there > 0.8) o.health.pressure = Math.max(o.health.pressure, 0.5);
     if ((this.next -= dt) <= 0) {
-      this.next = rand(2.5, 3.5);
+      // a few words to begin with; after that, mostly just being there
+      this.next = this.said++ < 2 ? rand(3.5, 5.5) : rand(9, 15);
       b.speak(pinned ? 'pinned' : 'comfort', { other: o.name }, 0.9, o);
     }
     if (this.there > 1.2) {
@@ -733,7 +887,18 @@ export class Help extends Behaviour {
     }
     return this.t < 14 && this.there < 9;
   }
-  end() { if (this.me.posture === 'kneel') this.me.setPosture(null); }
+  end() {
+    if (this.me.posture === 'kneel') this.me.setPosture(null);
+    this.me.tying = null;
+    this.me.popping = null;
+    if (this.there > 1 && this.target) this.brain.rel(this.target).helpedT = this.now;
+  }
+}
+
+/** The first joint someone has out of its socket, if any. */
+function outJoint(o) {
+  for (const [j, on] of Object.entries(o.health.dislocated)) if (on) return j;
+  return null;
 }
 
 export class Mourn extends Behaviour {
@@ -764,15 +929,15 @@ export class Mourn extends Behaviour {
 
 export class Arm extends Behaviour {
   get kind() { return 'arm'; }
-  get label() { return this.target.kind === 'knife' ? 'Going for the knife' : 'Going for the brass knuckles'; }
-  get icon() { return this.target.kind === 'knife' ? 'knife' : 'knuckles'; }
+  get label() { return 'Going for the ' + ({ knife: 'knife', machete: 'machete', glock: 'gun' }[this.target.kind] || 'brass knuckles'); }
+  get icon() { return { knife: 'knife', machete: 'machete', glock: 'gun' }[this.target.kind] || 'knuckles'; }
   start() { this.tries = 0; }
   update(dt) {
     this.t += dt;
     const k = this.target, me = this.me, b = this.brain;
     if (me.weapon) return false;
     if (k.removed || k.wornBy || (k.stuckIn && k.stuckIn.person)) {
-      if (k.wornBy && k.wornBy !== me) b.note(k.wornBy.name + (k.kind === 'knife' ? ' got the knife first.' : ' got the brass knuckles first.'));
+      if (k.wornBy && k.wornBy !== me) b.note(`${k.wornBy.name} got the ${({ knife: 'knife', machete: 'machete', glock: 'gun' }[k.kind] || 'brass knuckles')} first.`);
       return false;
     }
     if (me.acting) return true;
@@ -970,5 +1135,6 @@ export const KINDS = {
   fight: Fight, flee: Flee, hide: Hide, cower: Cower, confront: Confront, watch: Watch,
   help: Help, mourn: Mourn, arm: Arm, inspect: Inspect, play: Play, throw: ThrowCrate,
   investigate: Investigate, pullout: PullOut, throwKnife: ThrowKnife, exercise: Exercise,
+  surrender: Surrender,
 };
 

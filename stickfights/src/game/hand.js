@@ -1,13 +1,14 @@
 /* =============================================================================
    The hand from above: whatever you drag, it drags.
 
-   A crate or a set of brass knuckles is held by a soft spring joint at the
+   A crate, a weapon or a severed limb is held by a soft spring joint at the
    exact point you grabbed it, so it swings from there and anything too heavy
    lags behind. A stickman hangs from wherever you took hold - by the scruff
    of the neck, or by an ankle, upside down - and swings like a pendulum when
    you move them (stickman.js). Letting go while moving throws it.
    ========================================================================== */
 import { GrabJoint } from '../physics/rigid.js';
+import { isBlade } from './props.js';
 import { clamp } from '../core/util.js';
 
 export class Hand {
@@ -28,8 +29,9 @@ export class Hand {
       thing.grab(x, y);
     } else {
       if (thing.kind === 'crate' && thing.carriedBy) thing.carriedBy.dropCarried();
-      if ((thing.kind === 'knuckles' || thing.kind === 'knife') && thing.wornBy) return false;
-      if (thing.kind === 'knife' && thing.stuckIn) {
+      // something in someone's hand stays there
+      if (thing.wornBy) return false;
+      if (isBlade(thing.kind) && thing.stuckIn) {
         // pulled out of whatever it was stuck in, by the handle, at the angle it was in at
         const st = thing.stuckIn;
         if (st.person) st.person.pullKnife(st.entry, 'hand');
@@ -41,7 +43,9 @@ export class Hand {
         }
       }
       const b = thing.body;
-      this.joint = sb.phys.addJoint(new GrabJoint(b, x, y, { hz: thing.kind === 'knife' ? 7 : 5, damping: 0.8, maxForce: 2500 * b.mass }));
+      // the light, long things are held a little stiffer, so they point where they are pulled
+      const stiff = isBlade(thing.kind) || thing.kind === 'glock';
+      this.joint = sb.phys.addJoint(new GrabJoint(b, x, y, { hz: stiff ? 7 : 5, damping: 0.8, maxForce: 2500 * b.mass }));
     }
     this.holding = thing;
     this.x = x;

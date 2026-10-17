@@ -29,9 +29,32 @@
      conscious   1 is wide awake. Blows to the head knock it down; under
                  KO_LEVEL they are out cold until it climbs back
      dizzy       seconds of seeing stars after a knock to the head
+     shock       0..1, after something terrible: a limb gone, a bullet in
+                 them, too much blood lost. They go pale, shake, and the mind
+                 does not stay quite as awake
 
-   Death comes from the head (a skull can only take so much), the torso
-   (internal injuries), a broken neck, or running out of blood.
+   And the injuries that come from particular things:
+
+     gunshot     a hole where it went in and, as often as not, out. In the
+                 head it kills, most of the time; in the body it bleeds
+                 inside, and now and then finds the heart or the spine; in a
+                 limb it can break the bone or open an artery. A bullet that
+                 did not come out stays in them
+     gash        a machete opens the skin wide: a cut that bleeds harder than
+                 a knife's
+     severed     a hard enough chop goes right through an arm or a leg, at
+                 the middle of the bone it hit. The stump bleeds from the
+                 artery, and that does not clot on its own: someone has to
+                 tie it off (a tourniquet), and pressing on it only slows it
+     dislocated  a shoulder, elbow or knee knocked out of its socket: the limb
+                 is no use, and hurts, until somebody pops it back in
+     the face    black eyes, a bloody or broken nose, a split lip, a cut over
+                 the eye, a swollen cheek, knocked-out teeth - from blows to
+                 the head, mending slowly
+
+   Death comes from the head (a skull can only take so much, and a bullet
+   less), the torso (internal injuries), a broken neck, or running out of
+   blood.
    ========================================================================== */
 import { clamp } from '../core/util.js';
 
@@ -59,6 +82,18 @@ export const BONE_SAID = {
   humerusA: 'arm', forearmA: 'arm', humerusB: 'arm', forearmB: 'arm',
   femurA: 'leg', tibiaA: 'leg', femurB: 'leg', tibiaB: 'leg',
 };
+/** The joints that can come out of their sockets, and which part each one is in. */
+export const JOINT_PART = { shoulderA: 'armA', elbowA: 'armA', shoulderB: 'armB', elbowB: 'armB', kneeA: 'legA', kneeB: 'legB' };
+export const JOINT_NAMES = {
+  shoulderA: 'right shoulder', elbowA: 'right elbow', shoulderB: 'left shoulder', elbowB: 'left elbow', kneeA: 'right knee', kneeB: 'left knee',
+};
+/** How fast the artery in each stump bleeds, and what was lost: by the bone it was cut through. */
+const STUMP = {
+  forearm: { bleed: 0.0055, lost: 'hand' }, humerus: { bleed: 0.0095, lost: 'arm' },
+  tibia: { bleed: 0.0065, lost: 'foot' }, femur: { bleed: 0.014, lost: 'leg' },
+};
+export const SEVERABLE = ['forearmA', 'humerusA', 'forearmB', 'humerusB', 'tibiaA', 'femurA', 'tibiaB', 'femurB'];
+
 // how hard a single blow has to be to have any chance of breaking each one
 const STRENGTH = { skull: 34, neck: 36, ribs: 17, spine: 40, pelvis: 37, humerus: 24, forearm: 19, femur: 33, tibia: 25 };
 const strengthOf = (b) => STRENGTH[b.replace(/[AB]$/, '')];
@@ -89,6 +124,16 @@ export class Health {
     for (const b of BONE_LIST) this.bones[b] = { broken: false, cracked: 0, t: -99 };
     this.internal = 0;        // bleeding inside: a stab in the body, a punctured lung
     this.pressure = 0;        // seconds of someone pressing on the wounds
+    this.selfPress = 0;       // seconds of pressing on their own
+    this.severed = {};        // bone -> true: cut off through the middle of it
+    this.stumps = {};         // part -> how fast its stump bleeds
+    this.tourniquet = {};     // part -> true: tied off
+    this.dislocated = {};     // joint -> true
+    this.bullets = [];        // the bones bullets are still in
+    this.shots = {};          // part -> how many times shot there
+    this.gashes = {};         // part -> how many machete wounds
+    this.face = { blackEye: [0, 0], nose: 0, noseBroken: false, lip: 0, swell: 0, brow: 0, teeth: 0 };
+    this.shock = 0;
     this.paralysed = 'none';  // 'legs' after a broken back, 'all' after a broken neck
     this.blood = 1;
     this.pain = 0;
@@ -112,7 +157,7 @@ export class Health {
    *   bone         which bone it landed on, if that is known (skeleton.js)
    *   breakChance  extra chance of a break on top of what the force gives
    */
-  hit(part, amount, { sharp = 0, deep = false, bone = null, breakChance = 0 } = {}) {
+  hit(part, amount, { sharp = 0, deep = false, bone = null, breakChance = 0, chop = false, shot = false, strike = null } = {}) {
     const p = this.parts[part];
     if (!p) return { damage: 0 };
     let dmg = Math.max(0, amount);
@@ -128,25 +173,51 @@ export class Health {
     // splits the skin, mostly over the face - knuckles more often than a fist
     let wound = false;
     const blade = sharp > 0.9;
-    const cutChance = blade ? 1 : sharp * (dmg / 6) + (part === 'head' ? dmg / 40 : dmg / 80);
-    if (dmg > (blade ? 1.5 : 3) && Math.random() < cutChance) {
-      p.bleed += blade ? (0.0018 + dmg * 0.0002) * (deep ? 1.35 : 1) : dmg * 0.00013;
+    const cutChance = blade || shot ? 1 : sharp * (dmg / 6) + (part === 'head' ? dmg / 40 : dmg / 80);
+    if (dmg > (blade || shot ? 1.5 : 3) && Math.random() < cutChance) {
+      p.bleed += shot ? 0.002 + dmg * 0.00008
+        : chop ? (0.0022 + dmg * 0.00016) * 1.3
+        : blade ? (0.0018 + dmg * 0.0002) * (deep ? 1.35 : 1) : dmg * 0.00013;
       p.cuts++;
       wound = true;
       if (blade) {
         // where the blade went in matters more than how hard
         if (deep && part === 'torso') this.internal += dmg * 0.00018;
-        if (b === 'neck') p.bleed += dmg * 0.0011;
+        if (b === 'neck') p.bleed += dmg * (chop ? 0.0016 : 0.0011);
+        if (chop) this.gashes[part] = (this.gashes[part] || 0) + 1;
       }
+    }
+    let killedBy = null;
+    if (shot) {
+      this.shots[part] = (this.shots[part] || 0) + 1;
+      this.shock = Math.min(1, this.shock + 0.3);
+      // what a bullet finds on its way through
+      if (part === 'head') {
+        if (dmg > 16 && Math.random() < 0.8) killedBy = 'a gunshot to the head';
+        else this.conscious -= 0.5;
+      } else if (part === 'torso') {
+        this.internal += 0.0026 + Math.random() * 0.002;
+        if (Math.random() < 0.08) { this.internal += 0.03; killedBy = null; this.heartShot = true; }
+        if (b === 'spine' && Math.random() < 0.3 && this.paralysed === 'none') this.paralysed = 'legs';
+        if (b === 'ribs' && Math.random() < 0.4) this.internal += 0.0018;
+        if (b === 'neck') p.bleed += 0.012;
+      } else if (Math.random() < 0.12) {
+        // an artery: the limb bleeds hard until it is tied off
+        p.bleed += 0.008;
+        p.artery = true;
+      }
+    } else if (part === 'head' && !blade && dmg > 3) {
+      this.faceHit(dmg, sharp, strike);
     }
 
     // Bones: the blow has to be hard, and a bone that has had a few already goes easier
     let broke = null;
     const bn = b && this.bones[b];
-    if (bn && !bn.broken) {
+    if (bn && !bn.broken && !this.severed[b]) {
       const s = strengthOf(b);
       const worn = 1 - p.hp / p.max;
-      const force = dmg * (1 - sharp * 0.5);
+      // a bullet is small and sharp, but it goes through bone the way nothing else does
+      const force = shot ? dmg * 1.4 : dmg * (1 - sharp * 0.5);
       bn.cracked = Math.min(1, bn.cracked + force / (s * 4));
       const over = Math.max(0, force - s * 0.7) / (s * 1.4);
       const chance = breakChance + over * (0.25 + worn * 0.6 + bn.cracked * 0.5) + (p.hp <= 0 ? 0.5 : 0);
@@ -159,15 +230,115 @@ export class Health {
     // kill: a fistfight ends in a knockout, not a body - unless somebody keeps
     // going after the knockout.
     let ko = false;
-    if (part === 'head' && sharp < 0.9) {
+    if (part === 'head' && sharp < 0.9 && !shot) {
       this.conscious -= dmg * 0.021 * (1.25 - this.toughness * 0.45) * (this.bones.skull.broken ? 1.25 : 1);
       this.dizzy = Math.max(this.dizzy, dmg * 0.16);
       this.headT = this.time;
       if (this.conscious < KO_LEVEL) ko = true;
+    } else if (shot && part === 'head') {
+      this.headT = this.time;
+      if (this.conscious < KO_LEVEL) ko = true;
     }
+    if (killedBy) this.kill(killedBy);
     const fatal = this.checkDeath();
     return { damage: dmg, broke, wound, fatal, ko };
   }
+
+  /**
+   * What a blow to the face leaves: a black eye, a bloody (or broken) nose,
+   * a split lip, a cut over the eye from knuckles, swelling, a tooth or two.
+   */
+  faceHit(dmg, sharp, strike) {
+    const f = this.face;
+    if (Math.random() < dmg / 26) { const i = Math.random() < 0.5 ? 0 : 1; f.blackEye[i] = Math.min(1, f.blackEye[i] + 0.35 + dmg / 40); }
+    if (Math.random() < dmg / 34) {
+      f.nose = Math.min(1, f.nose + 0.5 + dmg / 40);
+      this.parts.head.bleed += 0.0005;
+      if (dmg > 13 && Math.random() < 0.35) f.noseBroken = true;
+    }
+    if (Math.random() < dmg / 30) f.lip = 1;
+    if (sharp > 0.4 && Math.random() < 0.5) { f.brow = 1; this.parts.head.bleed += 0.0004; }
+    f.swell = Math.min(1, f.swell + dmg / 70);
+    if ((strike === 'uppercut' || strike === 'kick' || strike === 'stomp' || sharp > 0.4) && dmg > 12 && Math.random() < 0.3) {
+      f.teeth = Math.min(4, f.teeth + 1);
+      this.lostTooth = true;
+    }
+  }
+
+  /** Cut off through the middle of `bone`. The stump bleeds from the artery until tied off. */
+  sever(bone) {
+    if (this.severed[bone]) return false;
+    const part = BONE_PART[bone];
+    const p = this.parts[part];
+    this.severed[bone] = true;
+    p.broken = true;
+    p.hp = Math.min(p.hp, p.max * 0.25);
+    const kind = bone.replace(/[AB]$/, '');
+    this.stumps[part] = Math.max(this.stumps[part] || 0, STUMP[kind].bleed);
+    this.tourniquet[part] = false;
+    // a dislocation further out does not matter any more
+    for (const [j, jp] of Object.entries(JOINT_PART)) if (jp === part) this.dislocated[j] = false;
+    this.pain = Math.min(130, this.pain + 65);
+    this.shock = Math.min(1, this.shock + 0.65);
+    return true;
+  }
+
+  /** What was lost, in words: 'hand', 'arm', 'foot', 'leg'. */
+  lostAt(bone) { return STUMP[bone.replace(/[AB]$/, '')].lost; }
+
+  /** Which limbs are gone, by part, with the bone they went through. */
+  get missing() {
+    const out = {};
+    for (const b of SEVERABLE) if (this.severed[b]) { const part = BONE_PART[b]; if (!out[part] || b.startsWith('humerus') || b.startsWith('femur')) out[part] = b; }
+    return out;
+  }
+
+  dislocate(joint) {
+    if (this.dislocated[joint] || this.severedAbove(joint)) return false;
+    this.dislocated[joint] = true;
+    this.pain = Math.min(130, this.pain + 30);
+    return true;
+  }
+
+  /** Back in its socket: a moment of agony, then relief. */
+  relocate(joint) {
+    if (!this.dislocated[joint]) return false;
+    this.dislocated[joint] = false;
+    this.pain = Math.min(130, this.pain + 25);
+    return true;
+  }
+
+  /** Whether the limb a joint is on has already been cut off above it. */
+  severedAbove(joint) {
+    const side = joint.slice(-1);
+    if (joint.startsWith('knee')) return !!this.severed['femur' + side];
+    if (joint.startsWith('elbow')) return !!this.severed['humerus' + side];
+    return false;
+  }
+
+  /** Tied off above the wound: a stump, or a limb bleeding from an artery, stops bleeding. */
+  applyTourniquet(part) {
+    const p = this.parts[part];
+    if (!p || this.tourniquet[part]) return false;
+    this.tourniquet[part] = true;
+    if (this.stumps[part]) this.stumps[part] *= 0.03;
+    p.bleed *= 0.12;
+    p.artery = false;
+    return true;
+  }
+
+  /** Which limbs need tying off: a stump still bleeding, or an opened artery. */
+  get needsTourniquet() {
+    const out = [];
+    for (const k of ['armA', 'armB', 'legA', 'legB']) {
+      if (this.tourniquet[k]) continue;
+      if ((this.stumps[k] || 0) > 0.0008 || (this.parts[k].artery && this.parts[k].bleed > 0.003)) out.push(k);
+    }
+    return out;
+  }
+
+  /** A bullet that did not come out again. */
+  lodge(bone) { if (bone && this.bullets.length < 12) this.bullets.push(bone); }
 
   /** Snaps a bone, with whatever that does. Returns its name. */
   breakBone(b, force = 30) {
@@ -225,16 +396,24 @@ export class Health {
   update(dt) {
     this.time += dt;
     let bleed = 0;
-    // someone pressing on the wounds stops them a good deal faster
-    const press = this.pressure > 0 ? 4 : 1;
+    // someone pressing on the wounds stops them a good deal faster; pressing on your own, a bit
+    const press = this.pressure > 0 ? 4 : this.selfPress > 0 ? 1.8 : 1;
     this.pressure = Math.max(0, this.pressure - dt);
+    this.selfPress = Math.max(0, this.selfPress - dt);
     for (const k of PARTS) {
       const p = this.parts[k];
       if (p.bleed > 0) {
         bleed += p.bleed;
         // clotting: the dead stop bleeding faster, there being no pressure
-        p.bleed *= Math.exp(-dt * (this.dead ? 0.12 : 0.035 * press));
-        if (p.bleed < 0.00004) p.bleed = 0;
+        p.bleed *= Math.exp(-dt * (this.dead ? 0.12 : 0.035 * press * (p.artery ? 0.35 : 1)));
+        if (p.bleed < 0.00004) { p.bleed = 0; p.artery = false; }
+      }
+      // a stump bleeds from the artery: hardly clotting, slowed by pressure, stopped by a tourniquet
+      const st = this.stumps[k];
+      if (st > 0) {
+        bleed += st;
+        this.stumps[k] = st * Math.exp(-dt * (this.dead ? 0.15 : 0.006 * press));
+        if (this.stumps[k] < 0.00003) this.stumps[k] = 0;
       }
       if (!this.dead) {
         if (!p.broken && this.time - p.lastHit > 6) p.hp = Math.min(p.max, p.hp + dt * 0.22);
@@ -249,6 +428,17 @@ export class Health {
     this.blood = Math.max(0, this.blood - bleed * dt);
     if (this.dead) return false;
     if (bleed === 0 && this.blood < 1) this.blood = Math.min(1, this.blood + dt * 0.0015);
+    // shock comes on with blood loss, and wears off slowly
+    if (this.blood < 0.7) this.shock = Math.min(1, this.shock + dt * (0.7 - this.blood) * 0.2);
+    this.shock = Math.max(0, this.shock - dt * 0.004);
+    // a face mends: a cut lip in a minute or two, a black eye in a good deal longer
+    const f = this.face;
+    f.blackEye[0] = Math.max(0, f.blackEye[0] - dt * 0.0015);
+    f.blackEye[1] = Math.max(0, f.blackEye[1] - dt * 0.0015);
+    f.nose = Math.max(f.noseBroken ? 0.25 : 0, f.nose - dt * 0.008);
+    f.lip = Math.max(0, f.lip - dt * 0.005);
+    f.brow = Math.max(0, f.brow - dt * 0.004);
+    f.swell = Math.max(0, f.swell - dt * 0.002);
 
     const ache = this.ache();
     if (this.pain > ache) this.pain = Math.max(ache, this.pain - dt * (2.5 + this.toughness * 3));
@@ -260,7 +450,7 @@ export class Health {
     // by the next good hit, rather than killed by it
     const head = this.parts.head;
     const cap = Math.min(this.blood < 0.56 ? clamp((this.blood - 0.38) / 0.18, 0, 1) : 1,
-      0.25 + 0.75 * clamp(head.hp / 70, 0, 1) - (this.bones.skull.broken ? 0.15 : 0));
+      0.25 + 0.75 * clamp(head.hp / 70, 0, 1) - (this.bones.skull.broken ? 0.15 : 0)) - this.shock * 0.12;
     const clearing = this.time - this.headT > 2.5 ? 0.03 + this.toughness * 0.02 : 0;
     this.conscious = Math.min(cap, this.conscious + dt * clearing);
     this.dizzy = Math.max(0, this.dizzy - dt);
@@ -273,12 +463,16 @@ export class Health {
     for (const k of PARTS) a += (1 - this.parts[k].hp / this.parts[k].max) * 20;
     for (const b of BONE_LIST) if (this.bones[b].broken) a += b === 'ribs' || b === 'pelvis' ? 20 : b === 'neck' ? 8 : 15;
     if (this.blood < 0.8) a += (0.8 - this.blood) * 40;
-    return Math.min(85, a);
+    for (const b of SEVERABLE) if (this.severed[b]) a += 30;
+    for (const j of Object.keys(JOINT_PART)) if (this.dislocated[j]) a += 22;
+    a += this.bullets.length * 6;
+    if (this.face.noseBroken) a += 6;
+    return Math.min(90, a);
   }
 
   get bleeding() {
     let b = this.internal;
-    for (const k of PARTS) b += this.parts[k].bleed;
+    for (const k of PARTS) b += this.parts[k].bleed + (this.stumps[k] || 0);
     return b;
   }
 
@@ -293,14 +487,15 @@ export class Health {
   canUse(part) {
     const p = this.parts[part];
     if (!p || p.broken || p.hp <= p.max * 0.1 || this.paralysed === 'all') return false;
+    for (const [j, jp] of Object.entries(JOINT_PART)) if (jp === part && this.dislocated[j]) return false;
     if (part.startsWith('leg')) return this.paralysed === 'none' && !this.bones.pelvis.broken;
     return true;
   }
 
-  /** How many legs will not hold them up: a broken back or pelvis counts as both. */
+  /** How many legs will not hold them up: a broken back or pelvis counts as both, a knee out of its socket as one. */
   get legsBroken() {
     if (this.paralysed !== 'none' || this.bones.pelvis.broken) return 2;
-    return (this.parts.legA.broken ? 1 : 0) + (this.parts.legB.broken ? 1 : 0);
+    return (this.parts.legA.broken || this.dislocated.kneeA ? 1 : 0) + (this.parts.legB.broken || this.dislocated.kneeB ? 1 : 0);
   }
 
   /** How well they can walk: 1 is fine, lower is a limp, 0 is not at all. */
@@ -328,15 +523,25 @@ export class Health {
     return out;
   }
 
-  /** Everything back as it was. The sandbox's heal button. */
+  /** Everything back as it was - even a limb. The sandbox's heal button. */
   heal() {
     for (const k of PARTS) {
       const p = this.parts[k];
-      p.hp = p.max; p.bleed = 0; p.broken = false; p.bruise = 0; p.cuts = 0;
+      p.hp = p.max; p.bleed = 0; p.broken = false; p.bruise = 0; p.cuts = 0; p.artery = false;
     }
     for (const b of BONE_LIST) { this.bones[b].broken = false; this.bones[b].cracked = 0; }
     this.internal = 0;
     this.paralysed = 'none';
+    this.severed = {};
+    this.stumps = {};
+    this.tourniquet = {};
+    this.dislocated = {};
+    this.bullets = [];
+    this.shots = {};
+    this.gashes = {};
+    this.face = { blackEye: [0, 0], nose: 0, noseBroken: false, lip: 0, swell: 0, brow: 0, teeth: 0 };
+    this.shock = 0;
+    this.heartShot = false;
     this.blood = 1; this.pain = 0; this.conscious = 1; this.dizzy = 0;
   }
 
@@ -347,6 +552,19 @@ export class Health {
     if (this.conscious < KO_LEVEL) out.push('Unconscious');
     if (this.paralysed === 'all') out.push('Paralysed from the neck down');
     else if (this.paralysed === 'legs') out.push('Legs paralysed');
+    for (const [part, b] of Object.entries(this.missing)) {
+      const side = part.endsWith('A') ? 'Right' : 'Left';
+      out.push(`${side} ${this.lostAt(b)} cut off` + (this.tourniquet[part] ? ' (tied off)' : ''));
+    }
+    for (const part of PARTS) {
+      const n = this.shots[part];
+      if (n) out.push((n > 1 ? `Shot ${n} times in the ` : 'Gunshot wound to the ') + PART_NAMES[part]);
+    }
+    if (this.bullets.length) out.push(this.bullets.length > 1 ? `${this.bullets.length} bullets still in them` : `A bullet lodged in the ${BONE_NAMES[this.bullets[0]]}`);
+    for (const part of PARTS) if (this.gashes[part]) out.push(`Machete wound to the ${PART_NAMES[part]}`);
+    for (const j of Object.keys(JOINT_PART)) if (this.dislocated[j]) out.push('Dislocated ' + JOINT_NAMES[j]);
+    for (const part of ['armA', 'armB', 'legA', 'legB']) if (this.parts[part].artery && !this.tourniquet[part]) out.push(`Bleeding from an artery (${PART_NAMES[part]})`);
+    if (this.shock > 0.45) out.push('In shock');
     const bn = this.bones;
     if (bn.neck.broken) out.push('Broken neck');
     if (bn.skull.broken) out.push('Fractured skull');
@@ -367,6 +585,12 @@ export class Health {
     else if (this.pain > 40) out.push('In pain');
     if (this.parts.head.hp < 45) out.push('Head injury');
     if (this.parts.torso.hp < 60) out.push('Badly hurt');
+    const f = this.face;
+    if (f.noseBroken) out.push('Broken nose');
+    else if (f.nose > 0.3) out.push('Bloody nose');
+    if (f.blackEye[0] > 0.25 || f.blackEye[1] > 0.25) out.push(f.blackEye[0] > 0.25 && f.blackEye[1] > 0.25 ? 'Two black eyes' : 'Black eye');
+    if (f.lip > 0.3) out.push('Split lip');
+    if (f.teeth) out.push(f.teeth > 1 ? `${f.teeth} teeth knocked out` : 'A tooth knocked out');
     return out;
   }
 }

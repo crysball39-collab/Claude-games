@@ -8,17 +8,27 @@
      SPAWN  tap the world to place whatever was picked in the spawn menu
      ERASE  tap something to remove it
 
-   Pinching zooms and pans with any tool. Keyboard: 1 2 3 4 pick a thing to
-   spawn (a stickman, knuckles, a crate, a knife), H hand, X erase, Space pause, S slow motion, F follow, Tab spawn
-   menu, + and - zoom, 0 reset the camera, M sound, Delete removes whoever is
-   selected, Esc closes things.
+   Pinching zooms and pans with any tool. Keyboard: 1 to 6 pick a thing to
+   spawn (a stickman, knuckles, a crate, a knife, a machete, a Glock-19), H
+   hand, X erase, Space pause, S slow motion, F follow, Tab spawn menu, + and
+   - zoom, 0 reset the camera, M sound, Delete removes whoever is selected,
+   Esc closes things. Tapping a pistol lying on the floor fires it.
+
+   The inspector is not just for looking. Their feelings are bars that can be
+   dragged, their personality is eight sliders, every other person in the
+   sandbox is listed under what they think of them - Friends, Knows,
+   Dislikes, Enemies - and can be moved to another group, and any of them can
+   be picked for them to go and fight.
    ========================================================================== */
 import { Gestures } from '../core/input.js';
-import { drawStickman, drawCrateShape, drawKnuckleShape, drawKnifeShape, KNIFE_W, KNIFE_H, INK } from '../game/draw.js';
+import {
+  drawStickman, drawCrateShape, drawKnuckleShape, drawKnifeShape, drawMacheteShape, drawGlockShape,
+  KNIFE_W, KNIFE_H, MACHETE_W, MACHETE_H, INK,
+} from '../game/draw.js';
 import { solve, makeJoints, P, DIM } from '../game/skeleton.js';
 import { STAND } from '../game/clips.js';
 import { describeTraits } from '../game/people.js';
-import { BONE_LIST } from '../game/health.js';
+import { relCategory } from '../game/brain.js';
 import { STYLE } from '../game/animator.js';
 import { LIMITS } from '../game/sandbox.js';
 import { clamp } from '../core/util.js';
@@ -27,8 +37,12 @@ const KINDS = {
   stickman: { name: 'Stickman', short: 'STICKMAN', plural: 'stickmen', limit: 'people' },
   knuckles: { name: 'Brass Knuckles', short: 'KNUCKLES', plural: 'brass knuckles', limit: 'knuckles' },
   knife: { name: 'Combat Knife', short: 'KNIFE', plural: 'knives', limit: 'knives' },
+  machete: { name: 'Machete', short: 'MACHETE', plural: 'machetes', limit: 'machetes' },
+  glock: { name: 'Glock-19', short: 'GLOCK-19', plural: 'pistols', limit: 'guns' },
   crate: { name: 'Crate', short: 'CRATE', plural: 'crates', limit: 'crates' },
 };
+const KEYS = ['stickman', 'knuckles', 'crate', 'knife', 'machete', 'glock'];
+const ARM_NAMES = { knife: 'Grab the knife', machete: 'Grab the machete', glock: 'Grab the gun', knuckles: 'Grab the brass knuckles' };
 
 const OPTION_NAMES = {
   fight: (t) => 'Fight ' + t.name,
@@ -36,7 +50,7 @@ const OPTION_NAMES = {
   chat: (t) => 'Talk to ' + t.name,
   help: (t) => 'Help ' + t.name,
   mourn: (t) => 'Mourn ' + t.name,
-  arm: (t) => (t.kind === 'knife' ? 'Grab the knife' : 'Grab the brass knuckles'),
+  arm: (t) => ARM_NAMES[t.kind] || 'Grab a weapon',
   pullout: () => 'Pull the knife out',
   exercise: () => 'Do some exercise',
   throwKnife: (t) => 'Throw the knife at ' + t.name,
@@ -53,6 +67,30 @@ const OPTION_NAMES = {
   confront: (t) => 'Stand up to ' + t.name,
   watch: (t) => 'Watch ' + t.name + ' fight',
   throw: (t) => 'Throw a crate at ' + t.name,
+  hide: (t) => 'Hide from ' + t.name,
+};
+
+// what someone thinks of someone else, as the inspector groups them
+const GROUPS = [['friend', 'FRIENDS'], ['knows', 'KNOWS'], ['dislikes', 'DISLIKES'], ['enemy', 'ENEMIES'], ['stranger', "HASN'T MET"]];
+const REL_CHOICES = [['friend', 'Friend'], ['knows', 'Knows'], ['dislikes', 'Dislikes'], ['enemy', 'Enemy']];
+const REL_SAID = {
+  friend: (a, b) => `${a} counts ${b} as a friend now`,
+  knows: (a, b) => `${a} just knows ${b} now`,
+  dislikes: (a, b) => `${a} dislikes ${b} now`,
+  enemy: (a, b) => `${b} is ${a}'s enemy now`,
+};
+
+const TRAIT_ROWS = [
+  ['bravery', 'Bravery'], ['aggression', 'Aggression'], ['temper', 'Temper'], ['empathy', 'Empathy'],
+  ['sociability', 'Sociability'], ['curiosity', 'Curiosity'], ['toughness', 'Toughness'], ['skill', 'Fighting skill'],
+];
+
+const WEAPON_SAID = { knuckles: 'Wearing brass knuckles', knife: 'Holding a combat knife', machete: 'Holding a machete' };
+// bone -> the two joints of the X-ray figure it runs between
+const XRAY_BONE = {
+  skull: ['head', 'head'], neck: ['neck', 'head'], spine: ['hip', 'neck'], ribs: ['chest', 'chest'], pelvis: ['hip', 'hip'],
+  humerusA: ['shoulder', 'elbowA'], forearmA: ['elbowA', 'handA'], humerusB: ['shoulder', 'elbowB'], forearmB: ['elbowB', 'handB'],
+  femurA: ['hip', 'kneeA'], tibiaA: ['kneeA', 'footA'], femurB: ['hip', 'kneeB'], tibiaB: ['kneeB', 'footB'],
 };
 
 const EMOTION_ROWS = [
@@ -128,9 +166,23 @@ export class UI {
       return;
     }
     if (thing && thing.kind === 'stickman') this.select(thing === this.selected ? null : thing);
-    else if (thing) this.toast(thing.wornBy ? `${thing.name}, in ${thing.wornBy.name}'s hand` : thing.carriedBy ? `A crate, held up by ${thing.carriedBy.name}`
-      : thing.stuckIn && thing.stuckIn.person ? `${thing.name}, stuck in ${thing.stuckIn.person.name}. Drag it to pull it out` : thing.stuckIn ? `${thing.name}, stuck fast` : thing.name);
+    else if (thing && thing.kind === 'glock' && thing.loose) this.fireLoose(thing);
+    else if (thing) this.toast(thing.wornBy ? `${thing.name}, in ${thing.wornBy.name}'s hand` + (thing.kind === 'glock' ? ` (${thing.mag}/15)` : '')
+      : thing.carriedBy ? `A crate, held up by ${thing.carriedBy.name}`
+        : thing.kind === 'limb' ? `${thing.of}'s ${thing.name.replace('Severed ', '')}, cut clean off`
+          : thing.stuckIn && thing.stuckIn.person ? `${thing.name}, stuck in ${thing.stuckIn.person.name}. Drag it to pull it out` : thing.stuckIn ? `${thing.name}, stuck fast` : thing.name);
     else this.select(null);
+  }
+
+  /** A pistol on the floor, tapped: it goes off the way it is pointing. Empty, a fresh magazine goes in instead. */
+  fireLoose(g) {
+    if (g.mag <= 0) {
+      if (g.reload()) this.toast(`Fresh magazine in: ${g.mag} rounds, ${g.spare} spare`);
+      else { this.sb.fireLoose(g); this.toast('Click. Out of ammo.'); }
+      return;
+    }
+    this.sb.fireLoose(g);
+    this.toast(g.mag ? `Bang! ${g.mag} left in the magazine` : 'Bang! That was the last one in the magazine');
   }
 
   dragStart(sx, sy, button) {
@@ -166,6 +218,8 @@ export class UI {
     else if (k === 'crate') made = sb.spawnCrate(x, Math.max(y, 0.4));
     else if (k === 'knuckles') made = sb.spawnKnuckles(x, Math.max(y, 0.12));
     else if (k === 'knife') made = sb.spawnKnife(x, Math.max(y, 0.1), Math.random() * 0.4 - 0.2);
+    else if (k === 'machete') made = sb.spawnMachete(x, Math.max(y, 0.1), Math.random() * 0.3 - 0.15);
+    else if (k === 'glock') made = sb.spawnGun(x, Math.max(y, 0.12), Math.random() * 0.3 - 0.15);
     if (!made) {
       this.toast(`That's as many ${KINDS[k].plural} as the sandbox holds (${LIMITS[KINDS[k].limit]})`);
       return null;
@@ -316,6 +370,15 @@ export class UI {
       const a = card ? 0.5 : 0.7;
       ctx.setTransform(s * Math.cos(a), -s * Math.sin(a), -s * Math.sin(a), -s * Math.cos(a), w / 2, card ? h * 0.52 : h / 2);
       drawKnifeShape(ctx, KNIFE_W, KNIFE_H, 0);
+    } else if (kind === 'machete') {
+      const s = (w * (card ? 0.86 : 1.02)) / MACHETE_W;
+      const a = card ? 0.62 : 0.78;
+      ctx.setTransform(s * Math.cos(a), -s * Math.sin(a), -s * Math.sin(a), -s * Math.cos(a), w / 2, card ? h * 0.5 : h / 2);
+      drawMacheteShape(ctx, MACHETE_W, MACHETE_H, 0);
+    } else if (kind === 'glock') {
+      const s = (w * (card ? 0.7 : 0.86)) / 0.3;
+      ctx.setTransform(s, 0, 0, -s, w / 2, card ? h * 0.47 : h * 0.47);
+      drawGlockShape(ctx, 1, 0, 0);
     }
   }
 
@@ -361,6 +424,105 @@ export class UI {
       row.append(l, bar);
       box.appendChild(row);
       this.meters[key] = fill;
+      if (where === 'ins-emotions') this.editableMeter(row, bar, key);
+    }
+
+    // personality: a slider for each trait
+    this.sliders = {};
+    for (const [key, label] of TRAIT_ROWS) {
+      const row = document.createElement('label');
+      row.className = 'trait';
+      const l = document.createElement('span');
+      l.textContent = label;
+      const input = document.createElement('input');
+      input.type = 'range';
+      input.min = '0';
+      input.max = '100';
+      input.step = '1';
+      const val = document.createElement('b');
+      input.addEventListener('input', () => {
+        const p = this.selected;
+        if (!p || !p.brain || p.dead) return;
+        p.brain.setTrait(key, +input.value / 100);
+        val.textContent = input.value;
+        this.showTraits(p);
+      });
+      row.append(l, input, val);
+      $('ins-personality').appendChild(row);
+      this.sliders[key] = { input, val };
+    }
+
+    // people: a group for each of the ways they can feel about someone, the
+    // rows kept from one refresh to the next so the controls in them keep working
+    this.rows = new Map();
+    this.groups = {};
+    for (const [key, title] of GROUPS) {
+      const g = document.createElement('div');
+      g.className = 'ppl-group ' + key;
+      const head = document.createElement('div');
+      head.className = 'ppl-title';
+      const count = document.createElement('i');
+      head.append(document.createTextNode(title), count);
+      const list = document.createElement('div');
+      const none = document.createElement('div');
+      none.className = 'ppl-none';
+      none.textContent = 'Nobody';
+      g.append(head, list, none);
+      $('ins-people').appendChild(g);
+      this.groups[key] = { g, count, list, none };
+    }
+    $('ins-order-stop').addEventListener('click', () => {
+      const p = this.selected;
+      if (!p || !p.brain || !p.brain.ordered) return;
+      const o = p.brain.ordered.target;
+      p.brain.standDown();
+      this.toast(`${p.name} leaves ${o.name} alone`);
+      this.insT = 0;
+    });
+  }
+
+  /** A feeling's bar, made something to drag: wherever it is let go is how they feel (for now - feelings settle). */
+  editableMeter(row, bar, key) {
+    row.classList.add('edit');
+    let id = null;
+    const set = (e) => {
+      const p = this.selected;
+      if (!p || !p.brain || p.dead) return;
+      const r = bar.getBoundingClientRect();
+      const v = clamp((e.clientX - r.left) / r.width, 0, 1);
+      p.brain.setEmotion(key, v);
+      this.meters[key].style.width = (v * 100).toFixed(0) + '%';
+    };
+    bar.addEventListener('pointerdown', (e) => {
+      const p = this.selected;
+      if (!p || !p.brain || p.dead) return;
+      e.preventDefault();
+      id = e.pointerId;
+      bar.setPointerCapture(id);
+      row.classList.add('drag');
+      set(e);
+    });
+    bar.addEventListener('pointermove', (e) => { if (e.pointerId === id) set(e); });
+    const end = (e) => {
+      if (e.pointerId !== id) return;
+      id = null;
+      row.classList.remove('drag');
+      const p = this.selected;
+      if (p && p.brain && !p.dead) this.toast(`${p.name}: ${key} ${Math.round(p.brain.emo[key] * 100)}%`, 1.2);
+    };
+    bar.addEventListener('pointerup', end);
+    bar.addEventListener('pointercancel', end);
+  }
+
+  /** The chips under the name: what is unusual about them. */
+  showTraits(p) {
+    const chips = this.$('ins-traits');
+    chips.textContent = '';
+    for (const t of describeTraits(p.brain ? p.brain.traits : p.traits || {})) {
+      const c = document.createElement('span');
+      c.className = 'chip';
+      c.textContent = t;
+      chips.appendChild(c);
     }
   }
 
@@ -376,13 +538,15 @@ export class UI {
     p.selected = true;
     ins.classList.remove('hidden');
     this.$('ins-name').textContent = p.name;
-    const chips = this.$('ins-traits');
-    chips.textContent = '';
-    for (const t of describeTraits(p.traits || {})) {
-      const c = document.createElement('span');
-      c.className = 'chip';
-      c.textContent = t;
-      chips.appendChild(c);
+    this.showTraits(p);
+    // somebody else's people
+    for (const e of this.rows.values()) e.row.remove();
+    this.rows.clear();
+    for (const [key, { input, val }] of Object.entries(this.sliders)) {
+      const v = Math.round((p.brain ? p.brain.traits[key] : 0.5) * 100);
+      input.value = String(v);
+      val.textContent = String(v);
+      input.setAttribute('aria-label', `${p.name}'s ${key}`);
     }
     this.$('ins-follow').classList.toggle('on', this.cam.follow === p);
     this.insT = 0;
@@ -409,7 +573,19 @@ export class UI {
     mood.textContent = p.dead ? 'Dead' : !p.conscious ? 'Unconscious' : b.emo.label;
     mood.classList.toggle('dead', p.dead);
     $('ins-doing').textContent = b.doing;
-    for (const [k] of EMOTION_ROWS) this.meters[k].style.width = (p.dead ? 0 : b.emo[k] * 100).toFixed(0) + '%';
+    for (const [k] of EMOTION_ROWS) {
+      this.meters[k].style.width = (p.dead ? 0 : b.emo[k] * 100).toFixed(0) + '%';
+      this.meters[k].parentNode.parentNode.classList.toggle('off', p.dead);
+    }
+    for (const [key, { input, val }] of Object.entries(this.sliders)) {
+      input.disabled = p.dead;
+      if (document.activeElement === input) continue;
+      const v = String(Math.round(b.traits[key] * 100));
+      if (input.value !== v) { input.value = v; val.textContent = v; }
+    }
+    const ord = b.ordered && !b.ordered.target.removed ? b.ordered : null;
+    $('ins-order').classList.toggle('hidden', !ord || p.dead);
+    if (ord) $('ins-order-text').textContent = `Sent to fight ${ord.target.name}`;
     this.meters.pain.style.width = (p.dead ? 0 : clamp(h.pain, 0, 100)).toFixed(0) + '%';
     this.meters.blood.style.width = (clamp((h.blood - 0.38) / 0.62, 0, 1) * 100).toFixed(0) + '%';
     $('ins-heal').disabled = p.dead;
@@ -431,13 +607,16 @@ export class UI {
     }
     if (p.weapon) {
       const s = document.createElement('div');
-      s.textContent = p.armedWith === 'knife' ? 'Holding a combat knife' : 'Wearing brass knuckles';
+      const g = p.weapon;
+      s.textContent = p.armedWith === 'glock' ? `Holding a Glock-19 (${g.mag}/15, ${g.spare} spare)${p.reloading ? ', reloading' : ''}`
+        : WEAPON_SAID[p.armedWith] || 'Holding ' + g.name;
       cb.appendChild(s);
     }
     if (p.stuck.length) {
       const s = document.createElement('div');
       s.className = 'bad';
-      s.textContent = p.stuck.length > 1 ? `${p.stuck.length} knives stuck in them` : 'A knife stuck in them';
+      const what = (e) => (e.knife && e.knife.kind === 'machete' ? 'machete' : 'knife');
+      s.textContent = p.stuck.length > 1 ? `${p.stuck.length} blades stuck in them` : `A ${what(p.stuck[0])} stuck in them`;
       cb.prepend(s);
     }
     this.drawFigure(p);
@@ -481,35 +660,127 @@ export class UI {
       tb.appendChild(row);
     }
 
-    const pb = $('ins-people');
-    pb.textContent = '';
-    const rels = [...b.rels.values()].filter((r) => !r.other.removed && r.met)
-      .sort((x, y) => (Math.abs(y.like) + y.anger + y.fear + y.fam) - (Math.abs(x.like) + x.anger + x.fear + x.fam))
-      .slice(0, 5);
-    for (const r of rels) {
+    this.updatePeople(p);
+
+    // what they remember: the things that mattered most, strongest first
+    const mb = $('ins-memories');
+    mb.textContent = '';
+    const mems = b.memories.filter((m) => m.w > 0.06).sort((x, y) => y.w * (0.4 + Math.abs(y.v)) - x.w * (0.4 + Math.abs(x.v))).slice(0, 6);
+    for (const m of mems) {
       const row = document.createElement('div');
-      row.className = 'person';
-      const n = document.createElement('b');
-      n.textContent = r.other.name;
-      const tag = document.createElement('span');
-      const [cls, text] = relTag(r);
-      tag.className = 'tag ' + cls;
-      tag.textContent = text;
-      row.append(n, tag);
-      pb.appendChild(row);
+      row.className = 'memory' + (m.v < -0.2 ? ' bad' : m.v > 0.2 ? ' good' : '') + (m.w < 0.25 ? ' faint' : '');
+      const ago = document.createElement('i');
+      ago.textContent = fmtAgo(this.sb.time - m.t);
+      row.append(ago, document.createTextNode(b.memoryText(m)));
+      mb.appendChild(row);
     }
-    if (!rels.length) {
+    if (!mems.length) {
       const row = document.createElement('div');
       row.className = 'thought';
-      row.textContent = 'Has not met anyone yet.';
-      pb.appendChild(row);
+      row.textContent = 'Nothing worth remembering yet.';
+      mb.appendChild(row);
     }
+  }
+
+  /**
+   * Everyone else in the sandbox, under what the selected person thinks of
+   * them. Rows stay put between refreshes and only move group when what they
+   * think changes - never while their menu is open.
+   */
+  updatePeople(p) {
+    const b = p.brain;
+    const seen = new Set();
+    for (const o of this.sb.people) {
+      if (o === p || o.removed) continue;
+      seen.add(o);
+      let e = this.rows.get(o);
+      if (!e) { e = this.personRow(o); this.rows.set(o, e); }
+      const r = b.rels.get(o);
+      const cat = relCategory(r);
+      const busy = document.activeElement === e.sel;
+      if (cat !== e.cat && !busy) {
+        // in name order within the group
+        const list = this.groups[cat].list;
+        let before = null;
+        for (const c of list.children) if (c.dataset.name.localeCompare(o.name) > 0) { before = c; break; }
+        list.insertBefore(e.row, before);
+        e.cat = cat;
+      }
+      const [cls, text] = relTag(r, o, p);
+      e.tag.className = 'tag ' + cls;
+      e.tag.textContent = text;
+      if (!busy) e.sel.value = cat;
+      e.sel.disabled = p.dead;
+      e.sel.setAttribute('aria-label', `What ${p.name} thinks of ${o.name}`);
+      const ordered = !!(b.ordered && b.ordered.target === o);
+      e.fight.textContent = ordered ? 'Stop' : 'Fight';
+      e.fight.classList.toggle('on', ordered);
+      e.fight.disabled = p.dead || (o.dead && !ordered);
+      e.fight.setAttribute('aria-label', ordered ? `Call ${p.name} off ${o.name}` : `Send ${p.name} to fight ${o.name}`);
+    }
+    for (const [o, e] of this.rows) if (!seen.has(o)) { e.row.remove(); this.rows.delete(o); }
+    for (const [key] of GROUPS) {
+      const g = this.groups[key];
+      const n = g.list.children.length;
+      g.count.textContent = n ? String(n) : '';
+      g.none.style.display = n ? 'none' : '';
+      if (key === 'stranger') g.g.style.display = n ? '' : 'none';
+    }
+  }
+
+  personRow(o) {
+    const row = document.createElement('div');
+    row.className = 'person';
+    row.dataset.name = o.name;
+    const who = document.createElement('span');
+    who.className = 'who';
+    const n = document.createElement('b');
+    n.textContent = o.name;
+    const tag = document.createElement('span');
+    who.append(n, tag);
+    const sel = document.createElement('select');
+    const never = new Option('Stranger', 'stranger');
+    never.disabled = true;
+    sel.add(never);
+    for (const [v, t] of REL_CHOICES) sel.add(new Option(t, v));
+    sel.addEventListener('change', () => {
+      const p = this.selected;
+      if (!p || !p.brain || p.dead) return;
+      p.brain.setRelation(o, sel.value);
+      this.toast(REL_SAID[sel.value](p.name, o.name));
+      sel.blur();
+      this.insT = 0;
+    });
+    const fight = document.createElement('button');
+    fight.className = 'mini-btn fight';
+    fight.textContent = 'Fight';
+    fight.addEventListener('click', () => this.orderFight(o));
+    row.append(who, sel, fight);
+    return { row, tag, sel, fight, cat: null };
+  }
+
+  /** Sends the selected person after `o` - or, if that is who they were already sent after, calls them off. */
+  orderFight(o) {
+    const p = this.selected;
+    if (!p || !p.brain) return;
+    const b = p.brain;
+    if (b.ordered && b.ordered.target === o) {
+      b.standDown();
+      this.toast(`${p.name} leaves ${o.name} alone`);
+    } else if (p.dead) this.toast(`${p.name} is dead`);
+    else if (o.dead) this.toast(`${o.name} is already dead`);
+    else if (b.order('fight', o)) {
+      this.toast(p.conscious && p.state === 'stand' ? `${p.name} goes after ${o.name}` : `${p.name} will go after ${o.name} once they are back on their feet`);
+    }
+    this.insT = 0;
   }
 
   /**
    * An X-ray of them: every bone, white while it is sound, warming to yellow
    * and red as the part around it takes damage, and broken bones drawn
-   * snapped, in red.
+   * snapped, in red. Whatever has been cut off is not there, joints out of
+   * their sockets are ringed in purple, and the bullets still in them show
+   * up as little gold dots.
    */
   drawFigure(p) {
     const cv = this.$('ins-figure');
@@ -541,13 +812,34 @@ export class UI {
       ctx.stroke();
     };
     const B = (id) => !!(h.bones[id] && h.bones[id].broken);
+    const S = h.severed;
+    // cut off halfway along: the half that is left, ending in a red stump
+    const half = (a, b, c, w) => {
+      const mx = (j[a].x + j[b].x) / 2, my = (j[a].y + j[b].y) / 2;
+      ctx.strokeStyle = c;
+      ctx.lineWidth = w;
+      ctx.beginPath(); ctx.moveTo(j[a].x, j[a].y); ctx.lineTo(mx, my); ctx.stroke();
+      ctx.fillStyle = '#ff4a3d';
+      ctx.beginPath(); ctx.arc(mx, my, w * 0.75, 0, Math.PI * 2); ctx.fill();
+    };
     // legs and arms
     for (const side of ['B', 'A']) {
-      bone('hip', 'knee' + side, col('femur' + side, 'leg' + side), 0.075, B('femur' + side));
-      bone('knee' + side, 'foot' + side, col('tibia' + side, 'leg' + side), 0.065, B('tibia' + side));
-      bone('foot' + side, 'toe' + side, col('tibia' + side, 'leg' + side), 0.05);
-      bone('shoulder', 'elbow' + side, col('humerus' + side, 'arm' + side), 0.065, B('humerus' + side));
-      bone('elbow' + side, 'hand' + side, col('forearm' + side, 'arm' + side), 0.055, B('forearm' + side));
+      const leg = 'leg' + side, arm = 'arm' + side;
+      if (S['femur' + side]) half('hip', 'knee' + side, col('femur' + side, leg), 0.075);
+      else {
+        bone('hip', 'knee' + side, col('femur' + side, leg), 0.075, B('femur' + side));
+        if (S['tibia' + side]) half('knee' + side, 'foot' + side, col('tibia' + side, leg), 0.065);
+        else {
+          bone('knee' + side, 'foot' + side, col('tibia' + side, leg), 0.065, B('tibia' + side));
+          bone('foot' + side, 'toe' + side, col('tibia' + side, leg), 0.05);
+        }
+      }
+      if (S['humerus' + side]) half('shoulder', 'elbow' + side, col('humerus' + side, arm), 0.065);
+      else {
+        bone('shoulder', 'elbow' + side, col('humerus' + side, arm), 0.065, B('humerus' + side));
+        if (S['forearm' + side]) half('elbow' + side, 'hand' + side, col('forearm' + side, arm), 0.055);
+        else bone('elbow' + side, 'hand' + side, col('forearm' + side, arm), 0.055, B('forearm' + side));
+      }
     }
     // the spine, as vertebrae
     const sc = col('spine', 'torso');
@@ -619,7 +911,27 @@ export class UI {
         ctx.beginPath(); ctx.arc(x, y, 0.045, 0, Math.PI * 2); ctx.fill();
       }
     }
-    void BONE_LIST;
+    // joints out of their sockets
+    ctx.strokeStyle = '#c77dff';
+    ctx.lineWidth = 0.025;
+    for (const [jn, out] of Object.entries(h.dislocated)) {
+      if (!out) continue;
+      const at = j[jn.startsWith('shoulder') ? 'shoulder' : jn];
+      if (!at) continue;
+      ctx.beginPath(); ctx.arc(at.x + (jn.startsWith('shoulder') ? (jn.endsWith('A') ? 0.05 : -0.05) : 0), at.y, 0.06, 0, Math.PI * 2); ctx.stroke();
+    }
+    // the bullets still in them, spread along the bone they stopped in
+    ctx.fillStyle = '#ffd166';
+    const per = {};
+    for (const bn of h.bullets) {
+      const ends = XRAY_BONE[bn];
+      if (!ends) continue;
+      const i = per[bn] = (per[bn] || 0) + 1;
+      const t = ends[0] === ends[1] ? 0 : 0.3 + ((i * 0.27) % 0.45);
+      const x = j[ends[0]].x + (j[ends[1]].x - j[ends[0]].x) * t + (ends[0] === ends[1] ? (i - 1) * 0.04 : 0);
+      const y = j[ends[0]].y + (j[ends[1]].y - j[ends[0]].y) * t;
+      ctx.beginPath(); ctx.arc(x, y, 0.028, 0, Math.PI * 2); ctx.fill();
+    }
   }
 
   /* -------------------------------------------------------------------------- */
@@ -663,9 +975,9 @@ export class UI {
 
   bindKeys() {
     window.addEventListener('keydown', (e) => {
-      if (!this.started || e.target.tagName === 'INPUT') return;
+      if (!this.started || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
       const k = e.key;
-      if (k === '1' || k === '2' || k === '3' || k === '4') { this.setSpawnKind(['stickman', 'knuckles', 'crate', 'knife'][+k - 1]); this.setTool('spawn'); }
+      if (k >= '1' && k <= '6') { this.setSpawnKind(KEYS[+k - 1]); this.setTool('spawn'); }
       else if (k === 'h' || k === 'H') this.setTool('hand');
       else if (k === 'x' || k === 'X') this.setTool('erase');
       else if (k === ' ') { e.preventDefault(); this.togglePause(); }
@@ -704,8 +1016,9 @@ export class UI {
     let ghost = null;
     if (this.tool === 'spawn' && this.hover && !this.hand.active) {
       const w = this.world(this.hover.x, this.hover.y);
-      const y = this.spawnKind === 'stickman' ? this.sb.surfaceBelow(w.x, 0.15, 100).y
-        : Math.max(w.y, this.spawnKind === 'crate' ? 0.39 : this.spawnKind === 'knife' ? 0.03 : 0.04);
+      const k = this.spawnKind;
+      const y = k === 'stickman' ? this.sb.surfaceBelow(w.x, 0.15, 100).y
+        : Math.max(w.y, k === 'crate' ? 0.39 : k === 'knife' ? 0.03 : k === 'machete' ? 0.05 : k === 'glock' ? 0.08 : 0.04);
       ghost = { kind: this.spawnKind, x: w.x, y };
     }
     return {
@@ -716,14 +1029,14 @@ export class UI {
   }
 }
 
-function relTag(r) {
-  if (r.other.dead) return ['dead', 'Dead'];
-  if (r.like > 0.4) return ['friend', 'Friend'];
+/** A word on how it stands with someone, beyond which group they are in. */
+function relTag(r, o, p) {
+  if (o.dead) return ['dead', 'Dead'];
+  if (p.brain && p.brain.fightTarget === o) return ['enemy', 'Fighting'];
+  if (!r) return ['', ''];
   if (r.fear > 0.4) return ['afraid', 'Afraid of'];
   if (r.anger > 0.45) return ['enemy', 'Angry at'];
-  if (r.like < -0.3) return ['enemy', 'Dislikes'];
-  if (r.fam > 0.2 || r.greeted) return ['', 'Knows'];
-  return ['', 'Stranger'];
+  return ['', ''];
 }
 
 function fmtAgo(s) {

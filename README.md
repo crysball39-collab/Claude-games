@@ -5,10 +5,12 @@ orientation, touch controls, no install, no build step, no assets on disk — ev
 texture in the game is drawn procedurally onto a canvas at load time.
 
 > This repository also holds **STICKFIGHTS**, a 2D sandbox on a grey background
-> and a black floor where you spawn stickmen, brass knuckles, combat knives and
-> crates, and the stickmen think, feel, talk, fight, break bones and die on their
-> own - animated frame by frame while they are in charge of their bodies, and
-> ragdolls with real joints when they are not. The single-file build is `dist/stickfights.html`,
+> and a black floor where you spawn stickmen, brass knuckles, combat knives,
+> machetes, Glock-19 pistols and crates, and the stickmen think, feel, remember,
+> talk, fight, break bones, lose limbs and die on their own - animated frame by
+> frame while they are in charge of their bodies, and ragdolls with real joints
+> when they are not - and you can change their feelings, their personality and
+> who they count as friends and enemies, and send them to fight. The single-file build is `dist/stickfights.html`,
 > the source lives in `stickfights/`, and
 > [`stickfights/README.md`](stickfights/README.md) has the details.
 

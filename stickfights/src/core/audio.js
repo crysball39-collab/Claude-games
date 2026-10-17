@@ -158,6 +158,89 @@ export class Sound {
     this.hiss(0.14, 700, 1.4, 0.3 * v, 'lowpass', 0.02);
   }
 
+  /**
+   * A 9 mm going off: a hard crack of noise over a low punch, and the slap
+   * of it coming back off the walls a moment later, quieter each time. Loud
+   * from anywhere; louder close to.
+   */
+  gunshot(x) {
+    if (!this.ready) return;
+    const v = 0.35 + this.near(x) * 0.75;
+    this.hiss(0.09, 2600, 0.7, 1.2 * v);
+    this.hiss(0.05, 6000, 0.6, 0.6 * v, 'highpass');
+    this.tone('sine', 150, 40, 0.16, 1.1 * v);
+    this.tone('triangle', 900, 120, 0.05, 0.25 * v);
+    for (const [d, k] of [[0.11, 0.35], [0.24, 0.18], [0.4, 0.08]]) this.hiss(0.16, 900, 0.5, k * v, 'lowpass', d);
+  }
+
+  /** The hammer falling on nothing. */
+  dryFire(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.tone('square', 2600, 2200, 0.012, 0.12 * v);
+    this.hiss(0.02, 4000, 4, 0.12 * v);
+  }
+
+  /** The working of a pistol: a magazine out, one in, the slide racked. */
+  gunClick(x, kind) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    if (kind === 'magOut') { this.tone('triangle', 900, 600, 0.03, 0.1 * v); this.hiss(0.04, 2500, 3, 0.12 * v); }
+    else if (kind === 'magIn') { this.tone('square', 1300, 900, 0.02, 0.1 * v); this.hiss(0.03, 3500, 4, 0.18 * v); }
+    else { this.hiss(0.05, 3000, 2, 0.22 * v); this.tone('square', 1800, 1200, 0.02, 0.1 * v, 0.06); this.hiss(0.03, 4000, 3, 0.18 * v, 'bandpass', 0.06); }
+  }
+
+  /** An empty case bouncing on the floor: a high tink. */
+  casing(x, speed = 2) {
+    if (!this.ready) return;
+    const v = this.near(x) * clamp(speed / 4, 0.15, 0.6);
+    this.tone('sine', 4200 + rand(-600, 600), 3900, 0.06, 0.06 * v);
+    this.tone('sine', 6100 + rand(-500, 500), 6000, 0.04, 0.03 * v);
+  }
+
+  /** A bullet off the floor: the whine of it going away. */
+  ricochet(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.tone('sine', 3400 + rand(-400, 400), 900, 0.32, 0.12 * v);
+    this.hiss(0.05, 3000, 2, 0.2 * v);
+  }
+
+  /** Where a bullet ends up: wood splinters, flesh thumps, the floor cracks. */
+  bulletHit(what, x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    if (what === 'stickman') { this.tone('sine', 120, 50, 0.08, 0.5 * v); this.hiss(0.06, 900, 1, 0.35 * v, 'lowpass'); }
+    else if (what === 'crate') { this.tone('triangle', 420, 160, 0.06, 0.3 * v); this.hiss(0.07, 1800, 1.6, 0.4 * v); }
+    else this.hiss(0.05, 2600, 1.5, 0.3 * v);
+  }
+
+  /** A machete going in: heavier and wetter than a knife. */
+  chop(power, x) {
+    if (!this.ready) return;
+    const v = this.near(x) * clamp(0.5 + power * 0.25, 0.4, 1.2);
+    this.tone('sine', 110, 45, 0.14, 0.6 * v);
+    this.hiss(0.1, 1900, 1.8, 0.45 * v);
+    this.hiss(0.18, 500, 1.2, 0.35 * v, 'lowpass', 0.02);
+  }
+
+  /** Right through: a crunch of bone and something wet. */
+  sever(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.hiss(0.06, 3200, 3, 0.55 * v);
+    this.tone('square', 600, 200, 0.06, 0.15 * v);
+    this.hiss(0.25, 450, 0.9, 0.45 * v, 'lowpass', 0.03);
+  }
+
+  /** A joint going out, or back in: a dull pop. */
+  jointPop(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.tone('sine', 260, 90, 0.07, 0.4 * v);
+    this.hiss(0.04, 1500, 2, 0.25 * v);
+  }
+
   /** A blade drawn across: a thin swish and a hiss. */
   slash(x) {
     if (!this.ready) return;

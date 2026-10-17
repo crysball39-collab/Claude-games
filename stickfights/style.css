@@ -335,9 +335,82 @@ button {
   color: var(--muted);
 }
 
+.ins-hint {
+  margin-left: 4px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: rgba(255, 255, 255, 0.32);
+}
+
 .meter { display: grid; grid-template-columns: 60px 1fr; align-items: center; gap: 8px; margin: 2px 0; font-size: 10.5px; }
 .meter .bar { height: 7px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
 .meter .fill { height: 100%; width: 0; border-radius: 4px; transition: width 0.2s; }
+/* the feelings can be dragged: a taller bar, a grip at the end of the fill */
+.meter.edit { margin: 0; padding: 3px 0; cursor: ew-resize; touch-action: none; }
+.meter.edit .bar { position: relative; height: 10px; border-radius: 5px; overflow: visible; }
+.meter.edit .fill { position: relative; border-radius: 5px; }
+.meter.edit .fill::after {
+  content: '';
+  position: absolute;
+  right: -3px;
+  top: -3px;
+  width: 6px;
+  height: 16px;
+  border-radius: 3px;
+  background: #f1f1f1;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+}
+.meter.edit.drag .fill { transition: none; }
+.meter.edit.off { cursor: default; opacity: 0.55; }
+.meter.edit.off .fill::after { display: none; }
+
+.ins-order {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 6px;
+  padding: 5px 6px 5px 9px;
+  border-radius: 9px;
+  background: rgba(226, 59, 59, 0.22);
+  border: 1px solid rgba(226, 59, 59, 0.5);
+  font-size: 11px;
+  font-weight: 700;
+}
+.mini-btn {
+  flex: none;
+  padding: 4px 8px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #f1f1f1;
+}
+.mini-btn:active { background: rgba(255, 255, 255, 0.24); }
+.mini-btn:disabled { opacity: 0.35; }
+.mini-btn.fight { background: rgba(226, 59, 59, 0.75); }
+.mini-btn.fight.on { background: #f1f1f1; color: var(--ink); }
+
+/* who they know, grouped by what they think of them */
+.ppl-group { margin: 0 0 4px; }
+.ppl-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 2px;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+.ppl-title::before { content: ''; width: 7px; height: 7px; border-radius: 2px; background: currentColor; }
+.ppl-title i { font-style: normal; font-weight: 700; color: var(--muted); letter-spacing: 0; }
+.ppl-group.friend .ppl-title { color: #6fd37a; }
+.ppl-group.knows .ppl-title { color: #c9c9c9; }
+.ppl-group.dislikes .ppl-title { color: #f0a03c; }
+.ppl-group.enemy .ppl-title { color: #ff5a4e; }
+.ppl-group.stranger .ppl-title { color: #8a8a8a; }
+.ppl-none { font-size: 10.5px; color: rgba(255, 255, 255, 0.3); padding: 1px 0 2px 13px; }
 
 .ins-body { display: flex; gap: 10px; align-items: flex-start; }
 #ins-figure { width: 84px; height: 110px; flex: none; background: #0d1a22; border-radius: 6px; }
@@ -355,13 +428,39 @@ button {
 .thought:last-child { color: #fff; font-weight: 600; }
 .thought i { color: var(--muted); font-style: normal; margin-right: 4px; }
 
-.person { display: flex; align-items: center; justify-content: space-between; font-size: 11px; padding: 2px 0; }
-.person b { font-weight: 700; }
-.tag { font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 6px; background: rgba(255, 255, 255, 0.1); }
+.person { display: flex; align-items: center; justify-content: space-between; gap: 5px; font-size: 11px; padding: 2px 0 2px 13px; }
+.person .who { flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; overflow: hidden; }
+.person b { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.person select {
+  flex: none;
+  width: 70px;
+  padding: 3px 2px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: #232326;
+  color: #f1f1f1;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+.person select:disabled { opacity: 0.4; }
+.tag { flex: none; font-size: 9.5px; font-weight: 800; padding: 1px 5px; border-radius: 6px; background: rgba(255, 255, 255, 0.1); }
+.tag:empty { display: none; }
 .tag.friend { background: #2f7a3a; }
 .tag.enemy { background: #8c2323; }
 .tag.afraid { background: #5a3d8c; }
 .tag.dead { background: #333; color: #aaa; }
+
+.trait { display: grid; grid-template-columns: 74px 1fr 26px; align-items: center; gap: 6px; font-size: 10.5px; }
+.trait input { width: 100%; height: 22px; margin: 0; accent-color: #9ec6ff; touch-action: none; }
+.trait input:disabled { opacity: 0.4; }
+.trait b { font-weight: 700; color: var(--muted); text-align: right; font-size: 10px; }
+
+.memory { display: flex; gap: 6px; font-size: 11px; line-height: 1.35; color: #ddd; padding: 3px 0 3px 7px; border-left: 2px solid rgba(255, 255, 255, 0.2); margin: 2px 0; }
+.memory.bad { border-left-color: #e2584f; }
+.memory.good { border-left-color: #5fd35f; }
+.memory i { flex: none; color: var(--muted); font-style: normal; }
+.memory.faint { opacity: 0.6; }
 
 .ins-actions {
   display: flex;

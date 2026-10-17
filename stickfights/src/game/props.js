@@ -1,15 +1,20 @@
 /* =============================================================================
    The things you can spawn that are not people: a wooden crate, a set of
-   brass knuckles and a combat knife. Each one is a rigid body in the physics
-   world while it is lying about; a crate someone is carrying turns kinematic
-   and goes where their hands go, and knuckles or a knife in someone's hand
-   leave the world altogether and are drawn in it.
+   brass knuckles, a combat knife, a machete and a Glock-19 - and the pieces
+   of people a machete leaves on the floor.
 
-   A knife that flies point first into something stays in it: a crate, the
-   floor, or a person (stickman.js holds it to the bone it went into).
+   Each one is a rigid body in the physics world while it is lying about; a
+   crate someone is carrying turns kinematic and goes where their hands go,
+   and a weapon in someone's hand leaves the world altogether and is drawn
+   in it.
+
+   A blade that flies point first into something stays in it: a crate, the
+   floor, or a person (stickman.js holds it to the bone it went into). A gun
+   carries its own ammunition: fifteen in the magazine and two spare
+   magazines, whoever is holding it.
    ========================================================================== */
 import { Body } from '../physics/rigid.js';
-import { KNIFE_W, KNIFE_H } from './draw.js';
+import { KNIFE_W, KNIFE_H, KNIFE_GRIP, MACHETE_W, MACHETE_H, MACHETE_GRIP, GLOCK_W, GLOCK_H, GLOCK_MUZZLE } from './draw.js';
 
 let nextId = 1;
 
@@ -30,6 +35,7 @@ export class Crate {
       x, y, rot, owner: this, friction: 0.65, restitution: 0.08, angularDamping: 0.35,
     }));
     this.stains = [];
+    this.holes = [];         // bullet holes, in its own frame
     this.carriedBy = null;   // a stickman holding it overhead
     this.thrownBy = null;    // who threw it last, so a hit can be blamed on them
     this.thrownAt = -99;
@@ -47,6 +53,14 @@ export class Crate {
     l.y = Math.max(-h, Math.min(h, l.y));
     if (this.stains.length > 60) this.stains.shift();
     this.stains.push({ x: l.x, y: l.y, r, a: Math.random() * Math.PI, flat: 0.6 + Math.random() * 0.4, dark: Math.random() < 0.3 });
+  }
+
+  /** Where a bullet went through, in the crate's own frame, so it turns with the crate. */
+  hole(wx, wy) {
+    const l = this.body.toLocal(wx, wy);
+    const h = this.size / 2 - 0.02;
+    if (this.holes.length > 40) this.holes.shift();
+    this.holes.push({ x: Math.max(-h, Math.min(h, l.x)), y: Math.max(-h, Math.min(h, l.y)) });
   }
 
   /** Picked up overhead: it follows the hands and stops being pushed about. */
@@ -104,13 +118,24 @@ export class Knuckles {
   }
 }
 
-export class Knife {
-  constructor(sandbox, x, y, rot = 0) {
+/** The two blades, and how each is built: drawn length and depth, weight, where the fist goes. */
+export const BLADES = {
+  knife: { name: 'Combat Knife', w: KNIFE_W, h: KNIFE_H, mass: 0.35, grip: KNIFE_GRIP },
+  machete: { name: 'Machete', w: MACHETE_W, h: MACHETE_H, mass: 0.6, grip: MACHETE_GRIP },
+};
+export const isBlade = (kind) => kind === 'knife' || kind === 'machete';
+
+export class Blade {
+  constructor(sandbox, x, y, rot = 0, kind = 'knife') {
+    const spec = BLADES[kind];
     this.id = nextId++;
-    this.kind = 'knife';
-    this.name = 'Combat Knife';
+    this.kind = kind;
+    this.name = spec.name;
     this.sandbox = sandbox;
-    this.body = new Body(KNIFE_W, KNIFE_H, 0.35, {
+    this.w = spec.w;
+    this.h = spec.h;
+    this.grip = spec.grip;
+    this.body = new Body(spec.w, spec.h, spec.mass, {
       x, y, rot, owner: this, friction: 0.45, restitution: 0.15, angularDamping: 0.5,
     });
     sandbox.phys.add(this.body);
@@ -138,7 +163,7 @@ export class Knife {
   get loose() { return !this.wornBy && !this.stuckIn && !this.removed; }
 
   /** Where its point is, while it is a body of its own. */
-  get tip() { return this.body.toWorld(KNIFE_W / 2, 0); }
+  get tip() { return this.body.toWorld(this.w / 2, 0); }
 
   leaveWorld() { if (this.inWorld) { this.sandbox.phys.remove(this.body); this.inWorld = false; } }
   enterWorld() { if (!this.inWorld) { this.sandbox.phys.add(this.body); this.inWorld = true; } }
@@ -195,4 +220,140 @@ export class Knife {
     this.body.pos.y = p.y;
     this.body.rot = c.rot + st.lr;
   }
+}
+
+export class Knife extends Blade {
+  constructor(sandbox, x, y, rot = 0) { super(sandbox, x, y, rot, 'knife'); }
+}
+
+export class Machete extends Blade {
+  constructor(sandbox, x, y, rot = 0) { super(sandbox, x, y, rot, 'machete'); }
+}
+
+export const GLOCK_MAG = 15;
+export const GLOCK_SPARE = 30;
+
+/**
+ * A Glock-19: fifteen 9 mm rounds in the magazine, two more magazines with
+ * it. Lying about it is a body like any other; tap it and it fires the way
+ * it is pointing.
+ */
+export class Gun {
+  constructor(sandbox, x, y, rot = 0) {
+    this.id = nextId++;
+    this.kind = 'glock';
+    this.name = 'Glock-19';
+    this.sandbox = sandbox;
+    this.body = new Body(GLOCK_W, GLOCK_H * 0.72, 0.85, {
+      x, y, rot, owner: this, friction: 0.55, restitution: 0.18, angularDamping: 0.6,
+    });
+    sandbox.phys.add(this.body);
+    this.inWorld = true;
+    this.wornBy = null;
+    this.mag = GLOCK_MAG;
+    this.spare = GLOCK_SPARE;
+    this.lastShot = -99;
+    this.blood = 0;
+    this.thrownBy = null;
+    this.thrownAt = -99;
+    this.lastSound = -99;
+    this.removed = false;
+  }
+
+  get pos() { return this.wornBy ? this.wornBy.wj.handA : this.body.pos; }
+  get loose() { return !this.wornBy && !this.removed; }
+  /** Every round it has, in the magazine and out. */
+  get ammo() { return this.mag + this.spare; }
+  /** How far back the slide is: kicked back for an instant by each shot, locked back when it is empty. */
+  get slide() {
+    if (this.mag <= 0) return 0.04;
+    const t = this.sandbox.time - this.lastShot;
+    return t < 0.06 ? 0.045 * (1 - t / 0.06) : 0;
+  }
+
+  wear(by) {
+    this.wornBy = by;
+    if (this.inWorld) { this.sandbox.phys.remove(this.body); this.inWorld = false; }
+  }
+
+  drop(x, y, vx = 0, vy = 0) {
+    this.wornBy = null;
+    const b = this.body;
+    b.pos.x = x; b.pos.y = y;
+    b.vel.x = vx; b.vel.y = vy;
+    b.rot = Math.random() * Math.PI * 2;
+    b.angVel = (Math.random() - 0.5) * 9;
+    if (!this.inWorld) { this.sandbox.phys.add(b); this.inWorld = true; }
+  }
+
+  /** Lying loose: where the muzzle is, and the way it points (counter-clockwise from +x). */
+  muzzle() {
+    const p = this.body.toWorld(GLOCK_MUZZLE.x, GLOCK_MUZZLE.y);
+    return { x: p.x, y: p.y, a: this.body.rot };
+  }
+
+  /** A full magazine from the spares, if there is one. */
+  reload() {
+    if (this.spare <= 0 || this.mag >= GLOCK_MAG) return false;
+    const n = Math.min(GLOCK_MAG - this.mag, this.spare);
+    this.mag += n;
+    this.spare -= n;
+    return true;
+  }
+}
+
+/** How heavy each piece a machete can take off is, and what to call it. */
+const PIECES = {
+  forearm: { name: 'Severed hand', mass: 0.9 },
+  humerus: { name: 'Severed arm', mass: 2.4 },
+  tibia: { name: 'Severed foot', mass: 2.2 },
+  femur: { name: 'Severed leg', mass: 6.5 },
+};
+
+/**
+ * A piece of someone that a machete took off: rigid, as it was when it came
+ * away, bleeding for a while from the cut end. `pts` are its joints in the
+ * world, from the cut end outward; `bone` the bone it was cut through.
+ */
+export class Limb {
+  constructor(sandbox, pts, bone, of, vx = 0, vy = 0, spin = 0, scale = 1) {
+    this.id = nextId++;
+    this.kind = 'limb';
+    const kind = bone.replace(/[AB]$/, '');
+    this.name = PIECES[kind].name;
+    this.bone = bone;
+    this.of = of;             // whose it was
+    this.sandbox = sandbox;
+    this.scale = scale;
+    // a box along the piece, from the cut end to the far end
+    const a = pts[0], z = pts[pts.length - 1];
+    const ang = Math.atan2(z.y - a.y, z.x - a.x);
+    const c = Math.cos(ang), s = Math.sin(ang);
+    let lo = Infinity, hi = -Infinity, lo2 = Infinity, hi2 = -Infinity;
+    for (const p of pts) {
+      const u = (p.x - a.x) * c + (p.y - a.y) * s, v = -(p.x - a.x) * s + (p.y - a.y) * c;
+      lo = Math.min(lo, u); hi = Math.max(hi, u); lo2 = Math.min(lo2, v); hi2 = Math.max(hi2, v);
+    }
+    const len = Math.max(0.1, hi - lo), dep = Math.max(0.06, hi2 - lo2 + 0.05);
+    const mu = (lo + hi) / 2, mv = (lo2 + hi2) / 2;
+    const cx = a.x + c * mu - s * mv, cy = a.y + s * mu + c * mv;
+    this.body = new Body(len, dep, PIECES[kind].mass * scale, {
+      x: cx, y: Math.max(cy, dep / 2), rot: ang, owner: this, friction: 0.8, restitution: 0.06, angularDamping: 0.8,
+    });
+    this.body.vel.x = vx; this.body.vel.y = vy; this.body.angVel = spin;
+    this.local = pts.map((p) => this.body.toLocal(p.x, p.y));
+    sandbox.phys.add(this.body);
+    this.bleed = 1;           // drips from the cut end, slowing to nothing
+    this.blood = 1;
+    this.dripAcc = 0;
+    this.thrownBy = null;
+    this.thrownAt = -99;
+    this.lastSound = -99;
+    this.removed = false;
+  }
+
+  get pos() { return this.body.pos; }
+  get loose() { return !this.removed; }
+  /** The cut end, in the world. */
+  get end() { const p = this.local[0]; return this.body.toWorld(p.x, p.y); }
 }

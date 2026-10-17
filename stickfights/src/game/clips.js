@@ -746,6 +746,123 @@ clip('shiver', { loop: true, frames: [
 ] });
 
 /* -------------------------------------------------------------------------- */
+/*                               with a machete                               */
+/* -------------------------------------------------------------------------- */
+
+// the blade up by the head, ready to come down; the other hand out in front
+export const MACHETE_GUARD = P({ t: 6, h: 2, aA: [128, 72], aB: [62, 100], lA: [22, -24], lB: [-20, -26] });
+clip('macheteGuard', { loop: true, frames: [
+  [0.36, MACHETE_GUARD],
+  [0.36, tweak(MACHETE_GUARD, { t: 7, aA: [132, 68], lA: [22, -32], lB: [-20, -34] })],
+] });
+
+// up behind the head, and down with everything behind it
+clip('chop', {
+  frames: [
+    [0.15, P({ t: -10, h: -6, aA: [205, 58], aB: [64, 92], lA: [20, -20], lB: [-24, -22] })],
+    [0.07, P({ t: 16, h: 8, x: 0.06, aA: [100, 8], aB: [40, 86], lA: [30, -18], lB: [-28, -10] })],
+    [0.08, P({ t: 26, s: 6, h: 12, x: 0.08, aA: [52, 4], aB: [30, 80], lA: [32, -22], lB: [-28, -10] })],
+    [0.26, MACHETE_GUARD],
+  ],
+  strike: { limb: 'handA', from: 0.13, to: 0.29, power: 1.7, reach: 1.15, blade: 'chop', sweep: true },
+});
+
+// a flat swing from low behind them, across and up
+clip('hack', {
+  frames: [
+    [0.13, P({ t: -4, h: 0, aA: [-38, 40], aB: [72, 100], lA: [20, -24], lB: [-22, -24] })],
+    [0.06, P({ t: 14, h: 6, x: 0.05, aA: [86, 16], aB: [44, 90], lA: [28, -18], lB: [-26, -12] })],
+    [0.08, P({ t: 18, h: 4, x: 0.06, aA: [126, 26], aB: [36, 84], lA: [28, -18], lB: [-26, -12] })],
+    [0.22, MACHETE_GUARD],
+  ],
+  strike: { limb: 'handA', from: 0.1, to: 0.25, power: 1.25, reach: 1.1, blade: 'hack', sweep: true },
+});
+
+/* -------------------------------------------------------------------------- */
+/*                               with a Glock                                 */
+/* -------------------------------------------------------------------------- */
+
+// two hands on it, arms out, sights on them (the body under it does whatever it
+// is doing; the aim up or down is laid on top, in stickman.js)
+clip('aimPistol', { loop: true, frames: [
+  [0.55, P({ t: 4, h: -2, aA: [90, 4], aB: [82, 18] })],
+  [0.55, P({ t: 5, h: -1, aA: [91, 3], aB: [83, 17] })],
+] });
+
+// carried low and forward, the muzzle at the floor
+clip('gunLow', { loop: true, frames: [
+  [0.8, P({ aA: [28, 22], aB: [-6, 14] })],
+  [0.8, P({ aA: [30, 20], aB: [-5, 15] })],
+] });
+
+// the empty magazine out, a full one from the belt, in, slapped home, slide racked
+clip('reload', { mask: 'upper', frames: [
+  [0.16, P({ t: 6, h: 14, aA: [56, 74], aB: [40, 80] })],
+  [0.12, P({ t: 6, h: 16, aA: [56, 76], aB: [46, 70] }), 'magOut'],
+  [0.24, P({ t: 8, h: 18, aA: [56, 76], aB: [-10, 30] })],
+  [0.22, P({ t: 8, h: 20, aA: [56, 76], aB: [-12, 36] })],
+  [0.18, P({ t: 6, h: 16, aA: [56, 76], aB: [48, 72] }), 'magIn'],
+  [0.1, P({ t: 6, h: 14, aA: [56, 76], aB: [56, 82] })],
+  [0.14, P({ t: 4, h: 10, aA: [60, 72], aB: [70, 58] }), 'rack'],
+  [0.16, P({ t: 4, h: 6, aA: [72, 40], aB: [66, 60] })],
+] });
+
+/* -------------------------------------------------------------------------- */
+/*                          wounds, and tending them                          */
+/* -------------------------------------------------------------------------- */
+
+// down on one knee by someone, both hands at work on a limb: tying it off, and a last hard pull
+const TIE_A = tweak(KNEEL, { t: 34, h: 30, aA: [56, 30], aB: [48, 40] });
+const TIE_B = tweak(KNEEL, { t: 36, h: 32, aA: [62, 20], aB: [40, 52] });
+clip('tourniquet', { frames: [
+  [0.22, TIE_A], [0.22, TIE_B], [0.22, TIE_A], [0.22, TIE_B], [0.2, TIE_A],
+  [0.14, tweak(KNEEL, { t: 26, h: 24, aA: [44, 40], aB: [30, 60] }), 'tie'],
+  [0.3, KNEEL],
+] });
+
+// a grip on it, a brace, and a hard pull: the joint goes back in
+clip('popJoint', { frames: [
+  [0.3, tweak(KNEEL, { t: 30, h: 26, aA: [64, 20], aB: [58, 26] })],
+  [0.3, tweak(KNEEL, { t: 32, h: 28, aA: [66, 18], aB: [60, 24] })],
+  [0.1, tweak(KNEEL, { t: 12, h: 12, aA: [40, 30], aB: [34, 36] }), 'pop'],
+  [0.4, KNEEL],
+] });
+
+// doubled over, a hand to the mouth, heaving
+clip('retch', { frames: [
+  [0.18, P({ t: 40, s: 10, h: 30, aA: [70, 120], aB: [20, 60], lA: [20, -24], lB: [-10, -18] })],
+  [0.22, P({ t: 50, s: 14, h: 36, aA: [60, 110], aB: [24, 56], lA: [22, -28], lB: [-10, -20] })],
+  [0.2, P({ t: 42, s: 10, h: 30, aA: [70, 120], aB: [20, 60], lA: [20, -24], lB: [-10, -18] })],
+  [0.24, P({ t: 52, s: 14, h: 38, aA: [62, 112], aB: [24, 56], lA: [22, -28], lB: [-10, -20] })],
+  [0.4, STAND],
+] });
+
+// a look down at where it hurts, a hand to it
+clip('checkWound', { mask: 'upper', frames: [
+  [0.2, P({ t: 16, h: 34, aA: [20, 70], aB: [10, 40] })],
+  [0.5, P({ t: 18, h: 38, aA: [22, 74], aB: [12, 44] })],
+  [0.3, STAND],
+] });
+
+// holding the stump of a lost limb against the body
+clip('clutchStump', { loop: true, frames: [
+  [0.2, P({ t: 26, s: 10, h: 24, aA: [24, 70], aB: [26, 74], lA: [14, -20], lB: [-8, -14] })],
+  [0.2, P({ t: 28, s: 11, h: 26, aA: [25, 72], aB: [27, 76], lA: [14, -22], lB: [-8, -16] })],
+] });
+
+// staring, shaking, not taking anything in
+clip('shock', { loop: true, frames: [
+  [0.05, P({ t: 6, h: 10, aA: [8, 30], aB: [6, 34], lA: [4, -4], lB: [-4, -4] })],
+  [0.05, P({ t: 7, h: 11, aA: [9, 32], aB: [7, 35], lA: [4, -5], lB: [-4, -5] })],
+] });
+
+// arms over the head, down low: under fire
+clip('coverHead', { loop: true, frames: [
+  [0.1, P({ t: 40, h: 30, aA: [168, 140], aB: [160, 146], lA: [80, -140], lB: [66, -140] })],
+  [0.1, P({ t: 41, h: 31, aA: [170, 138], aB: [162, 144], lA: [80, -142], lB: [66, -142] })],
+] });
+
+/* -------------------------------------------------------------------------- */
 /*                                  sampling                                  */
 /* -------------------------------------------------------------------------- */
 

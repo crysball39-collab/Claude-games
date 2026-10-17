@@ -108,6 +108,66 @@ export const LINES = {
   pullKnifeHelp: ['Hold still, {other}.', "I'm going to pull it out.", 'Deep breath, {other}.', 'Press here. Hard.'],
   throwKnife: ["You won't get away, {other}!", 'Catch this!', 'Heads up!'],
 
+  /* ---------------------------------- machete --------------------------------- */
+  macheteGet: ['A machete. Right.', 'This could clear a jungle.', 'Everybody back up.', 'Now THIS is a blade.', 'Heavy. Good.', 'Nobody move.'],
+  macheteFear: ['{other} has a MACHETE!', 'Machete! Machete!', 'Put that thing down, {other}!', "That's not for people, {other}!", 'Run! {other} has a machete!', 'Easy with that, {other}...'],
+  chopped: ['AAARGH! The machete!', '{other} chopped me!', "I'm cut! I'm cut open!", 'AAAH! It went right in!', 'Stop swinging that thing!'],
+  sawChop: ['{other} just hacked at {victim}!', 'Oh god, the machete!', 'Somebody stop {other}!', '{victim}! Get away from them!'],
+
+  /* ----------------------------------- guns ----------------------------------- */
+  gunGet: ["A gun. Let's see them try something now.", 'Fifteen in the magazine.', 'This changes things.', 'Nobody move.', 'Heavier than it looks.', "I'm not afraid to use this."],
+  gunFear: ['{other} has a GUN!', 'Gun! Gun! Everyone down!', 'Put the gun down, {other}!', 'Whoa, whoa, whoa! Easy with that!', "Is that loaded?!", "Don't point that at me!"],
+  aimAt: ["Don't move, {other}!", 'Hands where I can see them!', 'One more step, {other}. I dare you.', "Stay right there!", "I'll shoot, {other}! I will!", 'On your knees!'],
+  shootStart: ['Say goodbye, {other}!', 'You asked for this!', 'This ends now!', 'Eat lead, {other}!', 'Nobody does that to me!'],
+  backDown: ["That's what I thought.", "Don't let me see you again.", 'Smart choice.', 'Keep those hands up.', 'Not worth it.'],
+  reload: ['Reloading!', 'Changing mags!', 'Cover me!', 'Hold on... hold on...'],
+  outOfAmmo: ['Click? No!', "I'm out!", 'Empty!', 'Come on, come on...'],
+  outOfAmmoSee: ["{other}'s out! Get them!", "They're empty!", 'Now! While they reload!'],
+  surrenderGun: ["Don't shoot!", "Okay, okay! Don't shoot!", "I'm not moving! I'm not moving!", 'Please, {other}! Put it down!', "I'm unarmed!", 'Easy! Easy!'],
+  relief: ['Phew...', 'Okay. Okay.', 'I thought I was dead.', 'My heart...'],
+  gunshots: ['GUNSHOTS!', 'Was that a gun?!', 'Everybody get down!', 'What was that?!', 'Somebody is shooting!', 'Shots fired!'],
+  sawShooting: ['{other} is shooting at {victim}!', '{other} has a gun!', 'Stop shooting, {other}!', 'Get down, {victim}!'],
+  takeCover: ['Take cover!', 'Get behind something!', 'Down! Down!', "{other}'s shooting!", 'Everyone get down!'],
+  nearMiss: ['That was close!', 'Whoa! That nearly got me!', 'I felt that one go past!', 'Missed me!', 'Too close!'],
+  shot: ["I'm hit!", "I've been shot!", 'AAAH! {other} shot me!', 'It burns!', "I'm shot! I'm shot!", 'Medic!'],
+  sawShot: ['{other} shot {victim}!', '{victim}! No!', "They shot {victim}!", "{victim}'s hit!", 'Somebody help {victim}!'],
+
+  /* ------------------------------- wounds, gore ------------------------------- */
+  severedSelf: ['MY {part}! MY {part}!', "WHERE'S MY {part}?!", "It's gone! My {part}'s gone!", 'AAAAAH! My {part}!', "I can't feel my... where's my {part}?!", "That's MY {part} on the floor!"],
+  sawSevered: ["{victim}'s arm! Oh god!", 'That came OFF!', 'Oh god, oh god, oh god...', "{victim}! You're missing a bit!", "That's... not supposed to come off.", 'I think I am going to be sick.'],
+  limbSee: ["Is that... a hand?", "Whose is that?", "That's {victim}'s!", 'Is that a LEG?!', "Somebody's lost something.", 'I am not touching that.'],
+  retch: ['Hurk...', "I'm gonna be sick...", 'Bleurgh.', 'Oh no. Oh no no.', '*gag*'],
+  faint: ['I feel... faint...', 'Oh... the room is spinning...', 'I need to sit... down...', "That's... a lot of blood..."],
+  sawFaint: ['{victim} fainted!', 'Whoa, {victim}! Wake up!', 'Somebody catch {victim}!'],
+  shock: ["It's fine... it's fine... it's not fine.", "I can't feel it...", 'Why is everything so quiet?', "I'm cold...", 'Is this real?'],
+  seeBlood: ["I'm bleeding!", "That's a lot of blood...", "It's coming out!", 'Oh no, oh no, look at it.', 'That is MY blood.'],
+  checkWound: ['Ow. Let me see...', "It's just a scratch.", 'Hm. Not too bad.', 'That will leave a mark.'],
+  dislocatedSelf: ['My {part}! It popped out!', "My {part}'s gone the wrong way!", "AAH! My {part}'s out of its socket!", "I can't move my {part}!"],
+  popBack: ['Hold still... this will hurt.', 'On three. One-', 'Deep breath, {other}.', 'Trust me, {other}.', 'I saw this in a film once.'],
+  relocated: ['AAARGH! ...oh. Oh, that is better.', 'You could have counted to three!', 'Thanks, {other}... I think.', 'It went back in!'],
+  tourniquet: ['Hold still, I need to tie this off.', 'Press here. Hard!', "Stay with me, {other}! You're losing blood!", 'This is going to be tight.', "I've got you, {other}. I've got you."],
+  tourniquetThanks: ['Thank you... {other}...', 'You saved my life, {other}.', "I owe you. I really owe you.", "It's stopped... it's stopped."],
+  lostTooth: ['My tooth!', 'Hey! I need that tooth!', 'Ith my tooth on the floor?', 'You knocked my tooth out!'],
+
+  /* ----------------------------- remembering ---------------------------------- */
+  recallHurt: ['You! You hit me!', 'I remember you, {other}.', "I haven't forgotten, {other}.", 'You again.', "It's {other}. Keep away from me.", 'Back for more, {other}?'],
+  recallShot: ["You shot me, {other}!", 'YOU! With the gun!', "I know you, {other}. You shot at me.", 'Stay away from me, {other}!'],
+  recallKill: ['You killed {victim}!', "I saw what you did to {victim}.", 'Murderer!', "{victim}'s blood is on your hands, {other}."],
+  recallHelp: ['{other}! Thanks again for before.', 'My hero, {other}!', "{other}! I never thanked you properly.", 'There\'s the one who saved me!'],
+  recallFriend: ['{other}! Good to see you again.', 'Hey, {other}! Remember me?', 'There you are, {other}!'],
+  heardOf: ["So you're {other}. I've heard about you.", "You're the one they told me about.", "{other}... I've heard things."],
+  gossipBad: ['Did you hear? {victim} {what}!', 'Watch out for {victim}. They {what}.', "Can you believe it? {victim} {what}.", 'Keep away from {victim}. {victim} {what}.', "I'm telling you, {victim} {what}."],
+  gossipGood: ["You know {victim}? They {what}. Good sort.", '{victim} {what}. Nice, right?', "If you're ever in trouble, find {victim}. They {what}."],
+  gossipReplyBad: ['No way!', "I'll keep an eye on them.", 'Really?! That is awful.', "I'm staying away from them, then.", 'I knew there was something off about them.'],
+  gossipReplyGood: ['Good to know.', 'Aw, that is nice.', "I'll remember that.", 'Really? Huh.'],
+  remindGood: ['Remember when you {what}? Thanks for that.', "I still haven't forgotten. You {what}.", "You know, you {what}. That meant a lot."],
+  remindBad: ["I haven't forgotten. You {what}.", 'Just so you know, I remember. You {what}.', 'Funny how you act like you never {what}.'],
+  enemySee: ['{other}. My enemy.', 'Not you again.', 'Ugh. {other}.', "Well, if it isn't {other}.", 'Stay on your side, {other}.', 'I will never forgive you, {other}.'],
+
+  /* ----------------------------- told what to do ------------------------------ */
+  orderedFight: ['You heard them, {other}. Come here!', "Nothing personal, {other}.", "It's you and me, {other}!", "Let's do this, {other}!", "I'm coming for you, {other}!"],
+  orderedFightFriend: ["Sorry, {other}... I have to.", "Don't take this personally, {other}!", 'I really, really don\'t want to do this.', "Friends or not, {other}... here I come."],
+
   /* ---------------------------------- crates ---------------------------------- */
   crate: ['Nice crate.', "What's in here?", 'Knock knock.', 'Solid wood.', 'A crate! Neat.', 'Empty, I think.', 'Good crate. Good crate.'],
   crateTop: ['King of the crate!', 'I can see everything from up here!', 'Woo!', 'Look at me!', 'Higher! Higher!'],
@@ -133,6 +193,11 @@ export const LINES = {
   avenge: ['This is for {victim}!', 'You killed {victim}!', "You'll pay for {victim}!"],
   killedGuilt: ["I... I didn't mean to...", 'What have I done?', '{victim}? Get up... please.', 'Oh no. No no no.'],
   killedProud: ["That's what you get.", 'Stay down.', "Who's next?", 'Hmph.'],
+  killedAccident: [
+    "{victim}?! No - that wasn't for you!", "I didn't see you there! I didn't see you!", 'Oh god. Oh god, {victim}.',
+    'It was an accident! I swear it was an accident!', 'What have I done... {victim}...', 'No no no, not {victim}!',
+  ],
+  rushGun: ['Drop it!', 'Not if I get there first!', 'Get that thing away from me!', "You won't get the chance!", 'Charge!', 'Rush them!'],
   comfort: ['Are you okay?', 'Hang in there, {other}!', 'Let me help you up.', "You'll be alright.", "I've got you.", 'Stay with me, {other}!'],
   thanks: ['Thanks, {other}.', 'Thank you...', "You're a real friend, {other}.", 'I owe you one.'],
   crawl: ['Help... me...', "My legs... I can't stand...", 'Somebody...', 'Just... a bit further...'],

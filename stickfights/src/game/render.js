@@ -1,13 +1,17 @@
 /* =============================================================================
-   Draws the sandbox: the grey sky, the black floor, the crates, the brass
-   knuckles, everyone in it, the blood and the dust.
+   Draws the sandbox: the grey sky, the black floor, the crates, the weapons
+   lying about, everyone in it, the pieces of anyone who lost some, the blood,
+   the dust, the empty cases and the flash and streak of a shot.
 
    Then, over the top and at the same size whatever the zoom: names, speech
    and thought bubbles, health bars, and the little symbols that say how
    somebody feels - an anger mark, a sweat drop, a heart, stars going round
    a dizzy head.
    ========================================================================== */
-import { drawStickman, drawCrateShape, drawKnuckleShape, drawKnifeShape, KNIFE_W, KNIFE_H, INK, BLOOD, BLOOD_DARK } from './draw.js';
+import {
+  drawStickman, drawCrateShape, drawKnuckleShape, drawKnifeShape, drawMacheteShape, drawGlockShape, drawSeveredLimb,
+  KNIFE_W, KNIFE_H, MACHETE_W, MACHETE_H, INK, BLOOD, BLOOD_DARK, BRASS, BRASS_DARK,
+} from './draw.js';
 import { DIM } from './skeleton.js';
 import { clamp, TAU } from '../core/util.js';
 
@@ -53,7 +57,10 @@ export class Renderer {
     this.drawSplats(ctx, v);
     for (const c of sb.crates) if (!c.carriedBy) this.drawCrate(ctx, c);
     for (const k of sb.knuckles) if (!k.wornBy) this.drawKnuckles(ctx, k);
-    for (const k of sb.knives) if (!k.wornBy && !(k.stuckIn && k.stuckIn.person)) this.drawKnife(ctx, k);
+    for (const k of sb.blades) if (!k.wornBy && !(k.stuckIn && k.stuckIn.person)) this.drawKnife(ctx, k);
+    for (const g of sb.guns) if (!g.wornBy) this.drawGun(ctx, g);
+    for (const l of sb.limbs) this.drawLimb(ctx, l);
+    this.drawCasings(ctx, v);
 
     const order = [...sb.people].sort((a, b) => this.layer(a, ui) - this.layer(b, ui));
     for (const p of order) {
@@ -98,7 +105,7 @@ export class Renderer {
     ctx.save();
     ctx.translate(b.pos.x, b.pos.y);
     ctx.rotate(b.rot);
-    drawCrateShape(ctx, b.w, b.h, c.stains);
+    drawCrateShape(ctx, b.w, b.h, c.stains, c.holes);
     ctx.restore();
   }
 
@@ -116,25 +123,63 @@ export class Renderer {
     ctx.save();
     ctx.translate(b.pos.x, b.pos.y);
     ctx.rotate(b.rot);
-    drawKnifeShape(ctx, KNIFE_W, KNIFE_H, k.blood);
+    if (k.kind === 'machete') drawMacheteShape(ctx, MACHETE_W, MACHETE_H, k.blood);
+    else drawKnifeShape(ctx, KNIFE_W, KNIFE_H, k.blood);
     ctx.restore();
+  }
+
+  drawGun(ctx, g) {
+    const b = g.body;
+    ctx.save();
+    ctx.translate(b.pos.x, b.pos.y);
+    ctx.rotate(b.rot);
+    drawGlockShape(ctx, 1, g.blood, g.slide);
+    ctx.restore();
+  }
+
+  drawLimb(ctx, l) {
+    const b = l.body;
+    ctx.save();
+    ctx.translate(b.pos.x, b.pos.y);
+    ctx.rotate(b.rot);
+    drawSeveredLimb(ctx, l.local, 0.07 * l.scale, '#1b1b1b');
+    ctx.restore();
+  }
+
+  drawCasings(ctx, v) {
+    ctx.fillStyle = BRASS;
+    ctx.strokeStyle = BRASS_DARK;
+    ctx.lineWidth = 0.004;
+    for (const c of this.sb.fx.casings) {
+      if (c.x < v.minX || c.x > v.maxX) continue;
+      ctx.save();
+      ctx.translate(c.x, c.y);
+      ctx.rotate(c.a);
+      ctx.fillRect(-0.017, -0.007, 0.034, 0.014);
+      ctx.strokeRect(-0.017, -0.007, 0.034, 0.014);
+      ctx.restore();
+    }
   }
 
   drawPerson(ctx, p) {
     const h = p.health;
-    const stuck = p.stuck.length ? p.stuck.map((e) => { const q = p.knifePose(e); return { x: q.x, y: q.y, a: q.a, blood: e.knife.blood }; }) : null;
+    const stuck = p.stuck.length ? p.stuck.map((e) => { const q = p.knifePose(e); return { x: q.x, y: q.y, a: q.a, blood: e.knife.blood, kind: e.knife.kind }; }) : null;
     drawStickman(ctx, p.wj, {
       scale: p.scale,
       facing: p.rag ? p.rag.facing : p.facing,
       hair: p.hair,
       face: p.face,
+      hurt: h.face,
       weapon: p.armedWith,
       weaponBlood: p.weapon ? p.weapon.blood : 0,
+      gunSlide: p.armedWith === 'glock' ? p.weapon.slide : 0,
       wounds: p.wounds,
       headMarks: p.headMarks,
       broken: h.broken,
+      cut: p.cut,
+      dislocated: h.dislocated,
       stuck,
-      pale: p.dead ? 0.7 : clamp((0.86 - h.blood) / 0.42, 0, 1),
+      pale: p.dead ? 0.7 : clamp((0.86 - h.blood) / 0.42 + h.shock * 0.4, 0, 1),
       bruise: h.parts.head.bruise,
       ink: p.dead ? '#1b1b1b' : INK,
     });
@@ -142,6 +187,50 @@ export class Renderer {
 
   drawFx(ctx) {
     const fx = this.sb.fx;
+    // the streak of a bullet, bright at first and gone in a blink
+    ctx.lineCap = 'round';
+    for (const t of fx.tracers) {
+      const k = t.age / t.life;
+      ctx.strokeStyle = `rgba(255, 236, 170, ${0.85 * (1 - k)})`;
+      ctx.lineWidth = 0.018 * (1 - k * 0.5);
+      ctx.beginPath();
+      ctx.moveTo(t.x0, t.y0);
+      ctx.lineTo(t.x1, t.y1);
+      ctx.stroke();
+    }
+    for (const f of fx.flashes) {
+      const k = 1 - f.age / f.life, L = 0.2 * f.s * (0.6 + k * 0.6);
+      ctx.save();
+      ctx.translate(f.x, f.y);
+      ctx.rotate(f.a);
+      ctx.fillStyle = `rgba(255, 210, 90, ${0.95 * k})`;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(L * 0.45, L * 0.32);
+      ctx.lineTo(L, 0);
+      ctx.lineTo(L * 0.45, -L * 0.32);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = `rgba(255, 255, 230, ${k})`;
+      ctx.beginPath();
+      ctx.arc(L * 0.12, 0, L * 0.16, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+    for (const sp of fx.sparkles) {
+      ctx.fillStyle = `rgba(255, 220, 120, ${1 - sp.age / sp.life})`;
+      ctx.fillRect(sp.x - 0.008, sp.y - 0.008, 0.016, 0.016);
+    }
+    ctx.fillStyle = '#d9a464';
+    for (const c of fx.chips) {
+      ctx.save();
+      ctx.translate(c.x, c.y);
+      ctx.rotate(c.a);
+      ctx.globalAlpha = Math.min(1, 2 * (1 - c.age / c.life));
+      ctx.fillRect(-0.02, -0.005, 0.04, 0.01);
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
     for (const d of fx.drops) {
       ctx.fillStyle = BLOOD;
       ctx.beginPath();
@@ -178,6 +267,8 @@ export class Renderer {
     if (g.kind === 'crate') drawCrateShape(ctx, 0.78, 0.78, null);
     else if (g.kind === 'knuckles') drawKnuckleShape(ctx, 0.26, 0.11, 0);
     else if (g.kind === 'knife') drawKnifeShape(ctx, KNIFE_W, KNIFE_H, 0);
+    else if (g.kind === 'machete') drawMacheteShape(ctx, MACHETE_W, MACHETE_H, 0);
+    else if (g.kind === 'glock') drawGlockShape(ctx, 1, 0, 0);
     else if (g.kind === 'stickman') {
       ctx.strokeStyle = INK;
       ctx.lineWidth = 0.07;
@@ -518,6 +609,26 @@ export function drawIcon(ctx, kind, x, y, s) {
       ctx.rotate(-0.6);
       ctx.scale(s * 1.9 / KNIFE_W, -s * 1.9 / KNIFE_W);
       drawKnifeShape(ctx, KNIFE_W, KNIFE_H, 0);
+      ctx.restore();
+      break;
+    case 'machete':
+      ctx.save();
+      ctx.rotate(-0.6);
+      ctx.scale(s * 2.1 / MACHETE_W, -s * 2.1 / MACHETE_W);
+      drawMacheteShape(ctx, MACHETE_W, MACHETE_H, 0);
+      ctx.restore();
+      break;
+    case 'gun':
+      ctx.save();
+      ctx.scale(s * 1.7 / 0.3, -s * 1.7 / 0.3);
+      drawGlockShape(ctx, 1, 0, 0);
+      ctx.restore();
+      break;
+    case 'limb':
+      ctx.save();
+      ctx.rotate(-0.5);
+      ctx.scale(s * 1.4, -s * 1.4);
+      drawSeveredLimb(ctx, [{ x: -0.6, y: 0 }, { x: 0.35, y: 0 }, { x: 0.6, y: 0.18 }], 0.16);
       ctx.restore();
       break;
     case 'bone':
