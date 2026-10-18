@@ -1,20 +1,25 @@
 /* =============================================================================
    The things you can spawn that are not people: a wooden crate, a set of
-   brass knuckles, a combat knife, a machete and a Glock-19 - and the pieces
-   of people a machete leaves on the floor.
+   brass knuckles, a combat knife, a machete, two pistols (a Glock-19 and an
+   M1911), a light vest and three sizes of ammo box - and the pieces of
+   people a machete leaves on the floor. (The taser has a file of its own,
+   taser.js.)
 
    Each one is a rigid body in the physics world while it is lying about; a
    crate someone is carrying turns kinematic and goes where their hands go,
-   and a weapon in someone's hand leaves the world altogether and is drawn
-   in it.
+   and a weapon in someone's hand - or in their holster, or their pocket -
+   leaves the world altogether and is drawn on them.
 
    A blade that flies point first into something stays in it: a crate, the
    floor, or a person (stickman.js holds it to the bone it went into). A gun
-   carries its own ammunition: fifteen in the magazine and two spare
-   magazines, whoever is holding it.
+   carries its own ammunition, whoever is holding it: a magazine and two
+   spare magazines' worth - topped up again from an ammo box.
    ========================================================================== */
 import { Body } from '../physics/rigid.js';
-import { KNIFE_W, KNIFE_H, KNIFE_GRIP, MACHETE_W, MACHETE_H, MACHETE_GRIP, GLOCK_W, GLOCK_H, GLOCK_MUZZLE } from './draw.js';
+import {
+  KNIFE_W, KNIFE_H, KNIFE_GRIP, MACHETE_W, MACHETE_H, MACHETE_GRIP,
+  GLOCK_W, GLOCK_H, GLOCK_GRIP, GLOCK_MUZZLE, GLOCK_PORT, M1911_W, M1911_H, M1911_GRIP, M1911_MUZZLE, M1911_PORT,
+} from './draw.js';
 
 let nextId = 1;
 
@@ -126,8 +131,10 @@ export const BLADES = {
 export const isBlade = (kind) => kind === 'knife' || kind === 'machete';
 
 /** The kinds of thing that are guns: aimed, fired, carried by a stickman like the Glock. Mods add theirs. */
-export const GUN_KINDS = new Set(['glock']);
+export const GUN_KINDS = new Set(['glock', 'm1911', 'taser']);
 export const isGun = (kind) => GUN_KINDS.has(kind);
+/** A gun that kills: anything aimed and fired except the taser. */
+export const isFirearm = (kind) => GUN_KINDS.has(kind) && kind !== 'taser';
 
 /**
  * Weapons that are part of somebody rather than something they pick up -
@@ -261,24 +268,45 @@ export const GLOCK_MAG = 15;
 export const GLOCK_SPARE = 30;
 
 /**
- * A Glock-19: fifteen 9 mm rounds in the magazine, two more magazines with
- * it. Lying about it is a body like any other; tap it and it fires the way
- * it is pointing.
+ * The two pistols, and how they differ:
+ *   mag, spare  rounds in a magazine, and spare rounds carried with it
+ *   energy      how hard a round hits (and how far into things it goes)
+ *   cadence     how soon after one shot the next can go
+ *   kick        how far the muzzle climbs, and how long it takes to come back down
+ */
+export const GUN_MODELS = {
+  glock: {
+    name: 'Glock-19', a: 'a', mag: 15, spare: 30, energy: 1, cadence: 0.11, kick: 1, round: '9 mm',
+    w: GLOCK_W, h: GLOCK_H, mass: 0.85, grip: GLOCK_GRIP, muzzle: GLOCK_MUZZLE, port: GLOCK_PORT,
+  },
+  m1911: {
+    name: 'M1911', a: 'an', mag: 7, spare: 14, energy: 1.25, cadence: 0.2, kick: 1.6, round: '.45',
+    w: M1911_W, h: M1911_H, mass: 1.1, grip: M1911_GRIP, muzzle: M1911_MUZZLE, port: M1911_PORT,
+  },
+};
+
+/**
+ * A pistol: a Glock-19 (fifteen 9 mm rounds in the magazine) or an M1911
+ * (seven .45s: heavier, slower, and it kicks), with two more magazines'
+ * worth either way. Lying about it is a body like any other; tap it and it
+ * fires the way it is pointing.
  */
 export class Gun {
-  constructor(sandbox, x, y, rot = 0) {
+  constructor(sandbox, x, y, rot = 0, kind = 'glock') {
+    const spec = GUN_MODELS[kind] || GUN_MODELS.glock;
     this.id = nextId++;
-    this.kind = 'glock';
-    this.name = 'Glock-19';
+    this.kind = kind;
+    this.spec = spec;
+    this.name = spec.name;
     this.sandbox = sandbox;
-    this.body = new Body(GLOCK_W, GLOCK_H * 0.72, 0.85, {
+    this.body = new Body(spec.w, spec.h * 0.72, spec.mass, {
       x, y, rot, owner: this, friction: 0.55, restitution: 0.18, angularDamping: 0.6,
     });
     sandbox.phys.add(this.body);
     this.inWorld = true;
     this.wornBy = null;
-    this.mag = GLOCK_MAG;
-    this.spare = GLOCK_SPARE;
+    this.mag = spec.mag;
+    this.spare = spec.spare;
     this.lastShot = -99;
     this.blood = 0;
     this.thrownBy = null;
@@ -296,6 +324,12 @@ export class Gun {
     if (this.mag <= 0) return 0.04;
     const t = this.sandbox.time - this.lastShot;
     return t < 0.06 ? 0.045 * (1 - t / 0.06) : 0;
+  }
+  /** How many more rounds it could carry: what an ammo box would give it. */
+  get short() { return Math.max(0, this.spec.spare - this.spare) + Math.max(0, this.spec.mag - this.mag); }
+  canReload() { return this.spare > 0 && this.mag < this.spec.mag; }
+  describe(p) {
+    return `${p && p.weapon === this ? 'Holding' : 'Carrying'} ${this.spec.a} ${this.name} (${this.mag}/${this.spec.mag}, ${this.spare} spare)${p && p.reloading && p.weapon === this ? ', reloading' : ''}`;
   }
 
   wear(by) {
@@ -315,17 +349,151 @@ export class Gun {
 
   /** Lying loose: where the muzzle is, and the way it points (counter-clockwise from +x). */
   muzzle() {
-    const p = this.body.toWorld(GLOCK_MUZZLE.x, GLOCK_MUZZLE.y);
+    const p = this.body.toWorld(this.spec.muzzle.x, this.spec.muzzle.y);
     return { x: p.x, y: p.y, a: this.body.rot };
   }
 
   /** A full magazine from the spares, if there is one. */
   reload() {
-    if (this.spare <= 0 || this.mag >= GLOCK_MAG) return false;
-    const n = Math.min(GLOCK_MAG - this.mag, this.spare);
+    const M = this.spec.mag;
+    if (this.spare <= 0 || this.mag >= M) return false;
+    const n = Math.min(M - this.mag, this.spare);
     this.mag += n;
     this.spare -= n;
     return true;
+  }
+
+  /** Rounds from an ammo box, up to what it carries: the spare magazines first, then the one in it. */
+  topUp(n) {
+    let left = n;
+    const s = Math.min(left, Math.max(0, this.spec.spare - this.spare));
+    this.spare += s;
+    left -= s;
+    const m = Math.min(left, Math.max(0, this.spec.mag - this.mag));
+    this.mag += m;
+    left -= m;
+    return n - left;
+  }
+}
+
+/* --------------------------------- ammo boxes -------------------------------- */
+
+/** Three sizes of box of pistol rounds: what each holds, and how big and heavy it is. */
+export const AMMO_BOXES = {
+  small: { name: 'Small Ammo Box', short: 'SMALL AMMO', w: 0.24, h: 0.15, mass: 1.2, rounds: 30 },
+  medium: { name: 'Medium Ammo Box', short: 'MEDIUM AMMO', w: 0.34, h: 0.2, mass: 3, rounds: 80 },
+  big: { name: 'Big Ammo Box', short: 'BIG AMMO', w: 0.5, h: 0.28, mass: 8, rounds: 200 },
+};
+
+/**
+ * A box of pistol rounds: a cardboard one, a plastic case, a steel can.
+ * Anyone with a pistol running low comes and fills their magazines from it
+ * (any pistol: the boxes are mixed), until it is empty.
+ */
+export class AmmoBox {
+  constructor(sandbox, x, y, size = 'medium') {
+    const spec = AMMO_BOXES[size] || AMMO_BOXES.medium;
+    this.id = nextId++;
+    this.kind = 'ammo';
+    this.size = size;
+    this.spec = spec;
+    this.name = spec.name;
+    this.sandbox = sandbox;
+    this.rounds = spec.rounds;
+    this.body = new Body(spec.w, spec.h, spec.mass, {
+      x, y, rot: 0, owner: this, friction: 0.7, restitution: 0.08, angularDamping: 0.6,
+    });
+    sandbox.phys.add(this.body);
+    this.wornBy = null;
+    this.thrownBy = null;
+    this.thrownAt = -99;
+    this.lastSound = -99;
+    this.removed = false;
+  }
+  get pos() { return this.body.pos; }
+  get loose() { return !this.removed; }
+  get empty() { return this.rounds <= 0; }
+  /** Up to n rounds out of it: how many there were. */
+  take(n) {
+    const k = Math.max(0, Math.min(n, this.rounds));
+    this.rounds -= k;
+    return k;
+  }
+  describe() { return this.rounds > 0 ? `${this.name}: ${this.rounds} rounds left` : `${this.name}: empty`; }
+}
+
+/* ---------------------------------- the vest --------------------------------- */
+
+export const VEST_W = 0.42;
+export const VEST_H = 0.075;
+
+/**
+ * A light vest: soft armour, for the body only. On, it stops most pistol
+ * rounds that hit the torso - the round still lands like a hammer blow, and
+ * knocks them back - and takes the worst out of a blade. Every round it
+ * stops wears it down, and a worn-out one stops nothing much.
+ */
+export class Vest {
+  constructor(sandbox, x, y, o = {}) {
+    this.id = nextId++;
+    this.kind = 'vest';
+    this.police = !!o.police;
+    this.name = this.police ? 'Police Vest' : 'Light Vest';
+    this.sandbox = sandbox;
+    this.hp = 100;
+    this.body = new Body(VEST_W, VEST_H, 2.2, {
+      x, y, rot: 0, owner: this, friction: 0.85, restitution: 0.02, angularDamping: 0.9,
+    });
+    sandbox.phys.add(this.body);
+    this.inWorld = true;
+    this.wornBy = null;
+    this.dents = [];          // where rounds hit it: { t (along the torso, 0 hips .. 1 neck), side (1 front, -1 back) }
+    this.blood = 0;
+    this.thrownBy = null;
+    this.thrownAt = -99;
+    this.lastSound = -99;
+    this.removed = false;
+  }
+  get pos() { return this.wornBy ? this.wornBy.wj.chest : this.body.pos; }
+  get loose() { return !this.wornBy && !this.removed; }
+  /** 0..1: how much of it is left. */
+  get condition() { return Math.max(0, this.hp / 100); }
+
+  wear(by) {
+    this.wornBy = by;
+    if (this.inWorld) { this.sandbox.phys.remove(this.body); this.inWorld = false; }
+  }
+
+  drop(x, y, vx = 0, vy = 0) {
+    this.wornBy = null;
+    const b = this.body;
+    b.pos.x = x; b.pos.y = Math.max(y, VEST_H / 2 + 0.01);
+    b.vel.x = vx; b.vel.y = vy;
+    b.rot = 0;
+    b.angVel = (Math.random() - 0.5) * 3;
+    if (!this.inWorld) { this.sandbox.phys.add(b); this.inWorld = true; }
+  }
+
+  /**
+   * A round into it with `energy` (1 is a 9 mm). Whether it stops it - a
+   * light vest stops pistol rounds while it lasts - and the wear it takes.
+   */
+  stopsRound(energy, t, side) {
+    const k = this.condition;
+    const stop = k > 0.08 && Math.random() < (energy > 1.6 ? 0.25 : 0.55 + k * 0.45);
+    this.hp = Math.max(0, this.hp - (stop ? 9 + energy * 7 : 14));
+    if (this.dents.length > 12) this.dents.shift();
+    this.dents.push({ t, side, hole: !stop });
+    return stop;
+  }
+
+  /** How much of a blade's damage gets through (and only to the body). */
+  bladeThrough(kind) {
+    const k = this.condition;
+    this.hp = Math.max(0, this.hp - 2);
+    if (kind === 'stab') return 1 - 0.45 * k;
+    if (kind === 'chop' || kind === 'hack') return 1 - 0.35 * k;
+    return 1 - 0.6 * k;
   }
 }
 

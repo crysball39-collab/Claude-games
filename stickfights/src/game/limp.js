@@ -103,6 +103,8 @@ export function makeRagdoll(man, dt = 1 / 120) {
     if (mid && snapped.has(mid)) continue;
     rag.link(ref(from), n[to], boneLength(from, to, s));
   }
+  // handcuffed: the wrists stay together, whatever the body does
+  if (man.cuffed && !gone.has('handA') && !gone.has('handB')) rag.link(n.handA, n.handB, 0.07 * s);
 
   // joints, with the child bone running to the break point where there is one
   const midAfter = (from, to) => {

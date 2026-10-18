@@ -10,8 +10,10 @@
    ========================================================================== */
 import {
   drawStickman, drawCrateShape, drawKnuckleShape, drawKnifeShape, drawMacheteShape, drawGlockShape, drawSeveredLimb,
+  drawM1911Shape, drawTaserShape, drawVestShape, drawAmmoBoxShape,
   KNIFE_W, KNIFE_H, MACHETE_W, MACHETE_H, INK, BLOOD, BLOOD_DARK, BRASS, BRASS_DARK,
 } from './draw.js';
+import { AMMO_BOXES, VEST_W, VEST_H } from './props.js';
 import { DIM } from './skeleton.js';
 import { clamp, TAU } from '../core/util.js';
 
@@ -19,6 +21,8 @@ export const SKY = '#9b9b9b';
 export const FLOOR = '#000000';
 const OUTSIDE = '#7d7d7d';
 const FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+// an officer's uniform: a navy shirt, darker trousers
+export const POLICE_UNIFORM = { top: '#1f2d52', topFar: '#2c3b62', legs: '#151c31', legsFar: '#222b43' };
 
 export class Renderer {
   constructor(canvas, sandbox, camera) {
@@ -61,6 +65,8 @@ export class Renderer {
     for (const k of sb.knuckles) if (!k.wornBy) this.drawKnuckles(ctx, k);
     for (const k of sb.blades) if (!k.wornBy && !(k.stuckIn && k.stuckIn.person)) this.drawKnife(ctx, k);
     for (const g of sb.guns) if (!g.wornBy) this.drawGun(ctx, g);
+    for (const v of sb.vests) if (!v.wornBy) this.drawVest(ctx, v);
+    for (const a of sb.ammo) this.drawAmmo(ctx, a);
     for (const l of sb.limbs) this.drawLimb(ctx, l);
     for (const it of sb.items) if (!it.behind) it.draw(ctx);
     this.drawCasings(ctx, v);
@@ -142,7 +148,26 @@ export class Renderer {
     ctx.save();
     ctx.translate(b.pos.x, b.pos.y);
     ctx.rotate(b.rot);
-    drawGlockShape(ctx, 1, g.blood, g.slide);
+    if (g.kind === 'm1911') drawM1911Shape(ctx, 1, g.blood, g.slide);
+    else drawGlockShape(ctx, 1, g.blood, g.slide);
+    ctx.restore();
+  }
+
+  drawVest(ctx, v) {
+    const b = v.body;
+    ctx.save();
+    ctx.translate(b.pos.x, b.pos.y);
+    ctx.rotate(b.rot);
+    drawVestShape(ctx, b.w, b.h, v.police, v.condition);
+    ctx.restore();
+  }
+
+  drawAmmo(ctx, a) {
+    const b = a.body;
+    ctx.save();
+    ctx.translate(b.pos.x, b.pos.y);
+    ctx.rotate(b.rot);
+    drawAmmoBoxShape(ctx, a.size, b.w, b.h, a.rounds / a.spec.rounds);
     ctx.restore();
   }
 
@@ -181,7 +206,15 @@ export class Renderer {
       hurt: h.face,
       weapon: p.armedWith,
       weaponBlood: p.weapon ? p.weapon.blood : 0,
-      gunSlide: p.armedWith === 'glock' ? p.weapon.slide : 0,
+      gunSlide: (p.armedWith === 'glock' || p.armedWith === 'm1911') && p.weapon ? p.weapon.slide : 0,
+      // an officer's uniform and cap; what they have put away, a vest, handcuffs
+      uniform: p.officer ? POLICE_UNIFORM : null,
+      hat: p.officer ? 'police' : null,
+      belt: p.officer,
+      kit: p.kit.length ? { holster: p.stowed.holster && p.stowed.holster.kind, pocket: p.stowed.pocket && p.stowed.pocket.kind, duty: p.stowed.duty && p.stowed.duty.kind } : null,
+      vest: p.vest,
+      donning: p.donning,
+      cuffed: !!p.cuffed,
       wounds: p.wounds,
       headMarks: p.headMarks,
       broken: h.broken,
@@ -285,6 +318,10 @@ export class Renderer {
     else if (g.kind === 'knife') drawKnifeShape(ctx, KNIFE_W, KNIFE_H, 0);
     else if (g.kind === 'machete') drawMacheteShape(ctx, MACHETE_W, MACHETE_H, 0);
     else if (g.kind === 'glock') drawGlockShape(ctx, 1, 0, 0);
+    else if (g.kind === 'm1911') drawM1911Shape(ctx, 1, 0, 0);
+    else if (g.kind === 'taser') drawTaserShape(ctx, 1, true);
+    else if (g.kind === 'vest') drawVestShape(ctx, VEST_W, VEST_H, false, 1);
+    else if (g.kind === 'ammo') { const sp = AMMO_BOXES[g.size || 'medium']; drawAmmoBoxShape(ctx, g.size || 'medium', sp.w, sp.h, 1); }
     else {
       // a stickman - or anybody else a mod adds
       ctx.strokeStyle = INK;
@@ -641,6 +678,46 @@ export function drawIcon(ctx, kind, x, y, s) {
       ctx.scale(s * 1.7 / 0.3, -s * 1.7 / 0.3);
       drawGlockShape(ctx, 1, 0, 0);
       ctx.restore();
+      break;
+    case 'taser':
+      ctx.save();
+      ctx.scale(s * 1.7 / 0.26, -s * 1.7 / 0.26);
+      drawTaserShape(ctx, 1, true);
+      ctx.restore();
+      break;
+    case 'vest':
+      ctx.save();
+      ctx.scale(s * 1.8 / 0.26, -s * 1.8 / 0.26);
+      drawVestShape(ctx, 0.26, 0.13, false, 1);
+      ctx.restore();
+      break;
+    case 'ammo':
+      ctx.save();
+      ctx.scale(s * 1.6 / 0.34, -s * 1.6 / 0.34);
+      drawAmmoBoxShape(ctx, 'medium', 0.34, 0.2, 1);
+      ctx.restore();
+      break;
+    case 'badge':
+      // a gold shield with a star on it
+      ctx.fillStyle = '#e2b84a';
+      ctx.strokeStyle = '#7a5a12';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(0, -s * 0.85);
+      ctx.quadraticCurveTo(s * 0.45, -s * 0.6, s * 0.75, -s * 0.62);
+      ctx.quadraticCurveTo(s * 0.78, s * 0.35, 0, s * 0.9);
+      ctx.quadraticCurveTo(-s * 0.78, s * 0.35, -s * 0.75, -s * 0.62);
+      ctx.quadraticCurveTo(-s * 0.45, -s * 0.6, 0, -s * 0.85);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#7a5a12';
+      ctx.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const a = -Math.PI / 2 + (i * Math.PI) / 5, rr = i % 2 ? s * 0.13 : s * 0.3;
+        ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+      }
+      ctx.closePath();
+      ctx.fill();
       break;
     case 'limb':
       ctx.save();

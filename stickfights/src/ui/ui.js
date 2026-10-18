@@ -29,15 +29,18 @@
 import { Gestures } from '../core/input.js';
 import {
   drawStickman, drawCrateShape, drawKnuckleShape, drawKnifeShape, drawMacheteShape, drawGlockShape,
+  drawM1911Shape, drawTaserShape, drawVestShape, drawAmmoBoxShape,
   KNIFE_W, KNIFE_H, MACHETE_W, MACHETE_H, INK,
 } from '../game/draw.js';
+import { POLICE_UNIFORM } from '../game/render.js';
+import { spawnOfficer } from '../game/police.js';
 import { solve, makeJoints, P, DIM } from '../game/skeleton.js';
 import { STAND } from '../game/clips.js';
 import { describeTraits } from '../game/people.js';
 import { relCategory } from '../game/brain.js';
 import { STYLE } from '../game/animator.js';
 import { LIMITS } from '../game/sandbox.js';
-import { isGun } from '../game/props.js';
+import { isGun, AMMO_BOXES, VEST_W, VEST_H } from '../game/props.js';
 import { clamp } from '../core/util.js';
 import { installedMods, findSpawnable, modSpawnables, modOption } from '../mods/index.js';
 import { ModsScreen } from './mods-screen.js';
@@ -48,10 +51,20 @@ const KINDS = {
   knife: { name: 'Combat Knife', short: 'KNIFE', plural: 'knives', limit: 'knives' },
   machete: { name: 'Machete', short: 'MACHETE', plural: 'machetes', limit: 'machetes' },
   glock: { name: 'Glock-19', short: 'GLOCK-19', plural: 'pistols', limit: 'guns' },
+  m1911: { name: 'M1911', short: 'M1911', plural: 'pistols', limit: 'guns' },
+  taser: { name: 'Taser', short: 'TASER', plural: 'guns and tasers', limit: 'guns' },
   crate: { name: 'Crate', short: 'CRATE', plural: 'crates', limit: 'crates' },
+  officer: { name: 'Officer', short: 'OFFICER', plural: 'people', limit: 'people' },
+  vest: { name: 'Light Vest', short: 'VEST', plural: 'vests', limit: 'vests' },
+  ammoSmall: { name: 'Small Ammo Box', short: 'SMALL AMMO', plural: 'ammo boxes', limit: 'ammo' },
+  ammoMedium: { name: 'Medium Ammo Box', short: 'MEDIUM AMMO', plural: 'ammo boxes', limit: 'ammo' },
+  ammoBig: { name: 'Big Ammo Box', short: 'BIG AMMO', plural: 'ammo boxes', limit: 'ammo' },
 };
+// the three ammo boxes in the spawn menu, and which size each is
+const AMMO_KEYS = { ammoSmall: 'small', ammoMedium: 'medium', ammoBig: 'big' };
+const SLOT_SAID = { holster: 'In the holster', pocket: 'In a pocket', duty: 'On the duty belt' };
 const KEYS = ['stickman', 'knuckles', 'crate', 'knife', 'machete', 'glock'];
-const ARM_NAMES = { knife: 'Grab the knife', machete: 'Grab the machete', glock: 'Grab the gun', knuckles: 'Grab the brass knuckles' };
+const ARM_NAMES = { knife: 'Grab the knife', machete: 'Grab the machete', glock: 'Grab the gun', m1911: 'Grab the M1911', taser: 'Grab the taser', knuckles: 'Grab the brass knuckles' };
 // a padlock: the shackle drops into the body when it is locked (CSS moves it)
 const LOCK_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path class="shackle" d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/><rect x="5" y="11" width="14" height="10" rx="2.5" fill="currentColor"/></svg>';
 // the rows of buttons a mod's people have in the inspector
@@ -81,6 +94,15 @@ const OPTION_NAMES = {
   watch: (t) => 'Watch ' + t.name + ' fight',
   throw: (t) => 'Throw a crate at ' + t.name,
   hide: (t) => 'Hide from ' + t.name,
+  respond: (t) => 'Deal with ' + t.name,
+  comply: (t) => 'Do as ' + t.name + ' says',
+  detained: () => 'Sit tight in the cuffs',
+  vest: () => 'Put on the vest',
+  ammo: () => 'Take rounds from the ammo box',
+  catchBreath: () => 'Catch their breath',
+  report: (t) => 'Tell ' + t.name + ' what happened',
+  patrol: () => 'Walk the beat',
+  release: (t) => 'Let ' + t.name + ' go',
 };
 
 // what someone thinks of someone else, as the inspector groups them
@@ -197,7 +219,9 @@ export class UI {
     // a mod's thing with more to it: a panel to open, or something to say for itself
     else if (thing && thing.panel) this.openPanel(thing);
     else if (thing && thing.tap) { const said = thing.tap(this.sb); if (said) this.toast(said); }
-    else if (thing) this.toast(thing.wornBy ? `${thing.name}, in ${thing.wornBy.name}'s hand` + (thing.kind === 'glock' ? ` (${thing.mag}/15)` : '')
+    else if (thing && thing.kind === 'ammo') this.toast(thing.describe());
+    else if (thing && thing.kind === 'vest') this.toast(`${thing.name}: ${Math.round(thing.condition * 100)}% left in it` + (thing.dents.length ? `, ${thing.dents.length} round${thing.dents.length === 1 ? '' : 's'} in it` : ''));
+    else if (thing) this.toast(thing.wornBy ? `${thing.name}, in ${thing.wornBy.name}'s hand` + (thing.spec && thing.mag !== undefined ? ` (${thing.mag}/${thing.spec.mag})` : '')
       : thing.carriedBy ? `${thing.name === 'Crate' ? 'A crate' : thing.name}, held up by ${thing.carriedBy.name}`
         : thing.kind === 'limb' ? `${thing.of}'s ${thing.name.replace('Severed ', '')}, cut clean off`
           : thing.stuckIn && thing.stuckIn.person ? `${thing.name}, stuck in ${thing.stuckIn.person.name}. Drag it to pull it out` : thing.stuckIn ? `${thing.name}, stuck fast` : thing.name);
@@ -254,6 +278,11 @@ export class UI {
     else if (k === 'knife') made = sb.spawnKnife(x, Math.max(y, 0.1), Math.random() * 0.4 - 0.2);
     else if (k === 'machete') made = sb.spawnMachete(x, Math.max(y, 0.1), Math.random() * 0.3 - 0.15);
     else if (k === 'glock') made = sb.spawnGun(x, Math.max(y, 0.12), Math.random() * 0.3 - 0.15);
+    else if (k === 'm1911') made = sb.spawnGun(x, Math.max(y, 0.12), Math.random() * 0.3 - 0.15, 'm1911');
+    else if (k === 'taser') made = sb.spawnTaser(x, Math.max(y, 0.12), Math.random() * 0.3 - 0.15);
+    else if (k === 'officer') made = spawnOfficer(sb, x);
+    else if (k === 'vest') made = sb.spawnVest(x, Math.max(y, 0.1));
+    else if (AMMO_KEYS[k]) made = sb.spawnAmmo(x, Math.max(y, 0.2), AMMO_KEYS[k]);
     if (!made) {
       const info = this.kindInfo(k);
       // (a mod's thing may have its own reason: nothing crafted yet, say)
@@ -263,7 +292,7 @@ export class UI {
     }
     this.sound.pop(x);
     if (mod && mod.said) this.toast(mod.said(made));
-    else if (made.kind === 'stickman') this.toast(`${made.name} appeared`);
+    else if (made.kind === 'stickman') this.toast(made.officer ? `${made.name}, on duty` : `${made.name} appeared`);
     return made;
   }
 
@@ -503,6 +532,32 @@ export class UI {
       const s = (w * (card ? 0.7 : 0.86)) / 0.3;
       ctx.setTransform(s, 0, 0, -s, w / 2, card ? h * 0.47 : h * 0.47);
       drawGlockShape(ctx, 1, 0, 0);
+    } else if (kind === 'm1911') {
+      const s = (w * (card ? 0.72 : 0.88)) / 0.33;
+      ctx.setTransform(s, 0, 0, -s, w / 2, h * 0.47);
+      drawM1911Shape(ctx, 1, 0, 0);
+    } else if (kind === 'taser') {
+      const s = (w * (card ? 0.66 : 0.84)) / 0.26;
+      ctx.setTransform(s, 0, 0, -s, w / 2, h * 0.47);
+      drawTaserShape(ctx, 1, true);
+    } else if (kind === 'officer') {
+      const j = solve(STAND, 1, makeJoints());
+      const s = card ? (h * 0.78) / 1.78 : h;
+      ctx.setTransform(s, 0, 0, -s, w / 2, card ? h * 0.84 : h + 0.84 * s);
+      drawStickman(ctx, j, {
+        scale: 1, facing: 1, hair: 'none', hat: 'police', face: { eyes: 'normal', brow: 0.1, mouth: 0.15, open: 0 },
+        uniform: POLICE_UNIFORM, belt: true, vest: { police: true, dents: [] }, kit: { holster: 'm1911', duty: 'taser' },
+      });
+    } else if (kind === 'vest') {
+      const s = (w * (card ? 0.78 : 0.95)) / VEST_W;
+      ctx.setTransform(s, 0, 0, -s, w / 2, card ? h * 0.84 - (VEST_H / 2) * s : h / 2);
+      drawVestShape(ctx, VEST_W, VEST_H, false, 1);
+    } else if (AMMO_KEYS[kind]) {
+      // the three side by side in scale: the big can fills the card, the small box sits in it
+      const size = AMMO_KEYS[kind], sp = AMMO_BOXES[size];
+      const s = (w * (card ? 0.8 : 0.95)) / AMMO_BOXES.big.w;
+      ctx.setTransform(s, 0, 0, -s, w / 2, card ? h * 0.84 - (sp.h / 2) * s : h / 2);
+      drawAmmoBoxShape(ctx, size, sp.w, sp.h, 1);
     }
   }
 
@@ -523,6 +578,31 @@ export class UI {
       const p = this.selected;
       if (p && p.heal()) this.toast(`${p.name} is good as new`);
     });
+    $('ins-uncuff').addEventListener('click', () => {
+      const p = this.selected;
+      if (p && p.uncuff()) this.toast(`${p.name} is out of the cuffs`);
+    });
+    // what is in their hand into its holster or a pocket - or out again
+    $('ins-kit').addEventListener('click', () => {
+      const p = this.selected;
+      if (!p || p.dead) return;
+      const now = this.sb.time;
+      // a fidget gives way to it; a punch, a reload or anything else under way does not
+      if (!p.ready && p.state === 'stand' && !p.strike && !p.reloading && !p.stowing && !p.drawing && !p.donning && !p.wantItem && !p.ammoBox && !p.cuffing) p.anim.stopAction(0.08);
+      if (p.weapon) {
+        const what = p.weapon.name, slot = p.slotFor(p.weapon);
+        if (p.stow()) {
+          if (p.brain) p.brain.kitT = now + 8;
+          this.toast(`${p.name} puts the ${what.toLowerCase()} ${slot === 'pocket' ? 'in a pocket' : slot === 'duty' ? 'on the duty belt' : 'in the holster'}`);
+        }
+        return;
+      }
+      const slot = ['holster', 'duty', 'pocket'].find((k) => p.stowed[k]);
+      if (slot && p.drawFrom(slot)) {
+        if (p.brain) { p.brain.calmT = now + 10; p.brain.kitT = now + 2; }
+        this.toast(`${p.name} gets the ${p.stowed[slot].name.toLowerCase()} out`);
+      }
+    });
     $('ins-delete').addEventListener('click', () => {
       const p = this.selected;
       if (!p) return;
@@ -533,7 +613,8 @@ export class UI {
     // the bars are made once and only their widths change
     this.meters = {};
     this.locks = {};
-    const rows = [...EMOTION_ROWS.map((r) => [...r, 'ins-emotions']), ['pain', 'Pain', '#ff6b6b', 'ins-vitals'], ['blood', 'Blood', '#c0182a', 'ins-vitals']];
+    const rows = [...EMOTION_ROWS.map((r) => [...r, 'ins-emotions']), ['pain', 'Pain', '#ff6b6b', 'ins-vitals'], ['blood', 'Blood', '#c0182a', 'ins-vitals'],
+      ['stamina', 'Stamina', '#4fbf78', 'ins-vitals']];
     for (const [key, label, color, where] of rows) {
       const box = $(where);
       const row = document.createElement('div');
@@ -663,6 +744,12 @@ export class UI {
   showTraits(p) {
     const chips = this.$('ins-traits');
     chips.textContent = '';
+    if (p.officer) {
+      const c = document.createElement('span');
+      c.className = 'chip officer';
+      c.textContent = 'Police officer';
+      chips.appendChild(c);
+    }
     // what they are, when it is not a person
     if (p.species && p.species.label) {
       const c = document.createElement('span');
@@ -753,7 +840,13 @@ export class UI {
     if (ord) $('ins-order-text').textContent = `Sent to fight ${ord.target.name}`;
     this.meters.pain.style.width = (p.dead ? 0 : clamp(h.pain, 0, 100)).toFixed(0) + '%';
     this.meters.blood.style.width = (clamp((h.blood - 0.38) / 0.62, 0, 1) * 100).toFixed(0) + '%';
+    this.meters.stamina.style.width = (p.dead ? 0 : clamp(p.stamina, 0, 1) * 100).toFixed(0) + '%';
     $('ins-heal').disabled = p.dead;
+    $('ins-uncuff').classList.toggle('hidden', !p.cuffed);
+    const kit = $('ins-kit'), stowable = !!p.weapon && !!p.slotFor(p.weapon), drawable = !p.weapon && p.kit.length > 0;
+    kit.classList.toggle('hidden', p.dead || !!p.cuffed || !(stowable || drawable));
+    kit.textContent = p.weapon ? 'Put away' : 'Get it out';
+    kit.disabled = p.state !== 'stand';
 
     // whatever is at work on them (a mod's: acid, withering) comes first
     const conds = [...p.afflictions.filter((a) => a.label).map((a) => a.label), ...h.conditions()];
@@ -786,6 +879,24 @@ export class UI {
         s.textContent = said;
         cb.appendChild(s);
       }
+    }
+    if (p.vest) {
+      const s = document.createElement('div');
+      const v = p.vest;
+      s.textContent = `Wearing a ${v.police ? 'police' : 'light'} vest (${Math.round(v.condition * 100)}%${v.dents.length ? `, ${v.dents.length} round${v.dents.length === 1 ? '' : 's'} in it` : ''})`;
+      cb.appendChild(s);
+    }
+    for (const [slot, it] of p.kit) {
+      const s = document.createElement('div');
+      const said = it.describe ? it.describe(p).replace(/^Carrying /, '') : it.name;
+      s.textContent = `${SLOT_SAID[slot]}: ${said}`;
+      cb.appendChild(s);
+    }
+    if (p.cuffed || p.tased) {
+      const s = document.createElement('div');
+      s.className = 'bad';
+      s.textContent = p.tased ? 'Being tased' : `In handcuffs${p.cuffed.by ? ' (arrested by ' + p.cuffed.by.name + ')' : ''}`;
+      cb.prepend(s);
     }
     if (p.stuck.length) {
       const s = document.createElement('div');
@@ -1442,9 +1553,10 @@ export class UI {
       const w = this.world(this.hover.x, this.hover.y);
       const k = this.spawnKind;
       const mod = KINDS[k] ? null : findSpawnable(k);
-      const y = k === 'stickman' || (mod && mod.living) ? this.sb.surfaceBelow(w.x, 0.15, 100).y
-        : Math.max(w.y, k === 'crate' ? 0.39 : k === 'knife' ? 0.03 : k === 'machete' ? 0.05 : k === 'glock' ? 0.08 : 0.04);
-      ghost = { kind: this.spawnKind, x: w.x, y, draw: mod && mod.ghost ? mod.ghost : null };
+      const box = AMMO_KEYS[k] ? AMMO_BOXES[AMMO_KEYS[k]] : null;
+      const y = k === 'stickman' || k === 'officer' || (mod && mod.living) ? this.sb.surfaceBelow(w.x, 0.15, 100).y
+        : Math.max(w.y, k === 'crate' ? 0.39 : k === 'knife' ? 0.03 : k === 'machete' ? 0.05 : k === 'glock' || k === 'm1911' || k === 'taser' ? 0.08 : box ? box.h / 2 : 0.04);
+      ghost = { kind: box ? 'ammo' : this.spawnKind, size: box ? AMMO_KEYS[k] : null, x: w.x, y, draw: mod && mod.ghost ? mod.ghost : null };
     }
     return {
       selected: this.selected,

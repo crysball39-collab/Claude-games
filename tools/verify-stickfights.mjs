@@ -100,8 +100,9 @@ check('PLAY opens the game, the HUD and the spawn menu', await ev(() =>
   !document.querySelector('#hud').classList.contains('hidden') && document.querySelector('#drawer').classList.contains('open')));
 check('the sandbox starts empty', await ev(() => window.__sf.sb.people.length === 0 && window.__sf.sb.crates.length === 0));
 const cards = await ev(() => [...document.querySelectorAll('.card')].map((c) => c.dataset.spawn));
-check('there are six things to spawn: a Stickman, Brass Knuckles, a Combat Knife, a Machete, a Glock-19 and a Crate',
-  cards.length === 6 && ['stickman', 'knuckles', 'knife', 'machete', 'glock', 'crate'].every((k) => cards.includes(k)), cards.join(', '));
+const BASE = ['stickman', 'officer', 'knuckles', 'knife', 'machete', 'glock', 'm1911', 'taser', 'crate', 'vest', 'ammoSmall', 'ammoMedium', 'ammoBig'];
+check('there are thirteen things to spawn: a Stickman, an Officer, Brass Knuckles, a Combat Knife, a Machete, a Glock-19, an M1911, a Taser, a Crate, a Light Vest and three Ammo Boxes',
+  cards.length === BASE.length && BASE.every((k) => cards.includes(k)), cards.join(', '));
 check('the cards are named for what they spawn', await ev(() =>
   ['Stickman', 'Brass Knuckles', 'Combat Knife', 'Machete', 'Glock-19', 'Crate'].every((n) => [...document.querySelectorAll('.card b')].some((b) => b.textContent === n))));
 await shot('menu');
@@ -326,16 +327,23 @@ const dmg = await ev(() => {
   const sb = window.__sf.sb;
   // the same punches at a dummy who just stands there, with and without
   const a = sb.spawnStickman(0, null, { name: 'Rex', scale: 1, strength: 1 });
-  const d = sb.spawnStickman(0.85, null, { name: 'Dummy', scale: 1 });
-  a.brain = null; d.brain = null;
-  a.facing = 1; d.facing = -1;
+  let d = null;
+  a.brain = null;
+  a.facing = 1;
   const k = sb.spawnKnuckles(-3, 0.1);
   const out = { bare: [], armed: [] };
   sb.on('hit', (e) => { if (e.by === a && !e.blocked) (e.armed ? out.armed : out.bare).push(e.damage); });
   const swing = (n) => {
     for (let s = 0; s < n; s++) {
       for (let i = 0; i < 90; i++) { sb.step(1 / 120); if (a.ready) break; }
-      d.health.heal(); d.balance = 1; d.pos.x = 0.85; d.vel.x = 0; a.pos.x = 0; a.vel.x = 0;
+      // (a hard one can send the dummy stumbling, or over: then a fresh one)
+      if (!d || d.state !== 'stand') {
+        if (d) sb.remove(d);
+        d = sb.spawnStickman(0.85, null, { name: 'Dummy', scale: 1 });
+        d.brain = null;
+        for (let i = 0; i < 30; i++) sb.step(1 / 120);
+      }
+      d.health.heal(); d.balance = 1; d.pos.x = 0.85; d.vel.x = 0; d.facing = -1; a.pos.x = 0; a.vel.x = 0; a.stamina = 1;
       a.attack('cross', d);
       for (let i = 0; i < 60; i++) sb.step(1 / 120);
     }
@@ -758,6 +766,8 @@ const machete = await ev(() => {
     victim.setPosture('guard');
     if (k % 3 !== 2) victim.block(true);
     steps(12);
+    // (a fresh swing each time: eighty in a row would wind anybody, and a tired one cuts less)
+    a.stamina = 1;
     a.attack(k % 3 === 2 ? 'hack' : 'chop', victim);
     steps(84);
   }
@@ -1067,12 +1077,14 @@ const lib = await ev(() => {
   let lines = 0;
   for (const v of Object.values(LINES)) lines += Array.isArray(v) ? v.length : Object.values(v).reduce((a, b) => a + b.length, 0);
   const need = ['stab', 'slash', 'knifeThrow', 'pullOut', 'brace', 'hug', 'highFive', 'handshake', 'pushups', 'squats', 'jumpingJacks', 'handsUp', 'clutchStomach', 'shiver',
-    'chop', 'hack', 'macheteGuard', 'aimPistol', 'reload', 'tourniquet', 'popJoint', 'clutchStump', 'coverHead', 'retch', 'shock'];
+    'chop', 'hack', 'macheteGuard', 'aimPistol', 'reload', 'tourniquet', 'popJoint', 'clutchStump', 'coverHead', 'retch', 'shock',
+    'handsOnKnees', 'catchBreath', 'holster', 'drawGun', 'pocket', 'unpocket', 'vestOn', 'ammoGrab', 'reloadTaser', 'tased', 'taserZap',
+    'commandStop', 'radio', 'cuffing', 'kneelHands', 'sitCuffed', 'crackKnuckles', 'bounce', 'think'];
   return { clips: Object.keys(CLIPS).length, missing: need.filter((n) => !CLIPS[n]), lines, kinds: Object.keys(LINES).length };
 });
-check('over a hundred hand-keyed clips: knife and machete fighting, aiming and reloading a pistol, tying a tourniquet, hugs, press-ups',
-  lib.clips >= 110 && !lib.missing.length, `${lib.clips} clips${lib.missing.length ? ', missing ' + lib.missing.join(' ') : ''}`);
-check('hundreds of things to say, for every situation', lib.lines >= 700 && lib.kinds >= 140, `${lib.lines} lines in ${lib.kinds} situations`);
+check('over a hundred and forty hand-keyed clips: knife and machete fighting, aiming and reloading, holstering, tasing, cuffing, catching their breath, hugs, press-ups',
+  lib.clips >= 140 && !lib.missing.length, `${lib.clips} clips${lib.missing.length ? ', missing ' + lib.missing.join(' ') : ''}`);
+check('hundreds of things to say, for every situation', lib.lines >= 1000 && lib.kinds >= 200, `${lib.lines} lines in ${lib.kinds} situations`);
 
 await fresh();
 const bye = await ev(() => {
@@ -1126,6 +1138,472 @@ const freed = await ev(() => {
 check('...and tapped again, it is free to change', !freed.locked && freed.moved, JSON.stringify(freed));
 await ev(() => window.__sf.ui.select(null));
 
+/* ------------------------ the law, and what it carries ----------------------- */
+
+const spawnKind = (kind, x) => ev(([k, x]) => {
+  const ui = window.__sf.ui;
+  ui.setSpawnKind(k);
+  const made = ui.spawnAt(x, 0.3);
+  ui.setSpawnKind('stickman');
+  return !!made;
+}, [kind, x]);
+
+await fresh();
+await spawnKind('officer', 0);
+const officer = await ev(() => {
+  const sb = window.__sf.sb, o = sb.people[0];
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  return o && { name: o.name, officer: o.officer, vest: !!(o.vest && o.vest.police), holster: o.stowed.holster && o.stowed.holster.kind, mag: o.stowed.holster && o.stowed.holster.mag,
+    duty: o.stowed.duty && o.stowed.duty.kind, cop: !!(o.brain && o.brain.cop), hand: o.weapon ? o.weapon.kind : null };
+});
+check('an Officer spawns in uniform: a police vest on, an M1911 (7 rounds) in the holster, a taser on the duty belt',
+  !!officer && officer.officer && officer.vest && officer.holster === 'm1911' && officer.mag === 7 && officer.duty === 'taser' && officer.cop && !officer.hand && /^Officer /.test(officer.name), JSON.stringify(officer));
+
+await fresh();
+const arrest = await ev(() => {
+  const sb = window.__sf.sb, ui = window.__sf.ui;
+  const a = sb.spawnStickman(-3, null, { name: 'Rex', traits: { aggression: 0.9, temper: 0.9, bravery: 0.5, empathy: 0.2 } });
+  const v = sb.spawnStickman(-1.5, null, { name: 'Dot', traits: { aggression: 0.1, bravery: 0.3 } });
+  ui.setSpawnKind('officer');
+  const cop = ui.spawnAt(2, 0.3);
+  ui.setSpawnKind('stickman');
+  cop.facing = -1;
+  a.brain.rel(v).anger = 0.95;
+  a.brain.rel(v).like = -0.7;
+  let crime = null, commanded = false, cuffedT = null, tased = false, gaveUp = false;
+  const said = new Set();
+  sb.on('crime', (e) => { if (!crime && e.who === a) crime = e.crime; });
+  sb.on('command', (e) => { if (e.who === cop && e.to === a) commanded = true; });
+  sb.on('cuffed', (e) => { if (e.who === a && cuffedT === null) cuffedT = sb.time; });
+  sb.on('tased', (e) => { if (e.who === a) tased = true; });
+  sb.on('speech', (e) => { if (e.who === cop) said.add(e.kind); });
+  for (let i = 0; i < 120 * 80; i++) {
+    sb.step(1 / 120);
+    if (a.brain.behaviour && a.brain.behaviour.kind === 'comply') gaveUp = true;
+    // (tased first, they lie there a while before they are sat up)
+    if (cuffedT !== null && sb.time - cuffedT > 6 && a.brain.behaviour && a.brain.behaviour.kind === 'detained') break;
+    if (cuffedT !== null && sb.time - cuffedT > 16) break;
+  }
+  return {
+    crime: crime && crime.kind, answered: !!crime && crime.done, commanded, cuffed: !!a.cuffed, tased, gaveUp,
+    after: a.brain.behaviour ? a.brain.behaviour.kind : a.state, radio: said.has('copRadioCustody'), arrestSaid: said.has('copArrest') || said.has('copCuffing') || said.has('copCuffTased'),
+    hands: a.cuffed ? Math.hypot(a.wj.handA.x - a.wj.handB.x, a.wj.handA.y - a.wj.handB.y) : null, open: !!(cop.brain.cop.cases.size),
+  };
+});
+check('an Officer goes after whoever commits a crime: "Police! Stop!", then the taser for anyone who will not give up, and the cuffs',
+  !!arrest.crime && arrest.commanded && arrest.cuffed && arrest.answered && (arrest.tased || arrest.gaveUp), JSON.stringify(arrest));
+check('...cuffed, they sit there with their hands together behind them, and the officer calls it in',
+  arrest.cuffed && (arrest.after === 'detained' || arrest.after === 'down') && arrest.hands !== null && arrest.hands < 0.2 && arrest.radio && !arrest.open, JSON.stringify(arrest));
+
+await fresh();
+const heard = await ev(() => {
+  const sb = window.__sf.sb, ui = window.__sf.ui;
+  const s = sb.spawnStickman(-12, null, { name: 'Gus', traits: { aggression: 0.9 } });
+  const v = sb.spawnStickman(-9, null, { name: 'Bo' });
+  ui.setSpawnKind('officer');
+  const cop = ui.spawnAt(12, 0.3);
+  ui.setSpawnKind('stickman');
+  cop.facing = 1;
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  s.brain = null;
+  const g = sb.spawnGun(s.pos.x, 0.5);
+  g.wear(s);
+  s.weapon = g;
+  s.facing = 1;
+  s.aimAt(v);
+  for (let i = 0; i < 90; i++) sb.step(1 / 120);
+  const x0 = cop.pos.x;
+  const fired = s.fire();
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  const knew = cop.brain.cop.cases.has(s), saw = cop.brain.canSee(s.pos.x, s.pos.y + 1);
+  for (let i = 0; i < 120 * 4; i++) sb.step(1 / 120);
+  return { fired, knew, saw, moved: x0 - cop.pos.x, doing: cop.brain.doing };
+});
+check('gunshots carry: an officer who only heard them knows who fired, and heads that way', heard.fired && heard.knew && !heard.saw && heard.moved > 3, JSON.stringify(heard));
+
+/* -------------------------------- the taser -------------------------------- */
+
+await fresh();
+const tase = await ev(() => {
+  const sb = window.__sf.sb;
+  const a = sb.spawnStickman(-1.5, null, { name: 'Zed' });
+  const b = sb.spawnStickman(1.5, null, { name: 'Ivy' });
+  a.brain = null;
+  b.brain = null;
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  const t = sb.spawnTaser(a.pos.x, 0.5);
+  t.wear(a);
+  a.weapon = t;
+  a.facing = 1;
+  a.aimAt(b);
+  for (let i = 0; i < 90; i++) sb.step(1 / 120);
+  let tasedAt = null, endAt = null, ticks = 0, rigid = 0, n = 0, low = 9;
+  sb.on('tased', (e) => { if (e.who === b && tasedAt === null) tasedAt = sb.time; });
+  sb.on('tasedEnd', (e) => { if (e.who === b) endAt = sb.time; });
+  sb.on('taserTick', (e) => { if (e.who === b) ticks++; });
+  const fired = a.fire();
+  const x0 = b.pos.x;
+  for (let i = 0; i < 120 * 8; i++) {
+    sb.step(1 / 120);
+    if (b.tased) { n++; if (b.rag) rigid++; }
+    low = Math.min(low, b.wj.head.y);
+  }
+  return { fired, tased: tasedAt !== null, ride: tasedAt !== null && endAt !== null ? +(endAt - tasedAt).toFixed(2) : null, ticks, rigid: n ? rigid / n : 0,
+    down: low < 0.6, slid: +Math.abs(b.pos.x - x0).toFixed(2), crime: sb.law.crimes.map((c) => c.kind).join(), spent: !t.cart };
+});
+check('a taser fires two probes on wires: five seconds of current, every muscle locked, and over they go like a plank',
+  tase.fired && tase.tased && tase.ride >= 4.6 && tase.ride <= 5.6 && tase.ticks > 20 && tase.rigid > 0.9 && tase.down && tase.spent, JSON.stringify(tase));
+check('...and tasing somebody who was doing nothing is a crime', /tasing/.test(tase.crime), tase.crime);
+
+await fresh();
+const stun = await ev(() => {
+  const sb = window.__sf.sb;
+  const a = sb.spawnStickman(0, null, { name: 'Zed' });
+  const b = sb.spawnStickman(0.85, null, { name: 'Ivy' });
+  a.brain = null;
+  b.brain = null;
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  const t = sb.spawnTaser(a.pos.x, 0.5);
+  t.wear(a);
+  a.weapon = t;
+  t.cart = false;
+  t.spare = 0;
+  a.facing = 1;
+  b.facing = -1;
+  let stunned = 0;
+  sb.on('driveStun', (e) => { if (e.who === b) stunned++; });
+  const p0 = b.health.pain;
+  const can = a.strikes().includes('taserZap');
+  for (let k = 0; k < 3 && !stunned; k++) {
+    a.attack('taserZap', b);
+    for (let i = 0; i < 90; i++) sb.step(1 / 120);
+  }
+  return { can, stunned, pain: Math.round(b.health.pain - p0), tased: !!b.tased, standing: b.state === 'stand' || b.state === 'stumble' || b.state === 'stagger' };
+});
+check('out of cartridges, a taser pressed against somebody is a drive stun: it hurts like anything, but it does not lock them up',
+  stun.can && stun.stunned >= 1 && stun.pain >= 25 && !stun.tased, JSON.stringify(stun));
+
+/* --------------------------------- the vest -------------------------------- */
+
+await fresh();
+const vest = await ev(() => {
+  const sb = window.__sf.sb;
+  const a = sb.spawnStickman(-3, null, { name: 'Ash' });
+  a.brain = null;
+  let stops = 0, holes = 0, worn = 0, alive = 0, hurt = 0, pushed = 0;
+  const vests = [];
+  // a round into each of four people in vests, square in the chest
+  for (let k = 0; k < 4; k++) {
+    const b = sb.spawnStickman(1, null, { name: 'Kit' + k, traits: { toughness: 0.6 } });
+    b.brain = null;
+    for (let i = 0; i < 30; i++) sb.step(1 / 120);
+    const v = sb.spawnVest(b.pos.x, 0.2);
+    v.wear(b);
+    b.vest = v;
+    vests.push(v);
+    // hands up, so the round finds the body and not an arm hanging in front of it
+    a.pos.x = -3;
+    a.facing = 1;
+    b.facing = -1;
+    b.setPosture('handsUp');
+    for (let i = 0; i < 40; i++) sb.step(1 / 120);
+    let stopped = false;
+    const off = (e) => { if (e.who === b) stopped = true; };
+    sb.on('vestStop', off);
+    const torsoHp = b.health.parts.torso.hp, x0 = b.pos.x;
+    // a 9 mm round along a line through the chest
+    sb.shoot(a, b.pos.x - 1.2, b.wj.chest.y - 0.06, 0, { energy: 1, target: b });
+    for (let i = 0; i < 60; i++) sb.step(1 / 120);
+    if (stopped) {
+      stops++;
+      if (b.alive) alive++;
+      if (b.health.parts.torso.hp < torsoHp) hurt++;
+      if (b.pos.x - x0 > 0.05 || b.state !== 'stand') pushed++;
+    }
+    holes += b.wounds.filter((w) => w.hole && (w.bone === 'ribs' || w.bone === 'spine' || w.bone === 'pelvis')).length;
+    if (v.wornBy === b) worn++;
+    sb.remove(b);
+  }
+  return { stops, holes, alive, hurt, pushed, worn, worn0: vests.filter((v) => v.hp < 100).length };
+});
+check('a light vest stops pistol rounds to the body - they still hit like a hammer, and knock them back - and wears down with each one',
+  vest.stops >= 3 && vest.holes === 0 && vest.alive === vest.stops && vest.hurt === vest.stops && vest.pushed >= vest.stops - 1 && vest.worn0 >= vest.stops, JSON.stringify(vest));
+
+await fresh();
+const vestOn = await ev(() => {
+  const sb = window.__sf.sb;
+  const p = sb.spawnStickman(0, null, { name: 'Pia', traits: { bravery: 0.2, curiosity: 0.6 } });
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  const v = sb.spawnVest(1.6, 0.1);
+  // shots, somewhere: anyone would want it on
+  p.brain.gunThreat = { who: null, t: sb.time, x: 30, y: 1 };
+  p.brain.emo.bump('fear', 0.4);
+  let picked = false;
+  for (let i = 0; i < 120 * 20 && p.vest !== v; i++) {
+    sb.step(1 / 120);
+    if (p.brain.behaviour && p.brain.behaviour.kind === 'vest') picked = true;
+  }
+  return { picked, on: p.vest === v, worn: v.wornBy === p, inHands: !!p.donning };
+});
+check('a stickman who sees a vest lying about, with shots going off, goes over and puts it on', vestOn.picked && vestOn.on && vestOn.worn, JSON.stringify(vestOn));
+
+/* -------------------------- holsters and pockets --------------------------- */
+
+await fresh();
+const holster = await ev(() => {
+  const sb = window.__sf.sb;
+  const p = sb.spawnStickman(0, null, { name: 'Hal', traits: { aggression: 0.3, temper: 0.3, bravery: 0.7 } });
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  const g = sb.spawnGun(0, 0.5);
+  g.wear(p);
+  p.weapon = g;
+  p.brain.calmT = sb.time;
+  let holstered = false;
+  for (let i = 0; i < 120 * 25 && !holstered; i++) { sb.step(1 / 120); holstered = p.stowed.holster === g && !p.weapon; }
+  // trouble: somebody coming at them with a knife
+  const foe = sb.spawnStickman(5, null, { name: 'Foe', traits: { aggression: 0.95, temper: 0.9, bravery: 0.9 } });
+  const k = sb.spawnKnife(5, 0.5, 0);
+  k.wear(foe);
+  foe.weapon = k;
+  foe.brain.rel(p).anger = 1;
+  foe.brain.rel(p).like = -0.8;
+  foe.facing = -1;
+  let drew = false;
+  for (let i = 0; i < 120 * 12 && !drew; i++) { sb.step(1 / 120); drew = p.weapon === g; }
+  return { holstered, drew };
+});
+check('with nothing to be armed for, a pistol goes back in its holster...', holster.holstered, JSON.stringify(holster));
+check('...and comes back out when somebody comes at them', holster.drew, JSON.stringify(holster));
+
+await fresh();
+const pocket = await ev(() => {
+  const sb = window.__sf.sb;
+  const p = sb.spawnStickman(0, null, { name: 'Ned' });
+  p.brain = null;
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  const knife = sb.spawnKnife(0, 0.5, 0);
+  knife.wear(p);
+  p.weapon = knife;
+  p.facing = 1;
+  const kn = sb.spawnKnuckles(p.pos.x + 0.5, 0.06);
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  const bent = p.pickUp(kn);
+  for (let i = 0; i < 120; i++) sb.step(1 / 120);
+  return { bent, pocket: p.stowed.pocket ? p.stowed.pocket.kind : null, hand: p.weapon ? p.weapon.kind : null };
+});
+check('hands full, something small goes in a pocket', pocket.bent && pocket.pocket === 'knuckles' && pocket.hand === 'knife', JSON.stringify(pocket));
+
+/* ---------------------------- the M1911 and ammo ---------------------------- */
+
+await fresh();
+const m1911 = await ev(() => {
+  const sb = window.__sf.sb;
+  const a = sb.spawnStickman(-2, null, { name: 'Sid' });
+  a.brain = null;
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  const g = sb.spawnGun(a.pos.x, 0.5, 0, 'm1911');
+  const full = { mag: g.mag, spare: g.spare, energy: g.spec.energy };
+  g.wear(a);
+  a.weapon = g;
+  a.facing = 1;
+  a.aimAt({ x: 6, y: 1.2 });
+  let heavy = null;
+  sb.on('shot', (e) => { if (e.who === a) heavy = !!e.heavy; });
+  for (let i = 0; i < 80; i++) sb.step(1 / 120);
+  const fired = a.fire();
+  return { ...full, fired, heavy, after: g.mag, said: g.describe(a) };
+});
+check('the M1911 holds seven .45s, two spare magazines, and each one hits harder than a 9 mm',
+  m1911.mag === 7 && m1911.spare === 14 && m1911.energy > 1 && m1911.fired && m1911.heavy && m1911.after === 6 && /M1911/.test(m1911.said), JSON.stringify(m1911));
+
+await fresh();
+const ammo = await ev(() => {
+  const sb = window.__sf.sb, ui = window.__sf.ui;
+  const sizes = {};
+  for (const [k, x] of [['ammoSmall', -6], ['ammoMedium', -4], ['ammoBig', -2]]) {
+    ui.setSpawnKind(k);
+    const b = ui.spawnAt(x, 0.3);
+    sizes[k] = b ? b.rounds : null;
+  }
+  ui.setSpawnKind('stickman');
+  for (const b of [...sb.ammo]) sb.remove(b);
+  const p = sb.spawnStickman(3, null, { name: 'Max', traits: { curiosity: 0.5 } });
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  const g = sb.spawnGun(p.pos.x, 0.5, 0, 'm1911');
+  g.wear(p);
+  p.weapon = g;
+  g.mag = 1;
+  g.spare = 0;
+  p.brain.calmT = sb.time;
+  const box = sb.spawnAmmo(6.5, 0.2, 'small');
+  let went = false;
+  for (let i = 0; i < 120 * 25 && box.rounds === 30; i++) {
+    sb.step(1 / 120);
+    if (p.brain.behaviour && p.brain.behaviour.kind === 'ammo') went = true;
+  }
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  return { sizes, went, left: box.rounds, rounds: g.mag + g.spare };
+});
+check('ammo boxes come small, medium and big: 30, 80 and 200 rounds',
+  ammo.sizes.ammoSmall === 30 && ammo.sizes.ammoMedium === 80 && ammo.sizes.ammoBig === 200, JSON.stringify(ammo.sizes));
+check('...and anyone with a pistol running low goes over and fills up from one', ammo.went && ammo.rounds === 21 && ammo.left === 10, JSON.stringify(ammo));
+
+/* ------------------------- stamina, knockback, stumbling ------------------------- */
+
+await fresh();
+const breath = await ev(() => {
+  const sb = window.__sf.sb;
+  const p = sb.spawnStickman(-15, null, { name: 'Ola' });
+  p.brain = null;
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  // laps, end to end, at a run
+  let fast = 0, slow = 0, to = 17;
+  for (let i = 0; i < 120 * 13; i++) {
+    if (p.pos.x > 15) to = -17;
+    if (p.pos.x < -15) to = 17;
+    p.goTo(to, 'run');
+    sb.step(1 / 120);
+    if (i === 120) fast = Math.abs(p.vel.x);
+  }
+  slow = p.maxSpeed('run');
+  fast = Math.max(fast, 0.01);
+  const spent = p.stamina;
+  p.stop();
+  for (let i = 0; i < 120 * 10; i++) sb.step(1 / 120);
+  return { fast: +fast.toFixed(2), slow: +slow.toFixed(2), spent: +spent.toFixed(2), back: +p.stamina.toFixed(2) };
+});
+check('running uses up stamina - out of breath, they slow down - and standing still gets it back',
+  breath.spent < 0.25 && breath.slow < breath.fast * 0.85 && breath.back > 0.75, JSON.stringify(breath));
+
+await fresh();
+const puffed = await ev(() => {
+  const sb = window.__sf.sb;
+  const p = sb.spawnStickman(0, null, { name: 'Uma' });
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  p.stamina = 0.04;
+  let bent = false, kind = null;
+  for (let i = 0; i < 120 * 4; i++) {
+    sb.step(1 / 120);
+    if (p.brain.behaviour && p.brain.behaviour.kind === 'catchBreath') kind = 'catchBreath';
+    if (p.posture === 'handsOnKnees') bent = true;
+  }
+  return { kind, bent };
+});
+check('spent, they stop and catch their breath, hands on their knees', puffed.kind === 'catchBreath' && puffed.bent, JSON.stringify(puffed));
+
+await fresh();
+const shove = await ev(() => {
+  const sb = window.__sf.sb;
+  const a = sb.spawnStickman(0, null, { name: 'Bram', scale: 1, strength: 1 });
+  const b = sb.spawnStickman(0.85, null, { name: 'Cleo', scale: 1, traits: { toughness: 0.5 } });
+  a.brain = null;
+  b.brain = null;
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  a.facing = 1;
+  b.facing = -1;
+  a.pos.x = 0;
+  b.pos.x = 0.85;
+  const x0 = b.pos.x;
+  let landed = false;
+  sb.on('hit', (e) => { if (e.who === b && !e.blocked) landed = true; });
+  a.attack('jab', b);
+  for (let i = 0; i < 90; i++) sb.step(1 / 120);
+  return { landed, back: +(b.pos.x - x0).toFixed(3), state: b.state };
+});
+check('a blow knocks them back the way it was going', shove.landed && shove.back > 0.05, JSON.stringify(shove));
+
+await fresh();
+const stumbles = await ev(() => {
+  const sb = window.__sf.sb;
+  const out = { stumbled: 0, steps: 0, caught: 0, fell: 0 };
+  let st = null;
+  sb.on('stumbleStep', () => out.steps++);
+  sb.on('stumbleCaught', () => { st = 'caught'; });
+  sb.on('stumbleFall', () => { st = 'fell'; });
+  for (let k = 0; k < 16; k++) {
+    sb.clear();
+    const p = sb.spawnStickman(0, null, { name: 'Lee' + k, traits: { toughness: 0.5 } });
+    p.brain = null;
+    for (let i = 0; i < 30; i++) sb.step(1 / 120);
+    p.facing = 1;
+    st = null;
+    // a cross to the body, or an uppercut that rocks the head back
+    const up = k % 2 === 1;
+    p.takeHit({ by: null, part: up ? 'head' : 'torso', x: p.wj.chest.x, y: up ? p.wj.head.y : p.wj.chest.y, dir: -1, power: up ? 1.8 : 1.25, kind: up ? 'uppercut' : 'cross', armed: false, bone: up ? 'skull' : 'ribs' });
+    if (p.state === 'stumble') out.stumbled++;
+    for (let i = 0; i < 120 * 2.5; i++) sb.step(1 / 120);
+    if (st === 'caught') out.caught++;
+    if (st === 'fell') out.fell++;
+  }
+  return out;
+});
+check('a hard blow sends them stumbling - free steps, worked out as they go - and they catch themselves or go down',
+  stumbles.stumbled >= 12 && stumbles.steps >= stumbles.stumbled && stumbles.caught >= 4 && stumbles.fell >= 1 && stumbles.caught + stumbles.fell >= stumbles.stumbled - 1, JSON.stringify(stumbles));
+
+/* ------------------------------ in the inspector ------------------------------ */
+
+await fresh();
+await ev(() => {
+  const sb = window.__sf.sb, ui = window.__sf.ui;
+  ui.setSpawnKind('officer');
+  window.__o = ui.spawnAt(-1, 0.3);
+  ui.setSpawnKind('stickman');
+  window.__c = sb.spawnStickman(1, null, { name: 'Cal' });
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  window.__c.cuff(window.__o);
+  ui.select(window.__o);
+});
+await page.waitForTimeout(300);
+const insCop = await ev(() => ({
+  chips: [...document.querySelectorAll('#ins-traits .chip')].map((c) => c.textContent),
+  meters: [...document.querySelectorAll('#ins-vitals .meter span')].map((s) => s.textContent),
+  conds: [...document.querySelectorAll('#ins-conds div')].map((d) => d.textContent),
+}));
+check('the inspector shows an officer as one, their stamina, their vest and what is in the holster and on the belt',
+  insCop.chips.includes('Police officer') && insCop.meters.includes('Stamina') && insCop.conds.some((c) => /police vest/.test(c)) &&
+  insCop.conds.some((c) => /^In the holster: an M1911/.test(c)) && insCop.conds.some((c) => /^On the duty belt: a taser/.test(c)), JSON.stringify(insCop));
+await ev(() => window.__sf.ui.select(window.__c));
+await page.waitForTimeout(300);
+const cuffBtn = await ev(() => {
+  const b = document.querySelector('#ins-uncuff');
+  const r = b.getBoundingClientRect();
+  return { shown: !b.classList.contains('hidden'), x: r.left + r.width / 2, y: r.top + r.height / 2, cond: [...document.querySelectorAll('#ins-conds div')].map((d) => d.textContent)[0] };
+});
+if (cuffBtn.shown) await tapAt(cuffBtn.x, cuffBtn.y);
+await page.waitForTimeout(250);
+const uncuffed = await ev(() => !window.__c.cuffed && document.querySelector('#ins-uncuff').classList.contains('hidden'));
+check('somebody in handcuffs says so, and an Uncuff button lets them go', cuffBtn.shown && /handcuffs/.test(cuffBtn.cond) && uncuffed, JSON.stringify(cuffBtn));
+
+// a pistol in the hand: PUT AWAY puts it in the holster, GET IT OUT brings it back
+const kitAt = await ev(() => {
+  const sb = window.__sf.sb, c = window.__c;
+  const g = sb.spawnGun(c.pos.x, 0.5);
+  g.wear(c);
+  c.weapon = g;
+  // (just picked up: not about to put it straight away by themselves)
+  c.brain.calmT = sb.time;
+  window.__g6 = g;
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  window.__sf.ui.updateInspector();
+  const b = document.querySelector('#ins-kit');
+  const r = b.getBoundingClientRect();
+  return { shown: !b.classList.contains('hidden'), label: b.textContent, x: r.left + r.width / 2, y: r.top + r.height / 2 };
+});
+if (kitAt.shown) await tapAt(kitAt.x, kitAt.y);
+await sim(1);
+const away = await ev(() => {
+  window.__sf.ui.updateInspector();
+  const b = document.querySelector('#ins-kit');
+  return { holstered: window.__c.stowed.holster === window.__g6 && !window.__c.weapon, label: b.textContent };
+});
+if (away.holstered) await tapAt(kitAt.x, kitAt.y);
+await sim(1);
+const back = await ev(() => window.__c.weapon === window.__g6);
+check('the inspector can have them put a pistol away in its holster, and get it out again',
+  kitAt.shown && kitAt.label === 'Put away' && away.holstered && away.label === 'Get it out' && back, JSON.stringify({ kitAt, away, back }));
+await ev(() => window.__sf.ui.select(null));
+await shot('officer');
+
 /* ---------------------------------- mods --------------------------------- */
 
 await fresh();
@@ -1134,7 +1612,7 @@ const modsOff = await ev(() => ({
   cards: document.querySelectorAll('.card').length,
   section: document.getElementById('drawer-mods').children.length,
 }));
-check('mods are not in the game until they are installed', !modsOff.installed.length && modsOff.cards === 6 && !modsOff.section, JSON.stringify(modsOff));
+check('mods are not in the game until they are installed', !modsOff.installed.length && modsOff.cards === BASE.length && !modsOff.section, JSON.stringify(modsOff));
 
 await page.tap('#btn-menu');
 await page.waitForTimeout(300);
@@ -1167,7 +1645,7 @@ const installed = await ev(() => ({
   state: document.querySelector('.mod-item[data-mod="murder-drones"] .mod-state').offsetParent !== null,
 }));
 check('INSTALL fills a bar as it goes in, then Uzi, N and V are in the spawn menu',
-  installing.bar && !installing.yet && installed.cards.length === 9 && ['md-uzi', 'md-n', 'md-v'].every((k) => installed.cards.includes(k)) && installed.state,
+  installing.bar && !installing.yet && installed.cards.length === BASE.length + 3 && ['md-uzi', 'md-n', 'md-v'].every((k) => installed.cards.includes(k)) && installed.state,
   `"${installing.text}" -> ${installed.cards.join(', ')}`);
 check('...and the device remembers that it is installed', installed.stored.includes('murder-drones'), JSON.stringify(installed.stored));
 await page.tap('#mods-close');
@@ -1355,7 +1833,7 @@ const removed = await ev(() => ({
   stored: JSON.parse(localStorage.getItem('sf.mods') || '[]'),
 }));
 check('REMOVE asks once more, then takes the mod out of the spawn menu and everything of it out of the world',
-  armedRemove === 'TAP TO REMOVE' && removed.people.join() === 'Keeper' && !removed.guns.length && removed.cards === 6 && !removed.stored.length, JSON.stringify(removed));
+  armedRemove === 'TAP TO REMOVE' && removed.people.join() === 'Keeper' && !removed.guns.length && removed.cards === BASE.length && !removed.stored.length, JSON.stringify(removed));
 await page.tap('#mods-close');
 await ev(() => window.__sf.ui.toggleDrawer(false));
 await page.waitForTimeout(250);
@@ -1392,7 +1870,7 @@ const mcCards = await ev(() => {
   return { cards: [...document.querySelectorAll('.card')].map((k) => k.dataset.spawn), locked: !!c && c.classList.contains('locked'), badge: c && c.querySelector('.card-badge').textContent };
 });
 check('installed, Steve, a Crafting Table, Soul Sand, a Wither Skull and a Wither Totem are in the spawn menu - the totem locked until one is crafted',
-  mcCards.cards.length === 11 && ['mc-steve', 'mc-table', 'mc-soul', 'mc-skull', 'mc-totem'].every((k) => mcCards.cards.includes(k)) && mcCards.locked && mcCards.badge === 'CRAFT',
+  mcCards.cards.length === BASE.length + 5 && ['mc-steve', 'mc-table', 'mc-soul', 'mc-skull', 'mc-totem'].every((k) => mcCards.cards.includes(k)) && mcCards.locked && mcCards.badge === 'CRAFT',
   `${mcCards.cards.join(', ')}; the totem says ${mcCards.badge}`);
 await page.waitForTimeout(300);
 await ev(() => document.querySelector('.card[data-spawn="mc-totem"]').scrollIntoView({ block: 'center' }));
@@ -1454,7 +1932,8 @@ const tableAt = await ev(() => {
   for (let i = 0; i < 240; i++) sb.step(1 / 120);
   window.__table = t;
   sf.ui.setTool('hand');
-  const s = cam.toScreen(t.pos.x, t.pos.y);
+  // (low on its face: a skull can come to rest on the top of it)
+  const s = cam.toScreen(t.pos.x, t.pos.y - 0.12);
   return { x: s.x, y: s.y };
 });
 await page.waitForTimeout(300);
@@ -1627,7 +2106,7 @@ const mcGone = await ev(() => ({
   stored: JSON.parse(localStorage.getItem('sf.mods') || '[]'),
 }));
 check('removing Minecraft takes Steve, the blocks and everything else of it out of the world and the menu',
-  mcGone.people.join() === 'Keeper' && !mcGone.crates && !mcGone.items && mcGone.cards === 6 && !mcGone.stored.length, JSON.stringify(mcGone));
+  mcGone.people.join() === 'Keeper' && !mcGone.crates && !mcGone.items && mcGone.cards === BASE.length && !mcGone.stored.length, JSON.stringify(mcGone));
 await page.tap('#mods-close');
 await ev(() => window.__sf.ui.toggleDrawer(false));
 await page.waitForTimeout(250);

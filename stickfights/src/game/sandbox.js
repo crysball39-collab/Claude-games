@@ -17,14 +17,16 @@
    ========================================================================== */
 import { World, Body } from '../physics/rigid.js';
 import { Stickman, G } from './stickman.js';
-import { Crate, Knuckles, Knife, Machete, Gun, Limb, CRATE_SIZE } from './props.js';
+import { Crate, Knuckles, Knife, Machete, Gun, Limb, AmmoBox, Vest, CRATE_SIZE, AMMO_BOXES, VEST_H } from './props.js';
+import { Taser } from './taser.js';
+import { Law } from './law.js';
 import { FX } from './fx.js';
 import { makePerson } from './people.js';
 import { clamp, rand, chance } from '../core/util.js';
 
 export const STEP = 1 / 120;
 export const HALF_WIDTH = 20;
-export const LIMITS = { people: 24, crates: 40, knuckles: 16, knives: 16, machetes: 16, guns: 12, limbs: 40, items: 40 };
+export const LIMITS = { people: 24, crates: 40, knuckles: 16, knives: 16, machetes: 16, guns: 16, limbs: 40, items: 40, vests: 12, ammo: 16 };
 // how likely a bullet is to hit someone in its way who it was not aimed at
 const STRAY_HIT = 0.4;
 
@@ -79,8 +81,10 @@ export class Sandbox {
     this.knuckles = [];
     this.knives = [];
     this.machetes = [];
-    this.guns = [];
+    this.guns = [];           // pistols and tasers
     this.limbs = [];
+    this.vests = [];
+    this.ammo = [];           // ammo boxes
     this.fx = new FX(this);
     // things a mod puts in the world that are not bodies: beams, missiles, blasts.
     // Each is { update(dt, sandbox) -> false when it is over, draw(ctx) }
@@ -98,6 +102,8 @@ export class Sandbox {
     this.hand = null;
     /** Builds a brain for a new stickman; set by whoever owns the game. */
     this.makeBrain = null;
+    // who did what to whom, as far as the law is concerned (law.js)
+    this.law = new Law(this);
   }
 
   /* --------------------------------- events --------------------------------- */
@@ -121,11 +127,14 @@ export class Sandbox {
 
   get count() {
     return { people: this.people.length, crates: this.crates.length, knuckles: this.knuckles.length, knives: this.knives.length,
-      machetes: this.machetes.length, guns: this.guns.length, limbs: this.limbs.length };
+      machetes: this.machetes.length, guns: this.guns.length, limbs: this.limbs.length, vests: this.vests.length, ammo: this.ammo.length };
   }
 
   /** Every weapon in the sandbox, wherever it is. */
   get weapons() { return [...this.knuckles, ...this.knives, ...this.machetes, ...this.guns]; }
+
+  /** Vests and ammo boxes: not weapons, but worth going over for. */
+  get gear() { return [...this.vests, ...this.ammo]; }
 
   /** The knives and the machetes: the things that cut, and stick in when thrown point first. */
   get blades() { return [...this.knives, ...this.machetes]; }
@@ -137,6 +146,8 @@ export class Sandbox {
     for (const k of this.knives) if (k.loose) out.push(k);
     for (const k of this.machetes) if (k.loose) out.push(k);
     for (const g of this.guns) if (g.loose) out.push(g);
+    for (const v of this.vests) if (v.loose) out.push(v);
+    for (const a of this.ammo) if (a.loose) out.push(a);
     for (const l of this.limbs) if (l.loose) out.push(l);
     for (const it of this.items) if (it.loose && it.body) out.push(it);
     return out;
@@ -206,13 +217,43 @@ export class Sandbox {
     return m;
   }
 
-  spawnGun(x, y, rot = 0) {
+  /** A pistol: a Glock-19, or an M1911. */
+  spawnGun(x, y, rot = 0, kind = 'glock') {
     if (this.guns.length >= LIMITS.guns) return null;
     x = clamp(x, this.left + 0.2, this.right - 0.2);
-    const g = new Gun(this, x, Math.max(y, 0.08), rot);
+    const g = new Gun(this, x, Math.max(y, 0.08), rot, kind);
     this.guns.push(g);
     this.emit('spawn', { what: g, x, y });
     return g;
+  }
+
+  spawnTaser(x, y, rot = 0) {
+    if (this.guns.length >= LIMITS.guns) return null;
+    x = clamp(x, this.left + 0.2, this.right - 0.2);
+    const t = new Taser(this, x, Math.max(y, 0.08), rot);
+    this.guns.push(t);
+    this.emit('spawn', { what: t, x, y });
+    return t;
+  }
+
+  spawnVest(x, y, o = {}) {
+    if (this.vests.length >= LIMITS.vests) return null;
+    x = clamp(x, this.left + 0.3, this.right - 0.3);
+    const v = new Vest(this, x, Math.max(y, VEST_H / 2 + 0.01), o);
+    this.vests.push(v);
+    this.emit('spawn', { what: v, x, y });
+    return v;
+  }
+
+  /** An ammo box: 'small', 'medium' or 'big'. */
+  spawnAmmo(x, y, size = 'medium') {
+    if (this.ammo.length >= LIMITS.ammo) return null;
+    const spec = AMMO_BOXES[size] || AMMO_BOXES.medium;
+    x = clamp(x, this.left + spec.w / 2 + 0.05, this.right - spec.w / 2 - 0.05);
+    const a = new AmmoBox(this, x, Math.max(y, spec.h / 2 + 0.01), size);
+    this.ammo.push(a);
+    this.emit('spawn', { what: a, x, y });
+    return a;
   }
 
   /** A piece of someone, cut off: see Stickman.sever. */
@@ -229,6 +270,9 @@ export class Sandbox {
     if (thing.kind === 'stickman') {
       thing.dropCarried();
       if (thing.weapon) thing.dropWeapon(0);
+      thing.dropStowed(0);
+      if (thing.donning) thing.finishVest();
+      if (thing.vest) { const v = thing.vest; thing.vest = null; v.drop(thing.wj.chest.x, Math.max(0.2, thing.wj.chest.y), 0, 0); }
       for (const e of [...thing.stuck]) thing.pullKnife(e, null);
       thing.removed = true;
       this.phys.remove(thing.proxy);
@@ -247,9 +291,25 @@ export class Sandbox {
       this.phys.remove(thing.body);
       this.limbs.splice(this.limbs.indexOf(thing), 1);
       this.emit('vanish', { what: thing, x: thing.pos.x, y: thing.pos.y });
+    } else if (thing.kind === 'vest' || thing.kind === 'ammo') {
+      const at = { x: thing.pos.x, y: thing.pos.y };
+      thing.removed = true;
+      if (thing.kind === 'vest') {
+        const w = thing.wornBy;
+        if (w) { if (w.vest === thing) w.vest = null; if (w.donning === thing) w.donning = null; }
+        if (thing.inWorld) { this.phys.remove(thing.body); thing.inWorld = false; }
+        this.vests.splice(this.vests.indexOf(thing), 1);
+      } else {
+        this.phys.remove(thing.body);
+        this.ammo.splice(this.ammo.indexOf(thing), 1);
+      }
+      thing.wornBy = null;
+      this.emit('vanish', { what: thing, x: at.x, y: at.y });
     } else if (thing.kind === 'knuckles' || thing.kind === 'knife' || thing.kind === 'machete' || this.guns.includes(thing)) {
       const at = { x: thing.pos.x, y: thing.pos.y };
-      if (thing.wornBy) thing.wornBy.weapon = null;
+      // out of whoever's hand, holster or pocket it was in
+      if (thing.wornBy) { if (thing.wornBy.unequip) thing.wornBy.unequip(thing); else thing.wornBy.weapon = null; }
+      if (thing.shot) thing.shot.cut();
       if (thing.stuckIn && thing.stuckIn.person) {
         const p = thing.stuckIn.person;
         p.stuck = p.stuck.filter((e) => e.knife !== thing);
@@ -280,10 +340,13 @@ export class Sandbox {
     for (const k of [...this.machetes]) this.remove(k);
     for (const g of [...this.guns]) this.remove(g);
     for (const l of [...this.limbs]) this.remove(l);
+    for (const v of [...this.vests]) this.remove(v);
+    for (const a of [...this.ammo]) this.remove(a);
     for (const c of [...this.crates]) this.remove(c);
     for (const it of [...this.items]) this.remove(it);
     this.fx.clear();
     this.effects.length = 0;
+    this.law.clear();
   }
 
   /* ---------------------------------- time ---------------------------------- */
@@ -326,6 +389,7 @@ export class Sandbox {
       this.effects = kept.concat(this.effects);
     }
     for (const it of [...this.items]) if (it.update && !it.removed) it.update(dt, this);
+    this.law.update(dt);
     // anything knocked clean out of the world comes back down inside it
     for (const c of this.crates) this.keepInside(c.body);
     for (const k of this.loose()) this.keepInside(k.body);
@@ -718,16 +782,17 @@ export class Sandbox {
     if (g.fireLoose) return g.fireLoose(this);
     if (g.mag <= 0) { this.emit('dryFire', { what: g, x: g.pos.x, y: g.pos.y }); return false; }
     const m = g.muzzle();
+    const spec = g.spec || {}, kick = spec.kick || 1;
     g.mag--;
     g.lastShot = this.time;
-    this.fx.flash(m.x, m.y, m.a);
-    const port = g.body.toWorld(0.01, 0.09);
+    this.fx.flash(m.x, m.y, m.a, kick > 1.2 ? 1.3 : 1);
+    const port = spec.port ? g.body.toWorld(spec.port.x, spec.port.y) : g.body.toWorld(0.01, 0.09);
     this.fx.casing(port.x, port.y, -Math.cos(m.a) * 1.5 + rand(-0.5, 0.5), 2.5 + rand(0, 1.5));
     this.emit('shot', { who: null, gun: g, x: m.x, y: m.y, loud: true });
-    this.shoot(null, m.x, m.y, m.a + rand(-0.01, 0.01));
-    // the recoil throws it back and up
-    g.body.applyImpulse(-Math.cos(m.a) * 2.2, -Math.sin(m.a) * 2.2 + 0.8, m.x, m.y);
-    g.body.angVel += rand(4, 9) * (Math.cos(m.a) >= 0 ? 1 : -1);
+    this.shoot(null, m.x, m.y, m.a + rand(-0.01, 0.01), { energy: spec.energy ?? 1 });
+    // the recoil throws it back and up (a .45 harder)
+    g.body.applyImpulse(-Math.cos(m.a) * 2.2 * kick, -Math.sin(m.a) * 2.2 * kick + 0.8, m.x, m.y);
+    g.body.angVel += rand(4, 9) * Math.sqrt(kick) * (Math.cos(m.a) >= 0 ? 1 : -1);
     return true;
   }
 
@@ -905,6 +970,14 @@ export class Sandbox {
     for (let i = this.knuckles.length - 1; i >= 0; i--) {
       const k = this.knuckles[i];
       if (!k.wornBy && k.body.contains(x, y, r + 0.06)) return k;
+    }
+    for (let i = this.vests.length - 1; i >= 0; i--) {
+      const v = this.vests[i];
+      if (v.loose && v.body.contains(x, y, r * 0.6 + 0.05)) return v;
+    }
+    for (let i = this.ammo.length - 1; i >= 0; i--) {
+      const a = this.ammo[i];
+      if (a.body.contains(x, y, r * 0.6 + 0.04)) return a;
     }
     for (let i = this.items.length - 1; i >= 0; i--) {
       const it = this.items[i];

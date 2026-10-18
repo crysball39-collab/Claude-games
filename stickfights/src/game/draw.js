@@ -45,6 +45,9 @@ export function drawStickman(ctx, j, o) {
   const lw = DIM.line * s;
   const r = DIM.headR * s;
   const ink = o.ink || INK, far = o.far || INK_FAR;
+  // a uniform: the shirt and the trousers their own colours
+  const U = o.uniform || null;
+  const topInk = U ? U.top : ink, topFar = U ? U.topFar : far, legInk = U ? U.legs : ink, legFar = U ? U.legsFar : far;
   const cut = o.cut || NO_CUTS;
   // a mod's species can draw more of them (wings, a tail, hands that are not
   // hands) and draw the head its own way: o.skin = { back, farArm, head, front }
@@ -58,24 +61,34 @@ export function drawStickman(ctx, j, o) {
   if (skin && skin.back) skin.back(ctx, j, o);
 
   // far side first, so the near arm and leg sit in front of the body
-  ctx.strokeStyle = far;
+  const ha = j.headAngle, f = o.facing || 1;
   ctx.lineWidth = lw;
+  ctx.strokeStyle = legFar;
   limb(ctx, j, LEG_B, cut.legB);
+  ctx.strokeStyle = topFar;
   limb(ctx, j, ARM_B, cut.armB);
   if (skin && skin.farArm) skin.farArm(ctx, j, o);
+  // what hangs on the far hip (an officer's taser, cross-draw)
+  if (o.kit && o.kit.duty) drawStowed(ctx, j, f, s, 'duty', o.kit.duty);
 
-  ctx.strokeStyle = ink;
+  ctx.strokeStyle = topInk;
   ctx.lineWidth = lw;
   // the spine, then the neck up to the bottom of the head
-  const ha = j.headAngle, f = o.facing || 1;
   const nx = j.head.x - Math.sin(ha) * f * r, ny = j.head.y - Math.cos(ha) * r;
   polyline(ctx, [j.hip, j.chest, j.neck, { x: nx, y: ny }]);
+  ctx.strokeStyle = legInk;
   limb(ctx, j, LEG_A, cut.legA);
+  if (o.vest) drawWornVest(ctx, j, f, s, o.vest);
+  if (o.belt) drawBelt(ctx, j, f, s);
+  if (o.kit) {
+    if (o.kit.holster) drawStowed(ctx, j, f, s, 'holster', o.kit.holster);
+    if (o.kit.pocket) drawStowed(ctx, j, f, s, 'pocket', o.kit.pocket);
+  }
 
   if (skin && skin.head) skin.head(ctx, j, o, r, lw);
   else drawHead(ctx, j, o, r, lw);
 
-  ctx.strokeStyle = ink;
+  ctx.strokeStyle = topInk;
   ctx.lineWidth = lw;
   limb(ctx, j, ARM_A, cut.armA);
 
@@ -83,12 +96,14 @@ export function drawStickman(ctx, j, o) {
   if (o.dislocated) drawDislocations(ctx, j, o.dislocated, lw);
   if (o.broken) drawBreaks(ctx, j, o.broken, lw, cut, tint);
   if (o.wounds && o.wounds.length) drawWounds(ctx, j, o.wounds, lw, cut, tint);
+  if (o.cuffed) drawCuffs(ctx, j, s);
+  if (o.donning) drawVestBundle(ctx, j, s, o.donning);
   if (!cut.armA) {
     if (o.heldDraw) o.heldDraw(ctx, j, s, f);
     else if (o.weapon === 'knuckles') drawWornKnuckles(ctx, j.elbowA, j.handA, s, o.weaponBlood || 0);
     else if (o.weapon === 'knife') drawHeldKnife(ctx, j.midForeA, j.handA, s, o.weaponBlood || 0);
     else if (o.weapon === 'machete') drawHeldMachete(ctx, j.midForeA, j.handA, s, f, o.weaponBlood || 0);
-    else if (o.weapon === 'glock') drawHeldGun(ctx, j, s, f, o.weaponBlood || 0, o.gunSlide || 0);
+    else if (o.weapon === 'glock' || o.weapon === 'm1911') drawHeldGun(ctx, j, s, f, o.weaponBlood || 0, o.gunSlide || 0, o.weapon);
   }
   if (o.stuck) {
     for (const k of o.stuck) {
@@ -344,7 +359,53 @@ function drawHead(ctx, j, o, r, lw) {
 
   drawHair(ctx, o.hair, r, lw);
   if (o.face) drawFace(ctx, o.face, r, lw, o.hurt);
+  if (o.hat) drawHat(ctx, o.hat, r, lw);
   ctx.restore();
+}
+
+/** Something on the head, in the head's own frame (+x the way the face looks): a police cap. */
+function drawHat(ctx, hat, r, lw) {
+  if (hat !== 'police') return;
+  // the crown: soft, a little higher at the front
+  ctx.fillStyle = '#1b2848';
+  ctx.strokeStyle = '#0c1326';
+  ctx.lineWidth = lw * 0.45;
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.98, r * 0.42);
+  ctx.quadraticCurveTo(-r * 1.12, r * 0.96, -r * 0.55, r * 1.2);
+  ctx.quadraticCurveTo(r * 0.3, r * 1.42, r * 1.14, r * 1.12);
+  ctx.quadraticCurveTo(r * 1.16, r * 0.78, r * 0.92, r * 0.42);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // the band, and the peak sticking out over the eyes
+  ctx.fillStyle = '#0d0f14';
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.98, r * 0.42);
+  ctx.lineTo(r * 0.92, r * 0.42);
+  ctx.lineTo(r * 0.98, r * 0.62);
+  ctx.lineTo(-r * 1.02, r * 0.62);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(r * 0.5, r * 0.46);
+  ctx.quadraticCurveTo(r * 1.15, r * 0.5, r * 1.42, r * 0.3);
+  ctx.lineTo(r * 1.36, r * 0.22);
+  ctx.quadraticCurveTo(r * 1.05, r * 0.36, r * 0.48, r * 0.36);
+  ctx.closePath();
+  ctx.fill();
+  // the badge on the front
+  ctx.fillStyle = '#e2b84a';
+  ctx.strokeStyle = '#8a6a1a';
+  ctx.lineWidth = lw * 0.18;
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = Math.PI / 2 + (i * Math.PI) / 5, rr = i % 2 ? r * 0.08 : r * 0.17;
+    ctx.lineTo(r * 0.78 + Math.cos(a) * rr, r * 0.86 + Math.sin(a) * rr);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
 }
 
 function drawHair(ctx, hair, r, lw) {
@@ -900,12 +961,12 @@ export function drawGlockShape(ctx, k = 1, blood = 0, slide = 0) {
  * forearm, the way it points) and whether it is drawn mirrored, so that it
  * is always the right way up for the way they face.
  */
-export function heldGunFrame(j, s, f) {
+export function heldGunFrame(j, s, f, grip = GLOCK_GRIP) {
   const from = j.midForeA, hand = j.handA;
   const a = Math.atan2(hand.y - from.y, hand.x - from.x);
   const c = Math.cos(a), n = Math.sin(a);
   // the grip sits in the fist: the origin is the grip's offset back from the hand
-  const gx = -GLOCK_GRIP.x * s, gy = -GLOCK_GRIP.y * s * f;
+  const gx = -grip.x * s, gy = -grip.y * s * f;
   return { x: hand.x + c * gx - n * gy, y: hand.y + n * gx + c * gy, a, f, s };
 }
 
@@ -916,13 +977,116 @@ export function gunPoint(g, lx, ly) {
   return { x: g.x + c * x - n * y, y: g.y + n * x + c * y };
 }
 
-function drawHeldGun(ctx, j, s, f, blood, slide) {
-  const g = heldGunFrame(j, s, f);
+function drawHeldGun(ctx, j, s, f, blood, slide, kind = 'glock') {
+  const m1911 = kind === 'm1911';
+  const g = heldGunFrame(j, s, f, m1911 ? M1911_GRIP : GLOCK_GRIP);
   ctx.save();
   ctx.translate(g.x, g.y);
   ctx.rotate(g.a);
   ctx.scale(1, f);
-  drawGlockShape(ctx, s, blood, slide);
+  if (m1911) drawM1911Shape(ctx, s, blood, slide);
+  else drawGlockShape(ctx, s, blood, slide);
+  ctx.restore();
+}
+
+/* ------------------------------------ M1911 ---------------------------------- */
+
+// the old .45: a long steel slide, wooden grips, a hammer at the back
+export const M1911_W = 0.33;
+export const M1911_H = 0.2;
+export const M1911_GRIP = { x: -0.104, y: -0.058 };
+export const M1911_MUZZLE = { x: 0.166, y: 0.056 };
+export const M1911_PORT = { x: 0.028, y: 0.088 };
+
+/** The M1911, centred on its own origin, muzzle toward +x. `slide` as for the Glock. */
+export function drawM1911Shape(ctx, k = 1, blood = 0, slide = 0) {
+  ctx.save();
+  ctx.scale(k, k);
+  ctx.lineJoin = 'round';
+  // the frame, the trigger guard cut out of it, and the grip's steel round the wood
+  ctx.fillStyle = '#2a2c30';
+  ctx.beginPath();
+  ctx.moveTo(-0.15, 0.034);
+  ctx.lineTo(0.128, 0.034);
+  ctx.lineTo(0.128, 0.012);
+  ctx.lineTo(0.05, 0.006);
+  ctx.quadraticCurveTo(0.052, -0.058, -0.004, -0.058);
+  ctx.lineTo(-0.058, -0.036);
+  ctx.lineTo(-0.074, -0.122);
+  ctx.quadraticCurveTo(-0.112, -0.132, -0.146, -0.124);
+  ctx.lineTo(-0.156, -0.012);
+  ctx.lineTo(-0.168, 0.0);
+  ctx.closePath();
+  ctx.moveTo(-0.034, -0.004);
+  ctx.lineTo(0.032, -0.004);
+  ctx.quadraticCurveTo(0.036, -0.044, -0.004, -0.044);
+  ctx.lineTo(-0.034, -0.03);
+  ctx.closePath();
+  ctx.fill('evenodd');
+  // the wooden grip panel, chequered, two screws
+  ctx.fillStyle = '#7b4a24';
+  ctx.beginPath();
+  ctx.moveTo(-0.07, -0.03);
+  ctx.lineTo(-0.083, -0.112);
+  ctx.quadraticCurveTo(-0.112, -0.12, -0.138, -0.112);
+  ctx.lineTo(-0.146, -0.022);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#5a3416';
+  ctx.lineWidth = 0.003;
+  ctx.beginPath();
+  for (let i = 0; i < 5; i++) { const y = -0.04 - i * 0.016; ctx.moveTo(-0.142 + i * 0.001, y); ctx.lineTo(-0.076 - i * 0.002, y - 0.006); }
+  ctx.stroke();
+  ctx.fillStyle = '#c9ced3';
+  for (const y of [-0.042, -0.1]) { ctx.beginPath(); ctx.arc(-0.108, y, 0.0055, 0, Math.PI * 2); ctx.fill(); }
+  // the trigger
+  ctx.strokeStyle = '#121214';
+  ctx.lineWidth = 0.009;
+  ctx.beginPath();
+  ctx.moveTo(0.006, -0.002); ctx.lineTo(0.008, -0.03);
+  ctx.stroke();
+  // the hammer, cocked back over the grip safety
+  ctx.fillStyle = '#1d1f22';
+  ctx.beginPath();
+  ctx.moveTo(-0.15, 0.05); ctx.lineTo(-0.178, 0.078); ctx.lineTo(-0.172, 0.088); ctx.lineTo(-0.142, 0.068);
+  ctx.closePath();
+  ctx.fill();
+  // the slide: long, flat-topped, serrated at the back, a bushing at the muzzle
+  ctx.save();
+  ctx.translate(-slide, 0);
+  ctx.fillStyle = '#3c4046';
+  ctx.beginPath();
+  ctx.moveTo(-0.152, 0.032);
+  ctx.lineTo(0.162, 0.032);
+  ctx.lineTo(0.166, 0.04);
+  ctx.lineTo(0.166, 0.078);
+  ctx.quadraticCurveTo(0.166, 0.086, 0.156, 0.086);
+  ctx.lineTo(-0.146, 0.086);
+  ctx.quadraticCurveTo(-0.152, 0.086, -0.154, 0.078);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#565b62';
+  ctx.fillRect(-0.15, 0.078, 0.31, 0.008);
+  ctx.strokeStyle = '#25282c';
+  ctx.lineWidth = 0.004;
+  ctx.beginPath();
+  for (let i = 0; i < 7; i++) { const x = -0.145 + i * 0.009; ctx.moveTo(x, 0.038); ctx.lineTo(x, 0.08); }
+  ctx.stroke();
+  ctx.fillStyle = '#16181a';
+  ctx.fillRect(0.004, 0.068, 0.048, 0.018);
+  ctx.fillRect(0.146, 0.086, 0.012, 0.011);
+  ctx.fillRect(-0.142, 0.086, 0.016, 0.01);
+  ctx.beginPath();
+  ctx.arc(0.163, 0.057, 0.013, 0, Math.PI * 2);
+  ctx.fillStyle = '#2b2e33';
+  ctx.fill();
+  ctx.restore();
+  if (blood > 0) {
+    ctx.fillStyle = `rgba(150, 12, 24, ${Math.min(0.8, blood)})`;
+    ctx.beginPath();
+    ctx.ellipse(-0.11, -0.06, 0.03, 0.045, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -997,5 +1161,383 @@ export function drawCrateShape(ctx, w, h, stains, holes = null) {
       ctx.arc(ho.x, ho.y, w * 0.016, 0, Math.PI * 2);
       ctx.fill();
     }
+  }
+}
+
+/* ------------------------------------ taser ---------------------------------- */
+
+export const TASER_W = 0.26;
+export const TASER_H = 0.17;
+export const TASER_GRIP = { x: -0.064, y: -0.052 };
+export const TASER_MUZZLE = { x: 0.132, y: 0.03 };
+
+/** A taser, centred on its own origin, the business end toward +x: yellow, a black grip, a cartridge in the front. */
+export function drawTaserShape(ctx, k = 1, cart = true) {
+  ctx.save();
+  ctx.scale(k, k);
+  ctx.lineJoin = 'round';
+  // the grip and the trigger guard
+  ctx.fillStyle = '#18191b';
+  ctx.beginPath();
+  ctx.moveTo(-0.03, 0.004);
+  ctx.lineTo(-0.042, -0.102);
+  ctx.quadraticCurveTo(-0.07, -0.112, -0.1, -0.104);
+  ctx.lineTo(-0.104, 0.004);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#18191b';
+  ctx.lineWidth = 0.009;
+  ctx.beginPath();
+  ctx.moveTo(-0.028, -0.002); ctx.quadraticCurveTo(0.03, -0.004, 0.028, -0.04); ctx.lineTo(-0.034, -0.044);
+  ctx.stroke();
+  ctx.strokeStyle = '#0c0c0d';
+  ctx.beginPath();
+  ctx.moveTo(-0.006, -0.004); ctx.quadraticCurveTo(0.004, -0.02, -0.006, -0.03);
+  ctx.stroke();
+  // the body
+  ctx.fillStyle = '#f2c81c';
+  ctx.beginPath();
+  ctx.moveTo(-0.112, 0.0);
+  ctx.lineTo(0.074, 0.0);
+  ctx.lineTo(0.074, 0.066);
+  ctx.lineTo(-0.098, 0.066);
+  ctx.quadraticCurveTo(-0.114, 0.066, -0.114, 0.05);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#8f7406';
+  ctx.lineWidth = 0.004;
+  ctx.stroke();
+  ctx.fillStyle = '#1c1c1e';
+  ctx.fillRect(-0.09, 0.044, 0.05, 0.012);
+  ctx.fillStyle = '#c4161c';
+  ctx.beginPath(); ctx.arc(0.058, 0.012, 0.007, 0, Math.PI * 2); ctx.fill();
+  // the cartridge: black, with a yellow band, two probe ports at the front
+  if (cart) {
+    ctx.fillStyle = '#202022';
+    ctx.fillRect(0.074, 0.002, 0.058, 0.062);
+    ctx.fillStyle = '#f2c81c';
+    ctx.fillRect(0.09, 0.002, 0.01, 0.062);
+    ctx.fillStyle = '#5c5c60';
+    ctx.beginPath(); ctx.arc(0.128, 0.046, 0.007, 0, Math.PI * 2); ctx.arc(0.128, 0.018, 0.007, 0, Math.PI * 2); ctx.fill();
+  } else {
+    ctx.fillStyle = '#3a3a3c';
+    ctx.fillRect(0.074, 0.016, 0.012, 0.034);
+  }
+  ctx.restore();
+}
+
+/* ------------------------------------ vests ---------------------------------- */
+
+const VEST = { civ: ['#30333a', '#1d1f24', '#4b505a'], police: ['#1c2a4a', '#111a30', '#33476f'] };
+
+/**
+ * A light vest worn on the body: front and back panels along the spine, from
+ * just above the hips to just under the neck, shoulder straps over the top.
+ * A police one says so, in white, on the chest.
+ */
+function drawWornVest(ctx, j, f, s, v) {
+  const C = v.police ? VEST.police : VEST.civ;
+  const lerpP = (a, b, t) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+  const fwd = (a, b) => { const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1; return { x: (dy / d) * f, y: (-dx / d) * f }; };
+  const lo = lerpP(j.hip, j.chest, 0.3), up = lerpP(j.chest, j.neck, 0.82);
+  const n1 = fwd(j.hip, j.chest), n2 = fwd(j.chest, j.neck);
+  const nc = { x: (n1.x + n2.x) / 2, y: (n1.y + n2.y) / 2 };
+  const F = 0.088 * s, B = 0.074 * s;
+  const at = (p, n, k) => ({ x: p.x + n.x * k, y: p.y + n.y * k });
+  const pts = [at(lo, n1, F), at(j.chest, nc, F * 1.02), at(up, n2, F * 0.85), at(up, n2, -B * 0.85), at(j.chest, nc, -B), at(lo, n1, -B)];
+  ctx.fillStyle = C[0];
+  ctx.strokeStyle = C[1];
+  ctx.lineWidth = 0.012 * s;
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // the side seam, the straps, and a pocket on the front panel
+  ctx.strokeStyle = C[2];
+  ctx.lineWidth = 0.008 * s;
+  ctx.beginPath();
+  ctx.moveTo(lo.x, lo.y); ctx.lineTo(j.chest.x, j.chest.y); ctx.lineTo(up.x, up.y);
+  ctx.stroke();
+  ctx.strokeStyle = C[1];
+  ctx.lineWidth = 0.02 * s;
+  ctx.beginPath();
+  const top = at(j.neck, n2, 0.01 * s);
+  ctx.moveTo(pts[2].x, pts[2].y); ctx.quadraticCurveTo(top.x + n2.x * F * 0.4, top.y + n2.y * F * 0.4 + 0.02 * s, top.x, top.y);
+  ctx.quadraticCurveTo(top.x - n2.x * B * 0.4, top.y - n2.y * B * 0.4 + 0.02 * s, pts[3].x, pts[3].y);
+  ctx.stroke();
+  // where rounds hit it
+  for (const d of v.dents || []) {
+    const p = d.t < 0.5 ? lerpP(lo, j.chest, d.t * 2) : lerpP(j.chest, up, d.t * 2 - 1);
+    const n = d.t < 0.5 ? n1 : n2;
+    const q = at(p, n, d.side > 0 ? F * 0.62 : -B * 0.6);
+    ctx.fillStyle = d.hole ? '#2a0306' : '#0b0c0f';
+    ctx.beginPath();
+    ctx.arc(q.x, q.y, (d.hole ? 0.014 : 0.018) * s, 0, Math.PI * 2);
+    ctx.fill();
+    if (!d.hole) {
+      ctx.strokeStyle = '#7d8590';
+      ctx.lineWidth = 0.005 * s;
+      ctx.stroke();
+    }
+  }
+  if (v.police) {
+    // POLICE, upright whatever the lean, small, on the chest
+    const p = at(lerpP(lo, up, 0.62), nc, F * 0.32);
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.scale(0.0011 * s, -0.0011 * s);
+    ctx.fillStyle = '#f4f4f4';
+    ctx.font = '800 34px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('POLICE', 0, 0);
+    ctx.restore();
+  }
+}
+
+/** A light vest folded up, lying on the floor or carried: w long, h deep, centred on the origin. */
+export function drawVestShape(ctx, w, h, police = false, wear = 1) {
+  const C = police ? VEST.police : VEST.civ;
+  ctx.lineJoin = 'round';
+  ctx.fillStyle = C[0];
+  ctx.strokeStyle = C[1];
+  ctx.lineWidth = w * 0.02;
+  ctx.beginPath();
+  ctx.moveTo(-w / 2, -h / 2);
+  ctx.lineTo(w / 2, -h / 2);
+  ctx.quadraticCurveTo(w / 2 + h * 0.4, 0, w / 2, h / 2);
+  ctx.lineTo(-w / 2, h / 2);
+  ctx.quadraticCurveTo(-w / 2 - h * 0.4, 0, -w / 2, -h / 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.strokeStyle = C[2];
+  ctx.lineWidth = w * 0.012;
+  ctx.beginPath();
+  ctx.moveTo(-w * 0.42, 0); ctx.lineTo(w * 0.42, 0);
+  ctx.stroke();
+  // two straps, buckled
+  ctx.fillStyle = C[1];
+  for (const x of [-w * 0.22, w * 0.22]) ctx.fillRect(x - w * 0.03, -h / 2, w * 0.06, h);
+  ctx.fillStyle = '#9aa1aa';
+  for (const x of [-w * 0.22, w * 0.22]) ctx.fillRect(x - w * 0.018, -h * 0.18, w * 0.036, h * 0.36);
+  if (police) {
+    ctx.fillStyle = '#f4f4f4';
+    ctx.fillRect(-w * 0.12, -h * 0.28, w * 0.24, h * 0.56);
+    ctx.fillStyle = C[0];
+    ctx.fillRect(-w * 0.1, -h * 0.06, w * 0.2, h * 0.12);
+  }
+  if (wear < 0.5) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.beginPath(); ctx.arc(w * 0.08, h * 0.05, h * 0.18, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+/** Carried while it goes on: the vest bundled between the hands. */
+function drawVestBundle(ctx, j, s, v) {
+  const x = (j.handA.x + j.handB.x) / 2, y = (j.handA.y + j.handB.y) / 2;
+  const a = Math.atan2(j.handB.y - j.handA.y, j.handB.x - j.handA.x);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(a);
+  drawVestShape(ctx, 0.26 * s, 0.13 * s, v.police, v.condition ?? 1);
+  ctx.restore();
+}
+
+/* ------------------------------- worn kit and cuffs ------------------------------ */
+
+/** A duty belt: a black band round the hips, a buckle at the front. */
+function drawBelt(ctx, j, f, s) {
+  const dx = j.chest.x - j.hip.x, dy = j.chest.y - j.hip.y, d = Math.hypot(dx, dy) || 1;
+  const ux = dx / d, uy = dy / d, nx = uy * f, ny = -ux * f;
+  const cx = j.hip.x + ux * 0.035 * s, cy = j.hip.y + uy * 0.035 * s;
+  ctx.strokeStyle = '#0d0e10';
+  ctx.lineWidth = 0.05 * s;
+  ctx.lineCap = 'butt';
+  ctx.beginPath();
+  ctx.moveTo(cx - nx * 0.072 * s, cy - ny * 0.072 * s);
+  ctx.lineTo(cx + nx * 0.08 * s, cy + ny * 0.08 * s);
+  ctx.stroke();
+  ctx.lineCap = 'round';
+  ctx.fillStyle = '#b9c0c6';
+  ctx.beginPath();
+  ctx.arc(cx + nx * 0.072 * s, cy + ny * 0.072 * s, 0.017 * s, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+/**
+ * Something put away: a pistol in its holster on the near hip, the grip
+ * showing; an officer's taser on the far hip, grip forward; the handle of a
+ * knife (or a glint of brass knuckles) out of the front pocket.
+ */
+function drawStowed(ctx, j, f, s, slot, kind) {
+  const tx = j.kneeA.x - j.hip.x, ty = j.kneeA.y - j.hip.y, tl = Math.hypot(tx, ty) || 1;
+  const ux = tx / tl, uy = ty / tl;                 // down the thigh
+  const fx = -uy * f, fy = ux * f;                  // the thigh's front
+  const a = Math.atan2(uy, ux);
+  if (slot === 'holster' || slot === 'duty') {
+    const duty = slot === 'duty';
+    const along = duty ? 0.05 : 0.07, side = duty ? 0.04 : -0.035;
+    const x = j.hip.x + ux * along * s + fx * side * s, y = j.hip.y + uy * along * s + fy * side * s;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(a);
+    ctx.scale(1, duty ? -f : f);
+    const k = 0.78 * s;
+    if (kind === 'taser') drawTaserShape(ctx, k, true);
+    else if (kind === 'm1911') drawM1911Shape(ctx, k, 0, 0);
+    else drawGlockShape(ctx, k, 0, 0);
+    // the holster over all but the grip
+    ctx.fillStyle = '#121315';
+    ctx.strokeStyle = '#2a2c30';
+    ctx.lineWidth = 0.006 * s;
+    ctx.beginPath();
+    ctx.moveTo(-0.07 * k, -0.01 * k);
+    ctx.lineTo(0.175 * k, -0.004 * k);
+    ctx.quadraticCurveTo(0.19 * k, 0.05 * k, 0.17 * k, 0.1 * k);
+    ctx.lineTo(-0.06 * k, 0.1 * k);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+  // the front pocket, partway down the thigh
+  const x = j.hip.x + ux * 0.13 * s + fx * 0.036 * s, y = j.hip.y + uy * 0.13 * s + fy * 0.036 * s;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(a + Math.PI);                         // sticking up, out of the pocket
+  if (kind === 'knife') {
+    ctx.fillStyle = '#1c1c1c';
+    ctx.fillRect(0, -0.016 * s, 0.075 * s, 0.032 * s);
+    ctx.fillStyle = '#3a3a3a';
+    ctx.beginPath(); ctx.ellipse(0.08 * s, 0, 0.012 * s, 0.018 * s, 0, 0, Math.PI * 2); ctx.fill();
+  } else if (kind === 'taser') {
+    ctx.fillStyle = '#18191b';
+    ctx.fillRect(0, -0.018 * s, 0.06 * s, 0.036 * s);
+    ctx.fillStyle = '#f2c81c';
+    ctx.fillRect(0.06 * s, -0.022 * s, 0.03 * s, 0.044 * s);
+  } else if (kind === 'knuckles') {
+    ctx.strokeStyle = BRASS;
+    ctx.lineWidth = 0.012 * s;
+    ctx.beginPath(); ctx.arc(0.012 * s, 0, 0.018 * s, -1.2, 1.2); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** Handcuffs: a steel ring round each wrist, and the short chain between them. */
+function drawCuffs(ctx, j, s) {
+  const a = j.handA, b = j.handB;
+  ctx.strokeStyle = '#c9ced3';
+  ctx.lineWidth = 0.014 * s;
+  for (const p of [a, b]) { ctx.beginPath(); ctx.arc(p.x, p.y, 0.03 * s, 0, Math.PI * 2); ctx.stroke(); }
+  ctx.strokeStyle = '#8e959c';
+  ctx.lineWidth = 0.01 * s;
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+  ctx.stroke();
+}
+
+/* ---------------------------------- ammo boxes -------------------------------- */
+
+/** A cartridge lying on its side, centred on the origin, `len` long: a brass case and a lead nose. */
+function drawCartridge(ctx, len) {
+  const r = len * 0.2;
+  ctx.fillStyle = BRASS;
+  ctx.fillRect(-len / 2, -r, len * 0.68, r * 2);
+  ctx.fillStyle = '#8a8f96';
+  ctx.beginPath();
+  ctx.moveTo(len * 0.18, -r);
+  ctx.quadraticCurveTo(len * 0.52, -r * 0.9, len * 0.5, 0);
+  ctx.quadraticCurveTo(len * 0.52, r * 0.9, len * 0.18, r);
+  ctx.closePath();
+  ctx.fill();
+}
+
+/**
+ * An ammo box, w by h, centred on the origin: a small cardboard box, a
+ * medium plastic case, or a big steel can. `full` is how much is left in it.
+ */
+export function drawAmmoBoxShape(ctx, size, w, h, full = 1) {
+  const hw = w / 2, hh = h / 2;
+  ctx.lineJoin = 'round';
+  if (size === 'small') {
+    ctx.fillStyle = '#c9a36b';
+    ctx.fillRect(-hw, -hh, w, h);
+    ctx.fillStyle = '#b28a52';
+    ctx.fillRect(-hw, hh - h * 0.2, w, h * 0.2);
+    ctx.fillStyle = '#a8322c';
+    ctx.fillRect(-hw, -h * 0.18, w, h * 0.34);
+    ctx.save();
+    ctx.translate(-w * 0.05, -h * 0.01);
+    drawCartridge(ctx, h * 0.42);
+    ctx.restore();
+    ctx.strokeStyle = '#6e5330';
+    ctx.lineWidth = w * 0.03;
+    ctx.strokeRect(-hw, -hh, w, h);
+  } else if (size === 'big') {
+    ctx.fillStyle = '#5b5e2d';
+    ctx.fillRect(-hw, -hh, w, h);
+    ctx.fillStyle = '#474922';
+    ctx.fillRect(-hw, hh - h * 0.26, w, h * 0.26);
+    ctx.strokeStyle = '#33351a';
+    ctx.lineWidth = w * 0.012;
+    ctx.beginPath();
+    for (let i = 1; i < 4; i++) { const x = -hw + (w * i) / 4; ctx.moveTo(x, -hh + h * 0.08); ctx.lineTo(x, hh - h * 0.3); }
+    ctx.stroke();
+    // the stencilled band, and the folding handle on the lid
+    ctx.fillStyle = '#d6c35a';
+    ctx.fillRect(-hw + w * 0.08, -h * 0.12, w * 0.5, h * 0.09);
+    ctx.fillRect(-hw + w * 0.08, -h * 0.32, w * 0.34, h * 0.07);
+    ctx.save();
+    ctx.translate(hw - w * 0.2, -h * 0.12);
+    drawCartridge(ctx, h * 0.36);
+    ctx.restore();
+    ctx.strokeStyle = '#2e3017';
+    ctx.lineWidth = h * 0.06;
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.16, hh); ctx.lineTo(-w * 0.12, hh + h * 0.12); ctx.lineTo(w * 0.12, hh + h * 0.12); ctx.lineTo(w * 0.16, hh);
+    ctx.stroke();
+    ctx.strokeStyle = '#2e3017';
+    ctx.lineWidth = w * 0.022;
+    ctx.strokeRect(-hw, -hh, w, h);
+  } else {
+    ctx.fillStyle = '#3e5236';
+    ctx.beginPath();
+    ctx.moveTo(-hw + h * 0.12, -hh);
+    ctx.lineTo(hw - h * 0.12, -hh);
+    ctx.quadraticCurveTo(hw, -hh, hw, -hh + h * 0.12);
+    ctx.lineTo(hw, hh - h * 0.12);
+    ctx.quadraticCurveTo(hw, hh, hw - h * 0.12, hh);
+    ctx.lineTo(-hw + h * 0.12, hh);
+    ctx.quadraticCurveTo(-hw, hh, -hw, hh - h * 0.12);
+    ctx.lineTo(-hw, -hh + h * 0.12);
+    ctx.quadraticCurveTo(-hw, -hh, -hw + h * 0.12, -hh);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#26331f';
+    ctx.lineWidth = w * 0.025;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-hw, hh - h * 0.3); ctx.lineTo(hw, hh - h * 0.3);
+    ctx.stroke();
+    ctx.fillStyle = '#b7bdb2';
+    ctx.fillRect(-w * 0.06, hh - h * 0.42, w * 0.12, h * 0.22);
+    ctx.strokeStyle = '#26331f';
+    ctx.lineWidth = h * 0.08;
+    ctx.beginPath();
+    ctx.moveTo(-w * 0.2, hh); ctx.quadraticCurveTo(0, hh + h * 0.32, w * 0.2, hh);
+    ctx.stroke();
+    ctx.save();
+    ctx.translate(-w * 0.12, -h * 0.12);
+    drawCartridge(ctx, h * 0.4);
+    ctx.restore();
+  }
+  if (full <= 0) {
+    // empty: the lid hangs open
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    ctx.fillRect(-hw * 0.9, hh - h * 0.12, w * 0.9, h * 0.1);
   }
 }

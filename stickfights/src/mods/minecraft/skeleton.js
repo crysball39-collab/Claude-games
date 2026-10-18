@@ -29,6 +29,7 @@ export const WITHER_SKELETON = {
   skin: skeletonSkin,
   monster: true,
   undead: true,
+  tireless: true,
   mute: true,
   noPickup: true,
   power: 1.5,

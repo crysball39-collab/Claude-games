@@ -1,12 +1,25 @@
 # STICKFIGHTS
 
 A 2D sandbox of stickmen with minds of their own, on a grey background and a
-black floor. You spawn **stickmen**, **brass knuckles**, **combat knives**,
-**machetes**, **Glock-19 pistols** and **crates**, and the stickmen get on with
-it: they look around, talk, make friends and enemies, shake hands and hug,
-pick things up, climb on things, fight, run, hide, help each other up, get
-hurt, break bones, lose limbs, and die - and the ones still standing feel it,
-and remember it.
+black floor. You spawn **stickmen** and **police officers**, **brass
+knuckles**, **combat knives**, **machetes**, **Glock-19** and **M1911**
+pistols, **tasers**, **light vests**, **ammo boxes** and **crates**, and the
+stickmen get on with it: they look around, talk, make friends and enemies,
+shake hands and hug, pick things up and put them in their pockets, climb on
+things, fight until they are out of breath, run, hide, help each other up, get
+hurt, stumble, break bones, lose limbs, and die - and the ones still standing
+feel it, and remember it. Whoever does something to somebody else has the
+police to answer to.
+
+Stickmen have **stamina**: running, fighting and jumping use it up, and out
+of breath they slow down, hit softer and stop to catch it. Blows **knock them
+back**, and a hard one sends them **stumbling** - nothing keyed, a body
+balancing on its feet and stepping to catch itself, which it does, or does
+not. A pistol or a blade they are not using goes back in the **holster** or
+a **pocket**, and comes out again when there is trouble. **Officers** go
+after whoever commits a crime: "Police! Stop!", the taser for anyone who will
+not give up, the M1911 only for someone about to kill somebody, and the
+cuffs.
 
 And you can get inside their heads: drag their feelings up and down, change
 their personality, change who they count as a friend or an enemy, and send
@@ -59,17 +72,22 @@ The title screen has a few stickmen already going about their business behind
 it, one of them nursing a grudge. **PLAY** clears them away and opens the
 spawn menu.
 
-The spawn menu (☰ **SPAWN**, top left) has six things in it, in three
+The spawn menu (☰ **SPAWN**, top left) has thirteen things in it, in three
 sections:
 
 | Section | Thing | What it is |
 | ------- | ----- | ---------- |
 | People | **Stickman** | A normal human. Thinks, feels, remembers, fights back. |
+| People | **Officer** | A police officer: cap, uniform, a police vest, an M1911 in the holster and a taser on the duty belt. Goes after whoever commits a crime. |
 | Weapons | **Brass Knuckles** | Worn on the hand. Punches with them land about twice as hard, and cut. |
 | Weapons | **Combat Knife** | Held in the hand. Stabs and slashes; deep cuts bleed fast. Thrown point first, it sticks in. |
 | Weapons | **Machete** | Chops and hacks. Leaves gaping wounds, and a hard enough blow takes off a hand, an arm, a foot or a leg. |
 | Weapons | **Glock-19** | A pistol: 15 rounds in the magazine and two spare. Bullets go through people and crates, and ricochet off the floor. |
+| Weapons | **M1911** | A .45: seven rounds and two spare magazines. Each one hits harder and goes further through than a 9 mm, and it kicks. |
+| Weapons | **Taser** | Two barbed probes on wires: both in, and five seconds of current lock every muscle - down they go, stiff as a board. A vest stops it. Out of cartridges, it still hurts pressed against somebody. |
 | Objects | **Crate** | 22 kg of wood. Stack it, climb it, throw it - or let a stickman throw it. |
+| Objects | **Light Vest** | Soft armour for the body. Stops most pistol rounds to the chest - they still land like a hammer - and takes the worst out of a blade. Wears down with every round. |
+| Objects | **Small**, **Medium** and **Big Ammo Box** | 30, 80 and 200 pistol rounds: a cardboard box, a plastic case and a steel can. Anyone running low comes and fills up. |
 
 Pick one and the menu closes with the **spawn tool** armed: every tap on the
 world places another. A stickman appears on whatever is under the tap;
@@ -79,7 +97,7 @@ The three tools along the bottom:
 
 | Tool | What it does |
 | ---- | ------------ |
-| ✋ **HAND** | Drag anything to move it. Let go while moving to throw it. Tap a stickman to open their mind. Drag empty space to pan. Drag a blade stuck in someone to pull it out. Tap a pistol lying on the floor to fire it (empty, a tap puts a fresh magazine in). |
+| ✋ **HAND** | Drag anything to move it. Let go while moving to throw it. Tap a stickman to open their mind. Drag empty space to pan. Drag a blade stuck in someone to pull it out. Tap a pistol or a taser lying on the floor to fire it (empty, a tap puts a fresh magazine or cartridge in). Tap an ammo box or a vest to see how much is left in it. |
 | **SPAWN** (shows what is picked) | Tap the world to place it. |
 | ✖ **ERASE** | Tap something to remove it. |
 
@@ -87,13 +105,16 @@ Pinch (or the mouse wheel) zooms, two fingers pan. Along the top right: sound,
 slow motion, pause, settings, and clear everything (tap twice).
 
 **Tap a stickman** to open the inspector: their name and mood, what they are
-doing, their personality, five emotions, pain and blood, an X-ray of their
-body coloured by injury - every broken bone snapped and named, whatever has
-been cut off missing, joints out of their sockets ringed in purple, bullets
-still in them in gold - the options they are weighing up right now and how
-much each appeals, what they remember, and their recent thoughts. **Follow**
-keeps the camera on them, **Heal** mends them (not the dead), **Remove** takes
-them away.
+doing, their personality, five emotions, pain, blood and stamina, an X-ray
+of their body coloured by injury - every broken bone snapped and named,
+whatever has been cut off missing, joints out of their sockets ringed in
+purple, bullets still in them in gold - what they are wearing and carrying
+(a vest and how much is left of it, what is in the holster, a pocket and on
+the duty belt), the options they are weighing up right now and how much each
+appeals, what they remember, and their recent thoughts. **Follow** keeps the
+camera on them, **Heal** mends them (not the dead), **Uncuff** lets somebody
+in handcuffs go, **Put away** has them holster or pocket what is in their
+hand (and **Get it out** draws it again), **Remove** takes them away.
 
 The inspector is also where you change their mind:
 
@@ -297,7 +318,9 @@ The game has a few ways in that change nothing until a mod uses them:
 - for monsters and bosses: a species can be `mindless` (no brain - its own
   hooks do the thinking, and `inspect` says what the inspector shows),
   `steadfast` (nothing knocks it down or cuts anything off), a `monster`
-  (fought or fled, never befriended), `mute`; it can `pose` its own joints,
+  (fought or fled, never befriended, and nothing the law cares about),
+  `tireless` (it never runs out of breath), `mute`; it can `zap` (how a
+  taser takes it), `pose` its own joints,
   give a `proxy` box to bump into, say who it is `hostileTo`, whether it is
   `reachable`, what it `deflects` and whose blows it `spares`, draw its whole
   body itself (`skin.full`), and put up a `bossbar`; any species can weigh a
@@ -586,7 +609,22 @@ but not against something urgent, like someone coming at them. The options:
 | **Sit on a crate** | calm, bored, and not one for wandering: climbs up and sits on the edge for a while (two can share, one on each side) |
 | **Celebrate** | just won |
 | **Panic** | terrified and has no idea why |
-| **Wander**, **stand around** | nothing better to do: arms crossed, hands on hips, tapping a foot, yawning, kicking the dirt, stretching, shadowboxing |
+| **Wander**, **stand around** | nothing better to do: arms crossed, hands on hips, tapping a foot, yawning, kicking the dirt, stretching, shadowboxing, cracking their knuckles, a hand to the chin, bouncing on their toes |
+| **Catch their breath** | out of breath, and nobody coming for them: bent over, hands on their knees, until it comes back |
+| **Put on a vest** | there is one lying about, and shots going off (or they are the careful sort): over it goes, the straps pulled tight |
+| **Fill up** from an ammo box | a pistol running low, and a box in sight |
+| **Tell an officer** | they saw a crime, or it was done to them: they go and find one, point, and tell them who did what |
+| **Do as they are told** | an officer has told them to stop, and they are frightened, sensible or outgunned enough: the weapon dropped, hands up, down on their knees |
+| **Run from the police**, or fight them | told to stop, and bold enough to run, or angry and reckless enough to fight |
+| **Sit tight** | in handcuffs |
+
+An officer has a few more of their own:
+
+| Behaviour | When |
+| --------- | ---- |
+| **Deal with** someone | they saw them commit a crime, heard their shots, or were told about it: closes in, "Police! Stop!" - and a moment to do as they are told - then the taser for anyone who runs or fights, hands-on once it is empty, and the M1911 only for someone about to kill somebody, never through anybody else. Whoever is down or has given up is knelt over and cuffed, and it is called in on the radio |
+| **Walk the beat** | nothing going on: along a bit, a look round, a word into the radio |
+| **Let them go** | somebody they cuffed for something small has sat there long enough: a warning, and the cuffs off (never for a shooting or a killing) |
 
 **React.** A punch they see coming may get a block or a step back. A crate, a
 set of knuckles or a knife flying at them may get a duck or a jump. A blow
@@ -596,9 +634,12 @@ if someone dangerous is standing over them; trapped under a crate they shout
 for help, and friends come.
 
 They also talk - out loud, in speech bubbles, with a babbling voice pitched to
-each of them - from 785 lines for 148 situations in `src/game/lines.js`, from
-small talk to "My leg! It's bent the wrong way!", "Don't shoot!", "Did you
-hear what Axl did?" and "My hand... it's gone. It's on the floor." - and
+each of them - from 1,120 lines for 204 situations in `src/game/lines.js`,
+from small talk to "My leg! It's bent the wrong way!", "Don't shoot!", "Did
+you hear what Axl did?", "My hand... it's gone. It's on the floor.", "Can
+we... take five?" and "I want a lawyer." (officers have a way of talking all
+their own: "Police! Stop right there!", "Taser! Taser!", "Dispatch, one in
+custody.") - and
 think in pictures, in thought bubbles: a fist, a crate, the knuckles, the
 knife, a tear, a question mark.
 
@@ -653,6 +694,110 @@ slide back and an empty case out of the side, which bounces and rolls on the
 floor and stays there. Empty, the slide locks back, and a reload takes about
 a second. Lying loose, a tap fires it, and it kicks itself across the floor.
 
+The **M1911** is the Glock's heavier cousin: seven .45 rounds and two spare
+magazines. Each round hits harder and keeps more of itself going through a
+body or a crate; it kicks harder, so it takes longer to come back on target,
+and it is louder.
+
+### Stamina, knockback and stumbling
+
+Everyone has **stamina** (`stickman.js`), from fresh to spent. Running uses
+it, a punch, a kick or a chop uses some, a jump, a block, taking a blow and a
+stumbling step use a little; it comes back when they stop - fastest lying or
+sitting, slower standing, slower still walking, not at all running - and
+slower for the hurt, the bleeding and the soft. Out of breath, a run is a
+jog and then little more than a walk, blows land softer, the aim will not
+keep still, they pant, and they are easier to knock off balance. In a fight
+somebody spent steps back out of reach to get some breath; with nobody
+coming for them they bend over, hands on their knees, until it is back.
+
+A blow sends whoever it lands on **back the way it was going**: by how hard
+it was and what it was - a jab rocks them, a cross or a kick moves them, a
+crate or a round into a vest shoves them - and against how much body (a tough
+one gives less). A hard enough one, or one on top of others, and they
+**stumble** (`stumble.js`). Nothing plays while they stumble: the body is an
+inverted pendulum balanced over its feet. As long as the point it is falling
+toward is over the feet, pressing down through them brings it to a stop;
+once it is past them, the trailing foot swings out to where the fall is
+going, and the next, and every step is worked out from the pendulum, each
+leg solved for where its foot has to be, the arms windmilling and the trunk
+thrown against it. Most people catch themselves in a step or two; pushed too
+hard, too tired, dizzy, hurt in the legs or backing into a crate, the steps
+cannot keep up, and over they go - into the ragdoll, moving exactly the way
+they were. Hit again while they are still stumbling, they usually go down.
+
+### Holsters and pockets
+
+Besides what is in their hand, a stickman carries a pistol or a taser in a
+**holster** on the near hip and something small - a knife, brass knuckles,
+a taser - in a **pocket**; an officer has a taser on the far side of the duty
+belt too, grip forward. Each is drawn on them where it is. With their hands
+full, something small they pick up goes straight in a pocket. With nothing
+to be armed for for a while (longer for the aggressive), what is in their
+hand goes away, with a hand down to the hip; trouble - somebody coming at
+them, somebody they are after, shots - and out comes the best thing they
+have on them for it: a gun for someone far off and dangerous, a knife up
+close, the taser or the knuckles for a scuffle - nobody pulls a gun over a
+shove. Killed, it all falls out of them onto the floor.
+
+### Vests, ammo boxes and the taser
+
+A **light vest** goes on over the head and covers the body - the torso, front
+and back, not the arms, the legs or the head. A pistol round that hits it is
+usually stopped: it lands like a hammer blow instead - a bruise, the wind
+knocked out of them, and a shove back that may send them stumbling - and
+leaves a dent in the vest. Every round it stops wears it down, and a worn-out
+one lets them through. Against a blade it takes the worst of it out, a stab
+less than a slash. An officer's is a navy police vest with POLICE across the
+chest.
+
+An **ammo box** holds pistol rounds for either pistol - the boxes are mixed.
+Anyone with a pistol running low, in the hand or the holster, goes over,
+crouches by it and takes what their spare magazines and the one in the gun
+will hold, until the box is empty.
+
+The **taser** (`taser.js`) is aimed and fired like a pistol, but what comes
+out is a pair of barbed probes on thin wires, spreading as they go and
+dropping a little. If both land in somebody - and not in their vest - five
+seconds of current go down the wires: every muscle locks at once, and they go
+over stiff as a board, shaking and yelling, the current crackling between
+the probes. Then they are dazed a little while longer, which is when an
+officer gets the cuffs on. One cartridge in it, two spares; while the probes
+are still in someone and the wires whole, another pull of the trigger gives
+them another five seconds. Out of cartridges, pressed against somebody it is a
+**drive stun**: it hurts like anything and takes the fight out of them, but
+it does not put them down. Lying on the floor, a tap fires it.
+
+### The law, and officers
+
+Every blow, shot and death comes past the law (`law.js`), and most of what
+people do to each other is a crime: **assault**, **assault with a weapon**,
+**tasing someone**, **threatening someone with a gun** (holding one on
+somebody who was doing nothing, more than a moment), **shots fired**,
+**shooting someone** and **murder**. Not hitting back at someone who went
+for you first - squaring up counts as going for somebody - and not stepping
+in against someone in the middle of hurting somebody else, and nothing an
+officer does in the line of duty. Monsters (a mod's) are not people to the
+law, either way.
+
+Whoever saw it remembers it. An **officer** who saw it - or heard the shots,
+which carry the width of the world - goes after whoever did it; everybody
+else tells the first officer they come across, or goes looking for one.
+Then (`police.js`) the officer closes in and tells them to stop - and they
+decide for themselves what to do about it, by who they are and what is
+pointed at them: the frightened and the sensible give up (the weapon dropped,
+hands up, down on their knees), the bold run, and the angry and the reckless
+fight. Whoever runs or fights gets the taser; if it misses, or the
+cartridges run out, it is hands-on. Somebody about to kill somebody - a gun
+on them, just fired, a blade going at them - gets the M1911 instead: "Drop
+the weapon!", and if they do not, they are shot, never through anybody else.
+Whoever is down, tased or has given up is knelt over and **cuffed**,
+whatever they had taken off them and put down out of their reach, and the
+officer calls it in on the radio. Cuffed, they sit on the floor with their
+hands behind their back, complaining; somebody cuffed for something small is
+let go with a warning after a while. Everyone else is relieved to see an
+officer turn up - except whoever has just done something.
+
 ### The hand
 
 Dragging grabs whatever is under your finger. A crate swings from the exact
@@ -674,12 +819,16 @@ that did it.
 ### Sound
 
 Punches, the ring of brass knuckles, a blade going in and being drawn across,
-a machete chop, gunshots (with the camera shaking), the click of an empty gun,
-the magazine out and in and the slide racked, brass cases tinkling on the
-floor, ricochets, a bullet going in, a limb coming off, a joint popping, steel
-into wood, crates, bodies hitting the floor, bones breaking, claps, screams
-and every stickman's babbling voice are synthesised with WebAudio on the
-spot. There are no sound files.
+a machete chop, gunshots (with the camera shaking, and the .45 deeper and
+longer than the 9 mm), the click of an empty gun, the magazine out and in and
+the slide racked, brass cases tinkling on the floor, ricochets, a bullet going
+in, a round smacking into a vest, the pop of a taser cartridge and the dry
+crackle of the current, a holster's leather, the velcro of a vest, the
+ratchet of handcuffs, a radio's squelch, feet scuffing as somebody stumbles,
+rounds rattling out of a box, knuckles cracking, a limb coming off, a joint
+popping, steel into wood, crates, bodies hitting the floor, bones breaking,
+claps, screams and every stickman's babbling voice are synthesised with
+WebAudio on the spot. There are no sound files.
 
 ---
 
@@ -699,7 +848,12 @@ stickfights/
       skeleton.js     joints, bones, poses, forward kinematics, the lowest point down
       clips.js        every animation, key by key
       animator.js     layers, crossfades, events, flipbook
-      stickman.js     the body: controller, states, strikes, hits, ragdolls, death
+      stickman.js     the body: controller, states, strikes, hits, knockback, stamina,
+                      holsters and pockets, vests, cuffs, ragdolls, death
+      stumble.js      stumbling: the pendulum, the steps, catching it or going over
+      taser.js        the taser, its probes and wires, and being tased
+      law.js          what counts as a crime, and who saw it
+      police.js       officers, the people they deal with, and what each of them does
       limp.js         a stickman as a ragdoll: masses, joint ranges, and back again
       health.js       parts, bones, blood, pain, consciousness, paralysis, stumps,
                       dislocations, gunshots, the face, shock
@@ -708,7 +862,8 @@ stickfights/
       emotions.js     the five emotions
       lines.js        everything they can say
       people.js       names, looks and personalities
-      props.js        crate, brass knuckles, knife, machete, pistol, severed limbs
+      props.js        crate, brass knuckles, knife, machete, the pistols, ammo boxes,
+                      vests, severed limbs
       hand.js         dragging and throwing
       fx.js           blood, dust, hit bursts, muzzle flashes, tracers, splinters, casings
       draw.js         drawing a stickman, wounds and stumps, a crate, every weapon
@@ -742,8 +897,9 @@ screen and checks:
 
 - stickmen are already moving about behind the title, and PLAY opens an empty
   sandbox with the spawn menu
-- the spawn menu has exactly six things in it: a Stickman, Brass Knuckles, a
-  Combat Knife, a Machete, a Glock-19 and a Crate
+- the spawn menu has exactly thirteen things in it: a Stickman, an Officer,
+  Brass Knuckles, a Combat Knife, a Machete, a Glock-19, an M1911, a Taser, a
+  Crate, a Light Vest and three Ammo Boxes
 - the background is grey and the ground is black (read off the canvas)
 - tapping the world places a stickman, a crate and a set of knuckles where it
   was tapped, and the crate falls and settles
@@ -800,8 +956,35 @@ screen and checks:
 - the padlock on a feeling locks it - six seconds of being calmed down and
   cheered up do not move it, while the others move - and tapped again it is
   free to change
-- there are over a hundred and ten clips and over seven hundred lines, and
+- there are over a hundred and forty clips and over a thousand lines, and
   good friends part with a hug or a high five
+- an Officer spawns in uniform with a police vest on, an M1911 in the
+  holster and a taser on the duty belt
+- somebody who attacks somebody else gets "Police! Stop!" from an officer,
+  then the taser or the cuffs: they end up cuffed, sat on the floor with
+  their hands together behind them, the crime answered for and the arrest
+  called in on the radio
+- an officer who only heard shots from across the world knows who fired, and
+  heads that way
+- a taser's probes put five seconds of current through someone - rigid as a
+  board, over they go - and tasing somebody who was doing nothing is a crime;
+  out of cartridges it is a drive stun, which hurts but does not lock them up
+- a light vest stops pistol rounds to the body: no hole, but a bruise and a
+  shove back, and the vest worn down; somebody who sees one lying about with
+  shots going off goes and puts it on
+- a pistol nobody needs goes back in its holster, and comes out again when
+  someone comes at them with a knife; with the hands full, brass knuckles go
+  in a pocket
+- the M1911 holds seven heavier rounds; the ammo boxes hold 30, 80 and 200,
+  and somebody with a pistol running low goes and fills up from one
+- running uses up stamina and slows them down, standing still gets it back,
+  and spent they stop to catch their breath, hands on their knees
+- a blow knocks them back, and a hard one sends them stumbling - some catch
+  it, some go down
+- the inspector shows an officer as one, everyone's stamina, the vest and
+  what is in the holster, the pocket and on the duty belt; somebody in
+  handcuffs says so, and Uncuff lets them go; Put away holsters a pistol,
+  and Get it out draws it again
 - no mod is in the game until it is installed; the MODS screen lists
   Murder Drones with what it adds and the storage it needs, which is what
   its files really take up; INSTALL fills a bar and then puts Uzi, N and V in

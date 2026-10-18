@@ -279,6 +279,8 @@ function makeSpecies(kind) {
     // how badly nanite acid eats them
     acid: disassembly ? 0.35 : 3,
     noPickup: disassembly,
+    // machines: they never run out of breath
+    tireless: true,
 
     init(man) {
       man.tint = OIL;

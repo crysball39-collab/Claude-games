@@ -789,6 +789,7 @@ button {
 
 /* a mod's people in the inspector */
 .chip.species { background: #6c3fc4; color: #fff; }
+.chip.officer { background: #1f2d52; color: #fff; }
 .ins-conds .arms { color: #d9c7ff; font-weight: 700; }
 #ins-abilities { margin-bottom: 2px; }
 .abil-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 3px 0 5px; }

@@ -45,7 +45,7 @@ export class FX {
   }
 
   /** The flash at a muzzle, pointing the way the shot went (a counter-clockwise from +x). */
-  flash(x, y, a) { this.flashes.push({ x, y, a, age: 0, life: 0.05, s: rand(0.8, 1.2) }); }
+  flash(x, y, a, k = 1) { this.flashes.push({ x, y, a, age: 0, life: 0.05, s: rand(0.8, 1.2) * k }); }
 
   /** The streak a bullet leaves along its path for an instant. */
   tracer(x0, y0, x1, y1) { this.tracers.push({ x0, y0, x1, y1, age: 0, life: 0.07 }); }

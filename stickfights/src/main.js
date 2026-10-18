@@ -16,6 +16,7 @@ import { UI } from './ui/ui.js';
 import { CLIPS } from './game/clips.js';
 import { LINES } from './game/lines.js';
 import { armOf } from './game/props.js';
+import { spawnOfficer } from './game/police.js';
 import * as Mods from './mods/index.js';
 
 const canvas = document.getElementById('view');
@@ -42,9 +43,9 @@ resize();
 
 /* --------------------------------- sound ---------------------------------- */
 
-const SCREAMS = new Set(['panic', 'hurtBig', 'flee', 'grabbed', 'grabbedAgain', 'broken', 'shot', 'severedSelf', 'chopped', 'gunshots', 'dislocatedSelf']);
+const SCREAMS = new Set(['panic', 'hurtBig', 'flee', 'grabbed', 'grabbedAgain', 'broken', 'shot', 'severedSelf', 'chopped', 'gunshots', 'dislocatedSelf', 'tased']);
 sb.on('hit', (e) => {
-  if (e.weapon === 'bullet') return;   // its own sound, from bulletHit
+  if (e.weapon === 'bullet' || e.weapon === 'vestRound') return;   // its own sound, from bulletHit (or vestStop)
   if (armOf(e.weapon)) {
     // a mod's weapon makes its own noise (the mod listens for it); the view still jumps
     if (!e.blocked && (e.power > 1.7 || e.fatal)) cam.shake(Math.min(0.6, 0.15 + e.power * 0.08));
@@ -71,10 +72,31 @@ sb.on('swing', (e) => {
 });
 sb.on('shot', (e) => {
   if (e.silent) return;   // a gun with a noise of its own (a mod's)
-  sound.gunshot(e.x);
+  const heavy = e.heavy || !!(e.gun && e.gun.spec && e.gun.spec.energy > 1.1);
+  sound.gunshot(e.x, heavy);
   // the closer it is to the middle of the view, the more the view jumps
-  cam.shake(0.08 + 0.18 / (1 + Math.abs(e.x - cam.x) / 4));
+  cam.shake((0.08 + 0.18 / (1 + Math.abs(e.x - cam.x) / 4)) * (heavy ? 1.3 : 1));
 });
+// the taser, the vest, the holster, the cuffs
+sb.on('taserFire', (e) => sound.taserFire(e.x));
+sb.on('taserTick', (e) => sound.crackle(e.x));
+sb.on('taserArc', (e) => sound.crackle(e.x, true));
+sb.on('driveStun', (e) => sound.crackle(e.x, true));
+sb.on('probeHit', (e) => sound.stab(0.2, e.x));
+sb.on('probeBlocked', (e) => sound.clink(2, e.x));
+sb.on('cartOut', (e) => sound.gunClick(e.x, 'magOut'));
+sb.on('cartIn', (e) => sound.gunClick(e.x, 'magIn'));
+sb.on('vestStop', (e) => { sound.vestStop(e.x); cam.shake(0.1); });
+sb.on('vestOn', (e) => sound.velcro(e.x));
+sb.on('stow', (e) => sound.holster(e.x));
+sb.on('drawWeapon', (e) => sound.holster(e.x, true));
+sb.on('cuffed', (e) => sound.cuffs(e.x));
+sb.on('uncuffed', (e) => sound.cuffs(e.x, true));
+sb.on('radio', (e) => sound.radio(e.x));
+sb.on('ammoTaken', (e) => sound.rattle(e.x));
+sb.on('knuckleCrack', (e) => sound.knuckleCrack(e.x));
+sb.on('stumbleStep', (e) => sound.scuff(e.x, e.speed));
+sb.on('stumbleFall', (e) => sound.thud(3 + e.speed, e.x));
 sb.on('dryFire', (e) => sound.dryFire(e.x));
 sb.on('magOut', (e) => sound.gunClick(e.x, 'magOut'));
 sb.on('magIn', (e) => sound.gunClick(e.x, 'magIn'));
@@ -124,6 +146,8 @@ function demo() {
   const b = sb.spawnStickman(-0.8, null, { traits: { sociability: 0.8, empathy: 0.7 } });
   const c = sb.spawnStickman(1.2, null, { traits: { sociability: 0.7, aggression: 0.3 } });
   sb.spawnStickman(4.6, null, { traits: { curiosity: 0.8 } });
+  // and an officer on the beat, for when it does
+  spawnOfficer(sb, 7.2);
   // a grudge, so something happens while the title is up
   a.brain.rel(c).anger = 0.75;
   a.brain.rel(c).like = -0.5;

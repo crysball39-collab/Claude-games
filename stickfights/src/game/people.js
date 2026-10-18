@@ -34,6 +34,8 @@ export function makePerson(o = {}, taken = []) {
     strength: o.strength || 0.85 + traits.toughness * 0.15 + rand(0, 0.12),
     toughness: traits.toughness,
     traits,
+    // a job: 'officer' (police.js)
+    role: o.role || null,
     // from a mod: a species, a look, lines of their own
     species: o.species || null,
     look: o.look || null,

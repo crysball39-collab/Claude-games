@@ -127,6 +127,8 @@
     <div class="ins-actions">
       <button id="ins-follow" class="small-btn">Follow</button>
       <button id="ins-heal" class="small-btn">Heal</button>
+      <button id="ins-uncuff" class="small-btn hidden">Uncuff</button>
+      <button id="ins-kit" class="small-btn hidden">Put away</button>
       <button id="ins-delete" class="small-btn danger">Remove</button>
     </div>
   </aside>
@@ -152,6 +154,10 @@
       <canvas class="card-icon" width="72" height="72"></canvas>
       <span class="card-text"><b>Stickman</b><small>Normal human. Thinks, feels, fights back.</small></span>
     </button>
+    <button class="card" data-spawn="officer">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Officer</b><small>Responds to crimes: tells them to stop, tases whoever won't, cuffs whoever gives up. Police vest, taser, M1911.</small></span>
+    </button>
     <div class="cat">WEAPONS</div>
     <button class="card" data-spawn="knuckles">
       <canvas class="card-icon" width="72" height="72"></canvas>
@@ -169,10 +175,34 @@
       <canvas class="card-icon" width="72" height="72"></canvas>
       <span class="card-text"><b>Glock-19</b><small>A pistol: 15 rounds and two spare magazines. Bullets go through people and crates. Tap it on the ground to fire it.</small></span>
     </button>
+    <button class="card" data-spawn="m1911">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>M1911</b><small>A .45: only 7 rounds, but each one hits harder and goes further through. Kicks like a mule.</small></span>
+    </button>
+    <button class="card" data-spawn="taser">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Taser</b><small>Two probes on wires: five seconds of locked muscles and down they go. A vest stops it. Empty, press it against them.</small></span>
+    </button>
     <div class="cat">OBJECTS</div>
     <button class="card" data-spawn="crate">
       <canvas class="card-icon" width="72" height="72"></canvas>
       <span class="card-text"><b>Crate</b><small>22 kg of wood. Stack it, climb it, throw it.</small></span>
+    </button>
+    <button class="card" data-spawn="vest">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Light Vest</b><small>Soft armour for the body. Stops most pistol rounds - they still hit like a hammer - and takes the worst out of a blade.</small></span>
+    </button>
+    <button class="card" data-spawn="ammoSmall">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Small Ammo Box</b><small>30 pistol rounds. Anyone running low comes over and fills up.</small></span>
+    </button>
+    <button class="card" data-spawn="ammoMedium">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Medium Ammo Box</b><small>80 pistol rounds in a plastic case.</small></span>
+    </button>
+    <button class="card" data-spawn="ammoBig">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Big Ammo Box</b><small>A steel can of 200 rounds. Heavy.</small></span>
     </button>
     <!-- whatever the installed mods add -->
     <div id="drawer-mods"></div>

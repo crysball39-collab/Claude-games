@@ -5,13 +5,17 @@ orientation, touch controls, no install, no build step, no assets on disk — ev
 texture in the game is drawn procedurally onto a canvas at load time.
 
 > This repository also holds **STICKFIGHTS**, a 2D sandbox on a grey background
-> and a black floor where you spawn stickmen, brass knuckles, combat knives,
-> machetes, Glock-19 pistols and crates, and the stickmen think, feel, remember,
-> talk, fight, break bones, lose limbs and die on their own - animated frame by
-> frame while they are in charge of their bodies, and ragdolls with real joints
-> when they are not - and you can change their feelings (or lock them where they
-> are), their personality and who they count as friends and enemies, and send
-> them to fight. Mods add what is not part of the game itself: **Murder Drones**
+> and a black floor where you spawn stickmen and police officers, brass
+> knuckles, combat knives, machetes, Glock-19 and M1911 pistols, tasers, light
+> vests, ammo boxes and crates, and the stickmen think, feel, remember, talk,
+> fight until they run out of breath, stumble, break bones, lose limbs and die
+> on their own - animated frame by frame while they are in charge of their
+> bodies, balancing on their feet when a blow knocks them back, and ragdolls
+> with real joints when they go over - holster and pocket what they are not
+> using, and answer to the officers, who go after whoever commits a crime with
+> a warning, a taser and a pair of handcuffs. You can change their feelings (or
+> lock them where they are), their personality and who they count as friends
+> and enemies, and send them to fight. Mods add what is not part of the game itself: **Murder Drones**
 > brings worker drone Uzi with her railgun, and disassembly drones N and V, who
 > crash-land out of the sky and have hands that turn into chainsaws, guns,
 > swords, claws, lasers and missiles, and tails full of nanite acid; **Minecraft**

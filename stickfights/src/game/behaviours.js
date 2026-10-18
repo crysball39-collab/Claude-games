@@ -86,11 +86,22 @@ export class Idle extends Behaviour {
       if (T.aggression > 0.6 && E.fear < 0.3) opts.push('shadowbox');
       if (T.aggression > 0.5 && E.joy > 0.5) opts.push('flex');
       if (b.sawSky && this.now - b.sawSky < 30) opts.push('lookUp', 'lookUp');
+      if (T.aggression > 0.55 && E.fear < 0.3) opts.push('crackKnuckles');
+      if (T.aggression > 0.55 && E.joy > 0.35 && h.mobility > 0.9 && me.stamina > 0.6) opts.push('bounce');
+      if (T.curiosity > 0.55 || E.sadness > 0.35) opts.push('think');
+      if (me.stamina < 0.45) opts.push('wipeBrow', 'wipeBrow');
+      // on duty: a word into the radio, a look up and down the street
+      if (me.officer) opts.push('radio', 'patrol', 'patrol');
       const a = pick(opts);
       if (a === 'lookAround') { me.facing = -me.facing; this.what = 'Looking around'; }
       else if (a === 'whistle') { me.setEmote('music', 2.2); this.what = 'Whistling'; }
       else if (a === 'bored') { b.speak('bored', {}, 0.7); this.what = 'Bored'; }
       else if (a === 'dance') { me.setPosture('dance'); this.pose = 'dance'; this.poseT = rand(2, 4); this.what = 'Dancing'; }
+      else if (a === 'think') { me.setPosture('think'); this.pose = 'think'; this.poseT = rand(2.5, 4.5); this.what = 'Thinking'; }
+      else if (a === 'bounce') { me.setPosture('bounce'); this.pose = 'bounce'; this.poseT = rand(2, 3.5); this.what = 'Keeping warm'; }
+      else if (a === 'crackKnuckles') { me.perform('crackKnuckles'); this.what = 'Cracking their knuckles'; }
+      else if (a === 'radio') { me.perform('radio'); b.speak('copIdle', {}, 0.6); this.what = 'Checking in on the radio'; }
+      else if (a === 'patrol') { me.facing = -me.facing; me.setPosture('handsOnHips'); this.pose = 'handsOnHips'; this.poseT = rand(2, 4); this.what = 'Keeping an eye on things'; }
       else if (a === 'armsCrossed' || a === 'handsOnHips' || a === 'shadowbox') {
         me.setPosture(a); this.pose = a; this.poseT = rand(2.5, 5);
         this.what = a === 'shadowbox' ? 'Shadowboxing' : 'Standing around';
@@ -407,6 +418,8 @@ export class Fight extends Behaviour {
     }
     r.foughtT = this.now;
     this.me.setEmote('anger', 2);
+    // squaring up to someone is going for them, as far as anybody watching (and the law) is concerned
+    this.sb.emit('squareUp', { who: this.me, target: o, x: this.me.pos.x, y: this.me.pos.y + 1 });
   }
   update(dt) {
     this.t += dt;
@@ -504,6 +517,14 @@ export class Fight extends Behaviour {
     const gunOnMe = o.aiming && o.aimTarget === me;
     if (gunOnMe && !this.rushed) { this.rushed = true; b.speak('rushGun', { other: o.name }, 0.8, o, true); }
     if (gunOnMe) this.cool = Math.min(this.cool, 0.15);
+    // spent: a step back, out of reach, to get some breath back before the next one
+    if (me.stamina < 0.1 && !gunOnMe && !(b.ordered && b.ordered.target === o) && d < reach + 0.6) {
+      me.goTo(o.pos.x - dir * (reach + 1.1), 'walk', { backpedal: true, face: o.pos.x });
+      this.cool = Math.max(this.cool, 0.6);
+      if (!this.puffed) { this.puffed = true; b.speak('tired', {}, 0.6); }
+      return true;
+    }
+    if (me.stamina > 0.3) this.puffed = false;
     // (stepping in starts inside the distance a blow can land from, so there is
     // no gap between the two where they would just stand and look at each other)
     if (d > reach + 0.12) {
@@ -536,6 +557,8 @@ export class Fight extends Behaviour {
       if (can.includes('hack')) choices.push(['hack', 3.5]);
       if (can.includes('kick') && d > 0.75) choices.push(['kick', (1.6 + T.skill) * (armed ? 0.5 : 1)]);
       if (can.includes('uppercut') && d < 0.82) choices.push(['uppercut', armed ? 4 : 2.5]);
+      // an empty taser still works pressed against them
+      if (can.includes('taserZap')) choices.push(['taserZap', 6]);
       if (choices.length) {
         let total = 0;
         for (const c of choices) total += c[1];
@@ -563,6 +586,16 @@ export class Fight extends Behaviour {
     if (r.anger < 0.12 && !b.isHostile(o) && this.t > 3 && !(b.ordered && b.ordered.target === o)) return false;
     if (me.posture === 'guard') me.setPosture(null);
     me.lookAt = o.wj.head;
+    // a taser with its probes still on the way: wait and see
+    if (g.kind === 'taser' && g.flying) { me.stop(); me.aimAt(o); return true; }
+    // ...or still in them: another five seconds, down the same wires
+    if (g.kind === 'taser' && g.hooked && g.shot.target === o) {
+      me.stop();
+      me.faceTo(o.pos.x);
+      me.aimAt(o);
+      if (!o.tased && !o.lying && this.now - g.lastShot > 0.9) me.fire();
+      return true;
+    }
     if (g.mag <= 0) {
       me.lowerGun();
       if (d < 3.5) me.goTo(me.pos.x - dir * 3, 'run');
@@ -934,17 +967,22 @@ export class Mourn extends Behaviour {
 
 /* ---------------------------------- things ---------------------------------- */
 
+const ARM_SAID = { knife: 'knife', machete: 'machete', glock: 'gun', m1911: 'gun', taser: 'taser' };
+const ARM_ICON = { knife: 'knife', machete: 'machete', glock: 'gun', m1911: 'gun', taser: 'taser' };
+
 export class Arm extends Behaviour {
   get kind() { return 'arm'; }
-  get label() { return 'Going for the ' + ({ knife: 'knife', machete: 'machete', glock: 'gun' }[this.target.kind] || 'brass knuckles'); }
-  get icon() { return { knife: 'knife', machete: 'machete', glock: 'gun' }[this.target.kind] || 'knuckles'; }
+  get label() { return 'Going for the ' + (ARM_SAID[this.target.kind] || 'brass knuckles'); }
+  get icon() { return ARM_ICON[this.target.kind] || 'knuckles'; }
   start() { this.tries = 0; }
   update(dt) {
     this.t += dt;
     const k = this.target, me = this.me, b = this.brain;
-    if (me.weapon) return false;
+    if (k.wornBy === me) return false;
+    // (hands full: only while one or the other can be put away)
+    if (me.weapon && !me.slotFor(k) && !me.slotFor(me.weapon)) return false;
     if (k.removed || k.wornBy || (k.stuckIn && k.stuckIn.person)) {
-      if (k.wornBy && k.wornBy !== me) b.note(`${k.wornBy.name} got the ${({ knife: 'knife', machete: 'machete', glock: 'gun' }[k.kind] || 'brass knuckles')} first.`);
+      if (k.wornBy && k.wornBy !== me) b.note(`${k.wornBy.name} got the ${ARM_SAID[k.kind] || 'brass knuckles'} first.`);
       return false;
     }
     if (me.acting) return true;
@@ -956,6 +994,76 @@ export class Arm extends Behaviour {
     me.facing = dir;
     if (me.ready && me.pickUp(k)) this.tries++;
     return this.tries < 4 && this.t < 15;
+  }
+}
+
+/* ------------------------------ kit: a vest, rounds, breath ------------------------------ */
+
+/** A vest on the floor: over to it, picked up, and on over the head. */
+export class GearUp extends Behaviour {
+  get kind() { return 'vest'; }
+  get label() { return this.me.donning ? 'Putting on a vest' : 'Going for the vest'; }
+  get icon() { return 'vest'; }
+  start() { this.tries = 0; }
+  update(dt) {
+    this.t += dt;
+    const v = this.target, me = this.me;
+    if (me.vest || v.removed) return false;
+    // picked up: going on (or somebody else got there first)
+    if (v.wornBy) return v.wornBy === me && me.donning === v;
+    if (me.acting) return true;
+    if (Math.abs(v.pos.y - me.pos.y) > 0.45) return this.t < 12 && arrive(me, v.pos.x, 'walk') === false;
+    const dir = sign(v.pos.x - me.pos.x) || me.facing;
+    const spot = v.pos.x - dir * 0.42 * me.scale;
+    if (!arrive(me, spot, this.brain.emo.fear > 0.4 ? 'run' : 'walk', 0.1)) return this.t < 15;
+    me.facing = dir;
+    // both hands for this: whatever is in one goes away first, if it can
+    if (me.weapon && me.slotFor(me.weapon)) { if (me.ready) me.stow(); return true; }
+    if (me.ready && me.pickUp(v)) this.tries++;
+    return this.tries < 4 && this.t < 15;
+  }
+}
+
+/** A pistol running low, and a box of rounds: over to it, down beside it, the magazines filled. */
+export class Resupply extends Behaviour {
+  get kind() { return 'ammo'; }
+  get label() { return 'Taking rounds from the ' + this.target.name.toLowerCase(); }
+  get icon() { return 'ammo'; }
+  start() { this.tries = 0; }
+  update(dt) {
+    this.t += dt;
+    const bx = this.target, me = this.me;
+    if (bx.removed || bx.empty || !me.guns.some((g) => g.kind !== 'taser' && g.short > 0)) return false;
+    if (me.acting) return true;
+    if (Math.abs(bx.pos.y - me.pos.y) > 0.45) return this.t < 12 && arrive(me, bx.pos.x, 'walk') === false;
+    const dir = sign(bx.pos.x - me.pos.x) || me.facing;
+    const spot = bx.pos.x - dir * (bx.spec.w / 2 + 0.3) * me.scale;
+    if (!arrive(me, spot, 'walk', 0.12)) return this.t < 15;
+    if (me.ready && me.takeAmmo(bx)) this.tries++;
+    return this.tries < 3 && this.t < 15;
+  }
+}
+
+/** Out of breath: bent over, hands on the knees, until it comes back - then up, and a deep one. */
+export class CatchBreath extends Behaviour {
+  get kind() { return 'catchBreath'; }
+  get label() { return 'Catching their breath'; }
+  get icon() { return 'sweat'; }
+  start() {
+    this.me.stop();
+    this.brain.speak('catchBreath', {}, 0.7);
+  }
+  update(dt) {
+    this.t += dt;
+    const me = this.me;
+    me.stop();
+    if (me.ready && me.posture !== 'handsOnKnees') me.setPosture('handsOnKnees');
+    return me.stamina < 0.7 && this.t < 14;
+  }
+  end() {
+    const me = this.me;
+    if (me.posture === 'handsOnKnees') me.setPosture(null);
+    if (me.stamina >= 0.7 && me.ready) { me.perform('catchBreath'); this.brain.speak('breathBack', {}, 0.5); }
   }
 }
 
@@ -1142,6 +1250,6 @@ export const KINDS = {
   fight: Fight, flee: Flee, hide: Hide, cower: Cower, confront: Confront, watch: Watch,
   help: Help, mourn: Mourn, arm: Arm, inspect: Inspect, play: Play, throw: ThrowCrate,
   investigate: Investigate, pullout: PullOut, throwKnife: ThrowKnife, exercise: Exercise,
-  surrender: Surrender,
+  surrender: Surrender, vest: GearUp, ammo: Resupply, catchBreath: CatchBreath,
 };
 

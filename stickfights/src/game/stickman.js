@@ -10,7 +10,9 @@
    States:
      stand    on their feet: idle, walking, running, fighting, emoting
      air      jumped or walked off something, and coming down feet first
-     stagger  rocked by a blow, trying to stay up
+     stagger  rocked by a blow, trying to stay up (with ragdolls off)
+     stumble  knocked off balance and stepping to catch it (stumble.js): no
+              clip, just the pendulum - they catch it, or go over
      down     on the floor and awake: falls there, lies there, gets up
      ko       out cold
      getup    the get-up animation
@@ -41,8 +43,10 @@ import { CLIPS, MASKS } from './clips.js';
 import { solve, makeJoints, bounds, JOINTS, BONES, DIM, HEAD_BONE, BELOW_BREAK, boneSegments, pointOnBone, angleOf } from './skeleton.js';
 import { Health, KO_LEVEL, SEVERABLE } from './health.js';
 import { makeRagdoll, aimMuscles, toJoints, refNear, lyingSide } from './limp.js';
-import { heldGunFrame, gunPoint, goneAt, GLOCK_MUZZLE, GLOCK_PORT } from './draw.js';
-import { isBlade, isGun, armOf } from './props.js';
+import { heldGunFrame, gunPoint, goneAt } from './draw.js';
+import { isBlade, isGun, armOf, Gun, GUN_MODELS } from './props.js';
+import { startStumble, updateStumble, stumblePose } from './stumble.js';
+import { updateTased } from './taser.js';
 import { clamp, clamp01, lerp, lerpAngle, rand, chance, moveToward, segDist, sign, smooth, wrapAngle, wobble, DEG } from '../core/util.js';
 
 export const G = 18;
@@ -63,7 +67,7 @@ const NOMINAL = { walk: strideSpeed('walk'), run: strideSpeed('run'), runScared:
 
 const LYING = new Set(['down', 'ko', 'crawl', 'dead']);
 const HIT_REACTIONS = new Set(['hitHead', 'hitBody', 'hitLow', 'flinch']);
-export const STILL_POSTURES = new Set(['sit', 'sitEdge', 'kneel', 'cry', 'beg', 'cower', 'handsUp', 'pushups', 'squats', 'jacks', 'armsCrossed', 'handsOnHips', 'clutchStomach', 'clutchArm', 'shiver', 'shock', 'clutchStump', 'coverHead']);
+export const STILL_POSTURES = new Set(['sit', 'sitEdge', 'kneel', 'cry', 'beg', 'cower', 'handsUp', 'pushups', 'squats', 'jacks', 'armsCrossed', 'handsOnHips', 'clutchStomach', 'clutchArm', 'shiver', 'shock', 'clutchStump', 'coverHead', 'handsOnKnees', 'kneelHands', 'sitCuffed', 'think']);
 /** Which part a ragdoll point belongs to, and which bone takes it when that point hits something. */
 const POINT_PART = {
   head: ['head', 'skull'], neck: ['torso', 'ribs'], chest: ['torso', 'ribs'], hip: ['torso', 'pelvis'],
@@ -82,6 +86,13 @@ const LIMB_OF = { humerusA: 'armA', forearmA: 'armA', humerusB: 'armB', forearmB
 const SEVER_FORCE = { forearm: 9, humerus: 13, tibia: 12, femur: 17 };
 // how far out along its limb each break point is, so a cut further in wins
 const CHAIN_AT = { midHumA: 1, midForeA: 3, midHumB: 1, midForeB: 3, midFemA: 1, midTibA: 3, midFemB: 1, midTibB: 3 };
+
+// how much breath each strike takes
+const STRIKE_COST = { jab: 0.04, cross: 0.062, uppercut: 0.08, kick: 0.1, stomp: 0.08, stab: 0.055, slash: 0.055, chop: 0.105, hack: 0.08, taserZap: 0.045 };
+// where each thing they carry can go when it is not in their hand: a holster
+// (or the waistband) for a pistol, a pocket for anything small, and on an
+// officer's duty belt, a holster of its own for the taser
+const SLOTS = { holster: new Set(['glock', 'm1911', 'taser']), duty: new Set(['taser']), pocket: new Set(['knife', 'knuckles', 'taser']) };
 
 const HELD_MIX = { arms: 1, legs: 0.35, core: 0.15 };
 const HELD_BY_LEG = { arms: 1, legs: 0.04, core: 0.04 };
@@ -180,6 +191,23 @@ export class Stickman {
     this.innate = null;       // a weapon that is part of them, while they have it out (props.js ARMS)
     this.gravity = 1;         // how much of their weight they fall with: a flier holds itself up
     this.afflictions = [];    // things at work on them over time: { update(man, dt), draw(ctx, man), label }
+
+    // breath: 1 fresh .. 0 spent. Running, fighting, jumping use it; standing about gets it back
+    this.stamina = 1;
+    this.exertT = -99;
+    this.breath = rand(0, 6);
+    // what they carry besides what is in their hand: a pistol in a holster (or the
+    // waistband), something small in a pocket - and on an officer, a taser on the duty belt
+    this.stowed = { holster: null, pocket: null, duty: null };
+    this.stowing = null;      // { item, slot }: on the way in
+    this.drawing = null;      // a slot: on the way out
+    this.vest = null;
+    this.donning = null;      // a vest going on
+    this.role = o.role || null;
+    this.cuffed = null;       // { by, t }: hands cuffed behind them
+    this.tased = null;        // { by, t, dur }: current going through them (taser.js)
+    this.stumble = null;      // the pendulum while they stumble (stumble.js)
+    this.knock = 0;           // seconds of being shoved back, the legs going with it
     if (this.species && this.species.init) this.species.init(this, o);
   }
 
@@ -209,6 +237,13 @@ export class Stickman {
   get armedWith() { return this.weapon ? this.weapon.kind : this.innate; }
   /** Not to be knocked down, sent flying, ragdolled or picked up: a mod's (a boss that floats). */
   get steadfast() { return !!(this.species && this.species.steadfast); }
+  get officer() { return this.role === 'officer'; }
+  /** How much of their usual pace, punch and speed of hand their breath leaves them. */
+  get effort() { return 0.74 + 0.26 * clamp01(this.stamina / 0.35); }
+  /** Something they carry, wherever it is: in the hand, or put away. */
+  carries(kind) { return (this.weapon && this.weapon.kind === kind) || Object.values(this.stowed).some((it) => it && it.kind === kind); }
+  /** Everything put away on them. */
+  get kit() { return Object.entries(this.stowed).filter(([, it]) => it); }
   /** Physics has them: flopping, flying, dangling. */
   get limp() { return !!this.rag; }
   get ragdolls() { return this.sandbox.settings.ragdoll !== false; }
@@ -218,7 +253,19 @@ export class Stickman {
     this.state = s;
     this.stateT = 0;
     if (s !== 'stand') { this.blocking = false; this.pushing = null; }
+    if (s !== 'stumble') this.stumble = null;
   }
+
+  /** Breath used. */
+  tire(amount) {
+    // (some of what a mod makes never runs out of breath: a machine, the undead)
+    if (this.species && this.species.tireless) return;
+    this.stamina = Math.max(0, this.stamina - amount * (1.15 - this.health.toughness * 0.3));
+    this.exertT = this.sandbox.time;
+  }
+
+  /** A point t of the way along bone b, in the world. */
+  bonePoint(b, t) { return pointOnBone(this.wj, b, t); }
 
   notify(type, data) {
     if (this.brain) this.brain.onBody(type, data || {});
@@ -257,12 +304,14 @@ export class Stickman {
   /** Which strikes their arms and legs can still throw. */
   strikes() {
     const h = this.health, out = [];
-    if (this.carrying || this.rag || this.reloading) return out;
+    if (this.carrying || this.rag || this.reloading || this.cuffed) return out;
     const w = this.armedWith;
     if (h.canUse('armB')) out.push('jab');
     if (h.canUse('armA')) {
       if (w === 'knife') out.push('stab', 'slash');
       else if (w === 'machete') out.push('chop', 'hack');
+      // a taser up close is pressed against them: a drive stun
+      else if (w === 'taser') out.push('taserZap');
       // a pistol up close is a lump of steel: a pistol-whip, no uppercuts
       else if (isGun(w)) out.push('cross');
       else out.push('cross', 'uppercut');
@@ -281,7 +330,9 @@ export class Stickman {
     const clip = CLIPS[kind];
     this.posture = this.posture === 'block' ? 'guard' : this.posture;
     this.blocking = false;
-    this.anim.act(kind, { fadeIn: 0.035, fadeOut: 0.12 });
+    // out of breath, a punch comes slower
+    this.anim.act(kind, { fadeIn: 0.035, fadeOut: 0.12, speed: this.effort });
+    this.tire(STRIKE_COST[kind] || 0.03);
     this.strike = { kind, def: clip.strike, hit: new Set(), landed: false, done: false, target };
     this.aim = 0;
     if (target && clip.strike.limb.startsWith('hand') && !clip.strike.rising && !clip.strike.sweep) {
@@ -305,12 +356,14 @@ export class Stickman {
   perform(name, o = {}) {
     if (!this.ready || !CLIPS[name]) return false;
     this.anim.act(name, { fadeIn: o.fadeIn ?? 0.1, fadeOut: o.fadeOut ?? 0.2, speed: o.speed ?? 1 });
-    if (CLIPS[name].mask !== 'upper') this.vel.x *= 0.2;
+    if (CLIPS[name].mask !== 'upper' && CLIPS[name].mask !== 'arms' && CLIPS[name].mask !== 'armA') this.vel.x *= 0.2;
+    if (name === 'dodge') this.tire(0.05);
     return true;
   }
 
   jump(vx, vy = 5.6) {
-    if (!this.ready || this.health.legsBroken || this.carrying) return false;
+    if (!this.ready || this.health.legsBroken || this.carrying || this.cuffed || this.stamina < 0.05) return false;
+    this.tire(0.045);
     this.anim.act('jumpCrouch', { fadeIn: 0.03, fadeOut: 0.04 });
     this.jumpPending = { t: 0.085, vx, vy: vy * (0.75 + this.health.mobility * 0.25) };
     return true;
@@ -318,7 +371,10 @@ export class Stickman {
 
   /** Bends down for something on the floor in front of them: knuckles, a knife. */
   pickUp(item) {
-    if (!this.ready || this.weapon || item.wornBy || this.carrying) return false;
+    if (!this.ready || item.wornBy || this.carrying || this.cuffed) return false;
+    // hands full: only if one of the two can go in a pocket or a holster first
+    if (this.weapon && item.kind !== 'vest' && !this.slotFor(item) && !this.slotFor(this.weapon)) return false;
+    if (item.kind === 'vest' && (this.vest || this.donning)) return false;
     if (this.species && this.species.canPickUp && !this.species.canPickUp(this, item)) return false;
     if (item.stuckIn && item.stuckIn.person) return false;
     if (!this.health.canUse('armA')) return false;
@@ -332,6 +388,123 @@ export class Stickman {
 
   /** How far in front of where a reaching hand lands x is. */
   handReachOf(x) { return (x - this.pos.x) * this.facing - 0.42 * this.scale; }
+
+  /* --------------------------- holsters and pockets --------------------------- */
+
+  /** Where something could be put away on them right now: a free slot it fits, or null. */
+  slotFor(item) {
+    if (!item || this.species) return null;
+    const order = item.kind === 'taser' ? (this.officer ? ['duty', 'holster', 'pocket'] : ['holster', 'pocket']) : ['holster', 'pocket'];
+    for (const k of order) if (SLOTS[k].has(item.kind) && !this.stowed[k] && (k !== 'duty' || this.officer)) return k;
+    return null;
+  }
+
+  /** Puts what is in their hand away: into its holster, or a pocket. Takes a moment. */
+  stow() {
+    const w = this.weapon;
+    if (!w || !this.ready || this.cuffed || this.reloading || this.stowing || this.drawing) return false;
+    const slot = this.slotFor(w);
+    if (!slot) return false;
+    this.lowerGun();
+    this.stowing = { item: w, slot };
+    this.anim.act(slot === 'pocket' ? 'pocket' : 'holster', { fadeIn: 0.06, fadeOut: 0.12 });
+    return true;
+  }
+
+  /** Gets something out of a holster or a pocket into the hand, if the hand is free. */
+  drawFrom(slot) {
+    const it = this.stowed[slot];
+    if (!it || this.weapon || !this.ready || this.cuffed || this.stowing || this.drawing || !this.health.canUse('armA') || this.cut.armA) return false;
+    this.drawing = slot;
+    this.anim.act(slot === 'pocket' ? 'unpocket' : 'drawGun', { fadeIn: 0.05, fadeOut: 0.12, speed: 0.85 + (this.brain ? this.brain.traits.skill : 0.5) * 0.4 });
+    return true;
+  }
+
+  /** Into a slot straight away, no hands needed (an officer's kit, at the start). */
+  equip(item, slot = null) {
+    const k = slot || this.slotFor(item);
+    if (!k || this.stowed[k]) return false;
+    item.wear(this);
+    this.stowed[k] = item;
+    return true;
+  }
+
+  /** Whatever slot something is in, it is not there any more (it was removed, or taken). */
+  unequip(item) {
+    for (const k of Object.keys(this.stowed)) if (this.stowed[k] === item) this.stowed[k] = null;
+    if (this.weapon === item) { this.weapon = null; this.aimTarget = null; this.reloading = false; }
+    if (this.stowing && this.stowing.item === item) this.stowing = null;
+  }
+
+  /** Everything put away falls out (they died): onto the floor by their hips. */
+  dropStowed(fling = 0.5) {
+    const h = this.wj.hip;
+    for (const k of Object.keys(this.stowed)) {
+      const it = this.stowed[k];
+      if (!it) continue;
+      this.stowed[k] = null;
+      it.drop(h.x + rand(-0.15, 0.15), Math.max(h.y, 0.15), this.vel.x + rand(-1, 1) * fling, rand(0.3, 1.5) * fling);
+      this.sandbox.emit('drop', { who: this, item: it });
+    }
+    this.stowing = null;
+    this.drawing = null;
+  }
+
+  /** A vest, picked up off the floor, going on over the head. */
+  wearVest(v) {
+    if (this.vest || this.cuffed) return false;
+    this.donning = v;
+    v.wear(this);
+    this.anim.act('vestOn', { fadeIn: 0.08, fadeOut: 0.18 });
+    return true;
+  }
+
+  /** Down to the ammo box beside them, for a handful of rounds. */
+  takeAmmo(box) {
+    if (!this.ready || this.cuffed || !box || box.removed || box.empty) return false;
+    if (Math.abs(box.pos.x - this.pos.x) > 0.95) return false;
+    this.facing = sign(box.pos.x - this.pos.x);
+    this.ammoBox = box;
+    this.anim.act('ammoGrab', { fadeIn: 0.08, fadeOut: 0.18 });
+    this.vel.x = 0;
+    return true;
+  }
+
+  /** The guns they carry, in the hand or put away. */
+  get guns() { return [this.weapon, ...Object.values(this.stowed)].filter((g) => g && (g instanceof Gun || g.kind === 'taser')); }
+
+  /** Handcuffed, by an officer: whatever they had is taken off them first. */
+  cuff(by) {
+    if (this.cuffed || this.dead) return false;
+    this.cuffed = { by, t: this.sandbox.time };
+    this.strike = null;
+    this.blocking = false;
+    this.lowerGun();
+    this.dropCarried();
+    const where = by ? by.pos.x - sign(this.pos.x - by.pos.x) * 0.6 : this.pos.x;
+    const taken = [this.weapon, ...Object.values(this.stowed)].filter(Boolean);
+    this.weapon = null;
+    for (const k of Object.keys(this.stowed)) this.stowed[k] = null;
+    this.stowing = this.drawing = null;
+    // put down behind the officer, out of their reach
+    for (const it of taken) it.drop(where + rand(-0.2, 0.2), 0.2, 0, 0.5);
+    if (this.posture === 'handsUp' || this.posture === 'beg' || this.posture === 'cower') this.posture = null;
+    if (this.rag) this.rebuildRag();
+    this.sandbox.emit('cuffed', { who: this, by, x: this.wj.handA.x, y: this.wj.handA.y, taken });
+    this.notify('cuffed', { by });
+    return true;
+  }
+
+  uncuff() {
+    if (!this.cuffed) return false;
+    const by = this.cuffed.by;
+    this.cuffed = null;
+    if (this.posture === 'sitCuffed') this.posture = null;
+    if (this.rag) this.rebuildRag();
+    this.sandbox.emit('uncuffed', { who: this, by, x: this.wj.handA.x, y: this.wj.handA.y });
+    this.notify('uncuffed', { by });
+    return true;
+  }
 
   dropWeapon(fling = 0) {
     const w = this.weapon;
@@ -423,9 +596,10 @@ export class Stickman {
     if (!g) return this.species && this.species.fire ? this.species.fire(this) : false;
     if (g.fire) return g.fire(this);
     const now = sb.time;
-    if (now - g.lastShot < 0.11) return false;
-    const frame = heldGunFrame(this.wj, this.scale, this.facing);
-    const m = gunPoint(frame, GLOCK_MUZZLE.x, GLOCK_MUZZLE.y);
+    const spec = g.spec || GUN_MODELS.glock;
+    if (now - g.lastShot < spec.cadence) return false;
+    const frame = heldGunFrame(this.wj, this.scale, this.facing, spec.grip);
+    const m = gunPoint(frame, spec.muzzle.x, spec.muzzle.y);
     if (g.mag <= 0) {
       if (now - (this.dryT || -9) > 0.4) { this.dryT = now; sb.emit('dryFire', { who: this, x: m.x, y: m.y }); }
       return false;
@@ -436,13 +610,13 @@ export class Stickman {
     a += gauss() * this.spread();
     g.mag--;
     g.lastShot = now;
-    this.recoil = 1;
-    sb.fx.flash(m.x, m.y, a);
-    const port = gunPoint(frame, GLOCK_PORT.x, GLOCK_PORT.y);
+    this.recoil = spec.kick;
+    sb.fx.flash(m.x, m.y, a, spec.kick > 1.2 ? 1.3 : 1);
+    const port = gunPoint(frame, spec.port.x, spec.port.y);
     sb.fx.casing(port.x, port.y, -this.facing * rand(1.2, 2.4), rand(2.4, 4));
     const target = this.aimTarget && this.aimTarget.kind === 'stickman' ? this.aimTarget : null;
-    sb.emit('shot', { who: this, gun: g, x: m.x, y: m.y, target, loud: true });
-    sb.shoot(this, m.x, m.y, a, { target });
+    sb.emit('shot', { who: this, gun: g, x: m.x, y: m.y, target, loud: true, heavy: spec.energy > 1.1 });
+    sb.shoot(this, m.x, m.y, a, { target, energy: spec.energy });
     return true;
   }
 
@@ -454,8 +628,12 @@ export class Stickman {
     s += Math.min(1, this.health.pain / 100) * 3 + Math.min(1, this.health.dizzy / 2) * 3;
     s += Math.min(1, Math.abs(this.vel.x) / 2) * 3;
     s += (1 - this.steady) * 4;
+    // out of breath, the sights will not keep still
+    s += (1 - clamp01(this.stamina / 0.5)) * 2.5;
+    // and a heavy pistol takes longer to come back down after each shot
+    const kick = this.weapon && this.weapon.spec ? this.weapon.spec.kick : 1, back = 0.35 * Math.max(1, kick);
     const since = this.sandbox.time - (this.weapon ? this.weapon.lastShot : this.lastShotT ?? -99);
-    if (since < 0.35) s += 3 * (1 - since / 0.35);
+    if (since < back) s += 3 * kick * (1 - since / back);
     if (!this.health.canUse('armB') || this.cut.armB) s *= 1.35;
     return s * DEG;
   }
@@ -463,11 +641,11 @@ export class Stickman {
   /** The empty magazine out and a full one in, if there is one: it takes a second or so, less for the practised. */
   reload() {
     const g = this.weapon;
-    if (this.armedWith !== 'glock' || this.reloading || g.spare <= 0 || g.mag >= 15) return false;
+    if (!g || !g.canReload || !g.canReload() || this.reloading || this.cuffed) return false;
     if (!(this.state === 'stand' && this.onGround && !this.anim.acting && !this.rag)) return false;
     if (!this.health.canUse('armA') || this.cut.armA) return false;
     const skill = this.brain ? this.brain.traits.skill : 0.5;
-    this.anim.act('reload', { fadeIn: 0.1, fadeOut: 0.15, speed: 0.75 + skill * 0.55 });
+    this.anim.act(g.kind === 'taser' ? 'reloadTaser' : 'reload', { fadeIn: 0.1, fadeOut: 0.15, speed: 0.75 + skill * 0.55 });
     this.reloading = true;
     this.sandbox.emit('reload', { who: this });
     return true;
@@ -597,9 +775,12 @@ export class Stickman {
     if (parried) { blocked = false; h = { ...h, bone: 'forearm' + part.slice(-1) }; }
     // some bodies are harder to hurt than others (a mod's)
     const armor = this.species && this.species.armor ? this.species.armor(this, h, part, weapon) : 1;
-    const dmg = 9 * h.power * MUL[part] * (blocked ? 0.3 : parried ? 0.85 : 1) * rand(0.85, 1.15) * armor;
+    // a vest takes the worst out of what lands on the body (a bullet's is in shot())
+    const vestK = part === 'torso' && this.vest && !blocked && !bullet && !burn && weapon !== 'vestRound' && h.kind !== 'fall'
+      ? (blade ? this.vest.bladeThrough(h.kind) : 0.85) : 1;
+    const dmg = 9 * h.power * MUL[part] * (blocked ? 0.3 : parried ? 0.85 : 1) * rand(0.85, 1.15) * armor * vestK;
     const res = this.health.hit(part, dmg, {
-      sharp: blocked ? sharp * 0.5 : sharp, deep: !!h.deep && !blocked, chop: chops && !blocked, shot: bullet || !!(spec && spec.shot),
+      sharp: (blocked ? sharp * 0.5 : sharp) * vestK, deep: !!h.deep && !blocked && vestK > 0.7, chop: chops && !blocked && vestK > 0.7, shot: bullet || !!(spec && spec.shot),
       bone: blocked ? null : h.bone || null, breakChance: h.kind === 'stomp' ? 0.06 : 0, strike: h.kind,
       burn, cutBy: spec ? spec.wound || null : null, cause: spec ? spec.cause || null : null,
       // (an arrow is not a bullet: one to the head does not have to be the end of them)
@@ -638,6 +819,13 @@ export class Stickman {
     if ((h.kind === 'kick' || h.kind === 'stomp') && !blocked && (h.bone === 'tibiaA' || h.bone === 'tibiaB' || h.bone === 'femurA' || h.bone === 'femurB') &&
       h.power > 1.3 && chance(0.07 * h.power)) this.dislocate('knee' + h.bone.slice(-1));
     if (dmg > 3) this.sandbox.fx.burst(h.x, h.y, h.power);
+    // a taser pressed against them: it does not put them down, but nothing hurts like it
+    if (weapon === 'taserZap' && !blocked && !wasDead) {
+      this.health.pain = Math.min(130, this.health.pain + 32);
+      this.tire(0.3);
+      this.sandbox.fx.sparks(h.x, h.y, 4);
+      this.sandbox.emit('driveStun', { who: this, by: h.by, x: h.x, y: h.y });
+    }
     this.hurtT = this.sandbox.time;
     this.sandbox.emit('hit', { who: this, by: h.by, part, power: h.power, blocked, armed: !!weapon, weapon,
       kind: h.kind, x: h.x, y: h.y, damage: dmg, fatal: res.fatal && !wasDead, object: h.object || null, deep: !!h.deep });
@@ -651,6 +839,8 @@ export class Stickman {
     // a blade cuts more than it shoves, and a bullet more still
     const shove = h.power * (blocked ? 0.25 : 1) * (weapon === 'knife' ? 0.55 : weapon === 'machete' ? 0.8 : bullet ? 0.35 : spec && spec.shove !== undefined ? spec.shove : 1);
     this.balance -= shove * (part === 'head' ? 0.36 : 0.27) * (1.2 - this.health.toughness * 0.35);
+    // taking one knocks the wind out of them a little
+    if (!blocked) this.tire(0.015 + dmg * 0.003);
     this.notify('hurt', { ...h, part, damage: dmg, blocked, res, weapon });
 
     if (res.broke) this.sandbox.emit('break', { who: this, part, bone: res.broke, by: h.by });
@@ -665,18 +855,32 @@ export class Stickman {
     if (res.ko && this.state !== 'held') { this.knockOut(h.dir, h.power, h); return res; }
     if (this.health.paralysed === 'all') { this.collapse(h.dir, shove, h); return res; }
 
+    // how far the blow sends them: a jab rocks them back, a hard one puts them back a step or two
+    const kb = this.knockback(h, shove, part, blocked);
     switch (this.state) {
       case 'stand':
       case 'stagger':
-      case 'getup':
+      case 'getup': {
         if (this.carrying && shove > 0.8) this.dropCarried();
         // shot, people go down: a leg that will not hold, or the body just giving way
         if (bullet && this.weapon && part === 'armA' && chance(0.6)) this.dropWeapon(1);
+        // how much it takes to put them off balance: less for the tired, the battered, the half-up
+        // (a jab never does it; a cross or a kick often does, an uppercut more often still)
+        const steady = (0.45 + this.balance * 0.6 + this.health.toughness * 0.3) * (0.55 + 0.45 * clamp01(this.stamina / 0.4)) * (this.state === 'getup' ? 0.6 : 1) * rand(0.85, 1.2);
         if ((res.broke || this.cut.legA || this.cut.legB) && this.health.legsBroken) this.knockDown(h.dir, shove, h);
         else if (bullet && chance((part.startsWith('leg') ? 0.55 : part === 'torso' ? 0.35 : 0.1) + Math.max(0, this.health.shots - 1) * 0.18)) this.knockDown(h.dir, shove + 0.5, h);
-        else if (this.balance < 0) this.knockDown(h.dir, shove, h);
-        else if (this.balance < 0.32 || shove > 1.7) this.staggerFrom(h.dir, shove);
-        else this.flinch(part, h.dir, shove, blocked);
+        else if (this.balance < -0.25) this.knockDown(h.dir, shove, h);
+        else if (this.state === 'stand' && this.canStumble && (this.balance < 0.32 || kb > steady)) {
+          this.flinchFace(part);
+          startStumble(this, h.dir * kb, { high: part === 'head' || part === 'torso', by: h.by });
+        } else if (this.balance < 0.32 || shove > 1.7) this.staggerFrom(h.dir, shove);
+        else { this.flinch(part, h.dir, shove, blocked); this.shoveBack(h.dir * kb * (blocked ? 0.5 : 1)); }
+        break;
+      }
+      case 'stumble':
+        // already reeling: another one on top is usually the end of it
+        startStumble(this, h.dir * kb, { high: part === 'head' || part === 'torso', by: h.by });
+        if (this.balance < 0) this.knockDown(h.dir, shove, h);
         break;
       case 'air':
         if (shove > 1.2) this.launch(h.dir * (1.5 + shove), 1 + shove * 0.6);
@@ -699,7 +903,33 @@ export class Stickman {
       this.anim.act(name, { fadeIn: 0.03, fadeOut: 0.2 });
       this.strike = null;
     }
-    this.vel.x += dir * shove * (blocked ? 0.5 : 0.8);
+    if (blocked) this.tire(0.03);
+  }
+
+  /** Just the face of it, for a blow that sends them stumbling (the stumble does the rest). */
+  flinchFace() { this.strike = null; this.anim.freeze = Math.max(this.anim.freeze, 0.03); }
+
+  /** Can a blow put them off balance, rather than straight down or not at all? */
+  get canStumble() {
+    return !this.steadfast && !this.carrying && !this.rag && this.health.canUse('legA') && this.health.canUse('legB') && !this.cuffed && this.onGround;
+  }
+
+  /**
+   * How fast a blow sends them back, in m/s: by how hard it was and what it
+   * was - a fist, a boot, a round - and against how much body (a light one
+   * goes further; a tough one gives less).
+   */
+  knockback(h, shove, part, blocked) {
+    const k = h.kind === 'shot' ? 1.15 : h.kind === 'impact' ? 0.95 : 1.1;
+    const kb = shove * k * (blocked ? 0.45 : 1) * (part === 'legA' || part === 'legB' ? 0.6 : 1) * (1.12 - this.health.toughness * 0.25) / Math.sqrt(this.scale);
+    return clamp(kb, 0, 6);
+  }
+
+  /** Shoved back by a blow, the legs going with it rather than fighting it, for a moment. */
+  shoveBack(vx) {
+    if (this.steadfast || Math.abs(vx) < 0.05) return;
+    this.vel.x += vx;
+    this.knock = Math.max(this.knock, 0.16 + Math.abs(vx) * 0.12);
   }
 
   staggerFrom(dir, shove) {
@@ -881,6 +1111,18 @@ export class Stickman {
   shot(by, hit, dx, dy, energy) {
     const bone = this.boneName(hit.bone, hit.tb);
     const part = hit.part;
+    const sb0 = this.sandbox;
+    // in the body, with a vest on: it may stop there - and still land like a hammer
+    if (part === 'torso' && this.vest && energy > 0.2) {
+      const t = hit.bone === 0 ? hit.tb * 0.5 : 0.5 + hit.tb * 0.5;
+      const front = sign(dx) !== this.facing;
+      if (this.vest.stopsRound(energy, t, front ? 1 : -1)) {
+        sb0.fx.dust(hit.x, hit.y, 3, 0.35);
+        this.takeHit({ by, part, x: hit.x, y: hit.y, dir: sign(dx) || 1, power: 1.15 * energy, kind: 'shot', weapon: 'vestRound', bone: 'ribs' });
+        sb0.emit('vestStop', { who: this, by, x: hit.x, y: hit.y, energy });
+        return 0;
+      }
+    }
     const stop = (part === 'torso' ? 0.64 : part === 'head' ? 0.68 : 0.4) * rand(0.8, 1.2);
     const left = energy - stop;
     const through = left > 0.15;
@@ -903,6 +1145,9 @@ export class Stickman {
     this.strike = null;
     this.dropCarried();
     if (this.weapon) this.dropWeapon(0.5);
+    this.dropStowed(0.4);
+    if (this.donning) this.finishVest();
+    this.tased = null;
     this.anim.stopAction(0.1);
     if (wasHeld) {
       this.setState('held');
@@ -950,6 +1195,8 @@ export class Stickman {
   heal() {
     if (this.dead) return false;
     this.health.heal();
+    this.stamina = 1;
+    this.tased = null;
     this.wounds.length = 0;
     this.headMarks.length = 0;
     this.face.blood = 0;
@@ -991,6 +1238,10 @@ export class Stickman {
     this.climbing = null;
     this.jumpPending = null;
     this.posture = null;
+    this.knock = 0;
+    this.stowing = null;
+    this.drawing = null;
+    if (this.donning) this.finishVest();
     this.stop();
     this.anim.stopAction(0.05);
     this.toneLeft = 1;
@@ -1065,6 +1316,7 @@ export class Stickman {
         break;
       }
       case 'thrown': {
+        if (this.tased) { clip = 'tased'; tone = 0.92; break; }
         if (awake) {
           // flailing in the air; arms out for the ground as it comes up; then tucked up on it
           const falling = this.vel.y < -1.5 && lowest < 1.2;
@@ -1083,12 +1335,14 @@ export class Stickman {
         clip = 'koBack';
         break;
       case 'down':
-        clip = this.lieSide === 'back' ? 'pinned' : 'lieFront';
-        tone = awake ? 0.12 : 0;
+        clip = this.tased ? 'tased' : this.lieSide === 'back' ? 'pinned' : 'lieFront';
+        tone = this.tased ? 0.85 : awake ? 0.12 : 0;
         break;
       default:
         break;
     }
+    // cuffed, the arms stay behind them whatever else the body does
+    if (this.cuffed && (clip === 'brace' || clip === 'flail' || clip === 'pinned' || clip === 'lieFront')) clip = 'cuffedDown';
     this.anim.play(clip, { blend: 0.2 });
     this.limpToneNow = tone;
     rag.friction = st === 'dead' || st === 'ko' || !awake ? 0.06 : 0.03;
@@ -1110,7 +1364,7 @@ export class Stickman {
     }
 
     if (st === 'thrown') {
-      if (awake && this.canLandStanding()) { this.landFromLimp(); return; }
+      if (awake && !this.tased && this.canLandStanding()) { this.landFromLimp(); return; }
       if (!rested) return;
       if (!this.alive) { this.setState('dead'); return; }
       if (!this.conscious) { this.setState('ko'); return; }
@@ -1514,6 +1768,9 @@ export class Stickman {
     // a mod's species has its own business every step, and so does whatever is eating at them
     if (this.species && this.species.update) this.species.update(this, dt);
     if (this.afflictions.length) this.afflictions = this.afflictions.filter((a) => a.update(this, dt) !== false);
+    // breath, used and got back; and current going through them, if a taser has them
+    this.updateStamina(dt);
+    if (this.tased) updateTased(this, dt);
     const h = this.health;
     const wasAlive = !h.dead;
     if (h.update(dt) && wasAlive) {
@@ -1569,6 +1826,7 @@ export class Stickman {
       case 'stand': this.updateStand(dt); break;
       case 'air': this.updateAir(dt); break;
       case 'stagger': this.updateStagger(dt); break;
+      case 'stumble': updateStumble(this, dt); break;
       case 'down': this.updateDown(dt); break;
       case 'ko': this.updateKO(dt); break;
       case 'getup': this.updateGetUp(dt); break;
@@ -1588,9 +1846,16 @@ export class Stickman {
 
     this.anim.update(dt);
     for (const ev of this.anim.events) this.animEvent(ev);
-    if (this.reloading && this.anim.actionName !== 'reload') this.reloading = false;
+    const an = this.anim.actionName;
+    if (this.reloading && an !== 'reload' && an !== 'reloadTaser') this.reloading = false;
+    // whatever was being put away, got out or put on, interrupted before it got there
+    if (this.stowing && an !== 'holster' && an !== 'pocket') this.stowing = null;
+    if (this.drawing && an !== 'drawGun' && an !== 'unpocket') this.drawing = null;
+    if (this.donning && an !== 'vestOn') this.finishVest();
     if (this.rag) { this.tickBubbles(dt); return; }
     const pose = this.anim.sample();
+    // stumbling, no clip: the pendulum says where everything is
+    if (this.state === 'stumble' && this.stumble) stumblePose(this, pose, dt);
     this.procedural(pose, dt);
     solve(pose, this.scale, this.joints);
     this.bendBreaks(this.joints);
@@ -1614,6 +1879,9 @@ export class Stickman {
   maxSpeed(kind) {
     let s = SPEEDS[kind] || SPEEDS.walk;
     s *= this.health.mobility * (this.species && this.species.speed ? this.species.speed : 1);
+    // out of breath, a run is a jog, and then not much more than a walk
+    if (kind === 'run' || kind === 'flee') s *= 0.58 + 0.42 * smooth(this.stamina / 0.45);
+    if (this.cuffed) s = Math.min(s, SPEEDS.walk * 0.9);
     if (this.carrying) s = Math.min(s, SPEEDS.walk * 0.8);
     if (this.posture === 'guard' && kind !== 'run' && kind !== 'flee') s = Math.min(s, SPEEDS.shuffle);
     return s;
@@ -1655,11 +1923,20 @@ export class Stickman {
       this.faceTo(it.face);
     }
     const accel = Math.abs(want) > Math.abs(this.vel.x) ? 14 : 18;
-    this.vel.x = moveToward(this.vel.x, want, accel * dt);
-    if (rooted) this.vel.x = moveToward(this.vel.x, 0, 10 * dt);
+    if (this.knock > 0) {
+      // shoved back by a blow: the feet slide and step with it, and only then take charge again
+      this.knock -= dt;
+      this.vel.x = moveToward(this.vel.x, 0, 4.5 * dt);
+    } else {
+      this.vel.x = moveToward(this.vel.x, want, accel * dt);
+      if (rooted) this.vel.x = moveToward(this.vel.x, 0, 10 * dt);
+    }
 
     // the base clip: on the move, or standing in some posture or mood
     const sp = Math.abs(this.vel.x);
+    // running takes breath, and so does carrying something heavy
+    if (sp > 2.6) this.tire(dt * (0.04 + 0.03 * (sp - 2.6)));
+    else if (this.carrying) this.tire(dt * 0.018);
     const back = sign(this.vel.x) !== this.facing;
     let name, speed = 1;
     if (sp > 2.6 && !back) {
@@ -1714,6 +1991,11 @@ export class Stickman {
       case 'shock': return 'shock';
       case 'clutchStump': return 'clutchStump';
       case 'coverHead': return 'coverHead';
+      case 'handsOnKnees': return 'handsOnKnees';
+      case 'kneelHands': return 'kneelHands';
+      case 'sitCuffed': return 'sitCuffed';
+      case 'bounce': return 'bounce';
+      case 'think': return 'think';
       default: break;
     }
     switch (this.mood) {
@@ -1804,14 +2086,15 @@ export class Stickman {
     const falling = this.anim.baseName === 'fallBack' || this.anim.baseName === 'fallFront';
     if (!falling || this.anim.baseDone) {
       let name;
-      if (pinned) { name = 'pinned'; this.lieSide = 'back'; }
+      if (this.tased) name = 'tasedFloor';
+      else if (pinned) { name = 'pinned'; this.lieSide = 'back'; }
       else if (this.health.paralysed === 'all') name = this.lieSide === 'back' ? 'koBack' : 'koFront';
       else if (this.health.pain > 45) name = this.lieSide === 'back' ? 'writheBack' : 'writheFront';
       else name = this.lieSide === 'back' ? 'lieBack' : 'lieFront';
       this.anim.play(name, { blend: 0.35 });
     }
     if (pinned) { this.downT = Math.max(this.downT, 0.4); return; }
-    if (this.health.paralysed === 'all') return;
+    if (this.health.paralysed === 'all' || this.tased) return;
     if (this.downT > 0 || (this.brain && this.brain.stayDown)) return;
     if (this.health.legsBroken) {
       this.setState('crawl');
@@ -1823,6 +2106,7 @@ export class Stickman {
   }
 
   getUp() {
+    this.tire(0.04);
     this.setState('getup');
     this.anim.play(this.lieSide === 'back' ? 'getUpBack' : 'getUpFront', { blend: 0.15, restart: true, speed: 0.8 + this.health.mobility * 0.3 });
     this.sandbox.emit('getup', { who: this });
@@ -1896,6 +2180,7 @@ export class Stickman {
     h.prev.x = h.target.x; h.prev.y = h.target.y;
     this.vel.x = h.vx;
     this.vel.y = h.vy;
+    if (this.conscious) this.tire(dt * 0.025);
     // a pendulum hanging from the hand: dragging it sideways swings the body
     const L = 0.9 * this.scale;
     const s = h.swing;
@@ -1936,7 +2221,7 @@ export class Stickman {
     const sb = this.sandbox;
     const lying = this.lying || this.state === 'thrown' && !this.conscious;
     const hw = (lying ? 0.12 : HALF_W) * this.scale;
-    const walking = this.state === 'stand' || this.state === 'crawl';
+    const walking = this.state === 'stand' || this.state === 'crawl' || this.state === 'stumble';
 
     this.vel.y -= G * this.gravity * dt;
     if (this.onGround && !walking) this.vel.x = moveToward(this.vel.x, 0, (lying ? 9 : 6) * dt);
@@ -2138,7 +2423,7 @@ export class Stickman {
       for (const p of pts) { hit = o.touch(p.x, p.y, r); if (hit) break; }
       if (!hit) continue;
       s.hit.add(o);
-      this.landHit(o, hit, speed, s, armed ? this.armedWith : null);
+      this.landHit(o, hit, speed, s, armed ? (s.kind === 'taserZap' ? 'taserZap' : this.armedWith) : null);
     }
     for (const c of sb.crates) {
       if (s.hit.has(c) || c.carriedBy || c.removed) continue;
@@ -2178,7 +2463,7 @@ export class Stickman {
     // brass on the fist nearly doubles a punch; so does a pistol butt
     const spec = armOf(weapon);
     const mult = weapon === 'knuckles' ? 1.9 : isGun(weapon) ? 1.5 : spec && spec.mult ? spec.mult : 1;
-    const power = d.power * sp * limbOK * this.strength * fury * mult * clamp(this.health.mobility + 0.2, 0.6, 1);
+    const power = d.power * sp * limbOK * this.strength * fury * mult * clamp(this.health.mobility + 0.2, 0.6, 1) * this.effort;
     s.landed = true;
     const bladed = isBlade(weapon) || !!(spec && spec.blade);
     o.takeHit({
@@ -2204,8 +2489,30 @@ export class Stickman {
       this.wantItem = null;
       if (item && !item.wornBy && !item.removed && !(item.stuckIn && item.stuckIn.person)) {
         const h = this.wj.handA;
-        if (Math.hypot(item.pos.x - h.x, item.pos.y - h.y) < 0.55) {
+        if (Math.hypot(item.pos.x - h.x, item.pos.y - h.y) < 0.6) {
           if (item.stuckIn) item.unstick();
+          // a vest goes on, over the head
+          if (item.kind === 'vest') {
+            this.wearVest(item);
+            sb.emit('pickup', { who: this, item });
+            return;
+          }
+          // hands full: the new thing straight into a pocket - or the old one into its holster
+          if (this.weapon) {
+            const k = this.slotFor(item);
+            if (k) {
+              item.wear(this);
+              this.stowed[k] = item;
+              sb.emit('pickup', { who: this, item, slot: k });
+              this.notify('pocketed', { item });
+              return;
+            }
+            const k2 = this.slotFor(this.weapon);
+            if (!k2) return;
+            this.stowed[k2] = this.weapon;
+            this.weapon = null;
+            this.aimTarget = null;
+          }
           item.wear(this);
           this.weapon = item;
           sb.emit('pickup', { who: this, item });
@@ -2262,8 +2569,55 @@ export class Stickman {
     } else if (ev === 'magOut' || ev === 'rack') {
       sb.emit(ev, { who: this, x: this.wj.handA.x, y: this.wj.handA.y });
     } else if (ev === 'magIn') {
-      if (this.armedWith === 'glock') this.weapon.reload();
+      if (this.weapon instanceof Gun) this.weapon.reload();
       sb.emit('magIn', { who: this, x: this.wj.handA.x, y: this.wj.handA.y });
+    } else if (ev === 'cartOut') {
+      const g = this.weapon;
+      if (g && g.kind === 'taser' && g.shot) g.shot.cut();
+      sb.emit('cartOut', { who: this, x: this.wj.handA.x, y: this.wj.handA.y });
+    } else if (ev === 'cartIn') {
+      if (this.weapon && this.weapon.kind === 'taser') this.weapon.reload();
+      sb.emit('cartIn', { who: this, x: this.wj.handA.x, y: this.wj.handA.y });
+    } else if (ev === 'stow') {
+      const st = this.stowing;
+      this.stowing = null;
+      if (st && this.weapon === st.item && !this.stowed[st.slot]) {
+        this.weapon = null;
+        this.aimTarget = null;
+        // a taser put away pulls its wires off
+        if (st.item.kind === 'taser' && st.item.shot) st.item.shot.cut();
+        this.stowed[st.slot] = st.item;
+        sb.emit('stow', { who: this, item: st.item, slot: st.slot, x: this.wj.hip.x, y: this.wj.hip.y });
+      }
+    } else if (ev === 'draw') {
+      const k = this.drawing;
+      this.drawing = null;
+      const it = k ? this.stowed[k] : null;
+      if (it && !this.weapon) {
+        this.stowed[k] = null;
+        this.weapon = it;
+        sb.emit('drawWeapon', { who: this, item: it, slot: k, x: this.wj.hip.x, y: this.wj.hip.y });
+        this.notify('drew', { item: it });
+      }
+    } else if (ev === 'vestOn') {
+      this.finishVest();
+    } else if (ev === 'ammo') {
+      const box = this.ammoBox;
+      this.ammoBox = null;
+      if (box && !box.removed && Math.abs(box.pos.x - this.pos.x) < 1.2) {
+        let got = 0;
+        for (const g of this.guns) if (g instanceof Gun) got += g.topUp(box.take(g.short));
+        sb.emit('ammoTaken', { who: this, box, n: got, x: box.pos.x, y: box.pos.y });
+        this.notify('ammo', { n: got, box });
+      }
+    } else if (ev === 'cuff') {
+      const o = this.cuffing;
+      this.cuffing = null;
+      if (o && !o.removed && !o.cuffed && Math.abs(o.wj.hip.x - this.pos.x) < 1.4) o.cuff(this);
+    } else if (ev === 'drop') {
+      if (this.weapon) this.dropWeapon(0.3);
+    } else if (ev === 'crack' || ev === 'radio') {
+      sb.emit(ev === 'crack' ? 'knuckleCrack' : 'radio', { who: this, x: this.wj.handA.x, y: this.wj.handA.y });
     } else if (ev === 'pop') {
       if (this.popping) { this.popping.who.relocate(this.popping.joint, this); this.popping = null; }
     } else if (ev === 'tie') {
@@ -2280,6 +2634,36 @@ export class Stickman {
     } else if (this.species && this.species.animEvent) {
       this.species.animEvent(this, ev);
     }
+  }
+
+  /** The vest that was going on is on (or, if there is one already, back on the floor). */
+  finishVest() {
+    const v = this.donning;
+    if (!v) return;
+    this.donning = null;
+    if (this.vest || v.removed) { if (!v.removed && v.wornBy === this) v.drop(this.pos.x + this.facing * 0.3, 0.3); return; }
+    this.vest = v;
+    this.sandbox.emit('vestOn', { who: this, vest: v, x: this.wj.chest.x, y: this.wj.chest.y });
+    this.notify('vest', { vest: v });
+  }
+
+  /**
+   * Breath comes back while they are not using it: fastest lying or sitting,
+   * slower standing, slower still walking, not at all running - and slower
+   * for the hurt, the bleeding and the soft.
+   */
+  updateStamina(dt) {
+    if (this.dead) return;
+    const h = this.health;
+    this.breath += dt * (1.5 + 3.8 * (1 - this.stamina));
+    if (this.sandbox.time - this.exertT < 0.9) return;
+    const st = this.state, sp = Math.abs(this.vel.x);
+    let rate;
+    if (LYING.has(st) || st === 'getup') rate = 0.16;
+    else if (st === 'stand') rate = STILL_POSTURES.has(this.posture) ? 0.17 : sp > 2.6 ? 0 : sp > 0.2 ? 0.07 : 0.12;
+    else rate = 0.03;
+    rate *= (0.55 + h.toughness * 0.65) * clamp(h.overall + 0.25, 0.35, 1) * (h.pain > 60 ? 0.7 : 1) * (h.blood < 0.65 ? 0.55 : 1);
+    this.stamina = Math.min(1, this.stamina + rate * dt);
   }
 
   /**
@@ -2324,6 +2708,16 @@ export class Stickman {
       }
       // cracked ribs: hunched over them
       if (h.bones.ribs.broken) { p.s += 8 * DEG; p.t += 4 * DEG; }
+    }
+
+    // out of breath: the chest heaves, and the shoulders with it
+    const tired = 1 - clamp01(this.stamina / 0.5);
+    if (tired > 0 && (st === 'stand' || st === 'stumble') && this.conscious) {
+      const b = Math.sin(this.breath * 2);
+      p.t += b * 2.4 * DEG * tired;
+      p.h -= b * 2.6 * DEG * tired;
+      p.aAu += b * 2.2 * DEG * tired;
+      p.aBu += b * 2.2 * DEG * tired;
     }
 
     // limping: the bad leg stays stiff and the body dips onto it
@@ -2407,6 +2801,11 @@ export class Stickman {
     }
     if (h.paralysed !== 'none' && st === 'crawl') {
       p.lAu = lerp(p.lAu, 0, 0.9); p.lAl = 0; p.lBu = lerp(p.lBu, 0, 0.9); p.lBl = 0;
+    }
+    // cuffed: both hands held together behind the back, whatever the rest of them does
+    if (this.cuffed && st !== 'dead') {
+      p.aAu = -0.56 - p.t * 0.25; p.aAl = 1.02;
+      p.aBu = -0.63 - p.t * 0.25; p.aBl = 1.1;
     }
     if (this.species && this.species.procedural) this.species.procedural(this, p, dt);
   }
@@ -2542,7 +2941,8 @@ export class Stickman {
     f.brow = lerp(f.brow, clamp(-e.anger * 1.1 + Math.max(e.fear, e.sadness, pain * 0.8) * 0.9, -1, 1), k);
     f.browLift = lerp(f.browLift, Math.max(e.surprise, e.fear * 0.5), k);
     f.mouth = lerp(f.mouth, clamp(e.joy * 1.1 - e.sadness - e.fear * 0.5 - pain * 0.7 - e.anger * 0.25, -1, 1), k);
-    const open = Math.max(shouting ? 0.9 : 0, e.surprise > 0.4 ? e.surprise * 0.8 : 0, e.fear > 0.7 ? (e.fear - 0.5) * 1.4 : 0, pain > 0.8 ? 0.5 : 0);
+    const panting = this.stamina < 0.35 && (this.state === 'stand' || this.state === 'stumble') ? 0.2 + 0.14 * Math.sin(this.breath * 2) : 0;
+    const open = Math.max(shouting ? 0.9 : 0, e.surprise > 0.4 ? e.surprise * 0.8 : 0, e.fear > 0.7 ? (e.fear - 0.5) * 1.4 : 0, pain > 0.8 ? 0.5 : 0, panting, this.tased ? 0.6 : 0);
     f.open = lerp(f.open, open, k * 1.5);
     f.teeth = e.anger > 0.55 && f.open < 0.2 || (pain > 0.5 && pain < 0.8 && f.open < 0.2);
     f.tears = crying ? (f.tears + dt * 1.3) % 1 || 0.001 : 0;

@@ -866,6 +866,196 @@ clip('coverHead', { loop: true, frames: [
 ] });
 
 /* -------------------------------------------------------------------------- */
+/*                                out of breath                               */
+/* -------------------------------------------------------------------------- */
+
+// bent over, hands on the thighs, heaving
+const KNEES = P({ t: 55, s: 8, h: -12, aA: [-8, 10], aB: [-6, 14], lA: [55, -80], lB: [40, -78] });
+clip('handsOnKnees', { loop: true, frames: [
+  [0.42, KNEES],
+  [0.42, tweak(KNEES, { t: 58, h: -6, aA: [-7, 12], aB: [-5, 16] })],
+] });
+
+// upright again, a hand on the chest, a few deep breaths
+clip('catchBreath', { frames: [
+  [0.3, P({ t: 8, h: -8, aA: [24, 118], aB: [-4, 10] })],
+  [0.5, P({ t: 4, h: -14, aA: [26, 122], aB: [-3, 12], lift: 0.008 })],
+  [0.5, P({ t: 10, h: -4, aA: [24, 118], aB: [-4, 10] })],
+  [0.5, P({ t: 4, h: -14, aA: [26, 122], aB: [-3, 12], lift: 0.008 })],
+  [0.3, STAND],
+] });
+
+// caught their balance: arms out to the sides a moment, then down
+clip('steady', { mask: 'upper', frames: [
+  [0.1, P({ t: 4, h: -6, aA: [84, 10], aB: [76, 12] })],
+  [0.35, P({ t: 2, h: -2, aA: [80, 14], aB: [72, 16] })],
+  [0.3, STAND],
+] });
+
+// shaking it off: the head, then the shoulders
+clip('shakeOff', { mask: 'upper', frames: [
+  [0.08, P({ h: -14, aA: [12, 20], aB: [-8, 18] })], [0.08, P({ h: 12 })], [0.08, P({ h: -12 })], [0.08, P({ h: 10 })],
+  [0.14, P({ t: -4, aA: [20, 30], aB: [16, 30] })], [0.2, STAND],
+] });
+
+// light on the toes, the way a boxer keeps warm
+clip('bounce', { loop: true, frames: [
+  [0.18, P({ t: 6, h: 2, aA: [40, 112], aB: [52, 104], lA: [14, -14], lB: [-12, -14], lift: 0.035, fA: 14, fB: 14 })],
+  [0.18, P({ t: 7, h: 3, aA: [42, 116], aB: [54, 108], lA: [12, -22], lB: [-10, -22] })],
+] });
+
+clip('crackKnuckles', { mask: 'upper', frames: [
+  [0.2, P({ t: 2, h: 10, aA: [60, 70], aB: [64, 66] })],
+  [0.1, P({ t: 2, h: 12, aA: [62, 76], aB: [62, 72] }), 'crack'],
+  [0.2, P({ t: 2, h: 10, aA: [60, 70], aB: [64, 66] })],
+  [0.1, P({ t: 2, h: 12, aA: [62, 76], aB: [62, 72] }), 'crack'],
+  [0.25, STAND],
+] });
+
+// a hand to the chin, mulling it over
+clip('think', { loop: true, frames: [
+  [1.1, P({ t: 4, h: 10, aA: [25, 155], aB: [12, 92] })],
+  [1.1, P({ t: 5, h: 14, aA: [26, 152], aB: [13, 94] })],
+] });
+
+/* -------------------------------------------------------------------------- */
+/*                         holsters, pockets and kit                          */
+/* -------------------------------------------------------------------------- */
+
+// the near hand down to the hip, the pistol pushed home, the hand away
+clip('holster', { mask: 'armA', frames: [
+  [0.12, P({ aA: [28, 24] })],
+  [0.14, P({ aA: [-16, 40] }), 'stow'],
+  [0.12, P({ aA: [-10, 20] })],
+  [0.14, STAND],
+] });
+
+// and out again: down, a grip on it, up and forward
+clip('drawGun', { mask: 'armA', frames: [
+  [0.12, P({ aA: [-14, 36] })],
+  [0.06, P({ aA: [-16, 40] }), 'draw'],
+  [0.12, P({ aA: [6, 40] })],
+  [0.12, P({ aA: [28, 22] })],
+] });
+
+// into the front pocket, and out of it
+clip('pocket', { mask: 'armA', frames: [
+  [0.14, P({ aA: [24, 40] })],
+  [0.14, P({ aA: [8, 4] }), 'stow'],
+  [0.14, P({ aA: [10, 18] })],
+  [0.12, STAND],
+] });
+clip('unpocket', { mask: 'armA', frames: [
+  [0.14, P({ aA: [8, 4] })],
+  [0.06, P({ aA: [8, 6] }), 'draw'],
+  [0.14, P({ aA: [26, 40] })],
+  [0.12, P({ aA: [40, 60] })],
+] });
+
+// a vest on: over the head, pulled down, the straps tugged tight
+clip('vestOn', { frames: [
+  [0.24, P({ t: -4, h: -8, aA: [168, 22], aB: [162, 26] })],
+  [0.26, P({ t: -2, h: 4, aA: [128, 110], aB: [124, 114] })],
+  [0.14, P({ t: 4, h: 10, aA: [56, 110], aB: [52, 116] }), 'vestOn'],
+  [0.16, P({ t: 6, h: 14, aA: [42, 100], aB: [38, 104] })],
+  [0.12, P({ t: 6, h: 14, aA: [36, 86], aB: [34, 90] })],
+  [0.22, STAND],
+] });
+
+// down by an ammo box: a handful of rounds, thumbed into the magazines
+clip('ammoGrab', { frames: [
+  [0.22, P({ t: 42, h: 22, aA: [52, 10], aB: [44, 14], lA: [82, -112], lB: [56, -120] })],
+  [0.18, P({ t: 44, h: 24, aA: [56, 6], aB: [46, 12], lA: [82, -114], lB: [56, -122] }), 'ammo'],
+  [0.3, P({ t: 22, h: 26, aA: [52, 78], aB: [46, 84], lA: [40, -60], lB: [20, -50] })],
+  [0.25, P({ t: 10, h: 24, aA: [50, 80], aB: [44, 88] })],
+  [0.25, STAND],
+] });
+
+// the spent cartridge off the front of the taser, a fresh one on
+clip('reloadTaser', { mask: 'upper', frames: [
+  [0.14, P({ t: 6, h: 14, aA: [56, 74], aB: [46, 86] })],
+  [0.12, P({ t: 6, h: 16, aA: [56, 76], aB: [54, 92] }), 'cartOut'],
+  [0.22, P({ t: 8, h: 16, aA: [56, 76], aB: [-8, 32] })],
+  [0.2, P({ t: 6, h: 14, aA: [56, 76], aB: [56, 90] }), 'cartIn'],
+  [0.16, P({ t: 4, h: 8, aA: [70, 44], aB: [64, 60] })],
+] });
+
+/* -------------------------------------------------------------------------- */
+/*                                  the taser                                 */
+/* -------------------------------------------------------------------------- */
+
+// every muscle locked: straight as a board, fists tight to the chest, shaking
+const RIGID = P({ t: -6, h: -22, aA: [22, 104], aB: [18, 112], lA: [2, -1], lB: [-2, -1], fA: 24, fB: 24 });
+clip('tased', { loop: true, frames: [
+  [0.035, RIGID],
+  [0.035, tweak(RIGID, { t: -4, h: -18, aA: [26, 98], aB: [14, 116], lA: [3, -3] })],
+] });
+// on the floor while it goes on: jerking where they lie
+clip('tasedFloor', { loop: true, frames: [
+  [0.04, P({ rot: -90, t: -4, h: 18, aA: [40, 112], aB: [30, 120], lA: [8, -6], lB: [2, -4], fA: 20, fB: 20 })],
+  [0.04, P({ rot: -88, t: -2, h: 22, aA: [44, 104], aB: [26, 126], lA: [10, -10], lB: [4, -2], fA: 22, fB: 18 })],
+] });
+
+// pressed against them, a crackle: a short shove of the arm
+clip('taserZap', {
+  frames: [
+    [0.08, P({ t: 6, h: 4, aA: [40, 80], aB: [60, 100], lA: [22, -24], lB: [-20, -26] })],
+    [0.07, P({ t: 16, h: 4, x: 0.08, aA: [84, 8], aB: [50, 96], lA: [28, -16], lB: [-26, -10] })],
+    [0.12, P({ t: 16, h: 4, x: 0.08, aA: [82, 10], aB: [50, 96], lA: [28, -16], lB: [-26, -10] })],
+    [0.18, GUARD],
+  ],
+  strike: { limb: 'handA', from: 0.07, to: 0.24, power: 1, reach: 0.82, body: true },
+});
+
+/* -------------------------------------------------------------------------- */
+/*                               officers, arrests                            */
+/* -------------------------------------------------------------------------- */
+
+// "Stop!": the near hand out flat
+clip('commandStop', { mask: 'upper', frames: [
+  [0.1, P({ t: -2, h: -6, aA: [94, 22] })], [0.7, P({ t: -3, h: -8, aA: [96, 18] })], [0.2, STAND],
+] });
+// "Get down!": pointing at the floor in front of them
+clip('pointDown', { mask: 'upper', frames: [
+  [0.12, P({ t: 6, h: 10, aA: [52, 2] })], [0.6, P({ t: 7, h: 12, aA: [50, 0] })], [0.2, STAND],
+] });
+// talking into the radio clipped at the shoulder, head turned to it
+clip('radio', { mask: 'upper', frames: [
+  [0.16, P({ h: 14, aB: [64, 148] }), 'radio'], [1.1, P({ h: 16, aB: [66, 146] })], [0.2, STAND],
+] });
+// the other hand holding a weapon out, and letting it fall
+clip('dropIt', { mask: 'upper', frames: [
+  [0.2, P({ t: 6, h: 10, aA: [54, 12], aB: [70, 90] })],
+  [0.12, P({ t: 8, h: 12, aA: [50, 6], aB: [72, 92] }), 'drop'],
+  [0.25, P({ t: -2, h: 6, aA: [82, 96], aB: [72, 102] })],
+] });
+clip('salute', { mask: 'upper', frames: [
+  [0.16, P({ h: -4, aA: [148, 150] })], [0.6, P({ h: -6, aA: [150, 150] })], [0.2, STAND],
+] });
+
+// on both knees, fingers laced on the head: the way to be arrested
+clip('kneelHands', { loop: true, frames: [
+  [1, P({ t: 2, h: 6, aA: [160, 142], aB: [154, 146], lA: [0, -90], lB: [-4, -92] })],
+  [1, P({ t: 3, h: 8, aA: [161, 140], aB: [155, 144], lA: [0, -90], lB: [-4, -92] })],
+] });
+// down beside someone, knees on the floor, both hands at their wrists, the cuffs going on
+const CUFF_A = tweak(KNEEL, { t: 42, h: 32, aA: [58, 30], aB: [52, 34] });
+const CUFF_B = tweak(KNEEL, { t: 44, h: 34, aA: [64, 22], aB: [48, 42] });
+clip('cuffing', { frames: [
+  [0.3, CUFF_A], [0.24, CUFF_B], [0.24, CUFF_A], [0.2, CUFF_B, 'cuff'], [0.3, CUFF_A], [0.3, STAND],
+] });
+// cuffed and sat on the floor, hands behind
+clip('sitCuffed', { loop: true, frames: [
+  [1.4, tweak(SIT, { t: 6, h: 14, aA: [-34, 60], aB: [-38, 64] })],
+  [1.4, tweak(SIT, { t: 8, h: 18, aA: [-34, 62], aB: [-38, 66] })],
+] });
+// limp with the hands cuffed behind: what the ragdoll's arms aim for
+clip('cuffedDown', { loop: true, frames: [
+  [0.4, P({ t: 10, h: 10, aA: [-40, 60], aB: [-44, 64], lA: [30, -40], lB: [10, -30] })],
+  [0.4, P({ t: 12, h: 12, aA: [-40, 62], aB: [-44, 66], lA: [26, -44], lB: [14, -26] })],
+] });
+
+/* -------------------------------------------------------------------------- */
 /*                                  sampling                                  */
 /* -------------------------------------------------------------------------- */
 

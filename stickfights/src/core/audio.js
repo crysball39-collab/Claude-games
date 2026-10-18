@@ -163,14 +163,110 @@ export class Sound {
    * of it coming back off the walls a moment later, quieter each time. Loud
    * from anywhere; louder close to.
    */
-  gunshot(x) {
+  gunshot(x, heavy = false) {
     if (!this.ready) return;
     const v = 0.35 + this.near(x) * 0.75;
+    if (heavy) {
+      // a .45: lower, fatter, a longer roll off the walls
+      this.hiss(0.12, 1900, 0.6, 1.25 * v);
+      this.hiss(0.05, 5200, 0.6, 0.5 * v, 'highpass');
+      this.tone('sine', 120, 30, 0.24, 1.3 * v);
+      this.tone('triangle', 640, 90, 0.07, 0.3 * v);
+      for (const [d, k] of [[0.12, 0.42], [0.27, 0.24], [0.45, 0.12], [0.66, 0.05]]) this.hiss(0.2, 700, 0.5, k * v, 'lowpass', d);
+      return;
+    }
     this.hiss(0.09, 2600, 0.7, 1.2 * v);
     this.hiss(0.05, 6000, 0.6, 0.6 * v, 'highpass');
     this.tone('sine', 150, 40, 0.16, 1.1 * v);
     this.tone('triangle', 900, 120, 0.05, 0.25 * v);
     for (const [d, k] of [[0.11, 0.35], [0.24, 0.18], [0.4, 0.08]]) this.hiss(0.16, 900, 0.5, k * v, 'lowpass', d);
+  }
+
+  /** A taser cartridge going off: a sharp pop of gas, and the hiss of the wires paying out. */
+  taserFire(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.hiss(0.04, 3400, 1.2, 0.7 * v);
+    this.tone('square', 700, 260, 0.03, 0.2 * v);
+    this.hiss(0.22, 6500, 2.5, 0.12 * v, 'bandpass', 0.03);
+  }
+
+  /** Current going down the wires: a fast, dry ticking. `hard` for an arc in the open air. */
+  crackle(x, hard = false) {
+    if (!this.ready) return;
+    const v = this.near(x) * (hard ? 0.5 : 0.32);
+    for (let i = 0; i < 5; i++) {
+      const d = i * 0.017 + rand(0, 0.006);
+      this.tone('square', 2400 + rand(-500, 500), 1800, 0.008, 0.22 * v, d);
+      this.hiss(0.01, 5200, 2, 0.35 * v, 'bandpass', d);
+    }
+  }
+
+  /** A round stopped by a vest: a hard, dull smack, and the breath knocked out. */
+  vestStop(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.tone('sine', 95, 40, 0.14, 0.75 * v);
+    this.hiss(0.06, 700, 0.8, 0.5 * v, 'lowpass');
+    this.hiss(0.03, 2200, 1.4, 0.3 * v);
+  }
+
+  /** Into a holster, or out of it: leather, and a snap. */
+  holster(x, out = false) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.hiss(out ? 0.07 : 0.1, 1400, 1.1, 0.16 * v);
+    this.tone('square', out ? 1500 : 1100, out ? 1300 : 900, 0.012, 0.06 * v, out ? 0.05 : 0.08);
+  }
+
+  /** Velcro and straps: a vest going on. */
+  velcro(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    for (let i = 0; i < 3; i++) this.hiss(0.09, 2600 + i * 400, 1.6, 0.18 * v, 'bandpass', i * 0.1);
+  }
+
+  /** Handcuffs: the ratchet closing, a click a tooth, twice over. Off, one clack. */
+  cuffs(x, off = false) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    const n = off ? 1 : 7;
+    for (let i = 0; i < n; i++) {
+      const d = (i % 4) * 0.035 + (i > 3 ? 0.25 : 0);
+      this.tone('square', 3000 + rand(-300, 300), 2600, 0.01, 0.1 * v, d);
+      this.hiss(0.012, 5000, 3, 0.14 * v, 'bandpass', d);
+    }
+  }
+
+  /** A foot coming down hard to catch themselves: a scuff on the floor. */
+  scuff(x, speed = 2) {
+    if (!this.ready) return;
+    const v = this.near(x) * clamp(speed / 3, 0.25, 1);
+    this.hiss(0.06, 900, 0.8, 0.22 * v, 'lowpass');
+    this.tone('sine', 90, 60, 0.05, 0.15 * v);
+  }
+
+  /** A radio: the squelch, a beep. */
+  radio(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.hiss(0.12, 1900, 1.6, 0.22 * v);
+    this.tone('sine', 1250, 1250, 0.06, 0.07 * v, 0.13);
+    this.hiss(0.08, 1900, 1.6, 0.14 * v, 'bandpass', 0.6);
+  }
+
+  /** A handful of rounds out of a box: brass on brass. */
+  rattle(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    for (let i = 0; i < 6; i++) this.tone('sine', 3400 + rand(-900, 900), 3000, 0.04, 0.05 * v, i * 0.05 + rand(0, 0.03));
+  }
+
+  /** Knuckles cracking: two small pops. */
+  knuckleCrack(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    for (const d of [0, 0.07]) { this.tone('sine', 900, 400, 0.02, 0.12 * v, d); this.hiss(0.015, 3000, 2, 0.12 * v, 'bandpass', d); }
   }
 
   /** The hammer falling on nothing. */

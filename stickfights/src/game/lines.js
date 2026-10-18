@@ -221,7 +221,110 @@ export const LINES = {
   exercise: ['Time to work out!', 'Gotta stay in shape.', 'Feel the burn!', 'One more set.'],
   exerciseCount: ['{n}!', '{n}...', '{n}! Easy!', 'And {n}!'],
   exerciseDone: ['Phew! Done.', 'That\'s enough for today.', 'Look at these muscles.', 'I am SO sweaty.'],
+
+  /* ---------------------------------- breath ---------------------------------- */
+  tired: [
+    'Huff... huff...', 'I need... a second...', 'Out of... breath...', 'My lungs are on fire.', "I'm not as fit as I thought.",
+    'Can we... take five?', 'Legs... like jelly...', 'Note to self: more cardio.', 'Why is fighting so TIRING?',
+  ],
+  catchBreath: ['Just... give me a minute.', 'Huff... phew...', 'Hold on... hold on.', 'Too... much... running.', 'Breathe in. Breathe out.', 'Nobody... move... for a sec.'],
+  breathBack: ['Okay. I\'m good.', 'Phew. Better.', 'Right. Where was I?', 'Second wind!', 'Alright, I can feel my legs again.', 'Back in business.'],
+
+  /* -------------------------------- off balance -------------------------------- */
+  stumble: ['Whoa-!', 'Woah woah woah!', 'Wait-!', 'Uh oh-!', 'Whoops!', 'Hey-hey-hey!', 'Nonono-!'],
+  caught: ['Phew! Still standing.', 'Nailed it.', 'I meant to do that.', 'Balance of a cat.', 'Ha! Not today, floor.', 'Steady... steady...'],
+  sawFall: ['Ouch. {victim} went down.', 'Timber!', 'Oof. You okay, {victim}?', 'That looked like it hurt.', 'Down goes {victim}!'],
+  mockFall: ['HA! Look at {victim}!', 'Gravity wins again, {victim}!', 'Did the floor jump up at you, {victim}?', 'Graceful, {victim}. Real graceful.', 'Walk much, {victim}?'],
+  sawCaught: ['Nice save, {victim}!', 'Ooh, almost!', 'Good balance!', 'How are you still up, {victim}?'],
+
+  /* --------------------------- holsters and pockets ---------------------------- */
+  drawGun: ["Gun's out.", "Don't make me use this!", 'Back off!', 'Stay where you are!', "I'm not playing around.", 'Nobody move!'],
+  drawTaser: ["Taser's out.", 'One more step and you get zapped.', "Back off or you'll get the buzz!", 'Want a little shock?'],
+  drawWeapon: ["Oh, I've got a {what}.", 'Out comes the {what}.', 'You want some of this {what}?', 'Good thing I kept the {what}.'],
+  putAway: ['Okay. Putting the {what} away.', "Don't think I'll need this now.", 'Back it goes.', 'Crisis over, I think.', 'Away you go, {what}.'],
+  pocketed: ['The {what} goes in my pocket.', "I'll keep this {what} for later.", 'Pocketed.', 'Finders keepers.', 'In the pocket. Just in case.'],
+
+  /* --------------------------------- vests, ammo ------------------------------- */
+  vestOn: ['Safety first.', 'Bulletproof. Mostly.', 'How do I look? Tactical?', 'Snug fit.', 'Now I feel ready for anything.', 'Velcro: the sound of safety.'],
+  vestSaved: [
+    'OOF! The vest... the vest stopped it!', "That's going to bruise. But I'm alive!", 'Like being kicked by a horse!', 'Best purchase I ever made.',
+    'I got SHOT! ...and I am fine?!', 'Owww. Thank you, vest.', 'Right in the chest! Still breathing!',
+  ],
+  sawVestStop: ['The vest stopped it!', "{victim}'s vest took that one!", 'Whoa. Bulletproof!', 'How is {victim} still standing?!'],
+  ammoGot: ['{n} rounds. That\'ll do.', 'Topped up.', 'Locked and loaded.', 'Full mags.', 'Plenty more where those came from.'],
+  ammoNone: ['Empty. Great.', 'Nothing I can use.', 'Who took all the ammo?', 'Not my calibre. Or just empty.'],
+
+  /* --------------------------------- the taser -------------------------------- */
+  taserFear: ['Whoa, is that a taser?', 'Keep that thing away from me!', "Don't you dare zap me, {other}!", 'I have a heart condition! Probably!', 'Is that thing on?'],
+  taserGet: ['A taser! Zap zap.', 'Anybody tries anything, they get the buzz.', 'Shocking.', 'Five seconds of fun, right here.', 'Nobody touch me. I mean it.'],
+  tased: ['AAAAGHHH!', 'GRRRKKK!', 'AAH-AH-AH-AH!', 'Nnnnngh!', 'WHAT IS HAPPENING TO MEEE!', 'GAAAH-STOP-STOP!', 'EEEEEEEE!'],
+  tasedAfter: ['What... was that...', 'Everything... tingles...', 'Ow. Ow ow ow.', 'I can taste colours.', 'Never. Again.', 'My hair is standing up. I don\'t have hair.'],
+  driveStunned: ['OW! That BURNS!', 'Gah! You zapped me!', 'Stop zapping me, {other}!', 'YEOW!', 'That is NOT funny, {other}!'],
+  sawTased: ['{other} tased {victim}!', 'Ooh, that looked like it hurt.', '{victim} went stiff as a board!', 'Is {victim} okay?!', 'Zzzap. Poor {victim}.'],
+  sawCopTase: ['They tased {victim}!', '{victim} went down like a plank.', 'Easy, officer!', 'Whoa. {victim} is not getting up for a bit.', 'Did {victim} deserve that?'],
+
+  /* ---------------------------------- the law --------------------------------- */
+  seeCop: ['Oh, a police officer.', 'Hello, officer.', 'Afternoon, {other}.', 'Nice hat.', 'The police are here. Good.', 'Evening, {other}.'],
+  seeCopRelief: ['{other}! Thank goodness!', 'Officer! Over here!', 'Finally, the police!', 'Help! {other}, help!', 'You took your time, {other}!'],
+  seeCopGuilty: ['Uh oh. Police.', 'Act natural...', 'Oh no. Not the cops.', 'Just... walk normally.', "I didn't see anything. I wasn't here.", 'Gulp.'],
+  reportMe: ['{other}! {victim} {what}!', 'Officer, it was {victim}! They {what}!', '{victim} {what}! Arrest them!', '{other}! Do something! {victim} {what}!'],
+  reportCrime: ['{other}! {victim} just {what}!', 'Officer! {victim} {what}! Over there!', 'You have to do something: {victim} {what}!', 'I saw it! {victim} {what}!'],
+  copThanks: ["Thanks, {other}. I'll handle {victim}.", 'Got it. Stay here.', "Understood. I'm on it.", 'Good work. Leave {victim} to me.', 'Noted. Stand back, please.'],
+  copSees: ['Hey! Police! {other}, stop right there!', 'I saw that, {other}!', "That's assault! You're done, {other}!", 'Police! Leave {victim} alone!', 'Oi! {other}! Stop!'],
+  copShotsFired: ['Shots fired! Shots fired!', 'Everybody down!', 'Dispatch, shots fired! Requesting backup!', 'Weapon! Get down!', 'Shots fired! Moving in!', 'Get down! Stay down!'],
+  copStop: ['Police! Stop right there!', "{other}! Police! Don't move!", 'Hey! Stop! Police!', 'Freeze!', 'Hold it right there, {other}!'],
+  copGetDown: ['On the ground! Now!', 'Get down! Hands where I can see them!', 'Down, {other}! On your knees!', 'Hands on your head! Get down!'],
+  copStayDown: ['Stay down!', "Don't move, {other}!", 'Stay on the ground!', "Don't even think about getting up."],
+  copDrop: ['Drop the weapon!', 'Put it down, {other}! Now!', 'Drop it! Drop it!', 'Let go of the weapon, {other}!', 'Weapon on the floor! Now!'],
+  copDropGun: ['DROP THE GUN!', 'Drop the weapon or I will shoot!', 'Gun down, {other}! NOW!', 'Put it down or I fire!', 'Last chance, {other}! Drop it!'],
+  copTaserWarn: ['Taser! Taser!', "Stop or I'll tase you!", 'Last warning, {other}!', 'You will get tased!', 'Taser! Stand clear!'],
+  copStopResisting: ['Stop resisting!', 'Stay down, {other}!', 'Quit fighting it!', "Don't make me do it again!"],
+  copChase: ["Stop! Police!", "You can't outrun the radio, {other}!", 'Suspect on foot! In pursuit!', 'Get back here!', "Running just makes it worse, {other}!"],
+  copCuffTased: ['Hands behind your back.', "Don't move. You're getting cuffed.", 'Easy... cuffs going on.', 'Relax. It is over.'],
+  copCuffing: ["You're under arrest, {other}.", 'Hands behind your back.', "Don't make this harder than it is.", 'Slowly. Hands back.'],
+  copArrest: [
+    '{other}, you are under arrest.', 'You have the right to remain silent. Use it.', "That's it, you're coming with me.",
+    "Anything you say can be used against you. So maybe don't.", 'Off to the cells with you.', 'You\'re nicked, {other}.',
+  ],
+  copRelease: ["Alright, {other}. You're free to go. Behave.", "Consider this a warning, {other}.", "Off you go. I don't want to see you again.", "Cuffs off. Don't make me regret it.", "Lesson learned? Good."],
+  copRadioCustody: ['Dispatch, one in custody.', 'Suspect {other} in custody.', 'All units: scene is secure.', 'Dispatch, I need transport for one.'],
+  copSuspectDown: ['Suspect down. Dispatch, I need medical.', '{other} is down. Get an ambulance.', 'Suspect down! Scene is clear.', 'Dispatch... suspect is down.'],
+  copIdle: ['Unit twelve, all quiet.', 'Copy that, dispatch.', 'Ten-four.', 'Nothing to report.', 'Checking in. Grey sky, black ground, no trouble.', 'Dispatch, say again?'],
+  comply: ["Okay! Okay! I give up!", "Don't shoot!", "I'm not resisting!", 'Alright, officer, alright!', "I'm down! I'm down!", 'You got me. I give up.'],
+  cuffed: ['Ow! Not so tight!', 'This is so unfair.', 'I want my phone call!', 'Fine. FINE.', 'Is this really necessary?', 'You got the wrong stickman!'],
+  cuffedTalk: [
+    'I want a lawyer.', 'These are too tight.', "I didn't do anything!", 'This is a misunderstanding.', 'Can I at least scratch my nose?',
+    'My nose itches. Of course it does.', 'Somebody call my mum.', "I'm innocent! Mostly.", 'How long do I have to sit here?',
+  ],
+  uncuffed: ['Free! I\'m free!', 'Finally. My wrists...', "Thanks. I'll... behave.", 'Sweet freedom!', "I'm never doing that again."],
+  sawArrest: ['{other} cuffed {victim}.', "Huh. {victim}'s been arrested.", "That's {victim} in cuffs.", 'Busted.', 'Off you go, {victim}.'],
+  sawArrestMine: ['{victim} got what was coming!', 'Thank you, {other}! Lock them up!', "Ha! Who's laughing now, {victim}?", "That's for what you did to me, {victim}."],
+  sawArrestRelief: ['Good. One less troublemaker.', 'Finally. Somebody stopped {victim}.', 'Nice work, {other}.', 'Phew. We are safe now.', 'Justice!'],
+  sawArrestFriend: ['{victim}! No!', "Let them go! They didn't mean it!", "Hang in there, {victim}. I'll get you a lawyer.", 'Not {victim}!', "{victim}'s not a bad person!"],
 };
+
+/*
+ * More to say in the old situations: added to what is already there, so the
+ * lists above stay readable.
+ */
+const MORE = {
+  greet: ['Evening.', 'Hey hey!', 'Look who it is!', 'Oh good, a friendly face.', 'Hello, stranger.'],
+  smalltalk: [
+    'Have you seen the officer around? Very shiny badge.', 'I keep a vest in the cupboard. Just in case.', 'I tried jogging once. Never again.',
+    'Do you think the police ever get days off?', 'You can buy bullets by the box now. Whole boxes!', 'Did you know a taser shoots two little darts? Terrifying.',
+    "I'm saving up for a holster. A nice leather one.", 'I tripped over nothing earlier. Nothing! Just air.', 'Ever tried running in a straight line for an hour?',
+    'If you push me, I wobble. Everyone wobbles.', 'I keep my knife in my pocket. For sandwiches.',
+  ],
+  reply: ['Huh. Fair.', 'Wild.', 'I can see that.', 'Ha! Stop it.', 'You and me both.'],
+  bored: ['I could do some laps.', 'Maybe I will practise my balance.', 'Is it lunch yet? Do we eat?', 'Pockets: checked. Twice.'],
+  getUp: ['Up we get.', 'Still got it.', 'Ow. Fine.', "Floor's harder than it looks.", 'Who moved the ground?'],
+  dodge: ['Not this time!', 'Woop!', 'Nope!'],
+  happy: ['Not a scratch on me!', 'Feeling light on my feet today.'],
+  fightStart: ['Come on then!', "Let's dance, {other}.", 'You asked for it, {other}!'],
+  hurtSmall: ['Ngh.', 'Ouf.', "That'll leave a mark."],
+  wake: ['Did I miss anything?', 'Five more minutes...'],
+};
+for (const [k, v] of Object.entries(MORE)) LINES[k] = [...(LINES[k] || []), ...v];
 
 /** What people say about the things a mod adds: only ever needed once the mod is in. */
 export const EXTRA_LINES = {};
