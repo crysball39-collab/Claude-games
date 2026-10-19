@@ -28,7 +28,7 @@
     </button>
     <div class="how">
       <div><b>Spawn</b> &mdash; open the menu, pick a Stickman, a weapon or a Crate, then tap the world.</div>
-      <div><b>Drag</b> anything to move it. Let go while moving to throw it.</div>
+      <div><b>Drag</b> anything to move it. Let go while moving to throw it. Paused, things go just where they are put.</div>
       <div><b>Tap</b> a stickman to see what they think, feel and remember &mdash; and change it: their feelings, their personality, who they like, and who they fight.</div>
       <div><b>Mods</b> add things that are not part of the game itself. Install them from MODS and they turn up in the spawn menu.</div>
     </div>
@@ -70,10 +70,28 @@
       <canvas class="tool-icon" width="36" height="36"></canvas>
       <span id="tool-spawn-name">STICKMAN</span>
     </button>
+    <button class="tool" data-tool="freeze" aria-label="Freeze: tap something to freeze it in place, and again to let it go">
+      <svg viewBox="0 0 24 24" width="18" height="18"><rect x="5.5" y="10.5" width="13" height="10" rx="2.2" stroke="currentColor" stroke-width="2" fill="none"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M12 13.5v4M10 15.5h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <span>FREEZE</span>
+    </button>
+    <button class="tool" data-tool="wire" id="tool-wire" aria-label="Wire: ropes, rods and pins between things">
+      <svg viewBox="0 0 24 24" width="18" height="18"><circle cx="5" cy="6" r="2.4" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="19" cy="17" r="2.4" stroke="currentColor" stroke-width="2" fill="none"/><path d="M6.8 7.6c3 6 7 2 10.4 7.8" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+      <span id="tool-wire-name">WIRE</span>
+    </button>
     <button class="tool" data-tool="erase" aria-label="Erase: tap something to remove it">
       <svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
       <span>ERASE</span>
     </button>
+  </div>
+
+  <!-- the kinds of wire, while the wire tool is picked -->
+  <div id="wirebar" class="hidden" role="radiogroup" aria-label="Kind of wire">
+    <button class="wire-kind active" data-wire="woodRope" role="radio" aria-checked="true"><i class="wk wk-wood-rope"></i><span>WOOD ROPE</span></button>
+    <button class="wire-kind" data-wire="metalRope" role="radio" aria-checked="false"><i class="wk wk-metal-rope"></i><span>METAL ROPE</span></button>
+    <button class="wire-kind" data-wire="woodRod" role="radio" aria-checked="false"><i class="wk wk-wood-rod"></i><span>FIXED WOOD ROPE</span></button>
+    <button class="wire-kind" data-wire="metalRod" role="radio" aria-checked="false"><i class="wk wk-metal-rod"></i><span>FIXED METAL ROPE</span></button>
+    <button class="wire-kind" data-wire="woodPin" role="radio" aria-checked="false"><i class="wk wk-wood-pin"></i><span>WOOD PIN</span></button>
+    <button class="wire-kind" data-wire="metalPin" role="radio" aria-checked="false"><i class="wk wk-metal-pin"></i><span>METAL PIN</span></button>
   </div>
 
   <div id="hint"></div>
@@ -171,6 +189,10 @@
       <canvas class="card-icon" width="72" height="72"></canvas>
       <span class="card-text"><b>Machete</b><small>Chops and hacks. Leaves gaping wounds, and a hard enough blow takes off a hand, an arm or a leg.</small></span>
     </button>
+    <button class="card" data-spawn="crowbar">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Crowbar</b><small>A steel bar with a hooked end. Heavy, blunt swings that break bones - and walls, and glass.</small></span>
+    </button>
     <button class="card" data-spawn="glock">
       <canvas class="card-icon" width="72" height="72"></canvas>
       <span class="card-text"><b>Glock-19</b><small>A pistol: 15 rounds and two spare magazines. Bullets go through people and crates. Tap it on the ground to fire it.</small></span>
@@ -178,6 +200,14 @@
     <button class="card" data-spawn="m1911">
       <canvas class="card-icon" width="72" height="72"></canvas>
       <span class="card-text"><b>M1911</b><small>A .45: only 7 rounds, but each one hits harder and goes further through. Kicks like a mule.</small></span>
+    </button>
+    <button class="card" data-spawn="ak47">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>AK-47</b><small>An automatic rifle: 30 rounds of 7.62 mm, as fast as the trigger is held. Goes through people, wood and glass.</small></span>
+    </button>
+    <button class="card" data-spawn="mossberg">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Mossberg 500</b><small>A pump shotgun: 6 shells of 12 gauge, each a spray of pellets. Racked after every shot.</small></span>
     </button>
     <button class="card" data-spawn="taser">
       <canvas class="card-icon" width="72" height="72"></canvas>
@@ -192,17 +222,44 @@
       <canvas class="card-icon" width="72" height="72"></canvas>
       <span class="card-text"><b>Light Vest</b><small>Soft armour for the body. Stops most pistol rounds - they still hit like a hammer - and takes the worst out of a blade.</small></span>
     </button>
-    <button class="card" data-spawn="ammoSmall">
+    <div class="cat">AMMO</div>
+    <button class="card" data-spawn="ammo9">
       <canvas class="card-icon" width="72" height="72"></canvas>
-      <span class="card-text"><b>Small Ammo Box</b><small>30 pistol rounds. Anyone running low comes over and fills up.</small></span>
+      <span class="card-text"><b>9 mm Ammo</b><small>50 rounds for the Glock-19, and only the Glock. Anyone running low comes over and fills up.</small></span>
     </button>
-    <button class="card" data-spawn="ammoMedium">
+    <button class="card" data-spawn="ammo45">
       <canvas class="card-icon" width="72" height="72"></canvas>
-      <span class="card-text"><b>Medium Ammo Box</b><small>80 pistol rounds in a plastic case.</small></span>
+      <span class="card-text"><b>.45 ACP Ammo</b><small>50 rounds for the M1911.</small></span>
     </button>
-    <button class="card" data-spawn="ammoBig">
+    <button class="card" data-spawn="ammo762">
       <canvas class="card-icon" width="72" height="72"></canvas>
-      <span class="card-text"><b>Big Ammo Box</b><small>A steel can of 200 rounds. Heavy.</small></span>
+      <span class="card-text"><b>7.62 mm Ammo</b><small>A tin of 120 rounds for the AK-47. Heavy.</small></span>
+    </button>
+    <button class="card" data-spawn="ammo12">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>12 Gauge Shells</b><small>A box of 25 shells for the Mossberg 500.</small></span>
+    </button>
+    <div class="cat">BUILDING</div>
+    <button class="card" data-spawn="woodWall">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Wood Wall</b><small>Planks on battens. Bullets punch through; blows, bodies and crates break it up a piece at a time.</small></span>
+    </button>
+    <button class="card" data-spawn="metalWall">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Metal Wall</b><small>A steel plate. Stops pistol rounds dead, and takes a great deal to dent, let alone break.</small></span>
+    </button>
+    <button class="card" data-spawn="glassWall">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Glass Wall</b><small>A pane they can see through. Crack it enough and it all comes down in shards - which cut.</small></span>
+    </button>
+    <div class="cat">NATURE</div>
+    <button class="card" data-spawn="tree">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Tree</b><small>A trunk, branches, twigs and leaves that sway and bend. Shoot it, chop it, hang things off it.</small></span>
+    </button>
+    <button class="card" data-spawn="bush">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Bush</b><small>Leafy and springy. People push through it and hide in it; bullets strip the leaves off.</small></span>
     </button>
     <!-- whatever the installed mods add -->
     <div id="drawer-mods"></div>

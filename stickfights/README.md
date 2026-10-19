@@ -2,9 +2,11 @@
 
 A 2D sandbox of stickmen with minds of their own, on a grey background and a
 black floor. You spawn **stickmen** and **police officers**, **brass
-knuckles**, **combat knives**, **machetes**, **Glock-19** and **M1911**
-pistols, **tasers**, **light vests**, **ammo boxes** and **crates**, and the
-stickmen get on with it: they look around, talk, make friends and enemies,
+knuckles**, **combat knives**, **machetes**, **crowbars**, **Glock-19** and
+**M1911** pistols, an **AK-47**, a **Mossberg 500** pump shotgun, **tasers**,
+**light vests**, a box of **ammo** for each kind of gun, **crates**, **wood**,
+**metal** and **glass walls**, **trees** and **bushes**, and the stickmen get
+on with it: they look around, talk, make friends and enemies,
 shake hands and hug, pick things up and put them in their pockets, climb on
 things, fight until they are out of breath, run, hide, help each other up, get
 hurt, stumble, break bones, lose limbs, and die - and the ones still standing
@@ -20,6 +22,20 @@ a **pocket**, and comes out again when there is trouble. **Officers** go
 after whoever commits a crime: "Police! Stop!", the taser for anyone who will
 not give up, the M1911 only for someone about to kill somebody, and the
 cuffs.
+
+The walls and the trees break **cell by cell**, a few centimetres at a time:
+bullets punch holes in wood and dent steel, glass cracks round every hit and
+then comes down in shards, blows and bodies knock chunks out, and whatever is
+cut off from the ground comes away and falls. Trees **bend** - every branch,
+twig and bunch of leaves springs back when it is pushed, pulled, shot or hung
+from, and snaps when it is bent too far - and a trunk cut through comes down.
+
+The **freeze tool** stops anything dead where it is, in mid-air if need be,
+until it is tapped again. With the world **paused**, the hand just picks
+things up and puts them down somewhere else. The **wire tool** ties things
+together - or to the background - with a **wood rope**, a **metal rope**, a
+**fixed** rope of either (a rod that keeps them exactly as far apart), or a
+**wood** or **metal pin** through them.
 
 And you can get inside their heads: drag their feelings up and down, change
 their personality, change who they count as a friend or an enemy, and send
@@ -75,7 +91,7 @@ The title screen has a few stickmen already going about their business behind
 it, one of them nursing a grudge. **PLAY** clears them away and opens the
 spawn menu.
 
-The spawn menu (☰ **SPAWN**, top left) has thirteen things in it, in three
+The spawn menu (☰ **SPAWN**, top left) has twenty-two things in it, in six
 sections:
 
 | Section | Thing | What it is |
@@ -85,24 +101,48 @@ sections:
 | Weapons | **Brass Knuckles** | Worn on the hand. Punches with them land about twice as hard, and cut. |
 | Weapons | **Combat Knife** | Held in the hand. Stabs and slashes; deep cuts bleed fast. Thrown point first, it sticks in. |
 | Weapons | **Machete** | Chops and hacks. Leaves gaping wounds, and a hard enough blow takes off a hand, an arm, a foot or a leg. |
+| Weapons | **Crowbar** | A red steel bar with a hooked claw. Swung like a machete, but it does not cut: heavy blows that break bones - and break into walls, through glass in one, and chop at trees. |
 | Weapons | **Glock-19** | A pistol: 15 rounds in the magazine and two spare. Bullets go through people and crates, and ricochet off the floor. |
 | Weapons | **M1911** | A .45: seven rounds and two spare magazines. Each one hits harder and goes further through than a 9 mm, and it kicks. |
+| Weapons | **AK-47** | An automatic rifle: 30 rounds of 7.62 and two spare magazines, fired in bursts as fast as the trigger is held. Goes through a person, a wood wall, glass. Carried slung across the back. |
+| Weapons | **Mossberg 500** | A pump shotgun: six shells of 12 gauge, each one eight pellets that spread as they go - devastating close up, much less so across the room. The pump is worked after every shot, and the red shell flies out. |
 | Weapons | **Taser** | Two barbed probes on wires: both in, and five seconds of current lock every muscle - down they go, stiff as a board. A vest stops it. Out of cartridges, it still hurts pressed against somebody. |
 | Objects | **Crate** | 22 kg of wood. Stack it, climb it, throw it - or let a stickman throw it. |
 | Objects | **Light Vest** | Soft armour for the body. Stops most pistol rounds to the chest - they still land like a hammer - and takes the worst out of a blade. Wears down with every round. |
-| Objects | **Small**, **Medium** and **Big Ammo Box** | 30, 80 and 200 pistol rounds: a cardboard box, a plastic case and a steel can. Anyone running low comes and fills up. |
+| Ammo | **9 mm**, **.45 ACP**, **7.62 mm** and **12 gauge** | 50 rounds for the Glock (a cardboard box with a blue band), 50 for the M1911 (a green plastic case), 120 for the AK (a steel can) and 25 shells for the Mossberg (a red box). Rounds only go in the gun they are made for: anyone running low comes for the box that fits, and leaves the others. |
+| Building | **Wood Wall** | Planks on battens, 2.4 m tall. Bullets punch straight through; blows, bodies and crates break it up a few centimetres at a time; a knife thrown point first sticks in it. |
+| Building | **Metal Wall** | A riveted steel plate. Stops pistol rounds dead (and sometimes sends them back off it), and takes a great deal to dent, let alone break. |
+| Building | **Glass Wall** | A pane they can see through. Every knock cracks it further, and cracked enough it all comes down in shards - which cut whoever they land on. |
+| Nature | **Tree** | A trunk, branches, smaller branches, twigs and leaves, every one of them springy: it sways, bends under whatever pushes or hangs off it, sheds leaves when it is shot, and comes down when the trunk is cut through. |
+| Nature | **Bush** | Low, leafy stems. People walk through it - it gives way round them and closes behind - and it is drawn in front of them. |
 
 Pick one and the menu closes with the **spawn tool** armed: every tap on the
-world places another. A stickman appears on whatever is under the tap;
-anything else appears exactly where you tapped and falls.
+world places another. A stickman, a wall or a tree appears on whatever is
+under the tap; anything else appears exactly where you tapped and falls.
 
-The three tools along the bottom:
+The five tools along the bottom:
 
 | Tool | What it does |
 | ---- | ------------ |
-| ✋ **HAND** | Drag anything to move it. Let go while moving to throw it. Tap a stickman to open their mind. Drag empty space to pan. Drag a blade stuck in someone to pull it out. Tap a pistol or a taser lying on the floor to fire it (empty, a tap puts a fresh magazine or cartridge in). Tap an ammo box or a vest to see how much is left in it. |
+| ✋ **HAND** | Drag anything to move it. Let go while moving to throw it. Tap a stickman to open their mind. Drag empty space to pan. Drag a blade stuck in someone to pull it out. Tap a gun or a taser lying on the floor to fire it (empty, a tap puts a fresh magazine or cartridge in). Tap an ammo box, a vest, a wall or a tree to see what is left of it. A wall is slid along where it is dragged, and stands on whatever is under it when let go; a tree is dragged by its trunk, and a branch or a twig grabbed is bent - too far, and it snaps off. **With the world paused** (or the thing frozen), nothing swings and nothing is thrown: it is picked up and put down just as it was. |
 | **SPAWN** (shows what is picked) | Tap the world to place it. |
-| ✖ **ERASE** | Tap something to remove it. |
+| 🔒 **FREEZE** | Tap something to freeze it in place - a crate in mid-air, a falling knife, a wall, a tree, a person mid-stride - and tap it again to let it go. Nothing moves it: not gravity, not a blow, not something landing on it. A frozen person can still see, think and talk; they just cannot move a muscle. It has a pale dashed line round it. |
+| ⌇ **WIRE** | Pick a wire from the bar above the tools, then drag from one thing to another - or tap one, then the other. Either end can be the background, where it stays. A pin goes in with one tap: through the two things there, or through one into the background. Tied by somebody's neck, a wrist or an ankle, they go limp and hang there until they are free. |
+| ✖ **ERASE** | Tap something to remove it - a wire too. |
+
+The six wires:
+
+| Wire | What it does |
+| ---- | ------------ |
+| **Wood Rope** | Hemp. Hangs slack until it is pulled tight, swings, and snaps under a hard enough jolt. A bullet or a thrown blade can cut it, and it burns through tied to something on fire. |
+| **Metal Rope** | Steel cable: the same, but it takes about five times the pull, and a bullet seldom parts it. |
+| **Fixed Wood Rope** | A wooden rod: keeps its two ends exactly as far apart as they were, pushing or pulling. Strained too far, it snaps. |
+| **Fixed Metal Rope** | A steel rod: does not bend, and takes far more. |
+| **Wood Pin** | A dowel through two things (or one thing and the background): they stay together at that point, and turn about it. |
+| **Metal Pin** | A bolt: the same, stronger. |
+
+Every wire shows how hard it is being pulled: one near breaking goes red.
+Snapping, it says so, and so do the people who see it.
 
 Pinch (or the mouse wheel) zooms, two fingers pan. Along the top right: sound,
 slow motion, pause, settings, and clear everything (tap twice).
@@ -153,9 +193,10 @@ for the old animated falls.
 
 Keyboard: `1` to `6` pick a stickman, knuckles, a crate, a knife, a machete
 or a Glock-19 to spawn, `7` to `9` the first three things the installed mods
-add, `H` hand, `X` erase, `Space` pause, `S` slow motion, `F` follow, `Tab`
-spawn menu, `+` `-` zoom, `0` reset the camera, `M` sound, `Delete` removes
-whoever is selected, `Esc` closes things.
+add, `H` hand, `Z` freeze, `W` wire, `X` erase, `Space` pause, `S` slow
+motion, `F` follow, `Tab` spawn menu, `+` `-` zoom, `0` reset the camera, `M`
+sound, `Delete` removes whoever is selected, `Esc` closes things (and lets go
+of a wire's first end).
 
 ---
 
@@ -719,7 +760,7 @@ but not against something urgent, like someone coming at them. The options:
 | **Wander**, **stand around** | nothing better to do: arms crossed, hands on hips, tapping a foot, yawning, kicking the dirt, stretching, shadowboxing, cracking their knuckles, a hand to the chin, bouncing on their toes |
 | **Catch their breath** | out of breath, and nobody coming for them: bent over, hands on their knees, until it comes back |
 | **Put on a vest** | there is one lying about, and shots going off (or they are the careful sort): over it goes, the straps pulled tight |
-| **Fill up** from an ammo box | a pistol running low, and a box in sight |
+| **Fill up** from an ammo box | a gun running low, and a box of rounds that fit it in sight |
 | **Tell an officer** | they saw a crime, or it was done to them: they go and find one, point, and tell them who did what |
 | **Do as they are told** | an officer has told them to stop, and they are frightened, sensible or outgunned enough: the weapon dropped, hands up, down on their knees |
 | **Run from the police**, or fight them | told to stop, and bold enough to run, or angry and reckless enough to fight |
@@ -805,6 +846,90 @@ The **M1911** is the Glock's heavier cousin: seven .45 rounds and two spare
 magazines. Each round hits harder and keeps more of itself going through a
 body or a crate; it kicks harder, so it takes longer to come back on target,
 and it is louder.
+
+The **AK-47** is a rifle: thirty 7.62 rounds and two spare magazines, and
+each round hits about half as hard again as a .45 and goes on through far
+more - a person, a wood wall, a pane of glass - before it stops. It fires as
+fast as the trigger is held, about ten rounds a second, and whoever has it
+fires in bursts that get longer the angrier they are. Too long for a holster,
+it goes across the back on a sling when they want their hands free.
+
+The **Mossberg 500** is a pump shotgun: six 12 gauge shells and two more
+loads. Each shell is eight pellets, spreading by a few degrees as they go:
+close up they all land, across the room only some of them do. After every
+shot the pump is worked - back and forward - and the red shell flies out.
+Whoever has one gets in close before they use it.
+
+The **crowbar** is a steel bar with a hooked claw, carried and swung like the
+machete - chops and hacks - but it does not cut: it lands like a club, about
+twice as hard as a fist, and breaks bones. It is made for breaking into
+things: a blow from it takes three times as much out of a wall as anything
+else would, puts a pane of glass in at one go, and chops at a tree.
+
+### Walls, trees and wires
+
+The walls and the trees (`structures.js`, `trees.js`) are made of **cells**,
+four centimetres square, each with its own strength left. Whatever hits them
+takes it out of the cells it touches, and the material decides how much:
+
+| | Bullets | Blades | Blows | Bodies, crates | Blasts |
+| --- | --- | --- | --- | --- | --- |
+| **Wood** | holes, and on through | chops | splinters | splinters | holes |
+| **Metal** | dents; stopped, and sometimes sent back | barely a scratch | dents | dents | buckles |
+| **Glass** | a hole and a ring of cracks | cracks | cracks | cracks | gone |
+
+A bullet goes in cell by cell, each one taking some of what it had: a pistol
+round goes through a wood wall, a rifle round through a steel one is unlikely.
+Glass keeps count of its cracks, and past a point the whole pane comes down in
+shards that flutter and cut whoever they land on. Whatever is no longer joined
+to the cells along the bottom - a wall cut across, a corner shot away - comes
+away as a piece of its own, a body like a crate: it falls, tumbles and lands,
+and can be picked up, thrown, tied or frozen. A wall with nothing left
+standing goes over. People cannot walk through walls (only round them, or
+over the low pieces), they see through glass and not the rest, and a thrown
+knife sticks in wood and glances off steel. Blood lands on all of it and
+stays.
+
+A **tree** is a trunk, branches, smaller branches and twigs, each one a
+springy limb that bends where it grows out of the last: stiff as anything at
+the trunk, soft at the twigs. They sway in the air all the time; they bend
+under anything that pushes, pulls or hangs off them, and spring back - whip
+back - when it lets go. Bent further than its wood will take, a limb snaps,
+and what was beyond the break comes down. The wood is cells like a wall's: a
+bullet or a blade takes out what it goes through, and a limb cut right
+across - or so nearly across that what is left cannot hold it up - lets go of
+everything above the cut: a twig, a branch with its leaves still on, or the
+whole tree, which goes over with a creak and lies on its side, its branches
+underneath breaking off as it lands. What comes down is a **log**, a body like
+any other. Bullets through the leaves knock bunches of them off; they drift
+down, and so does the odd leaf on its own. A **bush** is low and soft: people
+walk through it, pushing the stems aside, and it closes behind them.
+
+A **wire** (`wires.js`) is put right after every step of the physics: each
+pulls its two ends back to where it says they may be - a body by a push where
+it is tied (so it swings, and turns), a ragdoll's point by moving it, a
+branch by bending it. A rope pulls only once it is tight; a fixed rope pushes
+as well, and keeps its ends exactly as far apart as they were; a pin keeps two
+points together. How hard it had to pull is the strain it is under, and past
+what it can take - a wood rope about 2,600 newtons, a steel one 12,000 - it
+snaps. Somebody tied to anything goes limp and hangs from it, and does not get
+up until they are free; a rope round the neck that is holding them up chokes
+them. A blade flying through a hemp rope cuts it, a bullet may, and a wood rope
+tied to something on fire burns through.
+
+### Freezing in place, and the pause
+
+The **freeze tool** (`freeze.js`) stops a thing dead: a body becomes one the
+physics cannot move (though other things still land on it and bounce off it),
+a ragdoll stops where it is, and a stickman stops in whatever pose they were
+in, limp or standing. They still see and hear, think, feel and talk - they
+just cannot move, and they say so, and the people who see it do too. Tapped
+again, everything goes on from where it stopped.
+
+With the world **paused**, the hand does not swing or throw anything: a drag
+picks the thing up and puts it down where it is let go, exactly as it was -
+the same pose, the same angle - and when the world runs again it carries on
+from there. Things frozen in place are moved the same way at any time.
 
 ### Stamina, knockback and stumbling
 
@@ -920,10 +1045,12 @@ one lets them through. Against a blade it takes the worst of it out, a stab
 less than a slash. An officer's is a navy police vest with POLICE across the
 chest.
 
-An **ammo box** holds pistol rounds for either pistol - the boxes are mixed.
-Anyone with a pistol running low, in the hand or the holster, goes over,
-crouches by it and takes what their spare magazines and the one in the gun
-will hold, until the box is empty.
+An **ammo box** holds one kind of round: 9 mm (for the Glock), .45 (for the
+M1911), 7.62 (for the AK) or 12 gauge shells (for the Mossberg). Anyone with
+a gun running low, in the hand, the holster or slung on their back, goes over
+to a box of rounds that fit it, crouches by it and takes what their spare
+magazines and the one in the gun will hold, until the box is empty. A box of
+the wrong rounds is no use to them, and they leave it where it is.
 
 The **taser** (`taser.js`) is aimed and fired like a pistol, but what comes
 out is a pair of barbed probes on thin wires, spreading as they go and
@@ -970,7 +1097,10 @@ officer turn up - except whoever has just done something.
 ### The hand
 
 Dragging grabs whatever is under your finger. A crate swings from the exact
-point you took hold of it. A stickman goes limp in your grip and hangs from
+point you took hold of it. A standing wall slides where it is dragged, shoving
+whatever is in its way, and stands on whatever is under it when let go. A tree
+is moved by its trunk; a branch or a twig taken hold of is bent toward the
+hand, and snaps off if it is bent too far. A stickman goes limp in your grip and hangs from
 wherever you grabbed them - by the scruff of the neck, a hand, or upside down
 by an ankle - kicking and shouting, swinging as you move them; the dead and
 the knocked-out just hang. Let go while moving and it is a throw: they tumble
@@ -1064,12 +1194,17 @@ stickfights/
       emotions.js     the five emotions
       lines.js        everything they can say
       people.js       names, looks and personalities
-      props.js        crate, brass knuckles, knife, machete, the pistols, ammo boxes,
-                      vests, severed limbs
-      hand.js         dragging and throwing
+      props.js        crate, brass knuckles, knife, machete, crowbar, the guns (pistols,
+                      the AK-47, the Mossberg), the four kinds of ammo, vests, severed limbs
+      structures.js   walls: wood, metal and glass, cell by cell; what comes off them
+      trees.js        trees and bushes: springy limbs, leaves, cells; the logs that fall
+      wires.js        ropes, fixed ropes and pins, and the strain on them
+      freeze.js       the freeze tool
+      hand.js         dragging and throwing (and, paused, just moving)
       fx.js           blood (drops, streams, splats, the walls, landing on things),
                       dust, hit bursts, muzzle flashes, tracers, splinters, casings,
-                      smoke, steam, embers, ice and meltwater
+                      smoke, steam, embers, ice and meltwater, and debris: chips of
+                      wall, shards of glass, falling leaves
       draw.js         drawing a stickman, wounds and stumps, a crate, every weapon
       render.js       the world, bubbles, symbols
       camera.js       pan, zoom, follow
@@ -1104,9 +1239,10 @@ screen and checks:
 
 - stickmen are already moving about behind the title, and PLAY opens an empty
   sandbox with the spawn menu
-- the spawn menu has exactly thirteen things in it: a Stickman, an Officer,
-  Brass Knuckles, a Combat Knife, a Machete, a Glock-19, an M1911, a Taser, a
-  Crate, a Light Vest and three Ammo Boxes
+- the spawn menu has exactly twenty-two things in it: a Stickman, an Officer,
+  Brass Knuckles, a Combat Knife, a Machete, a Crowbar, a Glock-19, an M1911,
+  an AK-47, a Mossberg 500, a Taser, a Crate, a Light Vest, four kinds of
+  ammo, three walls, a Tree and a Bush
 - the background is grey and the ground is black (read off the canvas)
 - tapping the world places a stickman, a crate and a set of knuckles where it
   was tapped, and the crate falls and settles
@@ -1182,8 +1318,10 @@ screen and checks:
 - a pistol nobody needs goes back in its holster, and comes out again when
   someone comes at them with a knife; with the hands full, brass knuckles go
   in a pocket
-- the M1911 holds seven heavier rounds; the ammo boxes hold 30, 80 and 200,
-  and somebody with a pistol running low goes and fills up from one
+- the M1911 holds seven heavier rounds; the four ammo boxes hold 50 rounds
+  of 9 mm, 50 of .45, 120 of 7.62 and 25 shotgun shells, and somebody with a
+  gun running low goes and fills up from the box that fits it - and leaves
+  the one that does not
 - running uses up stamina and slows them down, standing still gets it back,
   and spent they stop to catch their breath, hands on their knees
 - a blow knocks them back, and a hard one sends them stumbling - some catch
@@ -1224,6 +1362,29 @@ screen and checks:
   them) and people (without making them bleed), and moves with the thing it
   is on; on the Minecraft mod's table and skull, and on the skin, legs,
   skeleton and organs the Shallow leaves lying about
+- the three walls stand 2.4 m tall; a 9 mm goes through the wood one and
+  stops dead in the steel one; a blow knocks out the cells round it, a cut
+  right across sends the top half away as a piece of its own that falls over;
+  glass comes down in shards after a few rounds; people see through glass and
+  not through steel
+- a tree has a trunk, branches, smaller branches, twigs and leaves; its twigs
+  sway; bullets through the leaves knock them off; somebody walking through a
+  bush pushes the stems aside; chopped through at the foot, the tree comes
+  down and lies there, the stump left standing; somebody hung from a branch
+  bends it, and a branch dragged by the hand snaps off and falls
+- the freeze tool stops a falling crate in mid-air (it stays there with
+  something landing on it, and falls when tapped again), and stops a person
+  mid-stride, who knows it
+- with the world paused, dragging a crate or a person just puts them
+  somewhere else as they were, and they fall when it runs again
+- the wire tool has its six wires; a wood rope hangs a crate from the
+  background; a fixed metal rope keeps two crates the same distance apart;
+  a metal pin holds a crate to the background and it turns about the pin;
+  somebody tied by a wrist goes limp and hangs there; the same jolt snaps a
+  wood rope and not a metal one
+- the AK-47 holds 30 rounds of 7.62 and fires in bursts; a Mossberg shell is
+  eight pellets; a crowbar is swung like a machete, puts a glass wall in with
+  one blow, and does not cut
 - no mod is in the game until it is installed; the MODS screen lists
   Murder Drones with what it adds and the storage it needs, which is what
   its files really take up; INSTALL fills a bar and then puts Uzi, N and V in

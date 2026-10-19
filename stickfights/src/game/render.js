@@ -7,6 +7,11 @@
    unbroken arc; on the floor and up the walls; and on anything it landed
    on, over the top of it (blood.js drawStains).
 
+   Trees stand at the back, behind everything; bushes at the front, in front
+   of whoever is in them. Walls, and whatever has come off a wall or a tree,
+   are among the crates. Ropes, rods and pins go over the people they are
+   tied to. Anything frozen in place has a pale dashed line round it.
+
    Then, over the top and at the same size whatever the zoom: names, speech
    and thought bubbles, health bars, and the little symbols that say how
    somebody feels - an anger mark, a sweat drop, a heart, stars going round
@@ -18,11 +23,14 @@
    air, and black with burning.
    ========================================================================== */
 import {
-  drawStickman, drawCrateShape, drawKnuckleShape, drawKnifeShape, drawMacheteShape, drawGlockShape, drawSeveredLimb,
-  drawM1911Shape, drawTaserShape, drawVestShape, drawAmmoBoxShape,
-  KNIFE_W, KNIFE_H, MACHETE_W, MACHETE_H, INK, BLOOD, BLOOD_DARK, BRASS, BRASS_DARK,
+  drawStickman, drawCrateShape, drawKnuckleShape, drawKnifeShape, drawMacheteShape, drawSeveredLimb,
+  drawTaserShape, drawVestShape, drawAmmoBoxShape, drawGunShape, drawCrowbarShape,
+  KNIFE_W, KNIFE_H, MACHETE_W, MACHETE_H, CROWBAR_W, CROWBAR_H, INK, BLOOD, BLOOD_DARK, BRASS, BRASS_DARK,
 } from './draw.js';
-import { AMMO_BOXES, VEST_W, VEST_H } from './props.js';
+import { AMMO_BOXES, VEST_W, VEST_H, GUN_MODELS } from './props.js';
+import { drawWallShape, WALLS } from './structures.js';
+import { drawPlantShape } from './trees.js';
+import { WIRES } from './wires.js';
 import { drawVitalsBack, drawVitalsFront, headFill, inkFor, drawIcedLimb } from './vitals.js';
 import { drawStains, drawBlots } from './blood.js';
 import { DIM } from './skeleton.js';
@@ -34,6 +42,19 @@ const OUTSIDE = '#7d7d7d';
 const FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 // an officer's uniform: a navy shirt, darker trousers
 export const POLICE_UNIFORM = { top: '#1f2d52', topFar: '#2c3b62', legs: '#151c31', legsFar: '#222b43' };
+
+/** The pale outline round something frozen in place by the freeze tool. */
+export function drawFrozenBox(ctx, b, pad = 0.03) {
+  ctx.save();
+  ctx.translate(b.pos.x, b.pos.y);
+  ctx.rotate(b.rot);
+  ctx.strokeStyle = 'rgba(120, 200, 255, 0.95)';
+  ctx.lineWidth = 0.022;
+  ctx.setLineDash([0.07, 0.05]);
+  ctx.strokeRect(-b.w / 2 - pad, -b.h / 2 - pad, b.w + pad * 2, b.h + pad * 2);
+  ctx.setLineDash([]);
+  ctx.restore();
+}
 
 export class Renderer {
   constructor(canvas, sandbox, camera) {
@@ -71,11 +92,16 @@ export class Renderer {
 
     this.drawSplats(ctx, v);
     this.drawWallSplats(ctx, v);
+    // the trees, at the very back
+    for (const t of sb.plants) if (t.kind !== 'bush') this.drawPlant(ctx, t, v);
     // a mod's things: the big ones that stand at the back first
     for (const it of sb.items) if (it.behind) { it.draw(ctx); drawStains(ctx, it); }
     for (const c of sb.crates) if (!c.carriedBy) this.drawCrate(ctx, c);
+    for (const w of sb.slabs) if (!(w.body.aabb().maxX < v.minX || w.body.aabb().minX > v.maxX)) this.drawSlab(ctx, w);
+    for (const l of sb.logs) if (!(l.body.aabb().maxX < v.minX - 3 || l.body.aabb().minX > v.maxX + 3)) this.drawLog(ctx, l);
     for (const k of sb.knuckles) if (!k.wornBy) this.drawKnuckles(ctx, k);
     for (const k of sb.blades) if (!k.wornBy && !(k.stuckIn && k.stuckIn.person)) this.drawKnife(ctx, k);
+    for (const k of sb.crowbars) if (!k.wornBy) this.drawKnife(ctx, k);
     for (const g of sb.guns) if (!g.wornBy) this.drawGun(ctx, g);
     for (const v of sb.vests) if (!v.wornBy) this.drawVest(ctx, v);
     for (const a of sb.ammo) this.drawAmmo(ctx, a);
@@ -89,6 +115,11 @@ export class Renderer {
       this.drawPerson(ctx, p);
     }
     for (const c of sb.crates) if (c.carriedBy) this.drawCrate(ctx, c);
+    // the bushes, in front of whoever is in them; the wires over everything they hold
+    for (const t of sb.plants) if (t.kind === 'bush') this.drawPlant(ctx, t, v);
+    for (const w of sb.wires) w.draw(ctx);
+    if (ui.wire) this.drawWirePreview(ctx, ui.wire);
+    this.drawFrozen(ctx, v);
     this.drawFx(ctx);
     // a mod's beams, missiles and blasts
     for (const e of sb.effects) if (e.draw) e.draw(ctx);
@@ -170,6 +201,12 @@ export class Renderer {
     ctx.restore();
   }
 
+  /** A wall, or a piece of one: what is left of it (structures.js draws its own picture). */
+  drawSlab(ctx, w) {
+    w.draw(ctx);
+    if (w.frozenInPlace) drawFrozenBox(ctx, w.body);
+  }
+
   drawKnuckles(ctx, k) {
     const b = k.body;
     ctx.save();
@@ -186,6 +223,7 @@ export class Renderer {
     ctx.translate(b.pos.x, b.pos.y);
     ctx.rotate(b.rot);
     if (k.kind === 'machete') drawMacheteShape(ctx, MACHETE_W, MACHETE_H, k.blood);
+    else if (k.kind === 'crowbar') drawCrowbarShape(ctx, CROWBAR_W, CROWBAR_H, k.blood);
     else drawKnifeShape(ctx, KNIFE_W, KNIFE_H, k.blood);
     ctx.restore();
     drawStains(ctx, k);
@@ -198,10 +236,74 @@ export class Renderer {
     ctx.save();
     ctx.translate(b.pos.x, b.pos.y);
     ctx.rotate(b.rot);
-    if (g.kind === 'm1911') drawM1911Shape(ctx, 1, g.blood, g.slide);
-    else drawGlockShape(ctx, 1, g.blood, g.slide);
+    drawGunShape(ctx, g.kind, 1, g.blood, g.slide);
     ctx.restore();
     drawStains(ctx, g);
+  }
+
+  /** A tree or a bush, if any of it is in view. */
+  drawPlant(ctx, t, v) {
+    const bb = t.bounds();
+    if (bb.x1 < v.minX || bb.x0 > v.maxX) return;
+    t.draw(ctx);
+  }
+
+  /** Something off a tree: a branch, a log, a whole tree on its side. */
+  drawLog(ctx, l) {
+    l.draw(ctx);
+  }
+
+  /** Where a wire would go, while it is being put in: from where it was started to the pointer. */
+  drawWirePreview(ctx, w) {
+    const spec = WIRES[w.type];
+    if (!spec) return;
+    ctx.save();
+    ctx.globalAlpha = 0.75;
+    ctx.strokeStyle = spec.colour;
+    ctx.lineWidth = Math.max(spec.width, 0.03);
+    ctx.lineCap = 'round';
+    if (!spec.pin) {
+      ctx.setLineDash([0.08, 0.06]);
+      ctx.beginPath();
+      ctx.moveTo(w.x0, w.y0);
+      ctx.lineTo(w.x1, w.y1);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.fillStyle = spec.dark;
+    for (const [x, y] of spec.pin ? [[w.x1, w.y1]] : [[w.x0, w.y0], [w.x1, w.y1]]) {
+      ctx.beginPath(); ctx.arc(x, y, Math.max(spec.width, 0.035), 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  /** A pale dashed line round everything frozen in place. */
+  drawFrozen(ctx, v) {
+    const sb = this.sb;
+    for (const p of sb.people) {
+      if (!p.frozenInPlace || p.box.maxX < v.minX || p.box.minX > v.maxX) continue;
+      const b = p.box;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(120, 200, 255, 0.95)';
+      ctx.lineWidth = 0.022;
+      ctx.setLineDash([0.07, 0.05]);
+      ctx.strokeRect(b.minX - 0.05, b.minY - 0.05, b.maxX - b.minX + 0.1, b.maxY - b.minY + 0.1);
+      ctx.restore();
+    }
+    for (const t of [...sb.crates, ...sb.loose(), ...sb.items]) {
+      if (!t.frozenInPlace || !t.body || t.kind === 'wall' || t.kind === 'piece') continue;
+      drawFrozenBox(ctx, t.body);
+    }
+    for (const t of sb.plants) {
+      if (!t.frozenInPlace) continue;
+      const b = t.bounds();
+      ctx.save();
+      ctx.strokeStyle = 'rgba(120, 200, 255, 0.95)';
+      ctx.lineWidth = 0.03;
+      ctx.setLineDash([0.1, 0.07]);
+      ctx.strokeRect(b.x0 - 0.05, Math.max(0, b.y0 - 0.05), b.x1 - b.x0 + 0.1, b.y1 - Math.max(0, b.y0) + 0.1);
+      ctx.restore();
+    }
   }
 
   drawVest(ctx, v) {
@@ -244,8 +346,18 @@ export class Renderer {
       ctx.save();
       ctx.translate(c.x, c.y);
       ctx.rotate(c.a);
-      ctx.fillRect(-0.017, -0.007, 0.034, 0.014);
-      ctx.strokeRect(-0.017, -0.007, 0.034, 0.014);
+      if (c.shell) {
+        // a shotgun shell: the red hull, the brass head
+        ctx.fillStyle = '#b3201c';
+        ctx.fillRect(-0.03, -0.011, 0.05, 0.022);
+        ctx.fillStyle = BRASS;
+        ctx.fillRect(-0.042, -0.012, 0.014, 0.024);
+      } else {
+        const l = c.long ? 0.05 : 0.034;
+        ctx.fillStyle = BRASS;
+        ctx.fillRect(-l / 2, -0.007, l, 0.014);
+        ctx.strokeRect(-l / 2, -0.007, l, 0.014);
+      }
       ctx.restore();
     }
   }
@@ -262,12 +374,12 @@ export class Renderer {
       hurt: h.face,
       weapon: p.armedWith,
       weaponBlood: p.weapon ? p.weapon.blood : 0,
-      gunSlide: (p.armedWith === 'glock' || p.armedWith === 'm1911') && p.weapon ? p.weapon.slide : 0,
+      gunSlide: GUN_MODELS[p.armedWith] && p.weapon ? p.weapon.slide : 0,
       // an officer's uniform and cap; what they have put away, a vest, handcuffs
       uniform: p.officer ? POLICE_UNIFORM : null,
       hat: p.officer ? 'police' : null,
       belt: p.officer,
-      kit: p.kit.length ? { holster: p.stowed.holster && p.stowed.holster.kind, pocket: p.stowed.pocket && p.stowed.pocket.kind, duty: p.stowed.duty && p.stowed.duty.kind } : null,
+      kit: p.kit.length ? { holster: p.stowed.holster && p.stowed.holster.kind, pocket: p.stowed.pocket && p.stowed.pocket.kind, duty: p.stowed.duty && p.stowed.duty.kind, back: p.stowed.back && p.stowed.back.kind } : null,
       vest: p.vest,
       donning: p.donning,
       cuffed: !!p.cuffed,
@@ -370,6 +482,30 @@ export class Renderer {
       ctx.arc(p.x, p.y, p.r * (1 + k * 2.6), 0, TAU);
       ctx.fill();
     }
+    // bits off walls and trees: splinters and scraps, shards of glass, leaves
+    for (const d of fx.debris) {
+      const fade = d.rest && d.age > 30 ? Math.max(0, 1 - (d.age - 30) / 10) : 1;
+      ctx.save();
+      ctx.translate(d.x, d.y);
+      ctx.rotate(d.a);
+      ctx.globalAlpha = fade * (d.sharp ? 0.85 : 1);
+      ctx.fillStyle = d.c;
+      if (d.leaf) {
+        ctx.beginPath();
+        ctx.ellipse(0, 0, d.s, d.s * 0.55, 0, 0, TAU);
+        ctx.fill();
+      } else if (d.sharp) {
+        ctx.beginPath();
+        ctx.moveTo(-d.s, -d.s * 0.3); ctx.lineTo(d.s * 0.8, -d.s * 0.5); ctx.lineTo(d.s * 0.2, d.s * 0.6);
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        ctx.fillRect(-d.s / 2, -d.s / 2, d.s, d.s);
+        if (d.glow > 0) { ctx.fillStyle = `rgba(255, 150, 60, ${d.glow.toFixed(2)})`; ctx.fillRect(-d.s / 2, -d.s / 2, d.s, d.s); }
+      }
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
     for (const e of fx.emberBits) {
       const k = e.age / e.life, tw = 0.6 + 0.4 * Math.sin(e.age * 30 + e.seed);
       ctx.fillStyle = `rgba(255, ${170 + Math.round(60 * (1 - k))}, 60, ${(1 - k) * tw})`;
@@ -415,11 +551,13 @@ export class Renderer {
     else if (g.kind === 'knuckles') drawKnuckleShape(ctx, 0.26, 0.11, 0);
     else if (g.kind === 'knife') drawKnifeShape(ctx, KNIFE_W, KNIFE_H, 0);
     else if (g.kind === 'machete') drawMacheteShape(ctx, MACHETE_W, MACHETE_H, 0);
-    else if (g.kind === 'glock') drawGlockShape(ctx, 1, 0, 0);
-    else if (g.kind === 'm1911') drawM1911Shape(ctx, 1, 0, 0);
+    else if (g.kind === 'crowbar') drawCrowbarShape(ctx, CROWBAR_W, CROWBAR_H, 0);
+    else if (GUN_MODELS[g.kind]) drawGunShape(ctx, g.kind, 1, 0, 0);
     else if (g.kind === 'taser') drawTaserShape(ctx, 1, true);
     else if (g.kind === 'vest') drawVestShape(ctx, VEST_W, VEST_H, false, 1);
-    else if (g.kind === 'ammo') { const sp = AMMO_BOXES[g.size || 'medium']; drawAmmoBoxShape(ctx, g.size || 'medium', sp.w, sp.h, 1); }
+    else if (g.kind === 'ammo') { const sp = AMMO_BOXES[g.size] || AMMO_BOXES.ammo9; drawAmmoBoxShape(ctx, g.size, sp.w, sp.h, 1); }
+    else if (WALLS[g.kind]) { ctx.scale(1, -1); drawWallShape(ctx, g.kind, 0, 0, WALLS[g.kind].h); }
+    else if (g.kind === 'tree' || g.kind === 'bush') drawPlantShape(ctx, g.kind, 0, 0, g.kind === 'bush' ? 1 : 5, 11);
     else {
       // a stickman - or anybody else a mod adds
       ctx.strokeStyle = INK;

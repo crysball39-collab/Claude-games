@@ -8,19 +8,25 @@
    and the HUD listen on the same bus.
 
    Each step: the brains think, the bodies move (animated ones by their
-   controllers), the hand drags whatever it holds, the ragdolls fall and
-   tumble, the crates and props move, and then what ran into what is sorted
-   out - bodies bowling into people, blades going in point first.
+   controllers), the walls and the trees do what they do, the hand drags
+   whatever it holds, the ragdolls fall and tumble, the crates and props
+   move, the wires pull their ends back to where they may be, and then what
+   ran into what is sorted out - bodies bowling into people, blades going in
+   point first, walls taking the knocks.
 
    Bullets do not fly: a shot is traced the instant it is fired, along its
-   line, into and through whatever is in the way (shoot()).
+   line, into and through whatever is in the way (shoot()) - a wall or a
+   tree cell by cell.
    ========================================================================== */
 import { World, Body } from '../physics/rigid.js';
 import { Stickman, G } from './stickman.js';
-import { Crate, Knuckles, Knife, Machete, Gun, Limb, AmmoBox, Vest, CRATE_SIZE, AMMO_BOXES, VEST_H } from './props.js';
+import { Crate, Knuckles, Knife, Machete, Crowbar, Gun, Limb, AmmoBox, Vest, CRATE_SIZE, AMMO_BOXES, VEST_H, isLongGun } from './props.js';
 import { Taser } from './taser.js';
 import { Law } from './law.js';
 import { FX } from './fx.js';
+import { Slab, WALLS } from './structures.js';
+import { solveWires, bulletThrough } from './wires.js';
+import { Plant } from './trees.js';
 import { makePerson } from './people.js';
 import { clamp, rand, chance } from '../core/util.js';
 
@@ -29,7 +35,7 @@ export const HALF_WIDTH = 20;
 /** Too big to be bowled over by a body flying into them (a mod's). */
 const sturdy = (q) => !!(q.species && q.species.sturdy);
 
-export const LIMITS = { people: 24, crates: 40, knuckles: 16, knives: 16, machetes: 16, guns: 16, limbs: 40, items: 40, vests: 12, ammo: 16 };
+export const LIMITS = { people: 24, crates: 40, knuckles: 16, knives: 16, machetes: 16, crowbars: 16, guns: 16, limbs: 40, items: 40, vests: 12, ammo: 16, walls: 16, slabs: 70, plants: 12, logs: 40 };
 // how likely a bullet is to hit someone in its way who it was not aimed at
 const STRAY_HIT = 0.4;
 
@@ -84,10 +90,15 @@ export class Sandbox {
     this.knuckles = [];
     this.knives = [];
     this.machetes = [];
-    this.guns = [];           // pistols and tasers
+    this.crowbars = [];
+    this.guns = [];           // pistols, rifles, shotguns and tasers
     this.limbs = [];
     this.vests = [];
     this.ammo = [];           // ammo boxes
+    this.slabs = [];          // walls, and the pieces that come off them (structures.js)
+    this.wires = [];          // ropes, rods and pins (wires.js)
+    this.plants = [];         // trees and bushes (trees.js)
+    this.logs = [];           // what has come off them: branches, twigs, whole trees
     this.fx = new FX(this);
     // things a mod puts in the world that are not bodies: beams, missiles, blasts.
     // Each is { update(dt, sandbox) -> false when it is over, draw(ctx) }
@@ -126,15 +137,34 @@ export class Sandbox {
     for (const p of this.people) if (p.brain && !p.removed) p.brain.perceive(data);
   }
 
+  /** fn, `secs` from now (in the sandbox's time: not while it is paused). */
+  later(secs, fn) {
+    let t = secs;
+    this.effects.push({ update: (dt) => { t -= dt; if (t > 0) return true; fn(); return false; } });
+  }
+
   /* -------------------------------- spawning -------------------------------- */
 
   get count() {
     return { people: this.people.length, crates: this.crates.length, knuckles: this.knuckles.length, knives: this.knives.length,
-      machetes: this.machetes.length, guns: this.guns.length, limbs: this.limbs.length, vests: this.vests.length, ammo: this.ammo.length };
+      machetes: this.machetes.length, crowbars: this.crowbars.length, guns: this.guns.length, limbs: this.limbs.length, vests: this.vests.length, ammo: this.ammo.length,
+      walls: this.walls.length, plants: this.plants.length };
+  }
+
+  /** The walls standing, whole or not (not the pieces that came off them). */
+  get walls() { return this.slabs.filter((s) => s.kind === 'wall' && !s.removed); }
+
+  /** Every box things land on and bump into: the crates, the walls and the pieces off them. */
+  solidBoxes() {
+    const out = [];
+    for (const c of this.crates) if (!c.carriedBy && !c.removed) out.push(c.body);
+    for (const w of this.slabs) if (!w.removed) out.push(w.body);
+    for (const l of this.logs) if (!l.removed) out.push(l.body);
+    return out;
   }
 
   /** Every weapon in the sandbox, wherever it is. */
-  get weapons() { return [...this.knuckles, ...this.knives, ...this.machetes, ...this.guns]; }
+  get weapons() { return [...this.knuckles, ...this.knives, ...this.machetes, ...this.crowbars, ...this.guns]; }
 
   /** Vests and ammo boxes: not weapons, but worth going over for. */
   get gear() { return [...this.vests, ...this.ammo]; }
@@ -148,10 +178,13 @@ export class Sandbox {
     for (const k of this.knuckles) if (k.loose) out.push(k);
     for (const k of this.knives) if (k.loose) out.push(k);
     for (const k of this.machetes) if (k.loose) out.push(k);
+    for (const k of this.crowbars) if (k.loose) out.push(k);
     for (const g of this.guns) if (g.loose) out.push(g);
     for (const v of this.vests) if (v.loose) out.push(v);
     for (const a of this.ammo) if (a.loose) out.push(a);
     for (const l of this.limbs) if (l.loose) out.push(l);
+    for (const w of this.slabs) if (w.loose) out.push(w);
+    for (const l of this.logs) if (!l.removed) out.push(l);
     for (const it of this.items) if (it.loose && it.body) out.push(it);
     return out;
   }
@@ -220,10 +253,19 @@ export class Sandbox {
     return m;
   }
 
-  /** A pistol: a Glock-19, or an M1911. */
+  spawnCrowbar(x, y, rot = 0) {
+    if (this.crowbars.length >= LIMITS.crowbars) return null;
+    x = clamp(x, this.left + 0.4, this.right - 0.4);
+    const c = new Crowbar(this, x, Math.max(y, 0.05), rot);
+    this.crowbars.push(c);
+    this.emit('spawn', { what: c, x, y });
+    return c;
+  }
+
+  /** A gun: a Glock-19, an M1911, an AK-47 or a Mossberg 500. */
   spawnGun(x, y, rot = 0, kind = 'glock') {
     if (this.guns.length >= LIMITS.guns) return null;
-    x = clamp(x, this.left + 0.2, this.right - 0.2);
+    x = clamp(x, this.left + (isLongGun(kind) ? 0.55 : 0.2), this.right - (isLongGun(kind) ? 0.55 : 0.2));
     const g = new Gun(this, x, Math.max(y, 0.08), rot, kind);
     this.guns.push(g);
     this.emit('spawn', { what: g, x, y });
@@ -248,16 +290,80 @@ export class Sandbox {
     return v;
   }
 
-  /** An ammo box: 'small', 'medium' or 'big'. */
-  spawnAmmo(x, y, size = 'medium') {
+  /** A box of rounds: 'ammo9', 'ammo45', 'ammo762' or 'ammo12' (or, from before, 'small', 'medium', 'big'). */
+  spawnAmmo(x, y, size = 'ammo9') {
     if (this.ammo.length >= LIMITS.ammo) return null;
-    const spec = AMMO_BOXES[size] || AMMO_BOXES.medium;
+    size = { small: 'ammo9', medium: 'ammo45', big: 'ammo762' }[size] || size;
+    const spec = AMMO_BOXES[size] || AMMO_BOXES.ammo9;
     x = clamp(x, this.left + spec.w / 2 + 0.05, this.right - spec.w / 2 - 0.05);
     const a = new AmmoBox(this, x, Math.max(y, spec.h / 2 + 0.01), size);
     this.ammo.push(a);
     this.emit('spawn', { what: a, x, y });
     return a;
   }
+
+  /** A wall - 'woodWall', 'metalWall' or 'glassWall' - standing on whatever is under x. */
+  spawnWall(type, x, y = null) {
+    const spec = WALLS[type];
+    if (!spec || this.walls.length >= LIMITS.walls) return null;
+    x = clamp(x, this.left + spec.w / 2 + 0.02, this.right - spec.w / 2 - 0.02);
+    const base = this.surfaceBelow(x, spec.w * 0.4, (y ?? 60) + 0.02).y;
+    const w = this.addSlab(new Slab(this, type, x, base));
+    this.emit('spawn', { what: w, x, y: base });
+    return w;
+  }
+
+  /** A tree or a bush ('tree', 'bush'), growing out of whatever is under x. */
+  spawnPlant(kind, x, y = null) {
+    if (this.plants.length >= LIMITS.plants) return null;
+    x = clamp(x, this.left + 0.3, this.right - 0.3);
+    const base = this.surfaceBelow(x, 0.1, (y ?? 60) + 0.02).y;
+    const p = new Plant(this, kind, x, base);
+    this.plants.push(p);
+    this.emit('spawn', { what: p, x, y: base });
+    return p;
+  }
+
+  /** Something off a tree, into the world; to make room, the lightest other one goes. */
+  addLog(l) {
+    if (this.logs.length >= LIMITS.logs) {
+      let least = null;
+      for (const o of this.logs) if (o !== l && (!least || o.body.mass < least.body.mass)) least = o;
+      if (least) this.remove(least, { quiet: true });
+    }
+    this.logs.push(l);
+    this.phys.add(l.body);
+    return l;
+  }
+
+  /** A slab into the world - a wall, or a piece off one; to make room, the smallest loose piece goes to bits. */
+  addSlab(s) {
+    if (this.slabs.length >= LIMITS.slabs) {
+      let least = null;
+      for (const o of this.slabs) if (o.loose && o !== s && (!least || o.cellCount < least.cellCount)) least = o;
+      if (least) this.remove(least, { quiet: true });
+    }
+    this.slabs.push(s);
+    return s;
+  }
+
+  /** A rope, a rod or a pin, into the world (wires.js tie). */
+  addWire(w) {
+    this.wires.push(w);
+    return w;
+  }
+
+  /** Out of the world, and off whatever it was tied to. */
+  removeWire(w) {
+    if (w.removed) return;
+    w.removed = true;
+    const i = this.wires.indexOf(w);
+    if (i >= 0) this.wires.splice(i, 1);
+    for (const e of [w.a, w.b]) if (e.t && e.t.wires) e.t.wires = e.t.wires.filter((x) => x !== w);
+  }
+
+  /** The wires tied to a thing. */
+  wiresOn(t) { return this.wires.filter((w) => w.a.t === t || w.b.t === t); }
 
   /** A piece of someone, cut off: see Stickman.sever. */
   addLimb(pts, bone, of, vx, vy, spin, scale) {
@@ -277,6 +383,9 @@ export class Sandbox {
 
   removeNow(thing) {
     if (this.hand && this.hand.holding === thing) this.hand.release();
+    if (thing.isWire) { thing.snap('removed'); return; }
+    // whatever was tied to it is let go
+    for (const w of this.wiresOn(thing)) w.snap('removed');
     if (thing.kind === 'stickman') {
       thing.dropCarried();
       // whoever they had hold of (a mod's thing can hold people) is let go
@@ -303,6 +412,27 @@ export class Sandbox {
       this.phys.remove(thing.body);
       this.limbs.splice(this.limbs.indexOf(thing), 1);
       this.emit('vanish', { what: thing, x: thing.pos.x, y: thing.pos.y });
+    } else if (thing.kind === 'wall' || thing.kind === 'piece') {
+      thing.removed = true;
+      this.phys.remove(thing.body);
+      const i = this.slabs.indexOf(thing);
+      if (i >= 0) this.slabs.splice(i, 1);
+      // anything stuck in it falls out
+      for (const k of this.blades) if (k.stuckIn && k.stuckIn.slab === thing) k.drop(k.body.pos.x, k.body.pos.y, 0, 0);
+      this.emit('vanish', { what: thing, x: thing.pos.x, y: thing.pos.y });
+    } else if (thing.kind === 'tree' || thing.kind === 'bush') {
+      thing.removed = true;
+      const i = this.plants.indexOf(thing);
+      if (i >= 0) this.plants.splice(i, 1);
+      for (const k of this.blades) if (k.stuckIn && k.stuckIn.wood === thing) k.drop(k.body.pos.x, k.body.pos.y, 0, 0);
+      this.emit('vanish', { what: thing, x: thing.pos.x, y: thing.pos.y });
+    } else if (thing.kind === 'log') {
+      thing.removed = true;
+      this.phys.remove(thing.body);
+      const i = this.logs.indexOf(thing);
+      if (i >= 0) this.logs.splice(i, 1);
+      for (const k of this.blades) if (k.stuckIn && k.stuckIn.wood === thing) k.drop(k.body.pos.x, k.body.pos.y, 0, 0);
+      this.emit('vanish', { what: thing, x: thing.pos.x, y: thing.pos.y });
     } else if (thing.kind === 'vest' || thing.kind === 'ammo') {
       const at = { x: thing.pos.x, y: thing.pos.y };
       thing.removed = true;
@@ -317,7 +447,7 @@ export class Sandbox {
       }
       thing.wornBy = null;
       this.emit('vanish', { what: thing, x: at.x, y: at.y });
-    } else if (thing.kind === 'knuckles' || thing.kind === 'knife' || thing.kind === 'machete' || this.guns.includes(thing)) {
+    } else if (thing.kind === 'knuckles' || thing.kind === 'knife' || thing.kind === 'machete' || thing.kind === 'crowbar' || this.guns.includes(thing)) {
       const at = { x: thing.pos.x, y: thing.pos.y };
       // out of whoever's hand, holster or pocket it was in
       if (thing.wornBy) { if (thing.wornBy.unequip) thing.wornBy.unequip(thing); else thing.wornBy.weapon = null; }
@@ -328,8 +458,8 @@ export class Sandbox {
       }
       thing.removed = true;
       const gun = this.guns.includes(thing);
-      const list = gun ? this.guns : { knuckles: this.knuckles, knife: this.knives, machete: this.machetes }[thing.kind];
-      if (thing.kind === 'knife' || thing.kind === 'machete') thing.leaveWorld();
+      const list = gun ? this.guns : { knuckles: this.knuckles, knife: this.knives, machete: this.machetes, crowbar: this.crowbars }[thing.kind];
+      if (thing.kind === 'knife' || thing.kind === 'machete' || thing.kind === 'crowbar') thing.leaveWorld();
       else if (gun) { if (thing.inWorld) { this.phys.remove(thing.body); thing.inWorld = false; } }
       else if (!thing.wornBy) this.phys.remove(thing.body);
       list.splice(list.indexOf(thing), 1);
@@ -350,12 +480,17 @@ export class Sandbox {
     for (const k of [...this.knuckles]) this.remove(k);
     for (const k of [...this.knives]) this.remove(k);
     for (const k of [...this.machetes]) this.remove(k);
+    for (const k of [...this.crowbars]) this.remove(k);
     for (const g of [...this.guns]) this.remove(g);
     for (const l of [...this.limbs]) this.remove(l);
     for (const v of [...this.vests]) this.remove(v);
     for (const a of [...this.ammo]) this.remove(a);
     for (const c of [...this.crates]) this.remove(c);
+    for (const w of [...this.slabs]) this.remove(w);
+    for (const t of [...this.plants]) this.remove(t);
+    for (const l of [...this.logs]) this.remove(l);
     for (const it of [...this.items]) this.remove(it);
+    for (const w of [...this.wires]) this.removeWire(w);
     this.fx.clear();
     this.effects.length = 0;
     this.law.clear();
@@ -384,13 +519,17 @@ export class Sandbox {
     this.separate(dt);
     this.bodiesCollide();
     for (const p of this.people) p.syncProxy();
+    for (const w of this.slabs) w.update(dt);
+    for (const t of [...this.plants]) if (!t.removed) t.update(dt);
     if (this.hand) this.hand.step(dt);
     this.stepRagdolls(dt);
     this.limbsCollide();
     this.knivesFly(dt);
     this.phys.step(dt);
+    solveWires(this, dt);
     this.contacts();
-    for (const k of this.blades) if (k.stuckIn && k.stuckIn.crate) k.follow();
+    for (const l of [...this.logs]) if (!l.removed) l.update(dt);
+    for (const k of this.blades) if (k.stuckIn && (k.stuckIn.crate || k.stuckIn.slab || k.stuckIn.wood)) k.follow();
     this.bleedLimbs(dt);
     this.fx.update(dt);
     if (this.effects.length) {
@@ -465,8 +604,7 @@ export class Sandbox {
     const rags = [];
     for (const p of this.people) if (p.rag) rags.push(p);
     if (!rags.length) return;
-    const boxes = [];
-    for (const c of this.crates) if (!c.carriedBy && !c.removed) boxes.push(c.body);
+    const boxes = this.solidBoxes();
     const world = { floor: 0, left: this.left, right: this.right, boxes, friction: 0.55 };
     // something moving near a body at rest wakes it up
     for (const p of rags) {
@@ -503,10 +641,13 @@ export class Sandbox {
             const dx = pb.x - pa.x, dy = pb.y - pa.y;
             const d = Math.hypot(dx, dy), min = ra + rb;
             if (d >= min || d < 1e-6) continue;
-            const w = pa.im + pb.im;
+            // (a body frozen in place gives nothing: the other one is pushed off it)
+            const ia = A.pinned ? 0 : pa.im, ib = B.pinned ? 0 : pb.im;
+            const w = ia + ib;
+            if (w <= 0) continue;
             const k = (min - d) / (d * w) * 0.8;
-            pa.x -= dx * k * pa.im; pa.y -= dy * k * pa.im;
-            pb.x += dx * k * pb.im; pb.y += dy * k * pb.im;
+            pa.x -= dx * k * ia; pa.y -= dy * k * ia;
+            pb.x += dx * k * ib; pb.y += dy * k * ib;
             touched = true;
           }
         }
@@ -608,6 +749,8 @@ export class Sandbox {
       const tip = k.tip;
       const nx = tip.x + b.vel.x * dt, ny = tip.y + b.vel.y * dt;
       const pointFirst = along > 0.72 && sp > 6.5;
+      // a blade flying through a rope cuts it (a wooden one, anyway)
+      for (const w of this.wires) if (w.spec.wood && !w.spec.pin && w.crossedBy(tip.x, tip.y, nx, ny)) w.snap('cut');
       const by = k.thrownBy && this.time - k.thrownAt < 3 ? k.thrownBy : null;
 
       // people
@@ -649,6 +792,31 @@ export class Sandbox {
       }
       if (done) continue;
 
+      // a wooden wall: in it goes; steel and glass it only marks (and glass, hard enough, it goes through)
+      for (const w of this.slabs) {
+        if (w.removed || !w.contains(nx, ny, 0)) continue;
+        if (w.mat.name === 'wood') this.stickInWall(k, w, ux, uy);
+        else {
+          w.damage(nx, ny, 0.03, sp * 0.05, 'blade', { dx: ux, dy: uy });
+          if (w.mat.name === 'metal') this.fx.sparks(nx, ny, 4);
+          this.emit('knock', { who: k.thrownBy || { pos: { x: nx } }, wall: w, loud: false, blade: true, material: w.mat.name, x: nx, y: ny });
+        }
+        done = true;
+        break;
+      }
+      if (done) continue;
+
+      // a tree, a log: into the wood
+      for (const t of [...this.plants, ...this.logs]) {
+        if (t.removed) continue;
+        const h = t.hitTest(nx, ny, 0);
+        if (!h) continue;
+        this.stickInWood(k, t, h, ux, uy);
+        done = true;
+        break;
+      }
+      if (done) continue;
+
       // the floor, point down
       if (ny < 0 && uy < -0.45) {
         const depth = 0.05 + Math.min(0.05, (sp - 6) * 0.005);
@@ -684,6 +852,38 @@ export class Sandbox {
     this.emit('stuck', { what: k, into: c, x: ex, y: ey, speed: 8 });
   }
 
+  /** A blade, point first into a wooden wall: held there by the cells round its point. */
+  stickInWall(k, w, ux, uy) {
+    const b = k.body, tip = k.tip;
+    let t0 = 0, t1 = 0.4;
+    for (let i = 0; i < 14; i++) {
+      const m = (t0 + t1) / 2;
+      if (w.contains(tip.x + ux * m, tip.y + uy * m, 0)) t1 = m; else t0 = m;
+    }
+    const depth = 0.05;
+    const ex = tip.x + ux * (t1 + depth), ey = tip.y + uy * (t1 + depth);
+    b.pos.x = ex - ux * k.w / 2;
+    b.pos.y = ey - uy * k.w / 2;
+    const g = w.toGrid(b.pos.x, b.pos.y);
+    k.stickInto({ slab: w, gx: g.gx, gy: g.gy, lr: b.rot - w.body.rot });
+    if (this.hand && this.hand.holding === k) this.hand.release();
+    w.damage(ex, ey, 0.03, 0.4, 'blade', { mark: true, dx: ux, dy: uy });
+    this.emit('stuck', { what: k, into: w, x: ex, y: ey, speed: 8 });
+  }
+
+  /** A blade, point first into a tree or a log: in the limb it hit, wherever that limb goes. */
+  stickInWood(k, t, h, ux, uy) {
+    const b = k.body, tip = k.tip;
+    const ex = tip.x + ux * 0.04, ey = tip.y + uy * 0.04;
+    b.pos.x = ex - ux * k.w / 2;
+    b.pos.y = ey - uy * k.w / 2;
+    const l = t.local(h.b, b.pos.x, b.pos.y);
+    k.stickInto({ wood: t, bough: h.b, u: l.u, v: l.v, lr: b.rot - h.b.ang });
+    if (this.hand && this.hand.holding === k) this.hand.release();
+    t.damage(ex, ey, 0.03, 0.3, 'blade', { dx: ux, dy: uy });
+    this.emit('stuck', { what: k, into: t, x: ex, y: ey, speed: 8 });
+  }
+
   /* ---------------------------------- guns ---------------------------------- */
 
   /**
@@ -703,6 +903,8 @@ export class Sandbox {
     const hit = new Set(), passed = new Set();
     const path = [];
     let ricochets = 0;
+    // a tree somebody is standing at, shooting: the shot goes past it (they are in front of it)
+    for (const t of this.plants) if (t.hitTest(x, y, 0.05)) hit.add(t);
     while (energy > 0.15 && range > 0) {
       let best = null;
       if (dy < -1e-6) {
@@ -715,6 +917,21 @@ export class Sandbox {
         if (c.removed || hit.has(c)) continue;
         const h = rayBox(c.body, px, py, dx, dy, range);
         if (h && (!best || h.t < best.t)) best = { t: h.t, what: 'crate', crate: c, out: h.out };
+      }
+      for (const w of this.slabs) {
+        if (w.removed || hit.has(w)) continue;
+        const h = rayBox(w.body, px, py, dx, dy, range);
+        if (h && (!best || h.t < best.t)) best = { t: h.t, what: 'slab', slab: w, out: h.out };
+      }
+      // trees, bushes and what has come off them: only where the wood is
+      // (a tree is a little behind everything else: somebody standing in front of one is hit first)
+      for (const list of [this.plants, this.logs]) {
+        for (const w of list) {
+          if (w.removed || hit.has(w)) continue;
+          const h = w.rayHit(px, py, dx, dy, range);
+          const back = list === this.plants ? 0.3 : 0;
+          if (h && (!best || h.t + back < best.t)) best = { t: h.t, what: 'wood', wood: w };
+        }
       }
       for (const q of this.people) {
         if (q.removed || hit.has(q) || passed.has(q) || (q === by && !ricochets)) continue;
@@ -762,6 +979,43 @@ export class Sandbox {
         px = ox + ndx * 0.01; py = oy + ndy * 0.01;
         range -= best.out;
         dx = ndx; dy = ndy;
+      } else if (best.what === 'slab') {
+        // cell by cell through what is left of the wall: what each cell takes, it keeps
+        const w = best.slab;
+        hit.add(w);
+        const r = w.bullet(hx, hy, dx, dy, energy, best.out + 0.01);
+        if (r.hit) {
+          if (w.loose) w.body.applyImpulse(dx * 3 * energy, dy * 3 * energy, hx, hy);
+          this.emit('bulletHit', { what: w, x: r.at.x, y: r.at.y, energy, material: w.mat.name, through: r.energy > 0.15 });
+          if (w.mat.name === 'metal') this.fx.sparks(r.at.x, r.at.y, 5);
+          // stopped dead against steel at a slant, it goes off it instead
+          if (r.energy <= 0.15 && w.mat.name === 'metal' && ricochets < 2 && chance(0.35)) {
+            ricochets++;
+            dx = -dx * rand(0.6, 0.95); dy = dy + rand(-0.3, 0.3);
+            const n = Math.hypot(dx, dy); dx /= n; dy /= n;
+            energy *= 0.4;
+            px = r.at.x + dx * 0.02; py = r.at.y + dy * 0.02;
+            this.emit('ricochet', { x: r.at.x, y: r.at.y, by });
+            continue;
+          }
+        }
+        energy = r.energy;
+        const ox = hx + dx * r.out, oy = hy + dy * r.out;
+        path.push([hx, hy, ox, oy]);
+        px = ox + dx * 0.01; py = oy + dy * 0.01;
+        range -= r.out;
+      } else if (best.what === 'wood') {
+        // through the wood, cell by cell, every limb of it in the way
+        const w = best.wood;
+        hit.add(w);
+        const r = w.bullet(hx, hy, dx, dy, energy, range);
+        if (!r.hit) { px = hx + dx * 0.01; py = hy + dy * 0.01; continue; }
+        this.emit('bulletHit', { what: w, x: r.at.x, y: r.at.y, energy, material: 'wood', through: r.energy > 0.15 });
+        energy = r.energy;
+        const ox = hx + dx * r.out, oy = hy + dy * r.out;
+        path.push([hx, hy, ox, oy]);
+        px = ox + dx * 0.01; py = oy + dy * 0.01;
+        range -= r.out;
       } else if (best.what === 'floor') {
         // in shallow, it skips off; any steeper and it buries itself
         if (dy > -0.22 && ricochets < 2 && chance(0.65)) {
@@ -785,6 +1039,9 @@ export class Sandbox {
       }
     }
     for (const g of path) this.fx.tracer(g[0], g[1], g[2], g[3]);
+    // a rope in the way may be cut by it, and leaves knocked off
+    if (this.wires.length) for (const g of path) bulletThrough(this, g[0], g[1], g[2], g[3]);
+    for (const list of [this.plants, this.logs]) for (const w of list) if (!w.removed) for (const g of path) w.leavesThrough(g[0], g[1], g[2], g[3]);
     // everyone it passed close to without hitting hears it go by
     for (const q of this.people) {
       if (q.removed || hit.has(q) || q === by || !q.alive) continue;
@@ -800,6 +1057,21 @@ export class Sandbox {
     return { x: px, y: py, path };
   }
 
+  /**
+   * A blast at (x, y), out to r (a mod's explosion): the walls, the trees and
+   * what has come off them take it, cell by cell. (Hurting people and
+   * flinging things about is the blast's own business.)
+   */
+  blast(x, y, r, power = 1) {
+    for (const w of [...this.slabs]) {
+      if (w.removed) continue;
+      const b = w.body.aabb();
+      if (x < b.minX - r || x > b.maxX + r || y < b.minY - r || y > b.maxY + r) continue;
+      w.damage(x, y, r * 0.6, power * 2.5, 'blast', { dx: 0, dy: 1, speed: 2 });
+    }
+    for (const t of [...this.plants, ...this.logs]) if (!t.removed) t.blast(x, y, r, power);
+  }
+
   /** A gun lying loose, fired by the hand from above: it goes off the way it points, and kicks. */
   fireLoose(g) {
     if (!g.loose) return false;
@@ -811,9 +1083,11 @@ export class Sandbox {
     g.lastShot = this.time;
     this.fx.flash(m.x, m.y, m.a, kick > 1.2 ? 1.3 : 1);
     const port = spec.port ? g.body.toWorld(spec.port.x, spec.port.y) : g.body.toWorld(0.01, 0.09);
-    this.fx.casing(port.x, port.y, -Math.cos(m.a) * 1.5 + rand(-0.5, 0.5), 2.5 + rand(0, 1.5));
-    this.emit('shot', { who: null, gun: g, x: m.x, y: m.y, loud: true });
-    this.shoot(null, m.x, m.y, m.a + rand(-0.01, 0.01), { energy: spec.energy ?? 1 });
+    if (!spec.pump) this.fx.casing(port.x, port.y, -Math.cos(m.a) * 1.5 + rand(-0.5, 0.5), 2.5 + rand(0, 1.5), { long: !!spec.long });
+    this.emit('shot', { who: null, gun: g, x: m.x, y: m.y, loud: true, heavy: (spec.energy ?? 1) > 1.1 || !!spec.pellets, kind: g.kind });
+    // (a shotgun: its pellets, spreading; nobody there to work the pump, so the shell stays in it)
+    if (spec.pellets) for (let i = 0; i < spec.pellets; i++) this.shoot(null, m.x, m.y, m.a + (Math.random() + Math.random() + Math.random() - 1.5) * spec.spread * 0.0349, { energy: spec.energy, pellet: true });
+    else this.shoot(null, m.x, m.y, m.a + rand(-0.01, 0.01), { energy: spec.energy ?? 1 });
     // the recoil throws it back and up (a .45 harder)
     g.body.applyImpulse(-Math.cos(m.a) * 2.2 * kick, -Math.sin(m.a) * 2.2 * kick + 0.8, m.x, m.y);
     g.body.angVel += rand(4, 9) * Math.sqrt(kick) * (Math.cos(m.a) >= 0 ? 1 : -1);
@@ -850,6 +1124,30 @@ export class Sandbox {
     return true;
   }
 
+  /**
+   * Something hitting a wall, or a piece of one landing: the wall takes it
+   * where they touched, by how hard and how heavy - and a piece of glass
+   * that lands hard breaks; wood and steel only when they come down very
+   * hard.
+   */
+  slabImpact(arb) {
+    if (this.time - (arb.slabT || -9) < 0.15) return;
+    const p = arb.point();
+    for (const [me, other] of [[arb.b1, arb.b2], [arb.b2, arb.b1]]) {
+      const w = me.owner;
+      if (!w || (w.kind !== 'wall' && w.kind !== 'piece') || w.removed) continue;
+      // what hit it: something moving, with its weight behind it - or the floor, coming up to meet a piece
+      const mass = other.invMass > 0 ? other.mass : me.invMass > 0 ? me.mass : 0;
+      if (!mass) continue;
+      const self = other.invMass === 0;
+      if (self && arb.approach < (w.mat.brittle ? 3 : 8.5)) continue;
+      arb.slabT = this.time;
+      const v = other.invMass > 0 ? other.vel : me.vel;
+      const sp = Math.hypot(v.x, v.y) || 1;
+      w.impact(p.x, p.y, arb.approach, mass, v.x / sp, v.y / sp);
+    }
+  }
+
   touching(a, b) {
     const b1 = a.id < b.id ? a : b, b2 = b1 === a ? b : a;
     return this.phys.arbiters.has(b1.id * 65536 + b2.id);
@@ -879,6 +1177,7 @@ export class Sandbox {
         }
         continue;
       }
+      if (arb.approach > 2.5) this.slabImpact(arb);
       if (arb.approach > 1.4) {
         const thing = oa && oa.kind ? oa : ob && ob.kind ? ob : null;
         if (!thing || this.time - thing.lastSound < 0.08) continue;
@@ -892,17 +1191,19 @@ export class Sandbox {
 
   /* --------------------------------- queries -------------------------------- */
 
-  /** The highest thing to stand on under x (+/- hw) that is no higher than maxY. */
-  surfaceBelow(x, hw, maxY) {
+  /** The highest thing to stand on under x (+/- hw) that is no higher than maxY (but `except`). */
+  surfaceBelow(x, hw, maxY, except = null) {
     let best = { y: 0, body: null };
-    for (const c of this.crates) {
-      if (c.removed || c.carriedBy) continue;
-      const bb = c.body.aabb();
-      if (bb.maxX < x - hw || bb.minX > x + hw || bb.minY > maxY) continue;
-      const top = Math.max(c.body.topAt(x), c.body.topAt(x - hw), c.body.topAt(x + hw));
-      if (top > maxY + 1e-6 || top <= best.y) continue;
-      best = { y: top, body: c.body };
-    }
+    const consider = (body) => {
+      const bb = body.aabb();
+      if (bb.maxX < x - hw || bb.minX > x + hw || bb.minY > maxY) return;
+      const top = Math.max(body.topAt(x), body.topAt(x - hw), body.topAt(x + hw));
+      if (top > maxY + 1e-6 || top <= best.y) return;
+      best = { y: top, body };
+    };
+    for (const c of this.crates) if (!c.removed && !c.carriedBy && c !== except) consider(c.body);
+    for (const w of this.slabs) if (!w.removed && w !== except) consider(w.body);
+    for (const l of this.logs) if (!l.removed && l !== except) consider(l.body);
     return best;
   }
 
@@ -944,10 +1245,15 @@ export class Sandbox {
     return null;
   }
 
-  /** Whether one point can see another past the crates. */
+  /** Whether one point can see another past the crates and the walls (glass they can see through). */
   lineOfSight(ax, ay, bx, by, ignore = null) {
-    const hit = this.phys.raycast(ax, ay, bx, by,
-      (b) => b !== ignore && b.owner && b.owner.kind === 'crate' && !b.owner.carriedBy);
+    const hit = this.phys.raycast(ax, ay, bx, by, (b) => {
+      const o = b.owner;
+      if (b === ignore || !o) return false;
+      if (o.kind === 'crate') return !o.carriedBy;
+      if (o.kind === 'log') return o.body.h > 0.15;
+      return (o.kind === 'wall' || o.kind === 'piece') && !o.clear;
+    });
     return !hit;
   }
 
@@ -983,6 +1289,10 @@ export class Sandbox {
       const k = blades[i];
       if (!k.wornBy && !(k.stuckIn && k.stuckIn.person) && k.body.contains(x, y, r * 0.6 + 0.04)) return k;
     }
+    for (let i = this.crowbars.length - 1; i >= 0; i--) {
+      const k = this.crowbars[i];
+      if (!k.wornBy && k.body.contains(x, y, r * 0.6 + 0.05)) return k;
+    }
     for (let i = this.guns.length - 1; i >= 0; i--) {
       const g = this.guns[i];
       if (!g.wornBy && g.body.contains(x, y, r * 0.6 + 0.05)) return g;
@@ -1003,6 +1313,19 @@ export class Sandbox {
       const a = this.ammo[i];
       if (a.body.contains(x, y, r * 0.6 + 0.04)) return a;
     }
+    for (let i = this.logs.length - 1; i >= 0; i--) {
+      const l = this.logs[i];
+      if (!l.removed && l.contains(x, y, r * 0.5)) return l;
+    }
+    // the pieces before the walls they came off
+    for (let i = this.slabs.length - 1; i >= 0; i--) {
+      const w = this.slabs[i];
+      if (w.loose && w.contains(x, y, r * 0.5)) return w;
+    }
+    for (let i = this.slabs.length - 1; i >= 0; i--) {
+      const w = this.slabs[i];
+      if (!w.loose && w.contains(x, y, r * 0.5)) return w;
+    }
     for (let i = this.items.length - 1; i >= 0; i--) {
       const it = this.items[i];
       if (!it.removed && it.contains(x, y, r)) return it;
@@ -1011,6 +1334,44 @@ export class Sandbox {
       const c = this.crates[i];
       if (c.body.contains(x, y, r * 0.5)) return c;
     }
+    // a wire in front of a tree is the wire; the bushes and trees last of all (they are behind everything)
+    const wire = this.wireAt(x, y, r);
+    if (wire) return wire;
+    for (let i = this.plants.length - 1; i >= 0; i--) {
+      const t = this.plants[i];
+      if (!t.removed && t.hitTest(x, y, r * 0.5, true)) return t;
+    }
     return null;
+  }
+
+  /** The wire nearest (x, y), within r. */
+  wireAt(x, y, r) {
+    let best = null, bd = Math.max(0.06, r * 0.6);
+    for (const w of this.wires) {
+      const d = w.distTo(x, y);
+      if (d < bd) { bd = d; best = w; }
+    }
+    return best;
+  }
+
+  /** Everything under (x, y) that a wire could be tied to, the nearest first (for a pin through two of them). */
+  thingsAt(x, y, r) {
+    const out = [];
+    const seen = new Set();
+    const add = (t) => { if (t && !seen.has(t)) { seen.add(t); out.push(t); } };
+    const p = this.personAt(x, y, r);
+    if (p) add(p.who);
+    for (const list of [this.blades, this.crowbars, this.guns, this.limbs, this.knuckles, this.vests, this.ammo]) {
+      for (let i = list.length - 1; i >= 0; i--) {
+        const k = list[i];
+        if (!k.wornBy && !k.removed && !(k.stuckIn && k.stuckIn.person) && k.body.contains(x, y, r * 0.5)) add(k);
+      }
+    }
+    for (let i = this.slabs.length - 1; i >= 0; i--) if (this.slabs[i].contains(x, y, r * 0.4)) add(this.slabs[i]);
+    for (let i = this.items.length - 1; i >= 0; i--) { const it = this.items[i]; if (!it.removed && it.contains(x, y, r * 0.5)) add(it); }
+    for (let i = this.crates.length - 1; i >= 0; i--) { const c = this.crates[i]; if (!c.removed && c.body.contains(x, y, r * 0.3)) add(c); }
+    for (let i = this.logs.length - 1; i >= 0; i--) { const l = this.logs[i]; if (!l.removed && l.contains(x, y, r * 0.4)) add(l); }
+    for (let i = this.plants.length - 1; i >= 0; i--) { const t = this.plants[i]; if (!t.removed && t.hitTest(x, y, r * 0.4, true)) add(t); }
+    return out;
   }
 }

@@ -3,17 +3,24 @@
    settings, and the inspector that shows what a stickman thinks and feels.
 
    Tools:
-     HAND   drag anything to move it, let go while moving to throw it; tap a
-            stickman to open their mind; drag empty space to pan
-     SPAWN  tap the world to place whatever was picked in the spawn menu
-     ERASE  tap something to remove it
+     HAND    drag anything to move it, let go while moving to throw it; tap a
+             stickman to open their mind; drag empty space to pan. With the
+             world paused, whatever is dragged is simply put somewhere else,
+             just as it is
+     SPAWN   tap the world to place whatever was picked in the spawn menu
+     FREEZE  tap something to freeze it in place, and again to let it go
+     WIRE    tie things together - or to the background - with a rope, a
+             fixed rope or a pin: drag from one thing to another (or tap one,
+             then the other); a pin goes in with one tap, through whatever is
+             there
+     ERASE   tap something to remove it (a wire too)
 
    Pinching zooms and pans with any tool. Keyboard: 1 to 6 pick a thing to
    spawn (a stickman, knuckles, a crate, a knife, a machete, a Glock-19), 7
-   to 9 the first three things the installed mods add, H hand, X erase,
-   Space pause, S slow motion, F follow, Tab spawn menu, + and - zoom, 0
-   reset the camera, M sound, Delete removes whoever is selected, Esc closes
-   things. Tapping a gun lying on the floor fires it.
+   to 9 the first three things the installed mods add, H hand, Z freeze, W
+   wire, X erase, Space pause, S slow motion, F follow, Tab spawn menu, + and
+   - zoom, 0 reset the camera, M sound, Delete removes whoever is selected,
+   Esc closes things. Tapping a gun lying on the floor fires it.
 
    Mods (see mods/ and ui/mods-screen.js) put a section of their own in the
    spawn menu for each one installed, and what is different about the people
@@ -29,9 +36,13 @@
 import { Gestures } from '../core/input.js';
 import {
   drawStickman, drawCrateShape, drawKnuckleShape, drawKnifeShape, drawMacheteShape, drawGlockShape,
-  drawM1911Shape, drawTaserShape, drawVestShape, drawAmmoBoxShape,
-  KNIFE_W, KNIFE_H, MACHETE_W, MACHETE_H, INK,
+  drawM1911Shape, drawTaserShape, drawVestShape, drawAmmoBoxShape, drawGunShape, drawCrowbarShape,
+  KNIFE_W, KNIFE_H, MACHETE_W, MACHETE_H, CROWBAR_W, CROWBAR_H, AK_W, MOSS_W, INK,
 } from '../game/draw.js';
+import { drawWallShape, WALLS } from '../game/structures.js';
+import { drawPlantShape } from '../game/trees.js';
+import { WIRES, tie, pinAt } from '../game/wires.js';
+import { setFrozen, frozenSaid, freezable } from '../game/freeze.js';
 import { POLICE_UNIFORM } from '../game/render.js';
 import { spawnOfficer } from '../game/police.js';
 import { solve, makeJoints, P, DIM } from '../game/skeleton.js';
@@ -57,15 +68,27 @@ const KINDS = {
   crate: { name: 'Crate', short: 'CRATE', plural: 'crates', limit: 'crates' },
   officer: { name: 'Officer', short: 'OFFICER', plural: 'people', limit: 'people' },
   vest: { name: 'Light Vest', short: 'VEST', plural: 'vests', limit: 'vests' },
-  ammoSmall: { name: 'Small Ammo Box', short: 'SMALL AMMO', plural: 'ammo boxes', limit: 'ammo' },
-  ammoMedium: { name: 'Medium Ammo Box', short: 'MEDIUM AMMO', plural: 'ammo boxes', limit: 'ammo' },
-  ammoBig: { name: 'Big Ammo Box', short: 'BIG AMMO', plural: 'ammo boxes', limit: 'ammo' },
+  crowbar: { name: 'Crowbar', short: 'CROWBAR', plural: 'crowbars', limit: 'crowbars' },
+  ak47: { name: 'AK-47', short: 'AK-47', plural: 'guns', limit: 'guns', an: true },
+  mossberg: { name: 'Mossberg 500', short: 'MOSSBERG', plural: 'guns', limit: 'guns' },
+  ammo9: { name: '9 mm Ammo Box', short: '9 MM AMMO', plural: 'ammo boxes', limit: 'ammo' },
+  ammo45: { name: '.45 ACP Ammo Box', short: '.45 AMMO', plural: 'ammo boxes', limit: 'ammo' },
+  ammo762: { name: '7.62 mm Ammo Can', short: '7.62 AMMO', plural: 'ammo boxes', limit: 'ammo' },
+  ammo12: { name: 'Box of 12 Gauge Shells', short: '12 GA SHELLS', plural: 'ammo boxes', limit: 'ammo' },
+  woodWall: { name: 'Wood Wall', short: 'WOOD WALL', plural: 'walls', limit: 'walls' },
+  metalWall: { name: 'Metal Wall', short: 'METAL WALL', plural: 'walls', limit: 'walls' },
+  glassWall: { name: 'Glass Wall', short: 'GLASS WALL', plural: 'walls', limit: 'walls' },
+  tree: { name: 'Tree', short: 'TREE', plural: 'trees and bushes', limit: 'plants' },
+  bush: { name: 'Bush', short: 'BUSH', plural: 'trees and bushes', limit: 'plants' },
 };
-// the three ammo boxes in the spawn menu, and which size each is
-const AMMO_KEYS = { ammoSmall: 'small', ammoMedium: 'medium', ammoBig: 'big' };
+// the ammo boxes in the spawn menu: one for each kind of round
+const AMMO_KEYS = { ammo9: 'ammo9', ammo45: 'ammo45', ammo762: 'ammo762', ammo12: 'ammo12' };
 const SLOT_SAID = { holster: 'In the holster', pocket: 'In a pocket', duty: 'On the duty belt' };
 const KEYS = ['stickman', 'knuckles', 'crate', 'knife', 'machete', 'glock'];
-const ARM_NAMES = { knife: 'Grab the knife', machete: 'Grab the machete', glock: 'Grab the gun', m1911: 'Grab the M1911', taser: 'Grab the taser', knuckles: 'Grab the brass knuckles' };
+const ARM_NAMES = {
+  knife: 'Grab the knife', machete: 'Grab the machete', glock: 'Grab the gun', m1911: 'Grab the M1911', taser: 'Grab the taser', knuckles: 'Grab the brass knuckles',
+  crowbar: 'Grab the crowbar', ak47: 'Grab the AK-47', mossberg: 'Grab the shotgun',
+};
 // a padlock: the shackle drops into the body when it is locked (CSS moves it)
 const LOCK_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path class="shackle" d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/><rect x="5" y="11" width="14" height="10" rx="2.5" fill="currentColor"/></svg>';
 // the rows of buttons a mod's people have in the inspector
@@ -121,7 +144,7 @@ const TRAIT_ROWS = [
   ['sociability', 'Sociability'], ['curiosity', 'Curiosity'], ['toughness', 'Toughness'], ['skill', 'Fighting skill'],
 ];
 
-const WEAPON_SAID = { knuckles: 'Wearing brass knuckles', knife: 'Holding a combat knife', machete: 'Holding a machete' };
+const WEAPON_SAID = { knuckles: 'Wearing brass knuckles', knife: 'Holding a combat knife', machete: 'Holding a machete', crowbar: 'Holding a crowbar' };
 // bone -> the two joints of the X-ray figure it runs between
 const XRAY_BONE = {
   skull: ['head', 'head'], neck: ['neck', 'head'], spine: ['hip', 'neck'], ribs: ['chest', 'chest'], pelvis: ['hip', 'hip'],
@@ -147,6 +170,9 @@ export class UI {
     this.canvas = canvas;
     this.tool = 'hand';
     this.spawnKind = 'stickman';
+    this.wireKind = 'woodRope';
+    this.wireStart = null;     // the wire tool: where the first end went { t, x, y }, until the second goes in
+    this.wireEnd = null;       // ...and where the other end would go, as the pointer moves
     this.selected = null;
     this.hover = null;
     this.toastT = 0;
@@ -209,6 +235,7 @@ export class UI {
     if (!this.started) return;
     this.sound.unlock();
     const w = this.world(sx, sy);
+    if (this.tool === 'wire') { this.wireTap(w.x, w.y); return; }
     const thing = this.sb.thingAt(w.x, w.y, this.tol);
     if (this.tool === 'erase') {
       if (thing) {
@@ -216,6 +243,12 @@ export class UI {
         this.toast('Removed ' + (thing.kind === 'stickman' ? thing.name : 'the ' + thing.name.toLowerCase()));
         if (thing === this.selected) this.select(null);
       }
+      return;
+    }
+    if (this.tool === 'freeze') {
+      if (!thing || !freezable(thing)) { this.toast(thing ? `The ${thing.name.toLowerCase()} can't be frozen` : 'Tap something to freeze it in place'); return; }
+      const on = !thing.frozenInPlace;
+      if (setFrozen(this.sb, thing, on)) this.toast(frozenSaid(thing, on));
       return;
     }
     if (this.tool === 'spawn') {
@@ -255,7 +288,14 @@ export class UI {
     this.sound.unlock();
     if (button === 1 || button === 2) return 'pan';
     const w = this.world(sx, sy);
-    const thing = this.tool === 'erase' ? null : this.sb.thingAt(w.x, w.y, this.tol);
+    // the wire tool: from here to wherever it is let go
+    if (this.tool === 'wire') {
+      if (WIRES[this.wireKind].pin) return 'pan';
+      this.wireStart = this.wireStartAt(w.x, w.y);
+      this.wireEnd = { x: w.x, y: w.y };
+      return 'wire';
+    }
+    const thing = this.tool === 'erase' || this.tool === 'freeze' ? null : this.sb.thingAt(w.x, w.y, this.tol);
     if (thing && this.hand.grab(thing, w.x, w.y)) {
       this.cam.follow = null;
       return 'grab';
@@ -267,6 +307,8 @@ export class UI {
     if (mode === 'grab') {
       const w = this.world(sx, sy);
       this.hand.move(w.x, w.y);
+    } else if (mode === 'wire') {
+      this.wireEnd = this.world(sx, sy);
     } else if (mode === 'pan') {
       this.cam.pan(dx, dy);
     }
@@ -274,6 +316,74 @@ export class UI {
 
   dragEnd(sx, sy, mode) {
     if (mode === 'grab') this.hand.release();
+    else if (mode === 'wire') {
+      const w = this.world(sx, sy);
+      const s0 = this.wireStart;
+      // (a drag that went nowhere is a tap: that end stays put, waiting for the other)
+      if (s0 && Math.hypot(w.x - s0.x, w.y - s0.y) < 0.08) { this.wireEnd = null; this.wireHint(); return; }
+      this.wireFinish(w.x, w.y);
+    }
+  }
+
+  /* ---------------------------------- wires --------------------------------- */
+
+  /** The first end of a wire: whatever is there (the first thing a wire can be tied to), or the background. */
+  wireStartAt(x, y) {
+    const things = this.sb.thingsAt(x, y, this.tol);
+    return { t: things[0] || null, x, y };
+  }
+
+  /** A tap with the wire tool: a pin goes in; a rope's first end - or, with one already in, its second. */
+  wireTap(x, y) {
+    const sb = this.sb, type = this.wireKind;
+    if (WIRES[type].pin) {
+      const r = pinAt(sb, type, x, y, sb.thingsAt(x, y, this.tol));
+      if (r.error) this.toast(r.error);
+      else this.toast(r.describe().replace(/ - .*$/, ''));
+      return;
+    }
+    if (!this.wireStart) {
+      this.wireStart = this.wireStartAt(x, y);
+      this.wireHint();
+      return;
+    }
+    this.wireFinish(x, y);
+  }
+
+  /** The second end in: the wire tied (or why not). */
+  wireFinish(x, y) {
+    const sb = this.sb, s0 = this.wireStart;
+    this.wireStart = null;
+    this.wireEnd = null;
+    if (!s0) return;
+    let t1 = sb.thingsAt(x, y, this.tol).find((t) => t !== s0.t) || null;
+    if (s0.t && t1 === null && sb.thingsAt(x, y, this.tol).includes(s0.t)) t1 = s0.t;
+    const r = tie(sb, this.wireKind, s0.t, s0.x, s0.y, t1, x, y);
+    if (r.error) { this.toast(r.error); this.wireHint(); return; }
+    this.toast(r.describe().replace(/ - .*$/, ''));
+    this.wireHint();
+  }
+
+  /** What to do next with the wire tool. */
+  wireHint() {
+    if (this.tool !== 'wire') return;
+    const spec = WIRES[this.wireKind];
+    if (spec.pin) this.hint(`${spec.name}: tap where it goes - through what is there, or into the background`);
+    else if (this.wireStart) this.hint(`${spec.name}: now tap (or drag to) where the other end goes`);
+    else this.hint(`${spec.name}: drag from one thing to another - or to the background`);
+  }
+
+  setWireKind(k) {
+    if (!WIRES[k]) return;
+    this.wireKind = k;
+    this.wireStart = null;
+    for (const b of document.querySelectorAll('.wire-kind')) {
+      const on = b.dataset.wire === k;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+    }
+    this.$('tool-wire-name').textContent = WIRES[k].name.toUpperCase().replace('FIXED ', 'FIXED ');
+    this.wireHint();
   }
 
   spawnAt(x, y) {
@@ -291,7 +401,11 @@ export class UI {
     else if (k === 'taser') made = sb.spawnTaser(x, Math.max(y, 0.12), Math.random() * 0.3 - 0.15);
     else if (k === 'officer') made = spawnOfficer(sb, x);
     else if (k === 'vest') made = sb.spawnVest(x, Math.max(y, 0.1));
+    else if (k === 'crowbar') made = sb.spawnCrowbar(x, Math.max(y, 0.1), Math.random() * 0.3 - 0.15);
+    else if (k === 'ak47' || k === 'mossberg') made = sb.spawnGun(x, Math.max(y, 0.14), Math.random() * 0.2 - 0.1, k);
     else if (AMMO_KEYS[k]) made = sb.spawnAmmo(x, Math.max(y, 0.2), AMMO_KEYS[k]);
+    else if (WALLS[k]) made = sb.spawnWall(k, x, y);
+    else if (k === 'tree' || k === 'bush') made = sb.spawnPlant(k, x, y);
     if (!made) {
       const info = this.kindInfo(k);
       // (a mod's thing may have its own reason: nothing crafted yet, say)
@@ -319,6 +433,7 @@ export class UI {
     $('btn-settings').addEventListener('click', () => this.toggleSettings(true));
     $('btn-clear').addEventListener('click', () => this.clearPressed());
     $('btn-sound').classList.toggle('off', !this.sound.on);
+    for (const b of document.querySelectorAll('.wire-kind')) b.addEventListener('click', () => this.setWireKind(b.dataset.wire));
     for (const id of ['btn-mods', 'btn-mods-title', 'drawer-get-mods']) $(id).addEventListener('click', () => this.openMods());
   }
 
@@ -340,10 +455,16 @@ export class UI {
 
   setTool(t) {
     this.tool = t;
+    this.wireStart = null;
+    this.wireEnd = null;
     for (const b of document.querySelectorAll('.tool')) b.classList.toggle('active', b.dataset.tool === t);
+    this.$('wirebar').classList.toggle('hidden', t !== 'wire');
     this.drawIcon(document.querySelector('#tool-spawn .tool-icon'), this.spawnKind);
     if (t === 'spawn') this.hint(`Tap the world to place ${placeName(this.kindInfo(this.spawnKind))}`);
     else if (t === 'erase') this.hint('Tap something to remove it');
+    else if (t === 'freeze') this.hint('Tap something to freeze it in place - tap it again to let it go');
+    else if (t === 'wire') this.wireHint();
+    else if (this.sb.paused) this.hint('Paused: drag anything to move it');
     else this.hint('');
   }
 
@@ -351,6 +472,9 @@ export class UI {
     this.sb.paused = !this.sb.paused;
     this.$('btn-pause').classList.toggle('on', this.sb.paused);
     this.$('paused-tag').classList.toggle('hidden', !this.sb.paused);
+    // (whatever is in the hand is put down: held while paused, it is only moved; while running, it swings)
+    if (this.hand.active) this.hand.release();
+    if (this.tool === 'hand') this.hint(this.sb.paused ? 'Paused: drag anything to move it' : '');
   }
 
   toggleSlow() {
@@ -562,11 +686,37 @@ export class UI {
       ctx.setTransform(s, 0, 0, -s, w / 2, card ? h * 0.84 - (VEST_H / 2) * s : h / 2);
       drawVestShape(ctx, VEST_W, VEST_H, false, 1);
     } else if (AMMO_KEYS[kind]) {
-      // the three side by side in scale: the big can fills the card, the small box sits in it
+      // all of them in scale: the can fills the card, the boxes sit in it
       const size = AMMO_KEYS[kind], sp = AMMO_BOXES[size];
-      const s = (w * (card ? 0.8 : 0.95)) / AMMO_BOXES.big.w;
+      const s = (w * (card ? 0.8 : 0.95)) / AMMO_BOXES.ammo762.w;
       ctx.setTransform(s, 0, 0, -s, w / 2, card ? h * 0.84 - (sp.h / 2) * s : h / 2);
       drawAmmoBoxShape(ctx, size, sp.w, sp.h, 1);
+    } else if (kind === 'crowbar') {
+      const s = (w * (card ? 0.86 : 1.02)) / CROWBAR_W;
+      const a = card ? 0.62 : 0.78;
+      ctx.setTransform(s * Math.cos(a), -s * Math.sin(a), -s * Math.sin(a), -s * Math.cos(a), w / 2, card ? h * 0.5 : h / 2);
+      drawCrowbarShape(ctx, CROWBAR_W, CROWBAR_H, 0);
+    } else if (kind === 'ak47' || kind === 'mossberg') {
+      // a long gun, at a slant to fit
+      const len = kind === 'ak47' ? AK_W : MOSS_W;
+      const s = (w * (card ? 0.98 : 1.1)) / len;
+      const a = card ? 0.42 : 0.55;
+      ctx.setTransform(s * Math.cos(a), -s * Math.sin(a), -s * Math.sin(a), -s * Math.cos(a), w / 2, h * 0.5);
+      drawGunShape(ctx, kind, 1, 0, 0);
+    } else if (WALLS[kind]) {
+      // a length of the wall, near enough life size on the card
+      const sp = WALLS[kind];
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, w, card ? h * 0.84 : h);
+      ctx.clip();
+      const k = (card ? h * 0.84 : h) / 0.9;
+      ctx.translate(w / 2, card ? h * 0.84 : h);
+      // (three panels side by side, so it reads as a wall)
+      for (const dx of [-1, 0, 1]) drawWallShape(ctx, kind, dx * sp.w * k * 1.04, 0, sp.h * k * 0.62);
+      ctx.restore();
+    } else if (kind === 'tree' || kind === 'bush') {
+      drawPlantShape(ctx, kind, w / 2, card ? h * 0.84 : h, card ? h * 0.8 : h * 0.98, kind === 'tree' ? 11 : 5);
     }
   }
 
@@ -1626,6 +1776,8 @@ export class UI {
         if (sp) { this.setSpawnKind(sp.kind); this.setTool('spawn'); }
       }
       else if (k === 'h' || k === 'H') this.setTool('hand');
+      else if (k === 'z' || k === 'Z') this.setTool('freeze');
+      else if (k === 'w' || k === 'W') this.setTool('wire');
       else if (k === 'x' || k === 'X') this.setTool('erase');
       else if (k === ' ') { e.preventDefault(); this.togglePause(); }
       else if (k === 's' || k === 'S') this.toggleSlow();
@@ -1637,7 +1789,8 @@ export class UI {
       else if (k === '0') this.cam.home();
       else if ((k === 'Delete' || k === 'Backspace') && this.selected) this.$('ins-delete').click();
       else if (k === 'Escape') {
-        if (this.panelThing) this.closePanel();
+        if (this.wireStart) { this.wireStart = null; this.wireEnd = null; this.wireHint(); }
+        else if (this.panelThing) this.closePanel();
         else if (this.$('drawer').classList.contains('open')) this.toggleDrawer(false);
         else if (!this.$('settings').classList.contains('hidden')) this.toggleSettings(false);
         else if (this.selected) this.select(null);
@@ -1670,13 +1823,22 @@ export class UI {
       const k = this.spawnKind;
       const mod = KINDS[k] ? null : findSpawnable(k);
       const box = AMMO_KEYS[k] ? AMMO_BOXES[AMMO_KEYS[k]] : null;
-      const y = k === 'stickman' || k === 'officer' || (mod && mod.living) ? this.sb.surfaceBelow(w.x, 0.15, 100).y
-        : Math.max(w.y, k === 'crate' ? 0.39 : k === 'knife' ? 0.03 : k === 'machete' ? 0.05 : k === 'glock' || k === 'm1911' || k === 'taser' ? 0.08 : box ? box.h / 2 : 0.04);
+      const stands = k === 'stickman' || k === 'officer' || (mod && mod.living) || WALLS[k] || k === 'tree' || k === 'bush';
+      const y = stands ? this.sb.surfaceBelow(w.x, 0.15, WALLS[k] || k === 'tree' || k === 'bush' ? w.y + 0.02 : 100).y
+        : Math.max(w.y, k === 'crate' ? 0.39 : k === 'knife' ? 0.03 : k === 'machete' || k === 'crowbar' ? 0.05 : k === 'glock' || k === 'm1911' || k === 'taser' ? 0.08 : k === 'ak47' || k === 'mossberg' ? 0.14 : box ? box.h / 2 : 0.04);
       ghost = { kind: box ? 'ammo' : this.spawnKind, size: box ? AMMO_KEYS[k] : null, x: w.x, y, draw: mod && mod.ghost ? mod.ghost : null };
+    }
+    // a wire being put in: from its first end to the pointer (or, a pin, where it would go)
+    let wire = null;
+    if (this.tool === 'wire') {
+      const at = this.wireEnd || (this.hover ? this.world(this.hover.x, this.hover.y) : null);
+      if (this.wireStart && at) wire = { type: this.wireKind, x0: this.wireStart.x, y0: this.wireStart.y, x1: at.x, y1: at.y };
+      else if (WIRES[this.wireKind].pin && at) wire = { type: this.wireKind, x0: at.x, y0: at.y, x1: at.x, y1: at.y };
     }
     return {
       selected: this.selected,
       ghost,
+      wire,
       hand: { active: this.hand.active, x: this.hand.x, y: this.hand.y },
     };
   }
@@ -1684,7 +1846,7 @@ export class UI {
 
 /** "a Crate" - or just "Uzi", for somebody with a name of their own. */
 function placeName(info) {
-  return info.proper ? info.name : 'a ' + info.name;
+  return info.proper ? info.name : (info.an ? 'an ' : 'a ') + info.name;
 }
 
 /** A word on how it stands with someone, beyond which group they are in. */

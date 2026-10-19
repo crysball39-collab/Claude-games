@@ -34,6 +34,7 @@ const MAX_WALL = 160;
 const STICK = 0.75;
 const MAX_CASINGS = 80;
 const MAX_SMOKE = 260;
+const MAX_DEBRIS = 700;
 const WATER = ['#9fd0f2', '#6aa9d6'];
 
 export class FX {
@@ -53,6 +54,7 @@ export class FX {
     this.smokes = [];       // smoke and steam: { x, y, vx, vy, r, age, life, steam, k }
     this.emberBits = [];
     this.iceBits = [];
+    this.debris = [];       // what comes off walls and trees: splinters, scraps, shards, leaves - { x, y, vx, vy, s, c, a, va, rest, age, sharp, leaf }
   }
 
   clear() {
@@ -70,6 +72,28 @@ export class FX {
     this.smokes.length = 0;
     this.emberBits.length = 0;
     this.iceBits.length = 0;
+    this.debris.length = 0;
+  }
+
+  /**
+   * Bits off something broken, flung along (vx, vy): splinters, scraps of
+   * steel (now and then still glowing), shards of glass - which cut whoever
+   * they come down on - and leaves, which flutter. They come to rest where
+   * they land, and stay a while.
+   */
+  bits(x, y, n, colour, vx = 0, vy = 0, o = {}) {
+    for (let i = 0; i < n; i++) {
+      if (this.debris.length >= MAX_DEBRIS) {
+        // the oldest that have come to rest make room
+        const k = this.debris.findIndex((d) => d.rest);
+        this.debris.splice(k >= 0 ? k : 0, 1);
+      }
+      this.debris.push({
+        x: x + rand(-0.01, 0.01), y: y + rand(-0.01, 0.01), vx: vx + rand(-0.4, 0.4), vy: vy + rand(-0.3, 0.5),
+        s: o.size || 0.018, c: colour, a: rand(0, Math.PI), va: o.spin || o.leaf ? rand(-14, 14) : rand(-6, 6),
+        rest: false, age: 0, sharp: !!o.sharp, leaf: !!o.leaf, glow: o.glow ? rand(0.4, 0.9) : 0, from: o.from || null,
+      });
+    }
   }
 
   /** Smoke going up from (x, y), k how thick. */
@@ -133,9 +157,10 @@ export class FX {
   }
 
   /** An empty case, out of the ejection port: it tumbles, bounces and stays put. */
-  casing(x, y, vx, vy) {
+  /** A spent case flying out of a gun (o.long: a rifle's; o.shell: a shotgun's, red). */
+  casing(x, y, vx, vy, o = {}) {
     if (this.casings.length >= MAX_CASINGS) this.casings.shift();
-    this.casings.push({ x, y, vx, vy, a: rand(0, Math.PI), va: rand(-30, 30), rest: false, bounces: 0 });
+    this.casings.push({ x, y, vx, vy, a: rand(0, Math.PI), va: rand(-30, 30), rest: false, bounces: 0, long: !!o.long, shell: !!o.shell });
   }
 
   /**
@@ -324,6 +349,14 @@ export class FX {
     for (const v of sb.vests) if (!v.wornBy && !v.removed) fn(v, v.body.aabb());
     for (const a of sb.ammo) if (!a.removed) fn(a, a.body.aabb());
     for (const l of sb.limbs) if (!l.removed) fn(l, l.body.aabb());
+    for (const w of sb.slabs) if (!w.removed) fn(w, w.body.aabb());
+    for (const k of sb.crowbars) if (!k.wornBy && !k.removed) fn(k, k.body.aabb());
+    // trees, bushes, and what has come off them: on the wood
+    for (const t of [...sb.plants, ...sb.logs]) {
+      if (t.removed) continue;
+      const b = t.bounds();
+      fn(t, { minX: b.x0, maxX: b.x1, minY: b.y0, maxY: b.y1 });
+    }
     for (const it of sb.items) {
       if (it.removed || it.stainable === false || !it.pos) continue;
       // (a thing that is neither, a box big enough for anything: what it says it contains decides)
@@ -333,7 +366,7 @@ export class FX {
   }
 
   /** Whether (x, y) is on the thing (its box having been checked). */
-  static on(t, x, y) { return t.body ? t.body.contains(x, y) : !!(t.contains && t.contains(x, y, 0)); }
+  static on(t, x, y) { return t.cols || t.boughs ? t.contains(x, y, 0) : t.body ? t.body.contains(x, y) : !!(t.contains && t.contains(x, y, 0)); }
 
   /** The thing at (x, y), if blood landing there would land on something. */
   thingUnder(x, y) {
@@ -436,6 +469,7 @@ export class FX {
       if (p.y < p.s) { p.y = p.s; p.vy = Math.abs(p.vy) > 1 ? -p.vy * 0.3 : 0; p.vx *= 0.7; p.va *= 0.6; }
       if (p.age > p.life || p.x < sb.left - 1 || p.x > sb.right + 1) this.iceBits.splice(i, 1);
     }
+    this.updateDebris(dt);
     for (const list of [this.flashes, this.tracers]) {
       for (let i = list.length - 1; i >= 0; i--) if ((list[i].age += dt) > list[i].life) list.splice(i, 1);
     }
@@ -474,12 +508,66 @@ export class FX {
     }
   }
 
+  /**
+   * The bits fall, tumble and come to rest on the floor or on top of
+   * something; leaves drift as they go. A shard coming down on somebody cuts
+   * them. After half a minute or so they fade.
+   */
+  updateDebris(dt) {
+    const sb = this.sb;
+    for (let i = this.debris.length - 1; i >= 0; i--) {
+      const d = this.debris[i];
+      d.age += dt;
+      if (d.glow) d.glow = Math.max(0, d.glow - dt * 0.8);
+      if (d.rest) { if (d.age > 40) this.debris.splice(i, 1); continue; }
+      if (d.leaf) {
+        // a leaf falls slowly, rocking from side to side
+        d.vy = Math.max(d.vy - G * 0.12 * dt, -0.7);
+        d.vx += Math.sin(d.age * 5 + d.a) * 1.6 * dt;
+        d.vx *= 1 - dt * 1.5;
+      } else d.vy -= G * dt;
+      d.x += d.vx * dt;
+      d.y += d.vy * dt;
+      d.a += d.va * dt;
+      if (d.sharp && d.vy < -2 && d.age > 0.05) this.shardHits(d);
+      const top = this.casingFloor(d.x, d.y + 0.02);
+      if (d.y <= top) {
+        d.y = top;
+        if (Math.abs(d.vy) > 1.2 && !d.leaf) { d.vy = -d.vy * 0.25; d.vx *= 0.5; d.va *= 0.5; }
+        else { d.rest = true; d.vx = d.vy = d.va = 0; d.age = 0; }
+      }
+      if (d.x < sb.left) { d.x = sb.left; d.vx = -d.vx * 0.3; }
+      if (d.x > sb.right) { d.x = sb.right; d.vx = -d.vx * 0.3; }
+    }
+  }
+
+  /** A falling shard of glass coming down on somebody: a small cut where it lands. */
+  shardHits(d) {
+    for (const p of this.sb.people) {
+      if (p.removed || d.x < p.box.minX || d.x > p.box.maxX || d.y < p.box.minY || d.y > p.box.maxY) continue;
+      const t = p.touch(d.x, d.y, 0.01);
+      if (!t) continue;
+      if (this.sb.time - (p.shardT || -9) > 0.3) {
+        p.shardT = this.sb.time;
+        p.takeHit({ by: null, part: t.part, x: t.x, y: t.y, dir: Math.sign(d.vx) || 1, power: clampTo(-d.vy * 0.05, 0.15, 0.6), kind: 'slash', weapon: 'glass', bone: p.boneName(t.bone, t.t) });
+      }
+      d.vy = -d.vy * 0.2;
+      d.vx *= 0.3;
+      d.sharp = false;
+      return;
+    }
+  }
+
   /** What an empty case lands on: the floor, or the top of a crate. */
   casingFloor(x, y) {
     let top = 0.006;
     for (const c of this.sb.crates) {
       if (c.removed || c.carriedBy || !c.body.contains(x, y - 0.02, 0.01)) continue;
       top = Math.max(top, c.body.topAt(x) + 0.006);
+    }
+    for (const s of this.sb.slabs) {
+      if (s.removed || !s.body.contains(x, y - 0.02, 0.01)) continue;
+      top = Math.max(top, s.body.topAt(x) + 0.006);
     }
     return top;
   }

@@ -345,6 +345,22 @@ export const LINES = {
   cold: ['B-b-brrr...', 'So c-cold...', "Can't st-stop shivering...", "I can't feel my t-toes.", 'Anybody got a coat?'],
   breathless: ["Can't... catch my breath...", '*wheeze*', 'I need air...', 'Hah... hah...'],
   adrenaline: ['My heart is pounding!', "My hands won't stop shaking.", 'I feel like I could lift a crate. Two crates.', "Whoa. Whoa. Everything's so fast.", "I can't feel a thing right now."],
+
+  /* --------------------------- stuck fast, tied up --------------------------- */
+  cantMove: [
+    "I can't move!", "Why can't I move?!", 'Something is holding me!', "I'm stuck! I'm stuck in the air!", "My arms won't work!",
+    'Hello? Is this a joke?', 'Let me go! Whatever you are!', "I can't even blink properly.", 'Am I... a statue now?',
+  ],
+  canMove: ['I can move again!', 'Whoa! What was that?', 'I could not move a muscle. Not one.', 'Never do that to me again.', "I'm free!"],
+  tiedUp: ['Untie me!', 'Get this off me!', 'Who tied me up?!', 'Somebody cut me loose!', "Help! I'm tied up!", 'This knot is really good. Unfortunately.', 'Let me down!'],
+  sawTied: ['{victim} is tied up!', 'Who did that to {victim}?', "Hang on, {victim}!", '{victim}! What happened?'],
+  sawFrozenInPlace: ["{victim}'s just... stopped. In the air.", "Why isn't {victim} moving?", '{victim}? Are you okay? You look stuck.', 'Is {victim} frozen? Not cold frozen. Stuck frozen.'],
+
+  /* ------------------------------ walls and trees ----------------------------- */
+  glassBreak: ['The glass!', 'Whoa! Watch the glass!', 'Mind the shards!', 'That was a whole window!', 'Glass everywhere!'],
+  wallDown: ['The wall came down!', 'Look out! The wall!', 'There goes the wall.', 'Who knocked the wall down?'],
+  timber: ['TIMBER!', 'The tree! Look out!', "It's coming down!", 'Who cut the tree down?!', 'Watch out! TREE!'],
+  wireSnap: ['The rope snapped!', 'It broke!', 'Whoa! It gave way!', 'That rope was not strong enough.'],
 };
 
 /*

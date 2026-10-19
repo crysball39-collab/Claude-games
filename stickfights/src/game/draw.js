@@ -62,6 +62,8 @@ export function drawStickman(ctx, j, o) {
 
   // far side first, so the near arm and leg sit in front of the body
   const ha = j.headAngle, f = o.facing || 1;
+  // (a long gun slung across the back, behind all of it)
+  if (o.kit && o.kit.back) drawStowed(ctx, j, f, s, 'back', o.kit.back);
   ctx.lineWidth = lw;
   ctx.strokeStyle = legFar;
   limb(ctx, j, LEG_B, cut.legB);
@@ -103,7 +105,8 @@ export function drawStickman(ctx, j, o) {
     else if (o.weapon === 'knuckles') drawWornKnuckles(ctx, j.elbowA, j.handA, s, o.weaponBlood || 0);
     else if (o.weapon === 'knife') drawHeldKnife(ctx, j.midForeA, j.handA, s, o.weaponBlood || 0);
     else if (o.weapon === 'machete') drawHeldMachete(ctx, j.midForeA, j.handA, s, f, o.weaponBlood || 0);
-    else if (o.weapon === 'glock' || o.weapon === 'm1911') drawHeldGun(ctx, j, s, f, o.weaponBlood || 0, o.gunSlide || 0, o.weapon);
+    else if (o.weapon === 'crowbar') drawHeldCrowbar(ctx, j.midForeA, j.handA, s, f, o.weaponBlood || 0);
+    else if (o.weapon === 'glock' || o.weapon === 'm1911' || o.weapon === 'ak47' || o.weapon === 'mossberg') drawHeldGun(ctx, j, s, f, o.weaponBlood || 0, o.gunSlide || 0, o.weapon);
   }
   if (o.stuck) {
     for (const k of o.stuck) {
@@ -979,14 +982,247 @@ export function gunPoint(g, lx, ly) {
 }
 
 function drawHeldGun(ctx, j, s, f, blood, slide, kind = 'glock') {
-  const m1911 = kind === 'm1911';
-  const g = heldGunFrame(j, s, f, m1911 ? M1911_GRIP : GLOCK_GRIP);
+  const grip = { m1911: M1911_GRIP, ak47: AK_GRIP, mossberg: MOSS_GRIP }[kind] || GLOCK_GRIP;
+  const g = heldGunFrame(j, s, f, grip);
   ctx.save();
   ctx.translate(g.x, g.y);
   ctx.rotate(g.a);
   ctx.scale(1, f);
-  if (m1911) drawM1911Shape(ctx, s, blood, slide);
-  else drawGlockShape(ctx, s, blood, slide);
+  drawGunShape(ctx, kind, s, blood, slide);
+  ctx.restore();
+}
+
+/** Any of the guns, by kind, in its own frame. (`slide` is the slide, the bolt or the pump, however far back it is.) */
+export function drawGunShape(ctx, kind, k = 1, blood = 0, slide = 0) {
+  if (kind === 'm1911') drawM1911Shape(ctx, k, blood, slide);
+  else if (kind === 'ak47') drawAKShape(ctx, k, blood, slide);
+  else if (kind === 'mossberg') drawMossbergShape(ctx, k, blood, slide);
+  else if (kind === 'taser') drawTaserShape(ctx, k, true);
+  else drawGlockShape(ctx, k, blood, slide);
+}
+
+/* ----------------------------------- AK-47 ----------------------------------- */
+
+// the rifle: a wooden stock and handguard, a stamped steel receiver, the curved magazine
+export const AK_W = 0.92;
+export const AK_H = 0.26;
+export const AK_GRIP = { x: -0.1, y: -0.07 };
+export const AK_MUZZLE = { x: 0.46, y: 0.032 };
+export const AK_PORT = { x: -0.02, y: 0.05 };
+
+export function drawAKShape(ctx, k = 1, blood = 0, bolt = 0) {
+  const W = '#8a4a1f', WD = '#5b2e10', WL = '#ad6a33', ST = '#2b2d30', STD = '#17181a', STL = '#4a4e53';
+  ctx.save();
+  ctx.scale(k, k);
+  ctx.lineJoin = 'round';
+  // the stock
+  ctx.fillStyle = W;
+  ctx.beginPath();
+  ctx.moveTo(-0.2, 0.05);
+  ctx.lineTo(-0.44, 0.012);
+  ctx.quadraticCurveTo(-0.462, 0.0, -0.46, -0.03);
+  ctx.lineTo(-0.452, -0.075);
+  ctx.lineTo(-0.41, -0.078);
+  ctx.lineTo(-0.2, -0.004);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = WD;
+  ctx.fillRect(-0.462, -0.078, 0.02, 0.09);
+  ctx.strokeStyle = 'rgba(60, 28, 8, 0.5)';
+  ctx.lineWidth = 0.004;
+  ctx.beginPath(); ctx.moveTo(-0.42, -0.02); ctx.lineTo(-0.23, 0.02); ctx.stroke();
+  // the pistol grip
+  ctx.fillStyle = '#3a2210';
+  ctx.beginPath();
+  ctx.moveTo(-0.13, 0.0);
+  ctx.lineTo(-0.085, 0.0);
+  ctx.lineTo(-0.11, -0.1);
+  ctx.quadraticCurveTo(-0.13, -0.112, -0.148, -0.1);
+  ctx.closePath();
+  ctx.fill();
+  // the curved magazine
+  ctx.fillStyle = STD;
+  ctx.beginPath();
+  ctx.moveTo(-0.01, 0.0);
+  ctx.lineTo(0.06, 0.0);
+  ctx.quadraticCurveTo(0.075, -0.07, 0.115, -0.13);
+  ctx.lineTo(0.06, -0.155);
+  ctx.quadraticCurveTo(0.012, -0.08, -0.01, 0.0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#2f3134';
+  ctx.lineWidth = 0.004;
+  ctx.beginPath(); ctx.moveTo(0.02, -0.03); ctx.quadraticCurveTo(0.04, -0.08, 0.08, -0.13); ctx.stroke();
+  // the receiver, with its dust cover and the bolt handle
+  ctx.fillStyle = ST;
+  ctx.beginPath();
+  ctx.moveTo(-0.205, 0.0);
+  ctx.lineTo(0.11, 0.0);
+  ctx.lineTo(0.11, 0.05);
+  ctx.lineTo(-0.16, 0.058);
+  ctx.quadraticCurveTo(-0.2, 0.058, -0.205, 0.04);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = STL;
+  ctx.fillRect(-0.15, 0.046, 0.24, 0.012);
+  ctx.fillStyle = STD;
+  ctx.fillRect(0.02 - bolt, 0.03, 0.03, 0.012);
+  // the trigger guard and the trigger
+  ctx.strokeStyle = STD;
+  ctx.lineWidth = 0.007;
+  ctx.beginPath(); ctx.moveTo(-0.085, 0.0); ctx.quadraticCurveTo(-0.07, -0.04, -0.02, -0.004); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-0.06, -0.002); ctx.lineTo(-0.066, -0.022); ctx.stroke();
+  // the handguard, the gas tube over it, the barrel and the front sight
+  ctx.fillStyle = W;
+  ctx.beginPath();
+  ctx.moveTo(0.11, 0.004); ctx.lineTo(0.27, 0.01); ctx.lineTo(0.27, 0.046); ctx.lineTo(0.11, 0.05);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = WD;
+  ctx.lineWidth = 0.004;
+  ctx.beginPath(); for (const x of [0.15, 0.19, 0.23]) { ctx.moveTo(x, 0.012); ctx.lineTo(x, 0.044); } ctx.stroke();
+  ctx.fillStyle = WL;
+  ctx.fillRect(0.11, 0.05, 0.16, 0.01);
+  ctx.fillStyle = ST;
+  ctx.fillRect(0.11, 0.06, 0.2, 0.016);
+  ctx.fillRect(0.27, 0.022, 0.18, 0.02);
+  ctx.fillRect(0.38, 0.042, 0.012, 0.04);
+  ctx.fillRect(0.43, 0.018, 0.034, 0.028);
+  ctx.fillStyle = '#e8e8e8';
+  ctx.fillRect(0.383, 0.078, 0.006, 0.006);
+  // the rear sight
+  ctx.fillStyle = STD;
+  ctx.fillRect(0.1, 0.076, 0.03, 0.01);
+  if (blood > 0) {
+    ctx.fillStyle = `rgba(150, 12, 24, ${Math.min(0.8, blood)})`;
+    ctx.beginPath(); ctx.ellipse(-0.12, -0.05, 0.03, 0.04, 0.2, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* -------------------------------- Mossberg 500 ------------------------------- */
+
+// the pump shotgun: a long barrel over the magazine tube, the pump on the tube, a black stock
+export const MOSS_W = 1.0;
+export const MOSS_H = 0.2;
+export const MOSS_GRIP = { x: -0.17, y: -0.045 };
+export const MOSS_MUZZLE = { x: 0.5, y: 0.05 };
+export const MOSS_PORT = { x: -0.05, y: 0.045 };
+
+export function drawMossbergShape(ctx, k = 1, blood = 0, pump = 0) {
+  const B = '#1f2023', BD = '#0f1012', BL = '#3a3c40', ST = '#34373b';
+  ctx.save();
+  ctx.scale(k, k);
+  ctx.lineJoin = 'round';
+  // the stock, down from the receiver into the butt
+  ctx.fillStyle = B;
+  ctx.beginPath();
+  ctx.moveTo(-0.22, 0.06);
+  ctx.lineTo(-0.48, 0.03);
+  ctx.quadraticCurveTo(-0.5, 0.025, -0.5, 0.0);
+  ctx.lineTo(-0.496, -0.06);
+  ctx.lineTo(-0.45, -0.065);
+  ctx.lineTo(-0.25, -0.01);
+  ctx.lineTo(-0.2, 0.0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = '#4b4e53';
+  ctx.fillRect(-0.502, -0.066, 0.016, 0.098);
+  // the grip, in the wrist of the stock, and the trigger guard
+  ctx.strokeStyle = BD;
+  ctx.lineWidth = 0.007;
+  ctx.beginPath(); ctx.moveTo(-0.15, 0.0); ctx.quadraticCurveTo(-0.13, -0.036, -0.09, -0.002); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-0.12, -0.002); ctx.lineTo(-0.126, -0.02); ctx.stroke();
+  // the receiver
+  ctx.fillStyle = ST;
+  ctx.beginPath();
+  ctx.moveTo(-0.22, 0.0); ctx.lineTo(0.04, 0.0); ctx.lineTo(0.04, 0.066); ctx.lineTo(-0.2, 0.068);
+  ctx.quadraticCurveTo(-0.222, 0.06, -0.22, 0.0);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = BL;
+  ctx.fillRect(-0.12, 0.028, 0.06, 0.016);
+  // the barrel, and the magazine tube under it
+  ctx.fillStyle = BL;
+  ctx.fillRect(0.04, 0.036, 0.46, 0.026);
+  ctx.fillStyle = B;
+  ctx.fillRect(0.04, 0.008, 0.38, 0.026);
+  ctx.fillStyle = BD;
+  ctx.fillRect(0.416, 0.006, 0.018, 0.03);
+  // the bead at the muzzle
+  ctx.fillStyle = '#e6d9a2';
+  ctx.beginPath(); ctx.arc(0.49, 0.068, 0.006, 0, Math.PI * 2); ctx.fill();
+  // the pump, ridged, slid back as it is worked
+  ctx.save();
+  ctx.translate(-pump, 0);
+  ctx.fillStyle = '#26282b';
+  ctx.beginPath();
+  ctx.moveTo(0.12, 0.0); ctx.lineTo(0.31, 0.0); ctx.quadraticCurveTo(0.322, 0.02, 0.31, 0.04); ctx.lineTo(0.12, 0.04);
+  ctx.quadraticCurveTo(0.108, 0.02, 0.12, 0.0);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = '#121315';
+  ctx.lineWidth = 0.005;
+  ctx.beginPath(); for (let x = 0.14; x < 0.3; x += 0.018) { ctx.moveTo(x, 0.004); ctx.lineTo(x, 0.036); } ctx.stroke();
+  ctx.restore();
+  if (blood > 0) {
+    ctx.fillStyle = `rgba(150, 12, 24, ${Math.min(0.8, blood)})`;
+    ctx.beginPath(); ctx.ellipse(-0.16, -0.02, 0.03, 0.04, 0.2, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* ----------------------------------- crowbar --------------------------------- */
+
+// a steel bar painted red: the flat end at the back, the hooked claw at the front
+export const CROWBAR_W = 0.66;
+export const CROWBAR_H = 0.1;
+export const CROWBAR_GRIP = 0.2;
+
+export function drawCrowbarShape(ctx, w, h, blood = 0) {
+  const t = h * 0.22;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const bar = (col, lw) => {
+    ctx.strokeStyle = col;
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(-w / 2, -h * 0.2);
+    ctx.quadraticCurveTo(-w / 2 + h * 0.15, -h * 0.05, -w / 2 + h * 0.6, -h * 0.02);
+    ctx.lineTo(w / 2 - h * 0.55, 0);
+    // the gooseneck, curling back into the claw
+    ctx.quadraticCurveTo(w / 2, 0, w / 2, h * 0.32);
+    ctx.quadraticCurveTo(w / 2 - h * 0.02, h * 0.5, w / 2 - h * 0.28, h * 0.48);
+    ctx.stroke();
+  };
+  bar('#5a0d0d', t * 1.35);
+  bar('#b51d1d', t);
+  // the bare steel at the two working ends
+  ctx.strokeStyle = '#9aa2a8';
+  ctx.lineWidth = t * 0.9;
+  ctx.beginPath(); ctx.moveTo(-w / 2, -h * 0.2); ctx.lineTo(-w / 2 + h * 0.18, -h * 0.07); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(w / 2 - h * 0.08, h * 0.46); ctx.lineTo(w / 2 - h * 0.28, h * 0.48); ctx.stroke();
+  // the split in the claw
+  ctx.strokeStyle = '#3a0808';
+  ctx.lineWidth = t * 0.25;
+  ctx.beginPath(); ctx.moveTo(w / 2 - h * 0.12, h * 0.47); ctx.lineTo(w / 2 - h * 0.27, h * 0.48); ctx.stroke();
+  // a highlight along it
+  ctx.strokeStyle = 'rgba(255, 190, 180, 0.45)';
+  ctx.lineWidth = t * 0.25;
+  ctx.beginPath(); ctx.moveTo(-w / 2 + h * 0.7, -h * 0.04); ctx.lineTo(w / 2 - h * 0.6, -h * 0.025); ctx.stroke();
+  if (blood > 0) {
+    ctx.strokeStyle = `rgba(150, 12, 24, ${Math.min(0.85, blood)})`;
+    ctx.lineWidth = t * 1.1;
+    ctx.beginPath(); ctx.moveTo(w / 2 - h * 0.6, 0); ctx.quadraticCurveTo(w / 2, 0, w / 2, h * 0.3); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawHeldCrowbar(ctx, from, hand, s, f, blood) {
+  const a = Math.atan2(hand.y - from.y, hand.x - from.x);
+  ctx.save();
+  ctx.translate(hand.x + Math.cos(a) * CROWBAR_GRIP * s, hand.y + Math.sin(a) * CROWBAR_GRIP * s);
+  ctx.rotate(a);
+  ctx.scale(1, f);
+  drawCrowbarShape(ctx, CROWBAR_W * s, CROWBAR_H * s, blood);
   ctx.restore();
 }
 
@@ -1374,6 +1610,21 @@ function drawBelt(ctx, j, f, s) {
  * knife (or a glint of brass knuckles) out of the front pocket.
  */
 function drawStowed(ctx, j, f, s, slot, kind) {
+  if (slot === 'back') {
+    // slung: across the back on its sling, muzzle up over the far shoulder
+    const bx = j.chest.x - j.hip.x, by = j.chest.y - j.hip.y;
+    const a = Math.atan2(by, bx) - f * 0.55;
+    ctx.save();
+    ctx.translate((j.chest.x + j.hip.x) / 2 - f * 0.05 * s, (j.chest.y + j.hip.y) / 2 + 0.04 * s);
+    ctx.rotate(a);
+    ctx.scale(1, -f);
+    drawGunShape(ctx, kind, 0.8 * s, 0, 0);
+    ctx.restore();
+    ctx.strokeStyle = '#3b2f22';
+    ctx.lineWidth = 0.012 * s;
+    ctx.beginPath(); ctx.moveTo(j.neck.x, j.neck.y); ctx.lineTo(j.hip.x - f * 0.06 * s, j.hip.y + 0.02 * s); ctx.stroke();
+    return;
+  }
   const tx = j.kneeA.x - j.hip.x, ty = j.kneeA.y - j.hip.y, tl = Math.hypot(tx, ty) || 1;
   const ux = tx / tl, uy = ty / tl;                 // down the thigh
   const fx = -uy * f, fy = ux * f;                  // the thigh's front
@@ -1457,19 +1708,63 @@ function drawCartridge(ctx, len) {
   ctx.fill();
 }
 
+/** A shotgun shell on its side, centred, `len` long: the red hull and the brass head. */
+function drawShell(ctx, len) {
+  const r = len * 0.26;
+  ctx.fillStyle = '#b3201c';
+  ctx.fillRect(-len / 2 + len * 0.22, -r, len * 0.78, r * 2);
+  ctx.fillStyle = BRASS;
+  ctx.fillRect(-len / 2, -r * 1.08, len * 0.24, r * 2.16);
+  ctx.fillStyle = '#7d1512';
+  ctx.fillRect(len / 2 - len * 0.06, -r, len * 0.06, r * 2);
+}
+
+/** A rifle round: long, the case necked down to the bullet. */
+function drawRifleRound(ctx, len) {
+  const r = len * 0.13;
+  ctx.fillStyle = BRASS;
+  ctx.beginPath();
+  ctx.moveTo(-len / 2, -r); ctx.lineTo(len * 0.12, -r); ctx.lineTo(len * 0.2, -r * 0.6); ctx.lineTo(len * 0.2, r * 0.6); ctx.lineTo(len * 0.12, r); ctx.lineTo(-len / 2, r);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#a06a3a';
+  ctx.beginPath();
+  ctx.moveTo(len * 0.2, -r * 0.6); ctx.quadraticCurveTo(len * 0.48, -r * 0.4, len * 0.5, 0); ctx.quadraticCurveTo(len * 0.48, r * 0.4, len * 0.2, r * 0.6);
+  ctx.closePath(); ctx.fill();
+}
+
 /**
- * An ammo box, w by h, centred on the origin: a small cardboard box, a
- * medium plastic case, or a big steel can. `full` is how much is left in it.
+ * An ammo box, w by h, centred on the origin, by what is in it: 9 mm in a
+ * cardboard box with a blue band, .45 in a green plastic case, 7.62 in a
+ * steel can, 12 gauge shells in a red box. (The older names - small, medium,
+ * big - are the 9 mm box, the .45 case and the can.) `full` is how much is
+ * left in it.
  */
 export function drawAmmoBoxShape(ctx, size, w, h, full = 1) {
   const hw = w / 2, hh = h / 2;
   ctx.lineJoin = 'round';
-  if (size === 'small') {
+  size = { ammo9: 'small', ammo45: 'medium', ammo762: 'big' }[size] || size;
+  if (size === 'ammo12') {
+    ctx.fillStyle = '#c42a22';
+    ctx.fillRect(-hw, -hh, w, h);
+    ctx.fillStyle = '#8f1813';
+    ctx.fillRect(-hw, hh - h * 0.22, w, h * 0.22);
+    ctx.fillStyle = '#f0e6d0';
+    ctx.fillRect(-hw + w * 0.06, -h * 0.2, w * 0.88, h * 0.36);
+    for (let i = 0; i < 3; i++) {
+      ctx.save();
+      ctx.translate(-w * 0.22 + i * w * 0.22, -h * 0.02);
+      drawShell(ctx, h * 0.3);
+      ctx.restore();
+    }
+    ctx.strokeStyle = '#5e0f0b';
+    ctx.lineWidth = w * 0.025;
+    ctx.strokeRect(-hw, -hh, w, h);
+  } else if (size === 'small') {
     ctx.fillStyle = '#c9a36b';
     ctx.fillRect(-hw, -hh, w, h);
     ctx.fillStyle = '#b28a52';
     ctx.fillRect(-hw, hh - h * 0.2, w, h * 0.2);
-    ctx.fillStyle = '#a8322c';
+    ctx.fillStyle = '#2c5aa8';
     ctx.fillRect(-hw, -h * 0.18, w, h * 0.34);
     ctx.save();
     ctx.translate(-w * 0.05, -h * 0.01);
@@ -1494,7 +1789,7 @@ export function drawAmmoBoxShape(ctx, size, w, h, full = 1) {
     ctx.fillRect(-hw + w * 0.08, -h * 0.32, w * 0.34, h * 0.07);
     ctx.save();
     ctx.translate(hw - w * 0.2, -h * 0.12);
-    drawCartridge(ctx, h * 0.36);
+    drawRifleRound(ctx, h * 0.5);
     ctx.restore();
     ctx.strokeStyle = '#2e3017';
     ctx.lineWidth = h * 0.06;

@@ -577,10 +577,12 @@ export class Fight extends Behaviour {
     return true;
   }
   /**
-   * Fighting with a pistol: out of reach, brought up, and fired - a few at a
-   * time, waiting for the aim to settle in between. The ones who would rather
-   * not start by pointing it and shouting, and someone who puts their hands
-   * up may be left at that. Empty, it gets reloaded, at a distance.
+   * Fighting with a gun: out of reach, brought up, and fired - a few at a
+   * time, waiting for the aim to settle in between (a rifle in long bursts,
+   * a shotgun one shell at a time, pumped between, from close in). The ones
+   * who would rather not start by pointing it and shouting, and someone who
+   * puts their hands up may be left at that. Empty, it gets reloaded, at a
+   * distance.
    */
   shoot(dt, o, d, dir, r) {
     const me = this.me, b = this.brain, T = b.traits, g = me.weapon;
@@ -604,7 +606,8 @@ export class Fight extends Behaviour {
       if (!me.reloading && me.reload()) b.speak('reload', {}, 0.7, null, true);
       return true;
     }
-    const want = 3.5 + T.skill * 2.5;
+    const spec = g.spec || {};
+    const want = spec.pellets ? 2.2 + T.skill : spec.auto ? 5 + T.skill * 3 : 3.5 + T.skill * 2.5;
     const seen = b.sees(o);
     if (d < 1.6) me.goTo(me.pos.x - dir * 2, 'walk', { backpedal: true, face: o.pos.x });
     else if (d > 10 || !seen) me.goTo(o.pos.x - dir * want, 'walk', { face: o.pos.x });
@@ -635,8 +638,8 @@ export class Fight extends Behaviour {
     if (this.cool <= 0 && me.steady > 0.4 + (1 - T.skill) * 0.35) {
       if (me.fire()) {
         this.shots = (this.shots || 0) + 1;
-        const burst = 1 + Math.round(T.aggression * 2 + b.emo.anger);
-        this.cool = this.shots % burst ? rand(0.16, 0.35) : rand(0.6, 1.3);
+        const burst = spec.auto ? 3 + Math.round(T.aggression * 4 + b.emo.anger * 3) : 1 + Math.round(T.aggression * 2 + b.emo.anger);
+        this.cool = spec.pump ? rand(0.95, 1.35) : this.shots % burst ? (spec.auto ? spec.cadence : rand(0.16, 0.35)) : rand(0.6, 1.3);
       }
     }
     return true;
@@ -969,8 +972,8 @@ export class Mourn extends Behaviour {
 
 /* ---------------------------------- things ---------------------------------- */
 
-const ARM_SAID = { knife: 'knife', machete: 'machete', glock: 'gun', m1911: 'gun', taser: 'taser' };
-const ARM_ICON = { knife: 'knife', machete: 'machete', glock: 'gun', m1911: 'gun', taser: 'taser' };
+const ARM_SAID = { knife: 'knife', machete: 'machete', crowbar: 'crowbar', glock: 'gun', m1911: 'gun', taser: 'taser', ak47: 'rifle', mossberg: 'shotgun' };
+const ARM_ICON = { knife: 'knife', machete: 'machete', crowbar: 'machete', glock: 'gun', m1911: 'gun', taser: 'taser', ak47: 'gun', mossberg: 'gun' };
 
 export class Arm extends Behaviour {
   get kind() { return 'arm'; }
@@ -1035,7 +1038,7 @@ export class Resupply extends Behaviour {
   update(dt) {
     this.t += dt;
     const bx = this.target, me = this.me;
-    if (bx.removed || bx.empty || !me.guns.some((g) => g.kind !== 'taser' && g.short > 0)) return false;
+    if (bx.removed || bx.empty || !me.guns.some((g) => g.kind !== 'taser' && g.short > 0 && (!bx.fits || bx.fits(g)))) return false;
     if (me.acting) return true;
     if (Math.abs(bx.pos.y - me.pos.y) > 0.45) return this.t < 12 && arrive(me, bx.pos.x, 'walk') === false;
     const dir = sign(bx.pos.x - me.pos.x) || me.facing;

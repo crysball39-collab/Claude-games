@@ -64,6 +64,7 @@ const HEAR = {
   tased: 10, taserFire: 8, cuffed: 8, command: 16, vestStop: 9, stumble: 6, stumbleFall: 8, stumbleCaught: 5, driveStun: 6,
   // fire and ice
   ignite: 12, extinguish: 6, freeze: 7, thaw: 5, iceSnap: 9, shatter: 16, gasp: 6, dropRoll: 6,
+  glassShatter: 14, slabFree: 12, slabBreak: 7, limbFall: 14, snapBough: 7, wireSnap: 8, freezeInPlace: 8, unfreeze: 6, wire: 6,
 };
 // what counts as violence done to them, for fear and grudges
 const VIOLENT = new Set(['koMe', 'cutMe', 'stabbedMe', 'choppedMe', 'severedMe', 'shotMe', 'shotAtMe', 'aimedAtMe', 'sawStab', 'sawShoot', 'sawSever', 'sawKill', 'sawThreat', 'tasedMe', 'burnedMe', 'sawBurn']);
@@ -145,9 +146,9 @@ const HELP_CALLS = new Set(['fear', 'flee', 'beg', 'pinned', 'crawl', 'panic', '
 const GLANCE_FREE = new Set(['idle', 'rest', 'inspect']);
 
 const standing = (o) => o && !o.removed && o.alive && o.conscious && (o.state === 'stand' || o.state === 'air');
-const WEAPON_KINDS = new Set(['knuckles', 'knife', 'machete', 'glock', 'm1911', 'taser']);
+const WEAPON_KINDS = new Set(['knuckles', 'knife', 'machete', 'crowbar', 'glock', 'm1911', 'taser', 'ak47', 'mossberg']);
 // what they call something they are carrying
-const ITEM_SAID = { knuckles: 'brass knuckles', knife: 'knife', machete: 'machete', glock: 'gun', m1911: 'gun', taser: 'taser' };
+const ITEM_SAID = { knuckles: 'brass knuckles', knife: 'knife', machete: 'machete', crowbar: 'crowbar', glock: 'gun', m1911: 'gun', taser: 'taser', ak47: 'rifle', mossberg: 'shotgun' };
 const capital = (t) => t.charAt(0).toUpperCase() + t.slice(1);
 // what a witness says about the way somebody died, when it was not just a death
 const DEATH_SAID = { burns: 'sawBurnDeath', 'smoke inhalation': 'sawBurnDeath', 'frozen solid': 'sawFreezeDeath', hypothermia: 'sawFreezeDeath', suffocation: 'sawChokeDeath', heatstroke: 'sawHeatDeath' };
@@ -261,6 +262,9 @@ export class Brain {
     if (me.tased) return 'Being tased';
     if (me.flames) return me.rolling > 0 ? 'Rolling on the floor to put the fire out' : 'On fire!';
     if (me.state === 'held' && me.vit && me.vit.air === 'choke') return 'Held up by the head, choking';
+    if (me.vit && me.vit.air === 'choke' && me.tied) return 'Hanging by the neck, choking';
+    if (me.frozenInPlace) return 'Frozen in place: cannot move';
+    if (me.tied) return 'Tied up';
     // (what a mod's is up to, in its own words)
     const own = me.species && me.species.doing ? me.species.doing(me) : null;
     if (own) return own;
@@ -342,6 +346,8 @@ export class Brain {
       }
     }
     const st = me.state;
+    // frozen in place, or tied up: nothing to be done but say so
+    if (me.frozenInPlace || me.tied) { this.stuckFast(dt); return; }
     if (st === 'down' || st === 'crawl' || st === 'held') { this.whileDown(dt); return; }
     if (st !== 'stand' && st !== 'air' && st !== 'climb') return;
     this.stayDown = false;
@@ -834,6 +840,13 @@ export class Brain {
           this.shaken(0.3);
         }
         break;
+      case 'glassShatter':
+        // a pane of glass coming down
+        E.bump('surprise', seen ? 0.6 : 0.3);
+        if (d < 5) E.bump('fear', 0.08 * (1.2 - T.bravery));
+        if (seen && chance(0.5)) this.speak('glassBreak', {}, 0.7, null, true);
+        else if (!seen) { this.heard = { x, y, t: now }; this.hearLoud(x); }
+        break;
       case 'shatter':
         if (seen && ev.who) {
           E.bump('surprise', 1);
@@ -847,6 +860,42 @@ export class Brain {
           this.note(`${ev.who.name} shattered into pieces!`);
           this.shaken(0.8);
         } else { this.heard = { x, y, t: now }; this.hearLoud(x); }
+        break;
+      case 'slabFree':
+        // a wall going over
+        E.bump('surprise', 0.5);
+        if (seen && chance(0.6)) this.speak('wallDown', {}, 0.75, null, true);
+        else if (!seen) this.heard = { x, y, t: now };
+        break;
+      case 'limbFall':
+        if (ev.tree) {
+          // a whole tree coming down: get out from under it
+          E.bump('surprise', 0.8);
+          if (d < 6) E.bump('fear', 0.25 * (1.2 - T.bravery));
+          if (seen && chance(0.7)) this.speak('timber', {}, 0.9, null, true);
+          if (seen && d < 5 && me.ready && !me.frozenInPlace && !me.tied) me.goTo(me.pos.x + (Math.sign(me.pos.x - x) || 1) * 4, 'run');
+        } else if (seen && ev.big) E.bump('surprise', 0.25);
+        break;
+      case 'wireSnap':
+        if (seen && ev.why === 'strain') { E.bump('surprise', 0.4); if (chance(0.5)) this.speak('wireSnap', {}, 0.7, null, true); }
+        break;
+      case 'freezeInPlace':
+        // somebody stopped dead, in mid-air or mid-step
+        if (seen && ev.who && ev.who !== me) {
+          E.bump('surprise', 0.7);
+          E.bump('fear', 0.12 * (1.2 - T.bravery));
+          this.speak('sawFrozenInPlace', { victim: ev.who.name }, 0.7, null, true);
+          this.note(`${ev.who.name} stopped dead. Didn't move. Couldn't.`);
+        }
+        break;
+      case 'wire':
+        // somebody tied up, by a rope out of nowhere
+        for (const e of [ev.what && ev.what.a, ev.what && ev.what.b]) {
+          if (!seen || !e || !e.t || e.t.kind !== 'stickman' || e.t === me) continue;
+          E.bump('surprise', 0.4);
+          if (chance(0.6)) this.speak('sawTied', { victim: e.t.name }, 0.6, null, true);
+          break;
+        }
         break;
       default:
         break;
@@ -1149,6 +1198,39 @@ export class Brain {
       case 'thrown':
         E.bump('fear', 0.12);
         break;
+      case 'frozenInPlace':
+        // stopped dead by something they cannot see: not cold, not hurt - just not moving
+        this.clearBehaviour();
+        E.bump('surprise', 1);
+        E.bump('fear', 0.4 * (1.2 - T.bravery));
+        this.speak('cantMove', {}, 0.95, null, true);
+        this.note("I can't move. Not a muscle. I can still see everything.");
+        this.downTalk = rand(3, 5);
+        break;
+      case 'unfrozen':
+        E.bump('surprise', 0.6);
+        E.bump('fear', -0.1);
+        this.thinkT = 0;
+        this.speak('canMove', {}, 0.9, null, true);
+        this.note('I could move again, all at once.');
+        break;
+      case 'roped':
+        // tied to something: a rope, a rod or a pin through their clothes
+        if (d && d.first) {
+          this.clearBehaviour();
+          E.bump('surprise', 0.8);
+          E.bump('fear', 0.3 * (1.2 - T.bravery));
+          this.speak('tiedUp', {}, 0.9, null, true);
+          this.note(`Something tied me up by the ${String(d.part || 'arm').replace(/[AB]$/, '')}.`);
+          this.downTalk = rand(2.5, 4.5);
+        }
+        break;
+      case 'unroped':
+        E.bump('joy', 0.2);
+        this.thinkT = 0;
+        this.speak('canMove', {}, 0.6);
+        this.note('I am not tied to anything any more.');
+        break;
       case 'armed': {
         const k = d.item ? d.item.kind : 'knuckles';
         E.bump('fear', k === 'taser' ? -0.3 : isGun(k) ? -0.4 : k === 'knuckles' ? -0.2 : -0.28);
@@ -1158,6 +1240,7 @@ export class Brain {
         this.note({
           knife: 'Got the knife. Now they have to listen.', machete: 'Got the machete. Stay back, everyone.',
           glock: 'Got the gun. Nobody move.', m1911: 'Got the .45. Nobody move.', taser: 'Got a taser. Anybody tries anything, they get it.',
+          crowbar: 'Got a crowbar. Heavy. Good.', ak47: 'An AK. Nobody is going to argue with this.', mossberg: 'A shotgun. Up close, nothing beats it.',
         }[k] || 'Got the brass knuckles. Nobody messes with me now.');
         me.setEmote('sparkle', 1.2);
         break;
@@ -1835,11 +1918,12 @@ export class Brain {
         const onTheWay = d < foeD ? grudge * 0.5 * (0.5 + T.aggression) : 0;
         let s = (0.08 + E.anger * 0.4 * (0.4 + T.aggression) + expecting * 0.35 * (0.3 + T.bravery) +
           T.curiosity * 0.12 + T.aggression * 0.12 + onTheWay) / (1 + d / 7);
-        if (k.kind === 'knife' || k.kind === 'machete') {
-          // a blade is not for everyone: the kind and the timid leave it where it is
+        if (k.kind === 'knife' || k.kind === 'machete' || k.kind === 'crowbar') {
+          // a blade (or a bar of steel) is not for everyone: the kind and the timid leave it where it is
           s *= (0.55 + T.aggression * 0.9) * (1.25 - T.empathy * 0.8) * (k.kind === 'machete' ? 1.05 : 1) * spare;
           add('arm', k, s, k.kind === 'machete' ? (d < 4 ? 'A machete. Right.' : 'There is a machete over there.')
-            : d < 4 ? 'A knife. Nobody will mess with me now.' : 'There is a knife over there.');
+            : k.kind === 'crowbar' ? (d < 4 ? 'A crowbar. That will do.' : 'There is a crowbar over there.')
+              : d < 4 ? 'A knife. Nobody will mess with me now.' : 'There is a knife over there.');
         } else if (k.kind === 'taser') {
           // a taser: for the careful as much as the angry - it puts people down without killing them
           const guarded = this.gunThreat && now - this.gunThreat.t < 20 ? 0.2 * T.bravery : 0;
@@ -1849,7 +1933,10 @@ export class Brain {
           // a gun: the angry want it, and so do the brave who are frightened of someone else having it
           const guarded = this.gunThreat && now - this.gunThreat.t < 20 ? 0.35 * T.bravery : 0;
           s = (s + guarded) * (0.45 + T.aggression * 0.8 + T.bravery * 0.25) * (1.25 - T.empathy * 0.8) * spare;
-          add('arm', k, s, d < 4 ? (k.kind === 'm1911' ? 'A .45. Big gun. Mine.' : "A gun. Let's see them try something now.") : 'There is a gun on the floor over there.');
+          // (a rifle or a shotgun counts for more than a pistol)
+          if (k.kind === 'ak47' || k.kind === 'mossberg') s *= 1.25;
+          const close = { m1911: 'A .45. Big gun. Mine.', ak47: 'An AK-47. Oh, this changes things.', mossberg: 'A shotgun. Nobody comes near me now.' }[k.kind] || "A gun. Let's see them try something now.";
+          add('arm', k, s, d < 4 ? close : k.kind === 'ak47' ? 'There is a rifle over there.' : k.kind === 'mossberg' ? 'There is a shotgun over there.' : 'There is a gun on the floor over there.');
         } else {
           s *= spare;
           add('arm', k, s, d < 4 ? 'Brass knuckles, right there. Mine.' : 'Those brass knuckles could come in handy.');
@@ -1870,9 +1957,12 @@ export class Brain {
     // a gun running low, and a box of rounds in sight
     const low = !me.human ? [] : me.guns.filter((g) => g.kind !== 'taser' && g.short > 0);
     if (low.length) {
-      const need = low.reduce((n, g) => n + g.short / (g.spec.mag + g.spec.spare), 0) / low.length;
       for (const [bx] of this.things) {
         if (bx.kind !== 'ammo' || bx.removed || bx.empty || bx.pos.y - me.pos.y > 0.6) continue;
+        // only rounds that go in a gun they have
+        const fit = low.filter((g) => !bx.fits || bx.fits(g));
+        if (!fit.length) continue;
+        const need = fit.reduce((n, g) => n + g.short / (g.spec.mag + g.spec.spare), 0) / fit.length;
         const d = Math.abs(bx.pos.x - me.pos.x);
         add('ammo', bx, (0.08 + need * 0.55 + (this.maxAnger() > 0.4 ? 0.15 : 0)) * (1 - danger * 0.6) / (1 + d / 6),
           need > 0.6 ? 'Nearly out. There are rounds in that box.' : 'I could top up from that ammo box.');
@@ -2160,6 +2250,20 @@ export class Brain {
     if (this.man.weapon || !this.man.health.canUse('armA')) return false;
     const angry = this.maxAnger();
     return (T.aggression > 0.5 && angry > 0.35) || (T.bravery > 0.7 && !!this.mostDangerousNear(5)) || T.aggression > 0.8;
+  }
+
+  /** Frozen in place, or tied up: they cannot do anything, but they can still say what they think of it. */
+  stuckFast(dt) {
+    const me = this.man;
+    if (this.behaviour) this.clearBehaviour();
+    me.stop();
+    this.downTalk -= dt;
+    if (this.downTalk > 0) return;
+    const choking = me.vit && me.vit.air === 'choke' && me.health.oxygen < 0.94;
+    this.downTalk = choking ? rand(1.4, 2.2) : rand(3.5, 6.5);
+    if (me.flames) this.speak('onFire', {}, 0.85, null, true);
+    else if (choking) this.speak('choking', {}, 0.95, null, true);
+    else this.speak(me.frozenInPlace ? 'cantMove' : 'tiedUp', {}, 0.7, null, true);
   }
 
   /** On the floor, crawling, or held up: no behaviour, but still a mind. */

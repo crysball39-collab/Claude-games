@@ -19,6 +19,7 @@ import { armOf } from './game/props.js';
 import { spawnOfficer } from './game/police.js';
 import * as Mods from './mods/index.js';
 import * as Vitals from './game/vitals.js';
+import * as Wires from './game/wires.js';
 
 const canvas = document.getElementById('view');
 const sb = new Sandbox();
@@ -59,6 +60,9 @@ sb.on('hit', (e) => {
     if (!e.blocked) sound.punch(e.power * 0.35, false, e.x);
   } else if (e.weapon === 'machete') {
     sound.chop(e.power, e.x);
+  } else if (e.weapon === 'crowbar') {
+    sound.punch(e.power, false, e.x);
+    sound.clang(e.power * 0.35, e.x);
   } else if (e.kind === 'impact' && e.object && e.object.kind === 'stickman') {
     sound.punch(e.power * 0.7, false, e.x);
   } else if (e.kind === 'impact') {
@@ -76,7 +80,10 @@ sb.on('swing', (e) => {
 sb.on('shot', (e) => {
   if (e.silent) return;   // a gun with a noise of its own (a mod's)
   const heavy = e.heavy || !!(e.gun && e.gun.spec && e.gun.spec.energy > 1.1);
-  sound.gunshot(e.x, heavy);
+  const kind = e.kind || (e.gun && e.gun.kind);
+  if (kind === 'ak47') sound.rifleShot(e.x);
+  else if (kind === 'mossberg') sound.shotgun(e.x, !!e.who);
+  else sound.gunshot(e.x, heavy);
   // the closer it is to the middle of the view, the more the view jumps
   cam.shake((0.08 + 0.18 / (1 + Math.abs(e.x - cam.x) / 4)) * (heavy ? 1.3 : 1));
 });
@@ -106,21 +113,50 @@ sb.on('magIn', (e) => sound.gunClick(e.x, 'magIn'));
 sb.on('rack', (e) => sound.gunClick(e.x, 'rack'));
 sb.on('casing', (e) => sound.casing(e.x, e.speed));
 sb.on('ricochet', (e) => sound.ricochet(e.x));
-sb.on('bulletHit', (e) => sound.bulletHit(e.what ? e.what.kind : null, e.x));
+sb.on('bulletHit', (e) => {
+  if (e.material === 'metal') sound.clang(e.energy, e.x);
+  else if (e.material === 'glass') sound.tink(e.x, e.energy);
+  else if (e.material === 'wood') sound.bulletHit('crate', e.x);
+  else sound.bulletHit(e.what ? e.what.kind : null, e.x);
+});
 sb.on('sever', (e) => { sound.sever(e.x); cam.shake(0.25); });
 sb.on('dislocate', (e) => sound.jointPop(e.x));
 sb.on('relocate', (e) => sound.jointPop(e.x));
 sb.on('faint', (e) => sound.thud(4, e.who.pos.x));
 sb.on('throw', (e) => sound.whoosh(e.who.pos.x, true));
 sb.on('clatter', (e) => {
-  if (e.what.kind === 'crate') sound.wood(e.speed, e.x);
-  else sound.clink(e.speed * (e.what.kind === 'knife' ? 0.8 : 1), e.x);
-  if (e.what.kind === 'crate' && e.speed > 9) cam.shake(0.15);
+  const k = e.what.kind, mat = e.what.mat ? e.what.mat.name : null;
+  if (k === 'crate') sound.wood(e.speed, e.x);
+  // a piece of wall, a log: by what it is made of, and how heavy it is
+  else if (mat === 'metal') sound.clang(e.speed / 6, e.x);
+  else if (mat === 'glass') sound.tink(e.x, e.speed / 6);
+  else if (mat === 'wood' || k === 'log') { sound.wood(e.speed, e.x); if (e.what.body && e.what.body.mass > 30) sound.thud(e.speed, e.x); }
+  else sound.clink(e.speed * (k === 'knife' ? 0.8 : 1), e.x);
+  if ((k === 'crate' && e.speed > 9) || (k === 'log' && e.what.body.mass > 60 && e.speed > 4)) cam.shake(k === 'log' ? 0.35 : 0.15);
 });
+// walls, trees and wires
+sb.on('slabBreak', (e) => {
+  const mat = e.what.mat.name;
+  if (mat === 'metal') sound.clang(1.5, e.x);
+  else if (mat === 'glass') sound.tink(e.x, 1.5);
+  else sound.splinter(e.x, e.cells > 40);
+});
+sb.on('slabFree', (e) => { if (e.what.mat.name === 'wood') sound.creak(e.x); else if (e.what.mat.name === 'metal') sound.clang(2, e.x); });
+sb.on('limbFall', (e) => { if (e.tree) sound.creak(e.x); else sound.splinter(e.x, e.big); });
+sb.on('snapBough', (e) => sound.splinter(e.x, e.big));
+sb.on('rustle', (e) => sound.rustle(e.x, e.hard));
+sb.on('wire', (e) => sound.tieOn(e.metal, e.pin, e.x));
+sb.on('wireSnap', (e) => sound.snapWire(e.metal, e.x));
+sb.on('freezeInPlace', (e) => sound.lockInPlace(true, e.x));
+sb.on('unfreeze', (e) => sound.lockInPlace(false, e.x));
 sb.on('thud', (e) => sound.thud(e.speed, e.x));
 sb.on('collide', (e) => { sound.thud(e.speed * 0.8, e.x); cam.shake(Math.min(0.4, e.speed * 0.025)); });
 sb.on('land', (e) => { if (e.speed > 5) sound.thud(e.speed * 0.5, e.who.pos.x); });
-sb.on('knock', (e) => sound.wood(e.loud ? 5 : 2.5, e.who.pos.x));
+sb.on('knock', (e) => {
+  if (e.material === 'metal') sound.clang(e.loud ? 1.2 : 0.7, e.x ?? e.who.pos.x);
+  else if (e.material === 'glass') sound.tink(e.x ?? e.who.pos.x, 1);
+  else sound.wood(e.loud ? 5 : 2.5, e.who.pos.x);
+});
 sb.on('break', (e) => sound.crack(e.who.pos.x));
 sb.on('stuck', (e) => { if (e.into && e.into.kind === 'stickman') sound.stab(1.5, e.x); else sound.thunk(e.x); });
 sb.on('pullout', (e) => sound.stab(0.6, e.x));
@@ -138,6 +174,7 @@ sb.on('thaw', (e) => sound.steamHiss(e.x, false));
 sb.on('iceSnap', (e) => { sound.iceCrack(e.x, true); cam.shake(0.15); });
 sb.on('iceThud', (e) => sound.iceCrack(e.x, e.speed > 8));
 sb.on('shatter', (e) => { sound.shatter(e.x); cam.shake(0.4); });
+sb.on('glassShatter', (e) => { sound.shatter(e.x); cam.shake(0.2); });
 sb.on('gasp', (e) => sound.gasp(e.who.voice, e.x));
 sb.on('dropRoll', (e) => sound.thud(4, e.who.pos.x));
 sb.on('rollOver', (e) => sound.thud(2.2, e.x));
@@ -213,4 +250,4 @@ function start() {
 document.getElementById('btn-play').addEventListener('click', start);
 
 // for tests and the curious
-window.__sf = { sb, cam, ui, hand, sound, renderer, STYLE, start, demo, CLIPS, LINES, mods: Mods, vitals: Vitals };
+window.__sf = { sb, cam, ui, hand, sound, renderer, STYLE, start, demo, CLIPS, LINES, mods: Mods, vitals: Vitals, wires: Wires };

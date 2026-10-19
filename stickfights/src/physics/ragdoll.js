@@ -225,6 +225,8 @@ export class Ragdoll {
    */
   step(dt, world) {
     this.impacts.length = 0;
+    // frozen in place (the freeze tool): nothing moves at all
+    if (this.pinned) return;
     if (this.asleep && !this.grabRef) return;
     const g = this.gravity * dt * dt;
     const keep = 1 - this.drag * dt;

@@ -103,6 +103,8 @@ export function airway(man) {
   if (h.dead) return 'dead';
   if (h.frozen) return 'ice';
   if (man.state === 'held' && man.held && man.held.part === 'head') return 'choke';
+  // a rope round the neck, holding them up (wires.js)
+  if (man.necked && man.sandbox.time - man.necked < 0.25) return 'choke';
   return null;
 }
 

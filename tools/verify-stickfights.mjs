@@ -13,7 +13,9 @@
    storage each shows, and everything the Murder Drones, Minecraft and
    Shallow mods add - Steve, crafting a Wither Totem, the Wither from its
    first skull to its Nether Star, and Shallow from its disguise to the
-   next skin it climbs into.
+   next skin it climbs into. So are the walls and the trees, cell by cell,
+   the freeze tool, moving things with the world paused, the six wires, the
+   AK-47, the Mossberg 500, the crowbar and the four kinds of ammo.
 
    Needs playwright and a chromium build:
      npm install -D playwright && npx playwright install chromium
@@ -123,8 +125,9 @@ check('PLAY opens the game, the HUD and the spawn menu', await ev(() =>
   !document.querySelector('#hud').classList.contains('hidden') && document.querySelector('#drawer').classList.contains('open')));
 check('the sandbox starts empty', await ev(() => window.__sf.sb.people.length === 0 && window.__sf.sb.crates.length === 0));
 const cards = await ev(() => [...document.querySelectorAll('.card')].map((c) => c.dataset.spawn));
-const BASE = ['stickman', 'officer', 'knuckles', 'knife', 'machete', 'glock', 'm1911', 'taser', 'crate', 'vest', 'ammoSmall', 'ammoMedium', 'ammoBig'];
-check('there are thirteen things to spawn: a Stickman, an Officer, Brass Knuckles, a Combat Knife, a Machete, a Glock-19, an M1911, a Taser, a Crate, a Light Vest and three Ammo Boxes',
+const BASE = ['stickman', 'officer', 'knuckles', 'knife', 'machete', 'crowbar', 'glock', 'm1911', 'ak47', 'mossberg', 'taser', 'crate', 'vest',
+  'ammo9', 'ammo45', 'ammo762', 'ammo12', 'woodWall', 'metalWall', 'glassWall', 'tree', 'bush'];
+check('there are twenty-two things to spawn: a Stickman, an Officer, Brass Knuckles, a Combat Knife, a Machete, a Crowbar, a Glock-19, an M1911, an AK-47, a Mossberg 500, a Taser, a Crate, a Light Vest, four kinds of ammo, three walls, a Tree and a Bush',
   cards.length === BASE.length && BASE.every((k) => cards.includes(k)), cards.join(', '));
 check('the cards are named for what they spawn', await ev(() =>
   ['Stickman', 'Brass Knuckles', 'Combat Knife', 'Machete', 'Glock-19', 'Crate'].every((n) => [...document.querySelectorAll('.card b')].some((b) => b.textContent === n))));
@@ -1446,7 +1449,7 @@ await fresh();
 const ammo = await ev(() => {
   const sb = window.__sf.sb, ui = window.__sf.ui;
   const sizes = {};
-  for (const [k, x] of [['ammoSmall', -6], ['ammoMedium', -4], ['ammoBig', -2]]) {
+  for (const [k, x] of [['ammo9', -7], ['ammo45', -5], ['ammo762', -3], ['ammo12', -1]]) {
     ui.setSpawnKind(k);
     const b = ui.spawnAt(x, 0.3);
     sizes[k] = b ? b.rounds : null;
@@ -1461,18 +1464,21 @@ const ammo = await ev(() => {
   g.mag = 1;
   g.spare = 0;
   p.brain.calmT = sb.time;
-  const box = sb.spawnAmmo(6.5, 0.2, 'small');
+  // (a box of 9 mm beside them first: no use to an M1911)
+  const wrong = sb.spawnAmmo(5.2, 0.2, 'ammo9');
+  const box = sb.spawnAmmo(6.5, 0.2, 'ammo45');
   let went = false;
-  for (let i = 0; i < 120 * 45 && box.rounds === 30; i++) {
+  for (let i = 0; i < 120 * 45 && box.rounds === 50; i++) {
     sb.step(1 / 120);
     if (p.brain.behaviour && p.brain.behaviour.kind === 'ammo') went = true;
   }
   for (let i = 0; i < 60; i++) sb.step(1 / 120);
-  return { sizes, went, left: box.rounds, rounds: g.mag + g.spare };
+  return { sizes, went, left: box.rounds, rounds: g.mag + g.spare, wrongLeft: wrong.rounds };
 });
-check('ammo boxes come small, medium and big: 30, 80 and 200 rounds',
-  ammo.sizes.ammoSmall === 30 && ammo.sizes.ammoMedium === 80 && ammo.sizes.ammoBig === 200, JSON.stringify(ammo.sizes));
-check('...and anyone with a pistol running low goes over and fills up from one', ammo.went && ammo.rounds === 21 && ammo.left === 10, JSON.stringify(ammo));
+check('ammo comes in four kinds: 50 rounds of 9 mm, 50 of .45, 120 of 7.62 and 25 shotgun shells',
+  ammo.sizes.ammo9 === 50 && ammo.sizes.ammo45 === 50 && ammo.sizes.ammo762 === 120 && ammo.sizes.ammo12 === 25, JSON.stringify(ammo.sizes));
+check('...and anyone with a gun running low fills up from a box of the right rounds, and leaves the wrong ones alone',
+  ammo.went && ammo.rounds === 21 && ammo.left === 30 && ammo.wrongLeft === 50, JSON.stringify(ammo));
 
 /* ------------------------- stamina, knockback, stumbling ------------------------- */
 
@@ -2127,7 +2133,7 @@ const stains = await ev(() => {
   const sb = window.__sf.sb, fx = sb.fx;
   const things = {
     crate: sb.spawnCrate(-8, 0.4), knuckles: sb.spawnKnuckles(-6.6, 0.06), knife: sb.spawnKnife(-5.6, 0.04), machete: sb.spawnMachete(-4.4, 0.05),
-    pistol: sb.spawnGun(-3.1, 0.08), taser: sb.spawnTaser(-2.3, 0.08), vest: sb.spawnVest(-1.3, 0.05), ammo: sb.spawnAmmo(-0.2, 0.1, 'big'),
+    pistol: sb.spawnGun(-3.1, 0.08), taser: sb.spawnTaser(-2.3, 0.08), vest: sb.spawnVest(-1.3, 0.05), ammo: sb.spawnAmmo(-0.2, 0.1, 'ammo762'),
   };
   const v = sb.spawnStickman(2, null, { name: 'Wes' });
   const q = sb.spawnStickman(5, null, { name: 'Xia' });
@@ -2176,6 +2182,371 @@ await ev(() => {
   for (const k of ['drop', 'drip', 'gush', 'blood']) delete fx[k];
   window.__sf.cam.home();
 });
+
+/* ------------------------------ walls and trees ------------------------------ */
+
+await fresh();
+const walls = await ev(() => {
+  const sb = window.__sf.sb, ui = window.__sf.ui;
+  const made = {};
+  for (const [k, x] of [['woodWall', -6], ['metalWall', -3], ['glassWall', 0]]) { ui.setSpawnKind(k); made[k] = ui.spawnAt(x, 0.5); }
+  ui.setSpawnKind('stickman');
+  for (let i = 0; i < 24; i++) sb.step(1 / 120);
+  const wood = made.woodWall, metal = made.metalWall, glass = made.glassWall;
+  const standing = [wood, metal, glass].every((w) => w && w.anchored && Math.abs(w.body.h - 2.4) < 0.01 && Math.abs(w.pos.y - w.body.h / 2) < 0.01);
+  const hits = [];
+  sb.on('bulletHit', (e) => { if (window.__wallHits) window.__wallHits.push({ k: e.what ? e.what.kind : null, mat: e.material || null, through: !!e.through }); });
+  window.__wallHits = hits;
+  sb.shoot(null, -8.5, 1.2, 0, { energy: 1 });
+  window.__wallHits = null;
+  // a blow takes out the cells round it; a cut right across, and the top half comes away
+  const before = wood.alive;
+  const gone = wood.damage(-6, 1.6, 0.1, 3, 'blunt');
+  for (let x = -6.14; x <= -5.86; x += 0.02) wood.damage(x, 1.0, 0.05, 5, 'blade', { dx: 1 });
+  const pieces = sb.slabs.filter((s) => s.kind === 'piece');
+  for (let i = 0; i < 240; i++) sb.step(1 / 120);
+  let shots = 0;
+  while (!glass.removed && shots < 20) { sb.shoot(null, -1.5, 0.5 + shots * 0.15, 0, { energy: 1 }); shots++; }
+  const shards = sb.fx.debris.filter((d) => d.sharp).length;
+  // what people can see through: glass, not steel
+  const seeGlass = sb.lineOfSight(-1, 1.5, 1, 1.5), seeMetal = sb.lineOfSight(-4, 1.5, -2, 1.5);
+  return {
+    standing, hits, gone, before, after: wood.alive, pieces: pieces.length, pieceCells: pieces[0] ? pieces[0].cellCount : 0,
+    pieceLying: pieces[0] ? Math.abs(Math.cos(pieces[0].body.rot)) < 0.3 && pieces[0].pos.y < 0.3 : false, stump: wood.body.h, shots, shards, seeGlass, seeMetal,
+  };
+});
+check('the three walls stand 2.4 m tall where they are put: wood, metal and glass', walls.standing, JSON.stringify(walls));
+check('a 9 mm goes through the wood wall and stops dead in the steel one', walls.hits[0] && walls.hits[0].mat === 'wood' && walls.hits[0].through && walls.hits[1] && walls.hits[1].mat === 'metal' && !walls.hits[1].through,
+  JSON.stringify(walls.hits));
+check('walls break cell by cell: a blow knocks out the cells round it', walls.gone > 5 && walls.after < walls.before, `${walls.before} -> ${walls.after}`);
+check('...and cut right across, everything above the cut comes away as a piece of its own, and falls over', walls.pieces === 1 && walls.pieceCells > 150 && walls.pieceLying && walls.stump < 1.1,
+  JSON.stringify(walls));
+check('glass cracks with every round, and after a few it all comes down in sharp shards', walls.shots <= 6 && walls.shards > 30, `${walls.shots} shots, ${walls.shards} shards`);
+check('people can see through glass, not through steel', walls.seeGlass && !walls.seeMetal);
+await ev(() => { window.__sf.cam.x = -3; window.__sf.cam.y = 2; });
+await shot('walls');
+
+await fresh();
+const trees = await ev(() => {
+  const sb = window.__sf.sb, ui = window.__sf.ui;
+  ui.setSpawnKind('tree');
+  const t = ui.spawnAt(0, 0.5);
+  ui.setSpawnKind('bush');
+  const bush = ui.spawnAt(6, 0.5);
+  ui.setSpawnKind('stickman');
+  const depths = new Set(t.boughs.map((b) => b.depth));
+  let leaves = 0;
+  for (const b of t.boughs) leaves += b.leaves.length;
+  // a twig sways in the air
+  const twig = t.boughs.find((b) => b.depth === 3);
+  let lo = 9, hi = -9;
+  for (let i = 0; i < 240; i++) { sb.step(1 / 120); lo = Math.min(lo, twig.bend); hi = Math.max(hi, twig.bend); }
+  // bullets through the leaves strip some off
+  for (let i = 0; i < 15; i++) sb.shoot(null, -6, 3.4 + i * 0.07, 0.05, { energy: 1 });
+  let leaves2 = 0;
+  for (const b of t.boughs) leaves2 += b.leaves.length;
+  // somebody walking through the bush pushes its stems aside
+  const p = sb.spawnStickman(4.6, null, { name: 'Bo' });
+  p.brain = null;
+  let bent = 0;
+  for (let i = 0; i < 300; i++) { p.goTo(8, 'walk'); sb.step(1 / 120); for (const b of bush.boughs) bent = Math.max(bent, Math.abs(b.bend)); }
+  // chopped at the foot of the trunk, it comes down
+  let chops = 0;
+  while (!sb.logs.some((l) => l.name === 'Fallen tree') && chops < 80) {
+    const q = t.firstSolid(-0.6, 0.6, 1, 0, 1.2);
+    if (!q) break;
+    t.damage(q.x, q.y, 0.045, 0.6, 'blade', { dx: 1, dy: 0 });
+    chops++;
+  }
+  const log = sb.logs.find((l) => l.name === 'Fallen tree');
+  for (let i = 0; i < 120 * 5; i++) sb.step(1 / 120);
+  return {
+    depths: [...depths].sort(), leaves, sway: hi - lo, leaves2, bent, chops, felled: !!log,
+    lying: log ? Math.abs(Math.sin(log.body.rot)) < 0.35 && log.pos.y < 0.6 : false, stump: t.boughs.length, len: log ? log.body.w : 0,
+  };
+});
+check('a tree is a trunk, branches, smaller branches and twigs, with leaves on them', trees.depths.join() === '0,1,2,3' && trees.leaves > 40, JSON.stringify(trees));
+check('...its twigs sway in the air', trees.sway > 0.004, trees.sway.toFixed(4));
+check('...bullets through the leaves knock them off', trees.leaves2 < trees.leaves, `${trees.leaves} -> ${trees.leaves2}`);
+check('somebody walking through a bush pushes its stems aside', trees.bent > 0.15, trees.bent.toFixed(2));
+check('chopped through at the foot, a tree comes down, and lies there as a fallen tree with the stump left standing',
+  trees.felled && trees.chops < 40 && trees.lying && trees.stump >= 1 && trees.len > 2, JSON.stringify(trees));
+await ev(() => { window.__sf.cam.x = 2; window.__sf.cam.y = 2; });
+await shot('trees');
+
+await fresh();
+const bend = await ev(() => {
+  const sb = window.__sf.sb, hand = window.__sf.hand;
+  const t = sb.spawnPlant('tree', 0);
+  const p = sb.spawnStickman(3, null, { name: 'Lu' });
+  p.brain = null;
+  for (let i = 0; i < 20; i++) sb.step(1 / 120);
+  // hung from a branch by a steel rope: the branch bends under them
+  const br = t.boughs.filter((b) => b.depth === 1).sort((a, b) => b.r0 - a.r0)[0];
+  const at = t.at(br, br.len * 0.7);
+  const { tie } = window.__sf.wires;
+  const w = tie(sb, 'metalRope', t, at.x, at.y, p, p.wj.handA.x, p.wj.handA.y);
+  let most = 0;
+  for (let i = 0; i < 360; i++) { sb.step(1 / 120); most = Math.max(most, Math.abs(br.bend)); }
+  // a twig dragged by the hand bends - and, bent too far, snaps off
+  const tw0 = t.boughs.find((b) => b.depth === 3 && !b.gone);
+  const tip = t.at(tw0, tw0.len * 0.7);
+  // (taken hold of as the world runs: paused, it would only be moved, whole)
+  sb.paused = false;
+  hand.grab(t, tip.x, tip.y);
+  sb.paused = true;
+  // (whichever twig the hand closed on)
+  const tw = t.held && t.held.b ? t.held.b : tw0;
+  let snapped = false, maxBend = 0;
+  for (let i = 0; i < 200 && !snapped; i++) {
+    hand.move(tip.x + i * 0.01, tip.y - i * 0.015);
+    sb.step(1 / 120);
+    maxBend = Math.max(maxBend, Math.abs(tw.bend));
+    snapped = !!tw.gone || !t.boughs.includes(tw);
+  }
+  hand.release();
+  return { tied: p.tied, rope: !w.removed, most, snapped, maxBend, depth: tw.depth, fell: sb.logs.length > 0 };
+});
+check('someone hung from a branch on a rope bends it', bend.tied && bend.rope && bend.most > 0.03, JSON.stringify(bend));
+check('a branch dragged by the hand bends, then snaps off and falls', bend.snapped && bend.maxBend > 0.4 && bend.fell, JSON.stringify(bend));
+
+/* --------------------------- freezing, and pausing --------------------------- */
+
+await fresh();
+const frozen = await ev(() => {
+  const sf = window.__sf, sb = sf.sb, ui = sf.ui, cam = sf.cam;
+  cam.follow = null; cam.x = 0; cam.y = 2; cam.clamp();
+  const c = sb.spawnCrate(0, 3);
+  const p = sb.spawnStickman(3, null, { name: 'Fen' });
+  for (let i = 0; i < 12; i++) sb.step(1 / 120);
+  ui.setTool('freeze');
+  const at = (x, y) => { const q = cam.toScreen(x, y); return [q.x, q.y]; };
+  ui.tap(...at(c.body.pos.x, c.body.pos.y));
+  const y0 = c.body.pos.y, mid = { on: c.frozenInPlace, y: y0 };
+  for (let i = 0; i < 120; i++) sb.step(1 / 120);
+  mid.after = c.body.pos.y;
+  // something landing on it does not move it either
+  const k = sb.spawnKnuckles(c.body.pos.x, c.body.pos.y + 1.2);
+  for (let i = 0; i < 90; i++) sb.step(1 / 120);
+  mid.landed = c.body.pos.y;
+  // (by its lower half: the knuckles are lying on top of it)
+  ui.tap(...at(c.body.pos.x, c.body.pos.y - 0.25));
+  for (let i = 0; i < 180; i++) sb.step(1 / 120);
+  // a person: stopped dead, mid-stride; still thinking, still talking
+  p.goTo(8, 'run');
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  ui.tap(...at(p.wj.chest.x, p.wj.chest.y));
+  const px = p.pos.x;
+  for (let i = 0; i < 240; i++) sb.step(1 / 120);
+  const person = { on: p.frozenInPlace, moved: Math.abs(p.pos.x - px), said: p.brain.doing || '', toast: document.querySelector('#toast').textContent };
+  ui.tap(...at(p.wj.chest.x, p.wj.chest.y));
+  person.free = !p.frozenInPlace;
+  ui.setTool('hand');
+  return { mid, fell: c.body.pos.y, person };
+});
+check('the freeze tool stops a falling crate dead in the air, and it stays there', frozen.mid.on && Math.abs(frozen.mid.after - frozen.mid.y) < 0.001 && frozen.mid.y > 2,
+  JSON.stringify(frozen.mid));
+check('...even with something landing on it', Math.abs(frozen.mid.landed - frozen.mid.y) < 0.001, JSON.stringify(frozen.mid));
+check('...and tapped again, it falls', frozen.fell < 0.45, frozen.fell.toFixed(2));
+check('a person frozen in place stops mid-stride and cannot move, but still knows it - and tapped again, is let go',
+  frozen.person.on && frozen.person.moved < 0.01 && /Frozen in place/.test(frozen.person.said) && /frozen in place/.test(frozen.person.toast) && frozen.person.free,
+  JSON.stringify(frozen.person));
+
+await fresh();
+const paused = await ev(() => {
+  const sf = window.__sf, sb = sf.sb, ui = sf.ui, cam = sf.cam;
+  cam.follow = null; cam.x = 0; cam.y = 2; cam.clamp();
+  const c = sb.spawnCrate(-2, 0.4);
+  const p = sb.spawnStickman(2, null, { name: 'Gil' });
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  sb.paused = true;
+  ui.setTool('hand');
+  const t0 = sb.time;
+  const drag = (x0, y0, x1, y1) => {
+    const a = cam.toScreen(x0, y0), b = cam.toScreen(x1, y1);
+    const mode = ui.dragStart(a.x, a.y, 0);
+    for (let i = 1; i <= 10; i++) ui.dragMove(a.x + (b.x - a.x) * i / 10, a.y + (b.y - a.y) * i / 10, 0, 0, mode);
+    ui.dragEnd(b.x, b.y, mode);
+    return mode;
+  };
+  const m1 = drag(-2, 0.4, 0, 2.4);
+  const crate = { x: c.body.pos.x, y: c.body.pos.y, rot: c.body.rot };
+  const m2 = drag(p.wj.chest.x, p.wj.chest.y, p.wj.chest.x + 2, p.wj.chest.y + 1);
+  const person = { x: p.pos.x, y: p.pos.y, state: p.state };
+  const still = sb.time === t0;
+  return { m1, m2, crate, person, still };
+});
+check('with the world paused, dragging something just puts it somewhere else, as it is - nothing moves on its own',
+  paused.m1 === 'grab' && Math.abs(paused.crate.x) < 0.02 && Math.abs(paused.crate.y - 2.4) < 0.02 && Math.abs(paused.crate.rot) < 0.01 && paused.still,
+  JSON.stringify(paused));
+check('...a person too: picked up and put down, standing just as they were', paused.m2 === 'grab' && Math.abs(paused.person.x - 4) < 0.05 && paused.person.y > 0.9 && paused.person.state === 'stand',
+  JSON.stringify(paused.person));
+await ev(() => { window.__sf.sb.paused = false; });
+await page.waitForTimeout(900);
+const unpaused = await ev(() => ({ y: window.__sf.sb.crates[0].body.pos.y, p: window.__sf.sb.people[0].pos.y }));
+check('...and let go of the pause, they fall', unpaused.y < 0.5 && unpaused.p < 0.1, JSON.stringify(unpaused));
+await ev(() => { window.__sf.sb.paused = true; });
+
+/* ----------------------------------- wires ----------------------------------- */
+
+await fresh();
+const wirebar = await ev(() => {
+  window.__sf.ui.setTool('wire');
+  const bar = document.querySelector('#wirebar');
+  const kinds = [...bar.querySelectorAll('.wire-kind')].map((b) => b.dataset.wire + ':' + b.textContent.trim());
+  const shown = !bar.classList.contains('hidden');
+  window.__sf.ui.setTool('hand');
+  return { kinds, shown, hidden: bar.classList.contains('hidden') };
+});
+check('the wire tool has six wires: wood rope, metal rope, fixed wood rope, fixed metal rope, wood pin and metal pin',
+  wirebar.shown && wirebar.hidden && wirebar.kinds.join('|') === 'woodRope:WOOD ROPE|metalRope:METAL ROPE|woodRod:FIXED WOOD ROPE|metalRod:FIXED METAL ROPE|woodPin:WOOD PIN|metalPin:METAL PIN',
+  JSON.stringify(wirebar));
+await ev(() => window.__sf.ui.setTool('wire'));
+await shot('wirebar');
+
+const wires = await ev(() => {
+  const sf = window.__sf, sb = sf.sb, ui = sf.ui, cam = sf.cam;
+  cam.follow = null; cam.x = 0; cam.y = 2; cam.clamp();
+  const drag = (x0, y0, x1, y1) => {
+    const a = cam.toScreen(x0, y0), b = cam.toScreen(x1, y1);
+    const mode = ui.dragStart(a.x, a.y, 0);
+    for (let i = 1; i <= 8; i++) ui.dragMove(a.x + (b.x - a.x) * i / 8, a.y + (b.y - a.y) * i / 8, 0, 0, mode);
+    ui.dragEnd(b.x, b.y, mode);
+  };
+  // a crate hung from the background on a wood rope, dragged out with the wire tool
+  const c1 = sb.spawnCrate(-6, 2.6);
+  for (let i = 0; i < 2; i++) sb.step(1 / 120);
+  ui.setTool('wire');
+  ui.setWireKind('woodRope');
+  drag(-6, 2.95, -6, 4.2);
+  const rope = sb.wires[0];
+  for (let i = 0; i < 240; i++) sb.step(1 / 120);
+  const hung = { y: c1.body.pos.y, rope: !!rope && !rope.removed, ends: rope ? rope.a.kind + '/' + rope.b.kind : null };
+  // two crates on a fixed metal rope: kick one, and they go together, the same distance apart
+  const c2 = sb.spawnCrate(1, 0.4), c3 = sb.spawnCrate(3, 0.4);
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  ui.setWireKind('metalRod');
+  drag(1, 0.4, 3, 0.4);
+  const rod = sb.wires.find((w) => w.type === 'metalRod');
+  c3.body.vel.x = 4;
+  for (let i = 0; i < 180; i++) sb.step(1 / 120);
+  const [ra, rb] = rod ? rod.ends() : [{ x: 0, y: 0 }, { x: 0, y: 0 }];
+  const rodOk = rod && Math.abs(Math.hypot(rb.x - ra.x, rb.y - ra.y) - 2) < 0.03 && c2.body.pos.x > 1.08;
+  // a metal pin through a crate into the background: it hangs there, and turns about it
+  const c4 = sb.spawnCrate(6, 1.6);
+  for (let i = 0; i < 2; i++) sb.step(1 / 120);
+  ui.setWireKind('metalPin');
+  const q = cam.toScreen(c4.body.pos.x - 0.3, c4.body.pos.y + 0.3);
+  ui.tap(q.x, q.y);
+  const pin = sb.wires.find((w) => w.type === 'metalPin');
+  for (let i = 0; i < 240; i++) sb.step(1 / 120);
+  const pp = pin ? pin.ends() : null;
+  const pinned = !!pin && Math.hypot(pp[0].x - pp[1].x, pp[0].y - pp[1].y) < 0.02 && c4.body.pos.y > 1 && Math.abs(c4.body.rot) > 0.3;
+  // somebody tied by the wrist to the background: they go limp, and hang there
+  const p = sb.spawnStickman(-2, null, { name: 'Ty' });
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  ui.setWireKind('woodRope');
+  drag(p.wj.handA.x, p.wj.handA.y, p.wj.handA.x, p.wj.handA.y + 1.4);
+  for (let i = 0; i < 240; i++) sb.step(1 / 120);
+  const tied = { tied: p.tied, rag: !!p.rag, doing: p.brain.doing };
+  ui.setTool('hand');
+  return { hung, rodOk, pinned, tied, count: sb.wires.length };
+});
+check('a wood rope dragged from a crate to the background: the crate hangs on it', wires.hung.rope && wires.hung.ends === 'body/world' && wires.hung.y > 2.3, JSON.stringify(wires.hung));
+check('a fixed metal rope keeps two crates exactly as far apart as they were: kick one, and the other comes with it', wires.rodOk, JSON.stringify(wires));
+check('a metal pin through a crate holds it to the background, and it turns about the pin', wires.pinned, JSON.stringify(wires));
+check('somebody tied up by the wrist goes limp and hangs there - and knows they are tied up', wires.tied.tied && wires.tied.rag && /Tied up/.test(wires.tied.doing), JSON.stringify(wires.tied));
+await shot('wires');
+
+await fresh();
+const strain = await ev(() => {
+  const sb = window.__sf.sb;
+  const { tie } = window.__sf.wires;
+  // the same jolt on the two ropes: a crate dropped on a metre of slack
+  const out = {};
+  for (const [k, x] of [['woodRope', -4], ['metalRope', 4]]) {
+    const c = sb.spawnCrate(x, 3.2);
+    for (let i = 0; i < 2; i++) sb.step(1 / 120);
+    const w = tie(sb, k, c, x, c.body.pos.y + 0.39, null, x, c.body.pos.y + 0.49);
+    c.body.vel.y = -9;
+    out[k] = { w };
+  }
+  let peak = { woodRope: 0, metalRope: 0 };
+  for (let i = 0; i < 180; i++) {
+    sb.step(1 / 120);
+    for (const k of ['woodRope', 'metalRope']) if (!out[k].w.removed) peak[k] = Math.max(peak[k], out[k].w.strain);
+  }
+  return { wood: out.woodRope.w.removed, metal: out.metalRope.w.removed, peak };
+});
+check('a hard enough jolt snaps a wood rope; the metal one, which takes far more, holds', strain.wood && !strain.metal, JSON.stringify(strain));
+
+/* ------------------------- the AK-47, the Mossberg, the crowbar ------------------------- */
+
+await fresh();
+const guns = await ev(() => {
+  const sb = window.__sf.sb, ui = window.__sf.ui;
+  ui.setSpawnKind('ak47');
+  const ak = ui.spawnAt(-6, 0.3);
+  ui.setSpawnKind('mossberg');
+  const sg = ui.spawnAt(-3, 0.3);
+  ui.setSpawnKind('crowbar');
+  const cb = ui.spawnAt(0, 0.3);
+  ui.setSpawnKind('stickman');
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  // a shotgun shell is eight pellets
+  let paths = 0;
+  const sh = sb.shoot;
+  sb.shoot = function (...a) { paths++; return sh.apply(this, a); };
+  sb.fireLoose(sg);
+  sb.shoot = sh;
+  // somebody angry, with the rifle: bursts, as fast as it goes
+  const a = sb.spawnStickman(-9, null, { name: 'Ari', traits: { aggression: 0.95, temper: 0.9, bravery: 0.9, skill: 0.7 } });
+  const b = sb.spawnStickman(-2.5, null, { name: 'Bea', traits: { aggression: 0.1, bravery: 0.2 } });
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  ak.wear(a);
+  a.weapon = ak;
+  a.brain.rel(b).anger = 1;
+  a.brain.rel(b).like = -1;
+  const times = [];
+  sb.on('shot', (e) => { if (e.who === a && window.__akShots) window.__akShots.push(sb.time); });
+  window.__akShots = times;
+  for (let i = 0; i < 120 * 10 && times.length < 12; i++) sb.step(1 / 120);
+  window.__akShots = null;
+  let quick = 0;
+  for (let i = 1; i < times.length; i++) if (times[i] - times[i - 1] < 0.13) quick++;
+  return {
+    ak: { name: ak.name, mag: ak.spec.mag, spare: ak.spec.spare, energy: ak.spec.energy }, sg: { name: sg.name, mag: sg.spec.mag, left: sg.mag },
+    cb: cb.name, paths, shots: times.length, quick, bea: b.alive ? b.state : 'dead',
+  };
+});
+check('the AK-47 holds 30 rounds of 7.62 and hits far harder than a pistol', guns.ak.name === 'AK-47' && guns.ak.mag === 30 && guns.ak.energy > 1.5, JSON.stringify(guns.ak));
+check('the Mossberg 500 holds six shells, and each one is eight pellets', guns.sg.name === 'Mossberg 500' && guns.sg.mag === 6 && guns.sg.left === 5 && guns.paths === 8, JSON.stringify(guns));
+check('someone angry with an AK fires it in bursts, a round every tenth of a second', guns.shots >= 3 && guns.quick >= 2, JSON.stringify(guns));
+
+await fresh();
+const bar = await ev(() => {
+  const sb = window.__sf.sb;
+  const g = sb.spawnWall('glassWall', 1.6);
+  const p = sb.spawnStickman(0.8, null, { name: 'Cy', traits: { aggression: 0.5 } });
+  p.brain = null;
+  const cb = sb.spawnCrowbar(0.8, 0.1);
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  cb.wear(p);
+  p.weapon = cb;
+  p.facing = 1;
+  const strikes = p.strikes();
+  p.attack('chop');
+  for (let i = 0; i < 100; i++) sb.step(1 / 120);
+  // and on a person: a heavy blow, no cut
+  const q = sb.spawnStickman(5, null, { name: 'Dot' });
+  q.brain = null;
+  for (let i = 0; i < 20; i++) sb.step(1 / 120);
+  const hp = q.health.parts.torso.hp;
+  q.takeHit({ by: p, part: 'torso', x: q.wj.chest.x, y: q.wj.chest.y, dir: -1, power: 2.1, kind: 'chop', armed: true, weapon: 'crowbar', bone: 'ribs' });
+  return { strikes, glass: g.removed, hurt: hp - q.health.parts.torso.hp, gash: q.wounds.some((w) => w.gash) };
+});
+check('a crowbar is swung like a machete, and one blow puts a glass wall in', bar.strikes.includes('chop') && bar.glass, JSON.stringify(bar));
+check('...on a person, a heavy blow that does not cut', bar.hurt > 10 && !bar.gash, JSON.stringify(bar));
 
 /* ---------------------------------- mods --------------------------------- */
 

@@ -256,6 +256,8 @@ export function explode(sb, x, y, by, power = 1) {
     t.body.applyImpulse((dx / (d || 1)) * 7 * k, (Math.max(0.3, dy / (d || 1)) * 7 + 2) * k, t.body.pos.x, t.body.pos.y);
     t.body.angVel += rand(-12, 12);
   }
+  // walls and trees take it too, cell by cell
+  if (sb.blast) sb.blast(x, y, R, power);
   sb.fx.flash(x, y, 0);
   sb.fx.sparks(x, y, 16);
   sb.fx.dust(x, Math.max(0, y), 14, 1.8);

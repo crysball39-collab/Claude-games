@@ -191,6 +191,124 @@ export class Sound {
     for (const [d, k] of [[0.11, 0.35], [0.24, 0.18], [0.4, 0.08]]) this.hiss(0.16, 900, 0.5, k * v, 'lowpass', d);
   }
 
+  /** An AK-47 round: a harder, sharper crack than a pistol, and a long roll back off the walls. */
+  rifleShot(x) {
+    if (!this.ready) return;
+    const v = 0.4 + this.near(x) * 0.8;
+    this.hiss(0.08, 3200, 0.6, 1.3 * v);
+    this.hiss(0.04, 7000, 0.7, 0.75 * v, 'highpass');
+    this.tone('sine', 170, 35, 0.2, 1.15 * v);
+    this.tone('square', 1100, 160, 0.035, 0.18 * v);
+    for (const [d, k] of [[0.1, 0.4], [0.22, 0.26], [0.38, 0.14], [0.58, 0.07]]) this.hiss(0.18, 1100, 0.5, k * v, 'lowpass', d);
+  }
+
+  /** A 12 gauge: a deep, wide boom - and a moment after, the pump racked back and forward. */
+  shotgun(x, pump = true) {
+    if (!this.ready) return;
+    const v = 0.45 + this.near(x) * 0.8;
+    this.hiss(0.16, 1500, 0.5, 1.4 * v);
+    this.hiss(0.06, 4200, 0.6, 0.55 * v, 'highpass');
+    this.tone('sine', 95, 28, 0.32, 1.5 * v);
+    this.tone('triangle', 480, 70, 0.09, 0.35 * v);
+    for (const [d, k] of [[0.13, 0.5], [0.3, 0.3], [0.5, 0.15], [0.74, 0.07]]) this.hiss(0.24, 600, 0.5, k * v, 'lowpass', d);
+    if (!pump) return;
+    const n = this.near(x);
+    for (const d of [0.34, 0.5]) {
+      this.hiss(0.04, 2400, 3, 0.35 * n, 'bandpass', d);
+      this.tone('square', 900, 500, 0.03, 0.08 * n, d);
+    }
+  }
+
+  /** Steel struck - a bullet, a blow, a sheet of it landing: a clang, ringing on. */
+  clang(power, x) {
+    if (!this.ready) return;
+    const v = this.near(x) * clamp(0.25 + power * 0.25, 0.2, 1);
+    const f = 520 + rand(-80, 120);
+    this.tone('triangle', f, f * 0.97, 0.5, 0.22 * v);
+    this.tone('sine', f * 2.76, f * 2.7, 0.35, 0.1 * v);
+    this.tone('sine', f * 5.4, f * 5.3, 0.2, 0.05 * v);
+    this.hiss(0.04, 3800, 1.5, 0.35 * v);
+  }
+
+  /** Glass knocked: a bright tink. */
+  tink(x, power = 1) {
+    if (!this.ready) return;
+    const v = this.near(x) * clamp(0.3 + power * 0.3, 0.2, 0.9);
+    this.tone('sine', 3200 + rand(-300, 500), 3100, 0.18, 0.1 * v);
+    this.tone('sine', 5100 + rand(-300, 300), 5000, 0.12, 0.05 * v);
+    this.hiss(0.03, 5000, 2, 0.2 * v);
+  }
+
+  /** Wood giving way: a splintering crack (a big piece, a deeper one). */
+  splinter(x, big = false) {
+    if (!this.ready) return;
+    const v = this.near(x) * (big ? 0.9 : 0.55);
+    for (let i = 0; i < (big ? 5 : 3); i++) this.hiss(0.04, 1800 + rand(-500, 1200), 2.5, 0.4 * v, 'bandpass', i * rand(0.015, 0.04));
+    this.tone('triangle', big ? 160 : 260, 90, big ? 0.22 : 0.1, 0.4 * v);
+  }
+
+  /** A tree going over: a long, slow creak of wood. */
+  creak(x) {
+    if (!this.ready) return;
+    const v = this.near(x) * 0.7;
+    const c = this.ctx, t = c.currentTime;
+    const o = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(70, t);
+    o.frequency.linearRampToValueAtTime(48, t + 1.1);
+    f.type = 'bandpass'; f.frequency.value = 380; f.Q.value = 3;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.18 * v, t + 0.25);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+    o.connect(f); f.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t + 1.25);
+    this.splinter(x, true);
+  }
+
+  /** Leaves: a soft rush of them. */
+  rustle(x, hard = false) {
+    if (!this.ready) return;
+    const v = this.near(x) * (hard ? 0.3 : 0.14);
+    this.hiss(hard ? 0.32 : 0.22, 4200, 0.7, v, 'highpass');
+    this.hiss(0.12, 2600, 1.2, v * 0.6, 'bandpass', 0.06);
+  }
+
+  /** A wire going on: a rope pulled tight, a rod set, a pin tapped home. */
+  tieOn(metal, pin, x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    if (pin) {
+      this.tone('sine', metal ? 900 : 300, metal ? 820 : 180, 0.08, 0.3 * v);
+      this.hiss(0.03, metal ? 3400 : 1200, 2, 0.3 * v);
+      return;
+    }
+    this.sweep('bandpass', 700, 2200, 0.16, 0.16 * v, 3);
+    if (metal) this.tone('sine', 1500, 1450, 0.12, 0.05 * v, 0.1);
+  }
+
+  /** A wire parting: a hemp rope's snap, a steel one's twang. */
+  snapWire(metal, x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.hiss(0.05, metal ? 4200 : 2600, 2.2, 0.55 * v);
+    if (metal) this.tone('sawtooth', 620, 140, 0.4, 0.12 * v);
+    else this.tone('triangle', 340, 120, 0.08, 0.2 * v);
+  }
+
+  /** The freeze tool: a crisp, glassy lock - or, letting go, the same the other way. */
+  lockInPlace(on, x) {
+    if (!this.ready) return;
+    const v = this.near(x) * 0.45;
+    if (on) {
+      this.sweep('bandpass', 1800, 5200, 0.14, 0.18 * v, 4);
+      this.tone('sine', 2640, 2600, 0.35, 0.08 * v, 0.1);
+      this.tone('sine', 3960, 3900, 0.25, 0.04 * v, 0.12);
+    } else {
+      this.sweep('bandpass', 5200, 1500, 0.16, 0.16 * v, 4);
+      this.tone('sine', 1760, 1700, 0.18, 0.05 * v, 0.06);
+    }
+  }
+
   /** A taser cartridge going off: a sharp pop of gas, and the hiss of the wires paying out. */
   taserFire(x) {
     if (!this.ready) return;

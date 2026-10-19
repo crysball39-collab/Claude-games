@@ -1,9 +1,9 @@
 /* =============================================================================
    The things you can spawn that are not people: a wooden crate, a set of
-   brass knuckles, a combat knife, a machete, two pistols (a Glock-19 and an
-   M1911), a light vest and three sizes of ammo box - and the pieces of
-   people a machete leaves on the floor. (The taser has a file of its own,
-   taser.js.)
+   brass knuckles, a combat knife, a machete, a crowbar, two pistols (a
+   Glock-19 and an M1911), an AK-47, a Mossberg 500 pump shotgun, a light
+   vest and a box of rounds for each kind of gun - and the pieces of people a
+   machete leaves on the floor. (The taser has a file of its own, taser.js.)
 
    Each one is a rigid body in the physics world while it is lying about; a
    crate someone is carrying turns kinematic and goes where their hands go,
@@ -13,12 +13,15 @@
    A blade that flies point first into something stays in it: a crate, the
    floor, or a person (stickman.js holds it to the bone it went into). A gun
    carries its own ammunition, whoever is holding it: a magazine and two
-   spare magazines' worth - topped up again from an ammo box.
+   spare magazines' worth - topped up again from a box of the right rounds:
+   9 mm for the Glock, .45 for the M1911, 7.62 for the AK, 12 gauge shells
+   for the shotgun.
    ========================================================================== */
 import { Body } from '../physics/rigid.js';
 import {
-  KNIFE_W, KNIFE_H, KNIFE_GRIP, MACHETE_W, MACHETE_H, MACHETE_GRIP,
+  KNIFE_W, KNIFE_H, KNIFE_GRIP, MACHETE_W, MACHETE_H, MACHETE_GRIP, CROWBAR_W, CROWBAR_H, CROWBAR_GRIP,
   GLOCK_W, GLOCK_H, GLOCK_GRIP, GLOCK_MUZZLE, GLOCK_PORT, M1911_W, M1911_H, M1911_GRIP, M1911_MUZZLE, M1911_PORT,
+  AK_W, AK_H, AK_GRIP, AK_MUZZLE, AK_PORT, MOSS_W, MOSS_H, MOSS_GRIP, MOSS_MUZZLE, MOSS_PORT,
 } from './draw.js';
 
 let nextId = 1;
@@ -123,15 +126,22 @@ export class Knuckles {
   }
 }
 
-/** The two blades, and how each is built: drawn length and depth, weight, where the fist goes. */
+/**
+ * The two blades - and the crowbar, which is carried and swung like one but
+ * does not cut - and how each is built: drawn length and depth, weight,
+ * where the fist goes.
+ */
 export const BLADES = {
   knife: { name: 'Combat Knife', w: KNIFE_W, h: KNIFE_H, mass: 0.35, grip: KNIFE_GRIP },
   machete: { name: 'Machete', w: MACHETE_W, h: MACHETE_H, mass: 0.6, grip: MACHETE_GRIP },
+  crowbar: { name: 'Crowbar', w: CROWBAR_W, h: CROWBAR_H * 0.55, mass: 1.6, grip: CROWBAR_GRIP, blunt: true },
 };
 export const isBlade = (kind) => kind === 'knife' || kind === 'machete';
 
 /** The kinds of thing that are guns: aimed, fired, carried by a stickman like the Glock. Mods add theirs. */
-export const GUN_KINDS = new Set(['glock', 'm1911', 'taser']);
+export const GUN_KINDS = new Set(['glock', 'm1911', 'taser', 'ak47', 'mossberg']);
+/** The guns too long for a holster: they go across the back, on a sling. */
+export const isLongGun = (kind) => kind === 'ak47' || kind === 'mossberg';
 export const isGun = (kind) => GUN_KINDS.has(kind);
 /** A gun that kills: anything aimed and fired except the taser. */
 export const isFirearm = (kind) => GUN_KINDS.has(kind) && kind !== 'taser';
@@ -159,6 +169,12 @@ export const ARMS = {};
 export function defineArm(kind, spec) { ARMS[kind] = spec; }
 export const armOf = (kind) => (kind && ARMS[kind]) || null;
 
+// the crowbar: a steel bar on the end of an arm - it breaks bones, and it breaks into things (wrecks: walls, trees)
+defineArm('crowbar', {
+  name: 'Crowbar', noun: 'crowbar', wound: 'Crowbar', cause: 'beaten with a crowbar', blade: false, sharp: 0,
+  mult: 2.1, breaks: 0.22, shove: 1.35, spray: 0.5, scary: 0.4, nasty: 2, power: 1.9, wrecks: 3,
+});
+
 export class Blade {
   constructor(sandbox, x, y, rot = 0, kind = 'knife') {
     const spec = BLADES[kind];
@@ -175,7 +191,7 @@ export class Blade {
     sandbox.phys.add(this.body);
     this.inWorld = true;
     this.wornBy = null;     // in someone's hand
-    this.stuckIn = null;    // { person, entry } | { crate, lx, ly, lr } | { floor: true }
+    this.stuckIn = null;    // { person, entry } | { crate, lx, ly, lr } | { slab, gx, gy, lr } | { wood, bough, u, v, lr } | { floor: true }
     this.blood = 0;
     this.thrownBy = null;
     this.thrownAt = -99;
@@ -244,15 +260,41 @@ export class Blade {
 
   unstick() { this.stuckIn = null; }
 
-  /** Stuck in a crate, it goes where the crate goes. */
+  /**
+   * Stuck in a crate, a wall or a tree, it goes where that goes - and when
+   * what was holding it has gone (the wood round it shot away, the limb it
+   * was in fallen off as something else), it goes with that, or falls out.
+   */
   follow() {
     const st = this.stuckIn;
-    if (!st || !st.crate) return;
-    const c = st.crate.body;
-    const p = c.toWorld(st.lx, st.ly);
-    this.body.pos.x = p.x;
-    this.body.pos.y = p.y;
-    this.body.rot = c.rot + st.lr;
+    if (!st) return;
+    const b = this.body;
+    if (st.crate) {
+      const c = st.crate.body, p = c.toWorld(st.lx, st.ly);
+      b.pos.x = p.x; b.pos.y = p.y; b.rot = c.rot + st.lr;
+      return;
+    }
+    if (st.slab) {
+      const w = st.slab;
+      if (w.removed) { this.drop(b.pos.x, b.pos.y, 0, 0); return; }
+      const p = w.fromGrid(st.gx, st.gy);
+      b.pos.x = p.x; b.pos.y = p.y; b.rot = w.body.rot + st.lr;
+      // (the cells round its point gone, it drops out)
+      const tip = this.tip;
+      if (!w.contains(tip.x, tip.y, 0.04)) this.drop(b.pos.x, b.pos.y, 0, 0);
+      return;
+    }
+    if (st.wood) {
+      let t = st.wood;
+      if (t.removed || !t.boughs.includes(st.bough)) {
+        // the limb it was in came off: it is in whatever that became
+        t = this.sandbox.logs.find((l) => !l.removed && l.boughs.includes(st.bough)) || null;
+        if (!t) { this.drop(b.pos.x, b.pos.y, 0, 0); return; }
+        st.wood = t;
+      }
+      const p = t.at(st.bough, st.u, st.v);
+      b.pos.x = p.x; b.pos.y = p.y; b.rot = st.bough.ang + st.lr;
+    }
   }
 }
 
@@ -262,6 +304,11 @@ export class Knife extends Blade {
 
 export class Machete extends Blade {
   constructor(sandbox, x, y, rot = 0) { super(sandbox, x, y, rot, 'machete'); }
+}
+
+/** A crowbar: held and swung like a machete, but it hits like a club, and does not stick in what it is thrown at. */
+export class Crowbar extends Blade {
+  constructor(sandbox, x, y, rot = 0) { super(sandbox, x, y, rot, 'crowbar'); }
 }
 
 export const GLOCK_MAG = 15;
@@ -282,6 +329,16 @@ export const GUN_MODELS = {
   m1911: {
     name: 'M1911', a: 'an', mag: 7, spare: 14, energy: 1.25, cadence: 0.2, kick: 1.6, round: '.45',
     w: M1911_W, h: M1911_H, mass: 1.1, grip: M1911_GRIP, muzzle: M1911_MUZZLE, port: M1911_PORT,
+  },
+  // the rifle: thirty 7.62 rounds, as fast as the trigger is held - through a wall, through a person
+  ak47: {
+    name: 'AK-47', a: 'an', mag: 30, spare: 60, energy: 1.85, cadence: 0.1, kick: 1.25, round: '7.62', auto: true, long: true,
+    w: AK_W, h: AK_H, mass: 3.6, grip: AK_GRIP, muzzle: AK_MUZZLE, port: AK_PORT,
+  },
+  // the pump shotgun: six shells, eight pellets each, and the pump worked between shots
+  mossberg: {
+    name: 'Mossberg 500', a: 'a', mag: 6, spare: 12, energy: 0.5, pellets: 8, spread: 3.4, cadence: 0.85, kick: 2.4, round: '12 gauge', pump: true, long: true,
+    w: MOSS_W, h: MOSS_H, mass: 3.3, grip: MOSS_GRIP, muzzle: MOSS_MUZZLE, port: MOSS_PORT,
   },
 };
 
@@ -319,10 +376,15 @@ export class Gun {
   get loose() { return !this.wornBy && !this.removed; }
   /** Every round it has, in the magazine and out. */
   get ammo() { return this.mag + this.spare; }
-  /** How far back the slide is: kicked back for an instant by each shot, locked back when it is empty. */
+  /**
+   * How far back the slide is: kicked back for an instant by each shot,
+   * locked back when it is empty. (A rifle's bolt; a shotgun's pump, worked
+   * back and forward again after every shell.)
+   */
   get slide() {
-    if (this.mag <= 0) return 0.04;
     const t = this.sandbox.time - this.lastShot;
+    if (this.spec.pump) return t > 0.25 && t < 0.6 ? 0.07 * Math.sin(((t - 0.25) / 0.35) * Math.PI) : 0;
+    if (this.mag <= 0) return 0.04;
     return t < 0.06 ? 0.045 * (1 - t / 0.06) : 0;
   }
   /** How many more rounds it could carry: what an ammo box would give it. */
@@ -378,21 +440,28 @@ export class Gun {
 
 /* --------------------------------- ammo boxes -------------------------------- */
 
-/** Three sizes of box of pistol rounds: what each holds, and how big and heavy it is. */
+/**
+ * A box of rounds for each kind of gun: what is in it, which guns it fits,
+ * how many there are, and how big and heavy the box is.
+ */
 export const AMMO_BOXES = {
-  small: { name: 'Small Ammo Box', short: 'SMALL AMMO', w: 0.24, h: 0.15, mass: 1.2, rounds: 30 },
-  medium: { name: 'Medium Ammo Box', short: 'MEDIUM AMMO', w: 0.34, h: 0.2, mass: 3, rounds: 80 },
-  big: { name: 'Big Ammo Box', short: 'BIG AMMO', w: 0.5, h: 0.28, mass: 8, rounds: 200 },
+  ammo9: { name: '9 mm Ammo Box', short: '9 MM AMMO', round: '9 mm', fits: ['glock'], w: 0.26, h: 0.16, mass: 1.4, rounds: 50 },
+  ammo45: { name: '.45 ACP Ammo Box', short: '.45 AMMO', round: '.45', fits: ['m1911'], w: 0.3, h: 0.18, mass: 2, rounds: 50 },
+  ammo762: { name: '7.62 mm Ammo Can', short: '7.62 AMMO', round: '7.62', fits: ['ak47'], w: 0.46, h: 0.27, mass: 7, rounds: 120 },
+  ammo12: { name: '12 Gauge Shells', short: '12 GA SHELLS', round: '12 gauge', fits: ['mossberg'], w: 0.3, h: 0.17, mass: 1.8, rounds: 25 },
 };
+// (the old sizes, from before the boxes were split by what is in them)
+const OLD_BOX = { small: 'ammo9', medium: 'ammo45', big: 'ammo762' };
 
 /**
- * A box of pistol rounds: a cardboard one, a plastic case, a steel can.
- * Anyone with a pistol running low comes and fills their magazines from it
- * (any pistol: the boxes are mixed), until it is empty.
+ * A box of rounds of one kind: anyone with a gun that takes them, running
+ * low, comes and fills their magazines from it, until it is empty. Rounds
+ * that do not fit their gun are no use to them.
  */
 export class AmmoBox {
-  constructor(sandbox, x, y, size = 'medium') {
-    const spec = AMMO_BOXES[size] || AMMO_BOXES.medium;
+  constructor(sandbox, x, y, size = 'ammo9') {
+    size = OLD_BOX[size] || size;
+    const spec = AMMO_BOXES[size] || AMMO_BOXES.ammo9;
     this.id = nextId++;
     this.kind = 'ammo';
     this.size = size;
@@ -413,13 +482,18 @@ export class AmmoBox {
   get pos() { return this.body.pos; }
   get loose() { return !this.removed; }
   get empty() { return this.rounds <= 0; }
+  /** Whether its rounds go in this gun. */
+  fits(g) { return !!g && this.spec.fits.includes(g.kind); }
   /** Up to n rounds out of it: how many there were. */
   take(n) {
     const k = Math.max(0, Math.min(n, this.rounds));
     this.rounds -= k;
     return k;
   }
-  describe() { return this.rounds > 0 ? `${this.name}: ${this.rounds} rounds left` : `${this.name}: empty`; }
+  describe() {
+    const what = this.spec.fits.map((k) => GUN_MODELS[k] ? GUN_MODELS[k].name : k).join(', ');
+    return this.rounds > 0 ? `${this.name}: ${this.rounds} ${this.size === 'ammo12' ? 'shells' : 'rounds'} left, for the ${what}` : `${this.name}: empty`;
+  }
 }
 
 /* ---------------------------------- the vest --------------------------------- */

@@ -6,8 +6,11 @@ texture in the game is drawn procedurally onto a canvas at load time.
 
 > This repository also holds **STICKFIGHTS**, a 2D sandbox on a grey background
 > and a black floor where you spawn stickmen and police officers, brass
-> knuckles, combat knives, machetes, Glock-19 and M1911 pistols, tasers, light
-> vests, ammo boxes and crates, and the stickmen think, feel, remember, talk,
+> knuckles, combat knives, machetes, crowbars, Glock-19 and M1911 pistols, an
+> AK-47, a Mossberg 500 pump shotgun, tasers, light vests, a box of ammo for
+> each kind of gun, crates, wood, metal and glass walls that break cell by
+> cell, and trees and bushes whose branches, twigs and leaves bend, snap and
+> fall - and the stickmen think, feel, remember, talk,
 > fight until they run out of breath, stumble, break bones, lose limbs and die
 > on their own - animated frame by frame while they are in charge of their
 > bodies, balancing on their feet when a blow knocks them back, and ragdolls
@@ -20,7 +23,10 @@ texture in the game is drawn procedurally onto a canvas at load time.
 > They bleed from the wound that is bleeding - in spurting streams from a stump
 > or an artery, from the head that hit the floor - until their blood runs out,
 > and it lands on anything: the floor, the walls, crates, weapons, people.
-> You can change their feelings (or lock them where they are), their
+> A freeze tool stops anything dead where it is; with the world paused, the
+> hand just moves things; and a wire tool ties anything to anything (or to the
+> background) with wood or metal rope, fixed rods or pins, which take the strain
+> until they snap. You can change their feelings (or lock them where they are), their
 > personality and who they count as friends and enemies, and send them to
 > fight. Mods add what is not part of the game itself: **Murder Drones**
 > brings worker drone Uzi with her railgun, and disassembly drones N and V, who
