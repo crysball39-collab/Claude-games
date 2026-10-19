@@ -304,6 +304,20 @@ clip('writheFront', { loop: true, frames: [
   [0.55, P({ rot: 90, t: 0, h: -34, aA: [172, 8], aB: [-14, 6], lA: [-4, -46], lB: [-6, -18] })],
 ] });
 
+// on fire and rolling it out: stickman.js turns them over between these two -
+// each a heave onto the side, knees and elbows in, the arms beating at the flames
+clip('rollBack', { frames: [
+  [0.1, P({ rot: -74, t: 14, h: 34, aA: [70, 100], aB: [52, 112], lA: [72, -100], lB: [56, -84] })],
+  [0.12, P({ rot: -88, t: 6, h: 30, aA: [110, 70], aB: [40, 120], lA: [58, -80], lB: [30, -50] })],
+  [0.12, P({ rot: -90, t: 2, h: 32, aA: [150, 40], aB: [30, 90], lA: [44, -66], lB: [14, -30] })],
+] });
+
+clip('rollFront', { frames: [
+  [0.1, P({ rot: 76, t: 12, h: -24, aA: [130, 40], aB: [90, 60], lA: [20, -70], lB: [10, -40] })],
+  [0.12, P({ rot: 88, t: 4, h: -30, aA: [160, 20], aB: [40, 40], lA: [-4, -40], lB: [8, -26] })],
+  [0.12, P({ rot: 90, t: 0, h: -32, aA: [172, 10], aB: [-6, 10], lA: [-3, -10], lB: [4, -24] })],
+] });
+
 // knocked out: breathing, nothing else
 clip('koBack', { loop: true, frames: [
   [1.4, P({ rot: -90, t: 0, h: 26, aA: [170, 10], aB: [14, 16], lA: [8, -12], lB: [26, -52] })],
@@ -404,6 +418,13 @@ clip('knock', { frames: [
   [0.14, P({ t: 20, h: 14, aA: [62, 34] })], [0.08, P({ t: 20, h: 14, aA: [48, 8] }), 'knock'],
   [0.12, P({ t: 20, h: 14, aA: [62, 34] })], [0.08, P({ t: 20, h: 14, aA: [48, 8] }), 'knock'],
   [0.2, STAND],
+] });
+
+// beating at the flames on somebody: quick slaps at chest height, both hands
+clip('patOut', { mask: 'upper', frames: [
+  [0.09, P({ t: 14, h: 10, aA: [70, 40], aB: [56, 50] })], [0.07, P({ t: 16, h: 12, aA: [52, 10], aB: [70, 34] })],
+  [0.09, P({ t: 14, h: 10, aA: [70, 40], aB: [50, 12] })], [0.07, P({ t: 16, h: 12, aA: [52, 10], aB: [70, 34] })],
+  [0.14, P({ t: 8, h: 6, aA: [40, 30], aB: [30, 40] })],
 ] });
 
 // bent over something on the floor, having a look

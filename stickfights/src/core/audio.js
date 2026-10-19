@@ -7,8 +7,17 @@
    syllable or so, pitched to the speaker's voice and raised when they shout.
 
    Sounds get quieter the further they are from the middle of the view.
+
+   The little variations in every sound come from the sound's own random
+   numbers, not the game's: whether a sound plays depends on the audio
+   clock, and what is heard must never change what happens.
    ========================================================================== */
-import { clamp, rand } from './util.js';
+import { clamp, rng } from './util.js';
+
+const own = rng(0x50f7);
+/** A random number for a sound (the game's own Math.random is left alone). */
+export const soundRand = (a = 0, b = 1) => a + own() * (b - a);
+const rand = soundRand;
 
 export class Sound {
   constructor() {
@@ -36,7 +45,7 @@ export class Sound {
       const len = this.ctx.sampleRate;
       this.noise = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
       const d = this.noise.getChannelData(0);
-      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      for (let i = 0; i < len; i++) d[i] = own() * 2 - 1;
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
   }
@@ -83,7 +92,7 @@ export class Sound {
     s.connect(f);
     f.connect(g);
     g.connect(this.master);
-    s.start(t, Math.random() * 0.5);
+    s.start(t, own() * 0.5);
     s.stop(t + dur + 0.02);
   }
 
@@ -117,7 +126,7 @@ export class Sound {
     g.gain.exponentialRampToValueAtTime(v, t + 0.05);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
     s.connect(f); f.connect(g); g.connect(this.master);
-    s.start(t, Math.random() * 0.5);
+    s.start(t, own() * 0.5);
     s.stop(t + 0.2);
   }
 
@@ -200,6 +209,88 @@ export class Sound {
       this.tone('square', 2400 + rand(-500, 500), 1800, 0.008, 0.22 * v, d);
       this.hiss(0.01, 5200, 2, 0.35 * v, 'bandpass', d);
     }
+  }
+
+  /* -------------------------------- fire and ice -------------------------------- */
+
+  /** A sweep of filtered noise: f0 to f1 over dur, peaking at gain. */
+  sweep(type, f0, f1, dur, gain, q = 1, delay = 0) {
+    const c = this.ctx, t = c.currentTime + delay;
+    const s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+    s.buffer = this.noise;
+    f.type = type;
+    f.Q.value = q;
+    f.frequency.setValueAtTime(f0, t);
+    f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, gain), t + Math.min(0.1, dur * 0.2));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(this.master);
+    s.start(t, own() * 0.4);
+    s.stop(t + dur + 0.05);
+  }
+
+  /** Catching fire: air rushing up into it, and a low roar under that. */
+  ignite(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.sweep('bandpass', 260, 1800, 0.55, 0.5 * v, 0.9);
+    this.hiss(0.6, 180, 0.7, 0.35 * v, 'lowpass', 0.05);
+  }
+
+  /** A fire going: a soft roar, and pops and snaps, more of them the bigger it is. */
+  fire(power, x) {
+    if (!this.ready) return;
+    const v = this.near(x) * (0.25 + power * 0.5);
+    this.hiss(0.35, 320 + rand(-60, 60), 0.6, 0.16 * v, 'lowpass');
+    const n = 1 + Math.floor(rand(0, 3) * power);
+    for (let i = 0; i < n; i++) this.hiss(0.012, 2600 + rand(-900, 1400), 3, 0.32 * v, 'bandpass', rand(0, 0.3));
+  }
+
+  /** Put out with cold: steam, hissing away to nothing. */
+  steamHiss(x, big = true) {
+    if (!this.ready) return;
+    this.sweep('highpass', 4200, 1500, big ? 0.8 : 0.45, this.near(x) * (big ? 0.22 : 0.12), 0.7);
+  }
+
+  /** Freezing solid: ice spreading - a run of high ticks and creaks - and a glassy ring. */
+  freeze(x) {
+    if (!this.ready) return;
+    const v = this.near(x) * 0.5;
+    for (let i = 0; i < 9; i++) {
+      const d = i * rand(0.03, 0.07);
+      this.hiss(0.02, 3500 + rand(-800, 2500), 6, 0.25 * v, 'bandpass', d);
+      if (i % 3 === 0) this.tone('sine', 2400 + rand(-300, 900), 2200, 0.08, 0.05 * v, d);
+    }
+    this.tone('sine', 1320, 1300, 0.6, 0.06 * v, 0.3);
+    this.tone('sine', 1980, 1960, 0.45, 0.04 * v, 0.32);
+  }
+
+  /** Ice cracking: a sharp snap and a ringing chip. */
+  iceCrack(x, big = false) {
+    if (!this.ready) return;
+    const v = this.near(x) * (big ? 0.8 : 0.45);
+    this.hiss(0.05, 3000, 1.5, 0.55 * v);
+    this.tone('triangle', 1700 + rand(-200, 300), 900, 0.12, 0.18 * v);
+    this.tone('sine', 3100 + rand(-300, 300), 3000, 0.25, 0.06 * v, 0.02);
+  }
+
+  /** A whole frozen body going to pieces: a crash like glass, and bits tinkling down after it. */
+  shatter(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.hiss(0.35, 2600, 0.6, 0.6 * v, 'highpass');
+    this.tone('sine', 120, 50, 0.25, 0.45 * v);
+    for (let i = 0; i < 14; i++) this.tone('sine', 2000 + rand(0, 3500), 1800, 0.09, rand(0.03, 0.08) * v, 0.05 + i * rand(0.025, 0.06));
+  }
+
+  /** Air at last: a ragged gasp in, and a cough. */
+  gasp(pitch, x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.sweep('bandpass', 900 * pitch, 1600 * pitch, 0.5, 0.3 * v, 2);
+    this.hiss(0.08, 500 * pitch, 1.5, 0.3 * v, 'bandpass', 0.6);
+    this.tone('square', 160 * pitch, 110 * pitch, 0.06, 0.05 * v, 0.6);
   }
 
   /** A round stopped by a vest: a hard, dull smack, and the breath knocked out. */

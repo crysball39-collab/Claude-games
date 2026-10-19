@@ -108,7 +108,8 @@ Pinch (or the mouse wheel) zooms, two fingers pan. Along the top right: sound,
 slow motion, pause, settings, and clear everything (tap twice).
 
 **Tap a stickman** to open the inspector: their name and mood, what they are
-doing, their personality, five emotions, pain, blood and stamina, an X-ray
+doing, their personality, five emotions, how conscious they are, their
+adrenaline, oxygen and temperature, pain, blood and stamina, an X-ray
 of their body coloured by injury - every broken bone snapped and named,
 whatever has been cut off missing, joints out of their sockets ringed in
 purple, bullets still in them in gold - what they are wearing and carrying
@@ -138,6 +139,13 @@ The inspector is also where you change their mind:
 - **Personality** - eight sliders, one for each trait. Everything that grows
   out of a trait follows it: a braver one stops running, a kinder one starts
   helping, a more hot-headed one rests angrier.
+- **Temperature** - the box at the end of the Temp bar shows their body
+  temperature, and anything typed into it (and Enter) becomes it: `40`,
+  `-12.5`, `104F`, `300 K`, `37 °C` - or a word: `normal`, `hot`,
+  `boiling`, `cold`, `freezing`. 60 °C or more and they catch fire; 0 °C or
+  less and they freeze solid; in between, the heat or the cold does what it
+  does (below). Their body brings it back toward 37 on its own, unless the
+  **padlock** beside it is on: then it stays exactly where it was put.
 
 **Settings** turn names, speech bubbles, thought bubbles and blood on and off,
 switch on **flipbook** animation (below), and switch **ragdoll physics** off,
@@ -417,6 +425,11 @@ The game has a few ways in that change nothing until a mod uses them:
 - something in `sandbox.items` that is not one rigid body - a ragdoll of its
   own - is picked up by the hand from above with `handGrab`, `handHold` and
   `handRelease`
+- a species can say it `breathes: false` (a machine; the `undead` do not
+  either), and be `fireproof` or `frostproof`; `game/vitals.js` has
+  `ignite()`, `extinguish()`, `freezeSolid()`, `thaw()`, `setTemperature()`
+  and `warm()` for anything of a mod's that sets people alight, freezes
+  them or warms them up
 
 ---
 
@@ -810,6 +823,68 @@ hard, too tired, dizzy, hurt in the legs or backing into a crate, the steps
 cannot keep up, and over they go - into the ragdoll, moving exactly the way
 they were. Hit again while they are still stumbling, they usually go down.
 
+### Adrenaline, air and temperature; fire and ice
+
+Four more numbers keep everybody going (`src/game/vitals.js`), each with a
+bar in the inspector:
+
+- **Consciousness** - how awake they are (the knockouts above), and now also
+  how much air is in them and how hot or cold they are.
+- **Adrenaline** - fear, anger, a blow, a fall, being picked up, being on
+  fire: it surges in a second or two and wears off over most of a minute.
+  While it is up they feel less of the pain (it catches up with them once it
+  wears off), run faster, hit harder, tire slower, take more to knock out
+  and come round sooner - and they bleed faster, and their aim shakes.
+- **Oxygen** - what their blood is carrying. Held up by the head, they
+  cannot breathe: they choke, the oxygen goes, they go blue in the face and
+  pass out, and held long enough they die of it; let go in time, they gasp
+  and it comes back. Smoke, a punctured lung, lost blood and being out of
+  breath keep it down a little. Low, they are dizzy; lower, out cold.
+  Machines and the undead (a mod's) do not breathe at all.
+- **Temperature** - 37 °C is right, and a living body steers back to it:
+  sweating when it is hot, shivering when it is cold - fast from very hot,
+  slowly from very cold, and not at all if it is locked.
+  - **38** and up, flushed and sweating; **40**, overheating: dizzy, slow,
+    out of breath sooner; **43** or so, heatstroke: out cold, and kept up it
+    kills them - at 44 they come round as it comes down, at 50 it is the
+    end of them.
+  - **35** and down, shivering (they stand there hugging themselves) and
+    slower; **32**, hypothermia: slow and clumsy, and a gun will not keep
+    still; **28**, out cold; below **24** the cold starts to kill them,
+    and the fingers and toes go (frostbite).
+  - The dead, the frozen and the undead do nothing about it: they go,
+    slowly, to the temperature of the air.
+
+**Fire.** At 60 °C a body catches fire, all over, and fire spreads to anyone
+it touches, part to part. It burns each part that has caught - no blood,
+all pain, the skin scorching and the face blackening - while smoke and
+embers go up and the heat climbs. The first thing anybody on fire does is
+panic: a scream and a run in no particular direction, which only fans it.
+Some know better and stop, drop and roll - over and over on the floor, which
+puts it out in a few seconds; the rest remember when somebody shouts it at
+them. The people around them run in to beat the flames out (kneeling over
+them once they are down - and now and then catching it themselves) or keep
+well clear. Left to burn, a body goes through what there is to burn in under
+twenty seconds and is usually dead long before, charred black. It also goes
+out swung through the air fast enough, or cooled (anything under 36 °C typed
+in puts it out with a hiss). Afterwards they smoulder for a while, with
+burns all over. A drone's laser and its missiles can set people alight too;
+Minecraft's wither skeletons and the Wither do not burn.
+
+**Ice.** At 0 °C a body freezes solid where it is: frost on them first as
+they cool, then a shell of clear blue ice, icicles hanging off them, and the
+body locked stiff in the pose it froze in - the ragdoll's joints all held
+where they were, so a frozen statue stands there, or topples over all of a
+piece, and can be picked up, carried and thrown. Breathing, bleeding and
+thinking all stop, and within a quarter of a minute or so the cold kills
+them. Warmed past 0 (type a temperature in; a fire close by helps, and so do
+friends huddled round them) the ice melts and runs off them, and if they are
+still alive they come round, shivering, with frostbite. A hard blow to a
+frozen body cracks the ice and can snap a limb clean off, like an icicle (it
+comes away still in its ice, and the stump bleeds once it thaws); a very
+hard one, a bullet in the body, or a drop from high up shatters the whole
+thing.
+
 ### Holsters and pockets
 
 Besides what is in their hand, a stickman carries a pistol or a taser in a
@@ -941,6 +1016,8 @@ stickfights/
       limp.js         a stickman as a ragdoll: masses, joint ranges, and back again
       health.js       parts, bones, blood, pain, consciousness, paralysis, stumps,
                       dislocations, gunshots, the face, shock
+      vitals.js       adrenaline, oxygen and temperature; fire, frost and ice,
+                      and how each of them is drawn
       brain.js        sense, feel, think, react, remember, gossip
       behaviours.js   what a brain can decide to do
       emotions.js     the five emotions
@@ -949,7 +1026,8 @@ stickfights/
       props.js        crate, brass knuckles, knife, machete, the pistols, ammo boxes,
                       vests, severed limbs
       hand.js         dragging and throwing
-      fx.js           blood, dust, hit bursts, muzzle flashes, tracers, splinters, casings
+      fx.js           blood, dust, hit bursts, muzzle flashes, tracers, splinters, casings,
+                      smoke, steam, embers, ice and meltwater
       draw.js         drawing a stickman, wounds and stumps, a crate, every weapon
       render.js       the world, bubbles, symbols
       camera.js       pan, zoom, follow
@@ -1072,6 +1150,24 @@ screen and checks:
   what is in the holster, the pocket and on the duty belt; somebody in
   handcuffs says so, and Uncuff lets them go; Put away holsters a pistol,
   and Get it out draws it again
+- the inspector has a Conscious, an Adrenaline, an Oxygen and a Temperature
+  meter; a temperature typed in (in C, F or K) becomes theirs, and anything
+  else is turned away; the padlock holds it, and let go, the body sweats it
+  back toward 37
+- a fright sends the adrenaline up, numbing the pain, and it wears off
+- held up by the head they choke and pass out; let go in time, they gasp
+  and come round
+- at 44 °C they pass out and come round as it comes down, at 52 the
+  heatstroke kills them; at 33 they are cold and slower, below 28 out cold
+- at 100 °C they burst into flames and scream, drawn burning, and the
+  inspector says so; the people around shout, run in or keep clear; rolling
+  on the floor puts it out and leaves them burned but alive; cooled, it goes
+  out; it spreads to anybody it touches; left alone, they burn to death,
+  charred
+- at -10 °C they freeze solid, still standing, drawn in ice; warmed in time
+  they thaw and come round with frostbite, left alone the cold kills them; a
+  hard kick snaps a frozen arm off and a drop from high up shatters the body;
+  Heal thaws them out
 - no mod is in the game until it is installed; the MODS screen lists
   Murder Drones with what it adds and the storage it needs, which is what
   its files really take up; INSTALL fills a bar and then puts Uzi, N and V in
@@ -1123,6 +1219,9 @@ screen and checks:
 
 Every check starts from the same random numbers and the same clock, so what
 the people in it decide comes out the same every run (only the few checks
-that let the world run in real time can differ).
+that let the world run in real time can differ). Nothing outside the
+simulation draws on those numbers: the camera's shake and the little
+variations in every sound have random numbers of their own, so what is
+heard - which depends on the audio clock - never changes what happens.
 
 Set `CHROMIUM_PATH` to use a Chromium you already have.

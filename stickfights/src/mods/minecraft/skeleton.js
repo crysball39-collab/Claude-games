@@ -30,6 +30,8 @@ export const WITHER_SKELETON = {
   monster: true,
   undead: true,
   tireless: true,
+  // (out of the Nether: fire does nothing to them)
+  fireproof: true,
   mute: true,
   noPickup: true,
   power: 1.5,

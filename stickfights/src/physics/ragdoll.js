@@ -12,7 +12,8 @@
           bones keep their length
           joints stay inside the range a real one bends through - a knee
             never bends forwards, an elbow never backwards - and a broken
-            bone flops at the break
+            bone flops at the break; locked (a body frozen solid), they do
+            not bend at all, and the whole thing moves as one stiff piece
           muscles, while there is anyone awake inside, pull each joint some
             of the way toward the pose an animation wants
           a hand that has hold of the body drags that part of it along
@@ -155,6 +156,14 @@ export class Ragdoll {
 
   release() { this.grabRef = null; }
 
+  /**
+   * Every joint held at the bend it has right now: the body moves as one
+   * stiff piece, toppling and sliding all of a piece (frozen solid).
+   */
+  lock() { for (const j of this.joints) j.lock = this.rawBend(j); this.wake(); }
+  unlock() { for (const j of this.joints) j.lock = null; this.wake(); }
+  get locked() { return this.joints.length > 0 && this.joints[0].lock != null; }
+
   /** Adds velocity to every point (vx, vy in m/s). */
   kick(vx, vy, dt = 1 / 120) {
     for (const q of this.p) { q.px -= vx * dt; q.py -= vy * dt; }
@@ -276,6 +285,8 @@ export class Ragdoll {
   }
 
   solveJoint(j) {
+    // locked: it does not bend at all, whatever pulls on it
+    if (j.lock != null) { this.bendBy(j, wrap(j.lock - this.rawBend(j)), 1); return; }
     const f = this.facing;
     const rel = this.rawBend(j);
     // the limit

@@ -380,6 +380,28 @@ button {
 .meter.edit.locked .fill { background-image: repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.22) 0 4px, transparent 4px 8px); }
 .meter.edit.locked .fill::after { box-shadow: 0 0 0 2px var(--brass); }
 .meter.edit.off .fill::after { display: none; }
+/* the body's bars carry their number; the temperature is a thermometer with a box to type in, and a lock */
+.meter.val { grid-template-columns: 60px 1fr 34px; }
+.meter b { font-size: 10px; font-weight: 800; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.meter.val.off .fill { opacity: 0.25; }
+.meter.temp { grid-template-columns: 60px 1fr 64px 24px; gap: 6px; margin: 3px 0; }
+.thermo { position: relative; height: 9px; border-radius: 5px; overflow: visible;
+  background: linear-gradient(90deg, rgba(95, 180, 255, 0.28), rgba(255, 255, 255, 0.1) 55%, rgba(255, 120, 60, 0.3)); }
+.thermo .fill { position: absolute; inset: 0 auto 0 0; border-radius: 5px; opacity: 0.85; }
+.thermo i { position: absolute; left: 60%; top: -2px; bottom: -2px; width: 1px; background: rgba(255, 255, 255, 0.4); }
+.thermo .mark {
+  position: absolute; top: -3px; width: 4px; height: 15px; margin-left: -2px; border-radius: 2px;
+  background: #f1f1f1; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55); transition: left 0.2s;
+}
+.temp-input {
+  width: 100%; min-width: 0; padding: 3px 5px; border-radius: 7px; border: 1px solid rgba(255, 255, 255, 0.16);
+  background: #232326; color: #f1f1f1; font: inherit; font-size: 10.5px; font-weight: 800; text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.temp-input:focus { outline: none; border-color: #9ec6ff; background: #1b2633; }
+.meter.temp.hot .temp-input { color: #ffb36b; }
+.meter.temp.cold .temp-input { color: #a9dcff; }
+.meter.temp.locked .temp-input { border-color: var(--brass); }
 
 .ins-order {
   display: flex;

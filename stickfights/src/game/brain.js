@@ -35,6 +35,12 @@
    remember about them, and the feelings with it; a bad enough memory keeps
    a grudge alive after the anger would have worn off; and in a chat they
    pass on what they know, so a reputation gets around.
+
+   And the body has its say. On fire, they panic and run - until they
+   remember (or somebody shouts at them) to stop, drop and roll - and the
+   people around them either run in to beat the flames out or keep well
+   clear. They say when they are too hot or too cold, gasp after a grip on
+   the throat, and stare at somebody frozen solid.
    ========================================================================== */
 import { Emotions } from './emotions.js';
 import { line } from './lines.js';
@@ -44,6 +50,7 @@ import { isGun, isFirearm, armOf } from './props.js';
 import * as B from './behaviours.js';
 import { learn as copLearn, considerOfficer, considerSuspect, considerWitness, metOfficer, maybeReport, lethal } from './police.js';
 import { clamp, clamp01, rand, chance, pick, sign } from '../core/util.js';
+import { IGNITE_AT } from './vitals.js';
 
 const SIGHT = 14;
 const BEHIND = 2.2;
@@ -55,9 +62,11 @@ const HEAR = {
   // a gunshot carries the whole width of the world
   shot: 60, ricochet: 14, dryFire: 4, reload: 5, magOut: 3, magIn: 3, rack: 5, sever: 12, dislocate: 7, relocate: 7, faint: 8,
   tased: 10, taserFire: 8, cuffed: 8, command: 16, vestStop: 9, stumble: 6, stumbleFall: 8, stumbleCaught: 5, driveStun: 6,
+  // fire and ice
+  ignite: 12, extinguish: 6, freeze: 7, thaw: 5, iceSnap: 9, shatter: 16, gasp: 6, dropRoll: 6,
 };
 // what counts as violence done to them, for fear and grudges
-const VIOLENT = new Set(['koMe', 'cutMe', 'stabbedMe', 'choppedMe', 'severedMe', 'shotMe', 'shotAtMe', 'aimedAtMe', 'sawStab', 'sawShoot', 'sawSever', 'sawKill', 'sawThreat', 'tasedMe']);
+const VIOLENT = new Set(['koMe', 'cutMe', 'stabbedMe', 'choppedMe', 'severedMe', 'shotMe', 'shotAtMe', 'aimedAtMe', 'sawStab', 'sawShoot', 'sawSever', 'sawKill', 'sawThreat', 'tasedMe', 'burnedMe', 'sawBurn']);
 
 /**
  * The things worth remembering: how much each one matters to begin with
@@ -96,12 +105,14 @@ const MEMORY = {
   tasedMe: [0.6, -0.65, (m) => `${m.who.name} tased me`, () => 'tased me'],
   arrestedMe: [0.7, -0.45, (m) => `${m.who.name} arrested me`, () => 'arrested me'],
   sawArrest: [0.3, 0.15, (m) => `Saw ${m.who.name} arrest ${m.about.name}`, (m) => `arrested ${m.about.name}`],
+  burnedMe: [0.95, -1, (m) => `${m.who.name} set me on fire`, () => 'set me on fire'],
+  sawBurn: [0.85, -0.95, (m) => `Saw ${m.who.name} set ${m.about.name} on fire`, (m) => `set ${m.about.name} on fire`],
 };
 // told "X shot me" by Y, what the listener remembers is "X shot Y"
 const TOLD_AS = {
   hurtMe: 'sawAttack', koMe: 'sawAttack', cutMe: 'sawAttack', choppedMe: 'sawAttack', beatMe: 'sawAttack', threwAtMe: 'sawAttack',
   stabbedMe: 'sawStab', severedMe: 'sawSever', shotMe: 'sawShoot', shotAtMe: 'sawThreat', aimedAtMe: 'sawThreat',
-  helpedMe: 'sawHelp', savedMe: 'sawHelp', tasedMe: 'sawAttack',
+  helpedMe: 'sawHelp', savedMe: 'sawHelp', tasedMe: 'sawAttack', burnedMe: 'sawBurn',
 };
 
 /**
@@ -129,7 +140,7 @@ const REPEAT = {
 };
 // ...and the ones that are really the same plea
 const SAID_AS = { surrender: 'beg', surrenderGun: 'beg' };
-const HELP_CALLS = new Set(['fear', 'flee', 'beg', 'pinned', 'crawl', 'panic', 'hurtBig', 'broken']);
+const HELP_CALLS = new Set(['fear', 'flee', 'beg', 'pinned', 'crawl', 'panic', 'hurtBig', 'broken', 'onFire', 'choking']);
 // doing nothing much: free to turn round at a noise (the rest point themselves where they need to)
 const GLANCE_FREE = new Set(['idle', 'rest', 'inspect']);
 
@@ -138,8 +149,10 @@ const WEAPON_KINDS = new Set(['knuckles', 'knife', 'machete', 'glock', 'm1911', 
 // what they call something they are carrying
 const ITEM_SAID = { knuckles: 'brass knuckles', knife: 'knife', machete: 'machete', glock: 'gun', m1911: 'gun', taser: 'taser' };
 const capital = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+// what a witness says about the way somebody died, when it was not just a death
+const DEATH_SAID = { burns: 'sawBurnDeath', 'smoke inhalation': 'sawBurnDeath', 'frozen solid': 'sawFreezeDeath', hypothermia: 'sawFreezeDeath', suffocation: 'sawChokeDeath', heatstroke: 'sawHeatDeath' };
 // busy with something that wants the hands as they are
-const KIT_BUSY = new Set(['respond', 'comply', 'surrender', 'cower', 'arm', 'vest', 'ammo', 'help', 'pullout', 'detained', 'catchBreath']);
+const KIT_BUSY = new Set(['respond', 'comply', 'surrender', 'cower', 'arm', 'vest', 'ammo', 'help', 'pullout', 'detained', 'catchBreath', 'burning', 'douse']);
 
 /** How one person feels about another. */
 class Rel {
@@ -243,8 +256,11 @@ export class Brain {
   get doing() {
     const me = this.man;
     if (me.dead) return 'Dead';
+    if (me.health.frozen) return 'Frozen solid';
     if (!me.conscious) return 'Out cold';
     if (me.tased) return 'Being tased';
+    if (me.flames) return me.rolling > 0 ? 'Rolling on the floor to put the fire out' : 'On fire!';
+    if (me.state === 'held' && me.vit && me.vit.air === 'choke') return 'Held up by the head, choking';
     // (what a mod's is up to, in its own words)
     const own = me.species && me.species.doing ? me.species.doing(me) : null;
     if (own) return own;
@@ -437,6 +453,22 @@ export class Brain {
         this.speak('sawSevered', { victim: o.name }, 0.8, null, true);
         this.shaken(0.5);
       } else if (!Object.keys(o.cut).length) r.sawCut = false;
+      // somebody on fire, or frozen solid: nobody walks past that
+      if (o.flames && !r.sawFire && !me.flames) {
+        r.sawFire = true;
+        this.emo.bump('surprise', 0.55);
+        this.emo.bump('fear', 0.22 * (1.2 - this.traits.bravery));
+        this.speak(o.dead ? 'sawBurningBody' : 'sawOnFire', { victim: o.name }, 0.85, null, true);
+        this.note(o.dead ? `${o.name}'s body is on fire.` : `${o.name} is on fire!`);
+        this.thinkT = Math.min(this.thinkT, 0.1);
+      } else if (!o.flames) r.sawFire = false;
+      if (o.health.frozen && !r.sawIce) {
+        r.sawIce = true;
+        this.emo.bump('surprise', 0.6);
+        this.emo.bump('fear', 0.1 * (1.2 - this.traits.bravery));
+        this.speak('sawFrozen', { victim: o.name }, 0.75, null, true);
+        this.note(`${o.name} is frozen solid. Like a statue.`);
+      } else if (!o.health.frozen) r.sawIce = false;
       if (o.stuck.length && !r.sawStuck && o.alive) {
         r.sawStuck = true;
         this.emo.bump('fear', 0.15 * (1.1 - this.traits.bravery));
@@ -606,6 +638,8 @@ export class Brain {
       case 'hit': this.sawHit(ev, seen, x, y); break;
       case 'death': this.sawDeath(ev, seen, x, y); break;
       case 'speech':
+        // "stop, drop and roll!" - and on fire, they remember they should
+        if (ev.kind === 'rollAdvice' && me.flames) this.rollKnows = true;
         if (ev.kind && HELP_CALLS.has(ev.kind) && ev.who && !ev.who.removed) {
           const r = this.rel(ev.who);
           if (r.like > 0.1 || T.empathy > 0.65) r.cried = now;
@@ -762,6 +796,57 @@ export class Brain {
         break;
       case 'stumbleCaught':
         if (seen && ev.who && d < 6 && (ev.steps || 0) >= 3 && chance(0.35)) this.speak('sawCaught', { victim: ev.who.name }, 0.4, null);
+        break;
+      case 'ignite':
+        // (what they say about it, they say once they see it: sense())
+        if (seen && ev.who) {
+          E.bump('surprise', 0.5);
+          if (ev.by && ev.by !== me && !ev.by.removed && ev.by !== ev.who) {
+            const rb = this.rel(ev.by), care = Math.max(0, this.rel(ev.who).like);
+            rb.violent += 2;
+            rb.fear = clamp01(rb.fear + 0.3 * (1.15 - T.bravery));
+            rb.like = clamp(rb.like - 0.35 - care * 0.3, -1, 1);
+            if (care > 0.3) rb.anger = clamp01(rb.anger + 0.3 * care * (0.4 + T.temper));
+            this.remember('sawBurn', ev.by, ev.who);
+          }
+          this.react = Math.max(this.react, 0.15);
+        } else { this.heard = { x, y, t: now }; this.hearLoud(x); }
+        break;
+      case 'extinguish':
+        if (seen && ev.who && ev.how !== 'healed' && ev.how !== 'frozen' && ev.who.alive && ev.who.conscious) {
+          E.bump('fear', -0.08);
+          if (Math.max(0, this.rel(ev.who).like) > 0.2 || chance(0.35)) this.speak('sawPutOut', { victim: ev.who.name }, 0.6, null);
+        }
+        break;
+      case 'freeze':
+        if (seen && ev.who) {
+          E.bump('surprise', 0.65);
+          E.bump('fear', 0.12 * (1.2 - T.bravery));
+        }
+        break;
+      case 'thaw':
+        if (seen && ev.who) { E.bump('surprise', 0.3); this.speak(ev.who.dead ? 'sawThawDead' : 'sawThaw', { victim: ev.who.name }, 0.6, null); }
+        break;
+      case 'iceSnap':
+        if (seen && ev.who) {
+          E.bump('surprise', 0.5);
+          this.speak('sawIceSnap', { victim: ev.who.name }, 0.75, null, true);
+          this.shaken(0.3);
+        }
+        break;
+      case 'shatter':
+        if (seen && ev.who) {
+          E.bump('surprise', 1);
+          E.bump('fear', 0.3 * (1.2 - T.bravery));
+          if (ev.by && ev.by !== me && !ev.by.removed) {
+            const rb = this.rel(ev.by);
+            rb.violent += 2;
+            rb.fear = clamp01(rb.fear + 0.3 * (1.15 - T.bravery));
+          }
+          this.speak('sawShatter', { victim: ev.who.name }, 0.95, null, true);
+          this.note(`${ev.who.name} shattered into pieces!`);
+          this.shaken(0.8);
+        } else { this.heard = { x, y, t: now }; this.hearLoud(x); }
         break;
       default:
         break;
@@ -992,7 +1077,8 @@ export class Brain {
       this.note(`${V.name} died.`);
     }
     if (care > 0.3) this.remember('lostFriend', V, K);
-    this.speak(care > 0.15 ? 'witnessDeath' : 'witnessDeathStranger', { victim: V.name }, 0.85, null, true);
+    const how = seen && DEATH_SAID[ev.cause];
+    this.speak(how && chance(0.75) ? how : care > 0.15 ? 'witnessDeath' : 'witnessDeathStranger', { victim: V.name }, 0.85, null, true);
     me.setEmote('exclaim', 1.2);
   }
 
@@ -1011,6 +1097,15 @@ export class Brain {
         this.clearBehaviour();
         break;
       case 'wake': {
+        // coming round out of the ice: that is all there is to say for a while
+        if (me.thawedT && this.sb.time - me.thawedT < 90) {
+          E.bump('surprise', 0.7);
+          E.bump('fear', 0.2 * (1.2 - T.bravery));
+          this.speak('thawWake', {}, 0.9);
+          this.note('I was frozen. Solid. And now I am not.');
+          me.thawedT = null;
+          break;
+        }
         // coming round after being knocked out is frightening, and humbling
         E.bump('surprise', 0.4);
         E.bump('fear', 0.18 + 0.3 * (1.2 - T.bravery));
@@ -1192,6 +1287,51 @@ export class Brain {
         this.clearBehaviour();
         this.note(`I died: ${me.health.cause}.`);
         break;
+      case 'onFire': {
+        this.clearBehaviour();
+        E.bump('fear', 0.9);
+        E.bump('surprise', 1);
+        // some know what to do; the rest find out, or are told
+        this.rollKnows = chance(0.3 + T.skill * 0.35 + T.bravery * 0.15 + T.curiosity * 0.1);
+        const by = d.by && d.by !== me && !d.by.removed ? d.by : null;
+        if (by) {
+          const r = this.rel(by);
+          r.fear = clamp01(r.fear + 0.5 * (1.2 - T.bravery));
+          r.anger = clamp01(r.anger + 0.4 * (0.3 + T.temper));
+          r.like = -1;
+          r.hurtT = this.sb.time;
+          this.remember('burnedMe', by);
+        }
+        this.speak('onFire', {}, 1, null, true);
+        this.note(by ? `${by.name} set me on fire!` : "I'm on fire!");
+        this.thinkT = 0;
+        this.react = 0;
+        break;
+      }
+      case 'putOut':
+        if (d.how === 'healed' || d.how === 'frozen' || !me.conscious) break;
+        E.bump('fear', -0.35);
+        E.bump('joy', 0.15);
+        this.speak(d.how === 'rolled' ? 'fireOutRolled' : 'fireOut', {}, 0.9, null, true);
+        this.note(d.how === 'rolled' ? 'I rolled it out. I actually rolled it out.' : d.how === 'smothered' ? 'Somebody beat the flames out.' : 'The fire is out.');
+        break;
+      case 'frozen':
+        this.clearBehaviour();
+        this.note("So cold... I can't move...");
+        break;
+      case 'gasp':
+        E.bump('fear', 0.15);
+        this.speak('gasp', {}, 1, null, true);
+        this.note('Air. I can breathe again.');
+        break;
+      case 'tempShock': {
+        // a temperature set from the sky: they feel it at once
+        const t = d.temp;
+        if (t >= IGNITE_AT || t <= 0 || !me.conscious) break;
+        if (t > 39.5) { E.bump('surprise', 0.5); this.speak('suddenHot', {}, 0.9, null, true); this.note('Why is it suddenly so hot?'); }
+        else if (t < 34.5) { E.bump('surprise', 0.5); this.speak('suddenCold', {}, 0.9, null, true); this.note('So cold, all of a sudden.'); }
+        break;
+      }
       default:
         break;
     }
@@ -1423,6 +1563,16 @@ export class Brain {
       this.speak('tired', {}, 0.6);
       this.note("I'm out of breath.");
     }
+    // too hot, too cold, short of air, the heart going: they say so, now and then
+    const h = me.health;
+    if (now - (this.bodySaidT ?? -99) > 14 && !me.flames) {
+      const kind = h.temp >= 39.5 ? 'tooHot' : h.temp <= 34.5 ? 'cold' : h.oxygen < 0.8 ? 'breathless'
+        : h.adrenaline > 0.72 && !this.fighting && !this.fleeing ? 'adrenaline' : null;
+      if (kind && this.speak(kind, {}, 0.7)) {
+        this.bodySaidT = now;
+        this.note({ tooHot: "I'm burning up.", cold: "I'm freezing.", breathless: "I can't get my breath.", adrenaline: 'My heart is going like mad.' }[kind]);
+      }
+    }
     const opts = this.consider();
     this.options = opts.slice(0, 5);
     const best = opts[0];
@@ -1446,6 +1596,11 @@ export class Brain {
     const add = (kind, target, score, why, extra = null, urgent = false) => {
       if (score > 0.03) out.push({ kind, target, score, why, extra, urgent });
     };
+    // on fire, there is nothing else at all
+    if (me.flames) {
+      add('burning', null, 3, "I'm on fire!", null, true);
+      return out;
+    }
     // in handcuffs, there is nothing left to decide
     if (me.cuffed) {
       add('detained', null, 1, null);
@@ -1591,6 +1746,22 @@ export class Brain {
           if (o.pos.y > me.pos.y + 0.6) t += 0.3 * r.anger;
           add('throw', o, t * fit, `I'll throw a crate at ${o.name}!`, { crate: c });
         }
+      }
+    }
+
+    // somebody on fire: run over and beat it out - or keep well away from them
+    for (const o of this.visible) {
+      if (!o.flames || o.removed) continue;
+      const r = this.rel(o);
+      const d = Math.abs(o.pos.x - me.pos.x);
+      const near = 1 / (1 + Math.max(0, d - 2) / 5);
+      const monster = !!(o.species && o.species.monster) || !!(me.species && me.species.monster);
+      if (!monster && !o.dead && r.like > -0.3 && !this.isHostile(o) && me.health.canUse('armA')) {
+        const s = (0.35 + T.empathy * 0.6 + Math.max(0, r.like) * 0.5) * (0.45 + T.bravery * 0.7) * (1 - E.fear * 0.45) * near;
+        add('douse', o, s, `${o.name} is on fire! I have to put it out!`, null, d < 8);
+      }
+      if (o.conscious && !o.lying && d < 4) {
+        add('flee', o, (0.3 + E.fear * 0.6) * (1.2 - T.bravery) * (1 - d / 4) * 1.2, `${o.name} is on fire! Keep away from them!`, null, d < 2);
       }
     }
 
@@ -1999,8 +2170,17 @@ export class Brain {
     if (me.state === 'held') {
       if (this.downTalk <= 0) {
         this.downTalk = rand(2.5, 4.5);
-        this.speak(chance(0.5) ? 'grabbed' : 'fear', {}, 0.7, null, true);
+        const choking = me.vit && me.vit.air === 'choke' && me.health.oxygen < 0.94;
+        if (choking) this.downTalk = rand(1.4, 2.2);
+        this.speak(me.flames ? 'onFire' : choking ? 'choking' : chance(0.5) ? 'grabbed' : 'fear', {}, choking ? 0.95 : 0.8, null, true);
       }
+      return;
+    }
+    // on fire on the floor: roll, and scream
+    if (me.flames) {
+      this.begging = false;
+      if (me.rolling <= 0 && !me.health.frozen && (me.state === 'down' || me.state === 'crawl')) me.dropAndRoll(rand(2, 3));
+      if (this.downTalk <= 0) { this.downTalk = rand(1.2, 2.2); this.speak(me.rolling > 0 && chance(0.4) ? 'stopDropRoll' : 'onFire', {}, 0.85, null, true); }
       return;
     }
     // current going through them: nothing but yelling

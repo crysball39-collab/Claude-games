@@ -13,9 +13,13 @@ texture in the game is drawn procedurally onto a canvas at load time.
 > bodies, balancing on their feet when a blow knocks them back, and ragdolls
 > with real joints when they go over - holster and pocket what they are not
 > using, and answer to the officers, who go after whoever commits a crime with
-> a warning, a taser and a pair of handcuffs. You can change their feelings (or
-> lock them where they are), their personality and who they count as friends
-> and enemies, and send them to fight. Mods add what is not part of the game itself: **Murder Drones**
+> a warning, a taser and a pair of handcuffs. Each one has a consciousness,
+> adrenaline, oxygen and temperature meter, and a temperature typed into it
+> becomes theirs: hot enough they catch fire, run screaming and stop, drop and
+> roll; cold enough they freeze solid, an ice statue that thaws - or shatters.
+> You can change their feelings (or lock them where they are), their
+> personality and who they count as friends and enemies, and send them to
+> fight. Mods add what is not part of the game itself: **Murder Drones**
 > brings worker drone Uzi with her railgun, and disassembly drones N and V, who
 > crash-land out of the sky and have hands that turn into chainsaws, guns,
 > swords, claws, lasers and missiles, and tails full of nanite acid; **Minecraft**

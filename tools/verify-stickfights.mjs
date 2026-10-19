@@ -1630,6 +1630,297 @@ check('the inspector can have them put a pistol away in its holster, and get it 
 await ev(() => window.__sf.ui.select(null));
 await shot('officer');
 
+/* ---------------------------- fire, ice and air ---------------------------- */
+
+// what was said, put out and frozen, from here on
+await ev(() => {
+  const sb = window.__sf.sb;
+  window.__vit = { said: [], out: [], gasps: 0, ice: [] };
+  sb.on('speech', (e) => window.__vit.said.push(e.kind + '|' + e.who.name));
+  sb.on('extinguish', (e) => window.__vit.out.push(e.how + '|' + e.who.name));
+  sb.on('gasp', () => { window.__vit.gasps++; });
+  for (const k of ['freeze', 'thaw', 'iceSnap', 'shatter']) sb.on(k, (e) => window.__vit.ice.push(k + '|' + e.who.name));
+});
+/** Types into the temperature box of whoever is selected, the way a person would, and presses Enter. */
+const typeTemp = async (text) => {
+  await page.fill('.temp-input', text);
+  await page.press('.temp-input', 'Enter');
+  await page.waitForTimeout(120);
+  return ev(() => ({ t: window.__sf.ui.selected.health.temp, shown: document.querySelector('.temp-input').value, toast: document.querySelector('#toast').textContent }));
+};
+/** How many pixels near somebody are the colour asked for (in the picture as drawn). */
+const pixelsNear = (who, kind) => ev(([w, k]) => {
+  const sf = window.__sf, p = window[w], c = document.getElementById('view'), g = c.getContext('2d');
+  sf.renderer.draw(sf.ui.drawState());
+  const q = sf.cam.toScreen(p.wj.chest.x, p.wj.chest.y), dpr = sf.cam.dpr;
+  const x0 = Math.round((q.x - 70) * dpr), y0 = Math.round((q.y - 90) * dpr), W = Math.round(140 * dpr), H = Math.round(180 * dpr);
+  const d = g.getImageData(Math.max(0, x0), Math.max(0, y0), W, H).data;
+  let n = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], gg = d[i + 1], b = d[i + 2];
+    if (k === 'flame' && r > 220 && gg > 90 && gg < 235 && b < 120) n++;
+    if (k === 'ice' && b > 175 && b - r > 25 && gg > 150) n++;
+  }
+  return n;
+}, [who, kind]);
+
+await fresh();
+await ev(() => {
+  const sb = window.__sf.sb;
+  window.__v1 = sb.spawnStickman(-2, null, { name: 'Vic' });
+  window.__v2 = sb.spawnStickman(5, null, { name: 'Wen' });
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  window.__sf.ui.select(window.__v1);
+});
+await page.waitForTimeout(300);
+const vit0 = await ev(() => ({
+  labels: [...document.querySelectorAll('#ins-vitals .meter span')].map((s) => s.textContent),
+  values: [...document.querySelectorAll('#ins-vitals .meter b')].map((s) => s.textContent),
+  input: document.querySelector('.temp-input').value,
+}));
+check('the inspector has a Conscious, an Adrenaline, an Oxygen and a Temperature meter, each with its number',
+  ['Conscious', 'Adrenaline', 'Oxygen', 'Temp'].every((l) => vit0.labels.includes(l)) && vit0.values[0] === '100%' && vit0.input === '37.0 °C', JSON.stringify(vit0));
+const typed40 = await typeTemp('40');
+const typedF = await typeTemp('104F');
+const typedK = await typeTemp('300 K');
+const typedBad = await typeTemp('banana');
+check('a temperature typed into the inspector sets theirs, in degrees C, F or K',
+  Math.abs(typed40.t - 40) < 0.01 && typed40.shown === '40.0 °C' && /104 °F/.test(typed40.toast) && Math.abs(typedF.t - 40) < 0.01 && Math.abs(typedK.t - 26.85) < 0.01,
+  JSON.stringify({ typed40, typedF, typedK }));
+check('...and anything that is not a temperature is turned away, leaving theirs as it was', Math.abs(typedBad.t - 26.85) < 0.01 && /Type a temperature/.test(typedBad.toast), JSON.stringify(typedBad));
+await typeTemp('41');
+await ev(() => document.querySelector('.meter.temp .lock-btn').click());
+await sim(10);
+const heldT = await ev(() => ({ t: window.__v1.health.temp, locked: document.querySelector('.meter.temp').classList.contains('locked') }));
+await ev(() => document.querySelector('.meter.temp .lock-btn').click());
+await sim(20);
+const freeT = await ev(() => window.__v1.health.temp);
+check('the padlock holds a temperature exactly where it is; let go, the body sweats it back down toward 37',
+  heldT.locked && Math.abs(heldT.t - 41) < 0.01 && freeT < 39.5 && freeT > 36.5, JSON.stringify({ heldT, freeT }));
+
+// adrenaline: up with fright, and wearing off
+const adr = await ev(() => {
+  const sb = window.__sf.sb, v = window.__v1;
+  const before = v.health.adrenaline;
+  v.brain.setEmotion('fear', 0.95);
+  for (let i = 0; i < 240; i++) sb.step(1 / 120);
+  const up = v.health.adrenaline, painK = v.health.numbed;
+  v.brain.setEmotion('fear', 0);
+  v.brain.emo.lock('fear', true);
+  for (let i = 0; i < 120 * 30; i++) sb.step(1 / 120);
+  v.brain.emo.lock('fear', false);
+  return { before, up, painK, later: v.health.adrenaline, speed: v.maxSpeed('run') };
+});
+check('a fright sends the adrenaline up within seconds (numbing the pain), and it wears off over half a minute',
+  adr.before < 0.2 && adr.up > 0.6 && adr.painK < 0.8 && adr.later < adr.up - 0.4, JSON.stringify(adr));
+
+// held up by the head: no air
+const choke = await ev(() => {
+  const sb = window.__sf.sb, v = window.__v2;
+  v.brain.thinkT = 99;
+  const hx = v.wj.head.x, hy = v.wj.head.y;
+  v.grab(hx, hy);
+  const part = v.held.part;
+  let out = null, said = 0;
+  for (let i = 0; i < 120 * 16; i++) {
+    v.holdAt(hx, hy + 0.6);
+    sb.step(1 / 120);
+    if (out === null && !v.conscious) out = +sb.time.toFixed(1);
+  }
+  said = window.__vit.said.filter((s) => s === 'choking|Wen').length;
+  const low = v.health.oxygen, doing = v.brain.doing;
+  v.release();
+  for (let i = 0; i < 120 * 12; i++) sb.step(1 / 120);
+  return { part, out, said, low, doing, after: v.health.oxygen, alive: v.alive, awake: v.conscious, gasps: window.__vit.gasps };
+});
+check('held up by the head, they cannot breathe: they choke, the oxygen goes, and before long they pass out',
+  choke.part === 'head' && choke.said >= 1 && choke.low < 0.5 && choke.out !== null, JSON.stringify(choke));
+check('...let go in time, the air comes back and they come round', choke.alive && choke.after > 0.9 && choke.awake, JSON.stringify(choke));
+
+// the heat, and the cold
+const weather = await ev(() => {
+  const sb = window.__sf.sb, V = window.__sf.vitals;
+  const a = sb.spawnStickman(-8, null, { name: 'Hal' }), b = sb.spawnStickman(-10, null, { name: 'Ike' }), c = sb.spawnStickman(10, null, { name: 'Jan' }), d = sb.spawnStickman(12, null, { name: 'Kai' });
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  const run = d.maxSpeed('run');
+  V.setTemperature(a, 44);
+  V.setTemperature(b, 52);
+  V.setTemperature(c, 33);
+  V.setTemperature(d, 26);
+  for (let i = 0; i < 120; i++) sb.step(1 / 120);
+  const early = { a: a.conscious, b: b.conscious, c: c.conscious, d: d.conscious, cold: c.maxSpeed('run') / run, conds: c.health.conditions() };
+  for (let i = 0; i < 120 * 30; i++) sb.step(1 / 120);
+  const r = { early, a: [a.alive, a.conscious, +a.health.temp.toFixed(1)], b: [b.alive, b.health.cause], d: [d.alive, +d.health.temp.toFixed(1)] };
+  for (const p of [a, b, c, d]) sb.remove(p, { quiet: true });
+  return r;
+});
+check('too hot: past 43 or so they pass out, and at 44 they come round as it comes down; at 52 the heatstroke kills them',
+  !weather.early.a && weather.a[0] && weather.a[1] && !weather.early.b && !weather.b[0] && weather.b[1] === 'heatstroke', JSON.stringify(weather));
+check('too cold: shivering at 33 (and slower on their feet), out cold below 28', weather.early.c && weather.early.cold < 0.95 && weather.early.conds.includes('Cold') && !weather.early.d,
+  JSON.stringify(weather.early));
+
+/* fire */
+await fresh();
+await ev(() => {
+  const sb = window.__sf.sb;
+  window.__f1 = sb.spawnStickman(-1, null, { name: 'Fay', traits: { skill: 0.1, bravery: 0.2, curiosity: 0.2 } });
+  window.__f2 = sb.spawnStickman(2.5, null, { name: 'Gus', traits: { empathy: 0.9, bravery: 0.8, sociability: 0.6 } });
+  window.__f3 = sb.spawnStickman(-6, null, { name: 'Hob', traits: { empathy: 0.2, bravery: 0.1 } });
+  for (let i = 0; i < 120; i++) sb.step(1 / 120);
+  window.__sf.ui.select(window.__f1);
+});
+await page.waitForTimeout(250);
+const lit = await typeTemp('100');
+await ev(() => { window.__f1.brain.rollKnows = false; });
+await sim(0.5);
+await page.waitForTimeout(200);
+const fireNow = await ev(() => ({
+  fire: !!window.__f1.flames, power: window.__f1.flames ? +window.__f1.flames.power.toFixed(2) : 0, awake: window.__f1.conscious,
+  doing: window.__f1.brain.doing, conds: [...document.querySelectorAll('#ins-conds div')].map((d) => d.textContent), mood: document.querySelector('#ins-mood').textContent,
+  said: window.__vit.said.filter((s) => s === 'onFire|Fay').length,
+}));
+const flamePx = await pixelsNear('__f1', 'flame');
+check('typed 100 °C, they burst into flames - and, awake, scream about it', fireNow.fire && fireNow.awake && fireNow.said >= 1 && /100 °C/.test(lit.toast), JSON.stringify(fireNow));
+check('...the inspector says they are on fire, and the flames are drawn on them', fireNow.conds[0] === 'On fire' && /On fire/.test(fireNow.doing) && flamePx > 40, `${flamePx} flame pixels, ${fireNow.conds.join(', ')}`);
+await shot('fire');
+await sim(3);
+const crowd = await ev(() => ({
+  gus: window.__f2.brain.behaviour && window.__f2.brain.behaviour.kind, hob: window.__f3.brain.behaviour && window.__f3.brain.behaviour.kind,
+  said: window.__vit.said.filter((s) => /^(sawOnFire|rollAdvice)\|/.test(s)), fay: window.__f1.brain.behaviour && window.__f1.brain.behaviour.kind,
+}));
+check('the people around see it: they shout, run in to beat it out, or keep well clear',
+  crowd.said.length >= 1 && (crowd.said.some((x) => x.startsWith('rollAdvice')) || ['douse', 'flee'].includes(crowd.gus) || crowd.hob === 'flee'), JSON.stringify(crowd));
+const rolled = await ev(() => {
+  const sb = window.__sf.sb, f = window.__f1;
+  if (!f.flames) return { already: true };
+  const ok = f.dropAndRoll(3.5);
+  let outT = null;
+  for (let i = 0; i < 120 * 6; i++) { sb.step(1 / 120); if (outT === null && !f.flames) outT = +(i / 120).toFixed(2); }
+  return { ok, outT, out: window.__vit.out.slice(), alive: f.alive, burns: f.health.conditions().filter((c) => /Burns/.test(c)) };
+});
+check('stop, drop and roll: rolling on the floor puts the fire out in a few seconds, and leaves them burned but alive',
+  rolled.ok && rolled.outT !== null && rolled.outT < 4 && rolled.out.some((o) => /^(rolled|smothered)\|Fay/.test(o)) && rolled.alive && rolled.burns.length >= 1, JSON.stringify(rolled));
+const cooled = await ev(() => {
+  const sb = window.__sf.sb, V = window.__sf.vitals, g = window.__f2;
+  V.ignite(g, { power: 0.6 });
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  const was = !!g.flames;
+  V.setTemperature(g, 20);
+  sb.step(1 / 120);
+  return { was, now: !!g.flames, how: window.__vit.out.filter((o) => /\|Gus$/.test(o)) };
+});
+check('a burning body cooled (a temperature under 36 typed in) goes out with a hiss', cooled.was && !cooled.now && cooled.how.includes('cooled|Gus'), JSON.stringify(cooled));
+const spread = await ev(() => {
+  const sb = window.__sf.sb, V = window.__sf.vitals;
+  const a = sb.spawnStickman(8, null, { name: 'Lou' }), b = sb.spawnStickman(8.25, null, { name: 'Max' });
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  b.knockOut(0, 0.2);
+  a.knockOut(0, 0.2);
+  for (let i = 0; i < 120; i++) sb.step(1 / 120);
+  a.health.tempLock = 120;
+  V.setTemperature(a, 120);
+  let caught = null;
+  for (let i = 0; i < 120 * 8 && caught === null; i++) { sb.step(1 / 120); if (b.flames) caught = +(i / 120).toFixed(2); }
+  a.health.tempLock = null;
+  return { caught, d: +Math.abs(a.wj.chest.x - b.wj.chest.x).toFixed(2) };
+});
+check('fire spreads to anybody it touches', spread.caught !== null, JSON.stringify(spread));
+const burnedOut = await ev(() => {
+  const sb = window.__sf.sb, V = window.__sf.vitals;
+  // nobody about to beat it out, and no mind of their own to roll it out with: just a body, burning
+  for (const q of [...sb.people]) sb.remove(q, { quiet: true });
+  const a = sb.spawnStickman(-12, null, { name: 'Ned' });
+  a.brain = null;
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  V.setTemperature(a, 300);
+  let deadT = null;
+  for (let i = 0; i < 120 * 30; i++) { sb.step(1 / 120); if (deadT === null && a.dead) deadT = +(i / 120).toFixed(1); }
+  return { deadT, cause: a.health.cause, char: +a.char.toFixed(2), fire: !!a.flames, conds: [...V.vitalConditions(a), ...a.health.conditions()] };
+});
+check('nobody puts it out and it is not rolled out: they burn to death in a quarter of a minute or so, charred black',
+  burnedOut.deadT !== null && burnedOut.deadT < 25 && burnedOut.cause === 'burns' && burnedOut.char > 0.4 && burnedOut.conds.includes('Charred'), JSON.stringify(burnedOut));
+
+/* ice */
+await fresh();
+await ev(() => {
+  const sb = window.__sf.sb;
+  window.__i1 = sb.spawnStickman(-1, null, { name: 'Ida' });
+  window.__i2 = sb.spawnStickman(3, null, { name: 'Jo' });
+  for (const p of [window.__i1, window.__i2]) { p.brain.thinkT = 99; p.brain.clearBehaviour(); p.stop(); }
+  for (let i = 0; i < 120; i++) sb.step(1 / 120);
+  window.__sf.ui.select(window.__i1);
+});
+await page.waitForTimeout(250);
+await typeTemp('-10');
+await sim(3);
+await page.waitForTimeout(200);
+const iced = await ev(() => {
+  const p = window.__i1;
+  return {
+    frozen: p.health.frozen, locked: !!p.rag && p.rag.locked, awake: p.conscious, headY: +p.wj.head.y.toFixed(2), mood: document.querySelector('#ins-mood').textContent,
+    conds: [...document.querySelectorAll('#ins-conds div')].map((d) => d.textContent), conscious: document.querySelectorAll('#ins-vitals .meter b')[0].textContent,
+  };
+});
+const icePx = await pixelsNear('__i1', 'ice');
+check('typed -10 °C, they freeze solid: stiff as a statue, still standing, nobody home', iced.frozen && iced.locked && !iced.awake && iced.headY > 1.2 && iced.conscious === '0%', JSON.stringify(iced));
+check('...the inspector says so, and they are drawn in a shell of ice', iced.mood === 'Frozen solid' && iced.conds[0] === 'Frozen solid' && icePx > 150, `${icePx} ice pixels, ${iced.conds.join(', ')}`);
+await shot('frozen');
+await typeTemp('37');
+await sim(1.5);
+const thawed = await ev(() => ({ frozen: window.__i1.health.frozen, ice: window.__vit.ice.filter((e) => /Ida$/.test(e)) }));
+await sim(12);
+const woke = await ev(() => ({ awake: window.__i1.conscious, alive: window.__i1.alive, frost: window.__i1.health.conditions().filter((c) => /Frostbite/.test(c)) }));
+check('warmed up again in time, the ice melts off them and they come round, with frostbite', !thawed.frozen && thawed.ice.includes('thaw|Ida') && woke.awake && woke.alive && woke.frost.length >= 1,
+  JSON.stringify({ thawed, woke }));
+const frozeDead = await ev(() => {
+  const sb = window.__sf.sb, V = window.__sf.vitals, p = window.__i2;
+  V.setTemperature(p, -10);
+  let deadT = null;
+  for (let i = 0; i < 120 * 25 && deadT === null; i++) { sb.step(1 / 120); if (p.dead) deadT = +(i / 120).toFixed(1); }
+  return { deadT, cause: p.health.cause, frozen: p.health.frozen };
+});
+check('left frozen solid, the cold kills them in a quarter of a minute or so', frozeDead.deadT !== null && frozeDead.deadT < 20 && frozeDead.cause === 'frozen solid' && frozeDead.frozen, JSON.stringify(frozeDead));
+const snapped = await ev(() => {
+  const sb = window.__sf.sb, V = window.__sf.vitals;
+  const p = sb.spawnStickman(7, null, { name: 'Kit' }), q = sb.spawnStickman(8.2, null, { name: 'Lu' });
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  V.setTemperature(p, -15);
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  const e = p.wj.midForeA;
+  let tries = 0;
+  while (!p.cut.armA && tries++ < 4) { p.takeHit({ by: q, part: 'armA', x: e.x, y: e.y, dir: 1, power: 2.6, kind: 'kick', bone: 'forearmA' }); sb.step(1 / 120); }
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  return { cut: Object.keys(p.cut), iced: sb.limbs.filter((l) => l.iced).length, snaps: window.__vit.ice.filter((x) => x === 'iceSnap|Kit').length, tries };
+});
+check('a hard kick to a frozen arm snaps it clean off, like an icicle', snapped.cut.includes('armA') && snapped.iced >= 1 && snapped.snaps >= 1, JSON.stringify(snapped));
+const shattered = await ev(() => {
+  const sb = window.__sf.sb, V = window.__sf.vitals;
+  const p = sb.spawnStickman(-9, null, { name: 'Mo' });
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  V.setTemperature(p, -20);
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  const hx = p.wj.head.x;
+  p.grab(hx, p.wj.head.y);
+  for (let i = 0; i < 120; i++) { p.holdAt(hx, Math.min(6.5, p.wj.head.y + 0.08)); sb.step(1 / 120); }
+  p.release();
+  for (let i = 0; i < 120 * 3; i++) sb.step(1 / 120);
+  return { dead: p.dead, cause: p.health.cause, cut: Object.keys(p.cut).length, shattered: window.__vit.ice.includes('shatter|Mo') };
+});
+check('dropped from high up while frozen, the whole body shatters', shattered.dead && shattered.cause === 'shattered' && shattered.cut === 4 && shattered.shattered, JSON.stringify(shattered));
+const healedIce = await ev(() => {
+  const sb = window.__sf.sb, V = window.__sf.vitals;
+  const p = sb.spawnStickman(12, null, { name: 'Ola' });
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  V.setTemperature(p, -5);
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  const was = p.health.frozen;
+  p.heal();
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  return { was, frozen: p.health.frozen, t: +p.health.temp.toFixed(1), locked: !!p.rag && p.rag.locked };
+});
+check('Heal thaws them out, and sets their temperature right', healedIce.was && !healedIce.frozen && Math.abs(healedIce.t - 37) < 0.5 && !healedIce.locked, JSON.stringify(healedIce));
+await ev(() => window.__sf.ui.select(null));
+
 /* ---------------------------------- mods --------------------------------- */
 
 await fresh();
@@ -1719,6 +2010,8 @@ const forms = await ev(() => {
   const n = M.findSpawnable('md-n').spawn(sb, -2);
   steps(120 * 3);
   n.brain = null;
+  // (and nowhere it was already on its way to)
+  n.stop();
   const STRIKE = { chainsaw: 'saw', sword: 'chop', claw: 'slash' };
   const REACH = { chainsaw: 1.05, sword: 1.25, claw: 0.95 };
   const out = {};

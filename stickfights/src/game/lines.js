@@ -303,6 +303,48 @@ export const LINES = {
   sawArrestMine: ['{victim} got what was coming!', 'Thank you, {other}! Lock them up!', "Ha! Who's laughing now, {victim}?", "That's for what you did to me, {victim}."],
   sawArrestRelief: ['Good. One less troublemaker.', 'Finally. Somebody stopped {victim}.', 'Nice work, {other}.', 'Phew. We are safe now.', 'Justice!'],
   sawArrestFriend: ['{victim}! No!', "Let them go! They didn't mean it!", "Hang in there, {victim}. I'll get you a lawyer.", 'Not {victim}!', "{victim}'s not a bad person!"],
+
+  /* ------------------------------- fire, ice, air ------------------------------ */
+  onFire: [
+    "I'M ON FIRE!", 'IT BURNS! IT BURNS!', 'PUT IT OUT! PUT IT OUT!', 'AAAAAH! FIRE!', "HELP ME! I'M BURNING!", 'Get it off! GET IT OFF!',
+    'HOT HOT HOT HOT!', 'Water! Somebody get water!', 'AAAAAAAAH!', 'Why is there FIRE?!',
+  ],
+  stopDropRoll: ['Stop, drop and roll! Stop, drop and roll!', 'Roll! Roll!', 'On the ground! Roll!', 'Drop and roll, drop and roll...', 'Roll it out, roll it out!'],
+  rollAdvice: [
+    'Stop, drop and roll, {other}!', '{other}! Get on the floor and ROLL!', 'Roll, {other}! ROLL!', 'Drop! Drop and roll!', "Don't run, {other}! Roll!",
+    "Running makes it worse! ROLL!",
+  ],
+  fireOut: ["It's out... it's out...", "Oh no. Oh no, it's out. Is it out?", "Is it out? Tell me it's out.", 'I can still smell it...', 'Thank you. Thank you...', 'My skin...'],
+  fireOutRolled: ['It worked! It actually worked!', "I rolled it out! I'm alive!", 'Stop, drop and roll. Who knew.', "Out. It's out. Owww...", 'School was right about that one.'],
+  putOutDone: ["It's out, {other}. You're okay.", "There. It's out.", "Got it! You're okay now, {other}.", "Breathe, {other}. It's over.", "Don't move, {other}. You're burned."],
+  sawOnFire: [
+    '{victim} is ON FIRE!', 'FIRE! {victim} is on fire!', 'Somebody help {victim}!', "{victim}! You're burning!", 'Oh no, {victim}!', 'Get water! Anybody!',
+    "Don't touch {victim}, you'll catch!",
+  ],
+  sawBurningBody: ["{victim}'s body is burning...", 'Oh no... {victim}...', 'Is that... {victim}?', 'Somebody put {victim} out. Please.'],
+  sawPutOut: ["Phew. {victim}'s out.", "The fire's out!", '{victim} made it!', 'Is {victim} okay?', "{victim}'s smoking, but alive."],
+  sawBurnDeath: ['{victim} burned to death...', 'No... {victim}...', 'That smell... {victim}...', "We couldn't put {victim} out.", 'Not like that. Not like that.'],
+  sawFrozen: [
+    '{victim} is frozen solid!', "{victim}? Can you hear me? You're ice!", '{victim} turned into a statue!', 'Is {victim}... frozen?', '{victim} is covered in ice!',
+    "Don't knock {victim} over! They'll break!",
+  ],
+  sawThaw: ['{victim} is thawing out!', 'The ice is melting off {victim}!', '{victim}! Hang in there!', "Look! {victim}'s dripping!"],
+  sawThawDead: ["The ice is melting... {victim} isn't moving.", '{victim}... too late.', "{victim}'s not waking up."],
+  sawIceSnap: ['A piece of {victim} just broke off!', 'It snapped off like an icicle!', '{victim} is breaking!', 'Careful! Bits of {victim} are coming off!'],
+  sawShatter: ['{victim} SHATTERED!', "{victim}'s in pieces!", 'No! {victim}!', "It's... it's all over the floor...", 'Like glass. {victim} broke like glass.'],
+  sawFreezeDeath: ['{victim} froze to death...', '{victim}... so cold...', 'We were too late for {victim}.', "{victim}'s gone. Frozen."],
+  sawChokeDeath: ['{victim} stopped breathing!', "{victim} couldn't breathe...", 'No... {victim}!', "{victim}'s gone blue..."],
+  sawHeatDeath: ['{victim} collapsed from the heat!', 'It was too hot for {victim}...', "{victim}'s burning up... and now..."],
+  frozenFriend: ["{other}? You're like ice...", 'Stay with me, {other}. Somebody warm them up!', '{other} is so cold...', 'Can you hear me, {other}?', "Don't you dare die on me, {other}."],
+  thawWake: ['So... c-cold...', 'Wh-what happened? Why am I wet?', 'I was frozen... I was FROZEN.', "I c-can't feel my fingers...", 'Everything... hurts...'],
+  choking: ["Can't... breathe...", '*gurgle*', 'Let... go...', 'Air... please...', '*choking*', 'Hkk... hkk...'],
+  gasp: ['*GASP*', 'Air! AIR!', '*cough* *cough*', 'I can breathe... I can breathe...', '*gasping*', 'Never... do that... again...'],
+  suddenHot: ["Whoa, it's suddenly SO hot!", 'Is it me, or is it boiling in here?', "I'm sweating buckets!", 'Why am I so hot?!', 'Somebody turn the heat down!'],
+  suddenCold: ["Brrr! Where did that come from?!", "It's f-freezing!", 'Why is it suddenly so cold?', 'My t-teeth are chattering!', 'Who opened a window? There are no windows!'],
+  tooHot: ["I'm burning up...", 'So hot... I need water.', "I feel like I'm melting.", 'Is it hot, or is it me?', 'I need some shade. There is no shade.'],
+  cold: ['B-b-brrr...', 'So c-cold...', "Can't st-stop shivering...", "I can't feel my t-toes.", 'Anybody got a coat?'],
+  breathless: ["Can't... catch my breath...", '*wheeze*', 'I need air...', 'Hah... hah...'],
+  adrenaline: ['My heart is pounding!', "My hands won't stop shaking.", 'I feel like I could lift a crate. Two crates.', "Whoa. Whoa. Everything's so fast.", "I can't feel a thing right now."],
 };
 
 /*

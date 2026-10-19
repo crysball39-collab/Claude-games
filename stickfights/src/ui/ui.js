@@ -42,6 +42,7 @@ import { STYLE } from '../game/animator.js';
 import { LIMITS } from '../game/sandbox.js';
 import { isGun, AMMO_BOXES, VEST_W, VEST_H } from '../game/props.js';
 import { clamp } from '../core/util.js';
+import { parseTemperature, setTemperature, fmtTemp, toF, vitalConditions, hasVitals, breathes } from '../game/vitals.js';
 import { installedMods, findSpawnable, modSpawnables, modOption } from '../mods/index.js';
 import { ModsScreen } from './mods-screen.js';
 
@@ -618,13 +619,17 @@ export class UI {
       this.toast(`Removed ${p.name}`);
       this.select(null);
     });
-    // the bars are made once and only their widths change
+    // the bars are made once and only their widths change (and the body's, the number beside them)
     this.meters = {};
+    this.vals = {};
     this.locks = {};
-    const rows = [...EMOTION_ROWS.map((r) => [...r, 'ins-emotions']), ['pain', 'Pain', '#ff6b6b', 'ins-vitals'], ['blood', 'Blood', '#c0182a', 'ins-vitals'],
-      ['stamina', 'Stamina', '#4fbf78', 'ins-vitals']];
+    const rows = [...EMOTION_ROWS.map((r) => [...r, 'ins-emotions']),
+      ['conscious', 'Conscious', '#e6dfc8', 'ins-vitals'], ['adrenaline', 'Adrenaline', '#ffb13b', 'ins-vitals'], ['oxygen', 'Oxygen', '#5cc8ff', 'ins-vitals'],
+      ['temp', 'Temp', null, 'ins-vitals'],
+      ['pain', 'Pain', '#ff6b6b', 'ins-vitals'], ['blood', 'Blood', '#c0182a', 'ins-vitals'], ['stamina', 'Stamina', '#4fbf78', 'ins-vitals']];
     for (const [key, label, color, where] of rows) {
       const box = $(where);
+      if (key === 'temp') { this.tempRow(box); continue; }
       const row = document.createElement('div');
       row.className = 'meter';
       const l = document.createElement('span');
@@ -638,6 +643,12 @@ export class UI {
       row.append(l, bar);
       box.appendChild(row);
       this.meters[key] = fill;
+      if (where === 'ins-vitals') {
+        row.classList.add('val');
+        const v = document.createElement('b');
+        row.appendChild(v);
+        this.vals[key] = v;
+      }
       if (where === 'ins-emotions') {
         this.editableMeter(row, bar, key);
         // and a padlock: locked, the feeling stays exactly where it is
@@ -702,6 +713,102 @@ export class UI {
       this.toast(`${p.name} leaves ${o.name} alone`);
       this.insT = 0;
     });
+  }
+
+  /**
+   * Their temperature: a thermometer (25 to 45 degrees, 37 marked), the
+   * number - which can be typed over, in C, F or K, to set it - and a lock
+   * that holds it wherever it is.
+   */
+  tempRow(box) {
+    const row = document.createElement('div');
+    row.className = 'meter temp';
+    const l = document.createElement('span');
+    l.textContent = 'Temp';
+    const bar = document.createElement('div');
+    bar.className = 'bar thermo';
+    const fill = document.createElement('div');
+    fill.className = 'fill';
+    const norm = document.createElement('i');
+    const mark = document.createElement('div');
+    mark.className = 'mark';
+    bar.append(fill, norm, mark);
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'temp-input';
+    input.spellcheck = false;
+    input.autocomplete = 'off';
+    input.enterKeyHint = 'done';
+    input.title = 'Type a temperature: 37, 104F, -10, 300 ...';
+    const lock = document.createElement('button');
+    lock.className = 'lock-btn';
+    lock.innerHTML = LOCK_ICON;
+    lock.addEventListener('click', () => this.toggleTempLock());
+    row.append(l, bar, input, lock);
+    box.appendChild(row);
+    let shown = '';
+    const apply = () => {
+      const p = this.selected;
+      if (!p || !hasVitals(p) || input.value === shown) { input.value = shown; return; }
+      const t = parseTemperature(input.value);
+      if (t === null) {
+        this.toast('Type a temperature, like 37, 104F or -10', 1.8);
+        input.value = shown;
+        return;
+      }
+      setTemperature(p, t);
+      shown = input.value = fmtTemp(t);
+      this.toast(`${p.name} is now ${fmtTemp(t)} (${toF(t)} °F)${p.health.tempLock != null ? ', held there' : ''}`, 1.6);
+      this.insT = 0;
+    };
+    input.addEventListener('focus', () => { shown = input.value; input.select(); });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); apply(); input.blur(); }
+      else if (e.key === 'Escape') { input.value = shown; input.blur(); }
+    });
+    input.addEventListener('blur', () => { if (input.value !== shown) apply(); });
+    this.thermo = { row, fill, mark, input, lock };
+  }
+
+  /** Holds whoever is selected at the temperature they are now, or lets it go. */
+  toggleTempLock() {
+    const p = this.selected;
+    if (!p || !hasVitals(p)) return;
+    const h = p.health, on = h.tempLock == null;
+    h.tempLock = on ? h.temp : null;
+    this.toast(on ? `${p.name}'s temperature is held at ${fmtTemp(h.temp)}` : `${p.name}'s temperature can change again`);
+    this.insT = 0;
+  }
+
+  /** The body's bars: how awake, how much adrenaline and air, the temperature, the pain, the blood, the breath. */
+  showVitals(p) {
+    const h = p.health, m = this.meters, v = this.vals;
+    const pct = (x) => Math.round(clamp(x, 0, 1) * 100) + '%';
+    const bar = (k, f, text) => { m[k].style.width = (clamp(f, 0, 1) * 100).toFixed(0) + '%'; v[k].textContent = text; };
+    const awake = p.dead || h.frozen ? 0 : h.conscious;
+    bar('conscious', awake, pct(awake));
+    bar('adrenaline', h.adrenaline || 0, pct(h.adrenaline || 0));
+    const air = breathes(p);
+    bar('oxygen', air ? h.oxygen : 1, air ? pct(h.oxygen) : '—');
+    m.oxygen.parentNode.parentNode.classList.toggle('off', !air);
+    bar('pain', p.dead ? 0 : h.pain / 100, String(p.dead ? 0 : Math.round(h.pain)));
+    bar('blood', (h.blood - 0.38) / 0.62, pct(h.blood));
+    bar('stamina', p.dead ? 0 : p.stamina, pct(p.dead ? 0 : p.stamina));
+    const T = this.thermo;
+    if (!hasVitals(p)) return;
+    const t = h.temp, k = clamp((t - 25) / 20, 0, 1);
+    T.fill.style.width = (k * 100).toFixed(1) + '%';
+    T.mark.style.left = (k * 100).toFixed(1) + '%';
+    T.fill.style.background = h.frozen ? '#bfe6ff' : p.flames ? '#ff7a1a' : t < 35 ? '#5fb4ff' : t < 38 ? '#8fdc95' : t < 40 ? '#ffc24a' : '#ff5a3a';
+    T.row.classList.toggle('hot', t >= 38);
+    T.row.classList.toggle('cold', t <= 35);
+    const held = h.tempLock != null;
+    T.row.classList.toggle('locked', held);
+    T.lock.classList.toggle('on', held);
+    T.lock.setAttribute('aria-pressed', held ? 'true' : 'false');
+    T.lock.setAttribute('aria-label', `${held ? 'Let go of' : 'Hold'} ${p.name}'s temperature`);
+    T.input.setAttribute('aria-label', `${p.name}'s temperature`);
+    if (document.activeElement !== T.input) T.input.value = fmtTemp(t);
   }
 
   /** A feeling's bar, made something to drag: wherever it is let go is how they feel (for now - feelings settle). */
@@ -822,7 +929,7 @@ export class UI {
     const b = p.brain, h = p.health, $ = this.$;
     $('ins-boss').classList.add('hidden');
     const mood = $('ins-mood');
-    mood.textContent = p.dead ? 'Dead' : !p.conscious ? 'Unconscious' : b.emo.label;
+    mood.textContent = p.dead ? 'Dead' : h.frozen ? 'Frozen solid' : !p.conscious ? 'Unconscious' : b.emo.label;
     mood.classList.toggle('dead', p.dead);
     $('ins-doing').textContent = b.doing;
     for (const [k] of EMOTION_ROWS) {
@@ -846,9 +953,7 @@ export class UI {
     $('ins-order').classList.toggle('hidden', !ord || p.dead);
     this.updateAbilities(p);
     if (ord) $('ins-order-text').textContent = `Sent to fight ${ord.target.name}`;
-    this.meters.pain.style.width = (p.dead ? 0 : clamp(h.pain, 0, 100)).toFixed(0) + '%';
-    this.meters.blood.style.width = (clamp((h.blood - 0.38) / 0.62, 0, 1) * 100).toFixed(0) + '%';
-    this.meters.stamina.style.width = (p.dead ? 0 : clamp(p.stamina, 0, 1) * 100).toFixed(0) + '%';
+    this.showVitals(p);
     $('ins-heal').disabled = p.dead;
     $('ins-uncuff').classList.toggle('hidden', !p.cuffed);
     const kit = $('ins-kit'), stowable = !!p.weapon && !!p.slotFor(p.weapon), drawable = !p.weapon && p.kit.length > 0;
@@ -856,8 +961,8 @@ export class UI {
     kit.textContent = p.weapon ? 'Put away' : 'Get it out';
     kit.disabled = p.state !== 'stand';
 
-    // whatever is at work on them (a mod's: acid, withering) comes first
-    const conds = [...p.afflictions.filter((a) => a.label).map((a) => a.label), ...h.conditions()];
+    // fire, ice and a hand round the throat first; then whatever is at work on them (a mod's: acid, withering)
+    const conds = [...vitalConditions(p), ...p.afflictions.filter((a) => a.label).map((a) => a.label), ...h.conditions()];
     const cb = $('ins-conds');
     cb.textContent = '';
     if (!conds.length) {
@@ -1324,6 +1429,8 @@ export class UI {
     ctx.clearRect(0, 0, cv.width, cv.height);
     const part = (k) => h.parts[k];
     const col = (bone, partKey) => {
+      if (h.frozen) return '#a9dcff';
+      if (p.flames && (p.flames.parts[partKey] || 0) > 0.1) return '#ff8a2a';
       if (p.dead) return '#5d6a70';
       if (h.bones[bone] && h.bones[bone].broken) return '#ff4a3d';
       const f = part(partKey).hp / part(partKey).max;

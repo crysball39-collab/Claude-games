@@ -10,7 +10,7 @@
    Going in, it is wet for a long time, and then a small click as the skin
    closes behind it.
    ========================================================================== */
-import { rand } from '../../core/util.js';
+import { soundRand as rand } from '../../core/audio.js';
 
 function sweep(sound, type, f0, f1, dur, gain, delay = 0) {
   const c = sound.ctx, t = c.currentTime + delay;

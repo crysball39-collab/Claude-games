@@ -7,6 +7,11 @@
    and thought bubbles, health bars, and the little symbols that say how
    somebody feels - an anger mark, a sweat drop, a heart, stars going round
    a dizzy head.
+
+   Fire and ice are drawn on top of whoever has them (vitals.js): a glow
+   behind somebody burning and the flames in front; frost, or a whole shell
+   of ice; and a face that goes red with heat, blue with cold or for want of
+   air, and black with burning.
    ========================================================================== */
 import {
   drawStickman, drawCrateShape, drawKnuckleShape, drawKnifeShape, drawMacheteShape, drawGlockShape, drawSeveredLimb,
@@ -14,6 +19,7 @@ import {
   KNIFE_W, KNIFE_H, MACHETE_W, MACHETE_H, INK, BLOOD, BLOOD_DARK, BRASS, BRASS_DARK,
 } from './draw.js';
 import { AMMO_BOXES, VEST_W, VEST_H } from './props.js';
+import { drawVitalsBack, drawVitalsFront, headFill, inkFor, drawIcedLimb } from './vitals.js';
 import { DIM } from './skeleton.js';
 import { clamp, TAU } from '../core/util.js';
 
@@ -176,7 +182,8 @@ export class Renderer {
     ctx.save();
     ctx.translate(b.pos.x, b.pos.y);
     ctx.rotate(b.rot);
-    drawSeveredLimb(ctx, l.local, 0.07 * l.scale, '#1b1b1b', l.tint || null);
+    drawSeveredLimb(ctx, l.local, 0.07 * l.scale, l.iced ? '#1c2c3c' : '#1b1b1b', l.tint || null);
+    if (l.iced) drawIcedLimb(ctx, l.local, 0.07 * l.scale);
     ctx.restore();
   }
 
@@ -197,6 +204,7 @@ export class Renderer {
 
   drawPerson(ctx, p) {
     const h = p.health;
+    if (p.flames) drawVitalsBack(ctx, p);
     const stuck = p.stuck.length ? p.stuck.map((e) => { const q = p.knifePose(e); return { x: q.x, y: q.y, a: q.a, blood: e.knife.blood, kind: e.knife.kind }; }) : null;
     drawStickman(ctx, p.wj, {
       scale: p.scale,
@@ -223,7 +231,8 @@ export class Renderer {
       stuck,
       pale: p.dead ? 0.7 : clamp((0.86 - h.blood) / 0.42 + h.shock * 0.4, 0, 1),
       bruise: h.parts.head.bruise,
-      ink: p.dead ? '#1b1b1b' : INK,
+      ink: inkFor(p) || (p.dead ? '#1b1b1b' : INK),
+      headFill: headFill(p),
       // what a mod adds: its species' own drawing, what they bleed, a held thing that draws itself
       man: p,
       skin: p.species && p.species.skin ? p.species.skin : null,
@@ -231,6 +240,7 @@ export class Renderer {
       heldDraw: p.weapon && p.weapon.drawHeld ? (c, j, s, f) => p.weapon.drawHeld(c, j, s, f, p) : null,
     });
     for (const a of p.afflictions) if (a.draw) a.draw(ctx, p);
+    drawVitalsFront(ctx, p);
   }
 
   drawFx(ctx) {
@@ -291,6 +301,34 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.r * (1 + k * 1.5), 0, TAU);
       ctx.fill();
+    }
+    // smoke and steam, spreading as they rise
+    for (const p of fx.smokes) {
+      const k = p.age / p.life, a = Math.min(1, p.age * 6) * (1 - k);
+      ctx.fillStyle = p.steam ? `rgba(240, 244, 248, ${0.4 * a})` : `rgba(40, 38, 36, ${0.34 * a * p.k})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r * (1 + k * 2.6), 0, TAU);
+      ctx.fill();
+    }
+    for (const e of fx.emberBits) {
+      const k = e.age / e.life, tw = 0.6 + 0.4 * Math.sin(e.age * 30 + e.seed);
+      ctx.fillStyle = `rgba(255, ${170 + Math.round(60 * (1 - k))}, 60, ${(1 - k) * tw})`;
+      ctx.fillRect(e.x - 0.008, e.y - 0.008, 0.016, 0.016);
+    }
+    // ice: little clear splinters, catching the light as they tumble
+    for (const p of fx.iceBits) {
+      const a = Math.min(1, 2 * (1 - p.age / p.life));
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.a);
+      ctx.fillStyle = `rgba(200, 232, 255, ${0.85 * a})`;
+      ctx.beginPath();
+      ctx.moveTo(-p.s, -p.s * 0.4);
+      ctx.lineTo(p.s, 0);
+      ctx.lineTo(-p.s * 0.3, p.s * 0.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
     }
     ctx.lineCap = 'round';
     for (const b of fx.bursts) {
@@ -402,7 +440,8 @@ export class Renderer {
         drawStar(ctx, headS.x + Math.cos(a) * rPx * 1.4, headS.y - rPx * 1.1 + Math.sin(a) * rPx * 0.45, 4);
       }
     }
-    if (p.alive && !p.conscious) {
+    // (frozen solid is not asleep)
+    if (p.alive && !p.conscious && !p.health.frozen) {
       ctx.font = `700 13px ${FONT}`;
       ctx.fillStyle = '#ffffff';
       ctx.textAlign = 'left';

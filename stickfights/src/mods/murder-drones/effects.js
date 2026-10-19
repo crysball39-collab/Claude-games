@@ -18,6 +18,7 @@
 import { clamp, rand, chance, sign } from '../../core/util.js';
 import { pointOnBone } from '../../game/skeleton.js';
 import { ACID } from './look.js';
+import { ignite } from '../../game/vitals.js';
 
 const PART_NAMES = { head: 'head', torso: 'body', armA: 'right arm', armB: 'left arm', legA: 'right leg', legB: 'left leg' };
 
@@ -230,6 +231,8 @@ export function explode(sb, x, y, by, power = 1) {
       if (n.part === 'head') p.headMark(n.x, n.y, 0.6, true);
       else p.addWound({ bone: n.bone, t: n.t, r: 0.6, burn: true });
       if (p.health.dead && p.alive) p.die('an explosion', by && !by.removed ? by : null);
+      // and right in it, the flames catch
+      else if (k > 0.6 && chance(0.45)) ignite(p, { part: n.part, power: 0.45, by: by && !by.removed ? by : null });
     }
     if (k > 0.25 && p.state !== 'held') {
       const vx = dir * (3 + 8 * k) * power, vy = 2 + 6 * k * power;

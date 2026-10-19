@@ -298,6 +298,7 @@ export const WITHER = {
   monster: true,
   undead: true,
   tireless: true,
+  fireproof: true,
   mute: true,
   noPickup: true,
   // (how much of a fight it looks to anyone sizing it up: plenty, but not hopeless)

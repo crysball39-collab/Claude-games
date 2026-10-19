@@ -11,7 +11,7 @@
    long time before it goes off.
    ========================================================================== */
 import { armOf } from '../../game/props.js';
-import { rand } from '../../core/util.js';
+import { soundRand as rand } from '../../core/audio.js';
 
 function sweep(sound, type, f0, f1, dur, gain, delay = 0) {
   const c = sound.ctx, t = c.currentTime + delay;

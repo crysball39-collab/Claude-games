@@ -18,6 +18,7 @@ import { LINES } from './game/lines.js';
 import { armOf } from './game/props.js';
 import { spawnOfficer } from './game/police.js';
 import * as Mods from './mods/index.js';
+import * as Vitals from './game/vitals.js';
 
 const canvas = document.getElementById('view');
 const sb = new Sandbox();
@@ -43,8 +44,10 @@ resize();
 
 /* --------------------------------- sound ---------------------------------- */
 
-const SCREAMS = new Set(['panic', 'hurtBig', 'flee', 'grabbed', 'grabbedAgain', 'broken', 'shot', 'severedSelf', 'chopped', 'gunshots', 'dislocatedSelf', 'tased']);
+const SCREAMS = new Set(['panic', 'hurtBig', 'flee', 'grabbed', 'grabbedAgain', 'broken', 'shot', 'severedSelf', 'chopped', 'gunshots', 'dislocatedSelf', 'tased', 'onFire']);
 sb.on('hit', (e) => {
+  // a body frozen solid: whatever hit it, ice cracks
+  if (e.who && e.who.health && e.who.health.frozen) sound.iceCrack(e.x);
   if (e.weapon === 'bullet' || e.weapon === 'vestRound') return;   // its own sound, from bulletHit (or vestStop)
   if (armOf(e.weapon)) {
     // a mod's weapon makes its own noise (the mod listens for it); the view still jumps
@@ -123,6 +126,21 @@ sb.on('stuck', (e) => { if (e.into && e.into.kind === 'stickman') sound.stab(1.5
 sb.on('pullout', (e) => sound.stab(0.6, e.x));
 sb.on('clap', (e) => sound.clap(e.x, e.soft));
 sb.on('death', (e) => { if (!e.silent) sound.death(e.who.voice, e.who.pos.x); });
+// fire and ice
+sb.on('ignite', (e) => sound.ignite(e.x));
+sb.on('fireCrackle', (e) => sound.fire(e.power, e.x));
+sb.on('extinguish', (e) => {
+  if (e.how === 'cooled' || e.how === 'frozen') sound.steamHiss(e.x, true);
+  else if (e.how === 'rolled' || e.how === 'smothered' || e.how === 'blown') sound.whoosh(e.x);
+});
+sb.on('freeze', (e) => sound.freeze(e.x));
+sb.on('thaw', (e) => sound.steamHiss(e.x, false));
+sb.on('iceSnap', (e) => { sound.iceCrack(e.x, true); cam.shake(0.15); });
+sb.on('iceThud', (e) => sound.iceCrack(e.x, e.speed > 8));
+sb.on('shatter', (e) => { sound.shatter(e.x); cam.shake(0.4); });
+sb.on('gasp', (e) => sound.gasp(e.who.voice, e.x));
+sb.on('dropRoll', (e) => sound.thud(4, e.who.pos.x));
+sb.on('rollOver', (e) => sound.thud(2.2, e.x));
 sb.on('speech', (e) => {
   sound.voice(e.text, e.who.voice, e.loud, e.who.pos.x);
   if (e.loud && SCREAMS.has(e.kind)) sound.scream(e.who.voice, e.who.pos.x);
@@ -195,4 +213,4 @@ function start() {
 document.getElementById('btn-play').addEventListener('click', start);
 
 // for tests and the curious
-window.__sf = { sb, cam, ui, hand, sound, renderer, STYLE, start, demo, CLIPS, LINES, mods: Mods };
+window.__sf = { sb, cam, ui, hand, sound, renderer, STYLE, start, demo, CLIPS, LINES, mods: Mods, vitals: Vitals };

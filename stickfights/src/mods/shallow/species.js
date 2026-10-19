@@ -1034,6 +1034,8 @@ export const DISGUISE = {
   label: 'Shallow, in disguise',
   // a person, as far as holsters, pockets and vests are concerned - as far as anybody can tell
   human: true,
+  // (it only breathes because they do)
+  breathes: false,
   skin: disguiseSkin,
   init(man) { man.sh = newState(man.scale); },
   spawned(man, o) { if (o.sh) man.sh = o.sh; },
@@ -1058,6 +1060,7 @@ export const CREATURE = {
   monster: true,
   tireless: true,
   sturdy: true,
+  breathes: false,
   // it has words, but they are its own (lines.js), said when it wants
   mute: true,
   noPickup: true,

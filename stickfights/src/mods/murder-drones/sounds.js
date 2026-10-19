@@ -8,7 +8,8 @@
    cracks like a whip and the acid fizzes. The railgun whines as it charges
    and then goes off like the end of the world.
    ========================================================================== */
-import { clamp, rand } from '../../core/util.js';
+import { clamp } from '../../core/util.js';
+import { soundRand as rand } from '../../core/audio.js';
 import { armOf } from '../../game/props.js';
 
 function sweep(sound, type, f0, f1, dur, gain, delay = 0) {

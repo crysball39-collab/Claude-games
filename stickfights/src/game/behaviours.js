@@ -7,6 +7,7 @@
    so whatever a behaviour wants, the body still decides what is possible.
    ========================================================================== */
 import { clamp, rand, randInt, pick, chance, sign } from '../core/util.js';
+import { ignite, smother, warm } from './vitals.js';
 
 export class Behaviour {
   constructor(brain, target = null, o = {}) {
@@ -70,7 +71,7 @@ export class Idle extends Behaviour {
     const h = me.health;
     const stump = Object.keys(me.cut).length > 0 && h.bleeding > 0.001;
     const sore = h.shock > 0.55 ? 'shock' : stump ? 'clutchStump' : !h.canUse('armA') || !h.canUse('armB') ? 'clutchArm'
-      : h.blood < 0.62 ? 'shiver' : h.bones.ribs.broken || h.internal > 0.001 || h.parts.torso.hp < 70 ? 'clutchStomach' : null;
+      : h.blood < 0.62 || h.temp < 35 ? 'shiver' : h.bones.ribs.broken || h.internal > 0.001 || h.parts.torso.hp < 70 ? 'clutchStomach' : null;
     if (sore && me.ready && !this.pose) {
       me.setPosture(sore); this.pose = sore; this.poseT = rand(3, 6);
       this.what = sore === 'shiver' ? 'Shivering' : sore === 'shock' ? 'In shock' : sore === 'clutchStump' ? 'Holding the stump' : 'Holding where it hurts';
@@ -89,7 +90,7 @@ export class Idle extends Behaviour {
       if (T.aggression > 0.55 && E.fear < 0.3) opts.push('crackKnuckles');
       if (T.aggression > 0.55 && E.joy > 0.35 && h.mobility > 0.9 && me.stamina > 0.6) opts.push('bounce');
       if (T.curiosity > 0.55 || E.sadness > 0.35) opts.push('think');
-      if (me.stamina < 0.45) opts.push('wipeBrow', 'wipeBrow');
+      if (me.stamina < 0.45 || h.temp > 38.5) opts.push('wipeBrow', 'wipeBrow');
       // on duty: a word into the radio, a look up and down the street
       if (me.officer) opts.push('radio', 'patrol', 'patrol');
       const a = pick(opts);
@@ -913,12 +914,13 @@ export class Help extends Behaviour {
     } else if ((o.lying || bleeding) && me.ready && me.posture !== 'kneel') {
       me.setPosture('kneel');
     }
-    // pressing on the wounds
+    // pressing on the wounds; rubbing the cold out of them
     if (bleeding && this.there > 0.8) o.health.pressure = Math.max(o.health.pressure, 0.5);
+    if (this.there > 1 && o.health.temp < 35) warm(o, 0.35);
     if ((this.next -= dt) <= 0) {
       // a few words to begin with; after that, mostly just being there
       this.next = this.said++ < 2 ? rand(3.5, 5.5) : rand(9, 15);
-      b.speak(pinned ? 'pinned' : 'comfort', { other: o.name }, 0.9, o);
+      b.speak(pinned ? 'pinned' : o.health.frozen ? 'frozenFriend' : 'comfort', { other: o.name }, 0.9, o);
     }
     if (this.there > 1.2) {
       if (o.state === 'down' && !bleeding) o.downT = Math.min(o.downT, 0.3);
@@ -1245,11 +1247,94 @@ export class Exercise extends Behaviour {
 }
 
 /** For a quick look-up of what a behaviour is called, by kind. */
+/* ------------------------------------ fire ----------------------------------- */
+
+/**
+ * On fire. First, pure panic: a scream and a run in no particular direction,
+ * which only fans it. Those who know better - or who are told - stop, drop
+ * to the floor and roll; the rest keep running until it burns itself out or
+ * they go down (and on the floor, anybody rolls: brain.whileDown).
+ */
+export class Burning extends Behaviour {
+  get kind() { return 'burning'; }
+  get label() { return 'On fire!'; }
+  get icon() { return 'exclaim'; }
+  start() {
+    const T = this.brain.traits;
+    this.panic = rand(0.6, 2) * (1.4 - T.bravery * 0.5 - T.skill * 0.3);
+    this.turn = 0;
+    this.yell = rand(1, 1.6);
+    this.me.setPosture(null);
+    this.me.setEmote('sweat', 2);
+  }
+  update(dt) {
+    this.t += dt;
+    const me = this.me, b = this.brain;
+    if (!me.flames) return false;
+    if ((this.yell -= dt) <= 0) { this.yell = rand(1.2, 2.2); b.speak('onFire', {}, 0.9, null, true); }
+    // stop, drop and roll
+    if (b.rollKnows && this.t > this.panic && me.onGround && (me.state === 'stand' || me.state === 'stagger')) {
+      if (me.dropAndRoll(rand(2.4, 3.4))) { b.speak('stopDropRoll', {}, 1, null, true); return false; }
+    }
+    // running about, which does no good at all
+    if ((this.turn -= dt) <= 0) {
+      this.turn = rand(0.6, 1.3);
+      me.goTo(me.pos.x + rand(2.5, 5) * (chance(0.5) ? 1 : -1), 'flee');
+    }
+    return this.t < 40;
+  }
+}
+
+/**
+ * Somebody else on fire: get over there and put it out. Shout at them to
+ * roll, and beat at the flames - kneeling over them if they are down - which
+ * is not without its own risk of catching.
+ */
+export class Douse extends Behaviour {
+  get kind() { return 'douse'; }
+  get label() { return 'Putting out ' + this.target.name; }
+  get icon() { return 'exclaim'; }
+  start() { this.shout = 0; this.pat = 0; this.there = 0; }
+  update(dt) {
+    this.t += dt;
+    const o = this.target, me = this.me, b = this.brain;
+    if (!o || o.removed || me.flames) return false;
+    if (!o.flames) {
+      if (this.there > 0.3 && o.alive) {
+        b.speak('putOutDone', { other: o.name }, 0.85, o);
+        if (o.brain && o.conscious) o.brain.helpedBy(me);
+      }
+      return false;
+    }
+    const x = o.wj.chest.x, d = Math.abs(x - me.pos.x);
+    const down = o.lying || o.state === 'down';
+    if ((this.shout -= dt) <= 0 && d < 9 && o.conscious && !(down && o.rolling > 0)) {
+      this.shout = rand(2.2, 3.5);
+      b.speak('rollAdvice', { other: o.name }, 1, o, true);
+    }
+    const side = sign(me.pos.x - x) || 1;
+    if (!arrive(me, x + side * 0.55, 'run', 0.22)) return this.t < 15;
+    this.there += dt;
+    me.faceTo(x);
+    me.lookAt = o.wj.head;
+    if (down) { if (me.ready && me.posture !== 'kneelHands') me.setPosture('kneelHands'); }
+    else if (me.posture === 'kneelHands') me.setPosture(null);
+    // beating at it: down on the floor it goes out fast; on somebody running about, hardly at all
+    if (!down && (this.pat -= dt) <= 0 && me.ready) { this.pat = rand(0.4, 0.6); me.perform('patOut'); }
+    smother(o, (down ? 0.6 : 0.28) * (0.7 + b.traits.skill * 0.5));
+    // too close to it for too long, and it catches them too
+    if (chance(dt * 0.04 * o.flames.power * (1.3 - b.traits.skill))) ignite(me, { part: 'armA', power: 0.3 });
+    return this.t < 20;
+  }
+  end() { if (this.me.posture === 'kneelHands') this.me.setPosture(null); }
+}
+
 export const KINDS = {
   idle: Idle, wander: Wander, rest: Rest, celebrate: Celebrate, panic: Panic, chat: Chat,
   fight: Fight, flee: Flee, hide: Hide, cower: Cower, confront: Confront, watch: Watch,
   help: Help, mourn: Mourn, arm: Arm, inspect: Inspect, play: Play, throw: ThrowCrate,
   investigate: Investigate, pullout: PullOut, throwKnife: ThrowKnife, exercise: Exercise,
   surrender: Surrender, vest: GearUp, ammo: Resupply, catchBreath: CatchBreath,
+  burning: Burning, douse: Douse,
 };
 

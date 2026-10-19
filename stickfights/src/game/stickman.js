@@ -37,6 +37,10 @@
    Once they come to rest and can, they pick themselves up, and the animation
    takes back over from wherever the ragdoll left them. With ragdolls turned
    off in the settings, falls are animated instead, the way they used to be.
+
+   Under all of it, vitals.js keeps their adrenaline, their oxygen and their
+   temperature going - and sets them on fire, or freezes them solid. Frozen,
+   the ragdoll is locked stiff: a statue that stands, topples, and snaps.
    ========================================================================== */
 import { Animator } from './animator.js';
 import { CLIPS, MASKS } from './clips.js';
@@ -47,6 +51,7 @@ import { heldGunFrame, gunPoint, goneAt } from './draw.js';
 import { isBlade, isGun, armOf, Gun, GUN_MODELS } from './props.js';
 import { startStumble, updateStumble, stumblePose } from './stumble.js';
 import { updateTased } from './taser.js';
+import { updateVitals, healVitals, iceBlow, ignite } from './vitals.js';
 import { clamp, clamp01, lerp, lerpAngle, rand, chance, moveToward, segDist, sign, smooth, wrapAngle, wobble, DEG } from '../core/util.js';
 
 export const G = 18;
@@ -209,6 +214,14 @@ export class Stickman {
     this.tased = null;        // { by, t, dur }: current going through them (taser.js)
     this.stumble = null;      // the pendulum while they stumble (stumble.js)
     this.knock = 0;           // seconds of being shoved back, the legs going with it
+    // fire and ice (vitals.js): the flames on them, the ice they are in, how burned they look
+    this.flames = null;
+    this.ice = null;
+    this.char = 0;
+    this.charHead = 0;
+    this.smoulder = 0;
+    this.rolling = 0;         // seconds left of rolling on the floor to put a fire out
+    this.vit = null;
     if (this.species && this.species.init) this.species.init(this, o);
   }
 
@@ -263,7 +276,8 @@ export class Stickman {
   tire(amount) {
     // (some of what a mod makes never runs out of breath: a machine, the undead)
     if (this.species && this.species.tireless) return;
-    this.stamina = Math.max(0, this.stamina - amount * (1.15 - this.health.toughness * 0.3));
+    // (with the adrenaline up, it hardly seems to cost anything)
+    this.stamina = Math.max(0, this.stamina - amount * (1.15 - this.health.toughness * 0.3) * (1 - (this.health.adrenaline || 0) * 0.3));
     this.exertT = this.sandbox.time;
   }
 
@@ -631,8 +645,9 @@ export class Stickman {
     s += Math.min(1, this.health.pain / 100) * 3 + Math.min(1, this.health.dizzy / 2) * 3;
     s += Math.min(1, Math.abs(this.vel.x) / 2) * 3;
     s += (1 - this.steady) * 4;
-    // out of breath, the sights will not keep still
+    // out of breath, the sights will not keep still; nor with the adrenaline up, or shivering
     s += (1 - clamp01(this.stamina / 0.5)) * 2.5;
+    s += (this.health.adrenaline || 0) * 3 + Math.max(0, 35 - (this.health.temp ?? 37)) * 0.8;
     // and a heavy pistol takes longer to come back down after each shot
     const kick = this.weapon && this.weapon.spec ? this.weapon.spec.kick : 1, back = 0.35 * Math.max(1, kick);
     const since = this.sandbox.time - (this.weapon ? this.weapon.lastShot : this.lastShotT ?? -99);
@@ -792,7 +807,7 @@ export class Stickman {
 
     if (h.by && h.by !== this && !blocked && (res.wound || bullet || (blade && dmg > 4))) this.woundedBy = { by: h.by, t: this.sandbox.time };
     // blood, if the skin went or the face took it (a bullet's is its own: see shot())
-    const spray = !bullet && !burn && (res.wound || (part === 'head' && dmg > 10) || (weapon && dmg > 6));
+    const spray = !bullet && !burn && !this.health.frozen && (res.wound || (part === 'head' && dmg > 10) || (weapon && dmg > 6));
     if (spray && !blocked) {
       const n = Math.round(clamp(dmg * (weapon === 'machete' ? 1.3 : spec && spec.spray ? spec.spray : sharp > 0.9 ? 0.9 : 0.6), 3, 30));
       this.sandbox.fx.blood(h.x, h.y, h.dir * (1 + h.power), 1 + h.power * 0.5, n, 1, this);
@@ -810,12 +825,13 @@ export class Stickman {
       }
       if (part === 'head') this.face.blood = Math.min(1, this.face.blood + dmg / 35);
     }
-    // a burn: a black scorch where it touched, and a wisp of smoke
+    // a burn: a black scorch where it touched, and a wisp of smoke - and now and then, it catches
     if (burn && h.x !== undefined && !blocked) {
       const n2 = this.nearestPart(h.x, h.y);
       if (n2.part === 'head') this.headMark(h.x, h.y, 0.9, true);
       else this.addWound({ bone: n2.bone, t: n2.t, r: 0.5, burn: true });
       this.sandbox.fx.dust(h.x, h.y, 2, 0.3);
+      if (!(spec && spec.ignite === false) && chance(clamp(dmg / 40, 0, 0.3) * 0.4)) ignite(this, { part, power: 0.35, by: h.by || null });
     }
     // hard enough, a machete goes right through; a kick to the knee can put it out
     if ((weapon === 'machete' || (spec && spec.sever)) && !blocked && !this.removed) this.trySever(h, dmg, spec ? spec.sever : 1);
@@ -832,6 +848,11 @@ export class Stickman {
     this.hurtT = this.sandbox.time;
     this.sandbox.emit('hit', { who: this, by: h.by, part, power: h.power, blocked, armed: !!weapon, weapon,
       kind: h.kind, x: h.x, y: h.y, damage: dmg, fatal: res.fatal && !wasDead, object: h.object || null, deep: !!h.deep });
+    // frozen solid: the ice cracks, a limb may snap off, the whole of them may shatter
+    if (this.health.frozen && !blocked) {
+      iceBlow(this, { part, bone: h.bone, power: h.power, x: h.x, y: h.y, dir: h.dir, by: h.by, bullet });
+      if (this.removed) return res;
+    }
     if (wasDead) {
       this.vel.x += h.dir * h.power * 0.4;
       if (this.rag) this.rag.shove(h.x, h.y, h.dir * h.power * 1.4, h.power * 0.4);
@@ -1055,7 +1076,7 @@ export class Stickman {
    * Cut off through the middle of `bone`: everything further out than that
    * comes away as a piece of its own (a Limb), going the way it was going.
    */
-  sever(bone, dir = 0, power = 1) {
+  sever(bone, dir = 0, power = 1, o = {}) {
     const h = this.health, limb = LIMB_OF[bone], mid = BREAK_OF[bone];
     if (!limb || h.severed[bone] || this.steadfast) return false;
     // nothing to cut if it is already gone from further in
@@ -1067,18 +1088,25 @@ export class Stickman {
     const vx = clamp((w[end].x - pw[end].x) * 120, -12, 12), vy = clamp((w[end].y - pw[end].y) * 120, -12, 12);
     const piece = sb.addLimb(pts, bone, this.name, vx + dir * (1 + power), vy + 1.2, rand(-6, 6), this.scale);
     if (piece) { piece.tint = this.tint; piece.from = this; }
+    // frozen solid, it comes off like an icicle: no blood (yet), just ice
+    const frozen = h.frozen;
+    if (piece && frozen) { piece.iced = true; piece.bleed = 0; }
     h.sever(bone);
     this.cut[limb] = mid;
     if (limb === 'armA') { if (this.weapon) this.dropWeapon(0.5); this.aimTarget = null; }
     if (limb.startsWith('arm')) this.dropCarried();
     const m = w[mid];
-    sb.fx.blood(m.x, m.y, dir * 2.5, 2, 32, 1.4, this);
-    this.markAt(m.x, m.y, 0.9);
+    if (frozen) sb.fx.shards(m.x, m.y, 14, dir * 2, 1.4);
+    else {
+      sb.fx.blood(m.x, m.y, dir * 2.5, 2, 32, 1.4, this);
+      this.markAt(m.x, m.y, 0.9);
+    }
     // a blade stuck in what came off goes with it, onto the floor
     for (const e of [...this.stuck]) if (goneAt(this.cut, e.bone, e.t)) this.pullKnife(e, null);
     this.wounds = this.wounds.filter((x) => !goneAt(this.cut, x.bone, x.t));
     if (this.rag) this.rebuildRag();
-    sb.emit('sever', { who: this, bone, lost: h.lostAt(bone), x: m.x, y: m.y, by: this.lastHit ? this.lastHit.by : null });
+    // (o.quiet: something else says what happened - a frozen body coming apart)
+    if (!o.quiet) sb.emit('sever', { who: this, bone, lost: h.lostAt(bone), x: m.x, y: m.y, by: this.lastHit ? this.lastHit.by : null });
     this.notify('severed', { bone, lost: h.lostAt(bone) });
     return true;
   }
@@ -1142,8 +1170,11 @@ export class Stickman {
     const sb = this.sandbox;
     if (part === 'head') this.headMark(hit.x, hit.y, 1.2);
     else this.addWound({ bone: hit.bone, t: hit.tb, r: 0.5, hole: true });
-    sb.fx.blood(hit.x, hit.y, -dx * 1.2, -dy * 1.2 + 0.5, 4, 0.5, this);
-    if (through) sb.fx.blood(hit.x + dx * 0.05, hit.y + dy * 0.05, dx * 5, dy * 5 + 0.5, 16, 1.3, this);
+    if (this.health.frozen) sb.fx.shards(hit.x, hit.y, 6, dx * 2, 0.8);
+    else {
+      sb.fx.blood(hit.x, hit.y, -dx * 1.2, -dy * 1.2 + 0.5, 4, 0.5, this);
+      if (through) sb.fx.blood(hit.x + dx * 0.05, hit.y + dy * 0.05, dx * 5, dy * 5 + 0.5, 16, 1.3, this);
+    }
     this.takeHit({ by, part, x: hit.x, y: hit.y, dir: sign(dx) || 1, power: 2.7 * energy, kind: 'shot', weapon: 'bullet', bone, through });
     if (!through && !this.removed) this.health.lodge(bone);
     sb.emit('bulletHit', { what: this, x: hit.x, y: hit.y, energy });
@@ -1153,6 +1184,20 @@ export class Stickman {
   die(cause, killer = null, dir = 0, power = 1, at = null) {
     if (this.state === 'dead') return;
     if (!this.health.dead) this.health.kill(cause);
+    // frozen solid, nothing moves: the statue just stops being alive (and keeps hold of whatever it had)
+    if (this.health.frozen) {
+      this.strike = null;
+      this.tased = null;
+      this.dropCarried();
+      if (this.state !== 'held') this.setState('dead');
+      this.bubble = null;
+      this.thought = null;
+      this.emote = null;
+      if (this.species && this.species.died) this.species.died(this, killer);
+      this.sandbox.emit('death', { who: this, by: killer, cause });
+      this.notify('dead', {});
+      return;
+    }
     const wasLying = LYING.has(this.state) || this.state === 'thrown';
     const wasHeld = this.state === 'held';
     this.strike = null;
@@ -1204,9 +1249,37 @@ export class Stickman {
     return true;
   }
 
+  /**
+   * On fire: down on the floor and rolling, over and over, to smother it.
+   * `dur` seconds of it. False if they are in no state to.
+   */
+  dropAndRoll(dur = 3) {
+    if (!this.alive || !this.conscious || this.state === 'held' || this.state === 'thrown' || this.health.frozen) return false;
+    this.rolling = Math.max(this.rolling, dur);
+    this.rollT = 0.2;
+    this.rollDir = sign(this.sandbox.right - this.pos.x > this.pos.x - this.sandbox.left ? 1 : -1) * (chance(0.7) ? 1 : -1);
+    if (this.rag) return true;
+    if (this.state === 'down' || this.state === 'crawl') { this.setState('down'); this.downT = Math.max(this.downT, dur + 0.4); return true; }
+    // down they go, deliberately: no ragdoll, they are in charge of it
+    this.strike = null;
+    this.blocking = false;
+    this.dropCarried();
+    if (this.weapon && chance(0.6)) this.dropWeapon(0.5);
+    this.anim.stopAction(0.05);
+    this.posture = null;
+    this.stop();
+    this.lieSide = 'back';
+    this.setState('down');
+    this.anim.play('fallBack', { blend: 0.08, restart: true });
+    this.downT = dur + 0.5;
+    this.sandbox.emit('dropRoll', { who: this });
+    return true;
+  }
+
   /** Back to full health: the sandbox's heal button. Only for the living. */
   heal() {
     if (this.dead) return false;
+    healVitals(this);
     this.health.heal();
     this.stamina = 1;
     this.tased = null;
@@ -1244,6 +1317,8 @@ export class Stickman {
       this.rag = makeRagdoll(this);
       this.limpT = 0;
       this.restT = 0;
+      // (frozen solid, it comes out stiff)
+      if (this.health.frozen) this.rag.lock();
     }
     const rag = this.rag;
     this.blend = null;
@@ -1366,7 +1441,7 @@ export class Stickman {
     const rested = this.restT > 0.35 || rag.asleep;
     if (st === 'held') return;
     // nobody limp stays sitting up: a slumped body goes over the way it leans
-    if (!awake && this.restT > 0.15 && this.limpT - (this.slumpT || -9) > 0.5) {
+    if (!awake && !this.health.frozen && this.restT > 0.15 && this.limpT - (this.slumpT || -9) > 0.5) {
       const w = this.wj;
       const lean = wrapAngle(angleOf(w.hip, w.neck));
       if (Math.abs(lean) < 1.0 && w.head.y - this.pos.y > 0.5) {
@@ -1490,6 +1565,8 @@ export class Stickman {
       sb.emit('thud', { who: this, speed: top, x: this.wj.hip.x, y: this.pos.y });
       if (top > 5) sb.fx.dust(this.wj.hip.x, this.pos.y, Math.round(clamp(top, 4, 10)), Math.min(2, top / 6));
     }
+    // frozen solid, there is nothing soft to take it (vitals.js works out what snaps)
+    if (this.health.frozen) return;
     // a body toppling over hits the floor with its head at nearly 10 m/s, the
     // way a falling pole does: that is a knock, not an injury. Thrown, it is.
     if (top < 8 || now - (this.slamT || -99) < 0.25) return;
@@ -1595,6 +1672,7 @@ export class Stickman {
       this.stop();
       const start = LYING.has(was) ? (this.lieSide === 'back' ? -1.2 : 1.2) : 0;
       this.held = {
+        part: near.part,
         inverted: byLeg, joint: byLeg ? (near.part === 'legA' ? 'footA' : 'footB') : 'neck',
         target: { x, y }, prev: { x, y }, vx: 0, vy: 0, ax: 0,
         swing: byLeg ? 0 : start, swingV: 0,
@@ -1784,6 +1862,9 @@ export class Stickman {
     // a mod's species has its own business every step, and so does whatever is eating at them
     if (this.species && this.species.update) this.species.update(this, dt);
     if (this.afflictions.length) this.afflictions = this.afflictions.filter((a) => a.update(this, dt) !== false);
+    // adrenaline, air and heat; fire and ice
+    updateVitals(this, dt);
+    if (this.removed) return;
     // breath, used and got back; and current going through them, if a taser has them
     this.updateStamina(dt);
     if (this.tased) updateTased(this, dt);
@@ -1804,6 +1885,13 @@ export class Stickman {
     if (this.recoil > 0) this.recoil = Math.max(0, this.recoil - dt / 0.13);
     if (this.aimTarget && (this.aimTarget.removed || !this.gunReady)) this.aimTarget = null;
     this.aimT = this.aiming ? this.aimT + dt : 0;
+    // frozen solid with ragdolls off: the pose stays exactly as it was, and the body only falls
+    if (h.frozen && !this.rag && this.state !== 'held') {
+      this.physics(dt);
+      this.toWorld(dt);
+      this.tickBubbles(dt);
+      return;
+    }
 
     if (this.rag) {
       this.updateLimp(dt);
@@ -1897,6 +1985,11 @@ export class Stickman {
     s *= this.health.mobility * (this.species && this.species.speed ? this.species.speed : 1);
     // out of breath, a run is a jog, and then not much more than a walk
     if (kind === 'run' || kind === 'flee') s *= 0.58 + 0.42 * smooth(this.stamina / 0.45);
+    // adrenaline puts a little more in the legs; too hot or too cold takes it out of them
+    const h = this.health, t = h.temp ?? 37;
+    s *= 1 + (h.adrenaline || 0) * (kind === 'run' || kind === 'flee' ? 0.12 : 0.04);
+    if (t < 35) s *= clamp(1 - (35 - t) * 0.06, 0.45, 1);
+    else if (t > 39) s *= clamp(1 - (t - 39) * 0.08, 0.55, 1);
     if (this.cuffed) s = Math.min(s, SPEEDS.walk * 0.9);
     if (this.carrying) s = Math.min(s, SPEEDS.walk * 0.8);
     if (this.posture === 'guard' && kind !== 'run' && kind !== 'flee') s = Math.min(s, SPEEDS.shuffle);
@@ -2100,6 +2193,26 @@ export class Stickman {
     this.downT -= dt;
     const pinned = this.pinnedBy && this.sandbox.time - this.pinT < 0.25;
     if (!pinned) this.pinnedBy = null;
+    // rolling a fire out: over onto the front, over onto the back, along the floor - the head
+    // staying where it is while the body turns under it
+    if (this.rolling > 0 && !pinned && this.conscious && this.health.paralysed === 'none') {
+      this.rolling -= dt;
+      const falling = this.anim.baseName === 'fallBack' || this.anim.baseName === 'fallFront';
+      if (!falling || this.anim.baseDone) {
+        if ((this.rollT -= dt) <= 0) {
+          this.rollT = 0.34;
+          this.lieSide = this.lieSide === 'back' ? 'front' : 'back';
+          this.facing = -this.facing;
+          const room = this.rollDir > 0 ? this.sandbox.right - this.pos.x : this.pos.x - this.sandbox.left;
+          if (room < 0.8) this.rollDir = -this.rollDir;
+          this.vel.x = this.rollDir * 0.6 * this.scale;
+          this.anim.play(this.lieSide === 'back' ? 'rollBack' : 'rollFront', { blend: 0.1, restart: true });
+          this.sandbox.emit('rollOver', { who: this, x: this.pos.x });
+        }
+      }
+      this.downT = Math.max(this.downT, 0.6);
+      return;
+    }
     const falling = this.anim.baseName === 'fallBack' || this.anim.baseName === 'fallFront';
     if (!falling || this.anim.baseDone) {
       let name;
@@ -2476,7 +2589,7 @@ export class Stickman {
     const limbPart = { handA: 'armA', handB: 'armB', footA: 'legA', footB: 'legB' }[d.limb];
     const lp = this.health.parts[limbPart];
     const limbOK = clamp(lp.hp / lp.max, 0.4, 1);
-    const fury = 1 + (this.brain ? this.brain.emo.anger * 0.15 : 0);
+    const fury = (1 + (this.brain ? this.brain.emo.anger * 0.15 : 0)) * (1 + (this.health.adrenaline || 0) * 0.15);
     // brass on the fist nearly doubles a punch; so does a pistol butt
     const spec = armOf(weapon);
     const mult = weapon === 'knuckles' ? 1.9 : isGun(weapon) ? 1.5 : spec && spec.mult ? spec.mult : 1;
@@ -2931,6 +3044,8 @@ export class Stickman {
   updateFace(dt) {
     const f = this.face;
     const k = 1 - Math.exp(-dt * 8);
+    // frozen solid, the face stays as it froze
+    if (this.health.frozen) return;
     if (this.dead) {
       f.eyes = 'x'; f.open = lerp(f.open, 0.25, k); f.mouth = lerp(f.mouth, -0.2, k); f.teeth = false; f.tears = 0;
       return;
@@ -2944,8 +3059,11 @@ export class Stickman {
     const crying = this.posture === 'cry' || e.sadness > 0.78;
     const shouting = this.bubble && this.bubble.loud && this.bubble.t < this.bubble.dur * 0.8;
 
+    // on fire, or fighting for air: nothing else on the face matters
+    const burning = !!this.flames, choking = !!(this.vit && this.vit.air === 'choke') && this.health.oxygen < 0.9;
     let eyes = 'normal';
-    if (pain > 0.62 || crying || this.anim.actionName === 'hitHead') eyes = 'squint';
+    if (burning || pain > 0.62 || crying || this.anim.actionName === 'hitHead') eyes = 'squint';
+    else if (choking) eyes = 'wide';
     else if (e.surprise > 0.45 || e.fear > 0.62) eyes = 'wide';
     else if (e.joy > 0.72 && pain < 0.3) eyes = 'happy';
     else if (e.sadness > 0.45) eyes = 'sad';
@@ -2959,7 +3077,9 @@ export class Stickman {
     f.browLift = lerp(f.browLift, Math.max(e.surprise, e.fear * 0.5), k);
     f.mouth = lerp(f.mouth, clamp(e.joy * 1.1 - e.sadness - e.fear * 0.5 - pain * 0.7 - e.anger * 0.25, -1, 1), k);
     const panting = this.stamina < 0.35 && (this.state === 'stand' || this.state === 'stumble') ? 0.2 + 0.14 * Math.sin(this.breath * 2) : 0;
-    const open = Math.max(shouting ? 0.9 : 0, e.surprise > 0.4 ? e.surprise * 0.8 : 0, e.fear > 0.7 ? (e.fear - 0.5) * 1.4 : 0, pain > 0.8 ? 0.5 : 0, panting, this.tased ? 0.6 : 0);
+    const gasping = choking ? 0.45 + 0.25 * Math.sin(this.breath * 5) : 0;
+    const open = Math.max(shouting ? 0.9 : 0, e.surprise > 0.4 ? e.surprise * 0.8 : 0, e.fear > 0.7 ? (e.fear - 0.5) * 1.4 : 0, pain > 0.8 ? 0.5 : 0, panting, this.tased ? 0.6 : 0,
+      burning ? 0.85 : 0, gasping);
     f.open = lerp(f.open, open, k * 1.5);
     f.teeth = e.anger > 0.55 && f.open < 0.2 || (pain > 0.5 && pain < 0.8 && f.open < 0.2);
     f.tears = crying ? (f.tears + dt * 1.3) % 1 || 0.001 : 0;

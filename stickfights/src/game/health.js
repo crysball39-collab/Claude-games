@@ -32,6 +32,15 @@
      shock       0..1, after something terrible: a limb gone, a bullet in
                  them, too much blood lost. They go pale, shake, and the mind
                  does not stay quite as awake
+     adrenaline  0..1: fear, anger, a blow, being on fire. While it is up
+                 they feel less of the pain and wake up sooner - and the
+                 heart pumps out what they are bleeding faster
+     oxygen      0..1 of what the blood can carry. Too little, they go dizzy,
+                 then out; long enough near the bottom, it kills them
+     temp        their temperature, in degrees C: 37 is right. Too hot or too
+                 cold knocks them out, and kept up, kills them (heat, chill)
+     frozen      frozen solid: nothing flows, nothing heals, nobody is home
+   (vitals.js keeps those four going: breathing, the heat, fire and ice.)
 
    And the injuries that come from particular things:
 
@@ -147,7 +156,21 @@ export class Health {
     this.time = 0;
     this.headT = -99;
     this.lastBreak = null;
+    // what vitals.js keeps going
+    this.adrenaline = 0;
+    this.oxygen = 0.985;
+    this.temp = 37;
+    this.tempLock = null;     // a temperature it is held at, from the inspector
+    this.heat = 0;            // 0..1: what too hot for too long has done (1 kills)
+    this.chill = 0;           //       too cold for too long
+    this.hypoxia = 0;         //       too little air for too long
+    this.frozen = false;
+    this.burning = false;
+    this.lung = false;        // a punctured lung
   }
+
+  /** How much of the pain they feel, with the adrenaline up. */
+  get numbed() { return 1 - this.adrenaline * 0.4; }
 
   /**
    * A blow to one part. Returns what it did:
@@ -170,7 +193,7 @@ export class Health {
       b0.n++;
       p.hp = Math.max(0, p.hp - dmg);
       p.lastHit = this.time;
-      this.pain = Math.min(130, this.pain + dmg * PAIN[part] * 1.6 * (1.3 - this.toughness * 0.55));
+      this.pain = Math.min(130, this.pain + dmg * PAIN[part] * 1.6 * (1.3 - this.toughness * 0.55) * this.numbed);
       const what = cutBy ? cutBy.toLowerCase() : null;
       if (part === 'head' && p.hp <= 0) return { damage: dmg, fatal: !!this.kill(cause || (what ? `${what} to the head` : 'a burn to the head')), wound: false, broke: null, ko: false };
       if (part === 'torso' && p.hp <= 0) return { damage: dmg, fatal: !!this.kill(cause || what || 'burns'), wound: false, broke: null, ko: false };
@@ -243,14 +266,15 @@ export class Health {
       if (force > 4 && Math.random() < chance) broke = this.breakBone(b, force);
     }
 
-    this.pain = Math.min(130, this.pain + dmg * PAIN[part] * (1.3 - this.toughness * 0.55) * (broke ? 1.4 : 1));
+    this.pain = Math.min(130, this.pain + dmg * PAIN[part] * (1.3 - this.toughness * 0.55) * (broke ? 1.4 : 1) * this.numbed);
 
     // A few clean shots to the head put anyone down long before they could
     // kill: a fistfight ends in a knockout, not a body - unless somebody keeps
     // going after the knockout.
     let ko = false;
     if (part === 'head' && sharp < 0.9 && !shot) {
-      this.conscious -= dmg * 0.021 * (1.25 - this.toughness * 0.45) * (this.bones.skull.broken ? 1.25 : 1);
+      // (with the adrenaline up, it takes a little more to put them out)
+      this.conscious -= dmg * 0.021 * (1.25 - this.toughness * 0.45) * (this.bones.skull.broken ? 1.25 : 1) * (1 - this.adrenaline * 0.18);
       this.dizzy = Math.max(this.dizzy, dmg * 0.16);
       this.headT = this.time;
       if (this.conscious < KO_LEVEL) ko = true;
@@ -384,7 +408,7 @@ export class Health {
         if (this.paralysed === 'none') this.paralysed = 'legs';
         break;
       case 'ribs':
-        if (force > 24 && Math.random() < 0.35) this.internal += 0.0022;   // a punctured lung
+        if (force > 24 && Math.random() < 0.35) { this.internal += 0.0022; this.lung = true; }   // a punctured lung
         break;
       case 'pelvis':
         this.internal += 0.0008;
@@ -416,6 +440,12 @@ export class Health {
   /** Advances bleeding, clotting, healing and pain. True if it just killed them. */
   update(dt) {
     this.time += dt;
+    // frozen solid, nothing moves inside them: no bleeding, no clotting, no mending
+    if (this.frozen) {
+      this.dizzy = Math.max(0, this.dizzy - dt);
+      this.conscious = Math.min(this.conscious, this.vitalCap());
+      return this.checkDeath();
+    }
     let bleed = 0;
     // someone pressing on the wounds stops them a good deal faster; pressing on your own, a bit
     const press = this.pressure > 0 ? 4 : this.selfPress > 0 ? 1.8 : 1;
@@ -446,7 +476,8 @@ export class Health {
       this.internal *= Math.exp(-dt * (this.dead ? 0.2 : 0.011 * (press > 1 ? 2 : 1)));
       if (this.internal < 0.00003) this.internal = 0;
     }
-    this.blood = Math.max(0, this.blood - bleed * dt);
+    // a racing heart pumps it out faster
+    this.blood = Math.max(0, this.blood - bleed * dt * (this.dead ? 1 : 1 + this.adrenaline * 0.3));
     if (this.dead) return false;
     if (bleed === 0 && this.blood < 1) this.blood = Math.min(1, this.blood + dt * 0.0015);
     // shock comes on with blood loss, and wears off slowly
@@ -461,7 +492,8 @@ export class Health {
     f.brow = Math.max(0, f.brow - dt * 0.004);
     f.swell = Math.max(0, f.swell - dt * 0.002);
 
-    const ache = this.ache();
+    // (adrenaline keeps the ache down too, until it wears off)
+    const ache = this.ache() * (1 - this.adrenaline * 0.35);
     if (this.pain > ache) this.pain = Math.max(ache, this.pain - dt * (2.5 + this.toughness * 3));
     else this.pain = ache;
 
@@ -471,11 +503,28 @@ export class Health {
     // by the next good hit, rather than killed by it
     const head = this.parts.head;
     const cap = Math.min(this.blood < 0.56 ? clamp((this.blood - 0.38) / 0.18, 0, 1) : 1,
-      0.25 + 0.75 * clamp(head.hp / 70, 0, 1) - (this.bones.skull.broken ? 0.15 : 0)) - this.shock * 0.12;
-    const clearing = this.time - this.headT > 2.5 ? 0.03 + this.toughness * 0.02 : 0;
+      0.25 + 0.75 * clamp(head.hp / 70, 0, 1) - (this.bones.skull.broken ? 0.15 : 0), this.vitalCap()) - this.shock * 0.12;
+    const clearing = this.time - this.headT > 2.5 ? (0.03 + this.toughness * 0.02) * (1 + this.adrenaline * 0.8) : 0;
     this.conscious = Math.min(cap, this.conscious + dt * clearing);
     this.dizzy = Math.max(0, this.dizzy - dt);
     return this.checkDeath();
+  }
+
+  /**
+   * How awake the air in them and their temperature let them be: dizzy
+   * below three quarters of their oxygen and out cold near half; awake
+   * between about 33 and 40 degrees, out cold below 28 or past 43 or so,
+   * and nobody home at all frozen solid.
+   */
+  vitalCap() {
+    if (this.frozen) return 0;
+    const air = clamp((this.oxygen - 0.45) / 0.3, 0, 1);
+    const t = this.temp;
+    const cold = t >= 33 ? 1 : t >= 28 ? 0.3 + 0.7 * (t - 28) / 5 : clamp((t - 22) / 6, 0, 1) * 0.18;
+    // (on fire, nobody passes out from the heat of it: they are far too busy screaming)
+    const th = this.burning ? Math.min(t, 42.5) : t;
+    const hot = th <= 40 ? 1 : th >= 44 ? 0.12 : 1 - 0.88 * (th - 40) / 4;
+    return Math.min(air, cold, hot);
   }
 
   /** What the injuries go on hurting once the fresh pain has worn off. */
@@ -567,13 +616,28 @@ export class Health {
     this.shock = 0;
     this.heartShot = false;
     this.blood = 1; this.pain = 0; this.conscious = 1; this.dizzy = 0;
+    this.adrenaline = 0; this.oxygen = 0.985; this.temp = 37; this.tempLock = null;
+    this.heat = 0; this.chill = 0; this.hypoxia = 0; this.frozen = false; this.lung = false;
   }
 
   /** The conditions worth listing, worst first. */
   conditions() {
     const out = [];
     if (this.dead) { out.push('Dead (' + this.cause + ')'); return out; }
-    if (this.conscious < KO_LEVEL) out.push('Unconscious');
+    if (this.conscious < KO_LEVEL && !this.frozen) out.push('Unconscious');
+    // the air in them and how hot or cold they are (frozen solid says so for itself: vitals.js)
+    if (!this.frozen) {
+      if (this.oxygen < 0.55) out.push('Suffocating');
+      else if (this.oxygen < 0.8) out.push('Short of breath');
+      const t = this.temp;
+      if (t >= 42) out.push('Heatstroke');
+      else if (t >= 40) out.push('Overheating');
+      else if (t >= 38.3) out.push('Running hot');
+      else if (t <= 28) out.push('Severe hypothermia');
+      else if (t <= 32) out.push('Hypothermia');
+      else if (t <= 35) out.push('Cold');
+    }
+    if (this.adrenaline > 0.6 && this.conscious >= KO_LEVEL) out.push('Adrenaline rush');
     if (this.paralysed === 'all') out.push('Paralysed from the neck down');
     else if (this.paralysed === 'legs') out.push('Legs paralysed');
     for (const [part, b] of Object.entries(this.missing)) {
@@ -586,7 +650,18 @@ export class Health {
     }
     if (this.bullets.length) out.push(this.bullets.length > 1 ? `${this.bullets.length} bullets still in them` : `A bullet lodged in the ${BONE_NAMES[this.bullets[0]]}`);
     for (const part of PARTS) if (this.gashes[part]) out.push(`${this.gashBy[part] || 'Machete'} wound to the ${PART_NAMES[part]}`);
-    for (const part of PARTS) if (this.burns[part]) out.push(`${this.burns[part].by} burns on the ${PART_NAMES[part]}`);
+    // burns: fire's and frostbite's are said in a word or two, and all over is all over
+    const burnt = (by) => PARTS.filter((p) => this.burns[p] && this.burns[p].by === by);
+    for (const [by, said] of [['Fire', 'Burns'], ['Frostbite', 'Frostbite']]) {
+      const parts = burnt(by);
+      if (parts.length >= 3) out.push(`${said} all over`);
+      else for (const p of parts) out.push(`${said} on the ${PART_NAMES[p]}`);
+    }
+    for (const part of PARTS) {
+      const b = this.burns[part];
+      if (b && b.by !== 'Fire' && b.by !== 'Frostbite') out.push(`${b.by} burns on the ${PART_NAMES[part]}`);
+    }
+    if (this.lung) out.push('Punctured lung');
     for (const j of Object.keys(JOINT_PART)) if (this.dislocated[j]) out.push('Dislocated ' + JOINT_NAMES[j]);
     for (const part of ['armA', 'armB', 'legA', 'legB']) if (this.parts[part].artery && !this.tourniquet[part]) out.push(`Bleeding from an artery (${PART_NAMES[part]})`);
     if (this.shock > 0.45) out.push('In shock');

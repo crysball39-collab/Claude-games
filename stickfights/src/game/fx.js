@@ -9,6 +9,10 @@
    bone it hit. Not everything bleeds red: whatever bleeds something else
    (a mod's robots bleed oil) gives its drops a tint, [colour, darker], and
    the tint goes wherever the drop does.
+
+   And what fire and ice give off (vitals.js): smoke and steam going up and
+   spreading, embers rising and winking out, shards of ice that bounce and
+   skitter, and meltwater, which drips and runs away rather than staying.
    ========================================================================== */
 import { rand, segDist, clamp as clampTo } from '../core/util.js';
 import { BONES, DIM } from './skeleton.js';
@@ -17,6 +21,8 @@ const G = 18;
 const MAX_DROPS = 700;
 const MAX_SPLATS = 420;
 const MAX_CASINGS = 80;
+const MAX_SMOKE = 260;
+const WATER = ['#9fd0f2', '#6aa9d6'];
 
 export class FX {
   constructor(sandbox) {
@@ -30,6 +36,9 @@ export class FX {
     this.sparkles = [];
     this.chips = [];
     this.casings = [];
+    this.smokes = [];       // smoke and steam: { x, y, vx, vy, r, age, life, steam, k }
+    this.emberBits = [];
+    this.iceBits = [];
   }
 
   clear() {
@@ -42,6 +51,47 @@ export class FX {
     this.sparkles.length = 0;
     this.chips.length = 0;
     this.casings.length = 0;
+    this.smokes.length = 0;
+    this.emberBits.length = 0;
+    this.iceBits.length = 0;
+  }
+
+  /** Smoke going up from (x, y), k how thick. */
+  smoke(x, y, n = 1, k = 1) {
+    for (let i = 0; i < n && this.smokes.length < MAX_SMOKE; i++) {
+      this.smokes.push({ x: x + rand(-0.03, 0.03), y, vx: rand(-0.15, 0.15), vy: rand(0.5, 0.9), r: rand(0.04, 0.07), age: 0, life: rand(1.1, 1.8), steam: false, k });
+    }
+  }
+
+  /** Steam: like smoke, but white, and gone sooner. */
+  steam(x, y, n = 1) {
+    for (let i = 0; i < n && this.smokes.length < MAX_SMOKE; i++) {
+      this.smokes.push({ x: x + rand(-0.03, 0.03), y, vx: rand(-0.12, 0.12), vy: rand(0.4, 0.75), r: rand(0.03, 0.05), age: 0, life: rand(0.7, 1.1), steam: true, k: 1 });
+    }
+  }
+
+  /** Sparks off a fire, going up on the heat. */
+  embers(x, y, n = 1) {
+    for (let i = 0; i < n && this.emberBits.length < 160; i++) {
+      this.emberBits.push({ x: x + rand(-0.04, 0.04), y, vx: rand(-0.4, 0.4), vy: rand(0.6, 1.6), age: 0, life: rand(0.5, 1.1), seed: rand(0, 6) });
+    }
+  }
+
+  /** Bits of ice flying from (x, y), along (vx, vy). */
+  shards(x, y, n = 8, vx = 0, vy = 1) {
+    for (let i = 0; i < n && this.iceBits.length < 220; i++) {
+      this.iceBits.push({
+        x: x + rand(-0.06, 0.06), y: y + rand(-0.06, 0.06), vx: vx + rand(-2.4, 2.4), vy: vy + rand(-0.5, 2.8),
+        a: rand(0, Math.PI), va: rand(-18, 18), s: rand(0.012, 0.032), age: 0, life: rand(1.2, 2.4),
+      });
+    }
+  }
+
+  /** Meltwater: drops that fall and run away, leaving nothing (not blood: it falls whatever the settings). */
+  water(x, y, n = 1, vx = 0, vy = 0) {
+    for (let i = 0; i < n && this.drops.length < MAX_DROPS; i++) {
+      this.drops.push({ x, y, vx: vx + rand(-0.2, 0.2), vy: vy + rand(-0.3, 0), r: rand(0.009, 0.015), age: 0, from: null, sticky: false, tint: WATER, water: true });
+    }
   }
 
   /** The flash at a muzzle, pointing the way the shot went (a counter-clockwise from +x). */
@@ -145,11 +195,11 @@ export class FX {
       d.y += d.vy * dt;
       let gone = false;
       if (d.y <= 0) {
-        this.splat(d.x, d.r, d.tint);
+        if (!d.water) this.splat(d.x, d.r, d.tint);
         gone = true;
       } else {
         const c = sb.crateAt(d.x, d.y);
-        if (c) { c.stain(d.x, d.y, d.r * 1.5, d.tint); gone = true; }
+        if (c) { if (!d.water) c.stain(d.x, d.y, d.r * 1.5, d.tint); gone = true; }
         else if (d.age > 0.05) gone = this.hitPerson(d);
       }
       if (gone || d.age > 4 || d.x < sb.left - 1 || d.x > sb.right + 1) this.drops.splice(i, 1);
@@ -165,6 +215,31 @@ export class FX {
       const b = this.bursts[i];
       b.age += dt;
       if (b.age > b.life) this.bursts.splice(i, 1);
+    }
+    // smoke and steam: rising, slowing, spreading out
+    for (let i = this.smokes.length - 1; i >= 0; i--) {
+      const p = this.smokes[i];
+      p.age += dt;
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      p.vx += Math.sin(p.age * 2 + p.y * 3) * 0.12 * dt;
+      p.vy *= 1 - dt * 0.6;
+      if (p.age > p.life) this.smokes.splice(i, 1);
+    }
+    for (let i = this.emberBits.length - 1; i >= 0; i--) {
+      const e = this.emberBits[i];
+      e.age += dt;
+      e.x += (e.vx + Math.sin(e.age * 9 + e.seed) * 0.3) * dt; e.y += e.vy * dt;
+      e.vy -= dt * 0.8;
+      if (e.age > e.life) this.emberBits.splice(i, 1);
+    }
+    for (let i = this.iceBits.length - 1; i >= 0; i--) {
+      const p = this.iceBits[i];
+      p.age += dt;
+      p.vy -= G * dt;
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      p.a += p.va * dt;
+      if (p.y < p.s) { p.y = p.s; p.vy = Math.abs(p.vy) > 1 ? -p.vy * 0.3 : 0; p.vx *= 0.7; p.va *= 0.6; }
+      if (p.age > p.life || p.x < sb.left - 1 || p.x > sb.right + 1) this.iceBits.splice(i, 1);
     }
     for (const list of [this.flashes, this.tracers]) {
       for (let i = list.length - 1; i >= 0; i--) if ((list[i].age += dt) > list[i].life) list.splice(i, 1);
