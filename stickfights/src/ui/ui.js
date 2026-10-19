@@ -174,6 +174,7 @@ export class UI {
     // a mod saying something can now be placed, or used up
     sb.on('inventory', () => this.updateBadges());
     this.bindHud();
+    this.sb.on('becomes', (e) => this.becomes(e.from, e.to));
     this.bindDrawer();
     this.bindInspector();
     this.bindSettings();
@@ -182,6 +183,13 @@ export class UI {
     this.drawCardIcons();
     this.renderDrawerMods();
     this.setSpawnKind('stickman');
+  }
+
+  /** Somebody carried on in another body (a mod's): the inspector and the camera go with them. */
+  becomes(from, to) {
+    if (!to || to.removed) return;
+    if (this.selected === from) this.select(to);
+    if (this.cam.follow === from) this.cam.follow = to;
   }
 
   /** What the HUD needs to know about a kind of thing: the game's own, or one a mod adds. */

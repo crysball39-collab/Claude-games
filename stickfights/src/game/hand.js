@@ -30,6 +30,9 @@ export class Hand {
       // some things will not be picked up (a mod's)
       if (thing.steadfast) return false;
       thing.grab(x, y);
+    } else if (thing.handGrab) {
+      // a mod's thing that is not one rigid body (a ragdoll of its own): it holds itself
+      if (thing.handGrab(x, y) === false) return false;
     } else {
       if (thing.kind === 'crate' && thing.carriedBy) thing.carriedBy.dropCarried();
       // something in someone's hand stays there
@@ -68,6 +71,8 @@ export class Hand {
     if (t.kind === 'stickman') {
       if (t.state !== 'held') { this.holding = null; return; }
       t.holdAt(this.x, this.y);
+    } else if (t.handGrab) {
+      t.handHold(this.x, this.y);
     } else if (this.joint) {
       this.joint.target.x = this.x;
       this.joint.target.y = this.y;
@@ -80,6 +85,10 @@ export class Hand {
     this.holding = null;
     if (t.kind === 'stickman') {
       if (t.state === 'held') t.release();
+    } else if (t.handGrab) {
+      if (t.handRelease) t.handRelease();
+      t.thrownBy = null;
+      t.thrownAt = this.sb.time;
     } else {
       if (this.joint) this.sb.phys.removeJoint(this.joint);
       this.joint = null;

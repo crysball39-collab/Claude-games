@@ -10,9 +10,10 @@
    Most checks set something up and then run the simulation forward in fixed
    steps inside the page, so they do not depend on how fast the machine is.
    The mods are checked too: off until installed from the MODS screen, the
-   storage each shows, and everything the Murder Drones and Minecraft mods
-   add - Steve, crafting a Wither Totem, and the Wither from its first
-   skull to its Nether Star.
+   storage each shows, and everything the Murder Drones, Minecraft and
+   Shallow mods add - Steve, crafting a Wither Totem, the Wither from its
+   first skull to its Nether Star, and Shallow from its disguise to the
+   next skin it climbs into.
 
    Needs playwright and a chromium build:
      npm install -D playwright && npx playwright install chromium
@@ -64,6 +65,19 @@ const browser = await chromium.launch({
   args: ['--no-sandbox', '--disable-dev-shm-usage'],
 });
 const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+// Every check starts from the same random numbers (see fresh()): what the
+// people in it decide is down to chance, and a check should not pass or fail
+// on a roll of the dice
+await ctx.addInitScript(() => {
+  let seed = 1;
+  Math.random = () => {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  window.__seed = (n) => { seed = n; };
+});
 const page = await ctx.newPage();
 const errors = [];
 const network = [];
@@ -78,8 +92,17 @@ const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touch
 
 /** Runs the sandbox forward by `secs` of game time, in fixed steps, right now. */
 const sim = (secs) => ev((s) => { const sb = window.__sf.sb; for (let i = 0; i < Math.round(s * 120); i++) sb.step(1 / 120); }, secs);
-/** Clears the sandbox and pauses the real-time loop, so only sim() moves things. */
-const fresh = () => ev(() => { const sf = window.__sf; sf.sb.clear(); sf.ui.select(null); sf.sb.paused = true; });
+/** Clears the sandbox and pauses the real-time loop, so only sim() moves things - from the same clock and the same random numbers every run. */
+let freshN = 0;
+const fresh = () => ev((n) => {
+  const sf = window.__sf;
+  sf.sb.clear();
+  sf.sb.time = 0;
+  sf.ui.select(null);
+  sf.sb.paused = true;
+  // (after the clear: dropping what the last lot were holding uses some up)
+  window.__seed(9001 + n * 7919);
+}, freshN++);
 
 await page.goto(url, { waitUntil: 'load' });
 await page.waitForSelector('#btn-play', { state: 'visible', timeout: 30000 });
@@ -161,7 +184,8 @@ await shot('spawned');
 await fresh();
 const anim = await ev(() => {
   const sf = window.__sf, sb = sf.sb;
-  const p = sb.spawnStickman(0, null, { name: 'Walker' });
+  // (an everyday height: a taller body takes longer strides, so fewer of them)
+  const p = sb.spawnStickman(0, null, { name: 'Walker', scale: 1 });
   p.brain = null;                 // just the body, for this
   for (let i = 0; i < 60; i++) sb.step(1 / 120);
   p.goTo(6, 'walk');
@@ -405,7 +429,7 @@ const seat = await ev(() => {
   p.brain.inspected.add(c);
   p.brain.boredom = 0.95;
   let sat = false, x = 0;
-  for (let i = 0; i < 120 * 25 && !sat; i++) {
+  for (let i = 0; i < 120 * 45 && !sat; i++) {
     sb.step(1 / 120);
     if (p.posture === 'sitEdge' && p.support === c.body) { sat = true; x = p.pos.x - c.pos.x; }
   }
@@ -1206,6 +1230,8 @@ const heard = await ev(() => {
   cop.facing = 1;
   for (let i = 0; i < 30; i++) sb.step(1 / 120);
   s.brain = null;
+  // (and Bo in no position to start anything back, which would make it self defence)
+  v.brain = null;
   const g = sb.spawnGun(s.pos.x, 0.5);
   g.wear(s);
   s.weapon = g;
@@ -1369,7 +1395,7 @@ const holster = await ev(() => {
   foe.brain.rel(p).like = -0.8;
   foe.facing = -1;
   let drew = false;
-  for (let i = 0; i < 120 * 12 && !drew; i++) { sb.step(1 / 120); drew = p.weapon === g; }
+  for (let i = 0; i < 120 * 20 && !drew; i++) { sb.step(1 / 120); drew = p.weapon === g; }
   return { holstered, drew };
 });
 check('with nothing to be armed for, a pistol goes back in its holster...', holster.holstered, JSON.stringify(holster));
@@ -1437,7 +1463,7 @@ const ammo = await ev(() => {
   p.brain.calmT = sb.time;
   const box = sb.spawnAmmo(6.5, 0.2, 'small');
   let went = false;
-  for (let i = 0; i < 120 * 25 && box.rounds === 30; i++) {
+  for (let i = 0; i < 120 * 45 && box.rounds === 30; i++) {
     sb.step(1 / 120);
     if (p.brain.behaviour && p.brain.behaviour.kind === 'ammo') went = true;
   }
@@ -1932,11 +1958,19 @@ const tableAt = await ev(() => {
   for (let i = 0; i < 240; i++) sb.step(1 / 120);
   window.__table = t;
   sf.ui.setTool('hand');
-  // (low on its face: a skull can come to rest on the top of it)
-  const s = cam.toScreen(t.pos.x, t.pos.y - 0.12);
+  // somewhere on its face with nothing in front of it (a skull can come to rest against it, or on top)
+  let at = { x: t.pos.x, y: t.pos.y - 0.12 };
+  find: for (const dy of [-0.12, -0.24, 0, 0.12, -0.3]) {
+    for (const dx of [0, -0.18, 0.18, -0.3, 0.3]) {
+      if (sb.thingAt(t.pos.x + dx, t.pos.y + dy, sf.ui.tol) === t) { at = { x: t.pos.x + dx, y: t.pos.y + dy }; break find; }
+    }
+  }
+  const s = cam.toScreen(at.x, at.y);
   return { x: s.x, y: s.y };
 });
-await page.waitForTimeout(300);
+// (the spawn menu all the way shut first: it slides out over where the table is)
+await page.waitForFunction(() => !document.querySelector('#drawer').classList.contains('open'), null, { timeout: 3000 }).catch(() => {});
+await page.waitForTimeout(500);
 await tapAt(tableAt.x, tableAt.y);
 await page.waitForTimeout(300);
 const panel = await ev(() => {
@@ -2107,6 +2141,172 @@ const mcGone = await ev(() => ({
 }));
 check('removing Minecraft takes Steve, the blocks and everything else of it out of the world and the menu',
   mcGone.people.join() === 'Keeper' && !mcGone.crates && !mcGone.items && mcGone.cards === BASE.length && !mcGone.stored.length, JSON.stringify(mcGone));
+await page.tap('#mods-close');
+await ev(() => window.__sf.ui.toggleDrawer(false));
+await page.waitForTimeout(250);
+
+/* -------------------------------- Shallow -------------------------------- */
+
+await fresh();
+await ev(() => { window.__sf.ui.toggleDrawer(true); });
+await page.waitForTimeout(300);
+await page.tap('#btn-mods');
+await page.waitForTimeout(300);
+const shItem = await ev(() => {
+  const el = document.querySelector('.mod-item[data-mod="shallow"]');
+  return el && {
+    name: el.querySelector('.mod-name').textContent,
+    size: el.querySelector('.mod-size').textContent,
+    adds: [...el.querySelectorAll('.mod-adds .chip')].map((c) => c.textContent),
+    btn: el.querySelector('.mod-btn').textContent,
+  };
+});
+check('the MODS screen has Shallow, which adds Shallow', !!shItem && shItem.name === 'Shallow' && shItem.btn === 'INSTALL' && shItem.adds.join() === 'Shallow', JSON.stringify(shItem));
+const shKB = (measureMods().shallow / 1024).toFixed(1) + ' KB';
+check('...and shows the storage it needs', !!shItem && shItem.size === 'Storage needed: ' + shKB, `${shItem && shItem.size} (its folder: ${shKB})`);
+await page.tap('.mod-item[data-mod="shallow"] .mod-btn');
+await page.waitForFunction(() => window.__sf.mods.isInstalled('shallow'), null, { timeout: 8000 }).catch(() => {});
+await page.waitForTimeout(150);
+await page.tap('#mods-close');
+await page.waitForTimeout(250);
+const shCards = await ev(() => { window.__sf.ui.toggleDrawer(true); return [...document.querySelectorAll('.card')].map((k) => k.dataset.spawn); });
+check('installed, Shallow is in the spawn menu', shCards.length === BASE.length + 1 && shCards.includes('sh-shallow'), shCards.join(', '));
+
+// from its card: somebody ordinary
+await ev(() => document.querySelector('.card[data-spawn="sh-shallow"]').scrollIntoView({ block: 'center' }));
+await page.tap('.card[data-spawn="sh-shallow"]');
+await page.waitForTimeout(300);
+await tapAt(300, 200);
+await sim(0.5);
+const shSpawn = await ev(() => {
+  const sb = window.__sf.sb, s = sb.people[0];
+  window.__s = s;
+  return s && { name: s.name, label: s.species && s.species.label, human: s.human, scale: s.scale, hair: s.hair, holster: s.slotFor({ kind: 'glock' }), toast: document.querySelector('#toast').textContent };
+});
+check('Shallow spawns from its card looking like anybody at all: a name, a height, a haircut - and it passes for a person (a holster for a pistol, a pocket for a knife)',
+  !!shSpawn && shSpawn.label === 'Shallow, in disguise' && shSpawn.name !== 'Shallow' && shSpawn.human && shSpawn.scale > 0.9 && shSpawn.scale < 1.1 && shSpawn.holster === 'holster' && /Nobody looks twice/.test(shSpawn.toast), JSON.stringify(shSpawn));
+
+// angry: it splits, and comes out of the skin taller
+const shOut = await ev(() => {
+  const sb = window.__sf.sb, s = window.__s, ui = window.__sf.ui;
+  const a = window.__a = sb.spawnStickman(s.pos.x + 1.8, null, { name: 'Ann', traits: { bravery: 0.1 } });
+  window.__c = sb.spawnStickman(s.pos.x - 4, null, { name: 'Cy', hair: 'curly' });
+  // (tough enough not to faint at what they are about to see)
+  window.__d = sb.spawnStickman(s.pos.x - 6.5, null, { name: 'Dee', traits: { toughness: 1, bravery: 0.4 } });
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  ui.select(s);
+  const was = { name: s.name, scale: s.scale };
+  const seen = [];
+  for (const k of ['shallowCrack', 'shallowEmerge', 'becomes']) sb.on(k, (e) => seen.push(k));
+  s.brain.rel(a).anger = 0.7;
+  let it = null;
+  for (let i = 0; i < 120 * 4 && !(it && it.sh.phase !== 'rise'); i++) { sb.step(1 / 120); it = sb.people.find((p) => p.species && p.species.kind === 'shallow'); }
+  window.__it = it;
+  return {
+    seen, was, gone: s.removed, name: it && it.name, scale: it && it.scale, husk: sb.items.filter((x) => x.kind === 'husk').map((x) => x.name),
+    marked: it ? [...it.sh.marked].map((o) => o.name) : [], selected: ui.selected && ui.selected.name, claws: it && it.species.describeArms(it), monster: it && it.species.monster,
+  };
+});
+check('made angry, it cracks open and tears its way out of the skin', shOut.seen.includes('shallowCrack') && shOut.seen.includes('shallowEmerge') && shOut.gone && shOut.name === 'Shallow', JSON.stringify(shOut));
+check('...taller than the skin it came out of, and the skin is left lying where it stood', shOut.scale > shOut.was.scale * 1.45 && shOut.husk.includes(`${shOut.was.name}'s skin`),
+  `${shOut.was.scale.toFixed(2)} -> ${shOut.scale && shOut.scale.toFixed(2)}, ${shOut.husk.join()}`);
+check('...with five long black claws on each hand, and whoever made it angry on its list (the inspector goes with it)',
+  shOut.claws === 'Five long black claws on each hand' && shOut.monster && shOut.marked.join() === 'Ann' && shOut.selected === 'Shallow', JSON.stringify(shOut));
+await ev(() => { const c = window.__sf.cam, it = window.__it; c.follow = null; c.glide = null; c.ppm = c.homePpm * 2.2; c.x = it.wj.head.x; c.y = it.wj.chest.y; c.clamp(); window.__sf.ui.select(null); });
+await page.waitForTimeout(250);
+const shLook = await ev(() => {
+  // what the head looks like on screen: black, with white in it (the pupils, the teeth)
+  const it = window.__it, cam = window.__sf.cam, c = document.getElementById('view'), g = c.getContext('2d');
+  const r = 0.155 * it.scale * cam.ppm * (c.width / cam.w);
+  const p = cam.toScreen(it.wj.head.x, it.wj.head.y), k = c.width / cam.w;
+  const d = g.getImageData(Math.round(p.x * k - r), Math.round(p.y * k - r), Math.round(r * 2), Math.round(r * 2)).data;
+  let black = 0, white = 0;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i] < 16 && d[i + 1] < 16 && d[i + 2] < 16) black++;
+    else if (d[i] > 225 && d[i + 1] > 225 && d[i + 2] > 215) white++;
+  }
+  return { black, white, n: d.length / 4 };
+});
+check('...black all over, with white pupils and a grin of white teeth in its face', shLook.black > shLook.n * 0.35 && shLook.white > 12, JSON.stringify(shLook));
+await shot('shallow');
+
+// it grabs whoever did it, and tears them in half
+const shRip = await ev(() => {
+  const sb = window.__sf.sb, it = window.__it, a = window.__a;
+  it.sh.next = 'rip';
+  let grabbed = false, held = false;
+  sb.on('shallowSeize', (e) => { if (e.who === a) grabbed = true; });
+  for (let i = 0; i < 120 * 14 && !(a.dead && it.sh.phase === 'after'); i++) { sb.step(1 / 120); if (a.heldBy === it) held = true; }
+  return { grabbed, held, dead: a.dead, cause: a.health.cause, half: a.species && a.species.kind, legs: sb.items.filter((x) => x.kind === 'legs').map((x) => x.name) };
+});
+check('it goes after whoever made it angry, takes them by the neck, and tears them in half - the legs a thing of their own',
+  shRip.grabbed && shRip.held && shRip.dead && shRip.cause === 'torn in half' && shRip.half === 'shallowHalf' && shRip.legs.includes("Ann's legs"), JSON.stringify(shRip));
+
+// ...or eats them
+const shEat = await ev(() => {
+  const sb = window.__sf.sb, it = window.__it;
+  const b = window.__b = sb.spawnStickman(it.pos.x + 2.2, null, { name: 'Bob', traits: { bravery: 0.1 } });
+  for (let i = 0; i < 20; i++) sb.step(1 / 120);
+  it.sh.next = 'eat';
+  it.sh.marked.add(b);
+  const bites = [];
+  let cause = null;
+  sb.on('shallowBite', (e) => bites.push(e.n));
+  sb.on('death', (e) => { if (e.who === b) cause = e.cause; });
+  for (let i = 0; i < 120 * 14 && !(b.removed && it.sh.phase !== 'eat'); i++) sb.step(1 / 120);
+  return { bites, cause, gone: b.removed, inWorld: sb.people.includes(b), kills: it.sh.kills };
+});
+check('...or eats them: the head, the body, then the legs, and nothing of them is left',
+  shEat.bites.join() === '1,2,3' && shEat.cause === 'eaten' && shEat.gone && !shEat.inWorld && shEat.kills === 2, JSON.stringify(shEat));
+
+// then: the nearest person, emptied out, and it climbs inside and becomes them
+const shTake = await ev(() => {
+  const sb = window.__sf.sb, it = window.__it, c = window.__c, d = window.__d, ui = window.__sf.ui;
+  const before = { name: c.name, scale: c.scale, hair: c.hair, voice: c.voice, traits: JSON.stringify(c.traits) };
+  ui.select(it);
+  const seen = [];
+  for (const k of ['shallowCut', 'shallowBones', 'shallowOrgan', 'shallowEnter', 'shallowTook']) sb.on(k, (e) => seen.push(k));
+  // Cy right by it, the nearest; Dee further off the other way, watching
+  // (both of them rooted to the spot: this is not about the chase)
+  for (const [p, x] of [[it, 0], [c, 1.4], [d, -6.5]]) { p.pos.x = x; p.vel.x = 0; p.stop(); if (p.brain) { p.brain.clearBehaviour(); p.brain.thinkT = 99; } }
+  it.facing = 1;
+  c.facing = 1;
+  for (let i = 0; i < 120 * 25 && !(c.species && c.species.kind === 'shallowDisguise' && c.state === 'stand'); i++) { sb.step(1 / 120); d.facing = Math.sign(c.pos.x - d.pos.x) || 1; }
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  const r = d.brain.rels.get(c);
+  return {
+    seen: [...new Set(seen)], organs: sb.items.filter((x) => x.kind === 'organ').map((x) => x.organ), skeleton: sb.items.filter((x) => x.kind === 'skeleton').map((x) => x.name),
+    before, after: { name: c.name, scale: c.scale, hair: c.hair, voice: c.voice, traits: JSON.stringify(c.traits) },
+    kind: c.species && c.species.kind, state: c.state, health: c.health.overall, creature: it.removed, selected: ui.selected && ui.selected.name,
+    knows: !!(r && r.shallow) && d.brain.memories.some((m) => m.kind === 'sawShallowTake' && m.about === c), fear: r ? r.fear : 0,
+  };
+});
+check('with nobody left it is angry with, it takes the nearest person, cuts their back open and pulls out the skeleton and the organs',
+  ['shallowCut', 'shallowBones', 'shallowOrgan'].every((k) => shTake.seen.includes(k)) && shTake.skeleton.includes("Cy's skeleton") &&
+  ['heart', 'lungs', 'stomach', 'guts'].every((o) => shTake.organs.includes(o)), JSON.stringify({ seen: shTake.seen, organs: shTake.organs, skeleton: shTake.skeleton }));
+check('...climbs inside, and gets up as them: their name, height, hair, voice and all, good as new (the inspector follows it in)',
+  shTake.seen.includes('shallowTook') && shTake.creature && shTake.kind === 'shallowDisguise' && shTake.state === 'stand' && shTake.health > 0.95 &&
+  JSON.stringify(shTake.before) === JSON.stringify(shTake.after) && shTake.selected === 'Cy', JSON.stringify(shTake));
+check('...and whoever saw it happen knows that is not Cy any more, and is afraid of them', shTake.knows && shTake.fear > 0.5, JSON.stringify({ knows: shTake.knows, fear: shTake.fear }));
+await ev(() => window.__sf.ui.select(null));
+
+// removing the mod takes all of it away: the thing, wherever it is, and everything it left
+await ev(() => { window.__sf.ui.toggleDrawer(true); });
+await page.waitForTimeout(300);
+await page.tap('#btn-mods');
+await page.waitForTimeout(300);
+await page.tap('.mod-item[data-mod="shallow"] .mod-btn');
+await page.waitForTimeout(150);
+await page.tap('.mod-item[data-mod="shallow"] .mod-btn');
+await page.waitForTimeout(250);
+const shGone = await ev(() => ({
+  people: window.__sf.sb.people.map((p) => p.name),
+  items: window.__sf.sb.items.length,
+  cards: document.querySelectorAll('.card').length,
+  stored: JSON.parse(localStorage.getItem('sf.mods') || '[]'),
+}));
+check('removing Shallow takes it (in whatever skin it is wearing) and everything it left out of the world and the menu',
+  shGone.people.join() === 'Dee' && !shGone.items && shGone.cards === BASE.length && !shGone.stored.includes('shallow'), JSON.stringify(shGone));
 await page.tap('#mods-close');
 await ev(() => window.__sf.ui.toggleDrawer(false));
 await page.waitForTimeout(250);

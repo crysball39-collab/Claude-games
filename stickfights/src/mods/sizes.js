@@ -2,4 +2,5 @@
 export const MOD_SIZES = {
   'minecraft': 126307,
   'murder-drones': 139594,
+  'shallow': 122001,
 };

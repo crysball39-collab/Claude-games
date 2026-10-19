@@ -143,6 +143,7 @@ export class Stickman {
     this.pinnedBy = null;
     this.pinT = -99;
     this.held = null;
+    this.heldBy = null;
     this.spin = 0;
     this.spinV = 0;
     this.climbing = null;
@@ -238,6 +239,8 @@ export class Stickman {
   /** Not to be knocked down, sent flying, ragdolled or picked up: a mod's (a boss that floats). */
   get steadfast() { return !!(this.species && this.species.steadfast); }
   get officer() { return this.role === 'officer'; }
+  /** A person in every way the game cares about - holsters, pockets, vests: anybody, or a mod's that passes for one. */
+  get human() { return !this.species || !!this.species.human; }
   /** How much of their usual pace, punch and speed of hand their breath leaves them. */
   get effort() { return 0.74 + 0.26 * clamp01(this.stamina / 0.35); }
   /** Something they carry, wherever it is: in the hand, or put away. */
@@ -393,7 +396,7 @@ export class Stickman {
 
   /** Where something could be put away on them right now: a free slot it fits, or null. */
   slotFor(item) {
-    if (!item || this.species) return null;
+    if (!item || !this.human) return null;
     const order = item.kind === 'taser' ? (this.officer ? ['duty', 'holster', 'pocket'] : ['holster', 'pocket']) : ['holster', 'pocket'];
     for (const k of order) if (SLOTS[k].has(item.kind) && !this.stowed[k] && (k !== 'duty' || this.officer)) return k;
     return null;
@@ -857,6 +860,13 @@ export class Stickman {
 
     // how far the blow sends them: a jab rocks them back, a hard one puts them back a step or two
     const kb = this.knockback(h, shove, part, blocked);
+    // something too big to be knocked about (a mod's): it flinches, and that is all
+    if (this.species && this.species.sturdy && this.state === 'stand') {
+      // (and not even that, in the middle of something)
+      if (!this.anim.acting) this.flinch(part, h.dir, shove, blocked);
+      this.shoveBack(h.dir * kb * 0.15);
+      return res;
+    }
     switch (this.state) {
       case 'stand':
       case 'stagger':
@@ -911,7 +921,7 @@ export class Stickman {
 
   /** Can a blow put them off balance, rather than straight down or not at all? */
   get canStumble() {
-    return !this.steadfast && !this.carrying && !this.rag && this.health.canUse('legA') && this.health.canUse('legB') && !this.cuffed && this.onGround;
+    return !this.steadfast && !(this.species && this.species.sturdy) && !this.carrying && !this.rag && this.health.canUse('legA') && this.health.canUse('legB') && !this.cuffed && this.onGround;
   }
 
   /**
@@ -1100,6 +1110,9 @@ export class Stickman {
     const st = this.state, tone = this.baseTone;
     this.rag = null;
     this.goLimp({ state: st === 'ko' ? 'ko' : st, tone });
+    // held up while it happened: still held, by the same place
+    const h = this.held;
+    if (this.rag && h && h.rag) this.rag.grab(refNear(this.rag, this, h.target.x, h.target.y), h.target.x, h.target.y);
   }
 
   /**
@@ -1558,8 +1571,10 @@ export class Stickman {
     return best;
   }
 
-  grab(x, y) {
+  grab(x, y, by = null) {
     const was = this.state;
+    // (by somebody, not the hand in the sky: a mod's monster, say)
+    this.heldBy = by;
     this.dropCarried();
     this.strike = null;
     this.blocking = false;
@@ -1586,8 +1601,8 @@ export class Stickman {
       };
       this.anim.play(this.conscious ? 'dangle' : 'dangleLimp', { blend: 0.2 });
     }
-    this.sandbox.emit('grabbed', { who: this });
-    this.notify('grabbed', {});
+    this.sandbox.emit('grabbed', { who: this, by });
+    this.notify('grabbed', { by });
   }
 
   holdAt(x, y) {
@@ -1602,6 +1617,7 @@ export class Stickman {
     const h = this.held;
     if (!h) return;
     this.held = null;
+    this.heldBy = null;
     if (this.rag) {
       this.rag.release();
       // let go mid-swing, the whole body carries on the way the hand was going
@@ -1941,10 +1957,11 @@ export class Stickman {
     let name, speed = 1;
     if (sp > 2.6 && !back) {
       name = it.speed === 'flee' ? 'runScared' : 'run';
-      speed = sp / NOMINAL[name];
+      speed = sp / (NOMINAL[name] * this.scale);
     } else if (sp > 0.1) {
-      if (this.posture === 'guard' || back) { name = 'shuffle'; speed = clamp(sp / NOMINAL.shuffle, 0.6, 1.6); }
-      else { name = 'walk'; speed = sp / NOMINAL.walk; }
+      // (a bigger body covers more ground with every stride)
+      if (this.posture === 'guard' || back) { name = 'shuffle'; speed = clamp(sp / (NOMINAL.shuffle * this.scale), 0.6, 1.6); }
+      else { name = 'walk'; speed = sp / (NOMINAL.walk * this.scale); }
     } else {
       name = this.idleClip();
     }

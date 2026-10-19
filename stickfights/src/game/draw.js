@@ -289,7 +289,8 @@ function drawWounds(ctx, j, wounds, lw, cut, tint = null) {
 
 /* ---------------------------------- the head ------------------------------- */
 
-function drawHead(ctx, j, o, r, lw) {
+/** A head, as drawStickman draws one (exported for a mod's skin to draw an ordinary head its own way: squashed, say). */
+export function drawHead(ctx, j, o, r, lw) {
   const f = o.facing || 1;
   ctx.save();
   ctx.translate(j.head.x, j.head.y);

@@ -22,7 +22,11 @@ texture in the game is drawn procedurally onto a canvas at load time.
 > brings Steve, with his diamond sword, bow and golden apples, and the Wither - a
 > boss with a boss bar and 600 health, summoned from a totem crafted out of soul
 > sand and wither skulls, with a second phase and an army of wither skeletons,
-> that leaves a Nether Star. The single-file build is `dist/stickfights.html`,
+> that leaves a Nether Star; and **Shallow** is something disguised as a
+> stickman that, made angry, tears out of the skin - tall and black, with white
+> pupils, a grin of sharp teeth and five long claws on each hand - tears whoever
+> did it in half or eats them, then empties out the nearest person, climbs
+> inside and becomes them. The single-file build is `dist/stickfights.html`,
 > the source lives in `stickfights/`, and
 > [`stickfights/README.md`](stickfights/README.md) has the details.
 

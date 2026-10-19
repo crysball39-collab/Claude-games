@@ -26,6 +26,9 @@ import { clamp, rand, chance } from '../core/util.js';
 
 export const STEP = 1 / 120;
 export const HALF_WIDTH = 20;
+/** Too big to be bowled over by a body flying into them (a mod's). */
+const sturdy = (q) => !!(q.species && q.species.sturdy);
+
 export const LIMITS = { people: 24, crates: 40, knuckles: 16, knives: 16, machetes: 16, guns: 16, limbs: 40, items: 40, vests: 12, ammo: 16 };
 // how likely a bullet is to hit someone in its way who it was not aimed at
 const STRAY_HIT = 0.4;
@@ -264,11 +267,20 @@ export class Sandbox {
     return l;
   }
 
-  remove(thing) {
+  /** Out of the world. `o.quiet`: without anybody noticing it go (a mod's doing, with its own story). */
+  remove(thing, o = {}) {
     if (!thing || thing.removed) return;
+    const emit = this.emit;
+    if (o.quiet) this.emit = (type, e) => (type === 'vanish' ? undefined : emit.call(this, type, e));
+    try { this.removeNow(thing); } finally { if (o.quiet) this.emit = emit; }
+  }
+
+  removeNow(thing) {
     if (this.hand && this.hand.holding === thing) this.hand.release();
     if (thing.kind === 'stickman') {
       thing.dropCarried();
+      // whoever they had hold of (a mod's thing can hold people) is let go
+      for (const p of this.people) if (p.heldBy === thing && p.state === 'held') p.release();
       if (thing.weapon) thing.dropWeapon(0);
       thing.dropStowed(0);
       if (thing.donning) thing.finishVest();
@@ -509,6 +521,8 @@ export class Sandbox {
       const cx = (c.x + h.x) / 2, cy = (c.y + h.y) / 2;
       for (const q of this.people) {
         if (q === p || q.removed || q.state === 'held' || q.lying || q.rag) continue;
+        // (whoever has hold of them is not hit by them: they are in their hand)
+        if (p.heldBy === q || q.heldBy === p) continue;
         if (cx < q.box.minX - 0.25 || cx > q.box.maxX + 0.25 || cy < q.box.minY - 0.2 || cy > q.box.maxY + 0.2) continue;
         if (!this.cooled(p, q)) continue;
         const hit = q.nearestPart(cx, cy);
@@ -516,7 +530,7 @@ export class Sandbox {
         const power = Math.min(3, (sp - 4) * 0.32);
         const dir = Math.sign(p.vel.x) || 1;
         q.takeHit({ by: null, part: hit.part, x: cx, y: cy, dir, power, kind: 'impact', object: p, bone: q.boneName(hit.bone, hit.t) });
-        if (power > 1.6 && (q.state === 'stand' || q.state === 'stagger')) q.launch(p.vel.x * 0.45, 2 + power);
+        if (power > 1.6 && (q.state === 'stand' || q.state === 'stagger') && !sturdy(q)) q.launch(p.vel.x * 0.45, 2 + power);
         if (p.alive) p.takeHit({ by: null, part: 'torso', x: cx, y: cy, dir: -dir, power: power * 0.5, kind: 'impact', object: q });
         p.vel.x *= 0.45;
         this.emit('collide', { who: q, what: p, x: cx, y: cy, speed: sp });
@@ -532,6 +546,7 @@ export class Sandbox {
       const bb = rag.aabb(0.05);
       for (const q of this.people) {
         if (q === p || q.removed || q.rag || q.lying || q.state === 'held') continue;
+        if (p.heldBy === q || q.heldBy === p) continue;
         if (bb.maxX < q.box.minX || bb.minX > q.box.maxX || bb.maxY < q.box.minY || bb.minY > q.box.maxY) continue;
         let best = null;
         for (let i = 0; i < rag.p.length; i++) {
@@ -549,7 +564,7 @@ export class Sandbox {
         const power = Math.min(3, (v - 4) * 0.32 * weight);
         const dir = Math.sign(vx) || 1;
         q.takeHit({ by: null, part: hit.part, x: hit.x, y: hit.y, dir, power, kind: 'impact', object: p, bone: q.boneName(hit.bone, hit.t) });
-        if (power > 1.4 && (q.state === 'stand' || q.state === 'stagger') && !q.rag) q.launch(vx * 0.4, 1.5 + power);
+        if (power > 1.4 && (q.state === 'stand' || q.state === 'stagger') && !q.rag && !sturdy(q)) q.launch(vx * 0.4, 1.5 + power);
         if (p.alive) p.takeHit({ by: null, part: 'torso', x: hit.x, y: hit.y, dir: -dir, power: power * 0.45, kind: 'impact', object: q });
         if (p.rag) p.rag.shove(pt.x, pt.y, -vx * 0.45, -best.vy * 0.25, 0.7);
         this.emit('collide', { who: q, what: p, x: hit.x, y: hit.y, speed: v });

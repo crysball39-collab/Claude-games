@@ -4,5 +4,6 @@
    ========================================================================== */
 import './murder-drones/index.js';
 import './minecraft/index.js';
+import './shallow/index.js';
 
 export * from './registry.js';

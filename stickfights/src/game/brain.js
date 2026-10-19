@@ -104,6 +104,16 @@ const TOLD_AS = {
   helpedMe: 'sawHelp', savedMe: 'sawHelp', tasedMe: 'sawAttack',
 };
 
+/**
+ * Something a mod adds for people to remember: [weight, how good or bad,
+ * how they think of it, how they tell it] - and, told it by somebody else,
+ * what the listener keeps (itself, by default).
+ */
+export function addMemoryKind(kind, def, toldAs = kind) {
+  MEMORY[kind] = def;
+  if (toldAs) TOLD_AS[kind] = toldAs;
+}
+
 /** Which group someone is in, the way the inspector lists them. */
 export function relCategory(r) {
   if (!r || !r.met) return 'stranger';
@@ -235,6 +245,9 @@ export class Brain {
     if (me.dead) return 'Dead';
     if (!me.conscious) return 'Out cold';
     if (me.tased) return 'Being tased';
+    // (what a mod's is up to, in its own words)
+    const own = me.species && me.species.doing ? me.species.doing(me) : null;
+    if (own) return own;
     switch (me.state) {
       case 'held': return 'Being held up in the air';
       case 'stumble': return 'Stumbling';
@@ -292,6 +305,11 @@ export class Brain {
       this.sense();
     }
     if (!me.conscious) {
+      if (this.behaviour) this.clearBehaviour();
+      return;
+    }
+    // something a mod makes may do its own thinking for a while: then that is all there is
+    if (me.species && me.species.mind && me.species.mind(this, dt)) {
       if (this.behaviour) this.clearBehaviour();
       return;
     }
@@ -619,7 +637,19 @@ export class Brain {
         if (seen && ev.who) this.things.delete(ev.item);
         break;
       case 'grabbed':
-        if (seen && ev.who) {
+        // (whoever did the grabbing knows all about it)
+        if (ev.by === me) break;
+        if (seen && ev.who && ev.by && !ev.by.removed) {
+          // seized by somebody (a mod's thing): that one is the danger
+          E.bump('surprise', 0.5);
+          E.bump('fear', 0.3 * (1.2 - T.bravery));
+          const rb = this.rel(ev.by);
+          rb.fear = clamp01(rb.fear + 0.35 * (1.15 - T.bravery));
+          rb.violent += 1;
+          this.speak('seeSeized', { victim: ev.who.name, other: ev.by.name }, 0.6, null, true);
+          this.note(`${ev.by.name} grabbed ${ev.who.name}!`);
+          this.react = Math.max(this.react, 0.3);
+        } else if (seen && ev.who) {
           E.bump('surprise', 0.55);
           E.bump('fear', 0.18 * (1.1 - T.bravery));
           this.speak('seeGrabbed', { victim: ev.who.name }, 0.5, null, true);
@@ -1002,6 +1032,18 @@ export class Brain {
         this.speak('getUp', {}, 0.25);
         break;
       case 'grabbed':
+        if (d && d.by && !d.by.removed) {
+          // seized by somebody: by the throat, off the floor
+          E.bump('surprise', 0.9);
+          E.bump('fear', 0.6 * (1.2 - T.bravery));
+          const r = this.rel(d.by);
+          r.fear = clamp01(r.fear + 0.5 * (1.2 - T.bravery));
+          r.like = -1;
+          this.speak('seized', { other: d.by.name }, 1, d.by, true);
+          this.note(`${d.by.name} grabbed me!`);
+          this.clearBehaviour();
+          break;
+        }
         this.grabbedCount++;
         E.bump('surprise', 1);
         E.bump('fear', 0.45 * (1.2 - T.bravery));
@@ -1645,7 +1687,7 @@ export class Brain {
     }
 
     // a vest lying about: on it goes, for anybody expecting trouble - or just careful
-    if (!me.vest && !me.donning && !me.species && me.health.canUse('armA') && me.health.canUse('armB')) {
+    if (!me.vest && !me.donning && me.human && me.health.canUse('armA') && me.health.canUse('armB')) {
       const shots = this.gunThreat && now - this.gunThreat.t < 30 ? 0.45 : 0;
       for (const [g] of this.things) {
         if (g.kind !== 'vest' || g.wornBy || g.removed || g.pos.y - me.pos.y > 0.6) continue;
@@ -1655,7 +1697,7 @@ export class Brain {
       }
     }
     // a gun running low, and a box of rounds in sight
-    const low = me.species ? [] : me.guns.filter((g) => g.kind !== 'taser' && g.short > 0);
+    const low = !me.human ? [] : me.guns.filter((g) => g.kind !== 'taser' && g.short > 0);
     if (low.length) {
       const need = low.reduce((n, g) => n + g.short / (g.spec.mag + g.spec.spare), 0) / low.length;
       for (const [bx] of this.things) {
@@ -1720,7 +1762,7 @@ export class Brain {
    */
   manageKit() {
     const me = this.man, now = this.sb.time;
-    if (me.species || me.cuffed || !me.ready || me.reloading || now < this.kitT) return;
+    if (!me.human || me.cuffed || !me.ready || me.reloading || now < this.kitT) return;
     const b = this.behaviour, kind = b ? b.kind : null;
     if (kind && KIT_BUSY.has(kind)) return;
     // (somebody they are running from is trouble too, out of sight behind them or not)

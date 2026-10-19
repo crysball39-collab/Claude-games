@@ -6,7 +6,12 @@
    It never shows more than a sliver below the floor, and never wanders off
    past the walls.
    ========================================================================== */
-import { clamp, lerp, rand } from '../core/util.js';
+import { clamp, lerp } from '../core/util.js';
+
+// The shake's own dice, -1..1: how the view jolts has no business using up the
+// random numbers the world runs on (watching should not change what happens)
+let shakeSeed = 7;
+const shakeRand = () => { shakeSeed = (shakeSeed * 16807) % 2147483647; return (shakeSeed / 2147483647) * 2 - 1; };
 
 export class Camera {
   constructor(sandbox) {
@@ -123,8 +128,8 @@ export class Camera {
     }
     if (this.shakeAmt > 0.001) {
       const a = this.shakeAmt * 7;
-      this.sx = rand(-a, a);
-      this.sy = rand(-a, a);
+      this.sx = shakeRand() * a;
+      this.sy = shakeRand() * a;
       this.shakeAmt *= Math.exp(-dt * 9);
     } else {
       this.sx = this.sy = 0;

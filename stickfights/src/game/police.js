@@ -437,6 +437,8 @@ export class Respond extends Behaviour {
     this.mode = 'deadly';
     if (!inHand(me, 'gun')) { me.stop(); me.faceTo(o.pos.x); return true; }
     const g = me.weapon;
+    // no gun on them at all (lost, knocked out of their hand): it comes down to hands
+    if (!g || !isFirearm(g.kind)) return this.handsOn(dt, o, d, dir);
     if (g.mag <= 0) { me.lowerGun(); if (!me.reloading) me.reload(); return true; }
     if (!this.gunWarnT || now - this.gunWarnT > 5) { this.gunWarnT = now; b.speak('copDropGun', { other: o.name }, 1, o, true); this.command(o); }
     if (d < 3) me.goTo(me.pos.x - dir * 2.5, 'walk', { backpedal: true, face: o.pos.x });

@@ -184,6 +184,8 @@ export const LINES = {
   grabbedAgain: ['Not again!', 'Why me?!', 'PUT ME DOWN!', 'This again?!', 'I hate this part!'],
   thrownLand: ['Ugh...', "I'm alive?!", 'Who keeps doing that?!', 'Ow... everything hurts.', 'That is going to bruise.', 'I think I bounced.'],
   seeGrabbed: ['{victim} is flying!', 'What the...?!', 'Put {victim} down!', 'How?!', 'The hand! The hand is back!'],
+  seized: ['LET GO OF ME!', "{other}! Let go!", "I can't breathe!", 'Put me down! PUT ME DOWN!', 'Somebody help me!', 'No no no no!'],
+  seeSeized: ['{other} has got {victim}!', 'Let {victim} go!', '{victim}!', 'It picked {victim} up!', 'Somebody help {victim}!'],
   lookUp: ['Is someone up there?', 'Hello? Up there?', 'I swear something moved.', 'The sky has hands now?'],
 
   /* ---------------------------------- helping --------------------------------- */

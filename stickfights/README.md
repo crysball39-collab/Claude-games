@@ -26,8 +26,11 @@ their personality, change who they count as a friend or an enemy, and send
 them off to fight someone.
 
 **Mods** add things that are not part of the game itself: **Murder Drones**
-brings Uzi, N and V, and **Minecraft** brings Steve - and the Wither, a boss
-with 600 health that you craft a totem to summon (see [Mods](#mods)).
+brings Uzi, N and V, **Minecraft** brings Steve - and the Wither, a boss
+with 600 health that you craft a totem to summon - and **Shallow** is
+something disguised as a stickman that tears its way out of the skin when it
+is angry, kills whoever did it, and climbs inside somebody else (see
+[Mods](#mods)).
 
 While a stickman is in charge of their own body, every move they make is a
 hand-keyed animation, played frame by frame. The moment they are not -
@@ -287,6 +290,68 @@ fight them or run from them, but never make friends, chat, or mourn them -
 and they have plenty to say about them, about withering, and about Steve's
 head.
 
+### Shallow
+
+Something disguised as a stickman.
+
+| | What it is |
+| - | ---------- |
+| **Shallow** | Looks like anybody: a name, a height, a haircut, a voice, friends. It is not. |
+
+**The disguise.** Spawned, it is a stickman like any other, with a short
+temper: it talks, makes friends and wanders about, and everyone takes it for
+a person (in the inspector, and only there, a chip says *Shallow, in
+disguise*). What gives it away, to anyone watching closely: now and then its
+head twitches to an angle a neck should not go to, its face slips for a
+blink, and it mutters things under its breath.
+
+**Angry, it splits.** Hit it, insult it, point a gun at it, hurt somebody it
+likes - or drag its anger up in the inspector, or press *Tear out* - and black
+cracks spread over the body, the face goes dark with two white pupils
+looking out of it, and it tears its way out of the skin. The skin is left
+lying where it stood, empty and split down the back. Killed in disguise, it
+comes out of the body.
+
+**The thing itself** grows up out of the skin until it stands two thirds
+taller than it did: thin, hunched and blacker than anyone's ink, with a long
+head, two white pupils with nothing around them, a grin from the back of its
+jaw to the front full of sharp white teeth, and five long black claws on each
+hand. Black flakes come off it. It is very hard to hurt - fists hardly touch
+it, bullets not much more - it does not stumble, a taser does nothing to it,
+it never tires, and it mends: wounds close, bones knit, and anything cut off
+grows back.
+
+**It goes after whoever made it angry**, each of them in turn, the nearest
+first, and anyone who hurts it goes on the list. It runs them down, takes
+them by the neck, lifts them up in front of its face, and either:
+
+- **tears them in half**: the other hand on their hips, and a pull. The top
+  half dies in its hand; the legs are a thing of their own, dripping; or
+- **eats them**: three bites - the head, the body, the legs - and something
+  goes down its throat.
+
+**Then it takes a skin.** With nobody left that it is angry with, it goes
+for the nearest person, picks them up with their back to it, opens their
+back from the neck to the hips with its claws, pulls out their skeleton in
+one piece and throws it over its shoulder, then the heart, the lungs, the
+stomach and the guts, and lets the empty skin drop. It crouches over it, gets
+smaller and smaller, and pours itself in through the split. The skin fills,
+the split closes, and **they get up**: the same name, height, hair, voice and
+uniform, the same friends and memories - an officer is still an officer - and
+it is Shallow, in disguise, until somebody makes it angry again.
+
+**Only the people who saw it happen know.** They keep away from whoever it
+is wearing now, tell other people (who believe it or not by how much they
+trust them), and say so - *That's not Cy any more!* - and the brave ones go
+for it, which is just what brings it out. Everyone who sees it out of its
+skin is terrified of it.
+
+The skins, the halves, the skeletons and the insides lie where they fall,
+and the hand from above can pick them up and throw them. In the inspector
+the thing has **ABILITIES**: **Kills by** - *Either*, *Tearing in half*,
+*Eating* - and **Do** - *Take a skin* (straight to the nearest person) and
+*Let go*.
+
 ### Making one
 
 A mod is a folder under `src/mods/` whose `index.js` calls `registerMod()`
@@ -333,6 +398,25 @@ The game has a few ways in that change nothing until a mod uses them:
 - a thing in the spawn menu can have a `badge` and be `locked`, with `why`
   it is; a mod's `cleanup` runs when it is removed
 - `brain.lockEmotion()`: a feeling held where it is
+- a species can be `human` (a person in every way the game cares about -
+  holsters, pockets, vests - for something passing as one) or `sturdy` (too
+  big to be knocked back, stumbled or bowled over by a flying body: it
+  flinches, and that is all), can have a `mind` (its own thinking, whenever it
+  wants, with the brain still seeing and hearing for it) and say what it is
+  `doing` for the inspector
+- `man.grab(x, y, by)`: somebody taken hold of by somebody else, not just the
+  hand in the sky; `heldBy` says who, and they are let go if whoever has them
+  is removed
+- `sandbox.remove(thing, { quiet: true })`: out of the world without anybody
+  noticing it go; the `becomes` event: somebody carries on in another body,
+  and the inspector and the camera go with them
+- `addMemoryKind()` (`game/brain.js`): a new kind of thing to remember, and
+  to tell people about
+- `drawHead()` (`game/draw.js`): an ordinary head, for a skin to draw its own
+  way (squashed, say)
+- something in `sandbox.items` that is not one rigid body - a ragdoll of its
+  own - is picked up by the hand from above with `handGrab`, `handHold` and
+  `handRelease`
 
 ---
 
@@ -881,6 +965,9 @@ stickfights/
       minecraft/      Steve, the blocks, crafting, the totem, the Wither and its
                       skeletons: pixel art, skulls, arrows, explosions,
                       withering, lines, animations and sounds
+      shallow/        Shallow: the disguise, the thing, its mind, its looks, the
+                      skins, halves, skeletons and insides it leaves, what
+                      everybody makes of it, lines, animations and sounds
 ```
 
 ## Verifying it
@@ -1018,8 +1105,24 @@ screen and checks:
 - a wither skeleton's cut withers whoever it lands on, and its fear is
   locked at nothing
 - removing Minecraft takes all of it out of the world and the menu
+- the MODS screen lists Shallow, with the storage it needs; installed, it is
+  in the spawn menu, and it spawns looking like anybody, passing for a person
+- made angry, it cracks open and tears its way out of the skin, taller -
+  black, with white pupils, a grin of white teeth and five claws on each
+  hand - and the skin lies where it stood; the inspector goes with it
+- it takes whoever made it angry by the neck and tears them in half, or eats
+  them: the head, the body, then the legs
+- then it empties out the nearest person - the skeleton and the organs out -
+  climbs inside and gets up as them, with the same name, height, hair and
+  voice; whoever saw it knows that is not them any more, and is afraid
+- removing Shallow takes it, in whatever skin it is wearing, and everything
+  it left out of the world and the menu
 - ten stickmen, six crates, knuckles, knives, machetes and a pistol for 45
   seconds: nothing turns into NaN, and they get up to many different things
 - the console stays clean, and the single file fetches nothing
+
+Every check starts from the same random numbers and the same clock, so what
+the people in it decide comes out the same every run (only the few checks
+that let the world run in real time can differ).
 
 Set `CHROMIUM_PATH` to use a Chromium you already have.
