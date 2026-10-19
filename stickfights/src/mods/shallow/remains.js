@@ -20,6 +20,7 @@ import { Body } from '../../physics/rigid.js';
 import { makeRagdoll, toJoints } from '../../game/limp.js';
 import { DIM, makeJoints } from '../../game/skeleton.js';
 import { POLICE_UNIFORM } from '../../game/render.js';
+import { bloodK } from '../../game/blood.js';
 import { clamp, rand, moveToward } from '../../core/util.js';
 import { MOD, gripAt, lerpPt } from './common.js';
 import { drawEmptySkin, drawLowerHalf, drawSkeleton, ORGANS } from './look.js';
@@ -200,7 +201,8 @@ export class Legs extends RagItem {
   constructor(sb, man) {
     super(sb, 'legs', `${man.name}'s legs`, man.scale);
     this.look = lookOf(man);
-    this.bleed = 1;
+    // (as much as there was in them: none, bled dry)
+    this.bleed = bloodK(man);
     this.dripT = 0;
     this.clip = null;
     const s = man.scale;
@@ -236,10 +238,18 @@ export class Legs extends RagItem {
   get top() { const q = this.rag.p[this.rag.byName.U]; return { x: q.x, y: q.y }; }
   after(dt, sb) {
     this.bleed *= Math.exp(-dt * 0.08);
+    // pouring out of the top of it, at first
+    if (this.age < 1.6 && this.bleed > 0.3) {
+      const t = this.top, h = this.rag.p[this.rag.byName.hip];
+      const dx = t.x - h.x, dy = t.y - h.y, d = Math.hypot(dx, dy) || 1;
+      sb.fx.feedStream('legs' + this.seed, {
+        x: t.x, y: t.y, nx: dx / d, ny: dy / d, vx: 0, vy: 0, flow: this.bleed * (1 - this.age / 1.6), power: 0.7, from: this, tint: this.look.tint,
+      });
+    }
     if (this.bleed > 0.05 && (this.dripT -= dt) <= 0) {
       this.dripT = 0.05 + (1 - this.bleed) * 0.4;
       const t = this.top;
-      sb.fx.drip(t.x, t.y, null, this.look.tint);
+      sb.fx.drip(t.x, t.y, this, this.look.tint);
     }
   }
   draw(ctx) {
@@ -314,12 +324,12 @@ export class Organ {
     this.bleed *= Math.exp(-dt * 0.12);
     if (this.bleed > 0.04 && (this.dripT -= dt) <= 0) {
       this.dripT = 0.12 + (1 - this.bleed) * 0.6;
-      sb.fx.drip(b.pos.x, b.pos.y - this.h * 0.3);
+      sb.fx.drip(b.pos.x, b.pos.y - this.h * 0.3, this);
     }
     // the first time it hits the floor: a wet smack, and a splash
     if (!this.landed && b.pos.y < this.h * 0.75 && b.vel.y > -0.5) {
       this.landed = true;
-      sb.fx.blood(b.pos.x, b.pos.y, 0, 1.2, 8, 0.8);
+      sb.fx.blood(b.pos.x, b.pos.y, 0, 1.2, 8, 0.8, this);
       sb.fx.pool(b.pos.x, 0, 0.35);
       sb.emit('shallowSplat', { what: this, x: b.pos.x, y: b.pos.y });
     }

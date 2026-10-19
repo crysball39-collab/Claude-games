@@ -1557,7 +1557,8 @@ const stumbles = await ev(() => {
     const up = k % 2 === 1;
     p.takeHit({ by: null, part: up ? 'head' : 'torso', x: p.wj.chest.x, y: up ? p.wj.head.y : p.wj.chest.y, dir: -1, power: up ? 1.8 : 1.25, kind: up ? 'uppercut' : 'cross', armed: false, bone: up ? 'skull' : 'ribs' });
     if (p.state === 'stumble') out.stumbled++;
-    for (let i = 0; i < 120 * 2.5; i++) sb.step(1 / 120);
+    // (time enough for the longest stumble to end, one way or the other)
+    for (let i = 0; i < 120 * 4; i++) sb.step(1 / 120);
     if (st === 'caught') out.caught++;
     if (st === 'fell') out.fell++;
   }
@@ -1660,6 +1661,7 @@ const pixelsNear = (who, kind) => ev(([w, k]) => {
     const r = d[i], gg = d[i + 1], b = d[i + 2];
     if (k === 'flame' && r > 220 && gg > 90 && gg < 235 && b < 120) n++;
     if (k === 'ice' && b > 175 && b - r > 25 && gg > 150) n++;
+    if (k === 'blood' && r > 120 && gg < 45 && b < 55) n++;
   }
   return n;
 }, [who, kind]);
@@ -1920,6 +1922,260 @@ const healedIce = await ev(() => {
 });
 check('Heal thaws them out, and sets their temperature right', healedIce.was && !healedIce.frozen && Math.abs(healedIce.t - 37) < 0.5 && !healedIce.locked, JSON.stringify(healedIce));
 await ev(() => window.__sf.ui.select(null));
+
+/* ----------------------------------- blood ----------------------------------- */
+
+// every drop, squirt and drip that starts from here on, where it starts, and whose it is
+await ev(() => {
+  const fx = window.__sf.sb.fx;
+  window.__bl = [];
+  // (where each takes what it came out of)
+  for (const [k, at] of [['drop', 5], ['drip', 2], ['gush', 6], ['blood', 6]]) {
+    const f = fx[k];
+    fx[k] = function (...a) { window.__bl.push({ k, x: a[0], y: a[1], who: a[at] && a[at].name, t: this.sb.time }); return f.apply(this, a); };
+  }
+});
+
+await fresh();
+const slam = await ev(() => {
+  const sb = window.__sf.sb;
+  const p = sb.spawnStickman(0, null, { name: 'Sal' });
+  p.brain = null;
+  for (let i = 0; i < 36; i++) sb.step(1 / 120);
+  p.goLimp({ state: 'thrown', tone: 0 });
+  // turned upside down, the top of the head a step off the floor, coming down at 14 m/s
+  const r = p.rag, hip = r.p[r.byName.hip], cx = hip.x, cy = hip.y;
+  for (const q of r.p) { q.x = 2 * cx - q.x; q.y = 2 * cy - q.y; }
+  let low = Infinity;
+  for (const q of r.p) low = Math.min(low, q.y - q.r);
+  for (const q of r.p) { q.y += 14 / 120 - 0.001 - low; q.px = q.x; q.py = q.y + 14 / 120; }
+  window.__bl = [];
+  let at = null;
+  for (let i = 0; i < 6 && !at; i++) {
+    sb.step(1 / 120);
+    if (window.__bl.some((e) => e.k === 'drop')) at = { head: { ...p.wj.head }, hip: { ...p.wj.hip } };
+  }
+  if (!at) return { bled: false };
+  const from = window.__bl.filter((e) => e.k === 'drop' || e.k === 'gush');
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  return {
+    bled: true, n: from.length,
+    fromHead: +Math.max(...from.map((e) => Math.hypot(e.x - at.head.x, e.y - at.head.y))).toFixed(2),
+    fromHip: +Math.min(...from.map((e) => Math.hypot(e.x - at.hip.x, e.y - at.hip.y))).toFixed(2),
+    wound: p.headMarks.some((m) => !m.stain && !m.burn), floor: sb.fx.splats.some((s) => Math.abs(s.x - at.head.x) < 0.4),
+  };
+});
+check('a head driven into the floor bleeds from the head, out across the floor round it - not from somewhere in the middle of them',
+  slam.bled && slam.n >= 6 && slam.fromHead < 0.3 && slam.fromHip > 0.6 && slam.floor, JSON.stringify(slam));
+check('...and it leaves a wound on the head, where it hit', slam.wound, JSON.stringify(slam));
+
+await fresh();
+const slam2 = await ev(() => {
+  const sb = window.__sf.sb;
+  sb.settings.ragdoll = false;
+  const p = sb.spawnStickman(0, null, { name: 'Ty' });
+  p.brain = null;
+  for (let i = 0; i < 36; i++) sb.step(1 / 120);
+  // held upside down by an ankle, up high - and brought down hard
+  const f = p.wj.footA, x = f.x;
+  p.grab(x, f.y);
+  let y = f.y;
+  for (let i = 0; i < 120; i++) { y = Math.min(2.4, y + 0.04); p.holdAt(x, y); sb.step(1 / 120); }
+  window.__bl = [];
+  let at = null;
+  for (let i = 0; i < 60 && !at; i++) {
+    y = Math.max(0.05, y - 14 / 120);
+    p.holdAt(x, y);
+    sb.step(1 / 120);
+    if (window.__bl.some((e) => e.k === 'drop')) at = { head: { ...p.wj.head }, hip: { ...p.wj.hip } };
+  }
+  p.release();
+  sb.settings.ragdoll = true;
+  if (!at) return { bled: false, state: p.state };
+  const from = window.__bl.filter((e) => e.k === 'drop' || e.k === 'gush');
+  return {
+    bled: true, n: from.length,
+    fromHead: +Math.max(...from.map((e) => Math.hypot(e.x - at.head.x, e.y - at.head.y))).toFixed(2),
+    fromHip: +Math.min(...from.map((e) => Math.hypot(e.x - at.hip.x, e.y - at.hip.y))).toFixed(2),
+  };
+});
+check('...the same with ragdolls off: held upside down by the ankle and slammed down, it is the head that bleeds',
+  slam2.bled && slam2.fromHead < 0.3 && slam2.fromHip > 0.6, JSON.stringify(slam2));
+
+await fresh();
+const drips = await ev(() => {
+  const sb = window.__sf.sb;
+  // how far (x, y) is from the segment a-b
+  const dist = (x, y, a, b) => {
+    const vx = b.x - a.x, vy = b.y - a.y, t = Math.max(0, Math.min(1, ((x - a.x) * vx + (y - a.y) * vy) / (vx * vx + vy * vy || 1e-9)));
+    return Math.hypot(x - a.x - vx * t, y - a.y - vy * t);
+  };
+  const p = sb.spawnStickman(0, null, { name: 'Uma' });
+  p.brain = null;
+  for (let i = 0; i < 36; i++) sb.step(1 / 120);
+  // a cut across the right thigh (and nothing to knock them off their feet)
+  const m = p.wj.midFemA;
+  p.health.hit('legA', 7, { sharp: 1, bone: 'femurA' });
+  p.markAt(m.x, m.y, 0.8);
+  window.__bl = [];
+  let n = 0, worst = 0;
+  for (let i = 0; i < 120 * 4; i++) {
+    const before = window.__bl.length;
+    sb.step(1 / 120);
+    for (const e of window.__bl.slice(before)) {
+      if (e.k !== 'drip' || e.who !== 'Uma') continue;
+      n++;
+      worst = Math.max(worst, Math.min(dist(e.x, e.y, p.wj.hip, p.wj.midFemA), dist(e.x, e.y, p.wj.midFemA, p.wj.kneeA)));
+    }
+  }
+  return { n, worst: +worst.toFixed(3), leg: +p.health.parts.legA.bleed.toFixed(4), head: +p.health.parts.head.bleed.toFixed(4) };
+});
+check('blood drips from the wound that is bleeding and from nowhere else: a cut on the thigh drips off the thigh', drips.n >= 5 && drips.worst < 0.08 && drips.head === 0, JSON.stringify(drips));
+
+await fresh();
+const stump = await ev(() => {
+  const sb = window.__sf.sb, fx = sb.fx;
+  const p = window.__stp = sb.spawnStickman(0, null, { name: 'Viv' });
+  p.brain = null;
+  for (let i = 0; i < 36; i++) sb.step(1 / 120);
+  p.sever('humerusA', 1, 1);
+  const key = p.id + ':stumparmA', arm = sb.limbs[0];
+  const flows = [];
+  let off = 0, linked = 0, limb = false;
+  for (let i = 0; i < 120 * 3; i++) {
+    sb.step(1 / 120);
+    const s = fx.streams.find((q) => q.key === key);
+    if (s) {
+      flows.push(s.flow);
+      const e = p.wj[p.cut.armA];
+      off = Math.max(off, Math.hypot(s.x - e.x, s.y - e.y));
+    }
+    linked = Math.max(linked, fx.drops.filter((d) => d.link && !d.link.gone && d.from === p).length);
+    if (i === 12) limb = fx.streams.some((q) => q.key === 'limb' + arm.id);
+  }
+  return {
+    stream: flows.length, off: +off.toFixed(3), linked, beats: flows.filter((f, i) => i && f > 0.75 && flows[i - 1] <= 0.75).length,
+    min: +Math.min(...flows).toFixed(2), max: +Math.max(...flows).toFixed(2), limb, limbLater: fx.streams.some((q) => q.key === 'limb' + arm.id),
+  };
+});
+check('a stump spurts a stream of blood straight out of the end of it, that never quite stops while the heart beats and surges with every beat',
+  stump.stream >= 340 && stump.off < 0.08 && stump.linked >= 10 && stump.beats >= 3 && stump.min > 0.2 && stump.max > 0.9, JSON.stringify(stump));
+check('...and the arm that came off pours out of its cut end, for a moment', stump.limb && !stump.limbLater, JSON.stringify(stump));
+await ev(() => { const c = window.__sf.cam, p = window.__stp; c.follow = null; c.glide = null; c.ppm = c.homePpm * 2.4; c.x = p.wj.chest.x + 0.3; c.y = p.wj.chest.y; c.clamp(); });
+// the picture round the stump with the blood in the air in it, and without
+const streamPx = await ev(() => {
+  const sf = window.__sf, fx = sf.sb.fx, p = window.__stp, c = document.getElementById('view'), g = c.getContext('2d');
+  const count = () => {
+    sf.renderer.draw(sf.ui.drawState());
+    const q = sf.cam.toScreen(p.wj.chest.x, p.wj.chest.y), dpr = sf.cam.dpr;
+    const d = g.getImageData(Math.round((q.x - 90) * dpr), Math.round((q.y - 60) * dpr), Math.round(180 * dpr), Math.round(200 * dpr)).data;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] > 120 && d[i + 1] < 45 && d[i + 2] < 55) n++;
+    return n;
+  };
+  const all = count(), drops = fx.drops;
+  fx.drops = [];
+  const none = count();
+  fx.drops = drops;
+  return { all, none, stream: all - none, linked: drops.filter((d) => d.link && !d.link.gone && d.from === p).length };
+});
+check('...drawn as a stream: one unbroken arc of blood, not a scatter of drops', streamPx.stream > 120 && streamPx.linked >= 8, JSON.stringify(streamPx));
+await shot('stream');
+
+const dry = await ev(() => {
+  const sb = window.__sf.sb, fx = sb.fx, p = window.__stp, ui = window.__sf.ui;
+  // (most of it gone already, to save waiting for it)
+  p.health.blood = 0.45;
+  for (const l of [...sb.limbs]) sb.remove(l);
+  let t = 0;
+  for (; t < 120 * 60 && !p.health.dry; t++) sb.step(1 / 120);
+  const out = { dead: p.dead, cause: p.health.cause, left: p.health.bloodLeft, bleeding: p.health.bleeding, secs: +(t / 120).toFixed(1) };
+  // three seconds more: nothing more comes out of them
+  window.__bl = [];
+  for (let i = 0; i < 360; i++) sb.step(1 / 120);
+  out.after = window.__bl.filter((e) => e.who === 'Viv' && e.k === 'drip').length;
+  out.streams = fx.streams.filter((q) => q.from === p).length;
+  out.inAir = fx.drops.filter((d) => d.from === p).length;
+  // (with a mind again, for the inspector to show all of them)
+  p.brain = sb.makeBrain(p, p.traits);
+  ui.select(p);
+  return out;
+});
+await page.waitForTimeout(300);
+const dryShown = await ev(() => {
+  const rows = [...document.querySelectorAll('#ins-vitals .meter')];
+  const row = rows.find((r) => r.querySelector('span').textContent === 'Blood');
+  return { value: row && row.querySelector('b').textContent, width: row && row.querySelector('.fill').style.width, conds: document.querySelector('#ins-conds').textContent };
+});
+check('they bleed out; and with no blood left (the Blood bar at 0%), they stop bleeding: no drips, no streams, nothing',
+  dry.dead && dry.cause === 'blood loss' && dry.left === 0 && dry.bleeding === 0 && dry.after === 0 && dry.streams === 0 && dry.inAir === 0, JSON.stringify(dry));
+check('...the inspector says so: Blood 0%, and no blood left', dryShown.value === '0%' && dryShown.width === '0%' && /No blood left/.test(dryShown.conds), JSON.stringify(dryShown));
+const dryAfter = await ev(() => {
+  const sb = window.__sf.sb, fx = sb.fx, p = window.__stp;
+  window.__sf.ui.select(null);
+  const n0 = fx.drops.filter((d) => d.from === p).length;
+  p.takeHit({ by: null, part: 'torso', x: p.wj.chest.x, y: p.wj.chest.y, dir: 1, power: 3, kind: 'chop', weapon: 'machete', bone: 'ribs' });
+  p.sever('femurB', 1, 1);
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  return { drops: fx.drops.filter((d) => d.from === p).length - n0, streams: fx.streams.filter((q) => q.from === p).length, bleeding: p.health.bleeding, leg: sb.limbs[0] ? sb.limbs[0].bleed : null };
+});
+check('...and nothing comes out of them afterwards, whatever is done to them: a machete, a leg off - the leg does not bleed either',
+  dryAfter.drops === 0 && dryAfter.streams === 0 && dryAfter.bleeding === 0 && dryAfter.leg === 0, JSON.stringify(dryAfter));
+
+await fresh();
+const stains = await ev(() => {
+  const sb = window.__sf.sb, fx = sb.fx;
+  const things = {
+    crate: sb.spawnCrate(-8, 0.4), knuckles: sb.spawnKnuckles(-6.6, 0.06), knife: sb.spawnKnife(-5.6, 0.04), machete: sb.spawnMachete(-4.4, 0.05),
+    pistol: sb.spawnGun(-3.1, 0.08), taser: sb.spawnTaser(-2.3, 0.08), vest: sb.spawnVest(-1.3, 0.05), ammo: sb.spawnAmmo(-0.2, 0.1, 'big'),
+  };
+  const v = sb.spawnStickman(2, null, { name: 'Wes' });
+  const q = sb.spawnStickman(5, null, { name: 'Xia' });
+  v.brain = null;
+  q.brain = null;
+  for (let i = 0; i < 40; i++) sb.step(1 / 120);
+  v.sever('humerusA', 1, 1);
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  things.arm = sb.limbs[0];
+  sb.remove(v);
+  for (let i = 0; i < 360; i++) sb.step(1 / 120);
+  // blood coming down over all of it, and thrown at both walls
+  for (let i = 0; i < 120; i++) {
+    for (let x = -8.6; x <= 6; x += 0.05) fx.drop(x + Math.random() * 0.05, 2.4 + Math.random() * 0.4, 0, -1);
+    for (const [x, vx] of [[sb.left + 1, -8], [sb.right - 1, 8]]) fx.drop(x, 1.5, vx, 1);
+    for (let k = 0; k < 6; k++) sb.step(1 / 120);
+  }
+  for (let i = 0; i < 240; i++) sb.step(1 / 120);
+  const out = { on: {} };
+  for (const [k, t] of Object.entries(things)) out.on[k] = (t.stains || []).length;
+  out.person = q.wounds.filter((w) => w.stain).length + q.headMarks.filter((m) => m.stain).length;
+  out.bleeds = q.health.bleeding;
+  out.walls = [fx.wallSplats.filter((w) => w.side < 0).length, fx.wallSplats.filter((w) => w.side > 0).length];
+  out.runs = fx.wallSplats.filter((w) => w.run > 0.01).length;
+  // and it goes where the thing goes: a stain on the knife, before and after the knife is moved
+  const kn = things.knife, s0 = kn.stains && kn.stains[0];
+  if (s0) {
+    const w0 = kn.body.toWorld(s0.x, s0.y);
+    kn.body.pos.x += 1;
+    kn.body.rot += 1;
+    const w1 = kn.body.toWorld(s0.x, s0.y), c1 = kn.body.pos;
+    out.moved = Math.hypot(w1.x - w0.x, w1.y - w0.y) > 0.5 && Math.abs(Math.hypot(w1.x - c1.x, w1.y - c1.y) - Math.hypot(s0.x, s0.y)) < 1e-9;
+  } else out.moved = false;
+  return out;
+});
+check('blood lands on anything and stays there: a crate, knuckles, a knife, a machete, a pistol, a taser, a vest, an ammo box, a severed arm',
+  Object.values(stains.on).every((n) => n > 0), JSON.stringify(stains.on));
+check('...on the walls, where it runs down', stains.walls[0] > 0 && stains.walls[1] > 0 && stains.runs > 0, JSON.stringify({ walls: stains.walls, runs: stains.runs }));
+check('...and on people - as blood on them, not wounds: it does not make them bleed', stains.person > 0 && stains.bleeds === 0, JSON.stringify({ person: stains.person, bleeds: stains.bleeds }));
+check('...kept in the thing\'s own frame, so it goes where the thing goes', stains.moved, JSON.stringify(stains.moved));
+await ev(() => { const c = window.__sf.cam; c.follow = null; c.glide = null; c.ppm = c.homePpm * 1.6; c.x = -4.2; c.y = 0.9; c.clamp(); window.__sf.sb.paused = true; });
+await page.waitForTimeout(250);
+await shot('blood');
+await ev(() => {
+  const fx = window.__sf.sb.fx;
+  for (const k of ['drop', 'drip', 'gush', 'blood']) delete fx[k];
+  window.__sf.cam.home();
+});
 
 /* ---------------------------------- mods --------------------------------- */
 
@@ -2417,6 +2673,16 @@ await ev(() => {
   sb.spawnStickman(7, null, { name: 'Keeper' });
   for (let i = 0; i < 120; i++) sb.step(1 / 120);
 });
+const mcBlood = await ev(() => {
+  const sb = window.__sf.sb, fx = sb.fx;
+  const table = sb.crates.find((c) => c.block === 'table'), skull = sb.items.find((i) => i.kind === 'witherSkull');
+  for (let i = 0; i < 60; i++) {
+    for (let x = 1.4; x <= 3.6; x += 0.04) fx.drop(x, 1.6, 0, -1);
+    for (let k = 0; k < 4; k++) sb.step(1 / 120);
+  }
+  return { table: table ? table.stains.length : -1, skull: skull ? (skull.stains || []).length : -1 };
+});
+check('blood lands on the mod\'s things too: a Crafting Table, a Wither Skull', mcBlood.table > 0 && mcBlood.skull > 0, JSON.stringify(mcBlood));
 await ev(() => { window.__sf.ui.toggleDrawer(true); });
 await page.waitForTimeout(300);
 await page.tap('#btn-mods');
@@ -2582,6 +2848,19 @@ check('...climbs inside, and gets up as them: their name, height, hair, voice an
   JSON.stringify(shTake.before) === JSON.stringify(shTake.after) && shTake.selected === 'Cy', JSON.stringify(shTake));
 check('...and whoever saw it happen knows that is not Cy any more, and is afraid of them', shTake.knows && shTake.fear > 0.5, JSON.stringify({ knows: shTake.knows, fear: shTake.fear }));
 await ev(() => window.__sf.ui.select(null));
+const shBlood = await ev(() => {
+  const sb = window.__sf.sb, fx = sb.fx;
+  const its = sb.items.filter((i) => ['husk', 'legs', 'skeleton', 'organ'].includes(i.kind) && !i.removed);
+  for (let r = 0; r < 40; r++) {
+    for (const it of its) { const p = it.pos; for (let k = 0; k < 10; k++) fx.drop(p.x + (Math.random() - 0.5) * 0.5, p.y + 0.8, 0, -1); }
+    for (let k = 0; k < 6; k++) sb.step(1 / 120);
+  }
+  const out = {};
+  for (const it of its) out[it.kind] = (out[it.kind] || 0) + (it.stains || []).length;
+  return out;
+});
+check('blood lands on what it leaves lying about, too: the skin, the legs, the skeleton, the organs',
+  Object.keys(shBlood).length >= 3 && Object.values(shBlood).every((n) => n > 0), JSON.stringify(shBlood));
 
 // removing the mod takes all of it away: the thing, wherever it is, and everything it left
 await ev(() => { window.__sf.ui.toggleDrawer(true); });

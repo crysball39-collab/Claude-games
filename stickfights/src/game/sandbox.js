@@ -407,16 +407,25 @@ export class Sandbox {
     for (const k of this.loose()) this.keepInside(k.body);
   }
 
-  /** A severed piece goes on dripping from the cut end for a while. */
+  /** A severed piece pours out of the cut end at first, and goes on dripping from it for a while. */
   bleedLimbs(dt) {
     for (const l of this.limbs) {
       if (l.bleed <= 0.01) continue;
       l.bleed *= Math.exp(-dt * 0.07);
+      l.age = (l.age || 0) + dt;
+      if (l.age < 2.2) {
+        const e = l.end, q = l.local[1] ? l.body.toWorld(l.local[1].x, l.local[1].y) : l.body.pos;
+        const dx = e.x - q.x, dy = e.y - q.y, d = Math.hypot(dx, dy) || 1;
+        this.fx.feedStream('limb' + l.id, {
+          x: e.x, y: e.y, nx: dx / d, ny: dy / d, vx: l.body.vel.x, vy: l.body.vel.y,
+          flow: l.bleed * (1 - l.age / 2.2), power: 0.6, from: l, tint: l.tint || null,
+        });
+      }
       l.dripAcc += l.bleed * 9 * dt;
       while (l.dripAcc >= 1) {
         l.dripAcc -= 1;
         const e = l.end;
-        this.fx.drip(e.x, e.y, null, l.tint || null);
+        this.fx.drip(e.x, e.y, l, l.tint || null);
       }
     }
   }

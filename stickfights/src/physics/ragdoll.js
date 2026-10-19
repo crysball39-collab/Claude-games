@@ -55,7 +55,7 @@ export class Ragdoll {
     this.passive = 0.004;   // how hard the joints drift back to rest, per pass
     this.drag = 0.1;        // air, per second
     this.contacts = [];
-    this.impacts = [];      // { i, speed, what } from the last step: what hit what, how hard
+    this.impacts = [];      // { i, speed, what, nx, ny } from the last step: what hit what, how hard, and which way its face looks
     this.asleep = false;
     this.still = 0;
     this.maxSpeed = 0;
@@ -391,7 +391,7 @@ export class Ragdoll {
       if (q.wall) {
         const vx = q.x - q.px;
         if (vx * q.wall > 0) {
-          if (Math.abs(vx) / dt > 2.5) this.impacts.push({ i, speed: Math.abs(vx) / dt, what: 'wall' });
+          if (Math.abs(vx) / dt > 2.5) this.impacts.push({ i, speed: Math.abs(vx) / dt, what: 'wall', nx: -q.wall, ny: 0 });
           q.px = q.x + vx * 0.25;
         }
       }
@@ -405,7 +405,7 @@ export class Ragdoll {
       q.px = q.x - (vx - Math.sign(vx) * stop);
       if (vy < 0) {
         const speed = -vy / dt;
-        if (speed > 2.5) this.impacts.push({ i, speed, what: null });
+        if (speed > 2.5) this.impacts.push({ i, speed, what: null, nx: 0, ny: 1 });
         q.py = q.y + vy * 0.12;
       }
     }
@@ -429,7 +429,7 @@ export class Ragdoll {
       q.px -= ix * q.im * dt;
       q.py -= iy * q.im * dt;
       if (bodyIm > 0) b.applyImpulse(-ix, -iy, q.x, q.y);
-      if (-vn > 2.5) this.impacts.push({ i: ct.i, speed: -vn, what: b });
+      if (-vn > 2.5) this.impacts.push({ i: ct.i, speed: -vn, what: b, nx: ct.nx, ny: ct.ny });
     }
   }
 }

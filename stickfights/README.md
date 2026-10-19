@@ -430,6 +430,12 @@ The game has a few ways in that change nothing until a mod uses them:
   `ignite()`, `extinguish()`, `freezeSolid()`, `thaw()`, `setTemperature()`
   and `warm()` for anything of a mod's that sets people alight, freezes
   them or warms them up
+- blood lands on a mod's things by themselves: on a rigid `body` in its
+  frame, on a ragdoll of its own by its nearest point, on anything else by
+  where it is (`contains` says what it covers) - or a thing can keep it its
+  own way with `stain(x, y, r, tint)`, or refuse it with `stainable: false`;
+  `sandbox.fx` has `gush()` (a squirt) and `feedStream()` (a stream kept
+  going), and `game/blood.js` `splatter()` for a body hitting something
 
 ---
 
@@ -561,8 +567,11 @@ bones inside them (see `src/game/health.js`). On top of that:
   - **humerus**, **forearm** - the arm cannot punch, stab, carry or block,
     and hangs, bent where it broke
   - **femur**, **tibia** - the leg cannot take weight: down they go, and crawl
-- **Blood** - cuts bleed, bleeding clots, and below about 38% the heart has
-  nothing left to pump. Brass knuckles cut; a hard enough blow to the face
+- **Blood** - cuts bleed and bleeding clots. The inspector's Blood bar is
+  what they can still lose: at 0% (with about 38% of a body's blood still in
+  them) the heart has nothing left to pump - they die of it, and they are
+  bled dry: they stop bleeding, and nothing more comes out of them, whatever
+  is done to them. Brass knuckles cut; a hard enough blow to the face
   splits it anyway; a blade cuts far deeper than a fist. A stab in the body
   bleeds inside, where it clots slowly, and one in the neck is the worst of
   all. Someone pressing on the wound slows it right down.
@@ -602,8 +611,9 @@ bones inside them (see `src/game/health.js`). On top of that:
   done to someone else can make them faint too, or throw up.
 - **Death** - from the head, from the torso (internal injuries), a broken
   neck, a bullet, or bleeding out. The dead lie where they fall, with crosses
-  for eyes, and keep bleeding into a pool for a while. Bleeding out is still
-  somebody's doing: whoever opened the wound gets the blame.
+  for eyes, and keep bleeding into a pool under the wounds for a while -
+  until it clots, or there is none left. Bleeding out is still somebody's
+  doing: whoever opened the wound gets the blame.
 
 Damage comes from fists, feet and blades, bullets, thrown crates, knuckles and knives,
 crates dropped on people, falls, being thrown into the floor, a wall or a
@@ -970,10 +980,39 @@ they hit flying too, into the next.
 
 ### Blood
 
-Blood is simulated drop by drop until it lands, and it stays where it lands:
-on the floor as a splat (pools under the dead), on a crate as a stain that
-turns with the crate, on someone's body or face, on the knuckles or the blade
-that did it.
+**Where it comes out.** Every wound that is bleeding is somewhere it comes
+from - a cut, a bullet hole, a gash, a stump, a knife still in them, a nose
+- and each lets out as much as it is bleeding, so blood drips off the wound
+that is bleeding and from nowhere else. Lying in it, a pool spreads under
+the wounds. What bleeds inside stays inside, but for a little out of any
+hole there is in the body, and a punctured lung brings it up out of the
+mouth.
+
+**Streams.** A stump, an opened artery or a cut throat does not drip: it
+spurts, in a stream that never quite stops while the heart beats and surges
+with every beat - harder the faster the heart goes (fear, blood lost) and
+weaker as the blood runs out. Once the heart stops it only pours. A limb
+pours out of its cut end as it comes off, a bad blow from a blade or a
+bullet going right through lets out a squirt, and so does the Shallow
+tearing somebody in half. A stream is drawn as one unbroken arc of blood
+until it breaks up or lands.
+
+**Where it hits.** A body slammed into the floor, a wall or a crate bleeds
+from where it hit: a head driven into the floor splashes from the head, out
+across the floor round it, and leaves a wound on the head; a hard landing
+on the feet bleeds only if a bone came through. (Ragdoll or not, it is
+worked out from the part that met the surface.)
+
+**Where it lands.** Blood is simulated drop by drop until it lands, and it
+stays on whatever it lands on: the floor (a splat that spreads), the walls
+(a splash, running down), crates and blocks, knuckles, knives, machetes,
+pistols, tasers, vests, ammo boxes, severed limbs and a mod's things - each
+kept in the thing's own frame, so it goes where the thing goes and turns
+with it - and people, as blood on them (it does not make them bleed).
+
+**Bled dry**, a body gives no more: no drips, no streams, no pool, and no
+spray when it is cut, shot or a limb comes off. Turn blood off in the
+settings and none of it is drawn.
 
 ### Sound
 
@@ -1016,6 +1055,8 @@ stickfights/
       limp.js         a stickman as a ragdoll: masses, joint ranges, and back again
       health.js       parts, bones, blood, pain, consciousness, paralysis, stumps,
                       dislocations, gunshots, the face, shock
+      blood.js        where blood comes out (wounds, streams, the heartbeat), where a
+                      body that hit something bleeds from, and stains on anything
       vitals.js       adrenaline, oxygen and temperature; fire, frost and ice,
                       and how each of them is drawn
       brain.js        sense, feel, think, react, remember, gossip
@@ -1026,7 +1067,8 @@ stickfights/
       props.js        crate, brass knuckles, knife, machete, the pistols, ammo boxes,
                       vests, severed limbs
       hand.js         dragging and throwing
-      fx.js           blood, dust, hit bursts, muzzle flashes, tracers, splinters, casings,
+      fx.js           blood (drops, streams, splats, the walls, landing on things),
+                      dust, hit bursts, muzzle flashes, tracers, splinters, casings,
                       smoke, steam, embers, ice and meltwater
       draw.js         drawing a stickman, wounds and stumps, a crate, every weapon
       render.js       the world, bubbles, symbols
@@ -1168,6 +1210,20 @@ screen and checks:
   they thaw and come round with frostbite, left alone the cold kills them; a
   hard kick snaps a frozen arm off and a drop from high up shatters the body;
   Heal thaws them out
+- a head driven into the floor - ragdoll or not - bleeds from the head, out
+  across the floor round it, and leaves a wound there, not blood from the
+  middle of them; a cut on the thigh drips off the thigh and nowhere else
+- a stump spurts a stream straight out of the end of it, never quite
+  stopping and surging with every heartbeat, drawn as one unbroken arc, and
+  the arm that came off pours out of its cut end for a moment
+- bleeding out, they stop bleeding once their blood is gone: no drips, no
+  streams, Blood 0% and "No blood left" in the inspector, and nothing comes
+  out of them afterwards, cut or with a leg off - nor out of the leg
+- blood lands and stays on a crate, knuckles, a knife, a machete, a pistol,
+  a taser, a vest, an ammo box, a severed arm, both walls (running down
+  them) and people (without making them bleed), and moves with the thing it
+  is on; on the Minecraft mod's table and skull, and on the skin, legs,
+  skeleton and organs the Shallow leaves lying about
 - no mod is in the game until it is installed; the MODS screen lists
   Murder Drones with what it adds and the storage it needs, which is what
   its files really take up; INSTALL fills a bar and then puts Uzi, N and V in

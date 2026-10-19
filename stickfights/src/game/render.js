@@ -3,6 +3,10 @@
    lying about, everyone in it, the pieces of anyone who lost some, the blood,
    the dust, the empty cases and the flash and streak of a shot.
 
+   Blood is drawn wherever it is: in the air as drops, and streams as one
+   unbroken arc; on the floor and up the walls; and on anything it landed
+   on, over the top of it (blood.js drawStains).
+
    Then, over the top and at the same size whatever the zoom: names, speech
    and thought bubbles, health bars, and the little symbols that say how
    somebody feels - an anger mark, a sweat drop, a heart, stars going round
@@ -20,6 +24,7 @@ import {
 } from './draw.js';
 import { AMMO_BOXES, VEST_W, VEST_H } from './props.js';
 import { drawVitalsBack, drawVitalsFront, headFill, inkFor, drawIcedLimb } from './vitals.js';
+import { drawStains, drawBlots } from './blood.js';
 import { DIM } from './skeleton.js';
 import { clamp, TAU } from '../core/util.js';
 
@@ -65,8 +70,9 @@ export class Renderer {
     ctx.fillRect(v.minX, Math.min(v.minY, -1), v.maxX - v.minX, -Math.min(v.minY, -1));
 
     this.drawSplats(ctx, v);
+    this.drawWallSplats(ctx, v);
     // a mod's things: the big ones that stand at the back first
-    for (const it of sb.items) if (it.behind) it.draw(ctx);
+    for (const it of sb.items) if (it.behind) { it.draw(ctx); drawStains(ctx, it); }
     for (const c of sb.crates) if (!c.carriedBy) this.drawCrate(ctx, c);
     for (const k of sb.knuckles) if (!k.wornBy) this.drawKnuckles(ctx, k);
     for (const k of sb.blades) if (!k.wornBy && !(k.stuckIn && k.stuckIn.person)) this.drawKnife(ctx, k);
@@ -74,7 +80,7 @@ export class Renderer {
     for (const v of sb.vests) if (!v.wornBy) this.drawVest(ctx, v);
     for (const a of sb.ammo) this.drawAmmo(ctx, a);
     for (const l of sb.limbs) this.drawLimb(ctx, l);
-    for (const it of sb.items) if (!it.behind) it.draw(ctx);
+    for (const it of sb.items) if (!it.behind) { it.draw(ctx); drawStains(ctx, it); }
     this.drawCasings(ctx, v);
 
     const order = [...sb.people].sort((a, b) => this.layer(a, ui) - this.layer(b, ui));
@@ -117,14 +123,50 @@ export class Renderer {
     }
   }
 
+  /** Blood on the walls: a splash on the face of the wall, and the run down from it. */
+  drawWallSplats(ctx, v) {
+    const sb = this.sb, list = sb.fx.wallSplats;
+    if (!list.length) return;
+    for (const side of [-1, 1]) {
+      const x0 = side < 0 ? sb.left : sb.right;
+      if (x0 < v.minX - 0.5 || x0 > v.maxX + 0.5) continue;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(side < 0 ? x0 - 2 : x0, -1, 2, Math.max(60, v.maxY + 1));
+      ctx.clip();
+      for (const s of list) {
+        if (s.side !== side) continue;
+        ctx.fillStyle = s.tint ? s.tint[s.dark ? 1 : 0] : s.dark ? BLOOD_DARK : BLOOD;
+        ctx.beginPath();
+        ctx.ellipse(x0 + side * s.w * 0.3, s.y, s.w, s.h, 0, 0, TAU);
+        ctx.fill();
+        if (s.run > 0.004) {
+          const rw = s.w * 0.42;
+          ctx.fillRect(x0 + side * s.w * 0.35 - rw / 2, s.y - s.run, rw, s.run);
+          ctx.beginPath();
+          ctx.arc(x0 + side * s.w * 0.35, s.y - s.run, rw * 0.62, 0, TAU);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+  }
+
   drawCrate(ctx, c) {
     const b = c.body;
     ctx.save();
     ctx.translate(b.pos.x, b.pos.y);
     ctx.rotate(b.rot);
-    // (a block from a mod draws itself)
-    if (c.drawShape) c.drawShape(ctx, b.w, b.h);
-    else drawCrateShape(ctx, b.w, b.h, c.stains, c.holes);
+    // (a block from a mod draws itself; the blood on it goes over the top, inside its edges)
+    if (c.drawShape) {
+      c.drawShape(ctx, b.w, b.h);
+      if (c.stains.length) {
+        ctx.beginPath();
+        ctx.rect(-b.w / 2, -b.h / 2, b.w, b.h);
+        ctx.clip();
+        drawBlots(ctx, c.stains);
+      }
+    } else drawCrateShape(ctx, b.w, b.h, c.stains, c.holes);
     ctx.restore();
   }
 
@@ -135,6 +177,7 @@ export class Renderer {
     ctx.rotate(b.rot);
     drawKnuckleShape(ctx, b.w, b.h, k.blood);
     ctx.restore();
+    drawStains(ctx, k);
   }
 
   drawKnife(ctx, k) {
@@ -145,11 +188,12 @@ export class Renderer {
     if (k.kind === 'machete') drawMacheteShape(ctx, MACHETE_W, MACHETE_H, k.blood);
     else drawKnifeShape(ctx, KNIFE_W, KNIFE_H, k.blood);
     ctx.restore();
+    drawStains(ctx, k);
   }
 
   drawGun(ctx, g) {
     // a gun from a mod draws itself
-    if (g.draw) { g.draw(ctx); return; }
+    if (g.draw) { g.draw(ctx); drawStains(ctx, g); return; }
     const b = g.body;
     ctx.save();
     ctx.translate(b.pos.x, b.pos.y);
@@ -157,6 +201,7 @@ export class Renderer {
     if (g.kind === 'm1911') drawM1911Shape(ctx, 1, g.blood, g.slide);
     else drawGlockShape(ctx, 1, g.blood, g.slide);
     ctx.restore();
+    drawStains(ctx, g);
   }
 
   drawVest(ctx, v) {
@@ -166,6 +211,7 @@ export class Renderer {
     ctx.rotate(b.rot);
     drawVestShape(ctx, b.w, b.h, v.police, v.condition);
     ctx.restore();
+    drawStains(ctx, v);
   }
 
   drawAmmo(ctx, a) {
@@ -175,6 +221,7 @@ export class Renderer {
     ctx.rotate(b.rot);
     drawAmmoBoxShape(ctx, a.size, b.w, b.h, a.rounds / a.spec.rounds);
     ctx.restore();
+    drawStains(ctx, a);
   }
 
   drawLimb(ctx, l) {
@@ -185,6 +232,7 @@ export class Renderer {
     drawSeveredLimb(ctx, l.local, 0.07 * l.scale, l.iced ? '#1c2c3c' : '#1b1b1b', l.tint || null);
     if (l.iced) drawIcedLimb(ctx, l.local, 0.07 * l.scale);
     ctx.restore();
+    drawStains(ctx, l);
   }
 
   drawCasings(ctx, v) {
@@ -289,8 +337,20 @@ export class Renderer {
       ctx.restore();
     }
     ctx.globalAlpha = 1;
+    // blood in the air: a drop of a stream is joined to the one before it, so the stream is one arc
+    ctx.lineCap = 'round';
     for (const d of fx.drops) {
-      ctx.fillStyle = d.tint ? d.tint[0] : BLOOD;
+      const col = d.tint ? d.tint[0] : BLOOD, l = d.link;
+      if (l && !l.gone && Math.abs(l.x - d.x) + Math.abs(l.y - d.y) < 0.3) {
+        ctx.strokeStyle = col;
+        ctx.lineWidth = d.r + l.r;
+        ctx.beginPath();
+        ctx.moveTo(l.x, l.y);
+        ctx.lineTo(d.x, d.y);
+        ctx.stroke();
+        continue;
+      }
+      ctx.fillStyle = col;
       ctx.beginPath();
       ctx.arc(d.x, d.y, d.r, 0, TAU);
       ctx.fill();

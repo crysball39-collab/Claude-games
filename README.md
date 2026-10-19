@@ -17,6 +17,9 @@ texture in the game is drawn procedurally onto a canvas at load time.
 > adrenaline, oxygen and temperature meter, and a temperature typed into it
 > becomes theirs: hot enough they catch fire, run screaming and stop, drop and
 > roll; cold enough they freeze solid, an ice statue that thaws - or shatters.
+> They bleed from the wound that is bleeding - in spurting streams from a stump
+> or an artery, from the head that hit the floor - until their blood runs out,
+> and it lands on anything: the floor, the walls, crates, weapons, people.
 > You can change their feelings (or lock them where they are), their
 > personality and who they count as friends and enemies, and send them to
 > fight. Mods add what is not part of the game itself: **Murder Drones**

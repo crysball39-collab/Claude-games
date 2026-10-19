@@ -21,9 +21,12 @@
    On top of the hit points and the bones there is:
 
      blood       a full body's worth is 1. Cuts bleed, bleeding clots, and
-                 below 0.38 the heart has nothing left to pump. A blade cuts
-                 far deeper than a fist; a stab in the body bleeds inside,
-                 where it clots slowly, and one in the neck is the worst of all
+                 at BLOOD_EMPTY (0.38) the heart has nothing left to pump:
+                 they are dead, and bled dry - nothing more comes out of
+                 them, whatever is done to them (the inspector's Blood bar
+                 is what is left above that). A blade cuts far deeper than
+                 a fist; a stab in the body bleeds inside, where it clots
+                 slowly, and one in the neck is the worst of all
      pain        what they feel right now, 0 to about 100. It spikes with every
                  hit and settles back to what their injuries still ache
      conscious   1 is wide awake. Blows to the head knock it down; under
@@ -72,6 +75,8 @@ export const PART_NAMES = {
   head: 'head', torso: 'body', armA: 'right arm', armB: 'left arm', legA: 'right leg', legB: 'left leg',
 };
 export const KO_LEVEL = 0.22;
+/** All the blood they can lose: at this much left there is nothing for the heart to pump, and nothing more to bleed. */
+export const BLOOD_EMPTY = 0.38;
 
 export const BONE_LIST = ['skull', 'neck', 'ribs', 'spine', 'pelvis', 'humerusA', 'forearmA', 'humerusB', 'forearmB', 'femurA', 'tibiaA', 'femurB', 'tibiaB'];
 export const BONE_PART = {
@@ -285,6 +290,8 @@ export class Health {
     if (killedBy) this.kill(killedBy);
     // something with a name for what it does to a body (an explosion, say) says so if this was the end
     else if (cause && (this.parts.head.hp <= 0 || this.parts.torso.hp <= 0)) this.kill(cause);
+    // bled dry, a new wound has nothing to bleed
+    if (this.dry) this.stopBleeding();
     const fatal = this.checkDeath();
     return { damage: dmg, broke, wound, fatal, ko };
   }
@@ -319,7 +326,7 @@ export class Health {
     p.broken = true;
     p.hp = Math.min(p.hp, p.max * 0.25);
     const kind = bone.replace(/[AB]$/, '');
-    this.stumps[part] = Math.max(this.stumps[part] || 0, STUMP[kind].bleed);
+    this.stumps[part] = this.dry ? 0 : Math.max(this.stumps[part] || 0, STUMP[kind].bleed);
     this.tourniquet[part] = false;
     // a dislocation further out does not matter any more
     for (const [j, jp] of Object.entries(JOINT_PART)) if (jp === part) this.dislocated[j] = false;
@@ -426,7 +433,7 @@ export class Health {
     if (this.dead) return true;
     if (this.parts.head.hp <= 0) return this.kill('a blow to the head');
     if (this.parts.torso.hp <= 0) return this.kill('internal injuries');
-    if (this.blood <= 0.38) return this.kill('blood loss');
+    if (this.blood <= BLOOD_EMPTY) return this.kill('blood loss');
     return false;
   }
 
@@ -476,8 +483,11 @@ export class Health {
       this.internal *= Math.exp(-dt * (this.dead ? 0.2 : 0.011 * (press > 1 ? 2 : 1)));
       if (this.internal < 0.00003) this.internal = 0;
     }
-    // a racing heart pumps it out faster
-    this.blood = Math.max(0, this.blood - bleed * dt * (this.dead ? 1 : 1 + this.adrenaline * 0.3));
+    // a racing heart pumps it out faster - until there is none left to pump, and it stops
+    if (bleed > 0) {
+      this.blood = Math.max(BLOOD_EMPTY, this.blood - bleed * dt * (this.dead ? 1 : 1 + this.adrenaline * 0.3));
+      if (this.blood <= BLOOD_EMPTY) this.stopBleeding();
+    }
     if (this.dead) return false;
     if (bleed === 0 && this.blood < 1) this.blood = Math.min(1, this.blood + dt * 0.0015);
     // shock comes on with blood loss, and wears off slowly
@@ -502,7 +512,7 @@ export class Health {
     // and a badly hurt head cannot be fully awake: it is knocked out again
     // by the next good hit, rather than killed by it
     const head = this.parts.head;
-    const cap = Math.min(this.blood < 0.56 ? clamp((this.blood - 0.38) / 0.18, 0, 1) : 1,
+    const cap = Math.min(this.blood < 0.56 ? clamp((this.blood - BLOOD_EMPTY) / 0.18, 0, 1) : 1,
       0.25 + 0.75 * clamp(head.hp / 70, 0, 1) - (this.bones.skull.broken ? 0.15 : 0), this.vitalCap()) - this.shock * 0.12;
     const clearing = this.time - this.headT > 2.5 ? (0.03 + this.toughness * 0.02) * (1 + this.adrenaline * 0.8) : 0;
     this.conscious = Math.min(cap, this.conscious + dt * clearing);
@@ -546,12 +556,25 @@ export class Health {
     return b;
   }
 
+  /** 0..1: how much of what they can lose they still have - the inspector's Blood bar (0 is bled dry). */
+  get bloodLeft() { return clamp((this.blood - BLOOD_EMPTY) / (1 - BLOOD_EMPTY), 0, 1); }
+
+  /** Nothing left in them to bleed. */
+  get dry() { return this.blood <= BLOOD_EMPTY + 1e-9; }
+
+  /** Every wound stops, the stumps too: there is nothing left to come out. */
+  stopBleeding() {
+    for (const k of PARTS) { this.parts[k].bleed = 0; this.parts[k].artery = false; }
+    for (const k of Object.keys(this.stumps)) this.stumps[k] = 0;
+    this.internal = 0;
+  }
+
   /** 0..1, the short answer to "how are they doing". */
   get overall() {
     if (this.dead) return 0;
     const f = (k) => this.parts[k].hp / this.parts[k].max;
     const v = f('head') * 0.32 + f('torso') * 0.32 + (f('armA') + f('armB') + f('legA') + f('legB')) * 0.09;
-    return clamp(v * clamp((this.blood - 0.38) / 0.5, 0, 1) ** 0.5 * (this.paralysed === 'all' ? 0.5 : 1), 0, 1);
+    return clamp(v * clamp((this.blood - BLOOD_EMPTY) / 0.5, 0, 1) ** 0.5 * (this.paralysed === 'all' ? 0.5 : 1), 0, 1);
   }
 
   canUse(part) {
@@ -573,7 +596,7 @@ export class Health {
     if (this.legsBroken) return 0;
     const l = Math.min(this.parts.legA.hp / this.parts.legA.max, this.parts.legB.hp / this.parts.legB.max);
     const pain = clamp(1 - (this.pain - 40) / 120, 0.6, 1);
-    const blood = clamp((this.blood - 0.38) / 0.4, 0.45, 1);
+    const blood = clamp((this.blood - BLOOD_EMPTY) / 0.4, 0.45, 1);
     const ribs = this.bones.ribs.broken ? 0.82 : 1;
     return clamp((0.45 + l * 0.55) * pain * blood * ribs, 0.25, 1);
   }
@@ -623,7 +646,11 @@ export class Health {
   /** The conditions worth listing, worst first. */
   conditions() {
     const out = [];
-    if (this.dead) { out.push('Dead (' + this.cause + ')'); return out; }
+    if (this.dead) {
+      out.push('Dead (' + this.cause + ')');
+      if (this.dry) out.push('No blood left');
+      return out;
+    }
     if (this.conscious < KO_LEVEL && !this.frozen) out.push('Unconscious');
     // the air in them and how hot or cold they are (frozen solid says so for itself: vitals.js)
     if (!this.frozen) {

@@ -41,6 +41,10 @@
    Under all of it, vitals.js keeps their adrenaline, their oxygen and their
    temperature going - and sets them on fire, or freezes them solid. Frozen,
    the ragdoll is locked stiff: a statue that stands, topples, and snaps.
+
+   And blood.js says where their blood comes out: from each wound that is
+   bleeding, in streams from the worst of them, and - slammed into the floor
+   or a wall - from the part of them that hit it. Bled dry, none at all.
    ========================================================================== */
 import { Animator } from './animator.js';
 import { CLIPS, MASKS } from './clips.js';
@@ -52,6 +56,7 @@ import { isBlade, isGun, armOf, Gun, GUN_MODELS } from './props.js';
 import { startStumble, updateStumble, stumblePose } from './stumble.js';
 import { updateTased } from './taser.js';
 import { updateVitals, healVitals, iceBlow, ignite } from './vitals.js';
+import { bleedSources, pickSource, feedStreams, splatter, contactOf, woundId, bloodK } from './blood.js';
 import { clamp, clamp01, lerp, lerpAngle, rand, chance, moveToward, segDist, sign, smooth, wrapAngle, wobble, DEG } from '../core/util.js';
 
 export const G = 18;
@@ -87,6 +92,8 @@ const BREAK_OF = {
   femurA: 'midFemA', tibiaA: 'midTibA', femurB: 'midFemB', tibiaB: 'midTibB',
 };
 const LIMB_OF = { humerusA: 'armA', forearmA: 'armA', humerusB: 'armB', forearmB: 'armB', femurA: 'legA', tibiaA: 'legA', femurB: 'legB', tibiaB: 'legB' };
+// the joint before each break point: the way out of the stump a cut there leaves
+const BEFORE_CUT = { midHumA: 'shoulder', midForeA: 'elbowA', midHumB: 'shoulder', midForeB: 'elbowB', midFemA: 'hip', midTibA: 'kneeA', midFemB: 'hip', midTibB: 'kneeB' };
 // how hard a machete has to come down on each bone to have a chance of going right through
 const SEVER_FORCE = { forearm: 9, humerus: 13, tibia: 12, femur: 17 };
 // how far out along its limb each break point is, so a cut further in wins
@@ -811,15 +818,19 @@ export class Stickman {
     if (spray && !blocked) {
       const n = Math.round(clamp(dmg * (weapon === 'machete' ? 1.3 : spec && spec.spray ? spec.spray : sharp > 0.9 ? 0.9 : 0.6), 3, 30));
       this.sandbox.fx.blood(h.x, h.y, h.dir * (1 + h.power), 1 + h.power * 0.5, n, 1, this);
+      // a blade going in hard lets out a squirt of it, back the way the blow came
+      if (blade && dmg > 14 && h.x !== undefined) {
+        this.sandbox.fx.gush(h.x, h.y, -(h.dir || 1) * rand(0.6, 1.6), rand(0.8, 1.8), clamp(dmg / 40, 0.3, 0.9) * bloodK(this), 0.18, this);
+      }
       if (h.x !== undefined) {
-        this.markAt(h.x, h.y, 0.7 + dmg * 0.02);
+        this.markAt(h.x, h.y, 0.7 + dmg * 0.02, -(h.dir || 0));
         // a machete leaves it open (and a set of claws, three times over)
         const gashes = weapon === 'machete' ? 1 : spec && spec.gash ? spec.gash : 0;
         if (gashes && res.wound) {
           const n2 = this.nearestPart(h.x, h.y);
           if (n2.part !== 'head') {
             const tilt = rand(-0.5, 0.5);
-            for (let i = 0; i < gashes; i++) this.addWound({ bone: n2.bone, t: clamp(n2.t + (i - (gashes - 1) / 2) * 0.09, 0.05, 0.95), r: 0.6, gash: tilt });
+            for (let i = 0; i < gashes; i++) this.addWound({ bone: n2.bone, t: clamp(n2.t + (i - (gashes - 1) / 2) * 0.09, 0.05, 0.95), r: 0.6, gash: tilt, side: -(h.dir || 0) });
           }
         }
       }
@@ -1056,9 +1067,18 @@ export class Stickman {
     if (heavy && power > 2.2 && this.state === 'stand') this.knockDown(dir, power, { x: hit.x, y: hit.y });
   }
 
-  /** A wound to keep: a gash, a bullet hole, a mark of blood. Old ones give way to new. */
+  /**
+   * A wound to keep: a gash, a bullet hole, a mark of blood. Old ones give
+   * way to new - blood that only landed on them first, then marks, and the
+   * holes and gashes last.
+   */
   addWound(w) {
-    if (this.wounds.length > 22) this.wounds.splice(this.wounds.findIndex((x) => !x.hole && !x.gash) >>> 0, 1);
+    if (w.id === undefined) w.id = woundId();
+    if (this.wounds.length > 22) {
+      let i = this.wounds.findIndex((x) => x.stain);
+      if (i < 0) i = this.wounds.findIndex((x) => !x.hole && !x.gash);
+      this.wounds.splice(Math.max(0, i), 1);
+    }
     this.wounds.push(w);
   }
 
@@ -1087,7 +1107,8 @@ export class Stickman {
     const end = below[below.length - 1];
     const vx = clamp((w[end].x - pw[end].x) * 120, -12, 12), vy = clamp((w[end].y - pw[end].y) * 120, -12, 12);
     const piece = sb.addLimb(pts, bone, this.name, vx + dir * (1 + power), vy + 1.2, rand(-6, 6), this.scale);
-    if (piece) { piece.tint = this.tint; piece.from = this; }
+    // (as much as there was in them to bleed)
+    if (piece) { piece.tint = this.tint; piece.from = this; piece.bleed = bloodK(this); }
     // frozen solid, it comes off like an icicle: no blood (yet), just ice
     const frozen = h.frozen;
     if (piece && frozen) { piece.iced = true; piece.bleed = 0; }
@@ -1100,6 +1121,11 @@ export class Stickman {
     else {
       sb.fx.blood(m.x, m.y, dir * 2.5, 2, 32, 1.4, this);
       this.markAt(m.x, m.y, 0.9);
+      // out of the end of what is left, the moment it comes off (and then for as long as it bleeds: blood.js)
+      const a = w[BEFORE_CUT[mid]] || w.hip, d = Math.hypot(m.x - a.x, m.y - a.y) || 1;
+      const k = bloodK(this);
+      sb.fx.gush(m.x, m.y, (m.x - a.x) / d * 2.8 + dir, (m.y - a.y) / d * 2.8 + 0.8, k, 0.35, this, null,
+        (st) => { const p = this.wj[mid]; if (p) { st.x = p.x; st.y = p.y; } });
     }
     // a blade stuck in what came off goes with it, onto the floor
     for (const e of [...this.stuck]) if (goneAt(this.cut, e.bone, e.t)) this.pullKnife(e, null);
@@ -1169,11 +1195,14 @@ export class Stickman {
     const through = left > 0.15;
     const sb = this.sandbox;
     if (part === 'head') this.headMark(hit.x, hit.y, 1.2);
-    else this.addWound({ bone: hit.bone, t: hit.tb, r: 0.5, hole: true });
+    else this.addWound({ bone: hit.bone, t: hit.tb, r: 0.5, hole: true, side: -sign(dx) });
     if (this.health.frozen) sb.fx.shards(hit.x, hit.y, 6, dx * 2, 0.8);
     else {
       sb.fx.blood(hit.x, hit.y, -dx * 1.2, -dy * 1.2 + 0.5, 4, 0.5, this);
-      if (through) sb.fx.blood(hit.x + dx * 0.05, hit.y + dy * 0.05, dx * 5, dy * 5 + 0.5, 16, 1.3, this);
+      if (through) {
+        sb.fx.blood(hit.x + dx * 0.05, hit.y + dy * 0.05, dx * 5, dy * 5 + 0.5, 16, 1.3, this);
+        sb.fx.gush(hit.x + dx * 0.05, hit.y + dy * 0.05, dx * 3.4, dy * 3.4 + 0.4, 0.8 * bloodK(this), 0.12, this);
+      }
     }
     this.takeHit({ by, part, x: hit.x, y: hit.y, dir: sign(dx) || 1, power: 2.7 * energy, kind: 'shot', weapon: 'bullet', bone, through });
     if (!through && !this.removed) this.health.lodge(bone);
@@ -1563,7 +1592,10 @@ export class Stickman {
     if (now - (this.thudT || -99) > 0.12) {
       this.thudT = now;
       sb.emit('thud', { who: this, speed: top, x: this.wj.hip.x, y: this.pos.y });
-      if (top > 5) sb.fx.dust(this.wj.hip.x, this.pos.y, Math.round(clamp(top, 4, 10)), Math.min(2, top / 6));
+      // the dust goes up where they hit hardest
+      let at = null;
+      for (const im of list) if (im.speed >= top && (!im.what || !im.what.owner || im.what.owner.kind !== 'crate')) at = this.rag.p[im.i];
+      if (top > 5) sb.fx.dust(at ? at.x : this.wj.hip.x, at ? Math.max(this.pos.y, at.y - at.r) : this.pos.y, Math.round(clamp(top, 4, 10)), Math.min(2, top / 6));
     }
     // frozen solid, there is nothing soft to take it (vitals.js works out what snaps)
     if (this.health.frozen) return;
@@ -1587,6 +1619,7 @@ export class Stickman {
     if (sum <= 0) return;
     const was = this.alive;
     let headHit = false;
+    const took = [];
     for (const [k, wgt] of share) {
       const [part, bone] = k.split('/');
       const dmg = total * (wgt / sum) * rand(0.8, 1.2);
@@ -1594,6 +1627,7 @@ export class Stickman {
       if (part === 'head') headHit = true;
       const res = this.health.hit(part, dmg, { bone, breakChance: top > 13 ? 0.12 : 0 });
       if (res.broke) sb.emit('break', { who: this, part, bone: res.broke, by: null });
+      took.push({ part, dmg, broke: !!res.broke });
     }
     // landing hard on a hand or a knee can put the joint out
     for (const im of list) {
@@ -1603,8 +1637,18 @@ export class Stickman {
       else if ((n === 'kneeA' || n === 'kneeB') && im.speed > 11 && chance(0.08)) this.dislocate('knee' + side);
     }
     if (total > 12) {
-      const j = this.wj;
-      sb.fx.blood(j.hip.x, j.hip.y + 0.1, 0, 1.5, Math.round(clamp(total / 4, 2, 18)), 1.6, this);
+      // it comes out of each part where that part hit: the fastest of its points to hit, on the face of what it hit
+      for (const tk of took) {
+        if (!bleedsFrom(tk)) continue;
+        let best = null;
+        for (const im of list) {
+          const q = this.rag.p[im.i], key = POINT_PART[q.name];
+          if (key && key[0] === tk.part && (!best || im.speed > best.speed)) best = im;
+        }
+        if (!best) continue;
+        const q = this.rag.p[best.i], nx = best.nx ?? 0, ny = best.ny ?? 1;
+        splatter(this, q.x - nx * q.r, q.y - ny * q.r, nx, ny, tk.dmg, tk.part);
+      }
       if (headHit) this.face.blood = Math.min(1, this.face.blood + total / 60);
     }
     this.hurtT = now;
@@ -1811,13 +1855,16 @@ export class Stickman {
     const pose = this.knifePose(e);
     k.unstick();
     const part = BONES[e.bone][2];
+    // where it went in: the hole it leaves
+    const hole = pointOnBone(this.wj, e.bone, e.t);
     if (this.alive) {
       // the knife was holding the wound shut
-      this.health.parts[part].bleed += 0.0018;
+      if (!this.health.dry) this.health.parts[part].bleed += 0.0018;
       this.health.pain = Math.min(130, this.health.pain + 14);
-      this.sandbox.fx.blood(pose.tipX, pose.tipY, -pose.ux * 2.5, -pose.uy * 2 + 1, 14, 0.8, this);
+      this.sandbox.fx.blood(hole.x, hole.y, -pose.ux * 2.5, -pose.uy * 2 + 1, 14, 0.8, this);
+      this.sandbox.fx.gush(hole.x, hole.y, -pose.ux * 1.6, -pose.uy * 1.6 + 0.6, 0.6 * bloodK(this), 0.16, this);
     }
-    this.markAt(pose.tipX, pose.tipY, 0.9);
+    this.markAt(hole.x, hole.y, 0.9, -sign(pose.ux));
     this.sandbox.emit('pullout', { who: this, by: by === 'hand' ? null : by, knife: k, x: pose.tipX, y: pose.tipY });
     if (by === 'hand') {
       k.drop(pose.x, pose.y, 0, 0);
@@ -2360,7 +2407,7 @@ export class Stickman {
     if (nx < sb.left + hw || nx > sb.right - hw) {
       const sp = Math.abs(this.vel.x);
       nx = clamp(nx, sb.left + hw, sb.right - hw);
-      if (this.state === 'thrown' && sp > 7) this.landHard(sp * 0.8, 'side');
+      if (this.state === 'thrown' && sp > 7) this.landHard(sp * 0.8, 'side', { x: this.pos.x < 0 ? 1 : -1, y: 0 });
       this.vel.x = this.state === 'thrown' ? -this.vel.x * 0.25 : 0;
     }
     if (!lying || this.state === 'crawl') nx = this.bumpCrates(nx, hw, dt);
@@ -2415,7 +2462,7 @@ export class Stickman {
       if (into > 0) {
         if (this.state === 'thrown' && into > 4) {
           c.body.applyImpulse(this.vel.x * MASS * 0.35, 0, nx, this.pos.y + 0.8);
-          this.landHard(into * 0.9, 'side');
+          this.landHard(into * 0.9, 'side', { x: fromLeft ? -1 : 1, y: 0 });
           this.vel.x *= -0.3;
         } else {
           // a shove: as hard as a person leaning on something, no harder
@@ -2489,7 +2536,7 @@ export class Stickman {
    * depends on what met it first: feet, head, or the whole flat of the body.
    * (A ragdoll works it out from which of its points hit: limpImpacts.)
    */
-  landHard(v, how) {
+  landHard(v, how, n = UP) {
     const sb = this.sandbox;
     sb.emit('thud', { who: this, speed: v, x: this.pos.x, y: this.pos.y });
     if (v < 6.5) return;
@@ -2501,13 +2548,22 @@ export class Stickman {
       : how === 'side' ? [['torso', 0.4, 'ribs'], ['head', 0.3, 'skull'], ['armA', 0.15, null], ['legA', 0.15, null]]
       : [['torso', 0.5, null], ['head', 0.22, 'skull'], ['armA', 0.1, null], ['armB', 0.08, null], ['legB', 0.1, null]];
     const was = this.alive;
+    const took = [];
     for (const [part, f, bone] of spread) {
-      const res = this.health.hit(part, dmg * f * rand(0.8, 1.2), { bone, breakChance: v > 13 ? 0.15 : 0 });
+      const d = dmg * f * rand(0.8, 1.2);
+      const res = this.health.hit(part, d, { bone, breakChance: v > 13 ? 0.15 : 0 });
       if (res.broke) sb.emit('break', { who: this, part, bone: res.broke, by: null });
+      took.push({ part, dmg: d, broke: !!res.broke });
     }
     if (dmg > 12) {
-      const j = this.wj;
-      sb.fx.blood(j.hip.x, j.hip.y + 0.1, 0, 1.5, Math.round(clamp(dmg / 4, 2, 18)), 1.6, this);
+      // out of whatever met the floor (or the wall): the head, landing on it - the feet only if a bone came through
+      for (const tk of took) {
+        if (how === 'head' && tk.part !== 'head') continue;
+        if (how === 'legs' && !tk.part.startsWith('leg')) continue;
+        if (!bleedsFrom(tk)) continue;
+        const c = contactOf(this, tk.part, n.x, n.y);
+        splatter(this, c.x, c.y, n.x, n.y, tk.dmg, tk.part);
+      }
       if (how === 'head' || how === 'flat') this.face.blood = Math.min(1, this.face.blood + dmg / 60);
     }
     this.hurtT = sb.time;
@@ -3086,58 +3142,91 @@ export class Stickman {
     f.blood = Math.max(0, f.blood - dt * 0.004);
   }
 
-  /** A mark of blood on a bone: from a wound, or from blood landing on them. */
-  mark(bone, t, r, dark = false, tint = undefined) {
+  /**
+   * A mark of blood on a bone: a wound of theirs (it bleeds from there,
+   * blood.js), or - `stain` - blood that landed on them, theirs or anyone's.
+   * `side` is the way the wound opens (-1 or 1, x), when it is known.
+   */
+  mark(bone, t, r, dark = false, tint = undefined, stain = false, side = 0) {
     const own = tint === undefined ? this.tint : tint;
     for (const w of this.wounds) {
-      if (w.bone === bone && Math.abs(w.t - t) < 0.14 && w.tint === own) { w.r = Math.min(0.95, w.r + r * 0.1); return; }
+      if (w.bone === bone && !w.hole && !w.gash && !w.burn && !!w.stain === stain && Math.abs(w.t - t) < 0.14 && w.tint === own) {
+        w.r = Math.min(0.95, w.r + r * 0.1);
+        return;
+      }
     }
-    if (this.wounds.length > 18) this.wounds.shift();
-    this.wounds.push({ bone, t, r: clamp(r, 0.3, 0.8), dark, tint: own });
+    this.addWound({ bone, t, r: clamp(r, 0.3, 0.8), dark, tint: own, stain, side });
   }
 
-  markAt(x, y, r) {
+  /** A wound where (x, y) is on them: on the head, or on whichever bone is nearest. */
+  markAt(x, y, r, side = 0) {
     const n = this.nearestPart(x, y);
     if (n.part === 'head' && (n.bone !== HEAD_BONE || n.t > 0.25)) this.headMark(x, y, r);
-    else this.mark(n.bone, n.t, r, chance(0.3));
+    else this.mark(n.bone, n.t, r, chance(0.3), undefined, false, side);
   }
 
-  /** Blood on the head, kept in the head's own frame so it turns with it. */
-  headMark(x, y, size, burn = false) {
-    const j = this.wj, r = DIM.headR * this.scale;
-    const ux = (x - j.head.x) * this.facing, uy = y - j.head.y;
+  /**
+   * Blood on the head, kept in the head's own frame so it turns with it: a
+   * wound (or a burn), or - `stain` - blood that landed there, `tint` its colour.
+   */
+  headMark(x, y, size, burn = false, stain = false, tint = undefined) {
+    const j = this.wj, r = DIM.headR * this.scale, f = this.rag ? this.rag.facing : this.facing;
+    const ux = (x - j.head.x) * f, uy = y - j.head.y;
     const c = Math.cos(j.headAngle), s = Math.sin(j.headAngle);
     let lx = (ux * c - uy * s) / r, ly = (ux * s + uy * c) / r;
     const d = Math.hypot(lx, ly);
     if (d > 0.8) { lx *= 0.8 / d; ly *= 0.8 / d; }
-    if (this.headMarks.length > 14) this.headMarks.shift();
-    this.headMarks.push({ x: lx, y: ly, r: clamp(size * 0.22, 0.12, 0.32), dark: chance(0.3), burn, tint: this.tint });
+    const col = tint === undefined ? this.tint : tint;
+    const rr = clamp(size * 0.22, 0.12, 0.32);
+    if (stain) {
+      // landing in blood already there spreads it
+      for (const m of this.headMarks) {
+        if (m.stain && m.tint === col && Math.hypot(m.x - lx, m.y - ly) < m.r) { m.r = Math.min(0.36, m.r + rr * 0.15); return; }
+      }
+    }
+    if (this.headMarks.length > 14) {
+      const i = this.headMarks.findIndex((m) => m.stain);
+      this.headMarks.splice(Math.max(0, i), 1);
+    }
+    this.headMarks.push({ id: woundId(), x: lx, y: ly, r: rr, dark: chance(0.3), burn, stain, tint: col });
   }
 
+  /**
+   * Blood coming out of them (blood.js says from where, and how fast): it
+   * drips off each wound that is bleeding, pours out of the worst in
+   * streams, and spreads in a pool under them where they lie in it. None
+   * frozen solid, and none bled dry.
+   */
   updateBleeding(dt) {
-    const b = this.health.bleeding;
-    if (b <= 0) return;
-    this.dripAcc += b * 1500 * dt;
-    if (this.dead && this.onGround) {
-      this.sandbox.fx.pool(this.wj.hip.x * 0.5 + this.wj.neck.x * 0.5, this.pos.y, b * dt, this.tint);
-    }
+    const h = this.health;
+    if (h.frozen || h.dry || h.bleeding <= 0) { this.dripAcc = 0; return; }
+    const src = bleedSources(this);
+    if (!src.list.length) return;
+    const fx = this.sandbox.fx;
+    this.dripAcc += src.drip * 1500 * dt;
     while (this.dripAcc >= 1) {
       this.dripAcc -= 1;
-      let x, y;
-      if (this.stuck.length && chance(0.5)) {
-        const pose = this.knifePose(this.stuck[Math.floor(Math.random() * this.stuck.length)]);
-        x = pose.tipX; y = pose.tipY;
-      } else if (this.wounds.length && chance(0.75)) {
-        const w = this.wounds[Math.floor(Math.random() * this.wounds.length)];
-        const q = pointOnBone(this.wj, w.bone, w.t);
-        x = q.x;
-        y = q.y;
-      } else {
-        x = this.wj.head.x; y = this.wj.head.y - DIM.headR * this.scale;
-      }
-      this.sandbox.fx.drip(x, y, this);
+      const s = pickSource(src);
+      fx.drip(s.x + rand(-0.01, 0.01), s.y, this);
     }
+    if (this.onGround && (this.dead || this.lying)) {
+      for (const s of src.list) if (s.y - this.pos.y < 0.3) fx.pool(s.x, this.pos.y, s.rate * dt, this.tint);
+    }
+    feedStreams(this, src, dt);
   }
+}
+
+const UP = { x: 0, y: 1 };
+
+/**
+ * Whether a part that hit something hard bleeds from where it hit: a head
+ * splits open, a body takes a good deal more, and an arm or a leg only when
+ * a bone came through - or the blow was savage.
+ */
+function bleedsFrom(tk) {
+  if (tk.part === 'head') return tk.dmg >= 4;
+  if (tk.part === 'torso') return tk.dmg >= 7;
+  return tk.broke || tk.dmg >= 14;
 }
 
 /** About normally distributed, mean 0, standard deviation 1. */

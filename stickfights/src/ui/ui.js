@@ -792,7 +792,8 @@ export class UI {
     bar('oxygen', air ? h.oxygen : 1, air ? pct(h.oxygen) : '—');
     m.oxygen.parentNode.parentNode.classList.toggle('off', !air);
     bar('pain', p.dead ? 0 : h.pain / 100, String(p.dead ? 0 : Math.round(h.pain)));
-    bar('blood', (h.blood - 0.38) / 0.62, pct(h.blood));
+    // (what they can still lose: empty is bled dry, and nothing more comes out of them)
+    bar('blood', h.bloodLeft, pct(h.bloodLeft));
     bar('stamina', p.dead ? 0 : p.stamina, pct(p.dead ? 0 : p.stamina));
     const T = this.thermo;
     if (!hasVitals(p)) return;

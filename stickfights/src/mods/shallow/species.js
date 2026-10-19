@@ -459,6 +459,9 @@ function tearInHalf(man, v) {
   }
   sb.fx.blood(T.x, T.y, f * 2.2, 2.4, 46, 1.6, v);
   sb.fx.blood(T.x, T.y, -f * 1.6, 0.8, 30, 1.3, v);
+  // and out of both halves, where they came apart, in streams
+  sb.fx.gush(T.x, T.y, f * 2.6, 2, 1, 0.55, v);
+  sb.fx.gush(T.x, T.y, -f * 1.5, -0.3, 0.8, 0.45, v);
   sb.fx.pool(T.x, 0, 1.4, v.tint);
   sb.emit('shallowRip', { who: v, by: man, x: T.x, y: T.y });
   man.sh.kills++;
