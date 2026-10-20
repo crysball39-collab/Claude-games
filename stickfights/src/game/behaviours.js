@@ -973,7 +973,7 @@ export class Mourn extends Behaviour {
 /* ---------------------------------- things ---------------------------------- */
 
 const ARM_SAID = { knife: 'knife', machete: 'machete', crowbar: 'crowbar', glock: 'gun', m1911: 'gun', taser: 'taser', ak47: 'rifle', mossberg: 'shotgun' };
-const ARM_ICON = { knife: 'knife', machete: 'machete', crowbar: 'machete', glock: 'gun', m1911: 'gun', taser: 'taser', ak47: 'gun', mossberg: 'gun' };
+const ARM_ICON = { knife: 'knife', machete: 'machete', crowbar: 'crowbar', glock: 'glock', m1911: 'm1911', taser: 'taser', ak47: 'ak47', mossberg: 'mossberg' };
 
 export class Arm extends Behaviour {
   get kind() { return 'arm'; }

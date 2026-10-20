@@ -3254,6 +3254,48 @@ await page.tap('#mods-close');
 await ev(() => window.__sf.ui.toggleDrawer(false));
 await page.waitForTimeout(250);
 
+/* ----------------------------- thought clouds ----------------------------- */
+
+// somebody deciding to go for each weapon there is: the cloud that goes up over them, drawn
+await fresh();
+const clouds = await ev(() => {
+  const { sb, renderer, ui, cam } = window.__sf;
+  const out = {};
+  const spawn = {
+    glock: (x) => sb.spawnGun(x, 0.1, 0, 'glock'), m1911: (x) => sb.spawnGun(x, 0.1, 0, 'm1911'), ak47: (x) => sb.spawnGun(x, 0.1, 0, 'ak47'),
+    mossberg: (x) => sb.spawnGun(x, 0.1, 0, 'mossberg'), taser: (x) => sb.spawnTaser(x, 0.1), crowbar: (x) => sb.spawnCrowbar(x, 0.1),
+    knife: (x) => sb.spawnKnife(x, 0.1), machete: (x) => sb.spawnMachete(x, 0.1), knuckles: (x) => sb.spawnKnuckles(x, 0.1),
+  };
+  for (const [kind, put] of Object.entries(spawn)) {
+    sb.clear();
+    const a = sb.spawnStickman(0, null, { name: 'Ash', traits: { aggression: 0.95, temper: 0.9, bravery: 0.9, empathy: 0.05 } });
+    const b = sb.spawnStickman(9, null, { name: 'Bo' });
+    put(1.2);
+    for (let i = 0; i < 30; i++) sb.step(1 / 120);
+    const r = a.brain.rel(b);
+    r.anger = 0.95; r.like = -0.8;
+    let icon = null, error = null;
+    for (let i = 0; i < 120 * 6 && !icon; i++) {
+      sb.step(1 / 120);
+      if (a.brain.behaviour && a.brain.behaviour.kind === 'arm' && a.thought) icon = a.thought.icon;
+    }
+    if (icon) {
+      // the cloud shows when nothing is being said over it
+      a.bubble = null;
+      a.thought.t = 0.5;
+      cam.x = a.pos.x; cam.y = 1.6;
+      try { renderer.draw(ui.drawState()); } catch (e) { error = e.message; }
+    }
+    out[kind] = { icon, error };
+  }
+  return out;
+});
+const cloudBad = Object.entries(clouds).filter(([, c]) => !c.icon || c.error);
+check('going for each weapon (the four guns, the taser, the crowbar, the blades, the knuckles), a stickman thinks it in a cloud that draws',
+  !cloudBad.length, cloudBad.map(([k, c]) => `${k}: ${c.error || 'never went for it'}`).join('; '));
+check('...and the cloud shows the weapon they are going for', clouds.ak47.icon === 'ak47' && clouds.mossberg.icon === 'mossberg' && clouds.glock.icon === 'glock' && clouds.crowbar.icon === 'crowbar',
+  Object.entries(clouds).map(([k, c]) => `${k}: ${c.icon}`).join(', '));
+
 /* --------------------------------- mayhem -------------------------------- */
 
 await fresh();

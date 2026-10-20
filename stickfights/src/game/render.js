@@ -910,12 +910,27 @@ export function drawIcon(ctx, kind, x, y, s) {
       drawMacheteShape(ctx, MACHETE_W, MACHETE_H, 0);
       ctx.restore();
       break;
-    case 'gun':
+    case 'crowbar':
       ctx.save();
-      ctx.scale(s * 1.7 / 0.3, -s * 1.7 / 0.3);
-      drawGlockShape(ctx, 1, 0, 0);
+      ctx.rotate(-0.6);
+      ctx.scale(s * 2.3 / CROWBAR_W, -s * 2.3 / CROWBAR_W);
+      drawCrowbarShape(ctx, CROWBAR_W, CROWBAR_H, 0);
       ctx.restore();
       break;
+    case 'gun':
+    case 'glock':
+    case 'm1911':
+    case 'ak47':
+    case 'mossberg': {
+      // the gun they are going for (a long one tipped up, to fit in the cloud)
+      const gun = GUN_MODELS[kind] ? kind : 'glock', k = s * Math.min(1.7 / 0.3, 2.6 / GUN_MODELS[gun].w);
+      ctx.save();
+      if (GUN_MODELS[gun].long) ctx.rotate(-0.3);
+      ctx.scale(k, -k);
+      drawGunShape(ctx, gun, 1, 0, 0);
+      ctx.restore();
+      break;
+    }
     case 'taser':
       ctx.save();
       ctx.scale(s * 1.7 / 0.26, -s * 1.7 / 0.26);

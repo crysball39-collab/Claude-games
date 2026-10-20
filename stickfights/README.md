@@ -788,8 +788,10 @@ you hear what Axl did?", "My hand... it's gone. It's on the floor.", "Can
 we... take five?" and "I want a lawyer." (officers have a way of talking all
 their own: "Police! Stop right there!", "Taser! Taser!", "Dispatch, one in
 custody.") - and
-think in pictures, in thought bubbles: a fist, a crate, the knuckles, the
-knife, a tear, a question mark.
+think in pictures, in thought bubbles: a fist, a crate, a tear, a question
+mark - and, going for a weapon, that very weapon: the knuckles, the knife, the
+machete, the crowbar, the taser, the Glock, the M1911, the AK-47 or the
+Mossberg.
 
 ### Fighting
 
@@ -1167,7 +1169,8 @@ stickfights/
   index.html          every screen
   style.css           mobile first, safe-area aware
   src/
-    main.js           boot, the frame loop, the scene behind the title
+    main.js           boot, the frame loop (a frame that goes wrong is logged,
+                      and the game goes on), the scene behind the title
     core/             helpers, gestures (tap, drag, pinch), sound
     physics/
       rigid.js        2D boxes: separating axes, clipping, sequential impulses
@@ -1430,6 +1433,9 @@ screen and checks:
   voice; whoever saw it knows that is not them any more, and is afraid
 - removing Shallow takes it, in whatever skin it is wearing, and everything
   it left out of the world and the menu
+- going for each weapon - the four guns, the taser, the crowbar, the blades
+  and the knuckles - a stickman thinks it in a thought cloud that draws, with
+  that weapon in it
 - ten stickmen, six crates, knuckles, knives, machetes and a pistol for 45
   seconds: nothing turns into NaN, and they get up to many different things
 - the console stays clean, and the single file fetches nothing

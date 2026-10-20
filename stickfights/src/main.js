@@ -215,16 +215,26 @@ cam.titleView();
 /* ---------------------------------- loop ---------------------------------- */
 
 let last = performance.now();
+const failed = new Set();
 function frame(now) {
+  // (the next frame asked for first: whatever goes wrong in this one, the game goes on)
+  requestAnimationFrame(frame);
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
-  sb.update(dt);
-  cam.update(dt);
-  sound.listenX = cam.x;
-  sound.span = cam.w / cam.ppm;
-  if (started) ui.update(dt);
-  renderer.draw(started ? ui.drawState() : {});
-  requestAnimationFrame(frame);
+  try {
+    sb.update(dt);
+    cam.update(dt);
+    sound.listenX = cam.x;
+    sound.span = cam.w / cam.ppm;
+    if (started) ui.update(dt);
+    renderer.draw(started ? ui.drawState() : {});
+  } catch (e) {
+    // told once, to whoever has the console open - and the canvas put back the way it was
+    if (!failed.has(e.message)) { failed.add(e.message); console.error(e); }
+    const ctx = renderer.ctx;
+    if (ctx.reset) ctx.reset();
+    else { for (let i = 0; i < 64; i++) ctx.restore(); ctx.globalAlpha = 1; }
+  }
 }
 requestAnimationFrame(frame);
 
