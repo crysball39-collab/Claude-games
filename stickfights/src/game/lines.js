@@ -361,6 +361,14 @@ export const LINES = {
   wallDown: ['The wall came down!', 'Look out! The wall!', 'There goes the wall.', 'Who knocked the wall down?'],
   timber: ['TIMBER!', 'The tree! Look out!', "It's coming down!", 'Who cut the tree down?!', 'Watch out! TREE!'],
   wireSnap: ['The rope snapped!', 'It broke!', 'Whoa! It gave way!', 'That rope was not strong enough.'],
+
+  /* -------------------------------- the gallows -------------------------------- */
+  noosed: [
+    'Get this rope off my neck!', 'No. No, no, no. Not like this.', 'What did I do?!', 'Somebody help me! Please!',
+    "This isn't funny. Take it off!", "I can't get it off!", "Please. I'll do anything.", "Don't touch that lever!", "I don't want to die up here!",
+  ],
+  sawNoosed: ['Somebody get {victim} down from there!', '{victim}! No!', 'This is wrong. This is so wrong.', 'Who put {victim} up there?!', "Hold on, {victim}! Don't move!", 'Take that rope off {victim}!'],
+  sawHanged: ['{victim}!!', 'Cut the rope! Cut it!', 'Get {victim} down! Get them down!', 'Oh no. Oh no, no, no.', "I can't watch this.", 'Somebody do something!'],
 };
 
 /*

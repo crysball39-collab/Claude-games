@@ -126,8 +126,8 @@ check('PLAY opens the game, the HUD and the spawn menu', await ev(() =>
 check('the sandbox starts empty', await ev(() => window.__sf.sb.people.length === 0 && window.__sf.sb.crates.length === 0));
 const cards = await ev(() => [...document.querySelectorAll('.card')].map((c) => c.dataset.spawn));
 const BASE = ['stickman', 'officer', 'knuckles', 'knife', 'machete', 'crowbar', 'glock', 'm1911', 'ak47', 'mossberg', 'taser', 'crate', 'vest',
-  'ammo9', 'ammo45', 'ammo762', 'ammo12', 'woodWall', 'metalWall', 'glassWall', 'tree', 'bush'];
-check('there are twenty-two things to spawn: a Stickman, an Officer, Brass Knuckles, a Combat Knife, a Machete, a Crowbar, a Glock-19, an M1911, an AK-47, a Mossberg 500, a Taser, a Crate, a Light Vest, four kinds of ammo, three walls, a Tree and a Bush',
+  'ammo9', 'ammo45', 'ammo762', 'ammo12', 'woodWall', 'metalWall', 'glassWall', 'gallows', 'tree', 'bush'];
+check('there are twenty-three things to spawn: a Stickman, an Officer, Brass Knuckles, a Combat Knife, a Machete, a Crowbar, a Glock-19, an M1911, an AK-47, a Mossberg 500, a Taser, a Crate, a Light Vest, four kinds of ammo, three walls, a Gallows, a Tree and a Bush',
   cards.length === BASE.length && BASE.every((k) => cards.includes(k)), cards.join(', '));
 check('the cards are named for what they spawn', await ev(() =>
   ['Stickman', 'Brass Knuckles', 'Combat Knife', 'Machete', 'Glock-19', 'Crate'].every((n) => [...document.querySelectorAll('.card b')].some((b) => b.textContent === n))));
@@ -2310,6 +2310,86 @@ const bend = await ev(() => {
 check('someone hung from a branch on a rope bends it', bend.tied && bend.rope && bend.most > 0.03, JSON.stringify(bend));
 check('a branch dragged by the hand bends, then snaps off and falls', bend.snapped && bend.maxBend > 0.4 && bend.fell, JSON.stringify(bend));
 
+// taken hold of by the hand, a wall comes away from where it stood: it hangs from the hand and
+// turns under it; let go, it falls - not straight back down where it was; put down standing, it stands
+await fresh();
+const lifted = await ev(() => {
+  const sb = window.__sf.sb, hand = window.__sf.hand;
+  const w = sb.spawnWall('woodWall', 0);
+  for (let i = 0; i < 24; i++) sb.step(1 / 120);
+  sb.paused = false;
+  hand.grab(w, 0, 2.2);
+  sb.paused = true;
+  const loose = !w.anchored;
+  let turned = 0;
+  for (let i = 0; i < 120; i++) { hand.move(i * 0.03, 2.2 + Math.min(i, 40) * 0.03); sb.step(1 / 120); turned = Math.max(turned, Math.abs(w.body.rot)); }
+  for (let i = 0; i < 120; i++) { hand.move(3.6, 3.4); sb.step(1 / 120); }
+  const up = w.body.aabb().minY;
+  hand.release();
+  for (let i = 0; i < 12; i++) sb.step(1 / 120);
+  const fell = up - w.body.aabb().minY;
+  for (let i = 0; i < 120 * 3; i++) sb.step(1 / 120);
+  const lying = !w.anchored && Math.abs(Math.cos(w.body.rot)) < 0.3 && w.pos.y < 0.4;
+  // taken by the top end, hung up, lowered until it touches, let go
+  const top = w.body.toWorld(0, w.body.h / 2 - 0.08);
+  sb.paused = false;
+  hand.grab(w, top.x, top.y);
+  sb.paused = true;
+  for (let i = 0; i < 600; i++) { hand.move(-2, 3.4); sb.step(1 / 120); }
+  for (let i = 0; i < 360; i++) { hand.move(-2, 3.4 - Math.min(1, i / 300) * 1.12); sb.step(1 / 120); }
+  hand.release();
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  return { loose, turned, up, fell, lying, stands: w.anchored && Math.abs(w.body.rot) < 0.01 && w.body.aabb().minY < 0.02 };
+});
+check('a wall taken hold of by the hand comes away, and hangs from it, turning round under it', lifted.loose && lifted.turned > 0.3 && lifted.up > 1, JSON.stringify(lifted));
+check('...let go, it falls under its own weight, not straight back where it stood, and lands on its side',
+  lifted.fell > 0.02 && lifted.fell < 0.3 && lifted.lying, JSON.stringify(lifted));
+check('...and lowered onto its end and let go, it stands up again', lifted.stands, JSON.stringify(lifted));
+
+// a tree taken by the trunk comes up whole, roots and all; put back down on its foot, it takes root again
+await fresh();
+const uprooted = await ev(() => {
+  const sb = window.__sf.sb, hand = window.__sf.hand;
+  const t = sb.spawnPlant('tree', 0);
+  for (let i = 0; i < 36; i++) sb.step(1 / 120);
+  const n = t.boughs.length;
+  sb.paused = false;
+  hand.grab(t, 0, 0.7);
+  sb.paused = true;
+  const log = hand.holding;
+  const whole = !!log && log.kind === 'log' && log.name === 'Tree' && !sb.plants.includes(t) && log.boughs.length === n;
+  let tilt = 0;
+  for (let i = 0; i < 180; i++) { hand.move(i * 0.02, 0.7 + Math.min(i, 60) * 0.04); sb.step(1 / 120); tilt = Math.max(tilt, Math.abs(log.body.rot - log.upRot)); }
+  const footUp = log.body.toWorld(log.foot.x, log.foot.y).y;
+  hand.release();
+  for (let i = 0; i < 120 * 4; i++) sb.step(1 / 120);
+  const down = !log.removed && log.pos.y < 1.2;
+  const top = log.body.toWorld(log.foot.x + (log.spineLen - 0.3), log.foot.y);
+  sb.paused = false;
+  hand.grab(log, top.x, top.y);
+  sb.paused = true;
+  for (let i = 0; i < 600; i++) { hand.move(-3, 5.2); sb.step(1 / 120); }
+  const footY = () => log.body.toWorld(log.foot.x, log.foot.y).y;
+  const drop = footY();
+  for (let i = 0; i < 360; i++) { hand.move(-3, 5.2 - Math.min(1, i / 300) * (drop - 0.02)); sb.step(1 / 120); }
+  hand.release();
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  const rooted = log.removed && sb.plants.some((p) => p.kind === 'tree' && Math.abs(p.x + 3) < 0.6 && p.y < 0.05);
+  // a bush comes up whole from wherever it is taken
+  const bu = sb.spawnPlant('bush', 5);
+  for (let i = 0; i < 24; i++) sb.step(1 / 120);
+  sb.paused = false;
+  hand.grab(bu, 5.2, 0.5);
+  sb.paused = true;
+  const bl = hand.holding;
+  hand.release();
+  return { n, whole, tilt, footUp, down, rooted, bush: !!bl && bl.kind === 'log' && bl.name === 'Bush' && !sb.plants.includes(bu) };
+});
+check('a tree taken by the trunk comes up whole, every branch on it, and swings round in the hand', uprooted.whole && uprooted.tilt > 0.3 && uprooted.footUp > 0.5,
+  JSON.stringify(uprooted));
+check('...let go, it falls; and set back down on its foot, it takes root again', uprooted.down && uprooted.rooted, JSON.stringify(uprooted));
+check('a bush comes up whole too, wherever it is taken hold of', uprooted.bush, JSON.stringify(uprooted));
+
 /* --------------------------- freezing, and pausing --------------------------- */
 
 await fresh();
@@ -2443,10 +2523,11 @@ const wires = await ev(() => {
   const pp = pin ? pin.ends() : null;
   const pinned = !!pin && Math.hypot(pp[0].x - pp[1].x, pp[0].y - pp[1].y) < 0.02 && c4.body.pos.y > 1 && Math.abs(c4.body.rot) > 0.3;
   // somebody tied by the wrist to the background: they go limp, and hang there
+  // (the other end clear of their head - further than a tap on them reaches - however tall they are)
   const p = sb.spawnStickman(-2, null, { name: 'Ty' });
   for (let i = 0; i < 30; i++) sb.step(1 / 120);
   ui.setWireKind('woodRope');
-  drag(p.wj.handA.x, p.wj.handA.y, p.wj.handA.x, p.wj.handA.y + 1.4);
+  drag(p.wj.handA.x, p.wj.handA.y, p.wj.handA.x, Math.max(p.wj.handA.y + 1.4, p.wj.head.y + 0.25 + ui.tol));
   for (let i = 0; i < 240; i++) sb.step(1 / 120);
   const tied = { tied: p.tied, rag: !!p.rag, doing: p.brain.doing };
   ui.setTool('hand');
@@ -2479,6 +2560,102 @@ const strain = await ev(() => {
   return { wood: out.woodRope.w.removed, metal: out.metalRope.w.removed, peak };
 });
 check('a hard enough jolt snaps a wood rope; the metal one, which takes far more, holds', strain.wood && !strain.metal, JSON.stringify(strain));
+
+/* ----------------------------------- the gallows ----------------------------------- */
+
+await fresh();
+const gal = await ev(() => {
+  const { sb, ui, hand } = window.__sf;
+  ui.setSpawnKind('gallows');
+  const g = ui.spawnAt(1, 0.5);
+  ui.setSpawnKind('stickman');
+  const p = sb.spawnStickman(-4, null, { name: 'Vic' });
+  const q = sb.spawnStickman(4.6, null, { name: 'Wren' });
+  window.__g = g; window.__vic = p; window.__wren = q;
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  const parts = g.parts.map((s) => s.part).sort().join();
+  const held = g.parts.every((s) => s.anchored);
+  const empty = !!g.noose && !g.wire;
+  // up and over, and down onto the noose, held by the neck
+  const loop = g.loopAt();
+  const path = (t) => t < 0.4 ? { x: -4, y: 1.6 + 4.4 * t / 0.4 } : t < 0.7 ? { x: -4 + (loop.x + 0.5 + 4) * (t - 0.4) / 0.3, y: 6 }
+    : { x: loop.x + 0.5 * (1 - (t - 0.7) / 0.3), y: 6 + (loop.y + 0.04 - 6) * (t - 0.7) / 0.3 };
+  sb.paused = false;
+  hand.grab(p, p.wj.neck.x, p.wj.neck.y + 0.02);
+  sb.paused = true;
+  for (let i = 0; i < 480 && !g.wire; i++) { const s = path(Math.min(1, i / 400)); hand.move(s.x, s.y); sb.step(1 / 120); }
+  const caught = !!g.wire && p.noosed;
+  hand.release();
+  for (let i = 0; i < 120 * 2; i++) sb.step(1 / 120);
+  const sf = window.__sf;
+  sf.cam.follow = null; sf.cam.x = g.x + 1.2; sf.cam.y = 2.3; sf.cam.clamp();
+  return { parts, held, empty, caught, state: p.state, onTrap: p.support === g.trap.body, doing: p.brain.doing, said: p.bubble ? p.bubble.text : '' };
+});
+check('the gallows stands where it is put - a post, a beam with a brace under it, a platform on two legs and a trapdoor in it - each timber held up by what it rests on',
+  gal.parts === 'beam,brace,front leg,leg,platform,post,trapdoor' && gal.held, JSON.stringify(gal));
+check('...with a noose hanging empty from the end of the beam', gal.empty);
+check('the hand brings somebody\'s neck to the noose and it closes round it', gal.caught, JSON.stringify(gal));
+check('...and let go, they are on their feet on the trapdoor, and cannot get out of it', gal.state === 'stand' && gal.onTrap && /noose/.test(gal.doing), JSON.stringify(gal));
+await shot('gallows');
+// the lever: a tap on the gallows with the hand
+await ev(() => { window.__sf.ui.setTool('hand'); const q = window.__wren, g = window.__g; q.facing = Math.sign(g.x + 1.8 - q.pos.x) || -1; });
+const postAt = await ev(() => { const g = window.__g; return window.__sf.cam.toScreen(g.x, g.y + 2.6); });
+await tapAt(postAt.x, postAt.y);
+const hung = await ev(() => {
+  const sb = window.__sf.sb, g = window.__g, p = window.__vic, q = window.__wren;
+  const toast = document.getElementById('toast').textContent;
+  const open = g.open;
+  let choked = false;
+  for (let i = 0; i < 120 * 3; i++) { sb.step(1 / 120); if (p.vit && p.vit.air === 'choke') choked = true; }
+  const feet = Math.min(p.wj.footA.y, p.wj.footB.y);
+  return {
+    toast, open, choked, rag: !!p.rag, neck: p.wj.neck.y - g.y, feet: feet - g.y, deck: 1.26, trapRot: g.trap.body.rot, doing: p.brain.doing,
+    witness: q.brain.thoughts.map((t) => t.text).join(' / '), wrenFear: q.brain.emo.fear,
+  };
+});
+check('tapped, the gallows has its lever pulled: the trapdoor drops open, and hangs straight down from its hinge',
+  hung.open && /lever/i.test(hung.toast) && Math.abs(hung.trapRot + Math.PI / 2) < 0.05, JSON.stringify(hung));
+check('...whoever stood on it drops through and hangs by the neck, their feet below the platform, choking',
+  hung.rag && hung.choked && hung.feet < hung.deck - 0.1 && /choking/.test(hung.doing), JSON.stringify(hung));
+check('...and whoever saw it knows what they saw', /dropped through the trapdoor/.test(hung.witness), JSON.stringify(hung));
+await shot('gallows-hanged');
+const after = await ev(() => {
+  const sb = window.__sf.sb, g = window.__g, p = window.__vic;
+  let out = -1;
+  for (let i = 0; i < 120 * 50 && p.alive; i++) { sb.step(1 / 120); if (out < 0 && !p.conscious) out = sb.time; }
+  const said = g.pull();
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  return { out, dead: p.dead, cause: p.health.cause, said, shut: !g.open && g.trap.anchored && Math.abs(g.trap.body.rot) < 0.01 };
+});
+check('...until they black out, and die of it', after.out > 0 && after.dead && after.cause === 'suffocation', JSON.stringify(after));
+check('tapped again, the trapdoor is shut', after.shut && /shut/i.test(after.said), JSON.stringify(after));
+
+await fresh();
+const felled = await ev(() => {
+  const { sb, ui } = window.__sf;
+  ui.setSpawnKind('gallows');
+  const g = ui.spawnAt(-1, 0.5);
+  ui.setSpawnKind('stickman');
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  const beamY = g.beam.pos.y;
+  // sawn through, the post: what it held up comes down with it
+  for (let x = g.x - 0.16; x <= g.x + 0.16; x += 0.02) g.post.damage(x, g.y + 2, 0.05, 5, 'blade', { dx: 1 });
+  for (let i = 0; i < 120 * 3; i++) sb.step(1 / 120);
+  return { beamLoose: !g.beam.anchored, beamDown: beamY - g.beam.pos.y, braceLoose: !g.brace.anchored, deckHeld: g.deck.anchored, noose: !g.noose || !g.anchor() };
+});
+check('sawn through the post, the beam and the brace come down - and the platform, on its own legs, does not', felled.beamLoose && felled.beamDown > 1.5 && felled.braceLoose && felled.deckHeld,
+  JSON.stringify(felled));
+const gone = await ev(async () => {
+  const sf = window.__sf;
+  sf.ui.setTool('erase');
+  const g = sf.sb.gallows[0];
+  const at = sf.cam.toScreen(g.deck.pos.x, g.deck.pos.y);
+  return { at, n: sf.sb.slabs.filter((s) => s.group === g).length };
+});
+await tapAt(gone.at.x, gone.at.y);
+const erased = await ev(() => ({ gallows: window.__sf.sb.gallows.length, parts: window.__sf.sb.slabs.filter((s) => s.group).length, toast: document.getElementById('toast').textContent }));
+await ev(() => window.__sf.ui.setTool('hand'));
+check('one tap of the eraser on any of it takes the whole gallows away', !erased.gallows && !erased.parts && /gallows/i.test(erased.toast), JSON.stringify({ gone, erased }));
 
 /* ------------------------- the AK-47, the Mossberg, the crowbar ------------------------- */
 
@@ -2521,7 +2698,8 @@ const guns = await ev(() => {
 });
 check('the AK-47 holds 30 rounds of 7.62 and hits far harder than a pistol', guns.ak.name === 'AK-47' && guns.ak.mag === 30 && guns.ak.energy > 1.5, JSON.stringify(guns.ak));
 check('the Mossberg 500 holds six shells, and each one is eight pellets', guns.sg.name === 'Mossberg 500' && guns.sg.mag === 6 && guns.sg.left === 5 && guns.paths === 8, JSON.stringify(guns));
-check('someone angry with an AK fires it in bursts, a round every tenth of a second', guns.shots >= 3 && guns.quick >= 2, JSON.stringify(guns));
+// (a burst that has put them down already counts, if every round of it came as quick as the last)
+check('someone angry with an AK fires it in bursts, a round every tenth of a second', guns.shots >= 2 && guns.quick >= Math.min(2, guns.shots - 1), JSON.stringify(guns));
 
 await fresh();
 const bar = await ev(() => {
@@ -2891,6 +3069,11 @@ const tableAt = await ev(() => {
 // (the spawn menu all the way shut first: it slides out over where the table is)
 await page.waitForFunction(() => !document.querySelector('#drawer').classList.contains('open'), null, { timeout: 3000 }).catch(() => {});
 await page.waitForTimeout(500);
+// (what is under the finger as it goes down - for when it is not the table)
+const under = await ev(([x, y]) => {
+  const sf = window.__sf, el = document.elementFromPoint(x, y), w = sf.cam.toWorld(x, y), th = sf.sb.thingAt(w.x, w.y, sf.ui.tol);
+  return { el: el && (el.id || el.className || el.tagName), thing: th && th.name, tool: sf.ui.tool, drawer: document.querySelector('#drawer').classList.contains('open') };
+}, [tableAt.x, tableAt.y]);
 await tapAt(tableAt.x, tableAt.y);
 await page.waitForTimeout(300);
 const panel = await ev(() => {
@@ -2900,8 +3083,10 @@ const panel = await ev(() => {
     title: document.querySelector('#panel-title').textContent,
     text: document.querySelector('#panel-text').textContent,
     craft: b && { label: b.textContent, enabled: !b.disabled },
+    toast: document.getElementById('toast').textContent,
   };
 });
+panel.under = under;
 check('tapping the Crafting Table opens its crafting grid, which sees the 4 Soul Sand and 3 Wither Skulls by it',
   panel.open && panel.title === 'CRAFTING' && /4\/4 Soul Sand, 3\/3 Wither Skulls/.test(panel.text) && !!panel.craft && panel.craft.label === 'CRAFT' && panel.craft.enabled, JSON.stringify(panel));
 await shot('crafting');

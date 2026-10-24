@@ -8,12 +8,19 @@
    scrap of steel and a spark, shards off glass. Where a bullet went in, where
    something hit it hard, it shows: a hole, a dent, a crack.
 
-   What holds a wall up is its bottom row, standing on whatever is under it.
-   Anything no longer joined to that, through the cells that are left, comes
-   away as a piece of its own - a slab like the wall, but loose: it falls,
-   tumbles, lands and breaks further, and lands on whoever is underneath. A
-   wall cut through at the bottom comes away whole, and goes over. Glass does
-   not wear through: crack it enough and the whole pane comes down at once.
+   What holds a wall up is its bottom row, standing on whatever is under it
+   (and what holds up a timber of the gallows, gallows.js, is whatever it
+   rests on - the post, a leg). Anything no longer joined to that, through
+   the cells that are left, comes away as a piece of its own - a slab like
+   the wall, but loose: it falls, tumbles, lands and breaks further, and lands
+   on whoever is underneath. A wall cut through at the bottom comes away
+   whole, and goes over. Glass does not wear through: crack it enough and the
+   whole pane comes down at once.
+
+   Taken hold of by the hand, a standing wall comes away from where it stood
+   and is a loose body like any other: it hangs from the hand, swings round,
+   falls when let go, and tumbles where it lands. Set down upright on its
+   foot, it stands again.
 
    To the physics (rigid.js) each slab is one box, round the cells it has
    left. Narrow as a wall is, that is near enough what it is: anything that
@@ -64,6 +71,11 @@ export const WALLS = {
 };
 export const isWall = (kind) => !!WALLS[kind];
 
+/** Slabs that are not walls: the timbers something is built of (gallows.js), each its own size. */
+export const TIMBERS = {
+  gallows: { name: 'Gallows', mat: 'wood', w: 0.2, h: 1, timber: true },
+};
+
 // what a shard of glass does to somebody it falls on, or who goes through a pane
 defineArm('glass', {
   name: 'Glass', noun: 'glass', wound: 'Glass', cause: 'cut by glass', blade: true, sharp: 0.9, mult: 0.6, gash: 0, sever: 0,
@@ -80,17 +92,22 @@ export class Slab {
    * and o.vel how it was lying and moving.
    */
   constructor(sb, type, x, y, o = {}) {
-    const spec = WALLS[type];
+    const spec = WALLS[type] || TIMBERS[type];
     this.id = nextId++;
     this.sandbox = sb;
     this.type = type;
     this.spec = spec;
     this.mat = MATERIALS[spec.mat];
+    this.timber = !!spec.timber;
     this.kind = o.from ? 'piece' : 'wall';
-    this.name = o.from ? `Piece of ${spec.name.toLowerCase()}` : spec.name;
+    this.name = o.from ? `Piece of ${spec.name.toLowerCase()}` : o.name || spec.name;
+    this.group = o.group || null;  // what it is a part of (a gallows), if anything
     this.removed = false;
     this.frozenInPlace = false;
-    this.anchored = !o.from;      // standing, held up by its bottom row: the physics never moves it
+    this.anchored = !o.from;      // standing, held up: the physics never moves it
+    // what holds it up: its bottom row on whatever is under it, or (o.holds) where it rests on other slabs:
+    // { ground: true } | { cells: Set of cell indices, by: slab, gx, gy (the point in its grid that rests on that) }
+    this.holds = o.from ? [] : o.holds || [{ ground: true }];
     this.strain = o.strain || 0;  // glass: how cracked it is (1, and it gives)
     this.stains = [];             // blood, in cells: { c, r, r0, a, flat, dark, tint }
     this.thrownBy = null;
@@ -105,8 +122,9 @@ export class Slab {
       this.hp = o.grid.hp;
       this.marks = o.grid.marks || [];
     } else {
-      this.cols = Math.round(spec.w / CELL);
-      this.rows = Math.round(spec.h / CELL);
+      const size = o.size || spec;
+      this.cols = Math.max(1, Math.round(size.w / CELL));
+      this.rows = Math.max(1, Math.round(size.h / CELL));
       this.hp = new Float32Array(this.cols * this.rows).fill(1);
       this.marks = [];            // { c, r (fractional), kind: 'hole' | 'dent' | 'crack', s, a }
     }
@@ -344,28 +362,54 @@ export class Slab {
     return out;
   }
 
+  /**
+   * The cells holding it up just now: its bottom row, standing on whatever
+   * is under it - or, a timber resting on others, the cells where it rests
+   * on them, for as long as what they rest on is still there to rest on.
+   */
+  heldCells() {
+    const out = new Set();
+    for (const h of this.holds) {
+      if (h.ground) { for (let c = 0; c < this.cols; c++) out.add(c); continue; }
+      if (!this.holding(h)) continue;
+      for (const i of h.cells) out.add(i);
+    }
+    return out;
+  }
+
+  /** Whether what one of its holds rests on is still there, standing, under it. */
+  holding(h) {
+    if (h.ground) return true;
+    const by = h.by;
+    if (!by || by.removed || !by.anchored) return false;
+    const p = this.fromGrid(h.gx, h.gy);
+    return by.contains(p.x, p.y, CELL * 0.75);
+  }
+
   split(o = {}) {
     const parts = this.parts();
     if (!parts.length) { this.sandbox.remove(this, { quiet: true }); return; }
-    // what stays this slab: standing, the part on its bottom row (the biggest, if more than one is);
+    // what stays this slab: standing, the part held up (the biggest, if more than one is);
     // loose, the biggest part
-    const standing = (p) => p.some((i) => i < this.cols);
+    const held = this.anchored ? this.heldCells() : null;
+    const standing = (p) => !!held && p.some((i) => held.has(i));
     let keep = null;
     if (this.anchored) {
       for (const p of parts) if (standing(p) && (!keep || p.length > keep.length)) keep = p;
     } else {
       for (const p of parts) if (!keep || p.length > keep.length) keep = p;
     }
-    // nothing left standing on the bottom row: the whole of it goes over
+    // nothing left holding it up: the whole of it goes over (or down)
     if (!keep) {
       this.anchored = false;
+      this.holds = [];
       keep = parts.reduce((a, b) => (b.length > a.length ? b : a));
       this.body.setMass(1);
       this.sandbox.emit('slabFree', { what: this, x: this.pos.x, y: this.pos.y });
     }
     for (const p of parts) {
       if (p === keep) continue;
-      if (this.anchored && standing(p)) this.breakAway(p, true);
+      if (this.anchored && standing(p)) this.breakAway(p, true, o, held);
       else this.breakAway(p, false, o);
     }
     if (keep.length < CRUMBS && !this.anchored) {
@@ -382,8 +426,8 @@ export class Slab {
     this.bits(c, r, 0, 0.5, 1);
   }
 
-  /** The cells of part `p` out of this slab and into one of their own (standing, if `stands`). */
-  breakAway(p, stands, o = {}) {
+  /** The cells of part `p` out of this slab and into one of their own (standing, if `stands`: held up by what held them). */
+  breakAway(p, stands, o = {}, held = null) {
     if (p.length < CRUMBS && !stands) {
       for (const i of p) { this.crumb(i); this.hp[i] = 0; }
       return null;
@@ -416,12 +460,27 @@ export class Slab {
     piece.stains = stains;
     piece.paintFrom = { src: this, c0, r0 };
     if (stands) {
-      // standing on its own bottom row, like the wall it was part of
+      // standing on its own bottom row, like the wall it was part of - or resting where that rested
       piece.anchored = true;
       piece.kind = 'wall';
-      piece.name = this.spec.name;
+      piece.name = this.name;
+      piece.group = this.group;
+      piece.timber = this.timber;
+      const mine = new Set(p);
+      piece.holds = [];
+      for (const h of this.holds) {
+        if (h.ground) { piece.holds.push({ ground: true }); continue; }
+        const cells = new Set();
+        for (const i of h.cells) {
+          if (!mine.has(i)) continue;
+          const c = i % this.cols, r = (i - c) / this.cols;
+          cells.add((r - r0) * cols + (c - c0));
+        }
+        if (cells.size) piece.holds.push({ cells, by: h.by, gx: h.gx - c0 * CELL, gy: h.gy - r0 * CELL });
+      }
       piece.body.setMass(Infinity);
       piece.body.vel.x = piece.body.vel.y = piece.body.angVel = 0;
+      piece.fit();
     } else {
       // (for a moment it passes through what it came off, so the two do not fly apart)
       piece.body.ignore = new Set([b]);
@@ -473,44 +532,51 @@ export class Slab {
   }
 
   /**
-   * Down onto whatever is under it, standing - unless it is frozen in place,
-   * which keeps it wherever it was put.
+   * Let go of where it was (unfrozen, say): a wall standing on something
+   * stays standing; one left in mid-air comes loose, and falls.
    */
   settle() {
-    if (!this.anchored || this.frozenInPlace) return;
-    const b = this.body, half = b.w / 2;
-    const below = this.sandbox.surfaceBelow(b.pos.x, half * 0.8, b.pos.y - b.h / 2 + 0.05, this);
-    b.pos.y = below.y + b.h / 2;
+    if (!this.anchored || this.frozenInPlace || !this.holds.every((h) => h.ground)) return;
+    const b = this.body, bb = b.aabb();
+    const below = this.sandbox.surfaceBelow(b.pos.x, b.w * 0.4, bb.minY + 0.05, this);
+    if (bb.minY - below.y > 0.03) this.uproot();
   }
 
   /* -------------------------------- the hand -------------------------------- */
 
   /**
-   * Taken hold of by the hand from above at (x, y). A loose piece is a body
-   * like a crate, and swings from the hand; a standing wall is slid where it
-   * is dragged, upright, and stands on whatever is under it when let go.
+   * Taken hold of by the hand: it comes away from where it stood, and is a
+   * body like any other from now on - it hangs from the hand at the point it
+   * was taken by, and swings and turns with it, and falls when let go.
    */
-  handGrab(x, y) {
-    if (!this.anchored) return 'body';
-    this.grabOff = { x: this.body.pos.x - x, y: this.body.pos.y - y };
-    return 'self';
+  uproot() {
+    if (this.anchored) {
+      this.anchored = false;
+      this.holds = [];
+      this.fit();
+    }
+    return this;
   }
 
-  /** Held at (x, y): it goes there, pushing aside whatever it runs into on the way. */
-  handHold(x, y, dt) {
-    const b = this.body, o = this.grabOff || { x: 0, y: 0 };
-    const tx = x + o.x, ty = Math.max(y + o.y, b.h / 2 + 0.002);
-    // how fast it went is what it pushes with
-    b.vel.x = clamp((tx - b.pos.x) / dt, -8, 8);
-    b.vel.y = clamp((ty - b.pos.y) / dt, -8, 8);
-    b.pos.x = tx;
-    b.pos.y = ty;
-  }
-
-  handRelease() {
-    this.grabOff = null;
-    this.body.vel.x = this.body.vel.y = 0;
-    this.settle();
+  /**
+   * A wall lying loose, come to rest upright on its foot - put down that way
+   * by the hand, or just landed so: it stands again, as solid as it was.
+   */
+  tryStand() {
+    const b = this.body, sb = this.sandbox;
+    if (!this.box || this.box.r0 !== 0 || b.h < b.w * 1.5) return false;
+    if (Math.abs(Math.atan2(Math.sin(b.rot), Math.cos(b.rot))) > 0.07) return false;
+    if (Math.hypot(b.vel.x, b.vel.y) > 0.5 || Math.abs(b.angVel) > 0.5) return false;
+    const bb = b.aabb();
+    const below = sb.surfaceBelow(b.pos.x, b.w * 0.4, bb.minY + 0.05, this);
+    if (bb.minY - below.y > 0.04) return false;
+    b.rot = 0;
+    b.pos.y = below.y + b.h / 2;
+    this.anchored = true;
+    this.holds = [{ ground: true }];
+    this.fit();
+    sb.emit('slabStand', { what: this, x: b.pos.x, y: below.y });
+    return true;
   }
 
   /** What it says for itself, tapped. */
@@ -530,7 +596,20 @@ export class Slab {
     this.age += dt;
     if (this.unIgnoreT !== undefined && (this.unIgnoreT -= dt) <= 0) { this.body.ignore = null; this.unIgnoreT = undefined; }
     // nothing holds a standing slab up but what it stands on: knocked about, it stays put
-    if (this.anchored) { this.body.vel.x = this.body.vel.y = this.body.angVel = 0; }
+    if (this.anchored) {
+      this.body.vel.x = this.body.vel.y = this.body.angVel = 0;
+      // a timber resting on others: when one of those goes (or moves), it may be left resting on nothing
+      if (!this.frozenInPlace && this.holds.some((h) => !h.ground) && (this.holdT = (this.holdT || 0) - dt) <= 0) {
+        this.holdT = 0.1;
+        let sig = 0;
+        this.holds.forEach((h, k) => { if (this.holding(h)) sig |= 1 << k; });
+        if (this.holdSig !== undefined && sig !== this.holdSig) this.split();
+        this.holdSig = sig;
+      }
+    } else if (this.kind === 'wall' && !this.frozenInPlace && !(this.sandbox.hand && this.sandbox.hand.holding === this)) {
+      // a wall lying loose, set down upright: it stands again
+      if ((this.standT = (this.standT || 0) - dt) <= 0) { this.standT = 0.05; this.tryStand(); }
+    }
   }
 
   /* --------------------------------- drawing -------------------------------- */
@@ -645,7 +724,39 @@ function paint(s) {
   const g = cv.getContext('2d');
   const R = rng(s.seed);
   // the cells it was made with: a piece is painted as the whole wall was, where it was in it
-  if (s.mat.name === 'wood') {
+  if (s.timber) {
+    // a squared timber: one length of wood, the grain along it, bolted where it joins
+    const along = W >= H;
+    const L = along ? W : H, T = along ? H : W;
+    const tone = 0.9 + R() * 0.15;
+    g.fillStyle = `rgb(${Math.round(150 * tone)}, ${Math.round(100 * tone)}, ${Math.round(56 * tone)})`;
+    g.fillRect(0, 0, W, H);
+    const line = (a0, b0, a1, b1) => { if (along) { g.moveTo(a0, b0); g.lineTo(a1, b1); } else { g.moveTo(b0, a0); g.lineTo(b1, a1); } };
+    g.strokeStyle = 'rgba(80, 48, 20, 0.35)';
+    g.lineWidth = 1;
+    g.beginPath();
+    for (let k = 0; k < Math.max(2, Math.round(T / 5)); k++) {
+      const t0 = 2 + R() * (T - 4);
+      for (let a = 0; a < L; a += 10) line(a, t0 + Math.sin(a * 0.04 + k * 2) * 1.5, a + 10, t0 + Math.sin((a + 10) * 0.04 + k * 2) * 1.5);
+    }
+    g.stroke();
+    for (let k = 0; k < L / 60; k++) {
+      g.fillStyle = 'rgba(90, 54, 24, 0.5)';
+      const a = R() * L, b = T * (0.3 + R() * 0.4);
+      g.beginPath();
+      if (along) g.ellipse(a, b, 5, 2.2, 0, 0, Math.PI * 2); else g.ellipse(b, a, 2.2, 5, 0, 0, Math.PI * 2);
+      g.fill();
+    }
+    // the shadowed underside, and the edges
+    g.fillStyle = 'rgba(40, 22, 8, 0.28)';
+    if (along) g.fillRect(0, H * 0.7, W, H * 0.3); else g.fillRect(W * 0.7, 0, W * 0.3, H);
+    g.strokeStyle = 'rgba(50, 28, 10, 0.9)';
+    g.lineWidth = 2;
+    g.strokeRect(1, 1, W - 2, H - 2);
+    // a bolt near each end
+    g.fillStyle = '#2e2e2e';
+    for (const a of [PX * 2, L - PX * 2]) { g.beginPath(); if (along) g.arc(a, H / 2, 1.8, 0, Math.PI * 2); else g.arc(W / 2, a, 1.8, 0, Math.PI * 2); g.fill(); }
+  } else if (s.mat.name === 'wood') {
     const planks = 2, pw = W / planks;
     for (let i = 0; i < planks; i++) {
       const tone = 0.88 + R() * 0.2;

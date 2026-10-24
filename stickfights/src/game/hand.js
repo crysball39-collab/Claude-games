@@ -5,9 +5,13 @@
    exact point you grabbed it, so it swings from there and anything too heavy
    lags behind. A stickman hangs from wherever you took hold - by the scruff
    of the neck, or by an ankle, upside down - and swings like a pendulum when
-   you move them (stickman.js). Letting go while moving throws it. A wall
-   goes where it is dragged, and stands on whatever is under it when it is
-   let go.
+   you move them (stickman.js). Letting go while moving throws it.
+
+   Something rooted to the spot - a standing wall, a tree, a bush - comes
+   away from it when it is taken hold of, and is held like anything else from
+   then on: it swings and turns from the hand, and falls when it is let go
+   (and, put down upright, stands - or takes root - again). A branch or a
+   twig taken hold of is bent instead, until it snaps.
 
    With the world paused - or the thing frozen in place with the freeze tool -
    nothing swings and nothing is thrown: it is simply picked up and put down
@@ -53,6 +57,12 @@ export class Hand {
   grab(thing, x, y) {
     this.release();
     const sb = this.sb;
+    // rooted to the spot: it comes away (a tree pulled up is a log from then on; a branch is only bent)
+    if (thing.uproot && !thing.frozenInPlace && !thing.wornBy) {
+      const t = thing.uproot(x, y, sb.paused);
+      if (!t) return false;
+      thing = t;
+    }
     // with the world paused, or the thing frozen in place: it goes where it is put, and that is all
     if (sb.paused || thing.frozenInPlace) {
       if (thing.wornBy || (thing.stuckIn && thing.stuckIn.person)) return false;

@@ -41,6 +41,7 @@ import {
 } from '../game/draw.js';
 import { drawWallShape, WALLS } from '../game/structures.js';
 import { drawPlantShape } from '../game/trees.js';
+import { drawGallowsShape } from '../game/gallows.js';
 import { WIRES, tie, pinAt } from '../game/wires.js';
 import { setFrozen, frozenSaid, freezable } from '../game/freeze.js';
 import { POLICE_UNIFORM } from '../game/render.js';
@@ -78,6 +79,7 @@ const KINDS = {
   woodWall: { name: 'Wood Wall', short: 'WOOD WALL', plural: 'walls', limit: 'walls' },
   metalWall: { name: 'Metal Wall', short: 'METAL WALL', plural: 'walls', limit: 'walls' },
   glassWall: { name: 'Glass Wall', short: 'GLASS WALL', plural: 'walls', limit: 'walls' },
+  gallows: { name: 'Gallows', short: 'GALLOWS', plural: 'gallows', limit: 'gallows' },
   tree: { name: 'Tree', short: 'TREE', plural: 'trees and bushes', limit: 'plants' },
   bush: { name: 'Bush', short: 'BUSH', plural: 'trees and bushes', limit: 'plants' },
 };
@@ -238,16 +240,25 @@ export class UI {
     if (this.tool === 'wire') { this.wireTap(w.x, w.y); return; }
     const thing = this.sb.thingAt(w.x, w.y, this.tol);
     if (this.tool === 'erase') {
-      if (thing) {
-        this.sb.remove(thing);
-        this.toast('Removed ' + (thing.kind === 'stickman' ? thing.name : 'the ' + thing.name.toLowerCase()));
-        if (thing === this.selected) this.select(null);
+      // (a timber of a gallows: the whole gallows)
+      const t = thing && thing.group && !thing.group.removed ? thing.group : thing;
+      if (t) {
+        this.sb.remove(t);
+        this.toast('Removed ' + (t.kind === 'stickman' ? t.name : 'the ' + t.name.toLowerCase()));
+        if (t === this.selected) this.select(null);
       }
       return;
     }
     if (this.tool === 'freeze') {
       if (!thing || !freezable(thing)) { this.toast(thing ? `The ${thing.name.toLowerCase()} can't be frozen` : 'Tap something to freeze it in place'); return; }
       const on = !thing.frozenInPlace;
+      // (a timber of a gallows: every timber of it)
+      if (thing.group && !thing.group.removed) {
+        for (const p of thing.group.parts) setFrozen(this.sb, p, on);
+        thing.group.frozenInPlace = on;
+        this.toast(on ? 'The gallows is frozen in place' : 'The gallows is free to move again');
+        return;
+      }
       if (setFrozen(this.sb, thing, on)) this.toast(frozenSaid(thing, on));
       return;
     }
@@ -260,6 +271,8 @@ export class UI {
     else if (thing && isGun(thing.kind) && thing.loose) this.fireLoose(thing);
     // a mod's thing with more to it: a panel to open, or something to say for itself
     else if (thing && thing.panel) this.openPanel(thing);
+    // a gallows: the lever pulled (or put back)
+    else if (thing && thing.group && thing.group.pull && !thing.group.removed) this.toast(thing.group.pull());
     else if (thing && thing.tap) { const said = thing.tap(this.sb); if (said) this.toast(said); }
     else if (thing && thing.kind === 'ammo') this.toast(thing.describe());
     else if (thing && thing.kind === 'vest') this.toast(`${thing.name}: ${Math.round(thing.condition * 100)}% left in it` + (thing.dents.length ? `, ${thing.dents.length} round${thing.dents.length === 1 ? '' : 's'} in it` : ''));
@@ -406,6 +419,7 @@ export class UI {
     else if (AMMO_KEYS[k]) made = sb.spawnAmmo(x, Math.max(y, 0.2), AMMO_KEYS[k]);
     else if (WALLS[k]) made = sb.spawnWall(k, x, y);
     else if (k === 'tree' || k === 'bush') made = sb.spawnPlant(k, x, y);
+    else if (k === 'gallows') made = sb.spawnGallows(x - 1, y);
     if (!made) {
       const info = this.kindInfo(k);
       // (a mod's thing may have its own reason: nothing crafted yet, say)
@@ -717,6 +731,9 @@ export class UI {
       ctx.restore();
     } else if (kind === 'tree' || kind === 'bush') {
       drawPlantShape(ctx, kind, w / 2, card ? h * 0.84 : h, card ? h * 0.8 : h * 0.98, kind === 'tree' ? 11 : 5);
+    } else if (kind === 'gallows') {
+      const hh = card ? h * 0.8 : h * 0.98;
+      drawGallowsShape(ctx, w / 2 - hh * 0.27, card ? h * 0.84 : h, hh);
     }
   }
 
@@ -1823,10 +1840,10 @@ export class UI {
       const k = this.spawnKind;
       const mod = KINDS[k] ? null : findSpawnable(k);
       const box = AMMO_KEYS[k] ? AMMO_BOXES[AMMO_KEYS[k]] : null;
-      const stands = k === 'stickman' || k === 'officer' || (mod && mod.living) || WALLS[k] || k === 'tree' || k === 'bush';
-      const y = stands ? this.sb.surfaceBelow(w.x, 0.15, WALLS[k] || k === 'tree' || k === 'bush' ? w.y + 0.02 : 100).y
+      const stands = k === 'stickman' || k === 'officer' || (mod && mod.living) || WALLS[k] || k === 'tree' || k === 'bush' || k === 'gallows';
+      const y = stands ? this.sb.surfaceBelow(w.x, 0.15, WALLS[k] || k === 'tree' || k === 'bush' || k === 'gallows' ? w.y + 0.02 : 100).y
         : Math.max(w.y, k === 'crate' ? 0.39 : k === 'knife' ? 0.03 : k === 'machete' || k === 'crowbar' ? 0.05 : k === 'glock' || k === 'm1911' || k === 'taser' ? 0.08 : k === 'ak47' || k === 'mossberg' ? 0.14 : box ? box.h / 2 : 0.04);
-      ghost = { kind: box ? 'ammo' : this.spawnKind, size: box ? AMMO_KEYS[k] : null, x: w.x, y, draw: mod && mod.ghost ? mod.ghost : null };
+      ghost = { kind: box ? 'ammo' : this.spawnKind, size: box ? AMMO_KEYS[k] : null, x: k === 'gallows' ? w.x - 1 : w.x, y, draw: mod && mod.ghost ? mod.ghost : null };
     }
     // a wire being put in: from its first end to the pointer (or, a pin, where it would go)
     let wire = null;

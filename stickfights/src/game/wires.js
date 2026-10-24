@@ -41,6 +41,8 @@ export const WIRES = {
   metalRod: { name: 'Fixed metal rope', rod: true, strength: 16000, colour: '#a6aeb5', dark: '#5a6167', width: 0.036, cut: 0 },
   woodPin: { name: 'Wood pin', pin: true, strength: 2400, wood: true, colour: '#b98a50', dark: '#6b4622', width: 0.05, cut: 0 },
   metalPin: { name: 'Metal pin', pin: true, strength: 10000, colour: '#c3c9ce', dark: '#4f565c', width: 0.045, cut: 0 },
+  // (not one of the six: the rope of a gallows, with a noose on the end - gallows.js)
+  noose: { name: 'Noose', rope: true, noose: true, strength: 1e7, wood: true, colour: '#b08850', dark: '#6b4a24', width: 0.032, cut: 0.5 },
 };
 export const isPin = (kind) => !!(WIRES[kind] && WIRES[kind].pin);
 
@@ -223,6 +225,7 @@ export class Wire {
     this.removed = false;
     this.moved = 0;           // this step: how far it has had to move its ends (weighted), and how hard it has had to stop them
     this.stopped = 0;
+    this.tied = null;         // the tether a ragdoll on one end is keeping for it (see tether()), if one is
     // a rope is drawn as a chain of points that hangs and swings
     if (spec.rope) {
       const n = clamp(Math.round(this.len / 0.1), 4, 40);
@@ -241,9 +244,30 @@ export class Wire {
   /** What it is tied to, at each end: a name for each. */
   describe() {
     const say = (e) => (e.kind === 'world' ? 'the background' : e.t.kind === 'stickman' ? e.t.name : `the ${(e.t.name || 'thing').toLowerCase()}`);
+    if (this.spec.noose) return `A noose round ${say(this.b)}'s neck` + (this.strain > 260 ? ', holding them up by it' : '');
     const k = this.spec.pin ? 'pinning' : 'between';
     const pct = Math.round(clamp(this.strain / this.spec.strength, 0, 1) * 100);
     return `${this.name}, ${k} ${say(this.a)} and ${say(this.b)} - ${pct}% of what it can take`;
+  }
+
+  /**
+   * A person's (or a limb's) point on one end, and on the other something
+   * that does not give - the background, a timber, a wall, a crate frozen in
+   * place: the ragdoll keeps it within reach of that itself, along with its
+   * own bones, so it is caught as one body, not by the neck alone ({ rag, i,
+   * end } - or null).
+   */
+  tether() {
+    for (const [e, o] of [[this.a, this.b], [this.b, this.a]]) {
+      let rag = null, i = -1;
+      if (e.kind === 'man' && e.t.rag && !e.t.rag.pinned) { rag = e.t.rag; i = rag.byName[e.name] ?? -1; }
+      else if (e.kind === 'rag' && !e.t.rag.pinned) { rag = e.t.rag; i = e.i; }
+      if (!rag || i < 0) continue;
+      const p = endPos(o);
+      if (give(o, p, 0, 1) + give(o, p, 1, 0) > 1e-4) continue;
+      return { rag, i, other: o };
+    }
+    return null;
   }
 
   /**
@@ -252,6 +276,7 @@ export class Wire {
    */
   solve(first) {
     const spec = this.spec;
+    if (this.tied) return;
     const pa = endPos(this.a), pb = endPos(this.b);
     if (spec.pin) {
       // a pin: the two points together, in x and in y
@@ -341,6 +366,12 @@ export class Wire {
   snap(why = 'strain') {
     if (this.removed) return;
     const sb = this.sandbox;
+    // (whatever ragdoll was keeping it lets go)
+    for (const e of [this.a, this.b]) {
+      const rag = e.t && e.t.rag;
+      if (rag && this.tied) rag.tethers = rag.tethers.filter((t) => t !== this.tied);
+    }
+    this.tied = null;
     const [pa, pb] = this.ends();
     const mx = (pa.x + pb.x) / 2, my = (pa.y + pb.y) / 2;
     sb.removeWire(this);
@@ -424,10 +455,15 @@ export class Wire {
       ctx.stroke();
       ctx.setLineDash([]);
     }
-    // where it is tied: a knot, a bolt
-    for (const p of [pts[0], pts[pts.length - 1]]) {
+    // where it is tied: a knot, a bolt - or, a noose, the loop drawn tight round the neck
+    for (const p of s.noose ? [pts[0]] : [pts[0], pts[pts.length - 1]]) {
       ctx.fillStyle = s.dark;
       ctx.beginPath(); ctx.arc(p.x, p.y, s.width * 0.8, 0, Math.PI * 2); ctx.fill();
+    }
+    if (s.noose) {
+      const n = pts[pts.length - 1], q = pts[pts.length - 2] || pts[0];
+      const dx = n.x - q.x, dy = n.y - q.y, d = Math.hypot(dx, dy) || 1, r = NOOSE_LOOP * 0.55;
+      drawNooseLoop(ctx, { x: n.x - (dx / d) * r, y: n.y - (dy / d) * r }, q, s, 0);
     }
   }
 }
@@ -442,6 +478,31 @@ function segX(ax, ay, bx, by, cx, cy, dx, dy) {
   return { x: ax + rx * t, y: ay + ry * t };
 }
 
+const NOOSE_LOOP = 0.085;
+
+/**
+ * The knot and the loop of a noose on the end of a rope at `end` (`prev`,
+ * the point of the rope before it, says which way it runs): `open` 1, hanging
+ * open; 0, pulled tight round a neck.
+ */
+export function drawNooseLoop(ctx, end, prev, spec = WIRES.noose, open = 1) {
+  const dx = end.x - prev.x, dy = end.y - prev.y, d = Math.hypot(dx, dy) || 1;
+  const ux = dx / d, uy = dy / d, a = Math.atan2(uy, ux) - Math.PI / 2;
+  const r = NOOSE_LOOP * (0.55 + 0.45 * open);
+  const cx = end.x + ux * r, cy = end.y + uy * r;
+  for (const [w, col] of [[spec.width, spec.dark], [spec.width * 0.55, spec.colour]]) {
+    ctx.strokeStyle = col;
+    ctx.lineWidth = w;
+    ctx.beginPath(); ctx.ellipse(cx, cy, r * 0.8, r, a, 0, Math.PI * 2); ctx.stroke();
+  }
+  // the coils of the knot, above the loop
+  ctx.fillStyle = spec.dark;
+  for (let i = 0; i < 4; i++) {
+    const t = -0.02 - i * 0.028;
+    ctx.beginPath(); ctx.ellipse(end.x + ux * t, end.y + uy * t, spec.width * 0.95, spec.width * 0.55, a + Math.PI / 2, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
 /* ----------------------------- the world's wires ----------------------------- */
 
 /** Every wire, put right: a few passes, after everything else has moved this step. */
@@ -449,6 +510,38 @@ export function solveWires(sb, dt) {
   const ws = sb.wires;
   if (!ws.length) return;
   for (const w of [...ws]) if (gone(w.a) || gone(w.b) || deadEnd(w.a) || deadEnd(w.b)) w.snap('removed');
+  for (const w of ws) {
+    for (const e of [w.a, w.b]) {
+      if (e.kind !== 'man' && e.kind !== 'joint') continue;
+      const m = e.t;
+      // gone limp since: tied by the point, not the joint
+      if (e.kind === 'joint' && m.rag) e.kind = 'man';
+      // tied, but on their feet (standing in a noose): the moment the rope goes tight - the floor gone from under
+      // them - it takes them by it (and what it had to give before they went is not taken back with a jerk)
+      if (!m.rag && m.ragdolls && m.state !== 'held') {
+        const [pa, pb] = w.ends();
+        const d = Math.hypot(pb.x - pa.x, pb.y - pa.y);
+        if (d > w.len) {
+          m.goLimp({ state: 'thrown', tone: 0.35 });
+          if (m.rag) { e.kind = 'man'; w.len = d; }
+        }
+      }
+    }
+  }
+  // a body on a rope from something that does not give: its ragdoll does the work (see tether), and what it
+  // had to do this step is how hard the rope was pulled; and the rope is set up for it again for the next
+  const rags = new Set();
+  for (const w of ws) {
+    if (w.tied) { w.moved += w.tied.moved; w.tied = null; }
+    const t = w.tether();
+    if (!t) continue;
+    if (!rags.has(t.rag)) { t.rag.tethers.length = 0; rags.add(t.rag); }
+    const p = endPos(t.other);
+    w.tied = { i: t.i, x: p.x, y: p.y, len: w.len, rope: !!w.spec.rope, moved: 0 };
+    t.rag.tethers.push(w.tied);
+    t.rag.wake();
+  }
+  for (const m of sb.people) if (m.rag && !rags.has(m.rag) && m.rag.tethers.length) m.rag.tethers.length = 0;
   for (let it = 0; it < ITER; it++) for (const w of ws) w.solve(it === 0);
   for (const w of [...ws]) w.after(dt);
 }
@@ -499,8 +592,11 @@ export function pinAt(sb, type, x, y, things) {
   return tie(sb, type, list[0], x, y, list[1], x, y);
 }
 
-/** Whether somebody is tied to anything at all. */
-export const tiedUp = (man) => !!(man.wires && man.wires.some((w) => !w.removed));
+/** Whether somebody is tied to anything (a noose apart: they can stand up in that). */
+export const tiedUp = (man) => !!(man.wires && man.wires.some((w) => !w.removed && !w.spec.noose));
+
+/** Whether somebody has a noose round their neck. */
+export const noosed = (man) => !!(man.wires && man.wires.some((w) => !w.removed && w.spec.noose));
 
 /** A chance for a bullet going from (x0, y0) to (x1, y1) to part a wire it crosses. */
 export function bulletThrough(sb, x0, y0, x1, y1) {

@@ -22,6 +22,11 @@
    in front of them. A tree is drawn behind everything; neither is in
    anybody's way. Only what is shot into them, cut into them, tied to them
    or dragged through them touches them.
+
+   Taken hold of by the trunk (a bush, anywhere), it comes up out of the
+   ground, roots and all, and is a log from then on: a body that hangs from
+   the hand, swings round, falls when it is let go and lies where it lands.
+   Stood back up on its foot, it takes root again where it stands.
    ========================================================================== */
 import { Body } from '../physics/rigid.js';
 import { CELL } from './structures.js';
@@ -230,6 +235,7 @@ class Wood {
   hitTest(x, y, r = 0, leaves = false) {
     let best = null;
     for (const b of this.boughs) {
+      if (b.hidden) continue;
       const l = this.local(b, x, y);
       if (l.u < -r || l.u > b.len + r) continue;
       const rad = radiusAt(b, l.u);
@@ -316,6 +322,7 @@ class Wood {
 
   /** Where the line from (x, y) along (dx, dy) goes into bough b's outline and out of it, within `max`: { t0, t1 } or null. */
   span(b, x, y, dx, dy, max) {
+    if (b.hidden) return null;
     const p = this.local(b, x, y);
     const du = dx * b.c + dy * b.s, dv = -dx * b.s + dy * b.c;
     const hw = Math.max(b.r0, b.r1);
@@ -339,6 +346,7 @@ class Wood {
     const take = (TAKE[kind] ?? 1) * amount;
     let gone = 0, hit = null;
     for (const b of this.boughs) {
+      if (b.hidden) continue;
       const l = this.local(b, x, y);
       if (l.u < -r || l.u > b.len + r) continue;
       if (Math.abs(l.v) > radiusAt(b, l.u) + r) continue;
@@ -600,6 +608,7 @@ class Wood {
   /** The wood: every bough as it is now, cut where it has been cut. */
   drawWood(ctx) {
     for (const b of this.boughs) {
+      if (b.hidden) continue;
       const bark = b.depth === 0 ? BARK.trunk : b.depth === 1 ? BARK.branch : BARK.twig;
       // anything gone out of it, or chipped, or bloodied: drawn through its cells (slower); whole, as a plain shape
       let marked = b.stains.length > 0;
@@ -729,6 +738,7 @@ class Wood {
   bounds() {
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const b of this.boughs) {
+      if (b.hidden) continue;
       for (const p of [{ x: b.x, y: b.y }, this.at(b, b.len)]) {
         x0 = Math.min(x0, p.x - b.r0); x1 = Math.max(x1, p.x + b.r0);
         y0 = Math.min(y0, p.y - b.r0); y1 = Math.max(y1, p.y + b.r0);
@@ -754,7 +764,8 @@ const LOG_LIMIT = 40;
 
 /** A tree, or a bush, growing at (x, y). */
 export class Plant extends Wood {
-  constructor(sb, kind, x, y, seed = Math.floor(rand(1, 1e9))) {
+  /** A tree or a bush grown from `seed` - or, given `boughs`, one put back together from those (stood up again, rooted). */
+  constructor(sb, kind, x, y, seed = Math.floor(rand(1, 1e9)), boughs = null) {
     super(sb);
     this.id = nextPlant++;
     this.kind = kind;
@@ -764,7 +775,7 @@ export class Plant extends Wood {
     this.seed = seed;
     this.held = null;
     const R = rng(seed);
-    this.boughs = kind === 'bush' ? growBush(R) : growTree(R);
+    this.boughs = boughs ? order(boughs.filter((b) => !b.parent)) : kind === 'bush' ? growBush(R) : growTree(R);
     this.reweigh();
     this.pose();
     this.rustleT = 0;
@@ -963,27 +974,65 @@ export class Plant extends Wood {
   }
 
   /**
-   * Taken hold of by the hand: by the trunk (or the base of a bush), it is
-   * moved, as it is; by a branch or a twig, that is bent - and bent too far,
-   * it snaps off.
+   * Taken hold of by the hand at (x, y): by the trunk - a bush anywhere, or
+   * anything with the world paused (`whole`) - it comes up out of the ground
+   * whole, and is a log from then on, which the hand holds (returned). By a
+   * branch or a twig, it stays where it is, and that is bent (handGrab).
    */
+  uproot(x, y, whole = false) {
+    if (this.frozenInPlace || this.removed) return this;
+    if (!whole && this.kind !== 'bush') {
+      const h = this.hitTest(x, y, 0.15, true);
+      if (h && h.b.depth > 0) return this;
+    }
+    return this.pullUp();
+  }
+
+  /** Out of the ground, roots and all: everything it is, as a log - which swings, falls and lies where it lands. */
+  pullUp() {
+    const sb = this.sandbox;
+    this.pose();
+    let roots = this.boughs.filter((b) => !b.parent);
+    if (!roots.length) return null;
+    if (roots.length > 1) {
+      // a bush: its stems, gathered where they come out of the ground
+      const crown = bough(null, 0, Math.PI / 2, CELL * 3, 0.05, 0.045, 0);
+      crown.hidden = true;
+      crown.solid.fill(0);
+      crown.hp.fill(0);
+      crown.x = this.x; crown.y = this.y; crown.ang = Math.PI / 2; crown.c = 0; crown.s = 1;
+      for (const r of roots) { r.parent = crown; crown.kids.push(r); }
+      this.boughs.unshift(crown);
+      roots = [crown];
+    }
+    const log = sb.addLog(new Log(sb, order(roots), this, { whole: this.kind, still: true, rot: this.kind === 'bush' ? 0 : undefined }));
+    // the wires tied to it, and the blades stuck in it, go with it
+    for (const w of [...sb.wires]) {
+      for (const e of [w.a, w.b]) {
+        if (e.kind !== 'tree' || e.t !== this) continue;
+        const p = this.at(e.seg, e.along), l = log.body.toLocal(p.x, p.y);
+        e.kind = 'body'; e.t = log; e.lx = l.x; e.ly = l.y;
+        delete e.seg; delete e.along;
+      }
+    }
+    for (const k of sb.blades) if (k.stuckIn && k.stuckIn.wood === this) k.stuckIn.wood = log;
+    this.boughs = [];
+    sb.remove(this, { quiet: true });
+    sb.emit('uproot', { what: log, x: this.x, y: this.y, kind: this.kind });
+    return log;
+  }
+
+  /** A branch or a twig taken hold of by the hand: bent toward it, until it snaps. */
   handGrab(x, y) {
     const h = this.hitTest(x, y, 0.15, true);
-    if (!h || h.b.depth === 0 || (this.kind === 'bush' && h.u < 0.12 && !h.b.parent)) {
-      this.held = { move: true, ox: this.x - x, oy: this.y - y };
-    } else {
-      this.held = { b: h.b, along: Math.max(0.05, h.u) };
-    }
+    if (!h) return false;
+    this.held = { b: h.b, along: Math.max(0.05, h.u) };
     return 'self';
   }
 
   handHold(x, y) {
     const h = this.held;
     if (!h) return;
-    if (h.move) {
-      this.shift(x + h.ox - this.x, Math.max(0, y + h.oy) - this.y);
-      return;
-    }
     const b = h.b;
     if (b.gone || !this.boughs.includes(b)) { this.held = null; return; }
     // bent round toward the hand, a little at a time: as far as the wood will go before it snaps
@@ -994,7 +1043,6 @@ export class Plant extends Wood {
   }
 
   handRelease() {
-    if (this.held && this.held.move) this.settle();
     this.held = null;
   }
 
@@ -1005,11 +1053,14 @@ export class Plant extends Wood {
     this.pose();
   }
 
-  /** Down onto whatever is under it. */
+  /**
+   * Let go of where it was put (unfrozen, say): standing on something, it
+   * stays; left in mid-air, it comes up whole, and falls.
+   */
   settle() {
+    if (this.frozenInPlace || this.removed) return;
     const below = this.sandbox.surfaceBelow(this.x, 0.1, this.y + 0.05);
-    this.y = below.y;
-    this.pose();
+    if (this.y - below.y > 0.03) this.pullUp();
   }
 
   /** What it says for itself, tapped. */
@@ -1036,19 +1087,36 @@ export class Plant extends Wood {
  * on it, just as it was when it came off.
  */
 export class Log extends Wood {
+  /**
+   * The boughs of `set` (the root first), come off `from`: cut off it, or -
+   * o.whole, the kind of plant it was - the whole of it pulled up out of the
+   * ground (o.still: not moving yet; o.rot: the way its body lies, a bush's
+   * upright, a tree's along its trunk).
+   */
   constructor(sb, set, from, o = {}) {
     super(sb);
     const root = set[0];
     this.id = nextPlant++;
     this.kind = 'log';
     this.boughs = set;
-    this.name = root.depth === 0 ? (from.kind !== 'log' && set.length > 3 ? 'Fallen tree' : 'Log') : root.r0 >= 0.04 ? 'Branch' : 'Twig';
+    this.whole = o.whole || null;
+    this.boxAll = o.whole === 'bush';
+    this.name = this.whole ? PLANTS[this.whole].name
+      : root.depth === 0 ? (from.kind !== 'log' && set.length > 3 ? 'Fallen tree' : 'Log') : root.r0 >= 0.04 ? 'Branch' : 'Twig';
     this.age = 0;
-    this.body = new Body(0.1, 0.1, 1, { x: root.x, y: root.y, rot: root.ang, owner: this, friction: 0.75, restitution: 0.05, angularDamping: 0.5 });
+    this.body = new Body(0.1, 0.1, 1, { x: root.x, y: root.y, rot: o.rot ?? root.ang, owner: this, friction: 0.75, restitution: 0.05, angularDamping: 0.5 });
     this.refit();
     const b = this.body;
+    // pulled up whole: which way is up for it, and where its foot is
+    if (this.whole) {
+      this.upRot = b.rot;
+      this.foot = { x: root.lx, y: root.ly };
+      this.trunk = this.spineLen;
+    }
     // moving as it was: off a log, as the log was; off a tree, going over the way it was pushed (or leans)
-    if (from.body) {
+    if (o.still) {
+      // (pulled up: as still as it stood)
+    } else if (from.body) {
       const v = from.body.velAt(b.pos.x, b.pos.y);
       b.vel.x = v.x; b.vel.y = v.y; b.angVel = from.body.angVel;
     } else {
@@ -1070,6 +1138,7 @@ export class Log extends Wood {
    */
   refit() {
     const root = this.boughs[0];
+    if (this.boxAll) { this.fitAll(); return; }
     const spine = [root];
     for (let last = root; ;) {
       const next = last.kids.find((k) => k.at >= last.len - CELL * 1.5 && k.depth === last.depth && Math.abs(angDiff(k.ang, last.ang)) < 0.35);
@@ -1081,6 +1150,7 @@ export class Log extends Wood {
     const end = spine[spine.length - 1];
     const tip = this.at(end, end.len);
     const len = Math.max(0.06, (tip.x - root.x) * root.c + (tip.y - root.y) * root.s);
+    this.spineLen = len;
     const thick = Math.max(0.03, 2 * root.r0 * 0.85);
     let mass = 0;
     for (const q of this.boughs) {
@@ -1099,6 +1169,42 @@ export class Log extends Wood {
       const l = b.toLocal(q.x, q.y);
       q.lx = l.x; q.ly = l.y; q.la = q.ang - root.ang;
     }
+  }
+
+  /**
+   * A bush's body: a box round all of it, upright as it stood - it is small
+   * and round enough that a box is near what it is, so it lands on its
+   * leaves instead of through them.
+   */
+  fitAll() {
+    const b = this.body;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, mass = 0;
+    const take = (p, r) => {
+      const l = b.toLocal(p.x, p.y);
+      x0 = Math.min(x0, l.x - r); x1 = Math.max(x1, l.x + r);
+      y0 = Math.min(y0, l.y - r); y1 = Math.max(y1, l.y + r);
+    };
+    for (const q of this.boughs) {
+      if (q.hidden) continue;
+      take(q, q.r0);
+      take(this.at(q, q.len), q.r1);
+      for (const lf of q.leaves) take(this.at(q, lf.along, lf.side), lf.r * 0.55);
+      mass += WOOD * Math.PI * ((q.r0 + q.r1) / 2) ** 2 * q.len + q.leaves.length * LEAF_MASS;
+    }
+    if (!Number.isFinite(x0)) return;
+    const c = b.toWorld((x0 + x1) / 2, (y0 + y1) / 2);
+    b.pos.x = c.x;
+    b.pos.y = c.y;
+    b.w = Math.max(0.1, x1 - x0);
+    b.h = Math.max(0.1, y1 - y0);
+    b.setKinematic(this.frozenInPlace, clamp(mass, 0.5, 60));
+    for (const q of this.boughs) {
+      const l = b.toLocal(q.x, q.y);
+      q.lx = l.x; q.ly = l.y; q.la = q.ang - b.rot;
+    }
+    // (nothing on it is out beyond the box, to break off when it lands)
+    this.spine = new Set(this.boughs);
+    this.spineLen = b.h;
   }
 
   /** Every bough where the body has it now. */
@@ -1121,7 +1227,12 @@ export class Log extends Wood {
   reweigh() {
     if (this.removed) return;
     const roots = this.boughs.filter((q) => !q.parent);
-    if (this.boughs.length && roots.length === 1 && roots[0] === this.boughs[0]) { this.refit(); return; }
+    if (this.boughs.length && roots.length === 1 && roots[0] === this.boughs[0]) {
+      this.refit();
+      // (its trunk cut short, it is not a tree any more: it will not take root again)
+      if (this.whole && this.spineLen < this.trunk - CELL * 1.5) { this.whole = null; this.name = 'Log'; }
+      return;
+    }
     for (const r of roots) this.fall(r);
     this.sandbox.remove(this, { quiet: true });
   }
@@ -1129,8 +1240,13 @@ export class Log extends Wood {
   update(dt) {
     this.age += dt;
     this.pose();
-    // branches on the side it lands on break off under it
     const sb = this.sandbox;
+    // a whole tree (or bush) stood back up on its foot takes root again
+    if (this.whole && !this.frozenInPlace && !(sb.hand && sb.hand.holding === this) && (this.rootT = (this.rootT || 0) - dt) <= 0) {
+      this.rootT = 0.05;
+      if (this.tryRoot()) return;
+    }
+    // branches on the side it lands on break off under it
     for (const q of [...this.boughs]) {
       if (this.spine.has(q) || q.gone || !this.boughs.includes(q)) continue;
       const tip = this.at(q, q.len), mid = this.at(q, q.len / 2);
@@ -1147,6 +1263,59 @@ export class Log extends Wood {
       this.boughs = this.boughs.filter((z) => !set.includes(z));
       sb.emit('snapBough', { what: this, x: tip.x, y: Math.max(0, tip.y), big: q.r0 >= 0.03 });
     }
+  }
+
+  /** Standing upright on its foot, on the ground (or on whatever is there), and still: it takes root there. */
+  tryRoot() {
+    const b = this.body, sb = this.sandbox;
+    if (Math.abs(angDiff(b.rot, this.upRot)) > 0.15) return false;
+    if (Math.hypot(b.vel.x, b.vel.y) > 0.8 || Math.abs(b.angVel) > 0.8) return false;
+    const foot = b.toWorld(this.foot.x, this.foot.y);
+    const below = sb.surfaceBelow(foot.x, 0.12, foot.y + 0.06, this);
+    if (foot.y - below.y > 0.08) return false;
+    return !!this.root(foot.x, below.y);
+  }
+
+  /** In the ground again at (x, y), straightened up: a tree (or a bush) once more, just as it is now. */
+  root(x, y) {
+    const sb = this.sandbox, b = this.body;
+    if (!sb.addPlant) return null;
+    this.pose();
+    const tilt = angDiff(b.rot, this.upRot);
+    const top = this.boughs[0];
+    const roots = top.hidden ? [...top.kids] : [top];
+    for (const q of this.boughs) {
+      q.bend = 0; q.w = 0; q.was = 0; q.gone = false;
+      if (q.hidden) continue;
+      if (roots.includes(q)) {
+        // (each of a bush's stems where it was along the ground from the foot)
+        const dx = q.x - top.x, dy = q.y - top.y;
+        q.ox = dx * Math.cos(-tilt) - dy * Math.sin(-tilt);
+        q.rest = q.ang - tilt;
+        q.parent = null;
+        q.at = 0;
+      } else q.rest = q.ang - q.parent.ang;
+    }
+    const plant = sb.addPlant(new Plant(sb, this.whole, x, y, undefined, roots));
+    if (!plant) {
+      // (no room for another: it stays as it is)
+      if (top.hidden) for (const r of roots) r.parent = top;
+      return null;
+    }
+    // what was tied to it, and stuck in it, stays where it was on it
+    for (const w of [...sb.wires]) {
+      for (const e of [w.a, w.b]) {
+        if (e.kind !== 'body' || e.t !== this) continue;
+        const p = b.toWorld(e.lx, e.ly), at = plant.branchAt(p.x, p.y);
+        e.kind = 'tree'; e.t = plant; e.seg = at.seg; e.along = at.along;
+        delete e.lx; delete e.ly;
+      }
+    }
+    for (const k of sb.blades) if (k.stuckIn && k.stuckIn.wood === this) k.stuckIn.wood = plant;
+    this.boughs = [];
+    sb.remove(this, { quiet: true });
+    sb.emit('rooted', { what: plant, x, y });
+    return plant;
   }
 
   /** Whether a wire end tied to this log is on bough z. */
@@ -1166,6 +1335,7 @@ export class Log extends Wood {
   tap() {
     let leaves = 0;
     for (const b of this.boughs) leaves += b.leaves.length;
+    if (this.whole) return `${this.name}, pulled up by the roots (${Math.round(this.body.mass)} kg)` + (this.frozenInPlace ? ', frozen in place' : '. Stand it up on the ground and it takes root again');
     return `${this.name}, ${Math.round(this.body.mass)} kg` + (leaves ? ', still in leaf' : '') + (this.frozenInPlace ? ', frozen in place' : '');
   }
 

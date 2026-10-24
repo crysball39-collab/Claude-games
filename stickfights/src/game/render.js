@@ -30,6 +30,7 @@ import {
 import { AMMO_BOXES, VEST_W, VEST_H, GUN_MODELS } from './props.js';
 import { drawWallShape, WALLS } from './structures.js';
 import { drawPlantShape } from './trees.js';
+import { drawGallowsShape } from './gallows.js';
 import { WIRES } from './wires.js';
 import { drawVitalsBack, drawVitalsFront, headFill, inkFor, drawIcedLimb } from './vitals.js';
 import { drawStains, drawBlots } from './blood.js';
@@ -98,6 +99,8 @@ export class Renderer {
     for (const it of sb.items) if (it.behind) { it.draw(ctx); drawStains(ctx, it); }
     for (const c of sb.crates) if (!c.carriedBy) this.drawCrate(ctx, c);
     for (const w of sb.slabs) if (!(w.body.aabb().maxX < v.minX || w.body.aabb().minX > v.maxX)) this.drawSlab(ctx, w);
+    // a gallows' lever, and its noose hanging empty (its timbers are slabs)
+    for (const g of sb.gallows) g.draw(ctx);
     for (const l of sb.logs) if (!(l.body.aabb().maxX < v.minX - 3 || l.body.aabb().minX > v.maxX + 3)) this.drawLog(ctx, l);
     for (const k of sb.knuckles) if (!k.wornBy) this.drawKnuckles(ctx, k);
     for (const k of sb.blades) if (!k.wornBy && !(k.stuckIn && k.stuckIn.person)) this.drawKnife(ctx, k);
@@ -558,6 +561,7 @@ export class Renderer {
     else if (g.kind === 'ammo') { const sp = AMMO_BOXES[g.size] || AMMO_BOXES.ammo9; drawAmmoBoxShape(ctx, g.size, sp.w, sp.h, 1); }
     else if (WALLS[g.kind]) { ctx.scale(1, -1); drawWallShape(ctx, g.kind, 0, 0, WALLS[g.kind].h); }
     else if (g.kind === 'tree' || g.kind === 'bush') drawPlantShape(ctx, g.kind, 0, 0, g.kind === 'bush' ? 1 : 5, 11);
+    else if (g.kind === 'gallows') { ctx.scale(1, -1); drawGallowsShape(ctx, 0, 0, 4.1); }
     else {
       // a stickman - or anybody else a mod adds
       ctx.strokeStyle = INK;

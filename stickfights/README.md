@@ -5,7 +5,7 @@ black floor. You spawn **stickmen** and **police officers**, **brass
 knuckles**, **combat knives**, **machetes**, **crowbars**, **Glock-19** and
 **M1911** pistols, an **AK-47**, a **Mossberg 500** pump shotgun, **tasers**,
 **light vests**, a box of **ammo** for each kind of gun, **crates**, **wood**,
-**metal** and **glass walls**, **trees** and **bushes**, and the stickmen get
+**metal** and **glass walls**, a **gallows**, **trees** and **bushes**, and the stickmen get
 on with it: they look around, talk, make friends and enemies,
 shake hands and hug, pick things up and put them in their pockets, climb on
 things, fight until they are out of breath, run, hide, help each other up, get
@@ -29,6 +29,17 @@ then comes down in shards, blows and bodies knock chunks out, and whatever is
 cut off from the ground comes away and falls. Trees **bend** - every branch,
 twig and bunch of leaves springs back when it is pushed, pulled, shot or hung
 from, and snaps when it is bent too far - and a trunk cut through comes down.
+Taken hold of by the hand, a wall comes away from where it stood and hangs
+from the hand, turning round under it as it is carried; let go, it falls, and
+put down on its end it stands again. A tree or a bush comes up whole, roots
+and all, and put back on its foot it takes root.
+
+The **gallows** has a noose hanging from the end of its beam over a trapdoor.
+Bring somebody's neck to the noose with the hand and it closes round it; let
+go, and they are stood on the trapdoor, stuck there and well aware of what it
+is for. A tap on the gallows pulls the lever: the trapdoor drops open, and
+they hang by the neck, choking, until they black out and die. It is built of
+wood, timber by timber - saw through the post and the beam comes down.
 
 The **freeze tool** stops anything dead where it is, in mid-air if need be,
 until it is tapped again. With the world **paused**, the hand just picks
@@ -91,7 +102,7 @@ The title screen has a few stickmen already going about their business behind
 it, one of them nursing a grudge. **PLAY** clears them away and opens the
 spawn menu.
 
-The spawn menu (☰ **SPAWN**, top left) has twenty-two things in it, in six
+The spawn menu (☰ **SPAWN**, top left) has twenty-three things in it, in six
 sections:
 
 | Section | Thing | What it is |
@@ -113,6 +124,7 @@ sections:
 | Building | **Wood Wall** | Planks on battens, 2.4 m tall. Bullets punch straight through; blows, bodies and crates break it up a few centimetres at a time; a knife thrown point first sticks in it. |
 | Building | **Metal Wall** | A riveted steel plate. Stops pistol rounds dead (and sometimes sends them back off it), and takes a great deal to dent, let alone break. |
 | Building | **Glass Wall** | A pane they can see through. Every knock cracks it further, and cracked enough it all comes down in shards - which cut whoever they land on. |
+| Building | **Gallows** | A post and a braced beam over a platform with a trapdoor in it, and a noose hanging from the end of the beam. Bring someone's neck to the noose with the hand and set them on the trapdoor; tap the gallows to pull the lever. Each timber is held up by what it rests on, and comes down when that is cut through. |
 | Nature | **Tree** | A trunk, branches, smaller branches, twigs and leaves, every one of them springy: it sways, bends under whatever pushes or hangs off it, sheds leaves when it is shot, and comes down when the trunk is cut through. |
 | Nature | **Bush** | Low, leafy stems. People walk through it - it gives way round them and closes behind - and it is drawn in front of them. |
 
@@ -892,6 +904,14 @@ over the low pieces), they see through glass and not the rest, and a thrown
 knife sticks in wood and glances off steel. Blood lands on all of it and
 stays.
 
+Taken hold of by the hand, a standing wall comes away from where it stood
+and is a loose body from then on, hanging from the hand by the point it was
+taken by: carried, it swings and turns round under the hand, and let go it
+falls under its own weight and lands however it lands (wood and steel break
+when they are dropped from high up, not when they are let go of or pushed
+over; glass is another matter). Lowered onto its end - upright, and still -
+and let go, it stands again, as solid as it was.
+
 A **tree** is a trunk, branches, smaller branches and twigs, each one a
 springy limb that bends where it grows out of the last: stiff as anything at
 the trunk, soft at the twigs. They sway in the air all the time; they bend
@@ -907,6 +927,13 @@ any other. Bullets through the leaves knock bunches of them off; they drift
 down, and so does the odd leaf on its own. A **bush** is low and soft: people
 walk through it, pushing the stems aside, and it closes behind them.
 
+Taken hold of by the trunk, a tree comes up whole - roots, branches, leaves
+and all - as a log on the hand, which swings and tips like anything else and
+falls when it is let go; set back down on its foot, the right way up, it
+takes root where it is put. A bush comes up whole from wherever it is taken
+hold of. A branch or a twig taken by the hand is bent instead, and snaps off
+if it is bent too far.
+
 A **wire** (`wires.js`) is put right after every step of the physics: each
 pulls its two ends back to where it says they may be - a body by a push where
 it is tied (so it swings, and turns), a ragdoll's point by moving it, a
@@ -918,6 +945,34 @@ snaps. Somebody tied to anything goes limp and hangs from it, and does not get
 up until they are free; a rope round the neck that is holding them up chokes
 them. A blade flying through a hemp rope cuts it, a bullet may, and a wood rope
 tied to something on fire burns through.
+
+### The gallows
+
+The gallows (`gallows.js`) is seven timbers of wood - a post, a beam out from
+the top of it, a brace under the beam, a platform on the post and a leg, a
+front leg, and a trapdoor in the platform - each one a slab of cells like a
+wall, and each one held up by what it rests on: the post and the legs by the
+ground, the beam and the brace by the post, the platform by the post and its
+leg, the trapdoor by the platform and the front leg. Shoot, saw or break
+through what holds a timber up, and it comes away and falls with whatever it
+was holding: saw through the post and the beam comes down, and the rope with
+it.
+
+From the end of the beam hangs a rope with a noose on it, swinging. Bring a
+neck to the loop - with the hand, or a limp body falling through it - and it
+closes, and from then on it is a rope from the beam to their neck. Let go of
+by the hand, they are set down under it, on their feet on the trapdoor, and
+there they stay: they cannot walk off, they know what it is for ("Get this
+rope off my neck!"), and so does anybody who saw it put on them.
+
+A tap on the gallows with the hand pulls the lever. The trapdoor drops open
+on its hinge and is nothing to stand on any more; whoever was on it drops
+through until the rope takes them by the neck, and the trapdoor swings down
+and is caught hanging straight down, out of the way. They hang there,
+kicking, and choke; they black out; and with no air they die of it, in less
+than half a minute. Anyone watching sees it and does not forget it. Tap the
+gallows again and the trapdoor is shut. The eraser takes the whole gallows
+away at once, and the freeze tool freezes all of it.
 
 ### Freezing in place, and the pause
 
@@ -1099,13 +1154,15 @@ officer turn up - except whoever has just done something.
 ### The hand
 
 Dragging grabs whatever is under your finger. A crate swings from the exact
-point you took hold of it. A standing wall slides where it is dragged, shoving
-whatever is in its way, and stands on whatever is under it when let go. A tree
-is moved by its trunk; a branch or a twig taken hold of is bent toward the
-hand, and snaps off if it is bent too far. A stickman goes limp in your grip and hangs from
-wherever you grabbed them - by the scruff of the neck, a hand, or upside down
-by an ankle - kicking and shouting, swinging as you move them; the dead and
-the knocked-out just hang. Let go while moving and it is a throw: they tumble
+point you took hold of it. A standing wall comes away from where it stood and
+hangs from the hand the same way, turning round under it; let go, it falls, and
+lowered onto its end it stands again. A tree taken by the trunk comes up whole,
+and a bush wherever it is taken; set back down on its foot, either takes root
+again. A branch or a twig taken hold of is bent toward the hand instead, and
+snaps off if it is bent too far. A tap on a gallows pulls its lever. A
+stickman goes limp in your grip and hangs from wherever you grabbed them - by
+the scruff of the neck, a hand, or upside down by an ankle - kicking and
+shouting, swinging as you move them; the dead and the knocked-out just hang. Let go while moving and it is a throw: they tumble
 through the air and land hurt. Fling one at a crowd and they bowl into
 whoever is in the way: both get hurt, and a hard enough hit sends the one
 they hit flying too, into the next.
@@ -1202,6 +1259,7 @@ stickfights/
       structures.js   walls: wood, metal and glass, cell by cell; what comes off them
       trees.js        trees and bushes: springy limbs, leaves, cells; the logs that fall
       wires.js        ropes, fixed ropes and pins, and the strain on them
+      gallows.js      the gallows: its timbers, the noose, the lever and the trapdoor
       freeze.js       the freeze tool
       hand.js         dragging and throwing (and, paused, just moving)
       fx.js           blood (drops, streams, splats, the walls, landing on things),
@@ -1242,10 +1300,10 @@ screen and checks:
 
 - stickmen are already moving about behind the title, and PLAY opens an empty
   sandbox with the spawn menu
-- the spawn menu has exactly twenty-two things in it: a Stickman, an Officer,
+- the spawn menu has exactly twenty-three things in it: a Stickman, an Officer,
   Brass Knuckles, a Combat Knife, a Machete, a Crowbar, a Glock-19, an M1911,
   an AK-47, a Mossberg 500, a Taser, a Crate, a Light Vest, four kinds of
-  ammo, three walls, a Tree and a Bush
+  ammo, three walls, a Gallows, a Tree and a Bush
 - the background is grey and the ground is black (read off the canvas)
 - tapping the world places a stickman, a crate and a set of knuckles where it
   was tapped, and the crate falls and settles
@@ -1375,6 +1433,13 @@ screen and checks:
   bush pushes the stems aside; chopped through at the foot, the tree comes
   down and lies there, the stump left standing; somebody hung from a branch
   bends it, and a branch dragged by the hand snaps off and falls
+- a wall taken hold of by the hand comes away and hangs from it, turning
+  round under it; let go, it falls under its own weight rather than going
+  straight back where it stood, and lands on its side; lowered onto its end
+  and let go, it stands up again
+- a tree taken by the trunk comes up whole, every branch on it, and swings
+  round in the hand; let go, it falls, and set back down on its foot it takes
+  root again; a bush comes up whole wherever it is taken hold of
 - the freeze tool stops a falling crate in mid-air (it stays there with
   something landing on it, and falls when tapped again), and stops a person
   mid-stride, who knows it
@@ -1385,6 +1450,17 @@ screen and checks:
   a metal pin holds a crate to the background and it turns about the pin;
   somebody tied by a wrist goes limp and hangs there; the same jolt snaps a
   wood rope and not a metal one
+- the gallows stands where it is put - a post, a beam with a brace under it,
+  a platform on two legs and a trapdoor in it - each timber held up by what
+  it rests on, with a noose hanging empty from the beam; the hand brings
+  somebody's neck to the noose and it closes round it, and let go they are
+  on their feet on the trapdoor, stuck there; tapped, the gallows has its
+  lever pulled and the trapdoor drops open and hangs straight down from its
+  hinge; they drop through and hang by the neck, their feet below the
+  platform, choking, and whoever saw it knows what they saw; they black out
+  and die of suffocation; tapped again, the trapdoor is shut; sawn through
+  the post, the beam and the brace come down and the platform does not; and
+  one tap of the eraser takes the whole gallows away
 - the AK-47 holds 30 rounds of 7.62 and fires in bursts; a Mossberg shell is
   eight pellets; a crowbar is swung like a machete, puts a glass wall in with
   one blow, and does not cut

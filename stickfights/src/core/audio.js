@@ -295,6 +295,24 @@ export class Sound {
     else this.tone('triangle', 340, 120, 0.08, 0.2 * v);
   }
 
+  /** A trapdoor dropping open: the latch knocked out, and the door slamming down on its hinge - or, shut, a heavy knock. */
+  trapdoor(x, open = true) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.tone('square', 1300, 900, 0.03, 0.12 * v);
+    this.hiss(0.03, 3000, 2, 0.25 * v);
+    if (!open) { this.wood(6, x); return; }
+    this.tone('sine', 110, 45, 0.25, 0.8 * v, 0.12);
+    this.hiss(0.16, 500, 0.9, 0.5 * v, 'lowpass', 0.12);
+    this.tone('triangle', 230, 120, 0.12, 0.35 * v, 0.13);
+  }
+
+  /** A rope taking a weight: a short, dry creak. */
+  ropeCreak(x) {
+    if (!this.ready) return;
+    this.sweep('bandpass', 420, 300, 0.35, this.near(x) * 0.12, 6);
+  }
+
   /** The freeze tool: a crisp, glassy lock - or, letting go, the same the other way. */
   lockInPlace(on, x) {
     if (!this.ready) return;

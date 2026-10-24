@@ -27,6 +27,7 @@ import { FX } from './fx.js';
 import { Slab, WALLS } from './structures.js';
 import { solveWires, bulletThrough } from './wires.js';
 import { Plant } from './trees.js';
+import { Gallows } from './gallows.js';
 import { makePerson } from './people.js';
 import { clamp, rand, chance } from '../core/util.js';
 
@@ -35,7 +36,7 @@ export const HALF_WIDTH = 20;
 /** Too big to be bowled over by a body flying into them (a mod's). */
 const sturdy = (q) => !!(q.species && q.species.sturdy);
 
-export const LIMITS = { people: 24, crates: 40, knuckles: 16, knives: 16, machetes: 16, crowbars: 16, guns: 16, limbs: 40, items: 40, vests: 12, ammo: 16, walls: 16, slabs: 70, plants: 12, logs: 40 };
+export const LIMITS = { people: 24, crates: 40, knuckles: 16, knives: 16, machetes: 16, crowbars: 16, guns: 16, limbs: 40, items: 40, vests: 12, ammo: 16, walls: 16, slabs: 70, plants: 12, logs: 40, gallows: 4 };
 // how likely a bullet is to hit someone in its way who it was not aimed at
 const STRAY_HIT = 0.4;
 
@@ -99,6 +100,7 @@ export class Sandbox {
     this.wires = [];          // ropes, rods and pins (wires.js)
     this.plants = [];         // trees and bushes (trees.js)
     this.logs = [];           // what has come off them: branches, twigs, whole trees
+    this.gallows = [];        // gallows.js: their timbers are slabs, their ropes wires
     this.fx = new FX(this);
     // things a mod puts in the world that are not bodies: beams, missiles, blasts.
     // Each is { update(dt, sandbox) -> false when it is over, draw(ctx) }
@@ -148,11 +150,11 @@ export class Sandbox {
   get count() {
     return { people: this.people.length, crates: this.crates.length, knuckles: this.knuckles.length, knives: this.knives.length,
       machetes: this.machetes.length, crowbars: this.crowbars.length, guns: this.guns.length, limbs: this.limbs.length, vests: this.vests.length, ammo: this.ammo.length,
-      walls: this.walls.length, plants: this.plants.length };
+      walls: this.walls.length, plants: this.plants.length, gallows: this.gallows.length };
   }
 
-  /** The walls standing, whole or not (not the pieces that came off them). */
-  get walls() { return this.slabs.filter((s) => s.kind === 'wall' && !s.removed); }
+  /** The walls standing, whole or not (not the pieces that came off them, nor the timbers of a gallows). */
+  get walls() { return this.slabs.filter((s) => s.kind === 'wall' && !s.group && !s.removed); }
 
   /** Every box things land on and bump into: the crates, the walls and the pieces off them. */
   solidBoxes() {
@@ -318,9 +320,26 @@ export class Sandbox {
     if (this.plants.length >= LIMITS.plants) return null;
     x = clamp(x, this.left + 0.3, this.right - 0.3);
     const base = this.surfaceBelow(x, 0.1, (y ?? 60) + 0.02).y;
-    const p = new Plant(this, kind, x, base);
-    this.plants.push(p);
+    const p = this.addPlant(new Plant(this, kind, x, base));
     this.emit('spawn', { what: p, x, y: base });
+    return p;
+  }
+
+  /** A gallows, the foot of its post at x, on whatever is under it. */
+  spawnGallows(x, y = null) {
+    if (this.gallows.length >= LIMITS.gallows) return null;
+    x = clamp(x, this.left + 0.3, this.right - 2.5);
+    const base = this.surfaceBelow(x + 1.1, 1.2, (y ?? 60) + 0.02).y;
+    const g = new Gallows(this, x, base);
+    this.gallows.push(g);
+    this.emit('spawn', { what: g, x: x + 1, y: base });
+    return g;
+  }
+
+  /** A tree or a bush put (back) into the ground: null when there are as many as there can be. */
+  addPlant(p) {
+    if (this.plants.length >= LIMITS.plants) return null;
+    this.plants.push(p);
     return p;
   }
 
@@ -420,6 +439,11 @@ export class Sandbox {
       // anything stuck in it falls out
       for (const k of this.blades) if (k.stuckIn && k.stuckIn.slab === thing) k.drop(k.body.pos.x, k.body.pos.y, 0, 0);
       this.emit('vanish', { what: thing, x: thing.pos.x, y: thing.pos.y });
+    } else if (thing.kind === 'gallows') {
+      thing.leave();
+      const i = this.gallows.indexOf(thing);
+      if (i >= 0) this.gallows.splice(i, 1);
+      this.emit('vanish', { what: thing, x: thing.pos.x, y: thing.pos.y });
     } else if (thing.kind === 'tree' || thing.kind === 'bush') {
       thing.removed = true;
       const i = this.plants.indexOf(thing);
@@ -487,6 +511,7 @@ export class Sandbox {
     for (const a of [...this.ammo]) this.remove(a);
     for (const c of [...this.crates]) this.remove(c);
     for (const w of [...this.slabs]) this.remove(w);
+    for (const g of [...this.gallows]) this.remove(g);
     for (const t of [...this.plants]) this.remove(t);
     for (const l of [...this.logs]) this.remove(l);
     for (const it of [...this.items]) this.remove(it);
@@ -527,6 +552,7 @@ export class Sandbox {
     this.knivesFly(dt);
     this.phys.step(dt);
     solveWires(this, dt);
+    for (const g of [...this.gallows]) if (!g.removed) g.update(dt);
     this.contacts();
     for (const l of [...this.logs]) if (!l.removed) l.update(dt);
     for (const k of this.blades) if (k.stuckIn && (k.stuckIn.crate || k.stuckIn.slab || k.stuckIn.wood)) k.follow();
@@ -1128,7 +1154,7 @@ export class Sandbox {
    * Something hitting a wall, or a piece of one landing: the wall takes it
    * where they touched, by how hard and how heavy - and a piece of glass
    * that lands hard breaks; wood and steel only when they come down very
-   * hard.
+   * hard (dropped from high up, not just let go of, or pushed over).
    */
   slabImpact(arb) {
     if (this.time - (arb.slabT || -9) < 0.15) return;
@@ -1140,7 +1166,7 @@ export class Sandbox {
       const mass = other.invMass > 0 ? other.mass : me.invMass > 0 ? me.mass : 0;
       if (!mass) continue;
       const self = other.invMass === 0;
-      if (self && arb.approach < (w.mat.brittle ? 3 : 8.5)) continue;
+      if (self && arb.approach < (w.mat.brittle ? 3 : 11)) continue;
       arb.slabT = this.time;
       const v = other.invMass > 0 ? other.vel : me.vel;
       const sp = Math.hypot(v.x, v.y) || 1;
@@ -1202,7 +1228,8 @@ export class Sandbox {
       best = { y: top, body };
     };
     for (const c of this.crates) if (!c.removed && !c.carriedBy && c !== except) consider(c.body);
-    for (const w of this.slabs) if (!w.removed && w !== except) consider(w.body);
+    // (a trapdoor dropping open is nothing to stand on)
+    for (const w of this.slabs) if (!w.removed && w !== except && !w.dropping) consider(w.body);
     for (const l of this.logs) if (!l.removed && l !== except) consider(l.body);
     return best;
   }

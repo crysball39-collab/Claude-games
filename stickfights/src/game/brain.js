@@ -64,7 +64,7 @@ const HEAR = {
   tased: 10, taserFire: 8, cuffed: 8, command: 16, vestStop: 9, stumble: 6, stumbleFall: 8, stumbleCaught: 5, driveStun: 6,
   // fire and ice
   ignite: 12, extinguish: 6, freeze: 7, thaw: 5, iceSnap: 9, shatter: 16, gasp: 6, dropRoll: 6,
-  glassShatter: 14, slabFree: 12, slabBreak: 7, limbFall: 14, snapBough: 7, wireSnap: 8, freezeInPlace: 8, unfreeze: 6, wire: 6,
+  glassShatter: 14, slabFree: 12, slabBreak: 7, noosed: 9, trapdoor: 12, limbFall: 14, snapBough: 7, wireSnap: 8, freezeInPlace: 8, unfreeze: 6, wire: 6,
 };
 // what counts as violence done to them, for fear and grudges
 const VIOLENT = new Set(['koMe', 'cutMe', 'stabbedMe', 'choppedMe', 'severedMe', 'shotMe', 'shotAtMe', 'aimedAtMe', 'sawStab', 'sawShoot', 'sawSever', 'sawKill', 'sawThreat', 'tasedMe', 'burnedMe', 'sawBurn']);
@@ -262,9 +262,10 @@ export class Brain {
     if (me.tased) return 'Being tased';
     if (me.flames) return me.rolling > 0 ? 'Rolling on the floor to put the fire out' : 'On fire!';
     if (me.state === 'held' && me.vit && me.vit.air === 'choke') return 'Held up by the head, choking';
-    if (me.vit && me.vit.air === 'choke' && me.tied) return 'Hanging by the neck, choking';
+    if (me.vit && me.vit.air === 'choke' && (me.tied || me.noosed)) return 'Hanging by the neck, choking';
     if (me.frozenInPlace) return 'Frozen in place: cannot move';
     if (me.tied) return 'Tied up';
+    if (me.noosed) return me.rag ? 'Hanging in a noose' : 'Standing with a noose round the neck';
     // (what a mod's is up to, in its own words)
     const own = me.species && me.species.doing ? me.species.doing(me) : null;
     if (own) return own;
@@ -346,8 +347,8 @@ export class Brain {
       }
     }
     const st = me.state;
-    // frozen in place, or tied up: nothing to be done but say so
-    if (me.frozenInPlace || me.tied) { this.stuckFast(dt); return; }
+    // frozen in place, tied up, or with a noose round the neck: nothing to be done but say so
+    if (me.frozenInPlace || me.tied || me.noosed) { this.stuckFast(dt); return; }
     if (st === 'down' || st === 'crawl' || st === 'held') { this.whileDown(dt); return; }
     if (st !== 'stand' && st !== 'air' && st !== 'climb') return;
     this.stayDown = false;
@@ -879,6 +880,35 @@ export class Brain {
       case 'wireSnap':
         if (seen && ev.why === 'strain') { E.bump('surprise', 0.4); if (chance(0.5)) this.speak('wireSnap', {}, 0.7, null, true); }
         break;
+      case 'noosed':
+        // somebody with a noose put round their neck
+        if (seen && ev.who && ev.who !== me) {
+          const r = this.rel(ev.who);
+          E.bump('fear', 0.3 * (1.2 - T.bravery));
+          E.bump('sadness', 0.15 + Math.max(0, r.like) * 0.3);
+          E.bump('surprise', 0.5);
+          this.speak('sawNoosed', { victim: ev.who.name }, 0.85, null, true);
+          this.note(`Somebody put a noose round ${ev.who.name}'s neck.`);
+        }
+        break;
+      case 'trapdoor':
+        // the trapdoor dropping - and whoever was on it, through it
+        if (!ev.open) break;
+        E.bump('surprise', 0.6);
+        for (const v of ev.on || []) {
+          if (!seen || v === me || v.removed) continue;
+          const r = this.rel(v);
+          E.bump('fear', 0.4 * (1.2 - T.bravery));
+          E.bump('sadness', 0.3 + Math.max(0, r.like) * 0.5);
+          if (v.noosed) {
+            this.speak('sawHanged', { victim: v.name }, 1, null, true);
+            this.note(`${v.name} dropped through the trapdoor, on the end of a rope.`);
+            this.shaken(0.6);
+          }
+          break;
+        }
+        if (!seen) this.heard = { x, y, t: now };
+        break;
       case 'freezeInPlace':
         // somebody stopped dead, in mid-air or mid-step
         if (seen && ev.who && ev.who !== me) {
@@ -1224,6 +1254,16 @@ export class Brain {
           this.note(`Something tied me up by the ${String(d.part || 'arm').replace(/[AB]$/, '')}.`);
           this.downTalk = rand(2.5, 4.5);
         }
+        break;
+      case 'noosed':
+        // a rope round the neck, and a trapdoor under the feet: they know what that is
+        this.clearBehaviour();
+        E.bump('fear', 0.8 * (1.25 - T.bravery));
+        E.bump('surprise', 0.7);
+        E.bump('sadness', 0.25);
+        this.speak('noosed', {}, 1, null, true);
+        this.note('There is a noose round my neck.');
+        this.downTalk = rand(2, 3.5);
         break;
       case 'unroped':
         E.bump('joy', 0.2);
@@ -2263,7 +2303,7 @@ export class Brain {
     this.downTalk = choking ? rand(1.4, 2.2) : rand(3.5, 6.5);
     if (me.flames) this.speak('onFire', {}, 0.85, null, true);
     else if (choking) this.speak('choking', {}, 0.95, null, true);
-    else this.speak(me.frozenInPlace ? 'cantMove' : 'tiedUp', {}, 0.7, null, true);
+    else this.speak(me.frozenInPlace ? 'cantMove' : me.noosed && !me.tied ? 'noosed' : 'tiedUp', {}, 0.7, null, true);
   }
 
   /** On the floor, crawling, or held up: no behaviour, but still a mind. */

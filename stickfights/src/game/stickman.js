@@ -57,7 +57,7 @@ import { startStumble, updateStumble, stumblePose } from './stumble.js';
 import { updateTased } from './taser.js';
 import { updateVitals, healVitals, iceBlow, ignite } from './vitals.js';
 import { bleedSources, pickSource, feedStreams, splatter, contactOf, woundId, bloodK } from './blood.js';
-import { tiedUp } from './wires.js';
+import { tiedUp, noosed } from './wires.js';
 import { clamp, clamp01, lerp, lerpAngle, rand, chance, moveToward, segDist, sign, smooth, wrapAngle, wobble, DEG } from '../core/util.js';
 
 export const G = 18;
@@ -240,6 +240,8 @@ export class Stickman {
   get alive() { return !this.health.dead; }
   /** Tied to something with a rope, a rod or a pin (wires.js). */
   get tied() { return !!this.wires && tiedUp(this); }
+  /** A noose round their neck: on their feet in it, stuck there; off them, hanging by it. */
+  get noosed() { return !!this.wires && noosed(this); }
   get dead() { return this.health.dead; }
   get conscious() { return this.alive && this.health.conscious >= KO_LEVEL && this.state !== 'ko'; }
   get lying() { return LYING.has(this.state) || (this.state === 'getup' && this.stateT < 0.45) || (this.rag && this.state === 'thrown' && this.onGround); }
@@ -2494,7 +2496,8 @@ export class Stickman {
     const top = this.pos.y + Math.max(0.5, this.height);
     const sb = this.sandbox;
     for (const c of sb.slabs.length || sb.logs.length ? [...sb.crates, ...sb.slabs, ...sb.logs] : sb.crates) {
-      if (c.carriedBy || c.removed || c.body === this.support) continue;
+      // (a trapdoor dropping open from under them is not a wall either)
+      if (c.carriedBy || c.removed || c.body === this.support || c.dropping) continue;
       // something flying at them, or coming down on their head, is the
       // physics' business - that is a hit, not a wall to step back from
       const cv = c.body.vel;

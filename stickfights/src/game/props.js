@@ -287,8 +287,9 @@ export class Blade {
     if (st.wood) {
       let t = st.wood;
       if (t.removed || !t.boughs.includes(st.bough)) {
-        // the limb it was in came off: it is in whatever that became
-        t = this.sandbox.logs.find((l) => !l.removed && l.boughs.includes(st.bough)) || null;
+        // the limb it was in came off (or the whole thing came up, or took root again): it is in whatever that became
+        const sb = this.sandbox;
+        t = [...sb.logs, ...sb.plants].find((l) => !l.removed && l.boughs.includes(st.bough)) || null;
         if (!t) { this.drop(b.pos.x, b.pos.y, 0, 0); return; }
         st.wood = t;
       }

@@ -50,6 +50,9 @@ export class Ragdoll {
     this.grabRef = null;
     this.grabAt = { x: 0, y: 0 };
     this.grabK = 0.85;
+    // ropes, rods and pins from a point to something that does not give (wires.js): solved along with the
+    // bones, so a body caught by a rope is caught as one. { i, x, y, len, rope, moved }
+    this.tethers = [];
     this.tone = 0;          // how hard the muscles pull, 0 limp .. 1 wide awake
     this.friction = 0.03;   // joint friction: keeps a limp body from flopping for ever
     this.passive = 0.004;   // how hard the joints drift back to rest, per pass
@@ -227,7 +230,7 @@ export class Ragdoll {
     this.impacts.length = 0;
     // frozen in place (the freeze tool): nothing moves at all
     if (this.pinned) return;
-    if (this.asleep && !this.grabRef) return;
+    if (this.asleep && !this.grabRef && !this.tethers.length) return;
     const g = this.gravity * dt * dt;
     const keep = 1 - this.drag * dt;
     const lim = MAX_STEP * dt;
@@ -250,6 +253,17 @@ export class Ragdoll {
       j.prev = b;
     }
 
+    // a point on a rope that was already past its length a step ago is not flung back by it: only stopped
+    for (const t of this.tethers) {
+      const q = this.p[t.i];
+      if (!q) continue;
+      const ex = q.px - t.x, ey = q.py - t.y, e = Math.hypot(ex, ey);
+      if (e > t.len + 1e-6 || (!t.rope && e < t.len - 1e-6)) {
+        const k = e > 1e-9 ? (e - t.len) / e : 0;
+        q.px -= ex * k; q.py -= ey * k;
+      }
+    }
+
     this.contacts.length = 0;
     const boxes = this.nearBoxes(world);
     for (let it = 0; it < this.iterations; it++) {
@@ -261,6 +275,7 @@ export class Ragdoll {
         const w = this.invMass(this.grabRef);
         if (w > 0) this.push(this.grabRef, (this.grabAt.x - P.x) * this.grabK / w, (this.grabAt.y - P.y) * this.grabK / w);
       }
+      for (const t of this.tethers) this.solveTether(t);
       for (let i = 0; i < this.p.length; i++) this.collide(i, world, boxes, last);
     }
     this.afterContacts(dt, world);
@@ -272,6 +287,19 @@ export class Ragdoll {
     if (fast < 0.0005 && !this.grabRef) {
       if ((this.still += dt) > 1.5) this.asleep = true;
     } else this.still = 0;
+  }
+
+  /** A rope (or a rod, or a pin) from point t.i to (t.x, t.y), which does not give: the point put back within t.len of it. */
+  solveTether(t) {
+    const q = this.p[t.i];
+    if (!q || q.im <= 0) return;
+    const dx = q.x - t.x, dy = q.y - t.y, d = Math.hypot(dx, dy);
+    const c = d - t.len;
+    if (t.rope ? c <= 0 : Math.abs(c) < 1e-6) return;
+    const k = d > 1e-9 ? c / d : 0;
+    q.x -= dx * k; q.y -= dy * k;
+    // (how hard it pulled: the displacement, times the mass it moved)
+    t.moved += Math.abs(c) / q.im;
   }
 
   solveLink(l) {

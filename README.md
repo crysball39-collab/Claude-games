@@ -9,8 +9,11 @@ texture in the game is drawn procedurally onto a canvas at load time.
 > knuckles, combat knives, machetes, crowbars, Glock-19 and M1911 pistols, an
 > AK-47, a Mossberg 500 pump shotgun, tasers, light vests, a box of ammo for
 > each kind of gun, crates, wood, metal and glass walls that break cell by
-> cell, and trees and bushes whose branches, twigs and leaves bend, snap and
-> fall - and the stickmen think, feel, remember, talk,
+> cell (and that the hand lifts, swings round and sets back on their ends), a
+> gallows with a noose and a trapdoor that drops when the lever is pulled, and
+> trees and bushes whose branches, twigs and leaves bend, snap and fall, and
+> that come up whole, roots and all, and take root again where they are put -
+> and the stickmen think, feel, remember, talk,
 > fight until they run out of breath, stumble, break bones, lose limbs and die
 > on their own - animated frame by frame while they are in charge of their
 > bodies, balancing on their feet when a blow knocks them back, and ragdolls
