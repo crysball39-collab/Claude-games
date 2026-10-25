@@ -266,6 +266,44 @@ export function rockTexture(size = 256, { seed = 11, tint = [1, 0.98, 0.93], dar
   return toTexture(c);
 }
 
+/* ------------------------------ stone slabs ------------------------------- */
+
+/**
+ * Irregular flagstones with dark cracks between them, for the cave floor.
+ * Each slab is the area closest to one of a jittered grid of points; the
+ * grid wraps, so the tile does too.
+ */
+export function slabTexture(size = 256, { seed = 27, cells = 5, base = [124, 120, 117] } = {}) {
+  const rng = makeRng(seed);
+  const noise = makeTileableNoise(seed + 1);
+  const pts = [], shade = [];
+  for (let j = 0; j < cells; j++) {
+    for (let i = 0; i < cells; i++) {
+      pts.push([(i + 0.2 + rng() * 0.6) / cells, (j + 0.2 + rng() * 0.6) / cells]);
+      shade.push(0.8 + rng() * 0.32);
+    }
+  }
+  const mod = (a, n) => ((a % n) + n) % n;
+  const { c } = paintPixels(size, (u, v) => {
+    const ci = Math.floor(u * cells), cj = Math.floor(v * cells);
+    let d1 = 9, d2 = 9, id = 0;
+    for (let dj = -1; dj <= 1; dj++) {
+      for (let di = -1; di <= 1; di++) {
+        const ii = mod(ci + di, cells), jj = mod(cj + dj, cells);
+        const p = pts[jj * cells + ii];
+        const px = p[0] + (ci + di - ii) / cells, py = p[1] + (cj + dj - jj) / cells;
+        const d = Math.hypot(u - px, v - py);
+        if (d < d1) { d2 = d1; d1 = d; id = jj * cells + ii; } else if (d < d2) d2 = d;
+      }
+    }
+    const crack = 1 - clamp01((d2 - d1) / 0.014);
+    const grain = 0.84 + tileableFbm(noise, u, v, 8, 4, 0.55) * 0.32;
+    const k = shade[id] * grain * (1 - crack * 0.62);
+    return [base[0] * k, base[1] * k, base[2] * k];
+  });
+  return toTexture(c);
+}
+
 /* ------------------------------- roof tiles ------------------------------- */
 
 export function shinglesTexture(size = 256) {

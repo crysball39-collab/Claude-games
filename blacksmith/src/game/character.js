@@ -15,7 +15,9 @@
    elbows bend by a "flex" amount, and which way that turns is settled here
    and nowhere else.
    ========================================================================== */
-import { Group, Mesh, BoxGeometry, MeshLambertMaterial, Color } from 'three';
+import {
+  Group, Mesh, BoxGeometry, MeshLambertMaterial, Color, Vector3, Matrix3, BufferGeometry, Float32BufferAttribute,
+} from 'three';
 import { clamp, clamp01, lerp, smoothstep, damp } from '../core/util.js';
 import { faceTexture } from './textures.js';
 
@@ -189,6 +191,52 @@ export class Rig {
 
   /** A red flash over the whole body. */
   flash(seconds = 0.14) { this._flash = Math.max(this._flash, seconds); }
+
+  /**
+   * Folds each joint's plain boxes into one mesh coloured per vertex, so a
+   * body costs a draw call a joint rather than one a box. Textured, glowing
+   * and multi-material parts stay as they are, and so does anything added
+   * later - armour and whatever is in the hands.
+   */
+  bake() {
+    let shared = null;
+    const v = new Vector3(), nm = new Matrix3();
+    for (const j of Object.values(this.joints)) {
+      const list = j.children.filter((m) => m.isMesh && !Array.isArray(m.material) && this.materials.includes(m.material) &&
+        !m.material.map && m.material.emissive.getHex() === 0);
+      if (list.length < 2) continue;
+      shared = shared || this.mat(0xffffff, { vertexColors: true });
+      const pos = [], nor = [], col = [];
+      for (const m of list) {
+        m.updateMatrix();
+        nm.getNormalMatrix(m.matrix);
+        const g = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry;
+        const p = g.attributes.position, n = g.attributes.normal, c = m.material.color;
+        for (let i = 0; i < p.count; i++) {
+          v.fromBufferAttribute(p, i).applyMatrix4(m.matrix);
+          pos.push(v.x, v.y, v.z);
+          v.fromBufferAttribute(n, i).applyMatrix3(nm).normalize();
+          nor.push(v.x, v.y, v.z);
+          col.push(c.r, c.g, c.b);
+        }
+        if (g !== m.geometry) g.dispose();
+        m.geometry.dispose();
+        m.removeFromParent();
+      }
+      const geo = new BufferGeometry();
+      geo.setAttribute('position', new Float32BufferAttribute(pos, 3));
+      geo.setAttribute('normal', new Float32BufferAttribute(nor, 3));
+      geo.setAttribute('color', new Float32BufferAttribute(col, 3));
+      const mesh = new Mesh(geo, shared);
+      mesh.castShadow = true;
+      j.add(mesh);
+    }
+    // let go of the materials nothing is drawn with any more
+    const used = new Set();
+    this.root.traverse((o) => { if (o.isMesh) for (const m of [].concat(o.material)) used.add(m); });
+    this.materials = this.materials.filter((m) => used.has(m) || (m.dispose(), false));
+    return this;
+  }
 
   /**
    * Poses the rig for this frame.

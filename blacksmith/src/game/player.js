@@ -39,7 +39,7 @@ export function blobShadow(size = 1.1) {
 export class Player {
   constructor(profile) {
     this.profile = profile;
-    this.rig = dressHuman(new Rig(), SMITH);
+    this.rig = dressHuman(new Rig(), SMITH).bake();
     this.outfit = new Outfit(this.rig);
     this.group = new Group();
     this.group.add(this.rig.root);

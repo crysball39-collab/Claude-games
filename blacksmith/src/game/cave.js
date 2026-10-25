@@ -21,7 +21,7 @@ import {
   HemisphereLight, AmbientLight, PointLight, AdditiveBlending,
 } from 'three';
 import { makeRng, valueNoise2D, fbm, clamp01, lerp, TAU } from '../core/util.js';
-import { rockTexture, dirtTexture, woodTexture, flameTexture, softDotTexture } from './textures.js';
+import { rockTexture, slabTexture, woodTexture, flameTexture, softDotTexture } from './textures.js';
 import { mergeStatic, flatten, tiledBox, rockGeometry } from './geo.js';
 import { Collider } from './collide.js';
 import { buildPickaxe } from './gear.js';
@@ -62,11 +62,11 @@ export function buildCave({ quality }) {
   const noise = valueNoise2D(17);
 
   const rockTex = keep(rockTexture(256, { seed: 21, tint: [0.92, 0.9, 0.94] }));
-  const floorTex = keep(dirtTexture(256));
+  const floorTex = keep(slabTexture(256));
   const woodTex = keep(woodTexture(128, { seed: 8, planks: 1, base: [110, 74, 42] }));
   const M = {
     wall: new MeshLambertMaterial({ map: rockTex, vertexColors: true }),
-    floor: new MeshLambertMaterial({ map: floorTex, vertexColors: true, color: 0xa8a3a2 }),
+    floor: new MeshLambertMaterial({ map: floorTex, vertexColors: true, color: 0xc2bdbb }),
     rock: new MeshLambertMaterial({ map: rockTex, color: 0x8d8790 }),
     beam: new MeshLambertMaterial({ map: woodTex }),
     darkWood: new MeshLambertMaterial({ color: 0x4f321b }),
@@ -143,7 +143,7 @@ export function buildCave({ quality }) {
   wallGrid(CV.rOut, phiE, TAU - phiE, 0, CV.wallH + 0.4, segs, 9, true, 0.75, [0, ...OUTER_TORCHES]);
   wallGrid(CV.rOut, -phiE, phiE, CV.tunnel.h, CV.wallH + 0.4, 4, 3, true, 0.0);
   // the wall in the middle, floor to ceiling
-  wallGrid(CV.rIn, 0, TAU, 0, CV.wallH + 0.4, low ? 36 : 56, 9, false, 0.55, INNER_TORCHES);
+  wallGrid(CV.rIn, 0, TAU, 0, CV.wallH + 0.4, low ? 40 : 64, 12, false, 0.75, INNER_TORCHES);
 
   // the vault: a ring of ceiling, highest halfway between the walls
   {
@@ -185,7 +185,7 @@ export function buildCave({ quality }) {
     const colr = new Float32Array(pos.count * 3);
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i), z = pos.getZ(i), d = Math.hypot(x, z);
-      uv.setXY(i, x / 3, z / 3);
+      uv.setXY(i, x / 4, z / 4);
       const mid = 1 - Math.abs((d - (CV.rIn + CV.rOut) / 2) / ((CV.rOut - CV.rIn) / 2));
       const k = 0.82 + mid * 0.2 + (fbm(noise, x * 0.2, z * 0.2, 3) - 0.5) * 0.25;
       colr[i * 3] = k; colr[i * 3 + 1] = k * 0.96; colr[i * 3 + 2] = k * 0.92;

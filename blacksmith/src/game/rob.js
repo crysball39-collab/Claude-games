@@ -22,6 +22,7 @@ export class Rob {
     // braces on the overalls
     const strap = this.rig.mat('#3f5a7a');
     for (const x of [-0.12, 0.12]) this.rig.box('torso', 0.06, 0.5, 0.28, strap, { x, y: 0.27 });
+    this.rig.bake();
     this.rig.joints.grip.add(buildPickaxe('stone'));
     this.group = new Group();
     this.group.add(this.rig.root);

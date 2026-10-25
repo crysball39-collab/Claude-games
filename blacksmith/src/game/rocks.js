@@ -14,9 +14,9 @@ import { Bar3D } from './fx.js';
 import { makeRng, angleDelta } from '../core/util.js';
 
 const LOOK = {
-  pebble: { color: '#b3aca3', speck: '#8a837a', squash: 0.62, detail: 1 },
-  rock: { color: '#948d86', speck: '#6f6962', squash: 0.72, detail: 1 },
-  boulder: { color: '#77727a', speck: '#57525a', squash: 0.82, detail: 2 },
+  pebble: { color: '#cdc4b8', squash: 0.62, detail: 1 },
+  rock: { color: '#ada398', squash: 0.72, detail: 1 },
+  boulder: { color: '#958d98', squash: 0.82, detail: 2 },
 };
 
 export class RockField {

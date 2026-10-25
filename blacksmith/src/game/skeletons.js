@@ -47,7 +47,7 @@ export class SkeletonPack {
 
   spawn(avoid = null, rise = true) {
     const s = this._spot(avoid);
-    const rig = dressSkeleton(new Rig());
+    const rig = dressSkeleton(new Rig()).bake();
     rig.joints.grip.add(buildWoodenDagger());
     const group = new Group();
     group.add(rig.root);
