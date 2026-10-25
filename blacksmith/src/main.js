@@ -11,6 +11,7 @@ import { Menu } from './ui/menu.js';
 import { Hud } from './ui/hud.js';
 import { InventoryUI } from './ui/inventory.js';
 import { ForgeUI } from './ui/forge.js';
+import { ShopUI } from './ui/shop.js';
 import { DialogueUI } from './ui/dialogue.js';
 import { Profile } from './game/profile.js';
 import { readSave, clearSave } from './game/save.js';
@@ -67,6 +68,7 @@ const app = {
   hud: null,
   inventory: null,
   forge: null,
+  shop: null,
   dialogue: null,
   lastTime: 0,
 };
@@ -153,15 +155,22 @@ async function startGame(fresh) {
       onEquip: (uid) => app.game?.equipForged(uid),
       onSkip: () => app.game?.skipCraft(),
     });
+    app.shop = new ShopUI(profile, {
+      onSelect: (type) => app.game?.inspectPickaxe(type),
+      onBuy: (type) => app.game?.buyPickaxe(type),
+      onEquip: (type) => app.game?.equipPickaxe(type),
+      onClose: () => app.game?.closeShop(),
+    });
     app.dialogue = new DialogueUI();
   } else {
     app.inventory.setProfile(profile);
     app.forge.setProfile(profile);
+    app.shop.setProfile(profile);
   }
 
   const game = new app.Game({
     viewport, settings, profile, hud: app.hud, input,
-    inventory: app.inventory, forgeUI: app.forge, dialogue: app.dialogue,
+    inventory: app.inventory, forgeUI: app.forge, shopUI: app.shop, dialogue: app.dialogue,
   });
   app.game = game;
   try {
@@ -195,6 +204,7 @@ function quitToMenu() {
   pauseOverlay.classList.add('hidden');
   app.inventory?.close();
   app.forge?.close();
+  app.shop?.close();
   app.dialogue?.close();
   showMenu();
 }
@@ -226,6 +236,7 @@ function back() {
   if (app.state === 'paused') { setPaused(false); return; }
   if (g.mode === 'menu') g.closeInventory();
   else if (g.mode === 'forge') g.closeForge();
+  else if (g.mode === 'shop') g.closeShop();
   else if (g.mode === 'talk') g.closeTalk();
   else setPaused(true);
 }

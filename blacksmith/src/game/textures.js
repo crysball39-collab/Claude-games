@@ -441,6 +441,21 @@ export function signTexture(text, w = 512, h = 192) {
   return toTexture(c, { clamp: true });
 }
 
+/** A price, burnt into a little plank, for under each pickaxe on the wall. */
+export function drawPriceTag(ctx, w, h, text, color = '#2b1606') {
+  drawWood(ctx, w, h, { seed: 31, planks: 1, base: [178, 134, 86] });
+  ctx.strokeStyle = 'rgba(40,22,8,0.85)';
+  ctx.lineWidth = 6;
+  ctx.strokeRect(3, 3, w - 6, h - 6);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `bold ${Math.round(h * 0.54)}px Georgia, "Times New Roman", serif`;
+  ctx.fillStyle = 'rgba(240,200,150,0.5)';
+  ctx.fillText(text, w / 2 + 1, h / 2 + 4);
+  ctx.fillStyle = color;
+  ctx.fillText(text, w / 2, h / 2 + 2);
+}
+
 /** A name or a level, as a little pill that floats over someone's head. */
 export function tagCanvas(text, { fg = '#fff', bg = 'rgba(20,14,10,0.72)', border = 'rgba(255,220,170,0.6)', w = 256, h = 72 } = {}) {
   const c = makeCanvas(w, h);

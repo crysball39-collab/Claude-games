@@ -1,7 +1,7 @@
 /* =============================================================================
    Rob. A miner who has been down here a long time and would like there to be
-   fewer skeletons. He pays for them, three at a time, as often as you like,
-   and he will sell you his spare Stone Pickaxe.
+   fewer skeletons. He pays for them, three at a time, as often as you like.
+   Pickaxes are not his line: those are on the wall outside the cave mouth.
 
    Over his head: his name, and a mark that says what he wants from you -
    "!" when he has work, "?" when you have done it and he owes you.

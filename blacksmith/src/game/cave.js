@@ -24,7 +24,6 @@ import { makeRng, valueNoise2D, fbm, clamp01, lerp, TAU } from '../core/util.js'
 import { rockTexture, slabTexture, woodTexture, flameTexture, softDotTexture } from './textures.js';
 import { mergeStatic, flatten, tiledBox, rockGeometry } from './geo.js';
 import { Collider } from './collide.js';
-import { buildPickaxe } from './gear.js';
 import { oreMaterial } from './materials.js';
 import { ORE_ORDER } from './data.js';
 
@@ -359,7 +358,7 @@ export function buildCave({ quality }) {
       col.box(x, z, s / 2 + 0.02, s / 2 + 0.02, { ry, h: s });
     };
     // Rob's camp, off to the right of the way in: a mine cart full of ore,
-    // crates, and his Stone Pickaxe for sale
+    // and crates to sit on
     const { x, z } = CV.camp;
     const cart = new Group();
     cart.position.set(x + 2.0, 0, z - 2.0);
@@ -387,13 +386,7 @@ export function buildCave({ quality }) {
     col.box(x + 2.0, z - 2.0, 0.62, 0.8, { ry: 0.5, h: 1.1 });
     crate(x + 2.6, z + 1.0, 0.8, 0.2);
     crate(x + 3.2, z + 1.9, 0.6, 0.6);
-    // the display: a crate with the pickaxe laid across it
     crate(x - 0.2, z - 2.8, 0.75, -0.3);
-    const pick = buildPickaxe('stone');
-    pick.position.set(x - 0.2, 0.8, z - 2.8);
-    pick.rotation.set(Math.PI / 2, 0, 0.9);
-    world.add(pick);
-    flatten(pick, world);
     flatten(cart, world);
     // a bedroll and a cold campfire ring
     box(0.8, 0.08, 1.8, M.cloth, x + 1.7, 0.04, z + 3.3, { ry: 1.2 });

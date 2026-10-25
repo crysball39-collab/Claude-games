@@ -115,6 +115,14 @@ async function installHelpers() {
         g.camRig.snapBehind(p.pos, p.yaw);
       },
       ores() { return Object.values(A.profile.ores).reduce((a, b) => a + b, 0); },
+      /** Where on the screen the middle of a thing is, after a frame. */
+      onScreen(v) {
+        const g = A.game;
+        g.camera.updateMatrixWorld();
+        const p = v.clone().project(g.camera);
+        const r = g.renderer.domElement.getBoundingClientRect();
+        return { x: r.left + (p.x * 0.5 + 0.5) * r.width, y: r.top + (-p.y * 0.5 + 0.5) * r.height };
+      },
       /** One frame of a player's hands: the stick, and ATTACK held or not. */
       frame(attack = false, move = null) { this.step(1, { attack, move }); },
       /**
@@ -298,6 +306,45 @@ try {
   check('in your hand the blade is iron, the guard gold, the pommel diamond',
     held.blade === 'iron' && held.out.gold >= 1 && held.out.diamond === 1, JSON.stringify(held));
 
+  /* ---------------------------- the pickaxe wall --------------------------- */
+  const tapWall = async () => {
+    const at = await ev(() => {
+      const g = window.BLACKSMITH.game, Wl = g.area.pickWall, p = g.player;
+      p.teleport(Wl.center.x + Wl.normal.x * 4.5, Wl.center.z + Wl.normal.z * 4.5, Math.atan2(-Wl.normal.x, -Wl.normal.z));
+      g.camRig.snapBehind(p.pos, p.yaw);
+      g.camRig.pitch = 0.12;
+      window.T.step(25);
+      return window.T.onScreen(Wl.center.clone().setY(1.6));
+    });
+    await page.touchscreen.tap(at.x, at.y);
+    await ev(() => window.T.step(40));
+  };
+  await tapWall();
+  const wall = await ev(() => {
+    const g = window.BLACKSMITH.game, Wl = g.area.pickWall, s = Wl.slots.stone;
+    const tags = [...document.querySelectorAll('#shop-list .scard')].map((e) => e.textContent);
+    return {
+      mode: g.mode, dist: +g.camera.position.distanceTo(Wl.showPoint('stone')).toFixed(2), showing: Wl.showing,
+      off: +s.pick.position.distanceTo(s.home).toFixed(2), tags,
+      buy: document.querySelector('.sd-buy .mbtn').textContent, disabled: document.querySelector('.sd-buy .mbtn').disabled,
+      swings: document.querySelector('.sd-stats').textContent,
+    };
+  });
+  check('tapping the pickaxe wall by the cave mouth opens it, the camera close on it',
+    wall.mode === 'shop' && wall.dist < 3, JSON.stringify(wall));
+  check('it opens on the Stone Pickaxe, taken down off its pegs to be looked at',
+    wall.showing === 'stone' && wall.off > 0.3 && wall.swings.includes('Boulder 15'), JSON.stringify(wall));
+  check('the wall sells the Stone Pickaxe for $1,000, and not to a smith with $0',
+    wall.tags.some((t) => t.includes('Stone Pickaxe') && t.includes('$1,000')) && wall.buy === 'BUY $1,000' && wall.disabled, JSON.stringify(wall));
+  await page.tap('#shop-list .scard:nth-child(1)');
+  const woodLook = await ev(() => { window.T.step(30); const Wl = window.BLACKSMITH.game.area.pickWall; return { showing: Wl.showing, stats: document.querySelector('.sd-stats').textContent }; });
+  check('looking at the Wood Pickaxe instead: it cannot break a boulder', woodLook.showing === 'wood' && woodLook.stats.includes('Boulder too hard'),
+    JSON.stringify(woodLook));
+  await shot('10a-wall');
+  await page.tap('#btn-close-shop');
+  await ev(() => window.T.step(30));
+  check('closing the wall gives you your camera back', await ev(() => window.BLACKSMITH.game.mode === 'play' && !window.BLACKSMITH.game.area.pickWall.showing));
+
   /* ------------------------------- the bag -------------------------------- */
   await page.tap('#btn-inventory');
   await page.waitForTimeout(200);
@@ -430,10 +477,29 @@ try {
   await shot('15-paid');
   await page.locator('#dlg-choices .mbtn', { hasText: 'KILL 3 SKELETONS' }).tap();
   check('the bounty can be taken again', await ev(() => window.BLACKSMITH.profile.quest.active && window.BLACKSMITH.profile.quest.kills === 0));
-  await page.locator('#dlg-choices .mbtn', { hasText: 'BUY STONE PICKAXE' }).tap();
-  const bought = await ev(() => { const P = window.BLACKSMITH.profile; return { cash: P.cash, pick: P.pickaxe() }; });
-  check('$1,000 buys the Stone Pickaxe', bought.cash === 0 && bought.pick.item?.type === 'stone' && bought.pick.tier === 1, JSON.stringify(bought));
+  const robSells = await ev(() => [...document.querySelectorAll('#dlg-choices .mbtn')].map((b) => b.textContent).join('|'));
+  check('Rob does not sell pickaxes', !/PICKAXE/i.test(robSells), robSells);
   await page.locator('#dlg-choices .mbtn', { hasText: 'BYE' }).tap();
+
+  // out to the wall with the money
+  await ev(() => { window.BLACKSMITH.game.enter('overworld', { x: 0, z: -42.2, yaw: 0 }, false); window.T.step(5); });
+  await tapWall();
+  const canBuy = await ev(() => ({ text: document.querySelector('.sd-buy .mbtn').textContent, disabled: document.querySelector('.sd-buy .mbtn').disabled }));
+  await page.locator('.sd-buy .mbtn').tap();
+  await ev(() => window.T.step(10));
+  const bought = await ev(() => {
+    const P = window.BLACKSMITH.profile;
+    return {
+      cash: P.cash, pick: P.pickaxe(), card: document.querySelector('#shop-list .scard:nth-child(2)').textContent,
+      button: document.querySelector('.sd-buy .mbtn').textContent,
+    };
+  });
+  check('$1,000 on the wall buys the Stone Pickaxe, and it goes in your hand',
+    canBuy.text === 'BUY $1,000' && !canBuy.disabled && bought.cash === 0 && bought.pick.item?.type === 'stone' && bought.pick.tier === 1 &&
+    bought.card.includes('IN HAND') && bought.button === 'IN HAND', JSON.stringify({ canBuy, bought }));
+  await shot('15a-bought');
+  await page.tap('#btn-close-shop');
+  await ev(() => { window.T.step(10); window.BLACKSMITH.game.enter('cave', { x: 0, z: 12, yaw: Math.PI }, false); window.T.step(5); });
 
   await ev(() => { window.BLACKSMITH.game._skHooks.playerAlive = () => false; });
   const boulder = await mine('boulder');

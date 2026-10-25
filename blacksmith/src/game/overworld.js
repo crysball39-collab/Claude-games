@@ -22,15 +22,17 @@ import {
   SpriteMaterial, Sprite, HemisphereLight, DirectionalLight, AmbientLight, PointLight,
   DoubleSide, BackSide, AdditiveBlending,
 } from 'three';
-import { makeRng, valueNoise2D, fbm, clamp01, lerp } from '../core/util.js';
+import { makeRng, valueNoise2D, fbm, clamp01, lerp, smoothstep } from '../core/util.js';
 import {
   grassTexture, dirtTexture, stoneCircleTexture, bricksTexture, woodTexture, rockTexture,
   shinglesTexture, skyTexture, lavaTexture, signTexture, flameTexture, tuftTexture, softDotTexture,
+  makeCanvas, drawPriceTag, toTexture,
 } from './textures.js';
 import { mergeStatic, flatten, tiledBox, pathGeometry, smoothPath, rockGeometry } from './geo.js';
 import { Collider } from './collide.js';
-import { buildWeapon } from './gear.js';
+import { buildWeapon, buildPickaxe } from './gear.js';
 import { oreMaterial } from './materials.js';
+import { PICKAXES } from './data.js';
 
 /* --------------------------------- layout ---------------------------------- */
 
@@ -45,6 +47,8 @@ export const OW = {
   cave: { x: 0, mouthZ: -45.3, half: 2.3, enterZ: -48.2 },
   /** where you come out of the cave, facing home */
   caveExit: { x: 0, z: -42.2, yaw: 0 },
+  /** the pickaxe wall, just left of the cave mouth, turned to face the path */
+  wall: { x: -5.6, z: -40.4, yaw: 1.035 },
 };
 
 const CAVE_PATH = [[0, -4.4], [0.7, -10], [-0.5, -16], [0.6, -23], [-0.4, -30], [0.2, -36], [0, -41], [0, -47]];
@@ -782,9 +786,144 @@ export function buildOverworld({ quality }) {
     return { sign, torches };
   }
 
+  /* ---------------------------- the pickaxe wall --------------------------- */
+  const pickWall = buildPickaxeWall();
+
+  /**
+   * A timber wall by the cave mouth with every pickaxe for sale hung on
+   * pegs, a price under each. The timber is folded into the world like any
+   * other prop; the pickaxes and their tags stay loose, because inspecting
+   * one takes it down off its pegs, and buying one changes its tag.
+   */
+  function buildPickaxeWall() {
+    const Wd = OW.wall;
+    const types = Object.keys(PICKAXES);
+    const width = Math.max(2.8, types.length * 1.2 + 0.8);
+    const frame = new Group();
+    frame.position.set(Wd.x, 0, Wd.z);
+    frame.rotation.y = Wd.yaw;
+    world.add(frame);
+    const plankTex = keep(woodTexture(256, { seed: 14, planks: 5, vertical: true, base: [150, 104, 60] }));
+    const planks = keep(new MeshLambertMaterial({ map: plankTex }));
+    const shingle = keep(new MeshLambertMaterial({ map: roofTex }));
+    const half = width / 2;
+    // posts, boards, rails, and a little roof to keep the rain off
+    for (const sx of [-1, 1]) box(0.18, 3.05, 0.18, M.beam, sx * (half + 0.05), 1.52, -0.05, { parent: frame });
+    box(width, 1.95, 0.08, planks, 0, 1.2, -0.04, { parent: frame, tile: 1.6 });
+    box(width + 0.1, 0.12, 0.16, M.darkWood, 0, 0.2, 0, { parent: frame });
+    box(width + 0.4, 0.18, 0.22, M.beam, 0, 2.27, 0, { parent: frame });
+    const roofBoard = box(width + 0.8, 0.07, 1.0, shingle, 0, 3.1, 0.28, { parent: frame, tile: 1.2 });
+    roofBoard.rotation.x = 0.32;
+    // the name over it
+    const signFace = keep(new MeshLambertMaterial({ map: keep(signTexture('Pickaxes', 512, 160)) }));
+    const signBoard = new Mesh(new BoxGeometry(1.9, 0.56, 0.07), [M.wood, M.wood, M.wood, M.wood, signFace, M.wood]);
+    signBoard.position.set(0, 2.7, 0.05);
+    signBoard.castShadow = shadows;
+    frame.add(signBoard);
+    // a lantern on the left post, a barrel and a crate at the right end
+    box(0.22, 0.28, 0.22, M.iron, -half - 0.05, 2.0, 0.2, { parent: frame });
+    box(0.16, 0.2, 0.16, M.lantern, -half - 0.05, 2.0, 0.2, { parent: frame, cast: false });
+    box(0.08, 0.08, 0.3, M.darkWood, -half - 0.05, 2.18, 0.08, { parent: frame });
+    const bx = half + 0.5, bz = 0.35;
+    cyl(0.32, 0.28, 0.8, M.wood, bx, 0.4, bz, { seg: 14, parent: frame });
+    for (const y of [0.14, 0.66]) {
+      const band = new Mesh(new TorusGeometry(0.315, 0.014, 4, 18), M.iron);
+      band.rotation.x = Math.PI / 2;
+      band.position.set(bx, y, bz);
+      frame.add(band);
+    }
+    box(0.6, 0.6, 0.6, M.wood, bx + 0.15, 0.3, bz - 0.75, { parent: frame, ry: 0.3, tile: 0.6 });
+
+    // the loose parts: a pickaxe on two pegs per slot, and its tag under it
+    const live = new Group();
+    live.position.copy(frame.position);
+    live.rotation.copy(frame.rotation);
+    world.add(live);
+    const slots = {};
+    types.forEach((type, i) => {
+      const x = (i - (types.length - 1) / 2) * 1.2;
+      for (const px of [-0.13, 0.13]) {
+        const peg = new Mesh(new CylinderGeometry(0.022, 0.022, 0.2, 6), M.darkWood);
+        peg.rotation.x = Math.PI / 2;
+        peg.position.set(x + px, 1.4, 0.09);
+        frame.add(peg);
+      }
+      const pick = buildPickaxe(type);
+      const home = new Vector3(x, 0.8, 0.14);
+      pick.position.copy(home);
+      pick.traverse((o) => { if (o.isMesh) o.castShadow = shadows; });
+      live.add(pick);
+      // the tag: redrawn when the pickaxe changes hands
+      const canvas = makeCanvas(256, 96);
+      const tex = toTexture(canvas, { clamp: true });
+      const tagMat = new MeshLambertMaterial({ map: tex });
+      keep(tex, tagMat);
+      const tag = new Mesh(new BoxGeometry(0.66, 0.24, 0.035), [M.wood, M.wood, M.wood, M.wood, tagMat, M.wood]);
+      tag.position.set(x, 0.5, 0.04);
+      tag.rotation.z = (i % 2 ? 1 : -1) * 0.04;
+      live.add(tag);
+      const nail = new Mesh(new CylinderGeometry(0.012, 0.012, 0.06, 5), M.chain);
+      nail.rotation.x = Math.PI / 2;
+      nail.position.set(x, 0.62, 0.06);
+      frame.add(nail);
+      const setTag = (text, color) => {
+        drawPriceTag(canvas.getContext('2d'), 256, 96, text, color);
+        tex.needsUpdate = true;
+      };
+      const p = PICKAXES[type];
+      setTag(p.price ? '$' + p.price.toLocaleString('en-US') : 'FREE');
+      slots[type] = { type, pick, home, setTag, k: 0, spin: 0 };
+    });
+    // a tap anywhere on the wall lands on this
+    const hit = new Mesh(new BoxGeometry(width + 0.5, 3.3, 1.0), M.black);
+    hit.position.set(0, 1.65, 0.2);
+    hit.visible = false;
+    live.add(hit);
+    // the ground in front of it, trodden bare, and a way over from the path
+    const n = new Vector3(Math.sin(Wd.yaw), 0, Math.cos(Wd.yaw));
+    const r = new Vector3(Math.cos(Wd.yaw), 0, -Math.sin(Wd.yaw));
+    const patchAt = new Vector3(Wd.x, 0, Wd.z).addScaledVector(n, 1.35);
+    const patchGeo = new CircleGeometry(2.0, 24);
+    patchGeo.rotateX(-Math.PI / 2);
+    const pu = patchGeo.attributes.uv, pp = patchGeo.attributes.position;
+    for (let k = 0; k < pu.count; k++) pu.setXY(k, (pp.getX(k) + patchAt.x) / 2.4, (pp.getZ(k) + patchAt.z) / 2.4);
+    const patch = new Mesh(patchGeo, M.dirt);
+    patch.position.set(patchAt.x, 0.018, patchAt.z);
+    patch.receiveShadow = shadows;
+    patch.userData.keep = true;
+    world.add(patch);
+    const spur = new Mesh(pathGeometry([[-1.2, -38.6], [-2.4, -38.95], [patchAt.x + 0.8, patchAt.z + 0.35]], 1.5, 0.019), M.dirt);
+    spur.receiveShadow = shadows;
+    spur.userData.keep = true;
+    world.add(spur);
+    disposables.push(patchGeo, spur.geometry, hit.geometry);
+    col.box(Wd.x, Wd.z, half + 0.18, 0.2, { ry: Wd.yaw, h: 3.2 });
+    const barrelAt = new Vector3(Wd.x, 0, Wd.z).addScaledVector(r, bx).addScaledVector(n, bz);
+    col.circle(barrelAt.x, barrelAt.z, 0.36, { h: 0.9 });
+    const crateAt = new Vector3(Wd.x, 0, Wd.z).addScaledVector(r, bx + 0.15).addScaledVector(n, bz - 0.75);
+    col.circle(crateAt.x, crateAt.z, 0.4, { h: 0.7 });
+    flatten(frame, world);
+
+    return {
+      group: live, hit, slots, width, normal: n, right: r,
+      center: new Vector3(Wd.x, 1.35, Wd.z),
+      /** where you stand to look the wall over: off its left end, out of the camera's way */
+      standAt: new Vector3(Wd.x, 0, Wd.z).addScaledVector(r, -(half + 0.65)).addScaledVector(n, 0.95),
+      /** which one is down off its pegs being looked at, or null */
+      showing: null,
+      /** The middle of a pickaxe as it is shown, in the world. */
+      showPoint(type) {
+        const s = slots[type];
+        live.updateMatrixWorld();
+        return live.localToWorld(new Vector3(s.home.x, s.home.y + 0.7, s.home.z + 0.55));
+      },
+    };
+  }
+
   /* ------------------------- trees, bushes, fence ------------------------- */
   const free = (x, z, pad = 0) => {
     if (Math.hypot(x, z) < 8.5 + pad) return false;
+    if (Math.hypot(x - OW.wall.x, z - OW.wall.z) < 4.3) return false;
     if (distToPolyline(x, z, cavePath) < 4 + pad) return false;
     if (distToPolyline(x, z, forgePath) < 3.6 + pad) return false;
     const f = OW.forge;
@@ -901,6 +1040,7 @@ export function buildOverworld({ quality }) {
       for (let i = 0; i < nTufts * 3 && nt < nTufts; i++) {
         const x = lerp(-38, 28, rng()), z = lerp(-42, 24, rng());
         if (Math.hypot(x, z) < 5.3) continue;
+        if (Math.hypot(x - OW.wall.x, z - OW.wall.z) < 3.4) continue;
         if (distToPolyline(x, z, cavePath) < 1.8 || distToPolyline(x, z, forgePath) < 1.6) continue;
         const f = OW.forge;
         if (x > f.minX - 0.3 && x < f.maxX + 0.3 && z > f.minZ - 0.3 && z < f.maxZ + 0.3) continue;
@@ -989,6 +1129,16 @@ export function buildOverworld({ quality }) {
     forge.fire.intensity = 14 * (0.85 + 0.15 * Math.sin(t * 9.1) * Math.sin(t * 5.3));
     M.lava.map.offset.set((t * 0.02) % 1, (t * 0.035) % 1);
     cave.sign.rotation.x = Math.sin(t * 1.3) * 0.045;
+    // a pickaxe being looked at comes down off its pegs and sways in the light,
+    // never turning so far that its head goes edge-on
+    for (const sl of Object.values(pickWall.slots)) {
+      const want = pickWall.showing === sl.type;
+      sl.k = clamp01(sl.k + (want ? dt : -dt) * 2.6);
+      if (want) sl.spin += dt;
+      const e = smoothstep(sl.k);
+      sl.pick.position.set(sl.home.x, sl.home.y + 0.3 * e, sl.home.z + 0.55 * e);
+      sl.pick.rotation.set(-0.1 * e, Math.sin(sl.spin * 0.9) * 0.7 * e, 0.18 * e);
+    }
     cave.sign.rotation.z = Math.sin(t * 0.9) * 0.02;
     // chimney smoke
     if (fx && Math.random() < dt * 3.5) {
@@ -1030,10 +1180,15 @@ export function buildOverworld({ quality }) {
   return {
     id: 'overworld', name: 'The Meadow', sub: 'Mine below, forge above',
     scene, collider: col, ground: overworldGround, sun,
-    spawn: OW.spawn, forge, cave, update, clampCamera, dispose,
+    spawn: OW.spawn, forge, cave, pickWall, update, clampCamera, dispose,
     /** You are walking into the dark: time to go in. */
     enteringCave: (p) => p.z < OW.cave.enterZ,
     nearAnvil: (p) => Math.hypot(p.x - OW.anvil.x, p.z - OW.anvil.z) < 2.6,
+    /** Close to the pickaxe wall, on its front side. */
+    nearWall: (p) => {
+      const dx = p.x - OW.wall.x, dz = p.z - OW.wall.z;
+      return Math.hypot(dx, dz) < 3.6 && dx * pickWall.normal.x + dz * pickWall.normal.z > 0.1;
+    },
   };
 }
 

@@ -59,7 +59,7 @@
         <p>ATTACK swings what you are holding. Near a rock you swing your pickaxe, near a skeleton your weapon. Hold it to keep swinging.</p>
         <p>DASH is a quick dodge that costs stamina. SPRINT switches running on and off.</p>
         <p>The bag on the right opens your inventory. Equip and unequip things there.</p>
-        <p>Tap the anvil in the Forge to forge. Tap Rob, or press TALK beside him, to talk.</p>
+        <p>Tap the anvil in the Forge to forge. Tap the pickaxe wall by the cave mouth to look over its pickaxes. Tap Rob, or press TALK beside him, to talk.</p>
       </div>
       <div class="ctl-group"><b>Keyboard &amp; mouse</b>
         <p>WASD move &middot; drag the mouse to turn the camera &middot; wheel zooms</p>
@@ -69,7 +69,7 @@
       <div class="ctl-group"><b>How it goes</b>
         <p>Mine pebbles and rocks in the Cave with your Wood Pickaxe. Each one breaks into ore.</p>
         <p>Take the ore to the anvil. Put up to three kinds in, and the one you put most of becomes the blade or the plating.</p>
-        <p>Rob pays $1,000 and 100 EXP for every three skeletons. $1,000 buys his Stone Pickaxe, the only thing that breaks a boulder.</p>
+        <p>Rob pays $1,000 and 100 EXP for every three skeletons. $1,000 buys a Stone Pickaxe off the pickaxe wall by the cave mouth, the only thing that breaks a boulder.</p>
         <p>Dying costs you nothing. Not an ore, not a dollar.</p>
       </div>
     </div>
@@ -220,6 +220,19 @@
           <button class="mbtn" id="btn-forged-ok">FORGE MORE</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- ============================ THE PICKAXE WALL ========================== -->
+  <div id="shop" class="hidden">
+    <div class="shop-card">
+      <div class="forge-head">
+        <h3>PICKAXE WALL</h3>
+        <div class="inv-cash"><span class="coin"></span><b id="shop-cash">$0</b></div>
+        <button class="closebtn" id="btn-close-shop" aria-label="Close">&#10005;</button>
+      </div>
+      <div class="shop-list" id="shop-list"></div>
+      <div class="shop-detail" id="shop-detail"></div>
     </div>
   </div>
 

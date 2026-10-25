@@ -25,7 +25,7 @@ import { Rob } from './rob.js';
 import { sfx } from './sfx.js';
 import { updateOreMaterials, hotMetalMaterial, oreMaterial } from './materials.js';
 import { buildWeapon } from './gear.js';
-import { ORES, RARITIES, QUEST, recipe, itemName, itemRarity, partsOf } from './data.js';
+import { ORES, RARITIES, QUEST, PICKAXES, recipe, itemName, itemRarity, partsOf } from './data.js';
 import { writeSave } from './save.js';
 import { robPortrait, itemIcon } from '../ui/icons.js';
 import { yieldToPaint, clamp01, lerp, smoothstep, easeOutCubic, IS_TOUCH, money } from '../core/util.js';
@@ -42,13 +42,14 @@ const NO_INPUT = { move: { x: 0, y: 0 }, pressed: {}, down: {}, sprint: false };
 const CRAFT = { pourEnd: 1.15, toAnvil: 1.4, hammer: [1.55, 2.0, 2.45], quench: 2.95, dunk: 3.2, reveal: 3.45, done: 3.75 };
 
 export class Game {
-  constructor({ viewport, settings, profile, hud, inventory, forgeUI, dialogue, input }) {
+  constructor({ viewport, settings, profile, hud, inventory, forgeUI, shopUI, dialogue, input }) {
     this.viewport = viewport;
     this.settings = settings;
     this.profile = profile;
     this.hud = hud;
     this.inv = inventory;
     this.forgeUI = forgeUI;
+    this.shopUI = shopUI;
     this.dlg = dialogue;
     this.input = input;
     const q = QUALITY[settings.quality] || QUALITY.medium;
@@ -73,7 +74,7 @@ export class Game {
 
     this.camRig = new CameraRig(this.camera);
     this.raycaster = new Raycaster();
-    this.mode = 'play';           // play, forge, talk, menu, dead, travel
+    this.mode = 'play';           // play, forge, shop, talk, menu, dead, travel
     this.time = 0;
     this.area = null;
     this.craft = null;
@@ -152,6 +153,7 @@ export class Game {
     const s = area.spawn;
     const pose = P.pos ? { x: P.pos[0], z: P.pos[1], yaw: P.yaw ?? s.yaw } : { x: s.x, z: s.z, yaw: s.yaw };
     this.enter(area.id, pose, true);
+    this._refreshWallTags();
     this.running = true;
   }
 
@@ -232,6 +234,7 @@ export class Game {
       this._click = false;
     }
     if (this.mode === 'forge') this._updateForge(dt);
+    if (this.mode === 'shop') this._updateShop(dt);
 
     this.camRig.update(dt, playing || this.mode === 'dead' ? look : null, p, area);
     this.fx.update(dt);
@@ -260,8 +263,9 @@ export class Game {
     const p = this.player.pos;
     let near = null;
     if (this.area.id === 'overworld' && this.area.nearAnvil(p)) near = 'anvil';
+    if (this.area.id === 'overworld' && this.area.nearWall(p)) near = 'wall';
     if (this.area.id === 'cave' && Math.hypot(p.x - this.rob.pos.x, p.z - this.rob.pos.z) < 3.3) near = 'rob';
-    this.hud.setInteract(near === 'anvil' ? 'ANVIL' : near === 'rob' ? 'TALK' : null);
+    this.hud.setInteract({ anvil: 'ANVIL', wall: 'PICKAXES', rob: 'TALK' }[near] || null);
     if (input.pressed.interact && near) this._use(near);
     if (this._tap) {
       const t = this._tap;
@@ -270,25 +274,37 @@ export class Game {
     }
   }
 
-  /** A tap on the screen that was not a drag: did it land on the anvil, or on Rob? */
+  /** A tap on the screen that was not a drag: did it land on the anvil, the pickaxe wall, or Rob? */
   onTap(x, y) {
     if (this.mode === 'forge' && this.craft) { this.skipCraft(); return; }
+    if (this.mode === 'shop') { this._tapWall(x, y); return; }
     if (this.mode !== 'play') return;
     this._tap = { x, y };
   }
 
-  _tapWorld(x, y) {
+  _ray(x, y) {
     const r = this.renderer.domElement.getBoundingClientRect();
     const ndc = new Vector2(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1);
     this.raycaster.setFromCamera(ndc, this.camera);
-    const isOW = this.area.id === 'overworld';
-    const target = isOW ? this.area.forge.anvil : this.rob.group;
-    const hit = this.raycaster.intersectObject(target, true)[0];
-    if (hit) {
-      const at = isOW ? new Vector3(OW.anvil.x, 0, OW.anvil.z) : this.rob.pos;
-      const d = Math.hypot(at.x - this.player.pos.x, at.z - this.player.pos.z);
-      if (d < (isOW ? 13 : 10)) this._use(isOW ? 'anvil' : 'rob');
-      else this.hud.toast(isOW ? 'Walk over to the anvil first' : 'Walk over to Rob first');
+    return this.raycaster;
+  }
+
+  _tapWorld(x, y) {
+    const ray = this._ray(x, y);
+    // the things a tap can mean, here, and how near you must be for it to count
+    const things = this.area.id === 'overworld'
+      ? [['anvil', this.area.forge.anvil, new Vector3(OW.anvil.x, 0, OW.anvil.z), 13, 'Walk over to the anvil first'],
+        ['wall', this.area.pickWall.hit, new Vector3(OW.wall.x, 0, OW.wall.z), 13, 'Walk over to the pickaxe wall first']]
+      : [['rob', this.rob.group, this.rob.pos, 10, 'Walk over to Rob first']];
+    let best = null;
+    for (const [what, obj, at, reach, far] of things) {
+      const hit = ray.intersectObject(obj, true)[0];
+      if (hit && (!best || hit.distance < best.d)) best = { what, at, reach, far, d: hit.distance };
+    }
+    if (best) {
+      const d = Math.hypot(best.at.x - this.player.pos.x, best.at.z - this.player.pos.z);
+      if (d < best.reach) this._use(best.what);
+      else this.hud.toast(best.far);
       return;
     }
     // with a mouse, a click on nothing in particular is a swing
@@ -297,6 +313,7 @@ export class Game {
 
   _use(what) {
     if (what === 'anvil') this.openForge();
+    else if (what === 'wall') this.openShop();
     else if (what === 'rob') this.talkToRob();
   }
 
@@ -343,7 +360,7 @@ export class Game {
         this._toughAt = this.time;
         this.hud.toast(this.profile.hasPickaxe('stone')
           ? 'Equip your Stone Pickaxe to break boulders'
-          : 'Boulders need a Stone Pickaxe. Rob sells one for $1,000', 2800);
+          : 'Boulders need a Stone Pickaxe: $1,000 on the pickaxe wall by the cave mouth', 3000);
       }
       return;
     }
@@ -487,9 +504,6 @@ export class Game {
         : `Still got work if you want it. Three skeletons, ${money(QUEST.cash)} and ${QUEST.exp} EXP.`;
       choices.push({ label: 'KILL 3 SKELETONS', primary: true, pick: () => this._acceptBounty() });
     }
-    if (!P.hasPickaxe('stone')) {
-      choices.push({ label: `BUY STONE PICKAXE ${money(1000)}`, pick: () => this._buyPickaxe() });
-    }
     choices.push({ label: 'BYE', pick: () => this.closeTalk() });
     this.dlg.say(override || text, choices);
   }
@@ -526,25 +540,9 @@ export class Game {
     } else {
       this.hud.announce(`+${money(QUEST.cash)}`, `+${QUEST.exp} EXP`, '#f2c03a', 2000);
     }
-    this._robSays(`There you are: ${money(QUEST.cash)}. Fancy another go? Those bones don't stay down for long.`);
-  }
-
-  _buyPickaxe() {
-    const P = this.profile;
-    if (P.hasPickaxe('stone')) { this._robSays('You\'ve got my spare already, friend. Look after it.'); return; }
-    if (!P.spend(1000)) {
-      sfx.play('nope');
-      this._robSays(`That's ${money(1000)}, friend, and you've got ${money(P.cash)}. Skeletons pay well, if you catch my meaning.`);
-      return;
-    }
-    const pick = P.addItem({ kind: 'pickaxe', type: 'stone' });
-    P.equip(pick.uid);
-    this.player.tool = 'pickaxe';
-    this.player.refreshGear();
-    sfx.play('coin');
-    this.save();
-    this.hud.announce('STONE PICKAXE', 'Boulders can be mined now', '#62d662', 2400);
-    this._robSays('There you go. That\'ll crack a boulder, and boulders break into four ores apiece. Swing it like you mean it.');
+    this._robSays(P.hasPickaxe('stone')
+      ? `There you are: ${money(QUEST.cash)}. Fancy another go? Those bones don't stay down for long.`
+      : `There you are: ${money(QUEST.cash)}. That's just what a Stone Pickaxe costs on the wall outside the cave mouth - the only thing that'll crack a boulder.`);
   }
 
   closeTalk() {
@@ -566,7 +564,7 @@ export class Game {
     this.hud.setBusy(true);
     const A = OW.anvil;
     // you step round behind the anvil, facing out of the forge
-    this._walk = { from: this.player.pos.clone(), to: new Vector3(A.x - 0.95, OW.forge.floor, A.z + 0.02), t: 0, yaw0: this.player.yaw };
+    this._walk = { from: this.player.pos.clone(), to: new Vector3(A.x - 0.95, OW.forge.floor, A.z + 0.02), t: 0, yaw0: this.player.yaw, yaw1: Math.PI / 2 };
     this.player.holdHammer(true);
     this._shotK = 0;
     const shot = this._anvilShot(0);
@@ -613,18 +611,21 @@ export class Game {
     this.craft.t = Math.max(this.craft.t, CRAFT.done);
   }
 
+  /** The few steps round to where you work, at the anvil or the wall. */
+  _stepWalk(dt) {
+    const w = this._walk, p = this.player;
+    if (!w || w.t >= 1) return;
+    w.t = Math.min(1, w.t + dt / 0.45);
+    const k = easeOutCubic(w.t);
+    p.pos.lerpVectors(w.from, w.to, k);
+    p.yaw = lerpAngle(w.yaw0, w.yaw1, k);
+    p.group.position.copy(p.pos);
+    p.rig.root.rotation.y = p.yaw;
+  }
+
   _updateForge(dt) {
     const p = this.player;
-    // the walk round to the work spot
-    if (this._walk && this._walk.t < 1) {
-      const w = this._walk;
-      w.t = Math.min(1, w.t + dt / 0.45);
-      const k = easeOutCubic(w.t);
-      p.pos.lerpVectors(w.from, w.to, k);
-      p.yaw = lerpAngle(w.yaw0, Math.PI / 2, k);
-      p.group.position.copy(p.pos);
-      p.rig.root.rotation.y = p.yaw;
-    }
+    this._stepWalk(dt);
     const F = this.area.forge;
     const c = this.craft;
     this._shotK = clamp01(this._shotK + (c && c.t < CRAFT.done ? dt : -dt) * 2.2);
@@ -782,6 +783,121 @@ export class Game {
     this.camRig.giveBack(0.6);
     this.camRig.yaw = this.player.yaw + Math.PI;
     this.player.holdHammer(false);
+    this.mode = 'play';
+    this.hud.setBusy(false);
+    this.save();
+  }
+
+  /* ---------------------------- the pickaxe wall ---------------------------- */
+
+  openShop() {
+    if (this.mode !== 'play' || this.area.id !== 'overworld') return;
+    this.mode = 'shop';
+    this.input?.reset();
+    this.input?.setSprint(false);
+    this.hud.setBusy(true);
+    const Wl = this.area.pickWall, at = Wl.standAt;
+    // you step off to the wall's left end, so the camera has a clear look at it
+    this._walk = {
+      from: this.player.pos.clone(), to: new Vector3(at.x, 0, at.z), t: 0, yaw0: this.player.yaw,
+      yaw1: Math.atan2(Wl.center.x - at.x, Wl.center.z - at.z),
+    };
+    this._shopK = 0;
+    this._shopType = null;
+    const shot = this._wallShot(0, null);
+    this.camRig.lend(shot.pos, shot.look, 0.75);
+    this.shopUI.open();
+    sfx.play('ui');
+  }
+
+  /**
+   * The camera on the wall: `k` 0 frames the whole wall in the left of the
+   * screen, clear of the menu; 1 closes in on the pickaxe `type` while it is
+   * down off its pegs being looked at.
+   */
+  _wallShot(k, type) {
+    const Wl = this.area.pickWall;
+    const hfov = 2 * Math.atan(Math.tan((this.camera.fov * Math.PI / 180) / 2) * this.camera.aspect);
+    const frame = (centre, D, rise) => {
+      // looking at the wall's face, screen right is the wall's own right: aim
+      // to the right of what is being shown, to put it left of the middle
+      const shift = 0.44 * D * Math.tan(hfov / 2);
+      return {
+        pos: centre.clone().addScaledVector(Wl.normal, D).addScaledVector(Wl.right, shift * 0.2).add(new Vector3(0, rise, 0)),
+        look: centre.clone().addScaledVector(Wl.right, shift).add(new Vector3(0, -0.05, 0)),
+      };
+    };
+    const whole = frame(Wl.center, 3.7, 0.45);
+    if (!type) return whole;
+    const close = frame(Wl.showPoint(type), 2.3, 0.15);
+    const e = smoothstep(k);
+    return { pos: whole.pos.lerp(close.pos, e), look: whole.look.lerp(close.look, e) };
+  }
+
+  _updateShop(dt) {
+    this._stepWalk(dt);
+    const showing = this.area.pickWall.showing;
+    if (showing) this._shopType = showing;
+    this._shopK = clamp01(this._shopK + (showing ? dt : -dt) * 2.2);
+    const shot = this._wallShot(this._shopK, this._shopType);
+    this.camRig.reframe(shot.pos, shot.look);
+  }
+
+  /** Takes a pickaxe down off its pegs for a closer look. */
+  inspectPickaxe(type) {
+    if (this.mode !== 'shop') return;
+    this.area.pickWall.showing = type;
+  }
+
+  /** In the shop, a tap on a pickaxe on the wall picks that one. */
+  _tapWall(x, y) {
+    const ray = this._ray(x, y);
+    let best = null;
+    for (const [type, s] of Object.entries(this.area.pickWall.slots)) {
+      const hit = ray.intersectObject(s.pick, true)[0];
+      if (hit && (!best || hit.distance < best.d)) best = { type, d: hit.distance };
+    }
+    if (best) { this.shopUI.select(best.type); sfx.play('ui'); }
+  }
+
+  buyPickaxe(type) {
+    const P = this.profile, def = PICKAXES[type];
+    if (this.mode !== 'shop' || !def || P.hasPickaxe(type)) return;
+    if (!P.spend(def.price)) {
+      sfx.play('nope');
+      this.hud.toast(`That one is ${money(def.price)}. You have ${money(P.cash)}.`, 2200);
+      return;
+    }
+    const it = P.addItem({ kind: 'pickaxe', type });
+    this.equip(it.uid);
+    this._refreshWallTags();
+    sfx.play('coin');
+    this.save();
+    this.hud.announce(def.name.toUpperCase(), def.tier >= 1 ? 'Boulders can be mined now' : 'It is in your hand', RARITIES[def.rarity].color, 2400);
+  }
+
+  equipPickaxe(type) {
+    const it = this.profile.itemsOf('pickaxe').find((x) => x.type === type);
+    if (it) this.equip(it.uid);
+  }
+
+  /** Each tag on the wall says OWNED once that pickaxe is yours. */
+  _refreshWallTags() {
+    const Wl = this.areas?.overworld?.pickWall;
+    if (!Wl) return;
+    for (const [type, s] of Object.entries(Wl.slots)) {
+      const p = PICKAXES[type];
+      if (this.profile.hasPickaxe(type)) s.setTag('OWNED', '#1d5a1d');
+      else s.setTag(p.price ? money(p.price) : 'FREE');
+    }
+  }
+
+  closeShop() {
+    if (this.mode !== 'shop') return;
+    this.shopUI.close();
+    this.area.pickWall.showing = null;
+    this.camRig.giveBack(0.6);
+    this.camRig.yaw = this.player.yaw + Math.PI;
     this.mode = 'play';
     this.hud.setBusy(false);
     this.save();

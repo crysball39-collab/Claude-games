@@ -122,10 +122,29 @@ export const ROCK_RESPAWN = [8, 15];
 
 /* ------------------------------- pickaxes -------------------------------- */
 
+/**
+ * Every pickaxe there is, in the order they hang on the pickaxe wall by the
+ * cave mouth, which is where they are bought. `blurb` is what the wall says
+ * about each one when you inspect it.
+ */
 export const PICKAXES = {
-  wood: { name: 'Wood Pickaxe', damage: 5, tier: 0, price: 0, fight: 4, rarity: 'common' },
-  stone: { name: 'Stone Pickaxe', damage: 10, tier: 1, price: 1000, fight: 6, rarity: 'uncommon' },
+  wood: {
+    name: 'Wood Pickaxe', damage: 5, tier: 0, price: 0, fight: 4, rarity: 'common',
+    blurb: 'Every smith starts with one. Fine for pebbles and rocks; it just bounces off a boulder.',
+  },
+  stone: {
+    name: 'Stone Pickaxe', damage: 10, tier: 1, price: 1000, fight: 6, rarity: 'uncommon',
+    blurb: 'A stone head lashed to a good handle. Twice the bite of wood, and the only pickaxe that breaks a boulder.',
+  },
 };
+
+/** How many swings of this pickaxe each kind of rock takes, or null if it cannot break it. */
+export function hitsToBreak(type) {
+  const p = PICKAXES[type];
+  const out = {};
+  for (const [kind, r] of Object.entries(ROCKS)) out[kind] = p.tier >= r.tier ? Math.ceil(r.hp / p.damage) : null;
+  return out;
+}
 
 /* ----------------------------- the anvil --------------------------------- */
 

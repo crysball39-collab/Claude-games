@@ -5,7 +5,8 @@ runs in a browser. No install, no build step to play it, and no assets on disk:
 every texture, icon and sound is made by the code when it loads.
 
 You spawn on a stone circle in a meadow. One path runs left to the **Forge**; the
-other runs straight ahead to a **Cave** with a wooden sign hung over its mouth.
+other runs straight ahead to a **Cave** with a wooden sign hung over its mouth, and
+beside it the **pickaxe wall**, where pickaxes hang for sale.
 Mine ore in the cave, take it to the anvil, and forge weapons and armour whose
 every part is made of the ore you put in.
 
@@ -33,7 +34,7 @@ npm run build:blacksmith   # rebuilds dist/blacksmith.html (needs esbuild)
 | **DASH** | Space | a quick dodge; nothing can hit you mid-dash |
 | **SPRINT** (switches on and off) | hold Shift | run |
 | The bag on the right edge | I or Tab | inventory |
-| **TALK** / **ANVIL** when you are close, or tap Rob or the anvil | E | use |
+| **TALK** / **ANVIL** / **PICKAXES** when you are close, or tap Rob, the anvil or the wall | E | use |
 
 ATTACK picks the right tool by itself: at a rock you swing your pickaxe, at a
 skeleton your weapon. Dash and sprint use stamina, the yellow bar; HP is the red
@@ -54,7 +55,17 @@ grow out of the floor, and are replaced a few seconds after you break them.
 | Boulder | 150 | 4 | the Stone Pickaxe |
 
 You start with a **Wood Pickaxe** (5 damage to rocks). The **Stone Pickaxe** does
-10, breaks boulders, and costs $1,000 from Rob.
+10, breaks boulders, and costs $1,000 on the pickaxe wall.
+
+### The pickaxe wall
+
+A timber wall just left of the cave mouth, with every pickaxe hung on pegs and its
+price on a tag underneath. Walk up and press **PICKAXES**, or tap the wall, and the
+camera closes in. Pick one from the list (or tap it on the wall) and it comes down
+off its pegs so you can look it over: what it costs, its mining damage, how many
+swings each kind of rock takes with it, and what it is worth in a fight. **BUY** puts
+it straight in your hand; one you already own can be put back in your hand with
+**EQUIP**. Tags turn to OWNED as you buy.
 
 ### Ores
 
@@ -84,7 +95,8 @@ Rob is just inside the cave. Kill **3 skeletons** for him and he pays **$1,000 a
 100 EXP**, as often as you like. There are always three skeletons in the cave, each
 with a wooden dagger; a killed one falls to pieces and another climbs out of the
 floor elsewhere a few seconds later. One in 25 leaves its **Bones** behind, which
-forge like an ore. Skeletons never come into Rob's camp or the tunnel.
+forge like an ore. Skeletons never come into Rob's camp or the tunnel. Rob pays; he
+does not sell. Pickaxes are bought on the wall outside.
 
 Levels take 100 EXP times your level to climb, and each one adds 5 max HP.
 
@@ -129,7 +141,7 @@ blacksmith/
       data.js         every number the game is balanced on
       profile.js      your cash, EXP, ores, items, equipment, bounty
       save.js         storage, with an in-memory fallback
-      overworld.js    the meadow, the paths, the Forge, the cave mouth
+      overworld.js    the meadow, the paths, the Forge, the cave mouth, the pickaxe wall
       cave.js         the ring-shaped room, its torches, Rob's camp
       rocks.js        mining, drops and regrowth
       skeletons.js    the skeletons and how they fight
@@ -141,7 +153,7 @@ blacksmith/
       fx.js           sparks, chips, smoke, steam, flying ore, damage numbers
       sfx.js          synthesised sound
       game.js         ties it all together: travel, combat, the bounty, forging
-    ui/               HUD, bag, anvil menu, talking, icons, main menu
+    ui/               HUD, bag, anvil menu, pickaxe wall, talking, icons, main menu
   tools/
     build.mjs         folds the game into dist/blacksmith.html
     verify.mjs        drives the real game in Chromium and checks the rules
@@ -157,7 +169,9 @@ game in Chromium on a phone-sized touch screen and plays it: the stone circle an
 the stick, the anvil (tapped, zoomed, filled through its menu, the pour and the
 parts that come out), the bag, the cave ring, pebbles taking 4 hits for 2 ores and
 rocks 10 for 3, boulders refusing the Wood Pickaxe, Rob's bounty and its pay and
-level, buying the Stone Pickaxe and breaking a boulder in 15 hits for 4 ores, dying
+level, tapping the pickaxe wall and being refused with no money, Rob selling no
+pickaxes, buying the Stone Pickaxe off the wall and breaking a boulder in 15 hits for
+4 ores, dying
 without losing anything, and a reload restoring the save. Last, it starts a new
 smith and plays the first loop with nothing but the stick and the buttons: up the
 path into the cave, mine with ATTACK held, back out and over to the anvil, forge a

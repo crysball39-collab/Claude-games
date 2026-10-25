@@ -109,6 +109,7 @@ export class Hud {
   setInteract(label) {
     if (!this._changed('int', label || '')) return;
     this.interactBtn.classList.toggle('show', !!label);
+    this.interactBtn.classList.toggle('long', !!label && label.length > 6);
     if (label) this.interactBtn.textContent = label;
   }
 
