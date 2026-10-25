@@ -51,7 +51,10 @@ export class Profile {
     this.where = d.where === 'cave' ? 'cave' : 'overworld';
     this.pos = Array.isArray(d.pos) && d.pos.length === 2 && d.pos.every(Number.isFinite) ? d.pos : null;
     this.yaw = Number.isFinite(d.yaw) ? d.yaw : null;
-    this.met = { rob: !!d.met?.rob };
+    // who you have met and which hints you have already been given
+    this.met = {};
+    for (const [k, v] of Object.entries(d.met || {})) if (typeof v === 'boolean') this.met[k] = v;
+    this.met.rob = !!this.met.rob;
     const s = d.stats || {};
     this.stats = {
       mined: s.mined | 0, kills: s.kills | 0, crafted: s.crafted | 0,

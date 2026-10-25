@@ -115,6 +115,23 @@ async function installHelpers() {
         g.camRig.snapBehind(p.pos, p.yaw);
       },
       ores() { return Object.values(A.profile.ores).reduce((a, b) => a + b, 0); },
+      /** One frame of a player's hands: the stick, and ATTACK held or not. */
+      frame(attack = false, move = null) { this.step(1, { attack, move }); },
+      /**
+       * Walks to (x, z) on the stick alone, the way a thumb would: the camera
+       * is turned to face the way, and the stick pushed forward.
+       */
+      walkTo(x, z, within = 0.6, maxFrames = 900) {
+        const g = A.game;
+        for (let f = 0; f < maxFrames; f++) {
+          const p = g.player.pos;
+          const dx = x - p.x, dz = z - p.z;
+          if (Math.hypot(dx, dz) < within || g.mode !== 'play') { this.frame(); return { ok: g.mode === 'play' ? true : g.mode, at: [p.x, p.z] }; }
+          g.camRig.yaw = Math.atan2(dx, dz) + Math.PI;
+          this.frame(false, { x: 0, y: 1 });
+        }
+        return { ok: false, at: [g.player.pos.x, g.player.pos.z] };
+      },
       /** A skeleton in reach rightly takes a swing meant for a rock: send them round the far side. */
       clearSkeletons(x, z) {
         const far = Math.atan2(-x, -z);
@@ -455,6 +472,101 @@ try {
   const loaded = await ev(() => { const P = window.BLACKSMITH.profile; return JSON.stringify({ c: P.cash, e: P.exp, o: P.ores, i: P.items.map((x) => x.uid), q: P.quest.active, eq: P.equipped }); });
   check('a reload picks up exactly where you saved', hasContinue && saved === loaded);
   await shot('17-continued');
+
+  /* --------------------- a whole loop, by the real controls ----------------- */
+  // NEW GAME has to ask before it erases the smith that is saved
+  await ev(() => { window.BLACKSMITH.state = 'playing'; });
+  await page.tap('#btn-pause');
+  await page.tap('#btn-quit');
+  await page.waitForSelector('#menu-screen.active');
+  await page.tap('#btn-newgame');
+  const asked = await ev(() => !document.querySelector('#confirm-new').classList.contains('hidden'));
+  await page.tap('#btn-confirm-new');
+  await page.waitForFunction(() => window.BLACKSMITH?.state === 'playing', null, { timeout: 180000 });
+  await installHelpers();
+  const fresh = await ev(() => { const P = window.BLACKSMITH.profile; return { cash: P.cash, items: P.items.length, ores: window.T.ores(), exp: P.exp }; });
+  check('NEW GAME asks first, then starts a fresh smith', asked && fresh.cash === 0 && fresh.items === 1 && fresh.ores === 0 && fresh.exp === 0,
+    JSON.stringify(fresh));
+
+  // up the path on the stick and into the cave
+  await ev(() => window.T.walkTo(0, -40));
+  await ev(() => window.T.walkTo(0, -49, 0.3, 240));
+  await page.waitForTimeout(800);
+  await ev(() => window.T.step(5));
+  const loop1 = await ev(() => {
+    const g = window.BLACKSMITH.game;
+    if (g.area.id !== 'cave') return { area: g.area.id };
+    g._skHooks.playerAlive = () => false;
+    const mined = [];
+    for (let k = 0; k < 4 && window.T.ores() < 3; k++) {
+      const p = g.player.pos;
+      const rock = g.rocks.rocks.filter((r) => r.kind !== 'boulder')
+        .sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0];
+      window.T.clearSkeletons(rock.x, rock.z);
+      window.T.walkTo(rock.x, rock.z, rock.radius + 0.9, 1500);
+      for (let n = 0; rock.hp > 0 && n < 900; n++) window.T.frame(true);
+      window.T.step(70);
+      mined.push(rock.kind);
+    }
+    g._skHooks.playerAlive = () => !g.player.dead;
+    const out = window.T.walkTo(0, 21.5, 0.8, 1500);
+    window.T.walkTo(0, 34, 0.3, 600);
+    return { area: 'cave', mined, ores: window.T.ores(), out };
+  });
+  await page.waitForTimeout(800);
+  await ev(() => window.T.step(5));
+  const home = await ev(() => {
+    const g = window.BLACKSMITH.game;
+    const back = g.area.id;
+    window.T.walkTo(0, -6, 0.8);
+    const anvil = window.T.walkTo(-23.0, -4.4, 0.4);
+    return { back, anvil, button: document.querySelector('#btn-interact').textContent };
+  });
+  check('walking in, mining with ATTACK held and walking back out all work on the stick',
+    loop1.area === 'cave' && loop1.ores >= 3 && home.back === 'overworld', JSON.stringify({ loop1, back: home.back }));
+  check('walking up to the anvil offers it', home.anvil.ok === true && home.button === 'ANVIL', JSON.stringify(home));
+  await page.tap('#btn-interact');
+  await ev(() => window.T.step(20));
+  await page.tap('.rchip:nth-child(1)');
+  const owned = await ev(() => Object.entries(window.BLACKSMITH.profile.ores).filter(([, v]) => v > 0).map(([k]) => k));
+  const NAMES = { stone: 'Stone', bronze: 'Bronze', iron: 'Iron', bones: 'Bones', gold: 'Gold', amethyst: 'Amethyst', emerald: 'Emerald', diamond: 'Diamond', irisite: 'Irisite' };
+  for (let i = 0; i < Math.min(3, owned.length); i++) {
+    await page.tap(`#slots .slot:nth-child(${i + 1}) .sicon`);
+    await page.locator('#op-grid .opt', { hasText: NAMES[owned[i]] }).first().tap();
+  }
+  for (let i = 0; i < 6 && (await ev(() => document.querySelector('#forge-need').textContent)) !== 'ORE 3 / 3'; i++) {
+    await page.tap(`#slots .slot:nth-child(${(i % 3) + 1}) .samt button[data-d="1"]`).catch(() => {});
+  }
+  await tapSel('#btn-forge');
+  await ev(() => window.T.step(130));
+  await tapSel('#btn-forged-equip');
+  await page.tap('#btn-close-forge');
+  await ev(() => window.T.step(20));
+  const dagger = await ev(() => window.BLACKSMITH.profile.weapon());
+  check('the first ore makes a dagger', dagger?.item?.type === 'dagger', JSON.stringify(dagger));
+  await ev(() => { window.T.walkTo(0, -6, 0.8); window.T.walkTo(0, -40, 0.8); window.T.walkTo(0, -49, 0.3, 240); });
+  await page.waitForTimeout(800);
+  const fight = await ev(() => {
+    const g = window.BLACKSMITH.game, P = window.BLACKSMITH.profile;
+    window.T.step(5);
+    window.T.walkTo(0, 18, 0.8, 900);
+    const before = P.stats.kills;
+    let frames = 0;
+    while (P.stats.kills === before && frames < 3000 && !g.player.dead) {
+      const s = g.skeletons.nearest(g.player.pos, 99);
+      const p = g.player.pos;
+      if (s && Math.hypot(s.pos.x - p.x, s.pos.z - p.z) > 1.6) {
+        g.camRig.yaw = Math.atan2(s.pos.x - p.x, s.pos.z - p.z) + Math.PI;
+        window.T.frame(false, { x: 0, y: 1 });
+      } else {
+        window.T.frame(!!s);
+      }
+      frames++;
+    }
+    return { killed: P.stats.kills > before, seconds: +(frames / 30).toFixed(1), hp: Math.round(g.player.hp) };
+  });
+  check('and with it you can go back down and kill a skeleton', fight.killed, JSON.stringify(fight));
+  await shot('18-first-kill');
 
   if (FILE) check('the single file fetches nothing from the network', external.length === 0, external.slice(0, 3).join(' '));
 } catch (e) {

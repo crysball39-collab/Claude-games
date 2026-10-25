@@ -171,6 +171,16 @@ export class Game {
     this._world.ground = area.ground;
     if (banner) this.hud.areaBanner(area.name, area.sub);
     this.hud.setInteract(null);
+    if (id === 'cave') this._hint('hintCave', 'Hold ATTACK by a pebble or a rock to mine it. Rob is just to your right.', 4200, 2600);
+  }
+
+  /** A word of advice, once per smith, a moment after `delay` ms. */
+  _hint(key, text, ms = 3600, delay = 0) {
+    const met = this.profile.met;
+    if (met[key]) return;
+    met[key] = true;
+    this._dirty = true;
+    setTimeout(() => this.hud.toast(text, ms), delay);
   }
 
   /** Through a fade to black. */
@@ -350,6 +360,7 @@ export class Game {
   _gotOre(ore) {
     this.profile.addOre(ore, 1);
     this.hud.pickup(ore);
+    this._hint('hintOre', 'Ore goes in your bag. Take it to the anvil in the Forge to make something.', 4200, 900);
     const r = RARITIES[ORES[ore].rarity];
     sfx.play('pickup', { rank: r.rank, gap: 0.02 });
     if (r.rank >= 2) {
@@ -407,6 +418,9 @@ export class Game {
     sfx.play('hurt');
     this.camRig.shake(0.1, 0.2);
     if (this.player.dead) this._died();
+    else if (this.player.hp < this.profile.maxHp() * 0.35) {
+      this._hint('hintHurt', 'Low on health? Back off to Rob\'s camp: skeletons won\'t follow you there.', 4200);
+    }
   }
 
   _died() {

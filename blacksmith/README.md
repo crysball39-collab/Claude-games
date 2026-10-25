@@ -158,7 +158,10 @@ the stick, the anvil (tapped, zoomed, filled through its menu, the pour and the
 parts that come out), the bag, the cave ring, pebbles taking 4 hits for 2 ores and
 rocks 10 for 3, boulders refusing the Wood Pickaxe, Rob's bounty and its pay and
 level, buying the Stone Pickaxe and breaking a boulder in 15 hits for 4 ores, dying
-without losing anything, and a reload restoring the save.
+without losing anything, and a reload restoring the save. Last, it starts a new
+smith and plays the first loop with nothing but the stick and the buttons: up the
+path into the cave, mine with ATTACK held, back out and over to the anvil, forge a
+dagger from what it found, and go back down to kill a skeleton with it.
 
 ```
 npm run verify:blacksmith            # the source, over http
