@@ -396,22 +396,50 @@ export function softDotTexture(size = 64, inner = 'rgba(255,255,255,1)', outer =
   return toTexture(c, { clamp: true });
 }
 
-/** A flame tongue for torches and the hearth. */
+/**
+ * A flame tongue for torches and the hearth, worked out pixel by pixel: round
+ * at the foot, drawn up to a point, white-hot low in its heart, then yellow,
+ * orange and a red fringe that fades to nothing, so it has no hard edge.
+ * Its foot sits a tenth of the way up the texture (FLAME_FOOT in torch.js).
+ */
 export function flameTexture(size = 64) {
-  const c = makeCanvas(size, size * 2);
-  const ctx = c.getContext('2d');
   const w = size, h = size * 2;
-  const g = ctx.createRadialGradient(w / 2, h * 0.72, 2, w / 2, h * 0.62, h * 0.5);
-  g.addColorStop(0, 'rgba(255,250,210,1)');
-  g.addColorStop(0.25, 'rgba(255,200,80,0.95)');
-  g.addColorStop(0.6, 'rgba(255,100,20,0.6)');
-  g.addColorStop(1, 'rgba(200,40,0,0)');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.moveTo(w / 2, 2);
-  ctx.bezierCurveTo(w * 0.95, h * 0.45, w * 0.92, h * 0.95, w / 2, h - 2);
-  ctx.bezierCurveTo(w * 0.08, h * 0.95, w * 0.05, h * 0.45, w / 2, 2);
-  ctx.fill();
+  const c = makeCanvas(w, h);
+  const ctx = c.getContext('2d');
+  const img = ctx.createImageData(w, h);
+  const ramp = [[0, [190, 40, 6]], [0.3, [255, 120, 30]], [0.6, [255, 205, 95]], [0.85, [255, 245, 205]], [1, [255, 255, 245]]];
+  const colour = (t) => {
+    for (let k = 1; k < ramp.length; k++) {
+      if (t <= ramp[k][0]) {
+        const [t0, a] = ramp[k - 1], [t1, b] = ramp[k];
+        const f = (t - t0) / (t1 - t0);
+        return [lerp(a[0], b[0], f), lerp(a[1], b[1], f), lerp(a[2], b[2], f)];
+      }
+    }
+    return ramp[ramp.length - 1][1];
+  };
+  // half the flame's width, across the texture, at height v (0 the bottom, 1 the top)
+  const halfWidth = (v) => {
+    if (v < 0.04 || v > 0.97) return 0;
+    if (v < 0.24) return 0.86 * Math.sqrt(1 - ((0.24 - v) / 0.2) ** 2);
+    return 0.86 * (1 - (v - 0.24) / 0.73) ** 1.35;
+  };
+  for (let y = 0; y < h; y++) {
+    const v = 1 - (y + 0.5) / h;
+    const hw = halfWidth(v);
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      const u = Math.abs(((x + 0.5) / w) * 2 - 1);
+      const d = hw > 0 ? u / hw : 9;
+      if (d >= 1) { img.data[i + 3] = 0; continue; }
+      const body = 1 - d * d;
+      const heat = clamp01(body * (1.15 - v * 1.05));
+      const [r, g, b] = colour(heat);
+      img.data[i] = r; img.data[i + 1] = g; img.data[i + 2] = b;
+      img.data[i + 3] = 255 * clamp01(body * 1.6) * (0.45 + 0.55 * heat);
+    }
+  }
+  ctx.putImageData(img, 0, 0);
   return toTexture(c, { clamp: true });
 }
 

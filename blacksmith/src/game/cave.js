@@ -23,6 +23,7 @@ import {
 import { makeRng, valueNoise2D, fbm, clamp01, lerp, TAU } from '../core/util.js';
 import { rockTexture, slabTexture, woodTexture, flameTexture, softDotTexture } from './textures.js';
 import { mergeStatic, flatten, tiledBox, rockGeometry } from './geo.js';
+import { addTorch } from './torch.js';
 import { Collider } from './collide.js';
 import { oreMaterial } from './materials.js';
 import { ORE_ORDER } from './data.js';
@@ -243,40 +244,24 @@ export function buildCave({ quality }) {
 
   /* --------------------------------- torches ------------------------------ */
   const flameTex = keep(flameTexture(64));
+  const haloTex = keep(softDotTexture(64, 'rgba(255,170,90,0.5)', 'rgba(255,120,40,0)'));
+  const pitch = keep(new MeshLambertMaterial({ color: 0x23150b, emissive: 0x4a1a05 }));
   const flames = [];
   const lights = [];
   const maxLights = quality.caveLights;
   const torch = (phi, R, inward, light) => {
     // the wall is flat behind a torch: R + 0.25 on the outside wall, R on the middle one
     const surface = inward ? R + 0.25 : R;
-    const off = inward ? -0.6 : 0.55;
-    const d = surface + off;
-    const x = Math.sin(phi) * d, z = Math.cos(phi) * d;
-    const y = 2.7;
-    const stick = new Mesh(new CylinderGeometry(0.045, 0.035, 0.7, 6), M.darkWood);
-    // leaning out from the wall, into the room
-    const tilt = inward ? -0.5 : 0.5;
-    stick.position.set(Math.sin(phi) * (d - off * 0.35), y - 0.25, Math.cos(phi) * (d - off * 0.35));
-    stick.rotation.set(Math.cos(phi) * tilt, 0, -Math.sin(phi) * tilt);
-    world.add(stick);
-    const bracket = new Mesh(new BoxGeometry(0.16, 0.16, 0.16), M.iron);
-    bracket.position.set(Math.sin(phi) * (surface + off * 0.12), y - 0.45, Math.cos(phi) * (surface + off * 0.12));
-    world.add(bracket);
-    const fl = new Sprite(new SpriteMaterial({ map: flameTex, blending: AdditiveBlending, depthWrite: false, color: 0xffc080 }));
-    fl.position.set(x, y + 0.2, z);
-    fl.userData.base = 0.36;
-    fl.userData.phase = phi * 3;
-    world.add(fl);
-    flames.push(fl);
-    disposables.push(fl.material);
-    const halo = new Sprite(new SpriteMaterial({ map: keep(softDotTexture(64, 'rgba(255,170,90,0.5)', 'rgba(255,120,40,0)')), blending: AdditiveBlending, depthWrite: false }));
-    halo.position.set(x, y + 0.15, z);
-    halo.scale.set(2.2, 2.2, 1);
-    world.add(halo);
-    disposables.push(halo.material);
+    const sx = Math.sin(phi), cz = Math.cos(phi);
+    const out = inward ? { x: -sx, z: -cz } : { x: sx, z: cz };
+    const { flame, tip } = addTorch(world, { x: sx * surface, y: 2.4, z: cz * surface }, out,
+      { wood: M.darkWood, iron: M.iron, pitch, flameTex, haloTex, size: 1.1, disposables });
+    flame.userData.phase = phi * 3;
+    flames.push(flame);
     if (light && lights.length < maxLights) {
+      // a little out from the fire, so it lights the wall round the torch as well as the room
       const pl = new PointLight(0xffa050, 34, 20, 1.25);
-      pl.position.set(Math.sin(phi) * (d + off * 0.6), y + 0.1, Math.cos(phi) * (d + off * 0.6));
+      pl.position.set(tip.x + out.x * 0.35, tip.y + 0.1, tip.z + out.z * 0.35);
       pl.userData.phase = phi * 5;
       world.add(pl);
       lights.push(pl);
@@ -476,7 +461,7 @@ export function buildCave({ quality }) {
   return {
     id: 'cave', name: 'The Cave', sub: 'Rob is just inside',
     scene, collider: col, ground: () => 0,
-    spawn: CV.entry, rockSpots, skeletonSpots, inCamp,
+    spawn: CV.entry, rockSpots, skeletonSpots, inCamp, torches: flames,
     update, cameraAllowed, dispose,
     leaving: (p) => p.z > CV.exitZ,
   };

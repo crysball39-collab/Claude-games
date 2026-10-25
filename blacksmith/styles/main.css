@@ -325,58 +325,70 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
 .r-epic{--c:var(--epic)}
 .r-legendary{--c:var(--legendary)}
 
-/* the anvil */
+/* the anvil: a header, then the recipes and the slots (which scroll, if the
+   screen is too short for them), and the FORGE button, which never scrolls away */
 #forge{position:absolute;inset:0;z-index:24;pointer-events:none}
 #forge > *{pointer-events:auto}
 .forge-card{position:absolute;top:calc(var(--safe-t) + 8px);bottom:calc(var(--safe-b) + 8px);right:calc(var(--safe-r) + 8px);
   width:min(440px,50vw);background:var(--panel);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;
-  padding:8px 10px;gap:6px;box-shadow:0 20px 60px rgba(0,0,0,.55);animation:slideleft .3s ease;overflow:hidden}
+  max-height:480px;padding:8px 10px;gap:6px;box-shadow:0 20px 60px rgba(0,0,0,.55);animation:slideleft .3s ease;overflow:hidden}
 @keyframes slideleft{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
-.forge-head{display:flex;align-items:center;gap:8px}
+.forge-head{display:flex;align-items:center;gap:8px;flex:0 0 auto}
 .forge-head h3{margin:0;letter-spacing:.3em;font-size:.92rem;flex:1}
-.forge-need{font-size:.7rem;font-weight:800;color:var(--muted)}
+.forge-need{font-size:.7rem;font-weight:800;color:var(--muted);white-space:nowrap}
 .forge-need.ok{color:var(--uncommon)}
-.recipes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
+.forge-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:6px;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y}
+.recipes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;flex:0 0 auto}
 .rchip{display:flex;align-items:center;gap:3px;padding:3px 4px;border-radius:7px;border:1px solid var(--line);background:rgba(255,255,255,.04);
   font-size:.56rem;font-weight:800;letter-spacing:.03em;text-align:left;line-height:1.1;min-height:32px;min-width:0;overflow:hidden}
-.rchip span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.rchip span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rchip img{width:22px;height:22px;flex:0 0 auto}
 .rchip small{display:block;color:var(--muted);font-size:.5rem;letter-spacing:.06em}
 .rchip.sel{border-color:var(--ember-lit);background:rgba(255,122,31,.2)}
-.rchip .rgroup{display:none}
-.slots{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;flex:1;min-height:0}
-.slot{border-radius:10px;border:1.5px dashed rgba(255,220,180,.22);background:rgba(0,0,0,.3);display:flex;flex-direction:column;align-items:center;
-  justify-content:space-between;padding:5px 4px;min-height:0}
+.slots{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;flex:1 0 auto}
+.slot{position:relative;min-width:0;border-radius:10px;border:1.5px dashed rgba(255,220,180,.22);background:rgba(0,0,0,.3);
+  display:flex;flex-direction:column;align-items:stretch;gap:3px;padding:4px}
 .slot.filled{border-style:solid;border-color:var(--c,var(--line))}
-.slot .sicon{flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;font-size:1.5rem;color:var(--muted);border-radius:8px}
-.slot .sicon img{max-width:56px;max-height:100%;width:auto;height:100%}
-.slot .sname{font-size:.66rem;font-weight:800;white-space:nowrap}
-.slot .samt{display:flex;align-items:center;gap:6px;margin:2px 0}
-.slot .samt button{width:30px;height:26px;border-radius:7px;border:1px solid var(--line);background:rgba(255,255,255,.08);font-size:1rem;font-weight:800}
-.slot .samt button:active{background:rgba(255,122,31,.4)}
-.slot .samt b{min-width:22px;text-align:center;font-size:.9rem}
-.slot .spart{font-size:.52rem;letter-spacing:.2em;font-weight:800;color:var(--ember-lit)}
-.slot{position:relative}
-.slot .snum{font-size:.5rem;letter-spacing:.16em;color:var(--muted)}
-.slot .sall{position:absolute;top:3px;right:3px;padding:2px 5px;border-radius:5px;border:1px solid var(--line);
+/* the top of a slot is one button: tap anywhere on it to choose or change its ore */
+.slot .spick{flex:1 0 auto;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  border-radius:7px;padding:1px 0 2px}
+.slot .spick:active{background:rgba(255,255,255,.08)}
+.slot .snum{align-self:flex-start;padding-left:3px;font-size:.5rem;letter-spacing:.16em;color:var(--muted)}
+.slot .sicon{flex:1 1 0;min-height:34px;max-height:64px;aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+  border-radius:9px;border:1.5px dashed rgba(255,220,180,.2);font-size:1.5rem;color:var(--muted)}
+.slot.filled .sicon{border-color:transparent}
+.slot .sicon img{width:100%;height:100%}
+.slot .sname{max-width:100%;font-size:.66rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.slot .sall{position:absolute;top:3px;right:3px;padding:3px 5px;border-radius:5px;border:1px solid var(--line);
   background:rgba(255,255,255,.08);font-size:.48rem;font-weight:800;letter-spacing:.08em}
 .slot .sall:active{background:rgba(255,122,31,.4)}
-.preview .ptext .pbonus{color:var(--uncommon);font-weight:800}
-.forge-foot{display:flex;align-items:center;gap:8px}
+.slot .samt{display:flex;align-items:center;justify-content:center;gap:4px;flex:0 0 auto}
+.slot .samt button{flex:0 0 auto;width:30px;height:28px;border-radius:7px;border:1px solid var(--line);background:rgba(255,255,255,.08);
+  font-size:1rem;font-weight:800;touch-action:none}
+.slot .samt button:not(.off):active{background:rgba(255,122,31,.4)}
+.slot .samt button.off{opacity:.3}
+.slot .samt b{min-width:22px;text-align:center;font-size:.9rem;font-variant-numeric:tabular-nums}
+.slot .spart{min-height:1.15em;font-size:.5rem;line-height:1.15;letter-spacing:.12em;font-weight:800;color:var(--ember-lit);text-align:center}
+.forge-foot{display:flex;align-items:center;gap:8px;flex:0 0 auto}
 .preview{flex:1;display:flex;align-items:center;gap:8px;min-width:0}
 .preview .picon{width:46px;height:46px;flex:0 0 auto;border-radius:9px;border:1.5px solid var(--c,var(--line));background:rgba(0,0,0,.3)}
 .preview .picon img{width:100%;height:100%}
 .preview .ptext{min-width:0;font-size:.68rem;color:var(--muted);line-height:1.35}
-.preview .ptext b{display:block;color:var(--ink);font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#btn-forge{padding:.7rem 1.2rem}
-.ore-picker{position:absolute;inset:0;background:rgba(18,12,8,.97);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px}
-.op-head{display:flex;align-items:center;justify-content:space-between;letter-spacing:.2em;font-size:.8rem}
-.op-grid{flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:6px;align-content:start;touch-action:pan-y}
+.preview .ptext b{color:var(--ink)}
+.preview .ptext .pname{display:block;font-size:.78rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.preview .ptext .pbonus{color:var(--uncommon);font-weight:800}
+#btn-forge{flex:0 0 auto;padding:.7rem 1.2rem}
+.ore-picker{position:absolute;inset:0;z-index:2;background:rgba(18,12,8,.97);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.op-head{display:flex;align-items:center;justify-content:space-between;gap:8px;letter-spacing:.14em;font-size:.74rem}
+.op-head b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.op-grid{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));
+  gap:6px;align-content:start;touch-action:pan-y}
 .opt{position:relative;border-radius:9px;border:1.5px solid var(--c,var(--line));background:rgba(0,0,0,.3);padding:5px 3px;display:flex;flex-direction:column;align-items:center;gap:1px}
 .opt img{width:38px;height:38px}
 .opt .on{font-size:.62rem;font-weight:800}
 .opt .oc{font-size:.56rem;color:var(--muted)}
-.opt.used{opacity:.35;pointer-events:none}
+.opt .otag{font-size:.46rem;font-weight:800;letter-spacing:.08em;color:var(--ember-lit)}
+.opt.cur{box-shadow:0 0 0 2px var(--ember-lit)}
 .opt.clear{border-style:dashed;justify-content:center;color:var(--muted);font-size:.66rem;font-weight:800;letter-spacing:.1em}
 .forge-working{position:absolute;left:50%;bottom:calc(var(--safe-b) + 16px);transform:translateX(-50%);padding:9px 18px;border-radius:99px;
   background:rgba(15,10,7,.75);border:1px solid var(--ember);font-weight:800;letter-spacing:.3em;font-size:.8rem;text-align:center}
@@ -415,7 +427,7 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
 .sd-stats{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:.7rem;color:var(--muted);align-items:baseline}
 .sd-stats b{color:var(--ink)}
 .sd-stats .no{color:#ff8a7a}
-.sd-buy{display:flex;align-items:center;gap:10px;margin-top:auto;padding-top:2px}
+.sd-buy{display:flex;align-items:center;gap:10px;flex:0 0 auto}
 .sd-buy .mbtn{flex:0 0 auto;padding:.62rem 1.1rem}
 .sd-note{font-size:.64rem;color:var(--muted);line-height:1.35}
 
@@ -461,8 +473,52 @@ body.portrait-block #rotate-overlay{display:flex}
   .menu-buttons .mbtn{padding:.55rem 1rem}
   .menu-anvil{display:none}
 }
-/* narrow phones: the anvil's recipe chips lose their pictures to keep their names */
+/* narrow phones: the anvil's card takes a little more of the screen, and its
+   recipe chips lose their pictures to keep their names */
 @media (max-width:720px){
+  .forge-card{width:min(440px,56vw)}
+  .shop-card{width:min(420px,54vw)}
   .rchip img{display:none}
   .rchip{padding:3px 5px}
+}
+/* very short screens - a phone on its side with the browser's bars showing, or
+   the game opened inside another app: the anvil's recipes go into one row that
+   scrolls sideways, and everything on the card tightens up */
+@media (max-height:330px){
+  .forge-card{top:calc(var(--safe-t) + 5px);bottom:calc(var(--safe-b) + 5px);right:calc(var(--safe-r) + 5px);padding:5px 7px;gap:5px}
+  .forge-head h3{font-size:.78rem;letter-spacing:.24em}
+  .forge-head .closebtn{width:28px;height:28px;font-size:.8rem}
+  .forge-body{gap:5px}
+  .recipes{display:flex;overflow-x:auto;overscroll-behavior:contain;touch-action:pan-x;scrollbar-width:none}
+  .recipes::-webkit-scrollbar{display:none}
+  .rchip{flex:0 0 auto;min-height:27px}
+  .slot{gap:2px;padding:3px}
+  .slot .sicon{min-height:28px;max-height:40px;font-size:1.15rem;border-radius:7px}
+  .slot .samt{gap:3px}
+  .slot .samt button{width:27px;height:25px}
+  .slot .samt b{min-width:20px;font-size:.84rem}
+  .preview .picon{width:38px;height:38px}
+  .preview .ptext{font-size:.62rem;line-height:1.3}
+  .preview .ptext .pname{font-size:.72rem}
+  #btn-forge{padding:.5rem .9rem;font-size:.84rem}
+  .ore-picker{padding:7px;gap:6px}
+  .op-grid{grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:5px}
+  .opt{padding:3px}
+  .opt img{width:28px;height:28px}
+  .forged-card{padding:8px 14px}
+  .forged-icon{width:56px;height:56px;margin:4px auto}
+  .forged-stats{margin:2px 0 7px;line-height:1.35}
+  .forged-card .mbtn{padding:.5rem .9rem;font-size:.84rem}
+  .shop-card{top:calc(var(--safe-t) + 5px);bottom:calc(var(--safe-b) + 5px);right:calc(var(--safe-r) + 5px);padding:5px 7px;gap:5px}
+  .shop-card .forge-head h3{font-size:.74rem;letter-spacing:.2em}
+  .shop-card .closebtn{width:28px;height:28px;font-size:.8rem}
+  .scard{padding:3px 6px}
+  .scard img{width:30px;height:30px}
+  .sd-top{gap:8px}
+  .sd-icon{width:42px;height:42px}
+  .sd-name{font-size:.86rem}
+  .sd-blurb{font-size:.66rem;line-height:1.3}
+  .sd-stats{font-size:.64rem;gap:2px 8px}
+  .sd-buy .mbtn{padding:.5rem .9rem;font-size:.82rem}
+  .sd-note{font-size:.6rem;line-height:1.25}
 }

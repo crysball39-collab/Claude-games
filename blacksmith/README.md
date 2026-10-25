@@ -103,8 +103,10 @@ Levels take 100 EXP times your level to climb, and each one adds 5 max HP.
 ### The anvil
 
 Tap the anvil in the Forge and the camera zooms in on it. Choose what to make,
-then put ore in up to **three slots**, any amount of each. Each thing takes at
-least this much ore:
+then put ore in up to **three slots**, any amount of each. Tap a slot to choose
+its ore, and tap it again whenever you like to change it; choosing an ore that is
+already in another slot swaps the two slots over. Each thing takes at least this
+much ore:
 
 | Weapon | Ore | | Armour (Light) | Ore |
 | ------ | --- | - | -------------- | --- |
@@ -122,8 +124,9 @@ base number times the ore's strength, weighted by how much of each went in.
 Past the least it takes, there is no limit, and more ore makes it stronger: twice
 the ore is +30%, four times +60%, and so on up to double strength at ten times the
 ore. Better ore still counts for more than more ore: ten times the Stone does not
-make Gold. **ALL** on a slot puts in every one of that ore you have, and holding
-**+** counts up faster the longer you hold it.
+make Gold. **ALL** on a slot puts in every one of that ore you have. A tap on **+**
+or **−** is exactly one; held, they count faster the longer you hold them, and stop
+the moment you let go. A held **−** stops at one, and one more tap empties the slot.
 
 Forging pours the lava bucket into the sword mould, hammers the casting on the
 anvil, and quenches it in the water bucket before handing it over.
@@ -156,6 +159,7 @@ blacksmith/
       player.js       you
       character.js    the jointed rig everyone is built on, and its animation
       gear.js         weapons, pickaxes and armour, part by part in their ores
+      torch.js        the wall torches, bracket, handle, head and flame
       camera.js       the third person camera and its anvil close-up
       fx.js           sparks, chips, smoke, steam, flying ore, damage numbers
       sfx.js          synthesised sound
@@ -176,16 +180,21 @@ game in Chromium on a phone-sized touch screen and plays it: the stone circle an
 the stick, the anvil (tapped, zoomed, filled through its menu, the pour and the
 parts that come out), the bag, the cave ring, pebbles taking 4 hits for 2 ores and
 rocks 10 for 3, boulders refusing the Wood Pickaxe, any amount of ore going into
-the anvil and coming out stronger, the signpost's arrows pointing where they say,
-the pickaxe's spikes standing out straight, no gaps in the cliff round the cave
-mouth, Rob's bounty and its pay and
+the anvil and coming out stronger, changing a slot's ore and swapping two slots,
+**+** and **−** counting one a tap and stopping when the finger lifts, the signpost's
+arrows pointing where they say, the pickaxe's spikes standing out straight, no gaps
+in the cliff round the cave mouth, every torch's fire on the tip of a handle that
+leans out from its wall, Rob's bounty and its pay and
 level, tapping the pickaxe wall and being refused with no money, Rob selling no
 pickaxes, buying the Stone Pickaxe off the wall and breaking a boulder in 15 hits for
 4 ores, dying
 without losing anything, and a reload restoring the save. Last, it starts a new
 smith and plays the first loop with nothing but the stick and the buttons: up the
 path into the cave, mine with ATTACK held, back out and over to the anvil, forge a
-dagger from what it found, and go back down to kill a skeleton with it.
+dagger from what it found, and go back down to kill a skeleton with it. Then it
+opens the game again on a 585 × 260 screen, a phone on its side with the game
+inside another app, and checks that the anvil's slots and FORGE button, and the
+pickaxe wall's BUY button, all fit on it without overlapping.
 
 ```
 npm run verify:blacksmith            # the source, over http

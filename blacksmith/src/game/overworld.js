@@ -29,6 +29,7 @@ import {
   makeCanvas, drawPriceTag, toTexture, arrowSignTexture,
 } from './textures.js';
 import { mergeStatic, flatten, tiledBox, pathGeometry, smoothPath, rockGeometry } from './geo.js';
+import { addTorch } from './torch.js';
 import { Collider } from './collide.js';
 import { buildWeapon, buildPickaxe } from './gear.js';
 import { oreMaterial } from './materials.js';
@@ -809,19 +810,15 @@ export function buildOverworld({ quality }) {
       box(0.2, 1.3, 0.2, M.beam, sx * (C.half - 0.15), 4.35, fz + 0.02, { rz: sx * 0.75 });
     }
     box(6.2, 0.42, 0.42, M.beam, 0, 5.05, fz);
-    // a torch on each post
+    // a torch on the front of each post, leaning out towards you
     const flameTex = keep(flameTexture(64));
+    const pitch = keep(new MeshLambertMaterial({ color: 0x23150b, emissive: 0x3e1604 }));
     const torches = [];
     for (const sx of [-1, 1]) {
-      box(0.08, 0.5, 0.08, M.darkWood, sx * (C.half + 0.32), 2.65, fz + 0.3, { rx: -0.35 });
-      const fl = new Sprite(new SpriteMaterial({ map: flameTex, blending: AdditiveBlending, depthWrite: false, color: 0xffc080 }));
-      fl.position.set(sx * (C.half + 0.32), 3.05, fz + 0.4);
-      fl.scale.set(0.32, 0.6, 1);
-      fl.userData.base = 0.32;
-      fl.userData.phase = sx * 2;
-      world.add(fl);
-      torches.push(fl);
-      disposables.push(fl.material);
+      const { flame } = addTorch(world, { x: sx * (C.half + 0.32), y: 2.42, z: fz + 0.17 }, { x: 0, z: 1 },
+        { wood: M.darkWood, iron: M.iron, pitch, flameTex, disposables });
+      flame.userData.phase = sx * 2;
+      torches.push(flame);
     }
 
     // the sign: hung from the lintel on two chains, swinging a little

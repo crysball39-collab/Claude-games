@@ -28,7 +28,7 @@ import { buildWeapon } from './gear.js';
 import { ORES, RARITIES, QUEST, PICKAXES, recipe, itemName, itemRarity, partsOf } from './data.js';
 import { writeSave } from './save.js';
 import { robPortrait, itemIcon } from '../ui/icons.js';
-import { yieldToPaint, clamp01, lerp, smoothstep, easeOutCubic, IS_TOUCH, money } from '../core/util.js';
+import { yieldToPaint, clamp, clamp01, lerp, smoothstep, easeOutCubic, IS_TOUCH, money } from '../core/util.js';
 
 export const QUALITY = {
   low: { name: 'low', shadows: false, shadowMap: 512, pixelRatio: 1.0, tufts: 0, caveLights: 3, antialias: false },
@@ -581,8 +581,10 @@ export class Game {
     const top = this.area.forge.anvilTop;
     const hfov = 2 * Math.atan(Math.tan((this.camera.fov * Math.PI / 180) / 2) * this.camera.aspect);
     const D = 2.55;
-    // looking west, screen right is north (-z): aim right of the anvil to put it left of centre
-    const shift = 0.44 * D * Math.tan(hfov / 2);
+    // looking west, screen right is north (-z): aim right of the anvil to put it
+    // left of centre, in the space the menu leaves clear
+    const free = clamp(this.forgeUI.freeFrac, 0.3, 0.7);
+    const shift = 0.88 * (1 - free) * D * Math.tan(hfov / 2);
     const tight = { pos: new Vector3(top.x + D, top.y + 1.15, top.z - shift * 0.25), look: new Vector3(top.x - 0.2, top.y - 0.22, top.z - shift) };
     const midZ = (top.z + OW.mold.z) / 2 - 0.35;
     const far = { pos: new Vector3(top.x + 3.25, top.y + 1.3, midZ), look: new Vector3(top.x - 0.3, top.y + 0.05, midZ) };
@@ -820,8 +822,9 @@ export class Game {
     const hfov = 2 * Math.atan(Math.tan((this.camera.fov * Math.PI / 180) / 2) * this.camera.aspect);
     const frame = (centre, D, rise) => {
       // looking at the wall's face, screen right is the wall's own right: aim
-      // to the right of what is being shown, to put it left of the middle
-      const shift = 0.44 * D * Math.tan(hfov / 2);
+      // to the right of what is being shown, to put it left of the middle,
+      // in the space the menu leaves clear
+      const shift = 0.88 * (1 - clamp(this.shopUI.freeFrac, 0.3, 0.7)) * D * Math.tan(hfov / 2);
       return {
         pos: centre.clone().addScaledVector(Wl.normal, D).addScaledVector(Wl.right, shift * 0.2).add(new Vector3(0, rise, 0)),
         look: centre.clone().addScaledVector(Wl.right, shift).add(new Vector3(0, -0.05, 0)),

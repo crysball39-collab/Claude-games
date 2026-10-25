@@ -197,14 +197,16 @@
         <span class="forge-need" id="forge-need"></span>
         <button class="closebtn" id="btn-close-forge" aria-label="Close">&#10005;</button>
       </div>
-      <div class="recipes" id="recipes"></div>
-      <div class="slots" id="slots"></div>
+      <div class="forge-body">
+        <div class="recipes" id="recipes"></div>
+        <div class="slots" id="slots"></div>
+      </div>
       <div class="forge-foot">
         <div class="preview" id="forge-preview"></div>
         <button class="mbtn primary" id="btn-forge">FORGE</button>
       </div>
       <div class="ore-picker hidden" id="ore-picker">
-        <div class="op-head"><b>CHOOSE AN ORE</b><button class="closebtn small" id="btn-close-picker" aria-label="Close">&#10005;</button></div>
+        <div class="op-head"><b id="op-title">CHOOSE AN ORE</b><button class="closebtn small" id="btn-close-picker" aria-label="Close">&#10005;</button></div>
         <div class="op-grid" id="op-grid"></div>
       </div>
     </div>
@@ -225,7 +227,7 @@
 
   <!-- ============================ THE PICKAXE WALL ========================== -->
   <div id="shop" class="hidden">
-    <div class="shop-card">
+    <div class="shop-card" id="shop-card">
       <div class="forge-head">
         <h3>PICKAXE WALL</h3>
         <div class="inv-cash"><span class="coin"></span><b id="shop-cash">$0</b></div>
@@ -233,6 +235,7 @@
       </div>
       <div class="shop-list" id="shop-list"></div>
       <div class="shop-detail" id="shop-detail"></div>
+      <div class="sd-buy" id="shop-buy"></div>
     </div>
   </div>
 

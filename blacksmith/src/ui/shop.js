@@ -14,12 +14,16 @@ export class ShopUI {
   constructor(profile, { onSelect, onBuy, onEquip, onClose }) {
     this.root = $('#shop');
     this.list = $('#shop-list');
+    this.card = $('#shop-card');
     this.detail = $('#shop-detail');
+    this.buyRow = $('#shop-buy');
     this.cash = $('#shop-cash');
     this.cb = { onSelect, onBuy, onEquip, onClose };
     this.sel = null;
     this.isOpen = false;
+    this.freeFrac = 0.5;       // how much of the screen, from the left, the card leaves clear
     $('#btn-close-shop').addEventListener('click', () => this.cb.onClose?.());
+    window.addEventListener('resize', () => this._measure());
     this.setProfile(profile);
   }
 
@@ -36,6 +40,13 @@ export class ShopUI {
     this.root.classList.remove('hidden');
     const types = Object.keys(PICKAXES);
     this.select(type || types.find((t) => !this.profile.hasPickaxe(t)) || types[types.length - 1]);
+    this._measure();
+  }
+
+  /** Where the card starts, so the camera can put the wall in the space left of it. */
+  _measure() {
+    const w = this.root.clientWidth;
+    if (this.isOpen && w > 0 && this.card.offsetWidth > 0) this.freeFrac = this.card.offsetLeft / w;
   }
 
   close() {
@@ -76,7 +87,7 @@ export class ShopUI {
   _renderDetail() {
     const type = this.sel;
     const def = PICKAXES[type];
-    if (!def) { this.detail.innerHTML = ''; return; }
+    if (!def) { this.detail.innerHTML = ''; this.buyRow.innerHTML = ''; return; }
     const rar = RARITIES[def.rarity];
     const hits = hitsToBreak(type);
     const breaks = Object.keys(ROCKS).filter((k) => hits[k] != null).map((k) => ROCK_NAMES[k].toLowerCase() + 's');
@@ -94,9 +105,10 @@ export class ShopUI {
       `<span>Breaks</span><span><b>${breaks.join(', ')}</b></span>` +
       `<span>Swings</span><span>${swings}</span>` +
       `<span>Fighting</span><span><b>${def.fight}</b> damage, if it is all you have</span>` +
-      `</div>` +
-      `<div class="sd-buy"></div>`;
-    const row = this.detail.querySelector('.sd-buy');
+      `</div>`;
+    // the button lives under the detail, not in it, so it is on screen however short the screen is
+    const row = this.buyRow;
+    row.innerHTML = '';
     const btn = document.createElement('button');
     btn.className = 'mbtn';
     const note = document.createElement('span');

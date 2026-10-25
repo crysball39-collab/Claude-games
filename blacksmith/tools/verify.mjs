@@ -244,6 +244,32 @@ try {
       looks.spikes.length === 2 && Math.abs(a[0] + b[0]) < 0.01 && Math.abs(a[0]) > 0.25 && Math.abs(a[1] - b[1]) < 0.01 && Math.abs(a[2]) < 0.01 && Math.abs(b[2]) < 0.01,
       JSON.stringify(looks.spikes));
     check('nothing can be seen through the cliff beside or over the cave mouth', looks.holes.length === 0, JSON.stringify(looks.holes));
+
+    // every torch, at the cave mouth and in the cave: the fire stands on the tip
+    // of its handle, the handle leans out from the wall, and the wall is right behind it
+    const torches = await ev(() => {
+      const g = window.BLACKSMITH.game;
+      const ray = new g.raycaster.constructor();
+      ray.camera = g.camera;
+      const look = (area, flames) => {
+        area.scene.updateMatrixWorld(true);
+        return flames.map((f) => {
+          const { tip, out, dir } = f.userData;
+          ray.set(tip, out.clone().negate());
+          ray.far = 0.7;
+          const wall = ray.intersectObjects(area.scene.children, true).find((h) => h.object.isMesh);
+          return {
+            onTip: f.position.distanceTo(tip) < 1e-6 && f.center.y <= 0.15,
+            out: +dir.dot(out).toFixed(2), up: +dir.y.toFixed(2), wall: wall ? +wall.distance.toFixed(2) : null,
+          };
+        });
+      };
+      return { mouth: look(g.areas.overworld, g.areas.overworld.cave.torches), cave: look(g.areas.cave, g.areas.cave.torches) };
+    });
+    const all = [...torches.mouth, ...torches.cave];
+    check('every torch has its fire on the tip of its handle, leaning out from the wall it is fixed to',
+      torches.mouth.length === 2 && torches.cave.length === 12 &&
+      all.every((t) => t.onTip && t.out > 0.25 && t.up > 0.8 && t.wall !== null && t.wall < 0.6), JSON.stringify(torches));
   }
 
   /* --------------------------------- forging ------------------------------ */
@@ -349,6 +375,47 @@ try {
     big.need === '12 ORE \u00b7 NEEDS 3' && !big.disabled && big.preview.includes('Damage 17') && big.preview.includes('+60%') &&
     bigDagger.mix?.[0]?.[1] === 12 && bigDagger.iron === 0 && bigDagger.card.includes('Damage 17'), JSON.stringify({ big, bigDagger }));
   await tapSel('#btn-forged-ok');
+
+  // a slot that already has an ore in it: tap anywhere on it to change the
+  // ore; one already in another slot swaps over
+  await ev(() => { const P = window.BLACKSMITH.profile; P.addOre('iron', 9); P.addOre('gold', 4); P.addOre('stone', 5); });
+  await page.tap('.rchip:nth-child(2)');
+  const slotsNow = () => ev(() => window.BLACKSMITH.forge.slots.map((s) => (s.ore ? `${s.ore}:${s.amount}` : '-')).join(' '));
+  await pickOre(1, 'Iron');
+  await page.tap('#slots .slot:nth-child(1) .sname');
+  const reopened = await ev(() => !document.querySelector('#ore-picker').classList.contains('hidden'));
+  await page.locator('#op-grid .opt', { hasText: 'Gold' }).first().tap();
+  const replaced = await slotsNow();
+  await pickOre(2, 'Stone');
+  const [one, two] = (await slotsNow()).split(' ');
+  await page.tap('#slots .slot:nth-child(1) .snum');
+  await page.locator('#op-grid .opt', { hasText: 'Stone' }).first().tap();
+  const swapped = await slotsNow();
+  check('tapping a slot that has an ore in it changes the ore, and one from another slot swaps over',
+    reopened && replaced === 'gold:4 - -' && two.startsWith('stone:') && swapped === `${two} ${one} -`, JSON.stringify({ reopened, replaced, swapped }));
+
+  // + and - are one a tap, however quick the taps; held, + counts on until the finger lifts
+  await ev(() => window.BLACKSMITH.profile.addOre('stone', 20));
+  const amount = () => ev(() => window.BLACKSMITH.forge.slots[0].amount);
+  const plusSel = '#slots .slot:nth-child(1) .samt button[data-d="1"]', minusSel = '#slots .slot:nth-child(1) .samt button[data-d="-1"]';
+  const n0 = await amount();
+  for (let i = 0; i < 4; i++) await page.tap(plusSel);
+  for (let i = 0; i < 2; i++) await page.tap(minusSel);
+  const n1 = await amount();
+  await page.waitForTimeout(1200);
+  const n2 = await amount();
+  check('+ and - count exactly one a tap, and the count stays put after', n1 === n0 + 2 && n2 === n1, JSON.stringify({ n0, n1, n2 }));
+  const cdp = await page.context().newCDPSession(page);
+  const pb = await page.locator(plusSel).boundingBox();
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: pb.x + pb.width / 2, y: pb.y + pb.height / 2 }] });
+  await page.waitForTimeout(1100);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  const n3 = await amount();
+  await page.waitForTimeout(1000);
+  const n4 = await amount();
+  check('holding + keeps counting, and lifting the finger stops it dead', n3 > n2 + 3 && n4 === n3 && await ev(() => !window.BLACKSMITH.forge.held),
+    JSON.stringify({ n2, n3, n4 }));
+
   await page.tap('#btn-close-forge');
   await ev(() => window.T.step(30));
   await shot('09-wearing');
@@ -697,5 +764,64 @@ try {
 const errors = logs.filter((l) => !l.includes('GPU stall') && !l.includes('Automatic fallback to software WebGL'));
 check('no errors in the console', errors.length === 0, errors.slice(0, 5).join('\n'));
 await h.close();
+
+/* ---------------------- a phone with little height to spare ---------------------- */
+// a phone on its side with the game opened inside another app: 585 x 260
+{
+  const s = await launch({ url, width: 585, height: 260 });
+  try {
+    await s.page.waitForSelector('#menu-screen.active', { timeout: 60000 });
+    await s.page.tap('#btn-newgame');
+    await s.page.waitForFunction(() => window.BLACKSMITH?.state === 'playing', null, { timeout: 180000 });
+    await s.ev(() => {
+      const A = window.BLACKSMITH, g = A.game, P = A.profile;
+      A.state = 'test';
+      P.addOre('iron', 30); P.addOre('gold', 6); P.addOre('diamond', 2);
+      g.player.teleport(-23.2, -4.4, -Math.PI / 2);
+      g.openForge();
+      A.forge.type = 'sword';
+      A.forge.slots = [{ ore: 'iron', amount: 24 }, { ore: 'gold', amount: 6 }, { ore: 'diamond', amount: 2 }];
+      A.forge.render();
+    });
+    await s.page.waitForTimeout(400);
+    const forge = await s.ev(() => {
+      const r = (e) => e.getBoundingClientRect();
+      const card = r(document.querySelector('#forge-card')), body = r(document.querySelector('.forge-body')), foot = r(document.querySelector('.forge-foot'));
+      const slots = [...document.querySelectorAll('#slots .slot')].map(r);
+      const btns = [...document.querySelectorAll('#slots .samt button')].map(r);
+      const picks = [...document.querySelectorAll('#slots .spick')].map((e) => Math.round(r(e).height));
+      const forgeBtn = r(document.querySelector('#btn-forge'));
+      return {
+        separate: body.bottom <= foot.top + 0.5,
+        slotsShown: slots.every((b) => b.left >= card.left && b.right <= card.right && b.top >= body.top - 0.5 && b.bottom <= body.bottom + 0.5),
+        buttonsInSlots: btns.every((b, k) => b.left >= slots[k >> 1].left && b.right <= slots[k >> 1].right && b.bottom <= slots[k >> 1].bottom),
+        picks, forge: forgeBtn.bottom <= innerHeight && forgeBtn.right <= innerWidth && forgeBtn.height >= 30,
+      };
+    });
+    check('on a 585 x 260 screen the anvil\'s three slots, their buttons and FORGE are all on screen, none on top of another',
+      forge.separate && forge.slotsShown && forge.buttonsInSlots && forge.forge && forge.picks.every((hgt) => hgt >= 40), JSON.stringify(forge));
+    await s.page.screenshot({ path: path.join(SHOTS, '19-anvil-585x260.png') });
+    const shop = await s.ev(() => {
+      const A = window.BLACKSMITH, g = A.game;
+      g.closeForge();
+      A.profile.cash = 1500;
+      const Wl = g.area.pickWall;
+      g.player.teleport(Wl.center.x + Wl.normal.x * 2.5, Wl.center.z + Wl.normal.z * 2.5, 0);
+      g.openShop();
+      A.shop.select('stone');
+      const b = document.querySelector('.sd-buy .mbtn').getBoundingClientRect();
+      return { mode: g.mode, text: document.querySelector('.sd-buy .mbtn').textContent, onScreen: b.top >= 0 && b.bottom <= innerHeight && b.right <= innerWidth };
+    });
+    await s.page.waitForTimeout(400);
+    await s.page.screenshot({ path: path.join(SHOTS, '20-wall-585x260.png') });
+    check('and on the pickaxe wall the BUY button is on screen', shop.mode === 'shop' && shop.text === 'BUY $1,000' && shop.onScreen, JSON.stringify(shop));
+  } catch (e) {
+    check('the small-screen run finished', false, e.message);
+  }
+  const small = s.logs.filter((l) => !l.includes('GPU stall') && !l.includes('Automatic fallback to software WebGL'));
+  check('no errors in the console on the small screen', small.length === 0, small.slice(0, 5).join('\n'));
+  await s.close();
+}
+
 console.log(fails.length ? `\n${fails.length} FAILED` : '\nALL PASSED');
 process.exit(fails.length ? 1 : 0);
