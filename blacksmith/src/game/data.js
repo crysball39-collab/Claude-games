@@ -215,6 +215,20 @@ export function qualityOf(mix) {
   return n ? sum / n : 1;
 }
 
+export const oreCount = (mix) => mix.reduce((n, [, amount]) => n + amount, 0);
+
+/**
+ * The ore a recipe asks for is the least it takes; the anvil takes as much
+ * more as you like. Twice the ore makes it 30% stronger, four times 60%,
+ * and so on, up to double strength at ten times the ore. Better ore always
+ * counts for more than more ore: ten times the Stone does not make Gold.
+ */
+export const EXTRA_ORE = { per: 0.3, max: 2 };
+
+export function oreBonus(total, need) {
+  return Math.min(EXTRA_ORE.max, 1 + EXTRA_ORE.per * Math.log2(Math.max(1, total / need)));
+}
+
 /* -------------------------------- items ---------------------------------- */
 
 /** Damage, defence, mining power: everything an item does, from what it is. */
@@ -224,12 +238,15 @@ export function itemStats(item) {
     return { mining: p.damage, tier: p.tier, damage: p.fight };
   }
   const q = qualityOf(item.mix);
+  const total = oreCount(item.mix);
   if (item.kind === 'weapon') {
     const w = WEAPONS[item.type];
-    return { damage: Math.round(w.damage * q), cooldown: w.cooldown, reach: w.reach, arc: w.arc, hits: w.hits };
+    const bonus = oreBonus(total, w.ores);
+    return { damage: Math.round(w.damage * q * bonus), cooldown: w.cooldown, reach: w.reach, arc: w.arc, hits: w.hits, bonus, ores: total };
   }
   const a = ARMOR[item.type];
-  return { defense: Math.round(a.defense * q * 10) / 10 };
+  const bonus = oreBonus(total, a.ores);
+  return { defense: Math.round(a.defense * q * bonus * 10) / 10, bonus, ores: total };
 }
 
 export function itemRarity(item) {

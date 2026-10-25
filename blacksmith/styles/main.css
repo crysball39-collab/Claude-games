@@ -356,7 +356,12 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
 .slot .samt button:active{background:rgba(255,122,31,.4)}
 .slot .samt b{min-width:22px;text-align:center;font-size:.9rem}
 .slot .spart{font-size:.52rem;letter-spacing:.2em;font-weight:800;color:var(--ember-lit)}
+.slot{position:relative}
 .slot .snum{font-size:.5rem;letter-spacing:.16em;color:var(--muted)}
+.slot .sall{position:absolute;top:3px;right:3px;padding:2px 5px;border-radius:5px;border:1px solid var(--line);
+  background:rgba(255,255,255,.08);font-size:.48rem;font-weight:800;letter-spacing:.08em}
+.slot .sall:active{background:rgba(255,122,31,.4)}
+.preview .ptext .pbonus{color:var(--uncommon);font-weight:800}
 .forge-foot{display:flex;align-items:center;gap:8px}
 .preview{flex:1;display:flex;align-items:center;gap:8px;min-width:0}
 .preview .picon{width:46px;height:46px;flex:0 0 auto;border-radius:9px;border:1.5px solid var(--c,var(--line));background:rgba(0,0,0,.3)}

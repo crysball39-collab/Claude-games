@@ -441,6 +441,36 @@ export function signTexture(text, w = 512, h = 192) {
   return toTexture(c, { clamp: true });
 }
 
+/**
+ * One face of an arrow-shaped signboard: planks, a dark edge that follows
+ * the arrow round to its point, and the word in the body of it. The point
+ * is always on the right of the picture; `mirrored` writes the word back to
+ * front, for the face on the far side, which is seen from behind.
+ */
+export function arrowSignTexture(text, bodyFrac, mirrored = false, w = 512, h = 140) {
+  const c = makeCanvas(w, h);
+  const ctx = c.getContext('2d');
+  drawWood(ctx, w, h, { seed: 12, planks: 2, base: [140, 92, 50] });
+  const bw = w * bodyFrac, i = 7;
+  ctx.strokeStyle = 'rgba(40,22,8,0.85)';
+  ctx.lineWidth = 9;
+  ctx.beginPath();
+  ctx.moveTo(i, i); ctx.lineTo(bw, i); ctx.lineTo(w - i * 1.6, h / 2); ctx.lineTo(bw, h - i); ctx.lineTo(i, h - i);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.save();
+  if (mirrored) { ctx.translate(bw / 2, 0); ctx.scale(-1, 1); ctx.translate(-bw / 2, 0); }
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `bold ${Math.round(h * 0.6)}px Georgia, "Times New Roman", serif`;
+  ctx.fillStyle = 'rgba(230,190,140,0.55)';
+  ctx.fillText(text, bw / 2 + 2, h / 2 + 5);
+  ctx.fillStyle = '#2b1606';
+  ctx.fillText(text, bw / 2, h / 2 + 2);
+  ctx.restore();
+  return toTexture(c, { clamp: true });
+}
+
 /** A price, burnt into a little plank, for under each pickaxe on the wall. */
 export function drawPriceTag(ctx, w, h, text, color = '#2b1606') {
   drawWood(ctx, w, h, { seed: 31, planks: 1, base: [178, 134, 86] });

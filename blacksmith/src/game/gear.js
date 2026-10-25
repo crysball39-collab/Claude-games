@@ -108,12 +108,17 @@ export function buildPickaxe(type) {
   add(g, new CylinderGeometry(0.022, 0.026, len, 7), woodMat, 0, len / 2 - 0.14, 0);
   const top = len - 0.14;
   const headMat = type === 'stone' ? oreMaterial('stone') : lightWood;
-  add(g, new BoxGeometry(0.085, 0.09, 0.075), headMat, 0, top, 0);
-  // two picks, curving down a touch
+  add(g, new BoxGeometry(0.09, 0.1, 0.08), headMat, 0, top, 0);
+  // two picks, one out each side of the head, curving down a touch. Each is
+  // a square spike built pointing up from its base, so turning it about Z
+  // alone swings it straight out sideways; a turn about Y as well would
+  // send it off at a slant.
   for (const sx of [-1, 1]) {
-    const spike = add(g, new ConeGeometry(0.04, 0.24, 4), headMat, sx * 0.15, top - 0.02, 0);
-    spike.rotation.z = -sx * (Math.PI / 2 + 0.28);
-    spike.rotation.y = Math.PI / 4;
+    const geo = new CylinderGeometry(0.004, 0.046, 0.29, 4, 1);
+    geo.rotateY(Math.PI / 4);
+    geo.translate(0, 0.145, 0);
+    const spike = add(g, geo, headMat, sx * 0.035, top - 0.005, 0);
+    spike.rotation.z = -sx * (Math.PI / 2 + 0.22);
   }
   if (type === 'stone') {
     // lashed on

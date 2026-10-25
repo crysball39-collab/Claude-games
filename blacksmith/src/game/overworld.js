@@ -17,7 +17,7 @@
 import {
   Scene, Group, Mesh, InstancedMesh, Object3D, Color, Fog, Vector3,
   PlaneGeometry, BoxGeometry, CylinderGeometry, ConeGeometry, SphereGeometry,
-  IcosahedronGeometry, CircleGeometry, TorusGeometry, ShapeGeometry, Shape, BufferGeometry,
+  IcosahedronGeometry, CircleGeometry, TorusGeometry, ShapeGeometry, ExtrudeGeometry, Shape, BufferGeometry,
   Float32BufferAttribute, MeshLambertMaterial, MeshPhongMaterial, MeshBasicMaterial,
   SpriteMaterial, Sprite, HemisphereLight, DirectionalLight, AmbientLight, PointLight,
   DoubleSide, BackSide, AdditiveBlending,
@@ -26,7 +26,7 @@ import { makeRng, valueNoise2D, fbm, clamp01, lerp, smoothstep } from '../core/u
 import {
   grassTexture, dirtTexture, stoneCircleTexture, bricksTexture, woodTexture, rockTexture,
   shinglesTexture, skyTexture, lavaTexture, signTexture, flameTexture, tuftTexture, softDotTexture,
-  makeCanvas, drawPriceTag, toTexture,
+  makeCanvas, drawPriceTag, toTexture, arrowSignTexture,
 } from './textures.js';
 import { mergeStatic, flatten, tiledBox, pathGeometry, smoothPath, rockGeometry } from './geo.js';
 import { Collider } from './collide.js';
@@ -115,7 +115,8 @@ export function buildOverworld({ quality }) {
     beam: new MeshLambertMaterial({ map: beamTex }),
     darkWood: new MeshLambertMaterial({ color: 0x5b3a20 }),
     rock: new MeshLambertMaterial({ map: rockTex, color: 0xb8b2a6 }),
-    cliff: new MeshLambertMaterial({ map: rockTex, color: 0x9d968a }),
+    cliff: new MeshLambertMaterial({ map: rockTex, color: 0x9d968a, emissive: 0x15130f }),
+    cliffFace: new MeshLambertMaterial({ map: rockTex, color: 0xa39c90, emissive: 0x15130f, vertexColors: true }),
     roof: new MeshLambertMaterial({ map: roofTex, transparent: true, opacity: 1, side: DoubleSide }),
     roofWood: new MeshLambertMaterial({ map: woodTex, transparent: true, opacity: 1, side: DoubleSide }),
     iron: new MeshPhongMaterial({ color: 0x3b3f45, specular: 0x8a8f96, shininess: 45 }),
@@ -279,25 +280,47 @@ export function buildOverworld({ quality }) {
   {
     const x = -2.7, z = -6.4;
     box(0.16, 2.4, 0.16, M.beam, x, 1.2, z);
+    const cap = new Mesh(new ConeGeometry(0.15, 0.16, 4), M.darkWood);
+    cap.rotation.y = Math.PI / 4;
+    cap.position.set(x, 2.48, z);
+    world.add(cap);
     col.circle(x, z, 0.15, { h: 2.4, camera: false });
+    /**
+     * A board cut to an arrow, its point the way it says: one solid plank
+     * with the point on the end of it, lettered on both faces so it reads
+     * from either side.
+     */
     const arrow = (text, y, ry) => {
-      const tex = keep(signTexture(text, 384, 128));
-      const face = keep(new MeshLambertMaterial({ map: tex }));
-      const g = new Group();
-      g.position.set(x, y, z);
-      g.rotation.y = ry;
-      const board = new Mesh(new BoxGeometry(1.15, 0.36, 0.06), [M.wood, M.wood, M.wood, M.wood, face, face]);
-      board.position.x = 0.62;
+      const body = 1.0, tip = 0.3, h = 0.38, depth = 0.06, L = body + tip;
+      const shape = new Shape();
+      shape.moveTo(0, -h / 2); shape.lineTo(body, -h / 2); shape.lineTo(L, 0);
+      shape.lineTo(body, h / 2); shape.lineTo(0, h / 2); shape.closePath();
+      const geo = new ExtrudeGeometry(shape, { depth, bevelEnabled: false });
+      geo.translate(0.07, 0, -depth / 2);
+      // The two faces come first, back then front, then the edges: give each
+      // face its own lettering, and the edges plain wood.
+      const pos = geo.attributes.position, uv = geo.attributes.uv;
+      const [faces, edges] = geo.groups;
+      for (let i = faces.start; i < faces.start + faces.count; i++) {
+        uv.setXY(i, (pos.getX(i) - 0.07) / L, (pos.getY(i) + h / 2) / h);
+      }
+      for (let i = edges.start; i < edges.start + edges.count; i++) {
+        uv.setXY(i, (pos.getX(i) + pos.getY(i)) / 0.9, (pos.getZ(i) + depth) / 0.9);
+      }
+      const half = faces.count / 2;
+      geo.clearGroups();
+      geo.addGroup(faces.start, half, 0);
+      geo.addGroup(faces.start + half, half, 1);
+      geo.addGroup(edges.start, edges.count, 2);
+      const back = keep(new MeshLambertMaterial({ map: keep(arrowSignTexture(text, body / L, true)) }));
+      const front = keep(new MeshLambertMaterial({ map: keep(arrowSignTexture(text, body / L, false)) }));
+      const board = new Mesh(geo, [back, front, M.wood]);
+      board.position.set(x, y, z);
+      board.rotation.y = ry;
       board.castShadow = shadows;
-      g.add(board);
-      // the pointed end
-      const tip = new Mesh(new CylinderGeometry(0.26, 0.26, 0.06, 3), M.wood);
-      tip.rotation.set(Math.PI / 2, 0, Math.PI / 2);
-      tip.position.x = 1.25;
-      tip.scale.set(0.7, 1, 1);
-      g.add(tip);
-      world.add(g);
-      flatten(g, world);
+      board.userData.keep = true;
+      world.add(board);
+      disposables.push(geo);
     };
     // +X of each board points the way it says: north is -Z, west is -X
     arrow('Cave', 2.05, Math.PI / 2);
@@ -681,14 +704,53 @@ export function buildOverworld({ quality }) {
       disposables.push(geo);
       col.circle(x, z, r * 0.95, { h: r * 1.4 });
     }
-    // a lip of rock over the mouth
+    // The face of the cliff: one sheet of rock along its whole foot, with the
+    // mouth cut out of it to the tunnel's exact size, so there is nowhere
+    // beside the frame or over it to see through. It only ever bulges back,
+    // away from you, and it is flat where it meets the tunnel.
     {
-      const geo = rockGeometry(3.3, { seed: 909, detail: 2, squash: 0.5, rough: 0.2, flatBase: false });
-      const m = new Mesh(geo, M.cliff);
-      m.position.set(0, 5.05, -47.4);
-      m.scale.set(1.45, 1, 1.0);
-      m.receiveShadow = shadows;
-      world.add(m);
+      const noise = valueNoise2D(77);
+      const z0 = C.mouthZ - 0.15, hx = C.half + 0.15, hy = 4.62;
+      const xs = [];
+      for (let x = -44; x <= 36.01; x += 0.8) if (Math.abs(Math.abs(x) - hx) > 0.2) xs.push(x);
+      xs.push(-hx, hx);
+      xs.sort((a, b) => a - b);
+      const top = (x) => 9.5 + fbm(noise, x * 0.045 + 7, 3.1, 3) * 6 - Math.max(0, 6 - Math.abs(x)) * 0.1;
+      const rowsLow = 8, rowsHigh = 9;
+      const pos = [], uv = [], colr = [], idx = [];
+      for (let j = 0; j <= rowsLow + rowsHigh; j++) {
+        for (const x of xs) {
+          const y = j <= rowsLow ? -0.6 + (hy + 0.6) * (j / rowsLow) : hy + (top(x) - hy) * ((j - rowsLow) / rowsHigh);
+          // how far it may bulge back: nothing at the edge of the mouth
+          const edge = Math.max(Math.abs(x) - hx, y - hy, 0);
+          const nearMouth = Math.abs(x) < hx + 1.2 && y < hy + 1.2 ? Math.min(1, edge / 1.0) : 1;
+          const d = (0.2 + fbm(noise, x * 0.32, y * 0.32, 4) * 1.3) * nearMouth;
+          pos.push(x, y, z0 - d);
+          uv.push(x / 3, y / 3);
+          const k = (0.7 + 0.3 * (1 - d / 1.5)) * (0.82 + fbm(noise, x * 0.8 + 3, y * 0.8, 2) * 0.3);
+          const moss = Math.max(0, 1 - y / 1.4) * 0.25;
+          colr.push(k * (1 - moss * 0.4), k, k * (1 - moss * 0.6));
+        }
+      }
+      const row = xs.length;
+      for (let j = 0; j < rowsLow + rowsHigh; j++) {
+        for (let i = 0; i < row - 1; i++) {
+          const xc = (xs[i] + xs[i + 1]) / 2;
+          if (j < rowsLow && Math.abs(xc) < hx) continue;          // the mouth itself
+          const a = j * row + i, b = a + 1, c2 = a + row, d2 = c2 + 1;
+          idx.push(a, b, d2, a, d2, c2);
+        }
+      }
+      const geo = new BufferGeometry();
+      geo.setAttribute('position', new Float32BufferAttribute(pos, 3));
+      geo.setAttribute('uv', new Float32BufferAttribute(uv, 2));
+      geo.setAttribute('color', new Float32BufferAttribute(colr, 3));
+      geo.setIndex(idx);
+      geo.computeVertexNormals();
+      const face = new Mesh(geo, M.cliffFace);
+      face.receiveShadow = shadows;
+      face.userData.keep = true;
+      world.add(face);
       disposables.push(geo);
     }
     // mountains behind it
@@ -710,7 +772,7 @@ export function buildOverworld({ quality }) {
     }
 
     // the tunnel into the dark: rock that gets blacker the deeper it goes
-    const depth = 12, H = 4.6, hw = C.half + 0.1, z0 = C.mouthZ + 0.2;
+    const depth = 12, H = 4.6, hw = C.half + 0.1, z0 = C.mouthZ - 0.15;
     const tunnelPart = (w, h, d, x, y, z) => {
       const g = tiledBox(w, h, d, 1.6);
       const p = g.attributes.position;

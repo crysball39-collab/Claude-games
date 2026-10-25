@@ -207,6 +207,43 @@ try {
     check('the Forge has its anvil, its lava bucket over a sword mould, and a water bucket', world.forge && world.water);
     check('a wooden sign hangs over the cave mouth', world.sign.lettered && world.sign.y > 3.5 && Math.abs(world.sign.x) < 0.5 && world.sign.z < -44,
       JSON.stringify(world.sign));
+
+    const looks = await ev(() => {
+      const g = window.BLACKSMITH.game, scene = g.areas.overworld.scene;
+      scene.updateMatrixWorld(true);
+      const V = g.camera.position.constructor;
+      const r2 = (v) => +v.toFixed(2);
+      // the signpost: two arrow-cut planks, each pointing the way it says
+      const boards = [];
+      scene.traverse((o) => { if (o.isMesh && o.geometry.type === 'ExtrudeGeometry' && Array.isArray(o.material) && o.material.length === 3) boards.push(o); });
+      const arrows = boards.map((b) => {
+        b.geometry.computeBoundingBox();
+        const bb = b.geometry.boundingBox;
+        const dir = new V(bb.max.x, 0, 0).applyMatrix4(b.matrixWorld).sub(new V(bb.min.x, 0, 0).applyMatrix4(b.matrixWorld)).normalize();
+        return { dir: [r2(dir.x), r2(dir.z)], thick: r2(bb.max.z - bb.min.z), tall: r2(bb.max.y - bb.min.y) };
+      });
+      // the pickaxe in your hand: two spikes, straight out to each side
+      const spikes = [];
+      g.player.outfit.held.group.traverse((o) => { if (o.isMesh && o.geometry.parameters?.radiusTop === 0.004) spikes.push(new V(0, 0.29, 0).applyMatrix4(o.matrix)); });
+      // the cave mouth: whatever you look at beside it or over it is rock
+      const ray = new g.raycaster.constructor();
+      ray.camera = g.camera;
+      ray.far = 25;
+      const holes = [];
+      for (const [x, y] of [[-9, 3], [-6, 0.6], [-4, 2], [-3.2, 1], [-3.2, 4], [-2, 5.4], [0, 6], [0, 9], [2, 5.4], [3.2, 1], [3.2, 4], [4, 2], [6, 0.6], [9, 3], [0, 2]]) {
+        ray.set(new V(x, y, -43.6), new V(0, 0, -1));
+        if (!ray.intersectObjects(scene.children, true).some((h) => h.object.visible && h.object.isMesh)) holes.push([x, y]);
+      }
+      return { arrows, spikes: spikes.map((t) => [r2(t.x), r2(t.y), r2(t.z)]), holes };
+    });
+    const cave = looks.arrows.find((a) => a.dir[1] < -0.95), forge = looks.arrows.find((a) => a.dir[0] < -0.95);
+    check('the signpost\'s two arrows are cut to a point and aim at the Cave and the Forge',
+      looks.arrows.length === 2 && cave && forge && looks.arrows.every((a) => a.thick <= 0.07 && a.tall <= 0.4), JSON.stringify(looks.arrows));
+    const [a, b] = looks.spikes;
+    check('the pickaxe\'s two spikes stick straight out either side of its head',
+      looks.spikes.length === 2 && Math.abs(a[0] + b[0]) < 0.01 && Math.abs(a[0]) > 0.25 && Math.abs(a[1] - b[1]) < 0.01 && Math.abs(a[2]) < 0.01 && Math.abs(b[2]) < 0.01,
+      JSON.stringify(looks.spikes));
+    check('nothing can be seen through the cliff beside or over the cave mouth', looks.holes.length === 0, JSON.stringify(looks.holes));
   }
 
   /* --------------------------------- forging ------------------------------ */
@@ -252,7 +289,7 @@ try {
     disabled: document.querySelector('#btn-forge').disabled,
   }));
   check('the anvil says which ore becomes which part as you fill it',
-    slotState.need === 'ORE 10 / 10' && slotState.parts.join('|') === 'POMMEL|CROSS-GUARD|BLADE' && !slotState.disabled,
+    slotState.need === '10 ORE \u00b7 NEEDS 10' && slotState.parts.join('|') === 'POMMEL|CROSS-GUARD|BLADE' && !slotState.disabled,
     JSON.stringify(slotState));
   await shot('05-anvil-filled');
   await tapSel('#btn-forge');
@@ -292,6 +329,26 @@ try {
   });
   check('a Light Helmet goes on your head in its ores', helmet.mix && helmet.ores.includes('bronze') && helmet.ores.includes('gold') && helmet.def > 0,
     JSON.stringify(helmet));
+
+  // the recipe's count is only the least it takes: twelve Iron into a dagger
+  await ev(() => window.BLACKSMITH.profile.addOre('iron', 12));
+  await page.tap('.rchip:nth-child(1)');
+  await pickOre(1, 'Iron');
+  await page.tap('#slots .slot:nth-child(1) .sall');
+  const big = await ev(() => ({
+    need: document.querySelector('#forge-need').textContent, preview: document.querySelector('#forge-preview').textContent,
+    disabled: document.querySelector('#btn-forge').disabled,
+  }));
+  await tapSel('#btn-forge');
+  await ev(() => window.T.step(130));
+  const bigDagger = await ev(() => {
+    const P = window.BLACKSMITH.profile, it = P.itemsOf('weapon').find((w) => w.type === 'dagger');
+    return { mix: it?.mix, iron: P.ores.iron, card: document.querySelector('#forged-stats').textContent };
+  });
+  check('the anvil takes any amount of ore: twelve Iron in a dagger that needs three, 60% stronger for it',
+    big.need === '12 ORE \u00b7 NEEDS 3' && !big.disabled && big.preview.includes('Damage 17') && big.preview.includes('+60%') &&
+    bigDagger.mix?.[0]?.[1] === 12 && bigDagger.iron === 0 && bigDagger.card.includes('Damage 17'), JSON.stringify({ big, bigDagger }));
+  await tapSel('#btn-forged-ok');
   await page.tap('#btn-close-forge');
   await ev(() => window.T.step(30));
   await shot('09-wearing');
@@ -599,9 +656,6 @@ try {
   for (let i = 0; i < Math.min(3, owned.length); i++) {
     await page.tap(`#slots .slot:nth-child(${i + 1}) .sicon`);
     await page.locator('#op-grid .opt', { hasText: NAMES[owned[i]] }).first().tap();
-  }
-  for (let i = 0; i < 6 && (await ev(() => document.querySelector('#forge-need').textContent)) !== 'ORE 3 / 3'; i++) {
-    await page.tap(`#slots .slot:nth-child(${(i % 3) + 1}) .samt button[data-d="1"]`).catch(() => {});
   }
   await tapSel('#btn-forge');
   await ev(() => window.T.step(130));

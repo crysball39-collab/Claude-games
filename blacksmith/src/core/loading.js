@@ -7,6 +7,7 @@ import { $, yieldToPaint, clamp01 } from './util.js';
 
 const TIPS = [
   'The ore you put the most of becomes the blade.',
+  'An anvil takes as much ore as you give it. Extra ore makes it stronger.',
   'Boulders need a Stone Pickaxe: $1,000 on the pickaxe wall by the cave.',
   'Rob pays $1,000 and 100 EXP for every three skeletons.',
   'Irisite turns up once in three hundred ores. Keep swinging.',

@@ -1,6 +1,7 @@
 /* =============================================================================
    The anvil's menu. Pick what to make, then fill up to three slots with ore,
-   any amount of each, until the count is right. The slots say live which
+   any amount of each: the recipe's count is the least it takes, and more ore
+   makes it stronger. The slots say live which
    part each ore is going to become: the most of an ore is the blade (or the
    plating), the next the cross-guard (or the body), the least the pommel
    (or the trim). The preview shows it, painted in those ores, with what it
@@ -78,19 +79,12 @@ export class ForgeUI {
   /** The slots as the anvil reads them: [[ore, amount], ...] in slot order. */
   mix() { return this.slots.filter((s) => s.ore && s.amount > 0).map((s) => [s.ore, s.amount]); }
 
+  /** Never more of an ore in a slot than you have of it. */
   _clampToOwned() {
     for (const s of this.slots) {
       if (!s.ore) continue;
       s.amount = Math.min(s.amount, this.profile.ores[s.ore] || 0);
       if (!this.profile.ores[s.ore]) { s.ore = null; s.amount = 0; }
-    }
-    // never more than the recipe takes
-    let over = this.total - this.need;
-    for (let i = 2; i >= 0 && over > 0; i--) {
-      const s = this.slots[i];
-      const cut = Math.min(over, s.amount);
-      s.amount -= cut;
-      over -= cut;
     }
   }
 
@@ -108,8 +102,8 @@ export class ForgeUI {
     }
     // the count
     const need = this.need, total = this.total;
-    this.needEl.textContent = `ORE ${total} / ${need}`;
-    this.needEl.classList.toggle('ok', total === need);
+    this.needEl.textContent = `${total} ORE \u00b7 NEEDS ${need}`;
+    this.needEl.classList.toggle('ok', total >= need);
 
     // which slot becomes which part
     const ranked = rankSlots(this.slots);
@@ -130,12 +124,14 @@ export class ForgeUI {
       el.className = 'slot' + (ore ? ' filled r-' + ore.rarity : '');
       el.innerHTML =
         `<span class="snum">SLOT ${i + 1}</span>` +
+        (ore ? `<button class="sall" title="Put in all you have">ALL</button>` : '') +
         `<button class="sicon">${ore ? `<img alt="" src="${oreIcon(s.ore)}">` : '+'}</button>` +
         `<span class="sname">${ore ? ore.name : 'Add ore'}</span>` +
         `<span class="samt"><button data-d="-1">&minus;</button><b>${ore ? s.amount : 0}</b><button data-d="1">+</button></span>` +
         `<span class="spart">${roles.get(i) || '&nbsp;'}</span>`;
       el.querySelector('.sicon').addEventListener('click', () => this._openPicker(i));
-      for (const b of el.querySelectorAll('.samt button')) this._repeat(b, () => this._bump(i, +b.dataset.d));
+      el.querySelector('.sall')?.addEventListener('click', () => { s.amount = this.profile.ores[s.ore] || 0; this.render(); });
+      for (const b of el.querySelectorAll('.samt button')) this._repeat(b, (step) => this._bump(i, +b.dataset.d * step));
       this.slotsEl.appendChild(el);
     });
 
@@ -146,35 +142,37 @@ export class ForgeUI {
       const rar = itemRarity(item);
       const st = itemStats(item);
       const stat = R.kind === 'weapon' ? `Damage <b>${st.damage}</b>` : `Defense <b>${st.defense}</b>`;
+      const extra = st.bonus > 1.005 ? `<br><span class="pbonus">+${Math.round((st.bonus - 1) * 100)}% for the extra ore</span>` : '';
       this.previewEl.innerHTML =
         `<div class="picon r-${rar}"><img alt="" src="${recipeIcon(this.type, partsOf(mix))}"></div>` +
         `<div class="ptext"><b>${itemName(item)}</b>${stat} &middot; <span style="color:${RARITIES[rar].color}">${RARITIES[rar].name}</span>` +
-        (total < need ? `<br>${need - total} more ore` : '') + '</div>';
+        (total < need ? `<br>${need - total} more ore` : extra) + '</div>';
     } else {
       this.previewEl.innerHTML = `<div class="picon"><img alt="" src="${recipeIcon(this.type)}"></div>` +
         `<div class="ptext"><b>${R.weight} ${SHORT[this.type]}</b>Put ${need} ore in the slots</div>`;
     }
-    this.forgeBtn.disabled = total !== need || !this.profile.hasOres(mix);
+    this.forgeBtn.disabled = total < need || !this.profile.hasOres(mix);
   }
 
   _bump(i, d) {
     const s = this.slots[i];
     if (!s.ore) { if (d > 0) this._openPicker(i); return; }
     const owned = this.profile.ores[s.ore] || 0;
-    const room = this.need - this.total;
-    if (d > 0 && (room <= 0 || s.amount >= owned)) return;
-    s.amount = Math.max(0, Math.min(owned, s.amount + d));
+    const next = Math.max(0, Math.min(owned, s.amount + d));
+    if (next === s.amount) return;
+    s.amount = next;
     this.render();
   }
 
-  /** Hold a +/- to keep counting. */
+  /** Hold a +/- to keep counting, faster the longer it is held: ones, then fives, then twenty-fives. */
   _repeat(btn, fn) {
-    let t1 = 0, t2 = 0;
+    let t1 = 0, t2 = 0, n = 0;
     const stop = () => { clearTimeout(t1); clearInterval(t2); };
     btn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
-      fn();
-      t1 = setTimeout(() => { t2 = setInterval(fn, 80); }, 380);
+      n = 0;
+      fn(1);
+      t1 = setTimeout(() => { t2 = setInterval(() => { n++; fn(n > 30 ? 25 : n > 12 ? 5 : 1); }, 80); }, 380);
     });
     btn.addEventListener('pointerup', stop);
     btn.addEventListener('pointerleave', stop);
@@ -202,8 +200,8 @@ export class ForgeUI {
       el.addEventListener('click', () => {
         const s = this.slots[i];
         const others = this.total - (s.ore ? s.amount : 0);
-        // fill as much of what is still needed as you have of it
-        this.slots[i] = { ore: id, amount: Math.max(0, Math.min(n, this.need - others)) };
+        // start with what is still needed, as far as you have it; at least one
+        this.slots[i] = { ore: id, amount: Math.min(n, Math.max(1, this.need - others)) };
         this._closePicker();
         this.render();
       });
@@ -225,7 +223,7 @@ export class ForgeUI {
 
   _forge() {
     const mix = this.mix();
-    if (this.total !== this.need || !this.profile.hasOres(mix)) return;
+    if (this.total < this.need || !this.profile.hasOres(mix)) return;
     this.cb.onForge?.(this.type, mix);
   }
 

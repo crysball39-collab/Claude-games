@@ -22,7 +22,8 @@ export function describeItem(item) {
   const parts = partsOf(item.mix);
   const names = PART_NAMES[item.kind];
   const partText = names.map((n, i) => `${n} <b>${ORES[parts[i]].name}</b>`).join(' &middot; ');
-  const mix = item.mix.map(([o, n]) => `${n} ${ORES[o].name}`).join(', ');
+  const extra = s.bonus > 1.005 ? ` (+${Math.round((s.bonus - 1) * 100)}% for extra ore)` : '';
+  const mix = item.mix.map(([o, n]) => `${n} ${ORES[o].name}`).join(', ') + extra;
   if (item.kind === 'weapon') {
     const w = WEAPONS[item.type];
     return `<b>${w.weight}</b> weapon &middot; Damage <b>${s.damage}</b> &middot; ${(1 / w.cooldown).toFixed(1)} swings/s<br>${partText}<br><small>Forged from ${mix}</small>`;

@@ -103,7 +103,8 @@ Levels take 100 EXP times your level to climb, and each one adds 5 max HP.
 ### The anvil
 
 Tap the anvil in the Forge and the camera zooms in on it. Choose what to make,
-then put ore in up to **three slots**, any amount of each, until the count is right:
+then put ore in up to **three slots**, any amount of each. Each thing takes at
+least this much ore:
 
 | Weapon | Ore | | Armour (Light) | Ore |
 | ------ | --- | - | -------------- | --- |
@@ -117,6 +118,12 @@ The ore you put the **most** of becomes the sword's **blade** or the armour's
 the **least**, the **pommel** or the **trim**. A tie goes to the slot further left.
 Each part is drawn in its ore, on you and in its icon. Damage and defence are the
 base number times the ore's strength, weighted by how much of each went in.
+
+Past the least it takes, there is no limit, and more ore makes it stronger: twice
+the ore is +30%, four times +60%, and so on up to double strength at ten times the
+ore. Better ore still counts for more than more ore: ten times the Stone does not
+make Gold. **ALL** on a slot puts in every one of that ore you have, and holding
+**+** counts up faster the longer you hold it.
 
 Forging pours the lava bucket into the sword mould, hammers the casting on the
 anvil, and quenches it in the water bucket before handing it over.
@@ -168,7 +175,10 @@ GOREBOX.
 game in Chromium on a phone-sized touch screen and plays it: the stone circle and
 the stick, the anvil (tapped, zoomed, filled through its menu, the pour and the
 parts that come out), the bag, the cave ring, pebbles taking 4 hits for 2 ores and
-rocks 10 for 3, boulders refusing the Wood Pickaxe, Rob's bounty and its pay and
+rocks 10 for 3, boulders refusing the Wood Pickaxe, any amount of ore going into
+the anvil and coming out stronger, the signpost's arrows pointing where they say,
+the pickaxe's spikes standing out straight, no gaps in the cliff round the cave
+mouth, Rob's bounty and its pay and
 level, tapping the pickaxe wall and being refused with no money, Rob selling no
 pickaxes, buying the Stone Pickaxe off the wall and breaking a boulder in 15 hits for
 4 ores, dying
