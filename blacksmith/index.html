@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="theme-color" content="#120c08" />
+<meta name="description" content="Blacksmith - a third person mining and forging game" />
+<title>Blacksmith</title>
+<link rel="icon" href="data:," />
+<link rel="stylesheet" href="styles/main.css" />
+<script type="importmap">
+{ "imports": { "three": "../vendor/three.module.js" } }
+</script>
+</head>
+<body>
+
+<!-- ============================== LOADING SCREEN ============================== -->
+<div id="load-screen" class="loading-screen active">
+  <div class="ls-bg"></div>
+  <div class="ls-inner">
+    <h1 class="logo">BLACK<span>SMITH</span></h1>
+    <div class="ls-sub" id="load-sub">HEATING THE FORGE</div>
+    <div class="bar"><div class="bar-fill" id="load-bar"></div></div>
+    <div class="ls-status" id="load-status">Waking up&hellip;</div>
+    <div class="ls-tip" id="load-tip"></div>
+  </div>
+</div>
+
+<!-- ================================ MAIN MENU ================================= -->
+<div id="menu-screen" class="screen">
+  <div class="menu-bg"><div class="embers"></div></div>
+  <div class="menu-vignette"></div>
+
+  <div class="menu-panel" id="panel-main">
+    <div class="menu-anvil" aria-hidden="true"></div>
+    <h1 class="logo big">BLACK<span>SMITH</span></h1>
+    <div class="menu-tagline">mine &middot; forge &middot; fight</div>
+    <div class="menu-buttons">
+      <button class="mbtn primary" id="btn-continue">CONTINUE</button>
+      <button class="mbtn" id="btn-newgame">NEW GAME</button>
+      <button class="mbtn" id="btn-controls">CONTROLS</button>
+      <button class="mbtn" id="btn-settings">SETTINGS</button>
+    </div>
+    <div class="menu-save" id="menu-save"></div>
+    <div class="menu-foot">landscape &middot; your progress saves itself</div>
+  </div>
+
+  <div class="menu-panel hidden" id="panel-controls">
+    <div class="panel-head">
+      <button class="backbtn" data-back="panel-main" aria-label="Back">&#8592;</button>
+      <h2>CONTROLS</h2>
+    </div>
+    <div class="scroll-body">
+      <div class="ctl-group"><b>Touch</b>
+        <p>Left thumb: the joystick. Drag anywhere else to turn the camera.</p>
+        <p>ATTACK swings what you are holding. Near a rock you swing your pickaxe, near a skeleton your weapon. Hold it to keep swinging.</p>
+        <p>DASH is a quick dodge that costs stamina. SPRINT switches running on and off.</p>
+        <p>The bag on the right opens your inventory. Equip and unequip things there.</p>
+        <p>Tap the anvil in the Forge to forge. Tap Rob, or press TALK beside him, to talk.</p>
+      </div>
+      <div class="ctl-group"><b>Keyboard &amp; mouse</b>
+        <p>WASD move &middot; drag the mouse to turn the camera &middot; wheel zooms</p>
+        <p>Click or F attack &middot; Space dash &middot; Shift sprint &middot; E talk / use</p>
+        <p>I or Tab inventory &middot; Esc pause</p>
+      </div>
+      <div class="ctl-group"><b>How it goes</b>
+        <p>Mine pebbles and rocks in the Cave with your Wood Pickaxe. Each one breaks into ore.</p>
+        <p>Take the ore to the anvil. Put up to three kinds in, and the one you put most of becomes the blade or the plating.</p>
+        <p>Rob pays $1,000 and 100 EXP for every three skeletons. $1,000 buys his Stone Pickaxe, the only thing that breaks a boulder.</p>
+        <p>Dying costs you nothing. Not an ore, not a dollar.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="menu-panel hidden" id="panel-settings">
+    <div class="panel-head">
+      <button class="backbtn" data-back="panel-main" aria-label="Back">&#8592;</button>
+      <h2>SETTINGS</h2>
+    </div>
+    <div class="scroll-body">
+      <label class="setting"><span>Graphics quality</span>
+        <select id="set-quality"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select>
+      </label>
+      <label class="setting"><span>Shadows</span><input type="checkbox" id="set-shadows" /></label>
+      <p class="setting-note">Quality and shadows take effect the next time the world loads.</p>
+      <label class="setting"><span>Sound</span><input type="checkbox" id="set-sound" checked /></label>
+      <label class="setting"><span>Camera speed</span><input type="range" id="set-sens" min="20" max="200" value="100" /></label>
+      <label class="setting"><span>Invert camera Y</span><input type="checkbox" id="set-inverty" /></label>
+    </div>
+  </div>
+
+  <div id="confirm-new" class="modal hidden">
+    <div class="modal-card">
+      <h3>START OVER?</h3>
+      <p>Your saved smith &mdash; ores, gear, cash and level &mdash; will be erased.</p>
+      <div class="modal-buttons">
+        <button class="mbtn danger" id="btn-confirm-new">ERASE &amp; START</button>
+        <button class="mbtn" id="btn-cancel-new">KEEP MY SAVE</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================= GAME ==================================== -->
+<div id="game-screen" class="screen">
+  <div id="viewport"></div>
+  <div id="floaters"></div>
+
+  <div id="hud">
+    <!-- top left: you -->
+    <div id="vitals">
+      <div class="lvl-badge"><small>LV</small><b id="hud-level">1</b></div>
+      <div class="bars">
+        <div class="vbar hp"><div class="vfill" id="hp-fill"></div><span id="hp-text">100 / 100</span></div>
+        <div class="vbar st"><div class="vfill" id="st-fill"></div><span>STAMINA</span></div>
+        <div class="vbar xp"><div class="vfill" id="xp-fill"></div><span id="xp-text">0 / 100 EXP</span></div>
+      </div>
+    </div>
+
+    <!-- top middle: where and what -->
+    <div id="top-mid">
+      <div id="quest-track" class="hidden"></div>
+    </div>
+    <div id="area-banner"><div class="ab-name" id="area-name"></div><div class="ab-sub" id="area-sub"></div></div>
+
+    <!-- top right -->
+    <div id="top-right">
+      <div id="cash"><span class="coin"></span><b id="cash-text">$0</b></div>
+      <button id="btn-fullscreen" class="hud-btn square small" aria-label="Full screen">&#9974;</button>
+      <button id="btn-pause" class="hud-btn square small" aria-label="Pause">&#10074;&#10074;</button>
+    </div>
+
+    <!-- right edge: the bag -->
+    <button id="btn-inventory" class="hud-btn" aria-label="Inventory"><span class="bag"></span><span class="lbl">BAG</span></button>
+
+    <!-- left stick -->
+    <div id="stick-zone"><div id="stick-base"><div id="stick-knob"></div></div></div>
+
+    <!-- right thumb -->
+    <div id="action-cluster">
+      <button class="hud-btn round med" id="btn-interact">TALK</button>
+      <button class="hud-btn round med" id="btn-sprint">SPRINT</button>
+      <button class="hud-btn round med" id="btn-dash">DASH</button>
+      <button class="hud-btn round big" id="btn-attack"><span class="atk-icon" id="atk-icon"></span><span>ATTACK</span></button>
+    </div>
+
+    <div id="pickup-feed"></div>
+    <div id="announce"><div class="an-big" id="announce-big"></div><div class="an-small" id="announce-small"></div></div>
+    <div id="toast"></div>
+    <div id="save-tag">SAVED</div>
+    <div id="damage-vignette"></div>
+
+    <div id="death-overlay" class="hidden">
+      <div class="death-text">YOU WERE SLAIN</div>
+      <div class="death-sub">Nothing was lost. Not an ore, not a dollar.</div>
+      <button class="mbtn primary" id="btn-respawn">RESPAWN</button>
+    </div>
+  </div>
+
+  <div id="fade"></div>
+
+  <!-- ============================== INVENTORY ============================== -->
+  <div id="inventory" class="overlay hidden">
+    <div class="inv-card">
+      <div class="inv-head">
+        <h3>INVENTORY</h3>
+        <div class="inv-cash"><span class="coin"></span><b id="inv-cash">$0</b></div>
+        <button class="closebtn" id="btn-close-inv" aria-label="Close">&#10005;</button>
+      </div>
+      <div class="inv-body">
+        <div class="inv-left">
+          <div class="equip-grid" id="equip-grid"></div>
+          <div class="inv-stats" id="inv-stats"></div>
+        </div>
+        <div class="inv-right">
+          <div class="tabs" id="inv-tabs">
+            <button class="tab active" data-tab="weapons">WEAPONS</button>
+            <button class="tab" data-tab="armor">ARMOR</button>
+            <button class="tab" data-tab="pickaxes">PICKAXES</button>
+            <button class="tab" data-tab="ores">ORES</button>
+          </div>
+          <div class="inv-grid" id="inv-grid"></div>
+          <div class="inv-detail" id="inv-detail"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================ ANVIL ================================= -->
+  <div id="forge" class="hidden">
+    <div class="forge-card" id="forge-card">
+      <div class="forge-head">
+        <h3>ANVIL</h3>
+        <span class="forge-need" id="forge-need"></span>
+        <button class="closebtn" id="btn-close-forge" aria-label="Close">&#10005;</button>
+      </div>
+      <div class="recipes" id="recipes"></div>
+      <div class="slots" id="slots"></div>
+      <div class="forge-foot">
+        <div class="preview" id="forge-preview"></div>
+        <button class="mbtn primary" id="btn-forge">FORGE</button>
+      </div>
+      <div class="ore-picker hidden" id="ore-picker">
+        <div class="op-head"><b>CHOOSE AN ORE</b><button class="closebtn small" id="btn-close-picker" aria-label="Close">&#10005;</button></div>
+        <div class="op-grid" id="op-grid"></div>
+      </div>
+    </div>
+    <div class="forge-working hidden" id="forge-working">FORGING&hellip;<small>tap to skip</small></div>
+    <div class="forged hidden" id="forged">
+      <div class="forged-card">
+        <div class="forged-title">FORGED!</div>
+        <div class="forged-icon" id="forged-icon"></div>
+        <div class="forged-name" id="forged-name"></div>
+        <div class="forged-stats" id="forged-stats"></div>
+        <div class="modal-buttons">
+          <button class="mbtn primary" id="btn-forged-equip">EQUIP</button>
+          <button class="mbtn" id="btn-forged-ok">FORGE MORE</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================ TALKING =============================== -->
+  <div id="dialogue" class="hidden">
+    <div class="dlg-card">
+      <div class="dlg-portrait" id="dlg-portrait"></div>
+      <div class="dlg-main">
+        <div class="dlg-name" id="dlg-name">ROB</div>
+        <div class="dlg-text" id="dlg-text"></div>
+        <div class="dlg-choices" id="dlg-choices"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================= PAUSE ================================ -->
+  <div id="pause-overlay" class="overlay hidden">
+    <div class="pause-card">
+      <h2>PAUSED</h2>
+      <button class="mbtn primary" id="btn-resume">RESUME</button>
+      <button class="mbtn" id="btn-save">SAVE GAME</button>
+      <button class="mbtn" id="btn-fullscreen-pause">FULL SCREEN</button>
+      <button class="mbtn danger" id="btn-quit">SAVE &amp; QUIT TO MENU</button>
+      <div class="pause-stats" id="pause-stats"></div>
+    </div>
+  </div>
+</div>
+
+<div id="rotate-overlay"><div class="rot-inner"><div class="phone"></div><p>Turn your phone sideways to play</p></div></div>
+<noscript><div class="noscript">Blacksmith needs JavaScript and WebGL.</div></noscript>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

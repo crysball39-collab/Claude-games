@@ -4,6 +4,10 @@ A 3D, first person, mobile-first physics sandbox that runs in a browser. Landsca
 orientation, touch controls, no install, no build step, no assets on disk — every
 texture in the game is drawn procedurally onto a canvas at load time.
 
+> **Also in this repository: [BLACKSMITH](blacksmith/README.md)**, a third person
+> mining and forging game. Mine ore in the cave, forge it at the anvil, and take
+> Rob's bounty on the skeletons. `dist/blacksmith.html` is the whole game in one file.
+
 ## Getting it onto a phone
 
 **`dist/gorebox.html` is the whole game in one file.** Download it, open it, play —

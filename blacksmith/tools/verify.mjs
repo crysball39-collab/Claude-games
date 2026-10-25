@@ -1,0 +1,469 @@
+/* =============================================================================
+   Boots Blacksmith in a real browser, on a phone-sized landscape screen with
+   touch, and checks that the game does what it says it does: the stone
+   circle and its two paths, the cave and its ring, the rocks and what they
+   take to break, Rob's bounty, the Stone Pickaxe, the anvil and what it
+   makes of the ore you give it, dying without losing anything, and the save.
+
+     node blacksmith/tools/verify.mjs            # the source, served over http
+     node blacksmith/tools/verify.mjs --file     # dist/blacksmith.html, off the disk
+
+   Screenshots land in blacksmith/.shots/. Exits non-zero if anything fails.
+   Set CHROMIUM_PATH to reuse a chromium you already have.
+   ========================================================================== */
+import fs from 'node:fs';
+import path from 'node:path';
+import { launch, GAME } from './harness.mjs';
+import { ORES, minedOreOdds, rollMinedOre, partsOf, itemStats, afterArmor } from '../src/game/data.js';
+
+const FILE = process.argv.includes('--file');
+const SHOTS = path.join(GAME, '.shots', FILE ? 'file' : 'src');
+fs.mkdirSync(SHOTS, { recursive: true });
+
+const fails = [];
+const check = (name, ok, detail = '') => {
+  if (!ok) fails.push(name);
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? '  ' + detail : ''}`);
+};
+
+/* ------------------------- the numbers, without a browser ------------------ */
+
+{
+  const odds = minedOreOdds();
+  const n = 600000, seen = {};
+  for (let i = 0; i < n; i++) { const o = rollMinedOre(); seen[o] = (seen[o] || 0) + 1; }
+  const exact = ['stone', 'gold', 'amethyst', 'emerald', 'diamond', 'irisite'];
+  const okExact = exact.every((id) => Math.abs(odds[id] - 1 / ORES[id].oneIn) < 1e-9);
+  const okSim = Object.keys(odds).every((id) => Math.abs((seen[id] || 0) / n - odds[id]) < Math.max(0.004, odds[id] * 0.12));
+  check('ore odds: Stone 1/2, Gold 1/12, Amethyst 1/20, Emerald 1/40, Diamond 1/60, Irisite 1/300', okExact);
+  check('ore odds: Bronze stays commoner than Iron, and rolls land on the table', odds.bronze > odds.iron && okSim,
+    Object.entries(seen).map(([k, v]) => `${k} ${(v / n * 100).toFixed(2)}%`).join(' '));
+  check('the most ore is the blade, then the guard, the least the pommel',
+    partsOf([['iron', 5], ['gold', 3], ['diamond', 2]]).join() === 'iron,gold,diamond' &&
+    partsOf([['diamond', 2], ['gold', 3], ['iron', 5]]).join() === 'iron,gold,diamond');
+  check('a tie goes to the slot further left; one ore makes every part',
+    partsOf([['gold', 1], ['iron', 1]]).join() === 'gold,iron,iron' && partsOf([['emerald', 3]]).join() === 'emerald,emerald,emerald');
+  const dmg = (ore) => itemStats({ kind: 'weapon', type: 'dagger', mix: [[ore, 3]] }).damage;
+  const def = (ore) => itemStats({ kind: 'armor', type: 'chestplate', mix: [[ore, 5]] }).defense;
+  check('better ore, more damage and more defense',
+    dmg('stone') < dmg('bronze') && dmg('iron') < dmg('gold') && dmg('diamond') < dmg('irisite') &&
+    def('stone') < def('iron') && def('emerald') < def('irisite'),
+    `daggers ${['stone', 'iron', 'gold', 'diamond', 'irisite'].map(dmg).join('/')}`);
+  check('armor takes a share of every hit', afterArmor(10, 0) === 10 && afterArmor(10, 40) === 5);
+}
+
+/* ------------------------------ in the browser ----------------------------- */
+
+const url = FILE ? 'file://' + path.join(GAME, '..', 'dist', 'blacksmith.html') : null;
+if (FILE && !fs.existsSync(url.slice(7))) {
+  console.error('dist/blacksmith.html is missing - run: npm run build:blacksmith');
+  process.exit(1);
+}
+const h = await launch({ url });
+const { page, logs, ev } = h;
+const shot = async (n) => {
+  // the frame loop is stood down during the test, so draw the frame first
+  await ev(() => window.BLACKSMITH?.game?.render()).catch(() => {});
+  await page.screenshot({ path: path.join(SHOTS, n + '.png') });
+};
+const external = [];
+page.on('request', (r) => {
+  const u = r.url();
+  if (FILE && !u.startsWith('file://') && !u.startsWith('data:') && !u.startsWith('blob:')) external.push(u);
+});
+
+/**
+ * Helpers living in the page. The frame loop stands aside while the test
+ * runs and only these fixed steps move the game on: software rendering is
+ * slow enough to skew timings, and to turn a tap into a long press.
+ */
+async function installHelpers() {
+  await ev(() => {
+    const A = window.BLACKSMITH;
+    A.state = 'test';
+    window.T = {
+      A,
+      step(n = 1, { attack = false, move = null, dt = 1 / 30 } = {}) {
+        const I = A.input;
+        for (let i = 0; i < n; i++) {
+          I.beginFrame();
+          I.down.attack = attack;
+          if (move) { I.move.x = move.x; I.move.y = move.y; }
+          A.game.update(dt, I);
+        }
+        I.down.attack = false;
+        if (move) { I.move.x = 0; I.move.y = 0; }
+      },
+      /**
+       * Stand `gap` metres from a thing's edge, facing it, on whichever side
+       * has room for you: not in the wall, not in another rock.
+       */
+      faceUp(x, z, radius, gap = 0.45) {
+        const g = A.game, p = g.player;
+        const r = radius + gap + p.radius;
+        let best = null;
+        for (let k = 0; k < 16; k++) {
+          const a = (k / 16) * Math.PI * 2;
+          const want = { x: x + Math.sin(a) * r, z: z + Math.cos(a) * r };
+          const at = { ...want };
+          g.area.collider.resolve(at, p.radius);
+          const err = Math.hypot(at.x - want.x, at.z - want.z);
+          if (!best || err < best.err) best = { at, err };
+          if (err < 0.01) break;
+        }
+        p.teleport(best.at.x, best.at.z, Math.atan2(x - best.at.x, z - best.at.z));
+        g.camRig.snapBehind(p.pos, p.yaw);
+      },
+      ores() { return Object.values(A.profile.ores).reduce((a, b) => a + b, 0); },
+      /** A skeleton in reach rightly takes a swing meant for a rock: send them round the far side. */
+      clearSkeletons(x, z) {
+        const far = Math.atan2(-x, -z);
+        A.game.skeletons.list.forEach((s, i) => {
+          s.pos.set(Math.sin(far + i * 0.4) * 14, 0, Math.cos(far + i * 0.4) * 14);
+          s.state = 'wander';
+          s.wanderTo = null;
+        });
+      },
+    };
+  });
+}
+
+try {
+  await page.waitForSelector('#menu-screen.active', { timeout: 60000 });
+  check('the menu comes up', true);
+  await shot('01-menu');
+  await page.tap('#btn-newgame');
+  await page.waitForFunction(() => window.BLACKSMITH?.state === 'playing', null, { timeout: 180000 });
+  await page.waitForTimeout(800);
+  await installHelpers();
+  await shot('02-spawn');
+
+  const spawn = await ev(() => { const p = window.BLACKSMITH.game.player.pos; return { x: p.x, y: p.y, z: p.z }; });
+  check('you spawn on the stone circle', Math.hypot(spawn.x, spawn.z) < 5 && spawn.y > 0.05, JSON.stringify(spawn));
+  const start = await ev(() => {
+    const P = window.BLACKSMITH.profile;
+    return { cash: P.cash, pick: P.pickaxe(), weapon: P.weapon(), tag: window.BLACKSMITH.game.player.tag.text };
+  });
+  check('you start with a Wood Pickaxe that does 5 damage to rocks, and no money',
+    start.cash === 0 && start.pick.item?.type === 'wood' && start.pick.mining === 5 && !start.weapon, JSON.stringify(start.pick));
+  check('your level is over your head', start.tag === 'Lv. 1');
+
+  /* ------------------------------ the stick ------------------------------ */
+  {
+    const c = await ev(() => {
+      const r = document.querySelector('#stick-base').getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    });
+    const before = await ev(() => ({ ...window.BLACKSMITH.game.player.pos }));
+    const cdp = await page.context().newCDPSession(page);
+    const touch = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 1 }] });
+    await touch('touchStart', c.x, c.y);
+    for (let i = 1; i <= 8; i++) await touch('touchMove', c.x, c.y - i * 7);
+    const held = await ev(() => ({ ...window.BLACKSMITH.input.move }));
+    await ev(() => window.T.step(30));
+    await touch('touchEnd', c.x, c.y - 56);
+    const after = await ev(() => ({ ...window.BLACKSMITH.game.player.pos }));
+    check('the joystick walks you forward, up the cave path', held.y > 0.6 && before.z - after.z > 1.5,
+      JSON.stringify({ held, moved: +(before.z - after.z).toFixed(2) }));
+  }
+
+  /* ------------------------ the paths, the forge, the sign ---------------- */
+  {
+    const world = await ev(() => {
+      const g = window.BLACKSMITH.game, ow = g.areas.overworld;
+      const sign = ow.cave.sign;
+      sign.updateWorldMatrix(true, true);
+      const at = sign.getWorldPosition(sign.position.clone());
+      let lettered = false;
+      sign.traverse((o) => { for (const m of [].concat(o.material || [])) if (m.map?.image?.width === 512) lettered = true; });
+      return { forge: !!ow.forge.anvil && !!ow.forge.tipper && !!ow.forge.moldLava, water: !!ow.forge.waterTop,
+        sign: { y: at.y, x: at.x, z: at.z, lettered } };
+    });
+    check('the Forge has its anvil, its lava bucket over a sword mould, and a water bucket', world.forge && world.water);
+    check('a wooden sign hangs over the cave mouth', world.sign.lettered && world.sign.y > 3.5 && Math.abs(world.sign.x) < 0.5 && world.sign.z < -44,
+      JSON.stringify(world.sign));
+  }
+
+  /* --------------------------------- forging ------------------------------ */
+  // tap the anvil itself
+  await ev(() => {
+    const g = window.BLACKSMITH.game, p = g.player;
+    p.teleport(-19.5, -4.4, -Math.PI / 2);
+    g.camRig.snapBehind(p.pos, p.yaw);
+    g.camRig.pitch = 0.2;
+    window.T.step(20);
+  });
+  const anvilOnScreen = await ev(() => {
+    const g = window.BLACKSMITH.game;
+    const v = g.area.forge.anvilTop.clone().setY(0.8).project(g.camera);
+    const r = g.renderer.domElement.getBoundingClientRect();
+    return { x: r.left + (v.x * 0.5 + 0.5) * r.width, y: r.top + (-v.y * 0.5 + 0.5) * r.height };
+  });
+  await shot('03-forge');
+  await page.touchscreen.tap(anvilOnScreen.x, anvilOnScreen.y);
+  await ev(() => window.T.step(30));
+  const forgeOpen = await ev(() => {
+    const g = window.BLACKSMITH.game;
+    return { mode: g.mode, dist: g.camera.position.distanceTo(g.area.forge.anvilTop), menu: !document.querySelector('#forge').classList.contains('hidden') };
+  });
+  check('tapping the anvil opens its menu and the camera zooms to it',
+    forgeOpen.mode === 'forge' && forgeOpen.menu && forgeOpen.dist < 3.6, JSON.stringify(forgeOpen));
+  await shot('04-anvil');
+
+  // forge a sword through the menu, as a player would
+  await ev(() => { const P = window.BLACKSMITH.profile; P.addOre('iron', 5); P.addOre('gold', 3); P.addOre('diamond', 2); P.addOre('stone', 6); });
+  const tapSel = async (sel) => { await page.tap(sel); await ev(() => window.T.step(1)); };
+  await page.tap('.rchip:nth-child(2)');
+  const pickOre = async (slot, name) => {
+    await page.tap(`#slots .slot:nth-child(${slot}) .sicon`);
+    await page.locator('#op-grid .opt', { hasText: name }).first().tap();
+  };
+  await pickOre(1, 'Diamond');
+  await pickOre(2, 'Gold');
+  await pickOre(3, 'Iron');
+  const slotState = await ev(() => ({
+    need: document.querySelector('#forge-need').textContent,
+    parts: [...document.querySelectorAll('#slots .spart')].map((e) => e.textContent),
+    disabled: document.querySelector('#btn-forge').disabled,
+  }));
+  check('the anvil says which ore becomes which part as you fill it',
+    slotState.need === 'ORE 10 / 10' && slotState.parts.join('|') === 'POMMEL|CROSS-GUARD|BLADE' && !slotState.disabled,
+    JSON.stringify(slotState));
+  await shot('05-anvil-filled');
+  await tapSel('#btn-forge');
+  const mid = await ev(() => { window.T.step(24); const F = window.BLACKSMITH.game.area.forge; return { tilt: F.tipper.rotation.x, stream: F.stream.visible, ores: window.T.ores() }; });
+  check('forging pours the lava bucket into the mould, and uses up the ore', mid.tilt > 0.6 && mid.stream && mid.ores === 6, JSON.stringify(mid));
+  await shot('06-pour');
+  await ev(() => window.T.step(30));
+  await shot('07-hammer');
+  await ev(() => window.T.step(70));
+  const forged = await ev(() => {
+    const P = window.BLACKSMITH.profile;
+    const it = P.itemsOf('weapon')[0];
+    return { shown: !document.querySelector('#forged').classList.contains('hidden'), it, name: document.querySelector('#forged-name').textContent };
+  });
+  check('it comes out an Iron Straight-Sword with a Gold guard and a Diamond pommel',
+    forged.shown && forged.it?.type === 'sword' && forged.name.startsWith('Iron Straight-Sword'), JSON.stringify(forged));
+  await shot('08-forged');
+  await tapSel('#btn-forged-equip');
+  check('at the anvil you keep hold of the smith\'s hammer', await ev(() => window.BLACKSMITH.game.player.outfit.held?.key === 'hammer'));
+
+  // a helmet: two ores, one each - the tie goes to the left slot
+  await ev(() => { const P = window.BLACKSMITH.profile; P.addOre('bronze', 1); P.addOre('gold', 1); });
+  await page.tap('.rchip:nth-child(4)');
+  await pickOre(1, 'Bronze');
+  await pickOre(2, 'Gold');
+  await page.tap('#slots .slot:nth-child(3) .sicon');
+  await page.locator('#op-grid .opt.clear').tap();
+  await tapSel('#btn-forge');
+  await ev(() => window.T.step(130));
+  await tapSel('#btn-forged-equip');
+  const helmet = await ev(() => {
+    const g = window.BLACKSMITH.game, P = window.BLACKSMITH.profile;
+    const it = P.equippedItem('helmet');
+    const ores = new Set();
+    for (const m of g.player.outfit.armor.helmet?.meshes || []) ores.add(m.material.userData.ore);
+    return { mix: it?.mix, ores: [...ores], def: P.defense() };
+  });
+  check('a Light Helmet goes on your head in its ores', helmet.mix && helmet.ores.includes('bronze') && helmet.ores.includes('gold') && helmet.def > 0,
+    JSON.stringify(helmet));
+  await page.tap('#btn-close-forge');
+  await ev(() => window.T.step(30));
+  await shot('09-wearing');
+  check('closing the anvil gives you your camera back', await ev(() => window.BLACKSMITH.game.mode === 'play'));
+  const held = await ev(() => {
+    const g = window.BLACKSMITH.game, out = {};
+    g.player.rig.joints.grip.traverse((o) => { if (o.isMesh && o.material.userData.ore) out[o.material.userData.ore] = (out[o.material.userData.ore] || 0) + 1; });
+    let blade = null;
+    g.player.rig.joints.grip.traverse((o) => { if (o.userData.part === 'blade') blade = o.material.userData.ore; });
+    return { out, blade };
+  });
+  check('in your hand the blade is iron, the guard gold, the pommel diamond',
+    held.blade === 'iron' && held.out.gold >= 1 && held.out.diamond === 1, JSON.stringify(held));
+
+  /* ------------------------------- the bag -------------------------------- */
+  await page.tap('#btn-inventory');
+  await page.waitForTimeout(200);
+  const tabs = await ev(() => [...document.querySelectorAll('#inv-tabs .tab')].map((t) => t.textContent));
+  check('the bag has Weapons, Armor, Pickaxes and Ores', tabs.join() === 'WEAPONS,ARMOR,PICKAXES,ORES', tabs.join());
+  await page.tap('.tab[data-tab="armor"]');
+  await page.tap('#inv-grid .icard');
+  await page.locator('#inv-detail .mbtn', { hasText: 'UNEQUIP' }).tap();
+  const off = await ev(() => window.BLACKSMITH.profile.equippedItem('helmet'));
+  await page.locator('#inv-detail .mbtn', { hasText: 'EQUIP' }).tap();
+  const on = await ev(() => !!window.BLACKSMITH.profile.equippedItem('helmet'));
+  check('you equip and unequip from the bag', off === null && on);
+  await page.tap('.tab[data-tab="ores"]');
+  await shot('10-bag');
+  await page.tap('#btn-close-inv');
+
+  /* ------------------------------- the cave ------------------------------- */
+  await ev(() => { const g = window.BLACKSMITH.game, p = g.player; p.teleport(0, -44, Math.PI); g.camRig.snapBehind(p.pos, p.yaw); window.T.step(10); });
+  await shot('11-cave-mouth');
+  await ev(() => window.T.step(45, { move: { x: 0, y: 1 } }));
+  await page.waitForTimeout(700);
+  await ev(() => window.T.step(5));
+  const inCave = await ev(() => window.BLACKSMITH.game.area.id);
+  check('walking up the path into the cave mouth takes you inside', inCave === 'cave', inCave);
+  await ev(() => window.T.step(40));
+  await shot('12-cave');
+
+  const cave = await ev(() => {
+    const g = window.BLACKSMITH.game;
+    const count = (k) => g.rocks.rocks.filter((r) => r.kind === k).length;
+    // try to stand in the middle of the room, then out past its wall
+    const p = { x: 0.5, z: 0.5 };
+    g.area.collider.resolve(p, 0.38);
+    const q = { x: 30, z: -5 };
+    g.area.collider.resolve(q, 0.38);
+    return {
+      pebble: count('pebble'), rock: count('rock'), boulder: count('boulder'),
+      skeletons: g.skeletons.alive().length,
+      daggers: g.skeletons.list.every((s) => s.rig.joints.grip.children.length === 1),
+      wall: Math.hypot(p.x, p.z), outer: Math.hypot(q.x, q.z),
+    };
+  });
+  check('the room is a ring round a stone wall', cave.wall > 7 && cave.outer < 21.5, `${cave.wall.toFixed(2)} / ${cave.outer.toFixed(2)}`);
+  check('pebbles, rocks and boulders are waiting to be mined', cave.pebble >= 8 && cave.rock >= 5 && cave.boulder >= 3, JSON.stringify(cave));
+  check('three skeletons, each with a wooden dagger', cave.skeletons === 3 && cave.daggers);
+
+  // keep the skeletons out of the mining tests
+  await ev(() => { window.BLACKSMITH.game._skHooks.playerAlive = () => false; });
+  const mine = async (kind) => ev((k) => {
+    const g = window.BLACKSMITH.game;
+    const rock = g.rocks.rocks.filter((r) => r.kind === k).sort((a, b) => a.hp - b.hp)[0];
+    window.T.clearSkeletons(rock.x, rock.z);
+    window.T.faceUp(rock.x, rock.z, rock.radius);
+    const before = window.T.ores();
+    const hits = [];
+    let last = rock.hp;
+    for (let i = 0; i < 1200 && rock.hp > 0; i++) {
+      window.T.step(1, { attack: true });
+      if (rock.hp !== last) { hits.push(last - rock.hp); last = rock.hp; }
+      if (i > 60 && !hits.length) break;
+    }
+    window.T.step(70);
+    return { hits: hits.length, each: hits[0], broke: rock.hp <= 0, got: window.T.ores() - before, tool: g.player.tool };
+  }, kind);
+  const pebble = await mine('pebble');
+  check('a pebble takes 4 hits of 5 and breaks into 2 ores', pebble.hits === 4 && pebble.each === 5 && pebble.got === 2, JSON.stringify(pebble));
+  await shot('13-mined');
+  const rock = await mine('rock');
+  check('a rock takes 10 hits and breaks into 3 ores', rock.hits === 10 && rock.got === 3, JSON.stringify(rock));
+  const boulderWood = await ev(() => {
+    const g = window.BLACKSMITH.game;
+    const b = g.rocks.rocks.find((r) => r.kind === 'boulder');
+    window.T.clearSkeletons(b.x, b.z);
+    window.T.faceUp(b.x, b.z, b.radius);
+    window.T.step(60, { attack: true });
+    return { hp: b.hp, max: b.maxHp, tool: g.player.tool, toast: document.querySelector('#toast').textContent };
+  });
+  check('a Wood Pickaxe cannot touch a boulder', boulderWood.hp === boulderWood.max && boulderWood.tool === 'pickaxe' &&
+    boulderWood.toast.includes('Stone Pickaxe'), JSON.stringify(boulderWood));
+
+  /* --------------------------------- Rob ---------------------------------- */
+  await ev(() => { const g = window.BLACKSMITH.game; g._skHooks.playerAlive = () => !g.player.dead; });
+  const robTalk = async () => {
+    await ev(() => { const g = window.BLACKSMITH.game; window.T.faceUp(g.rob.pos.x, g.rob.pos.z, 0.4, 1.2); window.T.step(5); });
+    await page.locator('#btn-interact').tap();
+    await ev(() => window.T.step(5));
+  };
+  await robTalk();
+  await shot('14-rob');
+  const offer = await ev(() => ({ mode: window.BLACKSMITH.game.mode, text: document.querySelector('#dlg-text').textContent }));
+  check('Rob is in the cave and talks to you', offer.mode === 'talk');
+  await page.locator('#dlg-choices .mbtn', { hasText: 'KILL 3 SKELETONS' }).tap();
+  await page.locator('#dlg-choices .mbtn', { hasText: 'BYE' }).tap();
+  check('he asks for three skeletons', await ev(() => window.BLACKSMITH.profile.quest.active));
+
+  // a weapon that ends a skeleton in one blow, to keep the test short
+  const killAll = async (n) => ev((count) => {
+    const g = window.BLACKSMITH.game, P = window.BLACKSMITH.profile;
+    let kills = 0;
+    for (let guard = 0; guard < 40 && kills < count; guard++) {
+      const s = g.skeletons.alive().find((x) => x.state !== 'rise');
+      if (!s) { window.T.step(30); continue; }
+      const before = P.stats.kills;
+      for (let i = 0; i < 90 && P.stats.kills === before; i++) {
+        window.T.faceUp(s.pos.x, s.pos.z, s.radius, 0.3);
+        window.T.step(1, { attack: true });
+      }
+      if (P.stats.kills > before) kills++;
+      window.T.step(30);
+    }
+    return { kills, quest: { ...P.quest } };
+  }, n);
+  await ev(() => {
+    const P = window.BLACKSMITH.profile;
+    const big = P.addItem({ kind: 'weapon', type: 'broadsword', mix: [['irisite', 20]] });
+    window.BLACKSMITH.game.equip(big.uid);
+    window.BLACKSMITH.game.player.hp = 1e6;
+  });
+  const hunt = await killAll(3);
+  check('killing three skeletons fills the bounty', hunt.kills === 3 && hunt.quest.kills === 3, JSON.stringify(hunt));
+  await ev(() => window.T.step(400));
+  check('the skeletons come back: always three', await ev(() => window.BLACKSMITH.game.skeletons.alive().length === 3));
+  await ev(() => { window.BLACKSMITH.game.player.hp = window.BLACKSMITH.profile.maxHp(); });
+  await robTalk();
+  await page.locator('#dlg-choices .mbtn', { hasText: 'CLAIM' }).tap();
+  await ev(() => window.T.step(20));
+  const paid = await ev(() => { const P = window.BLACKSMITH.profile; return { cash: P.cash, exp: P.exp, level: P.level, tag: window.BLACKSMITH.game.player.tag.text, quest: { ...P.quest } }; });
+  check('Rob pays $1,000 and 100 EXP, and your level goes up over your head',
+    paid.cash === 1000 && paid.exp === 100 && paid.level === 2 && paid.tag === 'Lv. 2', JSON.stringify(paid));
+  await shot('15-paid');
+  await page.locator('#dlg-choices .mbtn', { hasText: 'KILL 3 SKELETONS' }).tap();
+  check('the bounty can be taken again', await ev(() => window.BLACKSMITH.profile.quest.active && window.BLACKSMITH.profile.quest.kills === 0));
+  await page.locator('#dlg-choices .mbtn', { hasText: 'BUY STONE PICKAXE' }).tap();
+  const bought = await ev(() => { const P = window.BLACKSMITH.profile; return { cash: P.cash, pick: P.pickaxe() }; });
+  check('$1,000 buys the Stone Pickaxe', bought.cash === 0 && bought.pick.item?.type === 'stone' && bought.pick.tier === 1, JSON.stringify(bought));
+  await page.locator('#dlg-choices .mbtn', { hasText: 'BYE' }).tap();
+
+  await ev(() => { window.BLACKSMITH.game._skHooks.playerAlive = () => false; });
+  const boulder = await mine('boulder');
+  check('with it a boulder takes 15 hits and breaks into 4 ores', boulder.hits === 15 && boulder.got === 4 && boulder.tool === 'pickaxe', JSON.stringify(boulder));
+  await ev(() => { const g = window.BLACKSMITH.game; g._skHooks.playerAlive = () => !g.player.dead; });
+
+  /* -------------------------- dying costs nothing ------------------------- */
+  const before = await ev(() => JSON.stringify({ c: window.BLACKSMITH.profile.cash, o: window.BLACKSMITH.profile.ores, i: window.BLACKSMITH.profile.items.length }));
+  await ev(() => {
+    const g = window.BLACKSMITH.game;
+    g.player.hp = 3;
+    const s = g.skeletons.alive()[0];
+    g._hurtPlayer(50, s.pos);
+    window.T.step(30);
+  });
+  await page.waitForTimeout(1400);
+  await shot('16-dead');
+  const deadState = await ev(() => ({ mode: window.BLACKSMITH.game.mode, overlay: !document.querySelector('#death-overlay').classList.contains('hidden') }));
+  check('skeletons can kill you', deadState.mode === 'dead' && deadState.overlay, JSON.stringify(deadState));
+  await page.tap('#btn-respawn');
+  await page.waitForTimeout(900);
+  await ev(() => window.T.step(10));
+  const after = await ev(() => JSON.stringify({ c: window.BLACKSMITH.profile.cash, o: window.BLACKSMITH.profile.ores, i: window.BLACKSMITH.profile.items.length }));
+  const back = await ev(() => { const g = window.BLACKSMITH.game; return { area: g.area.id, d: Math.hypot(g.player.pos.x, g.player.pos.z), hp: g.player.hp }; });
+  check('you come back on the stone circle with every ore, item and dollar', before === after && back.area === 'overworld' && back.d < 5 && back.hp > 50,
+    JSON.stringify(back));
+
+  /* --------------------------------- saving -------------------------------- */
+  const saved = await ev(() => { window.BLACKSMITH.game.save(); const P = window.BLACKSMITH.profile; return JSON.stringify({ c: P.cash, e: P.exp, o: P.ores, i: P.items.map((x) => x.uid), q: P.quest.active, eq: P.equipped }); });
+  await page.reload({ waitUntil: 'load' });
+  await page.waitForSelector('#menu-screen.active', { timeout: 60000 });
+  const hasContinue = await ev(() => !document.querySelector('#btn-continue').classList.contains('hidden'));
+  await page.tap('#btn-continue');
+  await page.waitForFunction(() => window.BLACKSMITH?.state === 'playing', null, { timeout: 180000 });
+  await installHelpers();
+  const loaded = await ev(() => { const P = window.BLACKSMITH.profile; return JSON.stringify({ c: P.cash, e: P.exp, o: P.ores, i: P.items.map((x) => x.uid), q: P.quest.active, eq: P.equipped }); });
+  check('a reload picks up exactly where you saved', hasContinue && saved === loaded);
+  await shot('17-continued');
+
+  if (FILE) check('the single file fetches nothing from the network', external.length === 0, external.slice(0, 3).join(' '));
+} catch (e) {
+  check('the run finished', false, e.message);
+  await shot('xx-failed').catch(() => {});
+}
+
+const errors = logs.filter((l) => !l.includes('GPU stall') && !l.includes('Automatic fallback to software WebGL'));
+check('no errors in the console', errors.length === 0, errors.slice(0, 5).join('\n'));
+await h.close();
+console.log(fails.length ? `\n${fails.length} FAILED` : '\nALL PASSED');
+process.exit(fails.length ? 1 : 0);

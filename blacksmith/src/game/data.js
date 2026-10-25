@@ -1,0 +1,266 @@
+/* =============================================================================
+   Every number the game is balanced on, in one file: ores and how often they
+   turn up, what rocks take to break, what the anvil can make and how strong
+   it comes out, and what the player and the skeletons can do.
+   ========================================================================== */
+
+/* -------------------------------- rarity --------------------------------- */
+
+export const RARITIES = {
+  common: { name: 'Common', color: '#c4c4bd', rank: 0 },
+  uncommon: { name: 'Uncommon', color: '#62d662', rank: 1 },
+  rare: { name: 'Rare', color: '#4fa9ff', rank: 2 },
+  epic: { name: 'Epic', color: '#bf6bff', rank: 3 },
+  legendary: { name: 'Legendary', color: '#ffb02e', rank: 4 },
+};
+
+/* --------------------------------- ores ---------------------------------- */
+
+/**
+ * `oneIn` is the chance the design gives each ore: a 1 in N roll. `power` is
+ * what it is worth on the anvil - every damage and defence number in the game
+ * is a base number times the power of the ore it was forged from.
+ *
+ * `look` drives both the icons and the 3D materials, so a blade on screen and
+ * the same blade in the inventory are the same colour.
+ */
+export const ORES = {
+  stone: {
+    name: 'Stone', rarity: 'common', oneIn: 2, power: 1.0,
+    look: { kind: 'rock', base: '#8e8b84', light: '#c8c4ba', dark: '#4f4c47', shine: 6 },
+  },
+  bronze: {
+    name: 'Bronze', rarity: 'uncommon', oneIn: 4, power: 1.4,
+    look: { kind: 'metal', base: '#c27a3a', light: '#f0b071', dark: '#6a3b14', shine: 60 },
+  },
+  iron: {
+    name: 'Iron', rarity: 'uncommon', oneIn: 5, power: 1.8,
+    look: { kind: 'metal', base: '#9aa3ad', light: '#e2e8ee', dark: '#4b525a', shine: 70 },
+  },
+  bones: {
+    name: 'Bones', rarity: 'uncommon', oneIn: 25, power: 2.0, fromSkeletons: true,
+    look: { kind: 'bone', base: '#e4dac2', light: '#fffaf0', dark: '#9c8f72', shine: 14 },
+  },
+  gold: {
+    name: 'Gold', rarity: 'rare', oneIn: 12, power: 2.6,
+    look: { kind: 'metal', base: '#f0bd34', light: '#fff0a6', dark: '#946510', shine: 90 },
+  },
+  amethyst: {
+    name: 'Amethyst', rarity: 'rare', oneIn: 20, power: 3.2,
+    look: { kind: 'gem', base: '#9b56d8', light: '#e3c4ff', dark: '#4a1f75', shine: 110, glow: '#2c0b48' },
+  },
+  emerald: {
+    name: 'Emerald', rarity: 'epic', oneIn: 40, power: 4.2,
+    look: { kind: 'gem', base: '#2ec46f', light: '#b8ffd6', dark: '#0d5a2d', shine: 110, glow: '#05361a' },
+  },
+  diamond: {
+    name: 'Diamond', rarity: 'epic', oneIn: 60, power: 5.2,
+    look: { kind: 'gem', base: '#a8ecff', light: '#ffffff', dark: '#3d8fae', shine: 130, glow: '#1a4a5c' },
+  },
+  irisite: {
+    name: 'Irisite', rarity: 'legendary', oneIn: 300, power: 8.0,
+    look: { kind: 'iris', base: '#ff6ad5', light: '#ffffff', dark: '#3a2a8a', shine: 130, glow: '#5a2a7a' },
+  },
+};
+
+/** The order ores are listed in: worst to best. */
+export const ORE_ORDER = ['stone', 'bronze', 'iron', 'bones', 'gold', 'amethyst', 'emerald', 'diamond', 'irisite'];
+
+/**
+ * What a broken rock gives, one ore at a time.
+ *
+ * Taken literally the design's eight chances add up to 113%, so they cannot
+ * all hold at once. Stone keeps its 1 in 2, and every Rare, Epic and
+ * Legendary ore keeps its exact chance - Irisite really is 1 in 300. Bronze
+ * and Iron share what is left between them, in the 4 to 5 the design gives
+ * them, which makes them 1 in 5.6 and 1 in 7.
+ */
+const EXACT = ['stone', 'gold', 'amethyst', 'emerald', 'diamond', 'irisite'];
+const SHARED = ['bronze', 'iron'];
+const MINED_ODDS = (() => {
+  const odds = {};
+  let left = 1;
+  for (const id of EXACT) { odds[id] = 1 / ORES[id].oneIn; left -= odds[id]; }
+  const weight = SHARED.reduce((s, id) => s + 1 / ORES[id].oneIn, 0);
+  for (const id of SHARED) odds[id] = left * (1 / ORES[id].oneIn) / weight;
+  return odds;
+})();
+/** Rarest first, so a glance down the table reads like the chances. */
+const MINED_TABLE = Object.entries(MINED_ODDS).sort((a, b) => a[1] - b[1]);
+
+export function rollMinedOre(rng = Math.random) {
+  let r = rng();
+  for (const [id, p] of MINED_TABLE) {
+    if (r < p) return id;
+    r -= p;
+  }
+  return 'stone';
+}
+
+/** The real share of each mined ore, 0..1. */
+export function minedOreOdds() { return { ...MINED_ODDS }; }
+
+/** "1 in 300", the way the inventory shows it. */
+export function oddsLabel(id) {
+  const p = ORES[id].fromSkeletons ? 1 / ORES[id].oneIn : MINED_ODDS[id];
+  const n = 1 / p;
+  return '1 in ' + (Math.abs(n - Math.round(n)) < 0.05 ? Math.round(n) : n.toFixed(1));
+}
+
+/* --------------------------------- rocks --------------------------------- */
+
+/** `tier` is the pickaxe it takes: boulders need the Stone Pickaxe. */
+export const ROCKS = {
+  pebble: { name: 'Pebble', hp: 20, drops: 2, tier: 0, radius: 0.46 },
+  rock: { name: 'Rock', hp: 50, drops: 3, tier: 0, radius: 0.78 },
+  boulder: { name: 'Boulder', hp: 150, drops: 4, tier: 1, radius: 1.2 },
+};
+
+/** How many of each are in the cave at once, and how soon a broken one is replaced. */
+export const ROCK_COUNTS = { pebble: 10, rock: 7, boulder: 5 };
+export const ROCK_RESPAWN = [8, 15];
+
+/* ------------------------------- pickaxes -------------------------------- */
+
+export const PICKAXES = {
+  wood: { name: 'Wood Pickaxe', damage: 5, tier: 0, price: 0, fight: 4, rarity: 'common' },
+  stone: { name: 'Stone Pickaxe', damage: 10, tier: 1, price: 1000, fight: 6, rarity: 'uncommon' },
+};
+
+/* ----------------------------- the anvil --------------------------------- */
+
+/**
+ * `damage` is with every part forged from Stone; better ore multiplies it.
+ * `cooldown` is seconds between swings, `reach` metres from your middle,
+ * `arc` the degrees in front of you a swing covers, `hits` how many
+ * skeletons one swing can catch.
+ */
+export const WEAPONS = {
+  dagger: { name: 'Dagger', weight: 'Light', ores: 3, damage: 6, cooldown: 0.42, reach: 1.95, arc: 80, hits: 1 },
+  sword: { name: 'Straight-Sword', weight: 'Medium', ores: 10, damage: 12, cooldown: 0.62, reach: 2.35, arc: 95, hits: 2 },
+  broadsword: { name: 'Broadsword', weight: 'Heavy', ores: 20, damage: 22, cooldown: 0.95, reach: 2.75, arc: 120, hits: 9 },
+};
+
+/** `defense` is with Stone, multiplied by the ore like damage is. */
+export const ARMOR = {
+  helmet: { name: 'Helmet', weight: 'Light', slot: 'helmet', ores: 2, defense: 2 },
+  chestplate: { name: 'Chestplate', weight: 'Light', slot: 'chest', ores: 5, defense: 5 },
+  leggings: { name: 'Leggings', weight: 'Light', slot: 'legs', ores: 3, defense: 3 },
+  boots: { name: 'Boots', weight: 'Light', slot: 'boots', ores: 2, defense: 2 },
+};
+
+/** The order the anvil offers them in. */
+export const RECIPES = ['dagger', 'sword', 'broadsword', 'helmet', 'chestplate', 'leggings', 'boots'];
+
+/** What the most, the second most and the least of the ore become. */
+export const PART_NAMES = {
+  weapon: ['Blade', 'Cross-Guard', 'Pommel'],
+  armor: ['Plating', 'Body', 'Trim'],
+};
+
+export const EQUIP_SLOTS = ['weapon', 'pickaxe', 'helmet', 'chest', 'legs', 'boots'];
+
+export function recipe(type) {
+  if (WEAPONS[type]) return { kind: 'weapon', type, ...WEAPONS[type] };
+  if (ARMOR[type]) return { kind: 'armor', type, ...ARMOR[type] };
+  return null;
+}
+
+/**
+ * The anvil's three slots, ranked: most ore first. A tie goes to the slot
+ * further left, so what you see is what you get.
+ */
+export function rankSlots(slots) {
+  return slots
+    .map((s, i) => ({ ore: s?.ore, amount: s?.amount || 0, i }))
+    .filter((s) => s.ore && s.amount > 0)
+    .sort((a, b) => b.amount - a.amount || a.i - b.i);
+}
+
+/**
+ * Which ore each part is made of: [blade or plating, guard or body, pommel
+ * or trim]. With two ores the second-most and the least are the same one;
+ * with one ore, everything is.
+ */
+export function partsOf(mix) {
+  const ranked = rankSlots(mix.map(([ore, amount]) => ({ ore, amount })));
+  if (!ranked.length) return null;
+  const n = ranked.length;
+  return [ranked[0].ore, ranked[Math.min(1, n - 1)].ore, ranked[n - 1].ore];
+}
+
+/** How good the ore going in is, weighted by how much of each. */
+export function qualityOf(mix) {
+  let sum = 0, n = 0;
+  for (const [ore, amount] of mix) { sum += (ORES[ore]?.power || 1) * amount; n += amount; }
+  return n ? sum / n : 1;
+}
+
+/* -------------------------------- items ---------------------------------- */
+
+/** Damage, defence, mining power: everything an item does, from what it is. */
+export function itemStats(item) {
+  if (item.kind === 'pickaxe') {
+    const p = PICKAXES[item.type];
+    return { mining: p.damage, tier: p.tier, damage: p.fight };
+  }
+  const q = qualityOf(item.mix);
+  if (item.kind === 'weapon') {
+    const w = WEAPONS[item.type];
+    return { damage: Math.round(w.damage * q), cooldown: w.cooldown, reach: w.reach, arc: w.arc, hits: w.hits };
+  }
+  const a = ARMOR[item.type];
+  return { defense: Math.round(a.defense * q * 10) / 10 };
+}
+
+export function itemRarity(item) {
+  if (item.kind === 'pickaxe') return PICKAXES[item.type].rarity;
+  const parts = partsOf(item.mix);
+  return parts ? ORES[parts[0]].rarity : 'common';
+}
+
+export function itemName(item) {
+  if (item.kind === 'pickaxe') return PICKAXES[item.type].name;
+  const parts = partsOf(item.mix);
+  const ore = parts ? ORES[parts[0]].name : '';
+  if (item.kind === 'weapon') return `${ore} ${WEAPONS[item.type].name}`;
+  return `Light ${ore} ${ARMOR[item.type].name}`;
+}
+
+/** Which equip slot an item goes in. */
+export function slotOf(item) {
+  if (item.kind === 'weapon') return 'weapon';
+  if (item.kind === 'pickaxe') return 'pickaxe';
+  return ARMOR[item.type].slot;
+}
+
+/* -------------------------------- people --------------------------------- */
+
+export const PLAYER = {
+  baseHp: 100, hpPerLevel: 5,
+  regenDelay: 5, regenRate: 4,
+  stamina: 100, staminaRegen: 26, staminaDelay: 0.75,
+  walk: 4.4, sprint: 7.4, sprintCost: 15,
+  dashCost: 24, dashSpeed: 15.5, dashTime: 0.22, dashCooldown: 0.4,
+  radius: 0.38,
+};
+
+export const SKELETON = {
+  count: 3, hp: 40, damage: 7, speed: 2.75, wander: 1.1,
+  aggro: 9, leash: 16, reach: 1.45, windup: 0.5, recover: 0.6, cooldown: 0.75,
+  respawn: [6, 10], radius: 0.36,
+};
+
+export const QUEST = { kills: 3, cash: 1000, exp: 100 };
+
+/** EXP it takes to climb from `level` to the next one. */
+export const expToNext = (level) => 100 * level;
+
+export function levelFromExp(exp) {
+  let level = 1, need = expToNext(1);
+  while (exp >= need) { exp -= need; level++; need = expToNext(level); }
+  return { level, into: exp, need };
+}
+
+/** Armour takes a share of every hit: 40 defence halves it. */
+export const afterArmor = (raw, defense) => raw * 40 / (40 + Math.max(0, defense));
