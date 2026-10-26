@@ -15,7 +15,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { launch, GAME } from './harness.mjs';
 import { mockScript } from './mockcloud.mjs';
-import { ORES, minedOreOdds, rollMinedOre, partsOf, itemStats, afterArmor, ROCK_COUNTS, DEEP_ROCK_COUNTS } from '../src/game/data.js';
+import {
+  ORES, minedOreOdds, rollMinedOre, partsOf, itemStats, afterArmor, ROCK_COUNTS, DEEP_ROCK_COUNTS,
+  HAMMER, strikeGrade, forgeScore, rankOf,
+} from '../src/game/data.js';
 
 const FILE = process.argv.includes('--file');
 const SHOTS = path.join(GAME, '.shots', FILE ? 'file' : 'src');
@@ -51,6 +54,24 @@ const check = (name, ok, detail = '') => {
     def('stone') < def('iron') && def('emerald') < def('irisite'),
     `daggers ${['stone', 'iron', 'gold', 'diamond', 'irisite'].map(dmg).join('/')}`);
   check('armor takes a share of every hit', afterArmor(10, 0) === 10 && afterArmor(10, 40) === 5);
+
+  // the forging game
+  const grade = (off) => strikeGrade(off === null ? null : HAMMER.ring + off).id;
+  check('a tap with the white ring on the green one is Perfect; further off, Great, Good, Mid, then Bad; no tap at all is Bad',
+    grade(0) === 'perfect' && grade(-0.1) === 'perfect' && grade(0.22) === 'great' && grade(-0.43) === 'good' &&
+    grade(0.7) === 'mid' && grade(1.2) === 'bad' && grade(-0.95) === 'bad' && grade(null) === 'bad');
+  const ranks = [0, 24, 25, 44, 45, 54, 55, 74, 75, 89, 90, 99, 100].map((s) => rankOf(s).name);
+  check('a gear\'s rank is Bad below 25%, Okay below 45%, Mid below 55%, Good below 75%, Great below 90%, Masterwork up to 99% and Perfect at 100%',
+    ranks.join() === 'Bad,Bad,Okay,Okay,Mid,Mid,Good,Good,Great,Great,Masterwork,Masterwork,Perfect', ranks.join());
+  check('five Perfect blows make 100%; one Great among them is only Masterwork',
+    forgeScore(Array(5).fill('perfect')) === 100 && rankOf(forgeScore(['perfect', 'perfect', 'perfect', 'perfect', 'great'])).id === 'masterwork');
+  const sword = (rank) => itemStats({ kind: 'weapon', type: 'sword', mix: [['iron', 10]], rank }).damage;
+  const plate = (rank) => itemStats({ kind: 'armor', type: 'chestplate', mix: [['iron', 5]], rank }).defense;
+  const ladder = [10, 30, 50, 60, 80, 95, 100];
+  check('the better the rank, the stronger the gear: Bad and Okay weaker than it would have been, Mid no different, Perfect best of all',
+    sword(10) < sword(30) && sword(30) < sword(undefined) && sword(50) === sword(undefined) &&
+    ladder.every((s, i) => i === 0 || sword(s) > sword(ladder[i - 1])) && plate(100) > plate(95) && plate(10) < plate(50),
+    'swords ' + ladder.map(sword).join('/') + ', chestplates ' + ladder.map(plate).join('/'));
 }
 
 /* ------------------------------ in the browser ----------------------------- */
@@ -79,11 +100,31 @@ page.on('request', (r) => {
  * slow enough to skew timings, and to turn a tap into a long press.
  */
 async function installHelpers() {
-  await ev(() => {
+  await ev((ring) => {
     const A = window.BLACKSMITH;
     A.state = 'test';
     window.T = {
       A,
+      /**
+       * The forging game played through on the game's own calls, quickly, for
+       * when the forging is not what is being tested: the chain pulled all the
+       * way, each blow struck `offs[i]` off the green ring (null lets it close
+       * untouched), the gear dipped. Leaves the card showing; returns the rank.
+       */
+      forgeGame(offs = [0, 0, 0, 0, 0]) {
+        const g = A.game;
+        g.pullHandle(1);
+        for (let f = 0; f < 400 && g.craft?.phase === 'pour'; f++) this.step(1);
+        for (let f = 0; f < 1500 && g.craft && g.craft.phase !== 'ranked'; f++) {
+          const c = g.craft, off = offs[c.grades.length];
+          if (c.phase === 'hammer' && c.r != null && off != null && c.r <= ring + off + 0.035) g.strike();
+          this.step(1);
+        }
+        for (let f = 0; f < 200 && g.craft && !g.craft.ready; f++) this.step(1);
+        g.pullHandle(1);
+        for (let f = 0; f < 400 && g.craft && g.craft.phase !== 'done'; f++) this.step(1);
+        return g.craft?.item.rank;
+      },
       step(n = 1, { attack = false, move = null, dt = 1 / 30 } = {}) {
         const I = A.input;
         for (let i = 0; i < n; i++) {
@@ -151,7 +192,94 @@ async function installHelpers() {
         });
       },
     };
+  }, HAMMER.ring);
+}
+
+/**
+ * Plays the forging game by hand, the way a thumb would: drags the chain's
+ * handle down and holds it until the bucket swings back by itself, taps TAP
+ * as the white ring closes - each blow `offs[i]` off the green ring, in
+ * button radii, or null to let the ring close untouched - then drags the gear
+ * down into the water and lets go. Says what it saw along the way.
+ */
+async function playForge(pg, offs, shotAt = null) {
+  const evp = (fn, a) => pg.evaluate(fn, a);
+  const seen = {};
+  const drag = async () => {
+    const a = await evp(() => {
+      const h = document.querySelector('#fg-handle').getBoundingClientRect(), t = document.querySelector('#fg-pull').getBoundingClientRect();
+      return { x: h.x + h.width / 2, y: h.y + h.height / 2, bottom: t.bottom - 2 };
+    });
+    await pg.mouse.move(a.x, a.y);
+    await pg.mouse.down();
+    for (let i = 1; i <= 8; i++) await pg.mouse.move(a.x, a.y + (a.bottom - a.y) * i / 8);
+  };
+  // 1. the pour
+  await evp(() => window.T.step(2));
+  await drag();
+  seen.pour = await evp(() => {
+    window.T.step(30);
+    const g = window.BLACKSMITH.game, F = g.area.forge, c = g.craft;
+    return { phase: c.phase, pull: +c.pull.toFixed(2), tilt: +(-F.tipper.rotation.x).toFixed(2), stream: F.stream.visible,
+      fill: +c.fill.toFixed(2), mould: F.mould.type, ores: window.T.ores() };
   });
+  if (shotAt) await shotAt('pour');
+  seen.full = await evp(() => {
+    const g = window.BLACKSMITH.game, c = g.craft;
+    for (let f = 0; f < 300 && !c.full; f++) window.T.step(1);
+    window.T.step(12);
+    const F = g.area.forge;
+    return { full: c.full, fill: c.fill, phase: c.phase, tilt: +(-F.tipper.rotation.x).toFixed(2), stream: F.stream.visible,
+      handleOff: document.querySelector('#fg-pull').classList.contains('off') };
+  });
+  await pg.mouse.up();
+  // 2. out of the mould onto the anvil, and 3. the blows
+  await evp(() => { const g = window.BLACKSMITH.game; for (let f = 0; f < 200 && g.craft.phase !== 'hammer'; f++) window.T.step(1); });
+  const tap = await evp(() => { const r = document.querySelector('#fg-tap').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+  seen.blows = [];
+  for (let i = 0; i < offs.length; i++) {
+    const off = offs[i];
+    const at = await evp(([target, i]) => {
+      const g = window.BLACKSMITH.game;
+      for (let f = 0; f < 150; f++) {
+        const c = g.craft;
+        if (c.phase !== 'hammer' || c.grades.length > i) break;
+        if (target !== null && c.r != null && c.r <= target + 0.035) break;
+        window.T.step(1);
+      }
+      const w = document.querySelector('#fg-white');
+      return { r: g.craft.r, drawn: w.classList.contains('off') ? null : +w.getAttribute('r') };
+    }, [off === null ? null : HAMMER.ring + off, i]);
+    if (i === 0 && shotAt) await shotAt('ring');
+    if (off !== null) await pg.touchscreen.tap(tap.x, tap.y);
+    const got = await evp(() => ({ grades: window.BLACKSMITH.game.craft.grades.slice(), popup: document.querySelector('#fg-grade').textContent }));
+    seen.blows.push({ ...at, grade: got.grades[i], popup: got.popup });
+    await evp(() => window.T.step(2));
+  }
+  seen.ranked = await evp(() => {
+    const c = window.BLACKSMITH.game.craft, b = document.querySelector('#fg-rank');
+    return { phase: c.phase, rank: c.item.rank, banner: b.classList.contains('hidden') ? null : b.textContent,
+      dots: [...document.querySelectorAll('#fg-dots i')].map((d) => d.style.background) };
+  });
+  // 4. the quench
+  await evp(() => { const g = window.BLACKSMITH.game; for (let f = 0; f < 200 && !g.craft.ready; f++) window.T.step(1); });
+  if (shotAt) await shotAt('water');
+  await drag();
+  seen.dipped = await evp(() => {
+    window.T.step(4);
+    const g = window.BLACKSMITH.game, c = g.craft;
+    return { phase: c.phase, under: c.mesh.position.y < g.area.forge.waterTop.y };
+  });
+  if (shotAt) await shotAt('cool');
+  await pg.mouse.up();
+  seen.after = await evp(() => {
+    const g = window.BLACKSMITH.game;
+    for (let f = 0; f < 200 && g.craft && g.craft.phase !== 'done'; f++) window.T.step(1);
+    const c = g.craft;
+    return { phase: c?.phase, above: c ? c.mesh.position.y > g.area.forge.waterTop.y + 0.1 : null,
+      card: !document.querySelector('#forged').classList.contains('hidden'), title: document.querySelector('#forged-title').textContent };
+  });
+  return seen;
 }
 
 try {
@@ -202,10 +330,10 @@ try {
       const at = sign.getWorldPosition(sign.position.clone());
       let lettered = false;
       sign.traverse((o) => { for (const m of [].concat(o.material || [])) if (m.map?.image?.width === 512) lettered = true; });
-      return { forge: !!ow.forge.anvil && !!ow.forge.tipper && !!ow.forge.moldLava, water: !!ow.forge.waterTop,
+      return { forge: !!ow.forge.anvil && !!ow.forge.tipper && !!ow.forge.mould && ow.forge.pull.links.length > 0, water: !!ow.forge.waterTop,
         sign: { y: at.y, x: at.x, z: at.z, lettered } };
     });
-    check('the Forge has its anvil, its lava bucket over a sword mould, and a water bucket', world.forge && world.water);
+    check('the Forge has its anvil, its lava bucket on a chain over a mould, and a water bucket', world.forge && world.water);
     check('a wooden sign hangs over the cave mouth', world.sign.lettered && world.sign.y > 3.5 && Math.abs(world.sign.x) < 0.5 && world.sign.z < -44,
       JSON.stringify(world.sign));
 
@@ -303,6 +431,16 @@ try {
     forgeOpen.mode === 'forge' && forgeOpen.menu && forgeOpen.dist < 3.6, JSON.stringify(forgeOpen));
   await shot('04-anvil');
 
+  // the mould under the lava bucket is cut to whatever the menu is set to make
+  const moulds = [];
+  for (const n of [1, 5, 7, 3, 2]) {
+    await page.tap(`.rchip:nth-child(${n})`);
+    moulds.push(await ev(() => { const M = window.BLACKSMITH.game.area.forge.mould; return [M.type, +(M.zMax - M.zMin).toFixed(2), +M.scale.toFixed(2)]; }));
+  }
+  check('the mould under the lava bucket changes to the shape of whatever the anvil is set to make',
+    moulds.map((m) => m[0]).join() === 'dagger,chestplate,boots,broadsword,sword' && new Set(moulds.map((m) => m.slice(1).join())).size === 5,
+    JSON.stringify(moulds));
+
   // forge a sword through the menu, as a player would
   await ev(() => { const P = window.BLACKSMITH.profile; P.addOre('iron', 5); P.addOre('gold', 3); P.addOre('diamond', 2); P.addOre('stone', 6); });
   const tapSel = async (sel) => { await page.tap(sel); await ev(() => window.T.step(1)); };
@@ -324,19 +462,31 @@ try {
     JSON.stringify(slotState));
   await shot('05-anvil-filled');
   await tapSel('#btn-forge');
-  const mid = await ev(() => { window.T.step(24); const F = window.BLACKSMITH.game.area.forge; return { tilt: F.tipper.rotation.x, stream: F.stream.visible, ores: window.T.ores() }; });
-  check('forging pours the lava bucket into the mould, and uses up the ore', mid.tilt > 0.6 && mid.stream && mid.ores === 6, JSON.stringify(mid));
-  await shot('06-pour');
-  await ev(() => window.T.step(30));
-  await shot('07-hammer');
-  await ev(() => window.T.step(70));
+  // the forging game, played by hand: a Perfect, a Great, a Good, a Mid, and one left to close
+  const fg = await playForge(page, [0, 0.22, -0.43, 0.7, null],
+    (n) => shot({ pour: '06-pour', ring: '07-hammer', water: '07b-quench', cool: '07c-cool' }[n]));
+  check('pulling the chain down tips the lava bucket, and the lava runs into the sword\'s mould; the ore is used up',
+    fg.pour.phase === 'pour' && fg.pour.pull === 1 && fg.pour.tilt > 0.9 && fg.pour.stream && fg.pour.fill > 0.15 && fg.pour.fill < 1 &&
+    fg.pour.mould === 'sword' && fg.pour.ores === 6, JSON.stringify(fg.pour));
+  check('when the mould is full the bucket swings back by itself, though the chain is still pulled down',
+    fg.full.full && fg.full.fill === 1 && fg.full.tilt < 0.4 && !fg.full.stream && fg.full.handleOff, JSON.stringify(fg.full));
+  check('on the anvil a white ring closes on TAP: tapped on the green ring a blow is Perfect, further off Great, Good and Mid, and Bad if it closes untouched',
+    fg.blows.map((b) => b.grade).join() === 'perfect,great,good,mid,bad' &&
+    fg.blows.slice(0, 4).every((b) => b.drawn != null && Math.abs(b.drawn / 30 - b.r) < 0.01) &&
+    fg.blows.map((b) => b.popup).join() === 'PERFECT!,GREAT,GOOD,MID,BAD', JSON.stringify(fg.blows));
+  check('the five blows make the gear\'s rank: these, Good at 63%',
+    fg.ranked.phase === 'ranked' && fg.ranked.rank === 63 && fg.ranked.banner === 'RANKGOOD63%' && fg.ranked.dots.every(Boolean), JSON.stringify(fg.ranked));
+  check('dragged down into the water it cools, and comes back out by itself when it is done',
+    fg.dipped.phase === 'cool' && fg.dipped.under && fg.after.phase === 'done' && fg.after.above && fg.after.card, JSON.stringify({ dipped: fg.dipped, after: fg.after }));
   const forged = await ev(() => {
     const P = window.BLACKSMITH.profile;
     const it = P.itemsOf('weapon')[0];
-    return { shown: !document.querySelector('#forged').classList.contains('hidden'), it, name: document.querySelector('#forged-name').textContent };
+    return { shown: !document.querySelector('#forged').classList.contains('hidden'), it, name: document.querySelector('#forged-name').textContent,
+      title: document.querySelector('#forged-title').textContent, stats: document.querySelector('#forged-stats').textContent };
   });
-  check('it comes out an Iron Straight-Sword with a Gold guard and a Diamond pommel',
-    forged.shown && forged.it?.type === 'sword' && forged.name.startsWith('Iron Straight-Sword'), JSON.stringify(forged));
+  check('it comes out an Iron Straight-Sword with a Gold guard and a Diamond pommel, its rank on the card and 10% the better for it',
+    forged.shown && forged.it?.type === 'sword' && forged.it.rank === 63 && forged.name.startsWith('Iron Straight-Sword') &&
+    forged.title === 'GOOD 63%' && forged.stats.includes('Good forging +10%'), JSON.stringify(forged));
   await shot('08-forged');
   await tapSel('#btn-forged-equip');
   check('at the anvil you keep hold of the smith\'s hammer', await ev(() => window.BLACKSMITH.game.player.outfit.held?.key === 'hammer'));
@@ -349,7 +499,7 @@ try {
   await page.tap('#slots .slot:nth-child(3) .sicon');
   await page.locator('#op-grid .opt.clear').tap();
   await tapSel('#btn-forge');
-  await ev(() => window.T.step(130));
+  await ev(() => window.T.forgeGame());
   await tapSel('#btn-forged-equip');
   const helmet = await ev(() => {
     const g = window.BLACKSMITH.game, P = window.BLACKSMITH.profile;
@@ -371,7 +521,8 @@ try {
     disabled: document.querySelector('#btn-forge').disabled,
   }));
   await tapSel('#btn-forge');
-  await ev(() => window.T.step(130));
+  // five Mid blows: Mid gear is just as the ore made it
+  await ev(() => window.T.forgeGame([0.7, 0.7, 0.7, 0.7, 0.7]));
   const bigDagger = await ev(() => {
     const P = window.BLACKSMITH.profile, it = P.itemsOf('weapon').find((w) => w.type === 'dagger');
     return { mix: it?.mix, iron: P.ores.iron, card: document.querySelector('#forged-stats').textContent };
@@ -819,12 +970,14 @@ try {
     await page.locator('#op-grid .opt', { hasText: NAMES[owned[i]] }).first().tap();
   }
   await tapSel('#btn-forge');
-  await ev(() => window.T.step(130));
+  // the forging game by hand once more, every blow on the green ring
+  const first = await playForge(page, [0, 0, 0, 0, 0]);
   await tapSel('#btn-forged-equip');
   await page.tap('#btn-close-forge');
   await ev(() => window.T.step(20));
   const dagger = await ev(() => window.BLACKSMITH.profile.weapon());
-  check('the first ore makes a dagger', dagger?.item?.type === 'dagger', JSON.stringify(dagger));
+  check('the first ore makes a dagger, and five blows on the green ring make it a Perfect one',
+    dagger?.item?.type === 'dagger' && dagger.item.rank === 100 && first.after.title === 'PERFECT 100%', JSON.stringify({ dagger, title: first.after.title }));
   await ev(() => { window.T.walkTo(0, -6, 0.8); window.T.walkTo(0, -40, 0.8); window.T.walkTo(0, -49, 0.3, 240); });
   await page.waitForTimeout(800);
   const fight = await ev(() => {
@@ -928,6 +1081,51 @@ await h.close();
     });
     check('and with the phone\'s text 130% bigger, nothing on the anvil\'s card sits on top of anything else',
       bigText.hits.length === 0 && bigText.spills === 0, JSON.stringify(bigText));
+
+    // the forging game on the same screen, twice: with ordinary text, and 130% text. At each
+    // step every control is on screen and clear of the others, and so is the card at the end
+    const fgLayout = await s.ev(() => {
+      const A = window.BLACKSMITH, g = A.game, root = document.documentElement;
+      const step = (n) => { for (let i = 0; i < n; i++) { A.input.beginFrame(); g.update(1 / 30, A.input); } };
+      const look = (phase) => {
+        const els = ['.fg-steps', '#fg-hint', '#fg-meter', '#fg-dots', '#fg-pull', '#fg-tap', '#fg-rank']
+          .map((q) => document.querySelector(q)).filter((e) => e.getClientRects().length)
+          .map((e) => ({ id: e.id || e.className, r: e.getBoundingClientRect() }));
+        const off = els.filter(({ r }) => r.left < 0 || r.top < 0 || r.right > innerWidth || r.bottom > innerHeight).map((e) => e.id);
+        const hits = [];
+        for (let i = 0; i < els.length; i++) for (let j = i + 1; j < els.length; j++) {
+          const a = els[i].r, b = els[j].r;
+          if (Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1) hits.push(els[i].id + ' / ' + els[j].id);
+        }
+        return { phase, shown: els.map((e) => e.id).join(' '), off, hits };
+      };
+      const runs = [];
+      for (const size of ['', '20.8px']) {
+        root.style.fontSize = document.body.style.fontSize = size;
+        A.forge.slots = [{ ore: 'iron', amount: 10 }, { ore: null, amount: 0 }, { ore: null, amount: 0 }];
+        A.forge.render();
+        A.forge._forge();
+        const out = [];
+        g.pullHandle(0.5); step(10); out.push(look('pour'));
+        g.pullHandle(1); for (let f = 0; f < 300 && g.craft.phase !== 'hammer'; f++) step(1);
+        step(20); out.push(look('hammer'));
+        for (let f = 0; f < 600 && g.craft.phase !== 'ranked'; f++) step(1);
+        step(2); out.push(look('ranked'));
+        for (let f = 0; f < 200 && !g.craft.ready; f++) step(1);
+        out.push(look('quench'));
+        g.pullHandle(1); step(10); out.push(look('cool'));
+        for (let f = 0; f < 300 && g.craft.phase !== 'done'; f++) step(1);
+        const card = [...document.querySelectorAll('.forged-card, .forged-card .mbtn')].map((e) => e.getBoundingClientRect());
+        out.push({ phase: 'card', off: card.some((r) => r.top < 0 || r.bottom > innerHeight) ? ['card'] : [], hits: [] });
+        runs.push(out);
+        A.forge.hideResult();
+        step(2);
+      }
+      root.style.fontSize = document.body.style.fontSize = '';
+      return runs;
+    });
+    check('on a 585 x 260 screen the forging game\'s words, meter, handle and TAP button are on screen at every step, none on top of another, and so is the card at the end; with 130% text too',
+      fgLayout.flat().every((l) => !l.off.length && !l.hits.length), JSON.stringify(fgLayout));
     const shop = await s.ev(() => {
       const A = window.BLACKSMITH, g = A.game;
       g.closeForge();

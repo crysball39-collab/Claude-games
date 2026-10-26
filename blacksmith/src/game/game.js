@@ -15,7 +15,7 @@
    ========================================================================== */
 import {
   PerspectiveCamera, WebGLRenderer, SRGBColorSpace, ACESFilmicToneMapping, PCFShadowMap, PCFSoftShadowMap,
-  Raycaster, Vector2, Vector3, Group, Mesh, BoxGeometry, SphereGeometry, Color,
+  Raycaster, Vector2, Vector3, Group, Mesh, Box3, Color,
 } from 'three';
 import { buildOverworld, OW } from './overworld.js';
 import { buildCave, CV } from './cave.js';
@@ -28,11 +28,16 @@ import { SkeletonPack } from './skeletons.js';
 import { makeRob, makeJack } from './rob.js';
 import { sfx } from './sfx.js';
 import { updateOreMaterials, hotMetalMaterial, oreMaterial } from './materials.js';
-import { buildWeapon } from './gear.js';
-import { ORES, RARITIES, QUESTS, PICKAXES, SKELETON, ELITE, DEEP_ROCK_COUNTS, recipe, itemName, itemRarity, partsOf } from './data.js';
+import { buildWeapon, buildArmorPlate, outlineGeometry, layInMould } from './gear.js';
+import {
+  ORES, RARITIES, QUESTS, PICKAXES, SKELETON, ELITE, DEEP_ROCK_COUNTS, HAMMER,
+  recipe, itemName, itemRarity, partsOf, strikeGrade, forgeScore, rankOf,
+} from './data.js';
 import { writeSave } from './save.js';
 import { robPortrait, jackPortrait, itemIcon } from '../ui/icons.js';
-import { yieldToPaint, clamp, clamp01, lerp, smoothstep, easeOutCubic, IS_TOUCH, money } from '../core/util.js';
+import {
+  yieldToPaint, clamp, clamp01, lerp, smoothstep, easeOutCubic, easeInOutCubic, damp, dampAngle, IS_TOUCH, money,
+} from '../core/util.js';
 
 export const QUALITY = {
   low: { name: 'low', shadows: false, shadowMap: 512, pixelRatio: 1.0, tufts: 0, caveLights: 3, antialias: false },
@@ -42,8 +47,27 @@ export const QUALITY = {
 
 const NO_INPUT = { move: { x: 0, y: 0 }, pressed: {}, down: {}, sprint: false };
 
-/** The forging, in seconds from the moment you press FORGE. */
-const CRAFT = { pourEnd: 1.15, toAnvil: 1.4, hammer: [1.55, 2.0, 2.45], quench: 2.95, dunk: 3.2, reveal: 3.45, done: 3.75 };
+/**
+ * The forging game: how far the bucket tips, how fast the mould fills, and
+ * how long the parts that play themselves take, in seconds.
+ */
+const CRAFT = {
+  tilt: 1.15,             // the bucket, tipped all the way
+  pour: 0.55,             // of the mould filled in a second, with the chain pulled all the way down
+  settle: 0.5,            // the bucket swinging back once the mould is full
+  lift: 0.3, carry: 0.6,  // the cast up out of the mould, then over onto the anvil
+  firstRing: 0.5,         // on the anvil, before the first white ring
+  ranked: 1.4,            // the rank on show, before the quench
+  toWater: 0.7,           // carried over the water
+  dipped: 0.85,           // how far down the handle must come for the gear to go in
+  cool: 1.6,              // in the water
+  out: 0.5,               // lifted back out
+  reveal: 0.7,            // up and turning, before the card
+};
+/** The steps of the forging that happen over the water. */
+const AT_WATER = new Set(['quench', 'cool', 'out', 'reveal', 'done']);
+const HOT_METAL = new Color(0xffa040);
+const SPLASH = new Color('#cfe8ff');
 
 export class Game {
   constructor({ viewport, settings, profile, hud, inventory, forgeUI, shopUI, dialogue, input }) {
@@ -67,6 +91,8 @@ export class Game {
     this.renderer.outputColorSpace = SRGBColorSpace;
     this.renderer.toneMapping = ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.08;
+    // the lava in the mould is drawn only as far as it has spread
+    this.renderer.localClippingEnabled = true;
     if (this.quality.shadows) {
       this.renderer.shadowMap.enabled = true;
       this.renderer.shadowMap.type = q.name === 'high' ? PCFSoftShadowMap : PCFShadowMap;
@@ -299,7 +325,6 @@ export class Game {
 
   /** A tap on the screen that was not a drag: did it land on the anvil, the pickaxe wall, Rob or Jack? */
   onTap(x, y) {
-    if (this.mode === 'forge' && this.craft) { this.skipCraft(); return; }
     if (this.mode === 'shop') { this._tapWall(x, y); return; }
     if (this.mode !== 'play') return;
     this._tap = { x, y };
@@ -358,7 +383,7 @@ export class Game {
   }
 
   _impact(pl, s) {
-    if (s.tool === 'hammer') { this._hammerBlow(); return; }
+    if (s.tool === 'hammer') { this._hammerBlow(s.grade); return; }
     if (!this.area.mine) return;
     const pk = this.profile.pickaxe();
     if (s.tool === 'pickaxe') {
@@ -629,18 +654,15 @@ export class Game {
     // you step round behind the anvil, facing out of the forge
     this._walk = { from: this.player.pos.clone(), to: new Vector3(A.x - 0.95, OW.forge.floor, A.z + 0.02), t: 0, yaw0: this.player.yaw, yaw1: Math.PI / 2 };
     this.player.holdHammer(true);
-    this._shotK = 0;
-    const shot = this._anvilShot(0);
+    const shot = this._anvilShot();
+    this._shot = { pos: shot.pos.clone(), look: shot.look.clone() };
     this.camRig.lend(shot.pos, shot.look, 0.75);
     this.forgeUI.open();
     sfx.play('ui');
   }
 
-  /**
-   * The close-up on the anvil. `wide` 0 frames it in the left of the screen,
-   * clear of the menu; 1 pulls back to take in the mould and the water too.
-   */
-  _anvilShot(wide) {
+  /** The close-up on the anvil, framed in the left of the screen, clear of the menu. */
+  _anvilShot() {
     const top = this.area.forge.anvilTop;
     const hfov = 2 * Math.atan(Math.tan((this.camera.fov * Math.PI / 180) / 2) * this.camera.aspect);
     const D = 2.55;
@@ -648,17 +670,38 @@ export class Game {
     // left of centre, in the space the menu leaves clear
     const free = clamp(this.forgeUI.freeFrac, 0.3, 0.7);
     const shift = 0.88 * (1 - free) * D * Math.tan(hfov / 2);
-    const tight = { pos: new Vector3(top.x + D, top.y + 1.15, top.z - shift * 0.25), look: new Vector3(top.x - 0.2, top.y - 0.22, top.z - shift) };
-    const midZ = (top.z + OW.mold.z) / 2 - 0.35;
-    const far = { pos: new Vector3(top.x + 3.25, top.y + 1.3, midZ), look: new Vector3(top.x - 0.3, top.y + 0.05, midZ) };
-    const k = smoothstep(wide);
-    return {
-      pos: new Vector3().lerpVectors(tight.pos, far.pos, k),
-      look: new Vector3().lerpVectors(tight.look, far.look, k),
-    };
+    return { pos: new Vector3(top.x + D, top.y + 1.15, top.z - shift * 0.25), look: new Vector3(top.x - 0.2, top.y - 0.22, top.z - shift) };
   }
 
-  /** FORGE was pressed: the ore goes in, the item is yours, and then the show. */
+  /**
+   * Where the camera is while you forge: on the bucket and the mould, then
+   * the anvil, then the water. Each puts what matters left of centre, clear
+   * of the handle and the TAP button on the right.
+   */
+  _craftShot(c) {
+    const F = this.area.forge;
+    if (c.phase === 'pour' || (c.phase === 'cast' && c.t < CRAFT.lift)) {
+      const m = F.mouldTop;
+      return { pos: new Vector3(m.x + 1.75, m.y + 1.5, m.z + 0.3), look: new Vector3(m.x, m.y + 0.42, m.z - 0.22) };
+    }
+    if (c.phase === 'cast' || c.phase === 'hammer' || c.phase === 'ranked') {
+      const top = F.anvilTop;
+      return { pos: new Vector3(top.x + 2.15, top.y + 1.15, top.z + 0.15), look: new Vector3(top.x - 0.1, top.y + 0.08, top.z - 0.45) };
+    }
+    const w = F.waterTop;
+    return { pos: new Vector3(w.x + 1.9, w.y + 1.15, w.z + 0.7), look: new Vector3(w.x + 0.05, w.y + 0.3, w.z - 0.35) };
+  }
+
+  /** The mould on the pedestal is cut to whatever the anvil's menu is showing. */
+  setMould(type) {
+    if (this.area?.id === 'overworld' && !this.craft) this.area.forge.mould.set(type);
+  }
+
+  /**
+   * FORGE was pressed: the ore goes in and the gear is yours. Now it has to
+   * be made - poured, hammered and quenched - and how well the hammering
+   * goes is its rank.
+   */
   forge(type, mix) {
     if (this.mode !== 'forge' || this.craft) return;
     if (!this.profile.takeOres(mix)) return;
@@ -666,14 +709,58 @@ export class Game {
     const item = this.profile.addItem({ kind: R.kind, type, mix });
     this.profile.stats.crafted++;
     this.save();
-    this.forgeUI.showWorking(true);
-    this.craft = { t: 0, item, kind: R.kind, type, hit: 0, mesh: null, steamed: false, shown: false };
-    sfx.play('pour');
+    this.setMould(type);
+    this.craft = {
+      phase: 'pour', t: 0, item, kind: R.kind, type,
+      pull: 0, tilt: 0, fill: 0, from: 0, full: false, pouring: 0,     // the pour
+      grades: [], ring: -CRAFT.firstRing, r: null,                      // the hammer
+      dip: 0, ready: false,                                             // the quench
+      mesh: null, hot: null,
+    };
+    this.forgeUI.startGame(this.craft);
+    sfx.play('ui');
   }
 
-  skipCraft() {
-    if (!this.craft) return;
-    this.craft.t = Math.max(this.craft.t, CRAFT.done);
+  /**
+   * The handle on the screen, from 0 (up) to 1 (pulled all the way down): the
+   * chain that tips the bucket while pouring, the gear going into the water
+   * while quenching. Ignored the rest of the time.
+   */
+  pullHandle(k) {
+    const c = this.craft;
+    if (!c) return;
+    k = clamp01(k);
+    if (c.phase === 'pour' && !c.full) {
+      if (c.pull < 0.05 && k >= 0.05) sfx.play('chain');
+      c.pull = k;
+    } else if (c.phase === 'quench' && c.ready) {
+      c.dip = k;
+    }
+  }
+
+  /** TAP: a blow of the hammer, graded by where the white ring was. Returns the grade, or null if it was no time to strike. */
+  strike() {
+    const c = this.craft;
+    if (!c || c.phase !== 'hammer' || c.r == null) return null;
+    return this._hammerStrike(strikeGrade(c.r));
+  }
+
+  _hammerStrike(grade) {
+    const c = this.craft;
+    c.grades.push(grade.id);
+    c.r = null;
+    c.ring = -HAMMER.gap;
+    this.player.swing = { kind: 'chop', t: 0, dur: 0.3, tool: 'hammer', target: null, landed: false, face: Math.PI / 2, grade: grade.id };
+    if (grade.id === 'perfect') sfx.play('perfect');
+    this.forgeUI.showGrade(grade, c.grades.length);
+    if (c.grades.length >= HAMMER.strikes) {
+      c.item.rank = forgeScore(c.grades);
+      c.phase = 'ranked';
+      c.t = 0;
+      this.forgeUI.showRank(rankOf(c.item.rank), c.item.rank);
+      this.save();
+    }
+    return grade;
   }
 
   /** The few steps round to where you work, at the anvil or the wall. */
@@ -693,130 +780,224 @@ export class Game {
     this._stepWalk(dt);
     const F = this.area.forge;
     const c = this.craft;
-    this._shotK = clamp01(this._shotK + (c && c.t < CRAFT.done ? dt : -dt) * 2.2);
-    const shot = this._anvilShot(this._shotK);
-    this.camRig.reframe(shot.pos, shot.look);
+    // the camera eases to the anvil beside the menu, or to whatever the forging is at
+    const want = c ? this._craftShot(c) : this._anvilShot();
+    const k = 1 - Math.exp(-dt * 3.2);
+    this._shot.pos.lerp(want.pos, k);
+    this._shot.look.lerp(want.look, k);
+    this.camRig.reframe(this._shot.pos, this._shot.look);
     if (!c) return;
-
     c.t += dt;
-    const t = c.t;
-    // 1. the bucket tips and lava runs into the mould
-    const tilt = t < CRAFT.pourEnd ? smoothstep(t / 0.35) * 1.15 : 1.15 * (1 - smoothstep((t - CRAFT.pourEnd) / 0.3));
-    F.tipper.rotation.x = tilt;
-    const pouring = t > 0.25 && t < CRAFT.pourEnd + 0.05;
-    F.stream.visible = pouring;
-    if (pouring) {
-      F.tipper.updateWorldMatrix(true, false);
-      const lip = F.tipper.localToWorld(new Vector3(0, -0.04, 0.21));
-      const gantry = F.stream.parent;
-      const a = gantry.worldToLocal(lip.clone());
-      const bottom = 0.73;
-      F.stream.position.set(a.x, (a.y + bottom) / 2, a.z);
-      F.stream.scale.set(1, Math.max(0.05, a.y - bottom), 1);
-      if (Math.random() < dt * 30) this.fx.sparks(gantry.localToWorld(new Vector3(a.x, bottom + 0.02, a.z)), 1, { speed: 0.8, up: 1.2, life: 0.4, size: 0.05 });
+    // you turn to what you are working on: the chain, the anvil, the water
+    if (!p.swing && (!this._walk || this._walk.t >= 1)) {
+      const at = c.phase === 'pour' ? F.mouldTop : AT_WATER.has(c.phase) ? F.waterTop : null;
+      p.yaw = dampAngle(p.yaw, at ? Math.atan2(at.x - p.pos.x, at.z - p.pos.z) : Math.PI / 2, 6, dt);
     }
-    const fill = smoothstep((t - 0.35) / (CRAFT.pourEnd - 0.35)) * (1 - smoothstep((t - CRAFT.toAnvil) / 0.25));
-    F.moldLava.scale.set(Math.max(0.001, fill), Math.max(0.001, fill), 1);
-    F.lavaGlow.intensity = 2.5 + (pouring ? 5 : 0);
-
-    // 2. what was cast comes up onto the anvil, glowing
-    if (t >= CRAFT.toAnvil && !c.mesh) {
-      c.mesh = this._castShape(c);
-      F.anvil.parent.add(c.mesh);
-      c.mesh.position.copy(F.anvilTop).add(new Vector3(0, 0.035, -0.18));
-      this.fx.sparks(F.anvilTop, 10, { speed: 2, up: 2 });
+    // between blows the metal settles back to its glow
+    if (c.hot && !AT_WATER.has(c.phase)) c.hot.emissiveIntensity = damp(c.hot.emissiveIntensity, 1.2, 4, dt);
+    if (c.phase === 'pour') this._pour(c, dt);
+    else {
+      // the bucket swings the rest of the way back
+      c.tilt = damp(c.tilt, 0, 4, dt);
+      F.tipper.rotation.x = -c.tilt;
+      if (c.phase === 'cast') this._cast(c);
+      else if (c.phase === 'hammer') this._hammer(c, dt);
+      else if (c.phase === 'ranked') { if (c.t >= CRAFT.ranked) { c.phase = 'quench'; c.t = 0; } }
+      else this._quench(c, dt);
     }
-    // 3. the hammer, three times
-    if (c.hit < CRAFT.hammer.length && t >= CRAFT.hammer[c.hit]) {
-      c.hit++;
-      p.swing = { kind: 'chop', t: 0, dur: 0.42, tool: 'hammer', target: null, landed: false, face: Math.PI / 2 };
-    }
-    // 4. into the water
-    if (c.mesh && t >= CRAFT.quench && t < CRAFT.reveal) {
-      const k = smoothstep((t - CRAFT.quench) / (CRAFT.dunk - CRAFT.quench));
-      const from = F.anvilTop.clone().add(new Vector3(0, 0.035, -0.18));
-      const to = F.waterTop.clone().add(new Vector3(0, -0.12, 0));
-      c.mesh.position.lerpVectors(from, to, k);
-      c.mesh.position.y += Math.sin(k * Math.PI) * 0.45;
-      c.mesh.scale.setScalar(lerp(1, 0.7, k));
-      if (k >= 1 && !c.steamed) {
-        c.steamed = true;
-        sfx.play('hiss');
-        this.fx.steam(F.waterTop, 18);
-        c.mesh.visible = false;
-      }
-    }
-    // 5. out it comes, cooled, in its true colours
-    if (t >= CRAFT.reveal && c.mesh && !c.revealed) {
-      c.revealed = true;
-      this._coolShape(c);
-      c.mesh.visible = true;
-      c.mesh.scale.setScalar(1);
-    }
-    if (c.revealed && c.mesh) {
-      const k = clamp01((t - CRAFT.reveal) / 0.4);
-      c.mesh.position.set(F.anvilTop.x, F.anvilTop.y + 0.25 + easeOutCubic(k) * 0.35, F.anvilTop.z - 0.2);
-      c.mesh.rotation.y += dt * 1.6;
-    }
-    if (t >= CRAFT.done && !c.shown) {
-      c.shown = true;
-      this._finishCraftVisuals(c, true);
-      this.forgeUI.showResult(c.item);
-      sfx.play(itemRarity(c.item) === 'legendary' ? 'legendary' : 'quest');
-    }
-    // the shot stays until the card is put away
-    if (c.shown && !this.forgeUI.showingResult) this._endCraft();
+    this.forgeUI.updateGame(c);
   }
 
-  /** What sits on the anvil while it is still hot: the weapon's shape, or a plate. */
-  _castShape(c) {
-    let g;
-    if (c.kind === 'weapon') {
-      g = buildWeapon(c.type, partsOf(c.item.mix));
-      g.rotation.set(Math.PI / 2, 0, 0);
-      g.position.z = 0;
-      const holder = new Group();
-      g.position.set(0, 0, -0.1);
-      holder.add(g);
-      g = holder;
-    } else {
-      g = new Group();
-      const parts = c.type === 'helmet' ? [new SphereGeometry(0.16, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2)]
-        : c.type === 'chestplate' ? [new BoxGeometry(0.4, 0.06, 0.34)]
-          : c.type === 'leggings' ? [new BoxGeometry(0.14, 0.06, 0.42), new BoxGeometry(0.14, 0.06, 0.42)]
-            : [new BoxGeometry(0.12, 0.1, 0.22), new BoxGeometry(0.12, 0.1, 0.22)];
-      parts.forEach((geo, i) => {
-        const m = new Mesh(geo, oreMaterial(partsOf(c.item.mix)[0]));
-        m.position.x = parts.length > 1 ? (i - 0.5) * 0.18 : 0;
-        g.add(m);
-      });
+  /** 1. The chain tips the bucket and lava runs into the mould, until the mould is full. */
+  _pour(c, dt) {
+    const F = this.area.forge;
+    c.tilt = damp(c.tilt, c.full ? 0 : c.pull * CRAFT.tilt, c.full ? 4 : 10, dt);
+    F.tipper.rotation.x = -c.tilt;
+    const flow = c.full ? 0 : smoothstep((c.tilt - 0.5) / (CRAFT.tilt - 0.5));
+    F.stream.visible = flow > 0.02;
+    if (F.stream.visible) {
+      F.tipper.updateWorldMatrix(true, false);
+      const gantry = F.stream.parent;
+      const lip = gantry.worldToLocal(F.tipper.localToWorld(new Vector3(0, -0.04, -0.21)));
+      const bottom = 0.73;
+      const thick = 0.35 + 0.65 * flow;
+      F.stream.position.set(lip.x, (lip.y + bottom) / 2, lip.z);
+      F.stream.scale.set(thick, Math.max(0.05, lip.y - bottom), thick);
+      c.from = lip.z;
+      c.fill = Math.min(1, c.fill + flow * CRAFT.pour * dt);
+      if (Math.random() < dt * 30) this.fx.sparks(gantry.localToWorld(new Vector3(lip.x, bottom + 0.02, lip.z)), 1, { speed: 0.8, up: 1.2, life: 0.4, size: 0.05 });
+      c.pouring -= dt;
+      if (c.pouring <= 0) { sfx.play('pour'); c.pouring = 0.8; }
     }
-    g.traverse((o) => { if (o.isMesh) { o.userData.cool = o.material; o.material = hotMetalMaterial(); } });
+    F.mould.fill(c.fill, c.from);
+    F.lavaGlow.intensity = 2.5 + flow * 5;
+    // full: the bucket swings back up by itself, however hard the chain is pulled
+    if (c.fill >= 1 && !c.full) {
+      c.full = true;
+      c.pull = 0;
+      c.t = 0;
+      sfx.play('ui');
+    }
+    if (c.full && c.t >= CRAFT.settle) {
+      c.phase = 'cast';
+      c.t = 0;
+      c.mesh = this._castShape(c);
+      F.anvil.parent.add(c.mesh);
+      this._cast(c);
+    }
+  }
+
+  /** 2. What was cast comes up out of the mould, still glowing, and over onto the anvil. */
+  _cast(c) {
+    const F = this.area.forge;
+    const inMould = F.mouldTop.clone().add(new Vector3(0, 0.02, 0));
+    const lifted = inMould.clone().add(new Vector3(0, 0.2, 0));
+    F.mould.fill(0);
+    if (c.t < CRAFT.lift) {
+      c.mesh.position.lerpVectors(inMould, lifted, easeOutCubic(c.t / CRAFT.lift));
+    } else {
+      const k = clamp01((c.t - CRAFT.lift) / CRAFT.carry);
+      c.mesh.position.lerpVectors(lifted, this._onAnvil(), easeInOutCubic(k));
+      c.mesh.position.y += Math.sin(k * Math.PI) * 0.3;
+    }
+    if (c.t >= CRAFT.lift + CRAFT.carry) {
+      c.mesh.position.copy(this._onAnvil());
+      c.phase = 'hammer';
+      c.t = 0;
+      c.ring = -CRAFT.firstRing;
+      sfx.play('hit');
+      this.fx.sparks(this._onAnvil(), 10, { speed: 2, up: 2 });
+    }
+  }
+
+  _onAnvil() { return this.area.forge.anvilTop.clone().add(new Vector3(0, 0.012, -0.1)); }
+
+  /**
+   * 3. Five blows. For each a white ring closes on the TAP button, and a tap
+   * as it crosses the green ring is a Perfect. If it closes all the way
+   * without a tap, that blow is Bad.
+   */
+  _hammer(c, dt) {
+    if (c.grades.length >= HAMMER.strikes) return;
+    c.ring += dt;
+    if (c.ring < 0) { c.r = null; return; }
+    const k = c.ring / HAMMER.shrink;
+    if (k >= 1) { this._hammerStrike(strikeGrade(null)); return; }
+    c.r = HAMMER.from + (HAMMER.to - HAMMER.from) * k;
+  }
+
+  /**
+   * 4. Over to the water, and down into it on the handle. In the water it
+   * cools and loses its glow, then comes back out by itself, finished.
+   */
+  _quench(c, dt) {
+    const F = this.area.forge, m = c.mesh, w = F.waterTop;
+    // a long blade goes in point first and only so far: the tub is 45cm deep
+    const half = m.userData.half;
+    const hover = new Vector3(w.x, w.y + 0.12 + half, w.z);
+    const under = new Vector3(w.x, w.y + Math.min(-0.1, half - 0.42), w.z);
+    if (c.phase === 'quench') {
+      const k = clamp01(c.t / CRAFT.toWater);
+      if (k < 1) {
+        m.position.lerpVectors(this._onAnvil(), hover, easeInOutCubic(k));
+        m.position.y += Math.sin(k * Math.PI) * 0.25;
+        standUp(m, c.kind, easeInOutCubic(k));
+        return;
+      }
+      if (!c.ready) { c.ready = true; c.dip = 0; }
+      standUp(m, c.kind, 1);
+      m.position.lerpVectors(hover, under, c.dip);
+      if (c.dip >= CRAFT.dipped) {
+        c.phase = 'cool';
+        c.t = 0;
+        c.dip = 1;
+        sfx.play('hiss');
+        this.fx.steam(w, 16);
+        this.fx.sparks(w, 14, { color: SPLASH, speed: 2.2, up: 2.4, life: 0.5, size: 0.05 });
+      }
+    } else if (c.phase === 'cool') {
+      m.position.copy(under);
+      const k = clamp01(c.t / CRAFT.cool);
+      c.cooled = k;
+      c.hot.emissiveIntensity = 1.2 * (1 - smoothstep(k * 1.15));
+      c.hot.color.lerpColors(HOT_METAL, oreMaterial(partsOf(c.item.mix)[0]).color, smoothstep(k));
+      if (Math.random() < dt * 9) this.fx.steam(w, 2);
+      if (c.t > CRAFT.cool * 0.5 && !c.hissed) { c.hissed = true; sfx.play('hiss'); }
+      if (k >= 1) {
+        c.phase = 'out';
+        c.t = 0;
+        this._finish(c);
+      }
+    } else if (c.phase === 'out') {
+      const k = clamp01(c.t / CRAFT.out);
+      m.position.lerpVectors(under, hover, easeOutCubic(k));
+      c.dip = 1 - k;
+      if (k >= 1) { c.phase = 'reveal'; c.t = 0; c.dip = 0; this.fx.steam(w, 6); }
+    } else {
+      // 5. up, turning in the light, in its true colours
+      const k = clamp01(c.t / CRAFT.reveal);
+      m.position.copy(hover);
+      m.position.y += easeOutCubic(k) * 0.3;
+      m.rotation.y += dt * 1.6;
+      if (c.phase === 'reveal' && k >= 1) {
+        c.phase = 'done';
+        this.forgeUI.showResult(c.item);
+        const r = rankOf(c.item.rank);
+        sfx.play(r.id === 'perfect' || itemRarity(c.item) === 'legendary' ? 'legendary' : r.mult >= 1 ? 'quest' : 'nope');
+      }
+      // the shot stays until the card is put away
+      if (c.phase === 'done' && !this.forgeUI.showingResult) this._endCraft();
+    }
+  }
+
+  /** The cast: a plate in the mould's outline, glowing hot, lying as the mould held it. */
+  _castShape(c) {
+    const F = this.area.forge;
+    const geo = outlineGeometry(c.type, { ...F.mould.fit, depth: 0.03 });
+    c.hot = hotMetalMaterial().clone();
+    const g = new Group();
+    g.rotation.order = 'YXZ';
+    g.add(layInMould(new Mesh(geo, c.hot), c.type));
+    // half its height, which is how far it reaches down once it is stood up over the water
+    g.userData.half = geo.boundingBox.max.y;
     return g;
   }
 
-  _coolShape(c) {
-    c.mesh.traverse((o) => { if (o.isMesh && o.userData.cool) o.material = o.userData.cool; });
-  }
-
-  _hammerBlow() {
+  /**
+   * Out of the water it is the real thing, the same size and the same way
+   * round as the cast was: the weapon in its three ores, or the armour's
+   * plate edged in its trim.
+   */
+  _finish(c) {
     const F = this.area.forge;
-    sfx.play('clang');
-    this.camRig.shake(0.05, 0.12);
-    this.fx.sparks(F.anvilTop.clone().add(new Vector3(0, 0.05, -0.1)), 16, { speed: 3.2, up: 2.6, size: 0.06 });
-  }
-
-  _finishCraftVisuals(c, keepMesh = false) {
-    const F = this.area.forge;
-    F.tipper.rotation.x = 0;
-    F.stream.visible = false;
-    F.moldLava.scale.set(0.001, 0.001, 1);
-    F.lavaGlow.intensity = 2.5;
-    if (c.mesh) {
-      if (!c.revealed) { this._coolShape(c); c.revealed = true; }
-      c.mesh.visible = true;
-      if (!keepMesh) this._dropMesh(c);
+    const parts = partsOf(c.item.mix);
+    let made;
+    if (c.kind === 'weapon') {
+      const wpn = buildWeapon(c.type, parts);
+      wpn.position.sub(new Box3().setFromObject(wpn).getCenter(new Vector3()));
+      made = new Group();
+      made.add(wpn);
+      made.scale.setScalar(F.mould.scale);
+    } else {
+      made = buildArmorPlate(c.type, parts, F.mould.fit);
     }
+    layInMould(made, c.type);
+    for (const old of [...c.mesh.children]) {
+      old.removeFromParent();
+      old.traverse((o) => { if (o.isMesh) o.geometry.dispose(); });
+    }
+    c.mesh.add(made);
+  }
+
+  _hammerBlow(grade = 'good') {
+    const at = this._onAnvil().add(new Vector3(0, 0.04, 0));
+    const big = { perfect: 1.6, great: 1.25, good: 1, mid: 0.75, bad: 0.45 }[grade] ?? 1;
+    sfx.play(grade === 'bad' ? 'thud' : 'clang', { gap: 0 });
+    this.camRig.shake(0.05 * big, 0.12);
+    this.fx.sparks(at, Math.round(16 * big), { speed: 3.2 * Math.sqrt(big), up: 2.6, size: 0.06 });
+    if (grade === 'perfect') this.fx.flare(at, undefined, 0.9, 0.35);
+    // each blow brightens the metal for a moment
+    if (this.craft?.hot) this.craft.hot.emissiveIntensity = 1.2 + 0.8 * big;
   }
 
   _dropMesh(c) {
@@ -826,12 +1007,21 @@ export class Game {
     c.mesh = null;
   }
 
+  /** The forging is over, or left part-way: everything back as it was. */
   _endCraft() {
     const c = this.craft;
     if (!c) return;
-    this._finishCraftVisuals(c);
+    // walked away before the hammering was done: the blows not struck count as Mid
+    if (!Number.isFinite(c.item.rank)) { c.item.rank = forgeScore(c.grades); this._dirty = true; }
+    const F = this.areas.overworld.forge;
+    F.tipper.rotation.x = 0;
+    F.stream.visible = false;
+    F.mould.fill(0);
+    F.lavaGlow.intensity = 2.5;
     this._dropMesh(c);
+    c.hot?.dispose();
     this.craft = null;
+    this.forgeUI.endGame();
   }
 
   /** EQUIP on the card. */
@@ -839,11 +1029,7 @@ export class Game {
 
   closeForge() {
     if (this.mode !== 'forge') return;
-    if (this.craft) {
-      // walking away mid-forge still leaves you with the thing
-      if (!this.craft.shown) this.craft.shown = true;
-      this._endCraft();
-    }
+    if (this.craft) this._endCraft();
     this.forgeUI.close();
     this.camRig.giveBack(0.6);
     this.camRig.yaw = this.player.yaw + Math.PI;
@@ -1081,7 +1267,8 @@ export class Game {
     this.running = false;
     window.removeEventListener('resize', this._onResize);
     this._unsub?.();
-    if (this.craft) this._endCraft();
+    // quitting part-way through forging still leaves the gear ranked, and saved so
+    if (this.craft) { this._endCraft(); this.save(); }
     this.fx?.dispose();
     for (const f of Object.values(this.fields || {})) f.dispose();
     for (const k of Object.values(this.packs || {})) k.dispose();
@@ -1094,6 +1281,15 @@ export class Game {
 }
 
 function wait(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+/**
+ * Stands the gear up over the water, `k` of the way from lying on the anvil:
+ * a blade point down with its flat to the camera, armour the right way up.
+ */
+function standUp(m, kind, k) {
+  if (kind === 'weapon') m.rotation.set(-Math.PI / 2 * k, Math.PI / 2 * k, 0);
+  else m.rotation.set(0, 0, -Math.PI / 2 * k);
+}
 
 function lerpAngle(a, b, t) {
   let d = (b - a) % (Math.PI * 2);

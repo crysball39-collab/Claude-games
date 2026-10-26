@@ -9,10 +9,15 @@
 
    The chips and slots are built once and only repainted after that, so a
    finger held on a +/- is still on the same button when it lifts.
+
+   FORGE starts the forging game, and this draws its controls: the handle to
+   drag down (the chain that tips the lava, then the gear into the water),
+   and the TAP button with a white ring closing on its green one. The game
+   owns the state; this shows it every frame and passes on the fingers.
    ========================================================================== */
-import { $ } from '../core/util.js';
+import { $, $$, clamp01 } from '../core/util.js';
 import {
-  ORES, ORE_ORDER, RARITIES, RECIPES, PART_NAMES, recipe, rankSlots, partsOf, itemStats, itemName, itemRarity,
+  ORES, ORE_ORDER, RARITIES, RECIPES, PART_NAMES, recipe, rankSlots, partsOf, itemStats, itemName, itemRarity, rankOf,
 } from '../game/data.js';
 import { oreIcon, recipeIcon, itemIcon } from './icons.js';
 import { describeItem } from './inventory.js';
@@ -20,10 +25,30 @@ import { describeItem } from './inventory.js';
 const SHORT = { dagger: 'Dagger', sword: 'Straight-Sword', broadsword: 'Broadsword', helmet: 'Helmet', chestplate: 'Chestplate', leggings: 'Leggings', boots: 'Boots' };
 const empty = () => ({ ore: null, amount: 0 });
 
+/** Which of the three steps each moment of the forging belongs to. */
+const STEPS = ['pour', 'hammer', 'quench'];
+const STEP_OF = { pour: 'pour', cast: 'pour', hammer: 'hammer', ranked: 'hammer', quench: 'quench', cool: 'quench', out: 'quench', reveal: 'quench', done: 'quench' };
+/** The rings' drawing units to one radius of the TAP button. */
+const RING_UNITS = 30;
+
+function hintFor(c) {
+  switch (c.phase) {
+    case 'pour':
+      if (c.full) return 'Full! The bucket swings back by itself';
+      return c.fill > 0 ? 'Keep pulling until the mould is full' : 'Drag the chain down to tip the lava into the mould';
+    case 'cast': return 'Out of the mould and onto the anvil';
+    case 'hammer': return 'Tap TAP as the white ring meets the green one';
+    case 'ranked': return '';
+    case 'quench': return c.ready ? 'Drag it down into the water' : 'Over to the water';
+    case 'cool': return 'Cooling in the water';
+    default: return 'Out it comes';
+  }
+}
+
 export class ForgeUI {
-  constructor(profile, { onForge, onClose, onEquip, onSkip }) {
+  constructor(profile, { onForge, onClose, onEquip, onType, onPull, onStrike }) {
     this.profile = profile;
-    this.cb = { onForge, onClose, onEquip, onSkip };
+    this.cb = { onForge, onClose, onEquip, onType, onPull, onStrike };
     this.root = $('#forge');
     this.card = $('#forge-card');
     this.recipesEl = $('#recipes');
@@ -35,8 +60,17 @@ export class ForgeUI {
     this.picker = $('#ore-picker');
     this.pickerTitle = $('#op-title');
     this.pickerGrid = $('#op-grid');
-    this.working = $('#forge-working');
     this.result = $('#forged');
+    this.game = $('#fgame');
+    this.g = {
+      steps: $$('#fg-steps span'), hint: $('#fg-hint'),
+      meter: $('#fg-meter'), meterLabel: $('#fg-meter-label'), meterFill: $('#fg-meter-fill'), meterPct: $('#fg-meter-pct'),
+      dotsBox: $('#fg-dots'), dots: $$('#fg-dots i'),
+      pull: $('#fg-pull'), chain: $('#fg-chain'), handle: $('#fg-handle'), handleLabel: $('#fg-handle-label'),
+      zone: $('#fg-tapzone'), white: $('#fg-white'), tap: $('#fg-tap'), grade: $('#fg-grade'), rank: $('#fg-rank'),
+    };
+    this._phase = null;
+    this._handleK = 0;
     this.type = 'dagger';
     this.slots = [empty(), empty(), empty()];
     this.slotEls = null;
@@ -49,7 +83,7 @@ export class ForgeUI {
     $('#btn-close-forge').addEventListener('click', () => this.cb.onClose?.());
     $('#btn-close-picker').addEventListener('click', () => this._closePicker());
     this.forgeBtn.addEventListener('click', () => this._forge());
-    this.working.addEventListener('pointerdown', () => this.cb.onSkip?.());
+    this._wireGame();
     $('#btn-forged-ok').addEventListener('click', () => this.hideResult());
     $('#btn-forged-equip').addEventListener('click', () => {
       if (this.lastItem) this.cb.onEquip?.(this.lastItem.uid);
@@ -75,10 +109,11 @@ export class ForgeUI {
     this.isOpen = true;
     this.root.classList.remove('hidden');
     this.card.classList.remove('hidden');
-    this.working.classList.add('hidden');
+    this.game.classList.add('hidden');
     this.result.classList.add('hidden');
     this._clampToOwned();
     this.render();
+    this.cb.onType?.(this.type);
     this._measure();
     // on a short screen the recipes are one row that scrolls: bring the chosen one into it
     const rc = this.recipesEl, chip = rc.querySelector('.sel');
@@ -128,7 +163,7 @@ export class ForgeUI {
       el.dataset.type = type;
       el.innerHTML = `<img alt="" src="${recipeIcon(type)}"><span class="rt"><span class="rn">${SHORT[type]}</span>` +
         `<small><i>${r.weight} &middot; </i>${r.ores}+ ore</small></span>`;
-      el.addEventListener('click', () => { this.type = type; this._clampToOwned(); this.render(); });
+      el.addEventListener('click', () => { this.type = type; this._clampToOwned(); this.render(); this.cb.onType?.(type); });
       this.recipesEl.appendChild(el);
     }
     // on a short screen the recipes are one row that scrolls sideways, and with big text the
@@ -350,19 +385,140 @@ export class ForgeUI {
     this.cb.onForge?.(this.type, mix);
   }
 
-  /** While the hammer is going: the menu steps aside. */
-  showWorking(on) {
-    if (on) this._stopHold();
-    this.card.classList.toggle('hidden', on);
-    this.working.classList.toggle('hidden', !on);
+  /* ------------------------------ the forging game ------------------------------ */
+
+  _wireGame() {
+    const g = this.g;
+    // the handle: a finger on it drags it from where it is; anywhere else on its track, it jumps to the finger
+    let drag = null;
+    const travel = () => Math.max(1, g.pull.clientHeight - g.handle.offsetHeight);
+    const at = (e) => clamp01((e.clientY - drag.y0) / travel());
+    g.pull.addEventListener('pointerdown', (e) => {
+      if (g.pull.classList.contains('off') || (e.button ?? 0) > 0) return;
+      e.preventDefault();
+      try { g.pull.setPointerCapture(e.pointerId); } catch { /* not every pointer can be captured */ }
+      const h = g.handle.getBoundingClientRect();
+      const onHandle = e.clientY >= h.top && e.clientY <= h.bottom;
+      drag = { id: e.pointerId, y0: onHandle ? e.clientY - this._handleK * travel() : g.pull.getBoundingClientRect().top + g.handle.offsetHeight / 2 };
+      g.pull.classList.add('held');
+      this.cb.onPull?.(at(e));
+    });
+    g.pull.addEventListener('pointermove', (e) => {
+      if (drag && e.pointerId === drag.id) this.cb.onPull?.(at(e));
+    });
+    const release = (e) => {
+      if (!drag || (e && e.pointerId !== drag.id)) return;
+      drag = null;
+      g.pull.classList.remove('held');
+      this.cb.onPull?.(0);
+    };
+    for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) g.pull.addEventListener(ev, release);
+    this._releasePull = () => release();
+    // TAP counts the moment the finger lands, not when it lifts
+    g.tap.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (!this.cb.onStrike?.()) return;
+      g.tap.classList.add('hit');
+      setTimeout(() => g.tap.classList.remove('hit'), 120);
+    });
+  }
+
+  /** FORGE was pressed: the menu steps aside for the forging. */
+  startGame() {
+    this._stopHold();
+    this._closePicker();
+    this.card.classList.add('hidden');
+    this.result.classList.add('hidden');
+    this.game.classList.remove('hidden');
+    this.g.rank.classList.add('hidden');
+    this.g.grade.classList.remove('pop');
+    for (const d of this.g.dots) { d.style.background = ''; d.style.borderColor = ''; }
+    this._phase = null;
+    this._handleK = 0;
+  }
+
+  /** Every frame of the forging: which step, what to do, the meter, the handle and the white ring. */
+  updateGame(c) {
+    const g = this.g;
+    if (c.phase !== this._phase) {
+      this._phase = c.phase;
+      const now = STEPS.indexOf(STEP_OF[c.phase]);
+      for (const s of g.steps) {
+        const i = STEPS.indexOf(s.dataset.step);
+        s.classList.toggle('on', i === now);
+        s.classList.toggle('done', i < now);
+      }
+      g.dotsBox.classList.toggle('hidden', STEP_OF[c.phase] !== 'hammer');
+      g.zone.classList.toggle('hidden', c.phase !== 'hammer');
+      g.pull.classList.toggle('hidden', !['pour', 'quench', 'cool', 'out'].includes(c.phase));
+      g.pull.classList.toggle('dip', c.phase !== 'pour');
+      g.handleLabel.textContent = c.phase === 'pour' ? 'PULL' : 'DIP';
+      if (c.phase !== 'ranked') g.rank.classList.add('hidden');
+    }
+    this._text(g.hint, hintFor(c));
+    // the meter: the mould filling, then the metal cooling
+    const m = c.phase === 'pour' ? ['MOULD', c.fill] : c.phase === 'cool' ? ['COOLING', c.cooled || 0] : c.phase === 'out' ? ['COOLING', 1] : null;
+    g.meter.classList.toggle('hidden', !m);
+    if (m) {
+      g.meter.classList.toggle('cool', m[0] === 'COOLING');
+      this._text(g.meterLabel, m[0]);
+      g.meterFill.style.width = (m[1] * 100).toFixed(1) + '%';
+      this._text(g.meterPct, Math.floor(m[1] * 100) + '%');
+    }
+    // the handle sits where the game has it: under the finger, until the game takes over
+    if (!g.pull.classList.contains('hidden')) {
+      const live = (c.phase === 'pour' && !c.full) || (c.phase === 'quench' && c.ready);
+      g.pull.classList.toggle('off', !live);
+      if (!live) this._releasePull();
+      const k = c.phase === 'pour' ? c.pull : c.dip;
+      this._handleK = k;
+      const travel = g.pull.clientHeight - g.handle.offsetHeight;
+      g.handle.style.transform = `translateY(${(k * travel).toFixed(1)}px)`;
+      g.chain.style.height = (k * travel + g.handle.offsetHeight / 2).toFixed(1) + 'px';
+    }
+    // the white ring, closing on the button
+    if (c.phase === 'hammer') {
+      g.white.classList.toggle('off', c.r == null);
+      if (c.r != null) g.white.setAttribute('r', (c.r * RING_UNITS).toFixed(2));
+    }
+  }
+
+  _text(el, s) { if (el.textContent !== s) el.textContent = s; }
+
+  /** How a blow went: the word, big, by the button, and its dot filled in. */
+  showGrade(grade, n) {
+    const g = this.g;
+    g.grade.textContent = grade.name.toUpperCase() + (grade.id === 'perfect' ? '!' : '');
+    g.grade.style.color = grade.color;
+    g.grade.classList.remove('pop');
+    void g.grade.offsetWidth;          // so the animation starts again
+    g.grade.classList.add('pop');
+    const d = g.dots[n - 1];
+    if (d) { d.style.background = grade.color; d.style.borderColor = grade.color; }
+  }
+
+  /** The five blows done: what the gear's rank is. */
+  showRank(rank, score) {
+    const g = this.g;
+    g.rank.style.setProperty('--c', rank.color);
+    g.rank.innerHTML = `<small>RANK</small><b>${rank.name.toUpperCase()}</b><span>${score}%</span>`;
+    g.rank.classList.remove('hidden');
+  }
+
+  endGame() {
+    this._releasePull();
+    this.game.classList.add('hidden');
+    this.g.rank.classList.add('hidden');
   }
 
   showResult(item) {
     this.lastItem = item;
-    this.working.classList.add('hidden');
+    this.game.classList.add('hidden');
     const rar = itemRarity(item);
+    const rank = rankOf(item.rank);
     const card = this.result.querySelector('.forged-card');
     card.className = 'forged-card r-' + rar;
+    $('#forged-title').innerHTML = rank ? `<span style="color:${rank.color}">${rank.name.toUpperCase()}</span> <small>${item.rank}%</small>` : 'FORGED!';
     $('#forged-icon').innerHTML = `<img alt="" src="${itemIcon(item)}">`;
     $('#forged-name').innerHTML = `${itemName(item)} <small style="color:${RARITIES[rar].color}">${RARITIES[rar].name}</small>`;
     $('#forged-stats').innerHTML = describeItem(item);

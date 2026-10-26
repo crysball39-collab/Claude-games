@@ -182,7 +182,9 @@ async function startGame(fresh) {
       onForge: (type, mix) => app.game?.forge(type, mix),
       onClose: () => app.game?.closeForge(),
       onEquip: (uid) => app.game?.equipForged(uid),
-      onSkip: () => app.game?.skipCraft(),
+      onType: (type) => app.game?.setMould(type),
+      onPull: (k) => app.game?.pullHandle(k),
+      onStrike: () => app.game?.strike(),
     });
     app.shop = new ShopUI(profile, {
       onSelect: (type) => app.game?.inspectPickaxe(type),
@@ -268,7 +270,12 @@ function back() {
   if (!g) return;
   if (app.state === 'paused') { setPaused(false); return; }
   if (g.mode === 'menu') g.closeInventory();
-  else if (g.mode === 'forge') g.closeForge();
+  else if (g.mode === 'forge') {
+    // in the middle of forging, back pauses rather than walking away from it
+    if (g.craft && app.forge.showingResult) app.forge.hideResult();
+    else if (g.craft) setPaused(true);
+    else g.closeForge();
+  }
   else if (g.mode === 'shop') g.closeShop();
   else if (g.mode === 'talk') g.closeTalk();
   else setPaused(true);

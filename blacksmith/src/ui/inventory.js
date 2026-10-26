@@ -6,12 +6,23 @@
 import { $, money } from '../core/util.js';
 import {
   ORES, ORE_ORDER, RARITIES, PART_NAMES, EQUIP_SLOTS, itemName, itemStats, itemRarity, partsOf,
-  oddsLabel, slotOf, WEAPONS, ARMOR,
+  oddsLabel, slotOf, rankOf, WEAPONS, ARMOR,
 } from '../game/data.js';
 import { itemIcon, oreIcon, ghostIcon } from './icons.js';
 
 const SLOT_LABEL = { weapon: 'WEAPON', pickaxe: 'PICKAXE', helmet: 'HELMET', chest: 'CHEST', legs: 'LEGS', boots: 'BOOTS' };
 const TAB_KIND = { weapons: 'weapon', armor: 'armor', pickaxes: 'pickaxe' };
+
+/** "Masterwork 94%", in its colour; nothing for gear forged before there were ranks. */
+export function rankTag(item, upper = false) {
+  const r = rankOf(item.rank);
+  return r ? `<span class="rank" style="color:${r.color}">${upper ? r.name.toUpperCase() : r.name} ${item.rank}%</span>` : '';
+}
+
+/** What a rank does to the gear's damage or defense: "+45%", "-25%", "no change". */
+export function rankEffect(r) {
+  return r.mult === 1 ? 'no change' : `${r.mult > 1 ? '+' : '&minus;'}${Math.round(Math.abs(r.mult - 1) * 100)}%`;
+}
 
 /** A few words on what an item does. */
 export function describeItem(item) {
@@ -23,7 +34,8 @@ export function describeItem(item) {
   const names = PART_NAMES[item.kind];
   const partText = names.map((n, i) => `${n} <b>${ORES[parts[i]].name}</b>`).join(' &middot; ');
   const extra = s.bonus > 1.005 ? ` (+${Math.round((s.bonus - 1) * 100)}% for extra ore)` : '';
-  const mix = item.mix.map(([o, n]) => `${n} ${ORES[o].name}`).join(', ') + extra;
+  const forged = s.rank ? ` &middot; ${s.rank.name} forging ${rankEffect(s.rank)}` : '';
+  const mix = item.mix.map(([o, n]) => `${n} ${ORES[o].name}`).join(', ') + extra + forged;
   if (item.kind === 'weapon') {
     const w = WEAPONS[item.type];
     return `<b>${w.weight}</b> weapon &middot; Damage <b>${s.damage}</b> &middot; ${(1 / w.cooldown).toFixed(1)} swings/s<br>${partText}<br><small>Forged from ${mix}</small>`;
@@ -126,7 +138,9 @@ export class InventoryUI {
       const el = document.createElement('button');
       el.className = 'icard r-' + itemRarity(it);
       if (this.sel?.uid === it.uid) el.classList.add('sel');
-      el.innerHTML = `<img alt="" src="${itemIcon(it)}">` + (p.isEquipped(it.uid) ? '<span class="eq">ON</span>' : '');
+      const rank = rankOf(it.rank);
+      el.innerHTML = `<img alt="" src="${itemIcon(it)}">` + (p.isEquipped(it.uid) ? '<span class="eq">ON</span>' : '') +
+        (rank ? `<span class="rk" style="background:${rank.color}" title="${rank.name}"></span>` : '');
       el.addEventListener('click', () => { this.sel = { uid: it.uid }; this.scrapArmed = null; this.render(); });
       this.grid.appendChild(el);
     }
@@ -169,7 +183,7 @@ export class InventoryUI {
     const canOff = on && slot !== 'pickaxe';
     d.innerHTML = `<div class="dicon r-${rar}"><img alt="" src="${itemIcon(it)}"></div>` +
       `<div class="dtext r-${rar}"><div class="dname">${itemName(it)}</div>` +
-      `<div class="drar">${RARITIES[rar].name.toUpperCase()}</div>` +
+      `<div class="drar">${[RARITIES[rar].name.toUpperCase(), rankTag(it, true)].filter(Boolean).join(' &middot; ')}</div>` +
       `<div class="dstats">${describeItem(it)}</div></div>` +
       `<div class="dbtns"></div>`;
     const btns = d.querySelector('.dbtns');

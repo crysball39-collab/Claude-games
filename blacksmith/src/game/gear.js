@@ -8,7 +8,7 @@
    ========================================================================== */
 import {
   Group, Mesh, BoxGeometry, CylinderGeometry, ConeGeometry, OctahedronGeometry,
-  SphereGeometry, ExtrudeGeometry, Shape, MeshLambertMaterial,
+  SphereGeometry, ExtrudeGeometry, ShapeGeometry, Shape, MeshLambertMaterial,
 } from 'three';
 import { partsOf } from './data.js';
 import { oreMaterial } from './materials.js';
@@ -215,6 +215,171 @@ export function buildArmor(rig, type, parts) {
     }
   }
   return out;
+}
+
+/* -------------------------------- outlines --------------------------------- */
+
+/**
+ * A weapon seen flat, as the mould has it cut: blade, cross-guard (its ends
+ * turned up on the swords), grip and pommel, at the sizes buildWeapon uses.
+ * +y runs up the blade.
+ */
+function weaponOutline(type) {
+  const S = WEAPON_SHAPES[type];
+  const gl = S.grip;
+  const y0 = gl * 0.2 - gl / 2, y1 = gl * 0.2 + gl / 2;    // the grip, bottom and top
+  const [gw, gh] = S.guard;
+  const [bl, bw, , tip] = S.blade;
+  const by = y1 + gh;                                       // where the blade starts
+  const g = 0.026;                                          // half the grip's width
+  const pr = S.pommel * 1.25, py = y0 - S.pommel * 0.6;
+  const h = Math.sqrt(pr * pr - g * g), a = Math.atan2(h, g);
+  // the cross-guard's corners going down the right-hand side; the left has the same, mirrored, going up
+  const guard = type === 'dagger'
+    ? [[gw / 2, by], [gw / 2, y1]]
+    : [[gw / 2 - gh * 0.85, by], [gw / 2 - gh * 0.85, y1 + gh * 1.85], [gw / 2 + gh * 0.25, y1 + gh * 1.85], [gw / 2 + gh * 0.25, y1]];
+  const s = new Shape();
+  s.moveTo(0, by + bl);
+  s.lineTo(bw / 2, by + bl - tip);
+  s.lineTo(bw / 2, by);
+  for (const [x, y] of guard) s.lineTo(x, y);
+  s.lineTo(g, y1);
+  s.lineTo(g, py + h);
+  s.absarc(0, py, pr, a, Math.PI - a, true);
+  s.lineTo(-g, y1);
+  for (const [x, y] of guard.slice().reverse()) s.lineTo(-x, y);
+  s.lineTo(-bw / 2, by);
+  s.lineTo(-bw / 2, by + bl - tip);
+  s.closePath();
+  return [s];
+}
+
+/** Armour seen from the front, flat, in metres. */
+const ARMOR_OUTLINES = {
+  // an open-faced helmet with a nose guard
+  helmet() {
+    const s = new Shape();
+    s.moveTo(-0.155, -0.15);
+    s.lineTo(-0.165, 0);
+    s.absarc(0, 0, 0.165, Math.PI, 0, true);
+    s.lineTo(0.155, -0.15);
+    s.lineTo(0.088, -0.15);
+    s.lineTo(0.072, -0.03);
+    s.lineTo(0.024, -0.03);
+    s.lineTo(0.018, -0.12);
+    s.lineTo(-0.018, -0.12);
+    s.lineTo(-0.024, -0.03);
+    s.lineTo(-0.072, -0.03);
+    s.lineTo(-0.088, -0.15);
+    s.closePath();
+    return [s];
+  },
+  // shoulders, a scooped neck, in under the arms, and a flared hem
+  chestplate() {
+    const s = new Shape();
+    s.moveTo(-0.095, 0.23);
+    s.lineTo(-0.2, 0.2);
+    s.lineTo(-0.215, 0.1);
+    s.quadraticCurveTo(-0.16, 0.08, -0.155, -0.02);
+    s.lineTo(-0.15, -0.16);
+    s.lineTo(-0.175, -0.23);
+    s.lineTo(0.175, -0.23);
+    s.lineTo(0.15, -0.16);
+    s.lineTo(0.155, -0.02);
+    s.quadraticCurveTo(0.16, 0.08, 0.215, 0.1);
+    s.lineTo(0.2, 0.2);
+    s.lineTo(0.095, 0.23);
+    s.quadraticCurveTo(0, 0.13, -0.095, 0.23);
+    return [s];
+  },
+  // a waistband and two legs
+  leggings() {
+    const s = new Shape();
+    s.moveTo(-0.17, 0.23);
+    s.lineTo(0.17, 0.23);
+    s.lineTo(0.17, 0.15);
+    s.lineTo(0.16, -0.25);
+    s.lineTo(0.045, -0.25);
+    s.lineTo(0.022, 0.06);
+    s.lineTo(-0.022, 0.06);
+    s.lineTo(-0.045, -0.25);
+    s.lineTo(-0.16, -0.25);
+    s.lineTo(-0.17, 0.15);
+    s.closePath();
+    return [s];
+  },
+  // a pair, side by side, toes the same way
+  boots() {
+    const boot = (ox) => {
+      const s = new Shape();
+      s.moveTo(ox - 0.06, 0.13);
+      s.lineTo(ox + 0.035, 0.13);
+      s.lineTo(ox + 0.04, 0);
+      s.lineTo(ox + 0.085, -0.03);
+      s.quadraticCurveTo(ox + 0.12, -0.04, ox + 0.115, -0.1);
+      s.lineTo(ox - 0.065, -0.1);
+      s.closePath();
+      return s;
+    };
+    return [boot(-0.1), boot(0.1)];
+  },
+};
+
+/** The flat outline of any forged thing: what its mould has cut into it. */
+export function gearOutline(type) {
+  return WEAPON_SHAPES[type] ? weaponOutline(type) : ARMOR_OUTLINES[type]();
+}
+
+/**
+ * How much room an outline has in the mould, in its own x by y: a blade runs
+ * along the mould, armour lies across it.
+ */
+export function mouldFit(type) {
+  return WEAPON_SHAPES[type] ? { w: 0.44, h: 1.02 } : { w: 1.02, h: 0.44 };
+}
+
+/**
+ * Lays something built in x/y (an outline, an armour plate, a weapon) the way
+ * the mould holds it, face up: a blade's length along the mould (-z), and
+ * armour across it, its top away from the front of the forge (-x).
+ */
+export function layInMould(obj, type) {
+  obj.rotation.order = 'YXZ';
+  obj.rotation.set(-Math.PI / 2, WEAPON_SHAPES[type] ? 0 : Math.PI / 2, 0);
+  return obj;
+}
+
+/**
+ * The outline as a flat shape, or (with `depth`) a plate that thick, centred
+ * on the origin and shrunk - never grown - to fit inside `w` by `h`.
+ */
+export function outlineGeometry(type, { w = Infinity, h = Infinity, depth = 0 } = {}) {
+  const shapes = gearOutline(type);
+  const geo = depth
+    ? new ExtrudeGeometry(shapes, { depth, bevelEnabled: true, bevelThickness: depth * 0.3, bevelSize: Math.min(0.007, depth * 0.3), bevelSegments: 1, curveSegments: 10 })
+    : new ShapeGeometry(shapes, 10);
+  geo.computeBoundingBox();
+  const b = geo.boundingBox;
+  geo.translate(-(b.min.x + b.max.x) / 2, -(b.min.y + b.max.y) / 2, -(b.min.z + b.max.z) / 2);
+  const k = Math.min(1, w / (b.max.x - b.min.x), h / (b.max.y - b.min.y));
+  geo.scale(k, k, 1);
+  geo.computeBoundingBox();
+  geo.userData.scale = k;
+  return geo;
+}
+
+/**
+ * A piece of armour on its own, flat, the way it comes off the anvil: a
+ * plate of its plating ore, edged in its trim. Fitted like outlineGeometry.
+ */
+export function buildArmorPlate(type, parts, fit = {}) {
+  const [plateOre, , trimOre] = parts;
+  const g = new Group();
+  const plate = add(g, outlineGeometry(type, { ...fit, depth: 0.03 }), oreMaterial(plateOre));
+  const rim = add(g, outlineGeometry(type, { ...fit, depth: 0.016 }), oreMaterial(trimOre), 0, 0, -0.012);
+  rim.scale.set(1.07, 1.07, 1);
+  plate.userData.part = 'plate';
+  return g;
 }
 
 /* --------------------------------- outfit ---------------------------------- */

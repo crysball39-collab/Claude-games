@@ -33,6 +33,8 @@ export class Profile {
     this.items = (Array.isArray(d.items) ? d.items : []).filter(isItem).map((it) => ({
       uid: it.uid, kind: it.kind, type: it.type,
       ...(it.mix ? { mix: it.mix.map(([o, n]) => [o, Math.floor(n)]) } : {}),
+      // how well it was forged, 0-100; gear from before the forging game has none
+      ...(Number.isFinite(it.rank) ? { rank: Math.max(0, Math.min(100, Math.round(it.rank))) } : {}),
     }));
     this.nextUid = this.items.reduce((m, it) => Math.max(m, it.uid + 1), 1);
 
@@ -127,6 +129,7 @@ export class Profile {
   addItem(item, emit = true) {
     const it = { uid: this.nextUid++, kind: item.kind, type: item.type };
     if (item.mix) it.mix = item.mix.map(([o, n]) => [o, n]);
+    if (Number.isFinite(item.rank)) it.rank = item.rank;
     this.items.push(it);
     if (emit) this._emit('items');
     return it;

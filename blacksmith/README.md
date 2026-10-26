@@ -10,8 +10,9 @@ beside it the **pickaxe wall**, where pickaxes hang for sale. A hall in the cave
 far wall goes down to the **Deep Mine**, where elite skeletons in iron guard the
 boulders and Jack pays well for them.
 Mine ore, take it to the anvil, and forge weapons and armour whose every part is
-made of the ore you put in. Sign up for an account and your smith is saved to the
-cloud, ready to pick up on another device.
+made of the ore you put in: pour the lava, strike the metal on the beat and quench
+it, and how well you strike it decides how good it comes out. Sign up for an
+account and your smith is saved to the cloud, ready to pick up on another device.
 
 ## Getting it onto a phone
 
@@ -163,8 +164,42 @@ make Gold. **ALL** on a slot puts in every one of that ore you have. A tap on **
 or **−** is exactly one; held, they count faster the longer you hold them, and stop
 the moment you let go. A held **−** stops at one, and one more tap empties the slot.
 
-Forging pours the lava bucket into the sword mould, hammers the casting on the
-anvil, and quenches it in the water bucket before handing it over.
+The mould on the pedestal under the lava bucket is cut to whatever the anvil is
+set to make: a dagger, a sword, a broadsword, a helmet, a chestplate, a pair of
+leggings or a pair of boots. It changes the moment you choose.
+
+### Forging
+
+**FORGE** takes the ore, and then the thing has to be made, in three steps:
+
+1. **Pour.** Drag the chain's handle, down the right of the screen, to tip the
+   lava bucket. The lava runs into the mould and spreads out from where it lands.
+   Keep pulling: when the mould is full the bucket swings back up by itself.
+2. **Hammer.** The casting comes out of the mould onto the anvil, glowing, for
+   five blows. For each one a white ring closes on the **TAP** button: tap when it
+   is on the button's green ring for a **Perfect**. A little off is **Great**, a bit
+   further **Good**, further still **Mid**, and far off - too early, too late, or
+   not at all - **Bad**.
+3. **Quench.** It is carried over to the water bucket. Drag it down into the
+   water; it cools there, and comes back out by itself when it is done.
+
+The five blows, averaged (Perfect 100, Great 85, Good 65, Mid 50, Bad 15), are the
+gear's **rank**, and the rank changes what it does:
+
+| Rank | Score | Damage or defence |
+| ---- | ----- | ----------------- |
+| Bad | below 25% | −25% |
+| Okay | 25 to 44% | −10% |
+| Mid | 45 to 54% | as the ore made it |
+| Good | 55 to 74% | +10% |
+| Great | 75 to 89% | +25% |
+| Masterwork | 90 to 99% | +45% |
+| Perfect | 100%: all five blows Perfect | +70% |
+
+The rank is on the card when it is done, in the bag (a bar under each piece, in
+the rank's colour), and kept in the save. Walking away part-way through still
+leaves you with the thing, with any blows not struck counted as Mid. Gear forged
+before there were ranks has none, and is as it always was.
 
 ### Dying and saving
 
@@ -210,7 +245,7 @@ blacksmith/
       profile.js      your cash, EXP, ores, items, equipment, bounties
       cloud.js        accounts, and saving to the cloud
       save.js         storage, with an in-memory fallback
-      overworld.js    the meadow, the paths, the Forge, the cave mouth, the pickaxe wall
+      overworld.js    the meadow, the paths, the Forge and its mould, the cave mouth, the pickaxe wall
       cave.js         the ring-shaped room, its torches, Rob's camp, the hall down
       deep.js         the deep mine: its pillars, crystals, boulders and Jack's camp
       rocks.js        mining, drops and regrowth
@@ -218,13 +253,13 @@ blacksmith/
       rob.js          Rob and Jack
       player.js       you
       character.js    the jointed rig everyone is built on, and its animation
-      gear.js         weapons, pickaxes and armour, part by part in their ores
+      gear.js         weapons, pickaxes and armour, part by part in their ores, and their moulds' outlines
       torch.js        the wall torches, bracket, handle, head and flame
       camera.js       the third person camera and its anvil close-up
       fx.js           sparks, chips, smoke, steam, flying ore, damage numbers
       sfx.js          synthesised sound
-      game.js         ties it all together: travel, combat, the bounty, forging
-    ui/               HUD, bag, anvil menu, pickaxe wall, talking, icons, main menu, accounts
+      game.js         ties it all together: travel, combat, the bounties, the forging game
+    ui/               HUD, bag, anvil menu and the forging game's controls, pickaxe wall, talking, icons, main menu, accounts
   tools/
     build.mjs         folds the game into dist/blacksmith.html and its Claude page
     verify.mjs        drives the real game in Chromium and checks the rules
@@ -236,10 +271,16 @@ GOREBOX.
 
 ## Verifying it
 
-`tools/verify.mjs` checks the ore table and forging rules directly, then boots the
-game in Chromium on a phone-sized touch screen and plays it: the stone circle and
-the stick, the anvil (tapped, zoomed, filled through its menu, the pour and the
-parts that come out), the bag, the cave ring, pebbles taking 4 hits for 2 ores and
+`tools/verify.mjs` checks the ore table and forging rules directly - and the forging
+game's: which tap is which grade, which score is which rank, and that each rank
+up makes stronger gear - then boots the game in Chromium on a phone-sized touch
+screen and plays it: the stone circle and the stick, the anvil (tapped, zoomed,
+filled through its menu, its mould changing shape with it), the forging game
+played by hand (the chain dragged down, the pour stopping by itself when the
+mould is full, five taps on TAP landing a Perfect, a Great, a Good and a Mid with
+one let go for a Bad, the rank they make, the gear dragged into the water and
+coming back out by itself, and the parts that come out), the bag, the cave ring,
+pebbles taking 4 hits for 2 ores and
 rocks 10 for 3, boulders refusing the Wood Pickaxe, any amount of ore going into
 the anvil and coming out stronger, changing a slot's ore and swapping two slots,
 **+** and **−** counting one a tap and stopping when the finger lifts, the signpost's
@@ -255,11 +296,14 @@ paying $5,000 and 1,000 EXP for five elites, the steps back up, dying
 without losing anything, and a reload restoring the save. Last, it starts a new
 smith and plays the first loop with nothing but the stick and the buttons: up the
 path into the cave, mine with ATTACK held, back out and over to the anvil, forge a
-dagger from what it found, and go back down to kill a skeleton with it. Then it
-opens the game again on a 585 × 260 screen, a phone on its side with the game
-inside another app, and checks that the anvil's slots and FORGE button, and the
-pickaxe wall's BUY button, all fit on it without overlapping, and that nothing on
-the anvil's card lands on anything else with the phone's text made 130% bigger.
+dagger from what it found - five Perfect blows, so a Perfect dagger - and go back
+down to kill a skeleton with it. Then it opens the game again on a 585 × 260
+screen, a phone on its side with the game inside another app, and checks that the
+anvil's slots and FORGE button, and the pickaxe wall's BUY button, all fit on it
+without overlapping, that nothing on the anvil's card lands on anything else with
+the phone's text made 130% bigger, and that at every step of the forging game its
+words, meter, handle and TAP button are on screen and clear of each other, with
+the card at the end, at both text sizes.
 Last of all, accounts, with a stand-in for the Claude page's database: the
 downloaded file saying its saves stay on the device, signing up and bringing the
 phone's smith along, the password never stored, progress reaching the cloud,

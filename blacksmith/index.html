@@ -123,6 +123,7 @@
       <div class="ctl-group"><b>How it goes</b>
         <p>Mine pebbles and rocks in the Cave with your Wood Pickaxe. Each one breaks into ore.</p>
         <p>Take the ore to the anvil. Put up to three kinds in, as much of each as you like, and the one you put most of becomes the blade or the plating. More ore than it needs makes it stronger.</p>
+        <p>Then forge it. Drag the chain down to pour the lava into the mould. Tap TAP five times, each as the white ring meets the green one, to hammer it. Drag it down into the water to quench it. The better your timing, the better its rank, from Bad to Perfect, and the stronger it is.</p>
         <p>Rob pays $1,000 and 100 EXP for every three skeletons. $1,000 buys a Stone Pickaxe off the pickaxe wall by the cave mouth, the only thing that breaks a boulder.</p>
         <p>Dying costs you nothing. Not an ore, not a dollar.</p>
       </div>
@@ -264,10 +265,31 @@
         <div class="op-grid" id="op-grid"></div>
       </div>
     </div>
-    <div class="forge-working hidden" id="forge-working">FORGING&hellip;<small>tap to skip</small></div>
+    <!-- the forging game: pour, hammer, quench -->
+    <div class="fgame hidden" id="fgame">
+      <div class="fg-head">
+        <div class="fg-steps" id="fg-steps"><span data-step="pour">1 POUR</span><span data-step="hammer">2 HAMMER</span><span data-step="quench">3 QUENCH</span></div>
+        <div class="fg-hint" id="fg-hint"></div>
+      </div>
+      <div class="fg-meter hidden" id="fg-meter"><b id="fg-meter-label">MOULD</b><span class="fg-bar"><span class="fg-bar-fill" id="fg-meter-fill"></span></span><b id="fg-meter-pct">0%</b></div>
+      <div class="fg-dots hidden" id="fg-dots"><b>BLOWS</b><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="fg-pull hidden" id="fg-pull">
+        <div class="fg-chain" id="fg-chain"></div>
+        <div class="fg-handle" id="fg-handle"><span id="fg-handle-label">PULL</span></div>
+      </div>
+      <div class="fg-tapzone hidden" id="fg-tapzone">
+        <svg class="fg-rings" viewBox="-90 -90 180 180" aria-hidden="true">
+          <circle class="fg-green" r="33.6"></circle>
+          <circle class="fg-white" id="fg-white" r="78"></circle>
+        </svg>
+        <button class="fg-tap" id="fg-tap" type="button">TAP</button>
+      </div>
+      <div class="fg-grade" id="fg-grade"></div>
+      <div class="fg-rank hidden" id="fg-rank"></div>
+    </div>
     <div class="forged hidden" id="forged">
       <div class="forged-card">
-        <div class="forged-title">FORGED!</div>
+        <div class="forged-title" id="forged-title">FORGED!</div>
         <div class="forged-icon" id="forged-icon"></div>
         <div class="forged-name" id="forged-name"></div>
         <div class="forged-stats" id="forged-stats"></div>

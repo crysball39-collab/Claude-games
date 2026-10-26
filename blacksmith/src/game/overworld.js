@@ -2,8 +2,9 @@
    The meadow: where you start.
 
    A stone circle in the grass, and two paths out of it. One runs west to the
-   Forge - anvil, a bucket of lava hung over a sword mould, a water bucket to
-   quench in, the hearth and the rest of a smith's things. The other runs
+   Forge - anvil, a bucket of lava hung over a mould cut to whatever is being
+   made, with a chain to tip it by, a water bucket to quench in, the hearth
+   and the rest of a smith's things. The other runs
    straight ahead, north, to a cave in the cliff with a wooden sign hung over
    its mouth that says "Cave".
 
@@ -20,7 +21,7 @@ import {
   IcosahedronGeometry, CircleGeometry, TorusGeometry, ShapeGeometry, ExtrudeGeometry, Shape, BufferGeometry,
   Float32BufferAttribute, MeshLambertMaterial, MeshPhongMaterial, MeshBasicMaterial,
   SpriteMaterial, Sprite, HemisphereLight, DirectionalLight, AmbientLight, PointLight,
-  DoubleSide, BackSide, AdditiveBlending,
+  DoubleSide, BackSide, AdditiveBlending, Plane,
 } from 'three';
 import { makeRng, valueNoise2D, fbm, clamp01, lerp, smoothstep } from '../core/util.js';
 import {
@@ -31,9 +32,9 @@ import {
 import { mergeStatic, flatten, tiledBox, pathGeometry, smoothPath, rockGeometry } from './geo.js';
 import { addTorch } from './torch.js';
 import { Collider } from './collide.js';
-import { buildWeapon, buildPickaxe } from './gear.js';
+import { buildWeapon, buildPickaxe, outlineGeometry, mouldFit, layInMould } from './gear.js';
 import { oreMaterial } from './materials.js';
-import { PICKAXES } from './data.js';
+import { PICKAXES, WEAPONS } from './data.js';
 
 /* --------------------------------- layout ---------------------------------- */
 
@@ -457,36 +458,19 @@ export function buildOverworld({ quality }) {
     col.circle(A.x, A.z, 0.42, { h: 1.0 });
     const anvilTop = new Vector3(A.x, f.floor + 0.9, A.z - 0.02);
 
-    // the lava bucket, hung from a little gantry over the sword mould
+    // the lava bucket, hung from a little gantry over the mould
     const L = OW.mold;
     const gantry = new Group();
     gantry.position.set(L.x, f.floor, L.z);
     world.add(gantry);
-    // pedestal and the mould on it, the sword cut into its top
+    // pedestal, and the mould on it with whatever is being made cut into its top
     box(0.6, 0.6, 1.25, M.stone, 0, 0.3, 0, { parent: gantry, tile: 0.7 });
     box(0.5, 0.12, 1.1, M.darkIron, 0, 0.66, 0, { parent: gantry });
-    const swordShape = new Shape();
-    swordShape.moveTo(0, -0.46); swordShape.lineTo(0.035, -0.38); swordShape.lineTo(0.035, 0.18);
-    swordShape.lineTo(0.12, 0.18); swordShape.lineTo(0.12, 0.23); swordShape.lineTo(0.025, 0.23);
-    swordShape.lineTo(0.025, 0.36); swordShape.lineTo(0.05, 0.4); swordShape.lineTo(-0.05, 0.4);
-    swordShape.lineTo(-0.025, 0.36); swordShape.lineTo(-0.025, 0.23); swordShape.lineTo(-0.12, 0.23);
-    swordShape.lineTo(-0.12, 0.18); swordShape.lineTo(-0.035, 0.18); swordShape.lineTo(-0.035, -0.38);
-    swordShape.closePath();
-    const cutGeo = new ShapeGeometry(swordShape);
-    disposables.push(cutGeo);
-    const cut = new Mesh(cutGeo, M.black);
-    cut.rotation.x = -Math.PI / 2;
-    cut.position.y = 0.722;
-    gantry.add(cut);
-    const moldLava = new Mesh(cutGeo, M.lava);
-    moldLava.rotation.x = -Math.PI / 2;
-    moldLava.position.y = 0.724;
-    moldLava.scale.set(0.001, 0.001, 1);
-    gantry.add(moldLava);
+    const mould = buildMould(gantry);
     // posts and crossbar
     for (const z of [-0.72, 0.72]) box(0.12, 2.3, 0.12, M.beam, 0, 1.15, z, { parent: gantry });
     box(0.14, 0.14, 1.6, M.beam, 0, 2.3, 0, { parent: gantry });
-    // the bucket swings from a chain; pour = turn it on its pivot
+    // the bucket swings from a chain; pour = turn it on its pivot, its lip (at -z) going down
     const pivot = new Group();
     pivot.position.set(0, 2.2, 0);
     gantry.add(pivot);
@@ -509,6 +493,30 @@ export function buildOverworld({ quality }) {
     bucket.add(lavaTop);
     for (const m of [pail, handle, lavaTop, pailBase]) m.userData.keep = true;
     disposables.push(pail.geometry, handle.geometry, lavaTop.geometry);
+    // a lever off the bucket's side, and a chain from its end down to a handle: pull the
+    // handle down and the bucket tips. The chain hangs straight however far it is turned.
+    for (const m of [
+      box(0.1, 0.03, 0.03, M.darkIron, 0.25, -0.03, 0, { parent: bucket }),
+      box(0.03, 0.03, 0.36, M.darkIron, 0.3, -0.03, -0.17, { parent: bucket }),
+    ]) m.userData.keep = true;
+    const pull = { end: new Vector3(0.3, -0.03, -0.34), links: [], handle: null };
+    const linkGeo = keep(new TorusGeometry(0.022, 0.006, 4, 10));
+    for (let i = 0; i < 10; i++) {
+      const l = new Mesh(linkGeo, M.chain);
+      l.rotation.y = i % 2 ? Math.PI / 2 : 0;
+      gantry.add(l);
+      pull.links.push(l);
+    }
+    pull.handle = cyl(0.02, 0.02, 0.18, M.darkWood, 0, 0, 0, { seg: 6, parent: gantry });
+    pull.handle.rotation.x = Math.PI / 2;
+    const end = new Vector3();
+    const hangChain = () => {
+      bucket.updateWorldMatrix(true, false);
+      gantry.worldToLocal(bucket.localToWorld(end.copy(pull.end)));
+      pull.links.forEach((l, i) => l.position.set(end.x, end.y - 0.03 - i * 0.047, end.z));
+      pull.handle.position.set(end.x, end.y - 0.04 - pull.links.length * 0.047, end.z);
+    };
+    hangChain();
     // the stream of lava a pour makes, hidden until then
     const stream = new Mesh(new CylinderGeometry(0.035, 0.05, 1, 8), M.lava);
     stream.visible = false;
@@ -646,9 +654,56 @@ export function buildOverworld({ quality }) {
     // the static bits that were easier to build as groups, folded into the rest
     for (const g of [wb, bel, sign]) flatten(g, world);
 
+    /**
+     * The mould: the outline of whatever is being made, cut into its iron, and
+     * the lava in it. The lava spreads both ways from where the stream lands,
+     * to the two ends of the outline, as the mould fills.
+     */
+    function buildMould(parent) {
+      const geos = {};
+      const lavaMat = keep(new MeshBasicMaterial({
+        map: lavaTex, clippingPlanes: [new Plane(new Vector3(0, 0, 1), 0), new Plane(new Vector3(0, 0, -1), 0)],
+      }));
+      const cut = new Mesh(undefined, M.black);
+      const lava = new Mesh(undefined, lavaMat);
+      cut.position.y = 0.722;
+      lava.position.y = 0.725;
+      for (const m of [cut, lava]) { m.userData.keep = true; parent.add(m); }
+      const at = new Vector3();
+      const api = {
+        type: null, fit: null, scale: 1, zMin: 0, zMax: 0,
+        /** Cuts the mould for `type`: 'dagger', 'chestplate', ... */
+        set(type) {
+          if (api.type === type) return;
+          api.type = type;
+          api.fit = mouldFit(type);
+          const g = geos[type] || (geos[type] = keep(outlineGeometry(type, api.fit)));
+          cut.geometry = lava.geometry = g;
+          layInMould(cut, type);
+          layInMould(lava, type);
+          // how far the outline runs along the mould: a blade's +y is the mould's -z, armour's +x is
+          const b = g.boundingBox;
+          [api.zMin, api.zMax] = WEAPONS[type] ? [-b.max.y, -b.min.y] : [-b.max.x, -b.min.x];
+          api.scale = g.userData.scale;
+        },
+        /** `k` 0..1 full, spread out from `from` along the mould (its middle is 0). */
+        fill(k, from = 0) {
+          lava.visible = k > 0.002;
+          parent.getWorldPosition(at);
+          const lo = from + (api.zMin - from) * k, hi = from + (api.zMax - from) * k;
+          lavaMat.clippingPlanes[0].constant = -(at.z + lo);
+          lavaMat.clippingPlanes[1].constant = at.z + hi;
+        },
+      };
+      api.set('sword');
+      api.fill(0);
+      return api;
+    }
+
     return {
       anvil, anvilTop, flames, fire, roof, lavaGlow,
-      bucket: pivot, tipper: bucket, stream, moldLava, moldTop: new Vector3(L.x, f.floor + 0.73, L.z),
+      bucket: pivot, tipper: bucket, stream, mould, hangChain, pull,
+      mouldTop: new Vector3(L.x, f.floor + 0.73, L.z),
       bucketLip: new Vector3(L.x, f.floor + 1.6, L.z),
       waterTop: new Vector3(Wt.x, f.floor + 0.46, Wt.z),
       chimneyTop: new Vector3(f.minX + 0.6, ridge + f.floor + 1.7, cz - 1.4),
@@ -1187,6 +1242,7 @@ export function buildOverworld({ quality }) {
     }
     forge.fire.intensity = 14 * (0.85 + 0.15 * Math.sin(t * 9.1) * Math.sin(t * 5.3));
     M.lava.map.offset.set((t * 0.02) % 1, (t * 0.035) % 1);
+    forge.hangChain();
     cave.sign.rotation.x = Math.sin(t * 1.3) * 0.045;
     // a pickaxe being looked at comes down off its pegs and sways in the light,
     // never turning so far that its head goes edge-on

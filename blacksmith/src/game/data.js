@@ -231,6 +231,67 @@ export function oreBonus(total, need) {
   return Math.min(EXTRA_ORE.max, 1 + EXTRA_ORE.per * Math.log2(Math.max(1, total / need)));
 }
 
+/* --------------------------- the forging game ---------------------------- */
+
+/**
+ * Forging is played: pull the chain until the mould is full, strike the
+ * metal five times on the beat, then quench it. Each strike is a white ring
+ * closing on the TAP button; tap while it is on the button's green ring.
+ * Sizes are in button radii, times in seconds.
+ */
+export const HAMMER = {
+  strikes: 5,
+  from: 2.6, to: 0.2,    // the white ring's radius as it starts, and where it gives up
+  shrink: 1.15,          // how long it takes from one to the other
+  ring: 1.12,            // the green ring's radius
+  gap: 0.55,             // after one strike, before the next ring starts
+};
+
+/**
+ * How a strike went, by how far the white ring was from the green one. A
+ * Perfect is inside the green ring's width, which is drawn to match.
+ */
+export const GRADES = [
+  { id: 'perfect', name: 'Perfect', within: 0.13, score: 100, color: '#ffd34a' },
+  { id: 'great', name: 'Great', within: 0.32, score: 85, color: '#5fd0ff' },
+  { id: 'good', name: 'Good', within: 0.55, score: 65, color: '#8ee07a' },
+  { id: 'mid', name: 'Mid', within: 0.85, score: 50, color: '#d8cfc4' },
+  { id: 'bad', name: 'Bad', within: Infinity, score: 15, color: '#ff6b5b' },
+];
+
+/** The grade for a tap with the white ring at radius `r`; null is no tap at all. */
+export function strikeGrade(r) {
+  if (r == null) return GRADES[GRADES.length - 1];
+  const off = Math.abs(r - HAMMER.ring);
+  return GRADES.find((g) => off <= g.within);
+}
+
+/** The gear's score, 0-100: its strikes' scores, averaged. A strike never made counts as Mid. */
+export function forgeScore(grades, strikes = HAMMER.strikes) {
+  let sum = 0;
+  for (let i = 0; i < strikes; i++) sum += (GRADES.find((g) => g.id === grades[i]) || GRADES[3]).score;
+  return Math.round(sum / strikes);
+}
+
+/** What the score makes the gear, and what that does to its damage or defense. */
+export const RANKS = [
+  { id: 'bad', name: 'Bad', min: 0, mult: 0.75, color: '#ff6b5b' },
+  { id: 'okay', name: 'Okay', min: 25, mult: 0.9, color: '#ffa65b' },
+  { id: 'mid', name: 'Mid', min: 45, mult: 1, color: '#d8cfc4' },
+  { id: 'good', name: 'Good', min: 55, mult: 1.1, color: '#8ee07a' },
+  { id: 'great', name: 'Great', min: 75, mult: 1.25, color: '#5fd0ff' },
+  { id: 'masterwork', name: 'Masterwork', min: 90, mult: 1.45, color: '#d68bff' },
+  { id: 'perfect', name: 'Perfect', min: 100, mult: 1.7, color: '#ffd34a' },
+];
+
+/** The rank a score earns; null for gear forged before there were ranks. */
+export function rankOf(score) {
+  if (!Number.isFinite(score)) return null;
+  let r = RANKS[0];
+  for (const x of RANKS) if (score >= x.min) r = x;
+  return r;
+}
+
 /* -------------------------------- items ---------------------------------- */
 
 /** Damage, defence, mining power: everything an item does, from what it is. */
@@ -241,14 +302,16 @@ export function itemStats(item) {
   }
   const q = qualityOf(item.mix);
   const total = oreCount(item.mix);
+  const rank = rankOf(item.rank);
+  const m = rank ? rank.mult : 1;
   if (item.kind === 'weapon') {
     const w = WEAPONS[item.type];
     const bonus = oreBonus(total, w.ores);
-    return { damage: Math.round(w.damage * q * bonus), cooldown: w.cooldown, reach: w.reach, arc: w.arc, hits: w.hits, bonus, ores: total };
+    return { damage: Math.round(w.damage * q * bonus * m), cooldown: w.cooldown, reach: w.reach, arc: w.arc, hits: w.hits, bonus, ores: total, rank };
   }
   const a = ARMOR[item.type];
   const bonus = oreBonus(total, a.ores);
-  return { defense: Math.round(a.defense * q * bonus * 10) / 10, bonus, ores: total };
+  return { defense: Math.round(a.defense * q * bonus * m * 10) / 10, bonus, ores: total, rank };
 }
 
 export function itemRarity(item) {

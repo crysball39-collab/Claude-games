@@ -349,6 +349,9 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
 .icard .eq{position:absolute;left:3px;top:3px;font-size:.48rem;font-weight:800;letter-spacing:.08em;padding:1px 4px;border-radius:4px;background:var(--ember);color:#1d0d03}
 .icard.sel{box-shadow:0 0 0 2px var(--ember-lit), 0 0 14px rgba(255,160,60,.4)}
 .icard.zero{opacity:.35}
+/* how well it was forged: a bar along the bottom in the rank's colour */
+.icard .rk{position:absolute;left:22%;right:22%;bottom:4px;height:4px;border-radius:2px}
+.rank{font-weight:800}
 .inv-empty{grid-column:1/-1;color:var(--muted);font-size:.8rem;text-align:center;padding:24px 8px;line-height:1.5}
 .inv-detail{border-top:1px solid var(--line);padding:8px 10px;display:flex;gap:10px;align-items:center;min-height:76px}
 .inv-detail .dicon{width:58px;height:58px;flex:0 0 auto;border-radius:9px;border:1.5px solid var(--c,var(--line));background:rgba(0,0,0,.3)}
@@ -444,13 +447,75 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
 .opt .otag{font-size:.46rem;font-weight:800;letter-spacing:.08em;color:var(--ember-lit)}
 .opt.cur{box-shadow:0 0 0 2px var(--ember-lit)}
 .opt.clear{border-style:dashed;justify-content:center;color:var(--muted);font-size:.66rem;font-weight:800;letter-spacing:.1em}
-.forge-working{position:absolute;left:50%;bottom:calc(var(--safe-b) + 16px);transform:translateX(-50%);padding:9px 18px;border-radius:99px;
-  background:rgba(15,10,7,.75);border:1px solid var(--ember);font-weight:800;letter-spacing:.3em;font-size:.8rem;text-align:center}
-.forge-working small{display:block;font-size:.5rem;letter-spacing:.2em;color:var(--muted);font-weight:700}
-.forged{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(5,3,2,.5)}
-.forged-card{width:min(360px,80vw);background:var(--panel);border:1.5px solid var(--c,var(--line));border-radius:14px;padding:12px 16px;text-align:center;
+/* the forging game: what to do along the top, the handle down the right while
+   pouring and quenching, the TAP button in the bottom right while hammering.
+   Everything is placed clear of everything else: the top line stops short of
+   the right-hand controls. */
+.fgame{position:absolute;inset:0;pointer-events:none;--tapR:clamp(28px,13vh,40px)}
+.fg-head{position:absolute;top:calc(var(--safe-t) + 6px);left:calc(var(--safe-l) + 12px);right:calc(var(--safe-r) + var(--tapR) * 6 + 12px);
+  display:flex;flex-direction:column;align-items:center;gap:4px}
+.fg-steps{display:flex;gap:4px;flex-wrap:wrap;justify-content:center}
+.fg-steps span{padding:2px 8px;border-radius:99px;font-size:.58rem;font-weight:800;letter-spacing:.14em;color:var(--muted);
+  background:rgba(15,10,7,.72);border:1px solid var(--line)}
+.fg-steps span.done{color:var(--ember-lit)}
+.fg-steps span.on{color:#1d0d03;background:var(--ember-lit);border-color:var(--ember-lit)}
+.fg-hint{max-width:100%;padding:4px 12px;border-radius:8px;background:rgba(15,10,7,.74);border:1px solid var(--line);
+  font-size:.74rem;font-weight:700;text-align:center;line-height:1.3}
+.fg-hint:empty{display:none}
+.fg-meter,.fg-dots{position:absolute;left:calc(var(--safe-l) + 12px);bottom:calc(var(--safe-b) + 12px);display:flex;align-items:center;gap:8px;
+  padding:6px 10px;border-radius:9px;background:rgba(15,10,7,.76);border:1px solid var(--line);font-size:.64rem;letter-spacing:.12em}
+.fg-bar{width:min(150px,24vw);height:9px;border-radius:99px;background:rgba(255,255,255,.08);border:1px solid var(--line);overflow:hidden}
+.fg-bar-fill{display:block;height:100%;width:0;background:linear-gradient(90deg,#b8420c,var(--ember),var(--ember-lit))}
+.fg-meter.cool .fg-bar-fill{background:linear-gradient(90deg,#2f6f9e,#9ad2ff)}
+#fg-meter-pct{min-width:4ch;text-align:right;font-variant-numeric:tabular-nums}
+.fg-dots i{width:13px;height:13px;border-radius:50%;border:1.5px solid rgba(255,230,200,.45);background:rgba(0,0,0,.4)}
+/* the handle: drag it down. A chain hangs from the top to it while pouring, a rod while quenching */
+.fg-pull{position:absolute;right:calc(var(--safe-r) + 22px);top:calc(var(--safe-t) + 22%);bottom:calc(var(--safe-b) + 8%);width:76px;
+  pointer-events:auto;touch-action:none}
+.fg-pull::before{content:"";position:absolute;top:0;bottom:0;left:50%;width:32px;margin-left:-16px;border-radius:16px;
+  background:rgba(0,0,0,.3);border:1px dashed rgba(255,220,180,.2)}
+.fg-chain{position:absolute;top:0;left:50%;width:12px;margin-left:-6px;height:0;border-radius:3px;transition:height .25s ease-out;
+  background:repeating-linear-gradient(180deg,#a3a9ae 0 3px,#4c5055 3px 5px,transparent 5px 8px,#6d7277 8px 14px,transparent 14px 16px)}
+.fg-pull.held .fg-chain{transition-duration:.04s}
+.fg-pull.dip .fg-chain{width:7px;margin-left:-3.5px;background:linear-gradient(90deg,#3a3d42,#8a8f95,#3a3d42)}
+.fg-handle{position:absolute;top:0;left:50%;width:64px;height:64px;margin-left:-32px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(circle at 40% 35%,#ffcf8a,var(--ember) 55%,#9a3a08);border:3px solid #ffd9a8;
+  box-shadow:0 4px 14px rgba(0,0,0,.5),0 0 18px rgba(255,122,31,.45);
+  font-weight:900;font-size:.7rem;letter-spacing:.12em;color:#2a1204;transition:transform .25s ease-out}
+.fg-pull.held .fg-handle{transition-duration:.04s}
+.fg-pull.dip .fg-handle{background:radial-gradient(circle at 40% 35%,#d9f0ff,#5aa7e0 55%,#1f5a8a);border-color:#cfe8ff;
+  box-shadow:0 4px 14px rgba(0,0,0,.5),0 0 18px rgba(90,167,224,.45);color:#06243b}
+.fg-pull.off .fg-handle{opacity:.55;box-shadow:none}
+/* the TAP button, its green ring, and the white ring closing on it */
+.fg-tapzone{position:absolute;right:calc(var(--safe-r) + 6px);bottom:calc(var(--safe-b) + 4px);width:calc(var(--tapR) * 6);height:calc(var(--tapR) * 6)}
+.fg-rings{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none;z-index:2}
+.fg-green{fill:none;stroke:#3fe06a;stroke-width:7.8}
+.fg-white{fill:none;stroke:#fff;stroke-width:3.2;transition:opacity .1s}
+.fg-white.off{opacity:0}
+.fg-tap{position:absolute;left:50%;top:50%;width:calc(var(--tapR) * 2);height:calc(var(--tapR) * 2);
+  margin:calc(var(--tapR) * -1) 0 0 calc(var(--tapR) * -1);border-radius:50%;pointer-events:auto;touch-action:none;
+  font-weight:900;letter-spacing:.14em;font-size:.8rem;color:#2a1204;
+  background:radial-gradient(circle at 40% 35%,#ffd9a0,var(--ember) 60%,#8a3206);box-shadow:0 4px 14px rgba(0,0,0,.55)}
+.fg-tap.hit{filter:brightness(1.3)}
+/* a finger a little off the button still counts */
+.fg-tap::after{content:"";position:absolute;inset:-30%;border-radius:50%}
+.fg-grade{position:absolute;right:calc(var(--safe-r) + var(--tapR) * 6 + 2px);bottom:calc(var(--safe-b) + var(--tapR) * 3 - 14px);
+  font-family:Georgia,serif;font-weight:900;font-size:1.5rem;letter-spacing:.08em;white-space:nowrap;opacity:0;
+  text-shadow:0 2px 8px rgba(0,0,0,.85);pointer-events:none}
+.fg-grade.pop{animation:gradepop .75s ease-out}
+@keyframes gradepop{0%{opacity:0;transform:scale(.6)}15%{opacity:1;transform:scale(1.15)}30%{transform:scale(1)}75%{opacity:1}100%{opacity:0;transform:translateY(-10px)}}
+.fg-rank{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:8px 22px;border-radius:12px;text-align:center;
+  background:rgba(15,10,7,.84);border:1.5px solid var(--c,var(--line));box-shadow:0 0 30px rgba(0,0,0,.5);pointer-events:none;animation:rankin .35s ease}
+@keyframes rankin{from{opacity:0;transform:translate(-50%,-50%) scale(.8)}to{opacity:1;transform:translate(-50%,-50%)}}
+.fg-rank small{display:block;font-size:.58rem;letter-spacing:.3em;color:var(--muted);font-weight:800}
+.fg-rank b{display:block;font-family:Georgia,serif;font-size:1.6rem;letter-spacing:.12em;color:var(--c)}
+.fg-rank span{font-size:.8rem;font-weight:800;font-variant-numeric:tabular-nums}
+/* centred, and scrollable on a screen too short for it */
+.forged{position:absolute;inset:0;display:flex;overflow-y:auto;padding:6px;background:rgba(5,3,2,.5)}
+.forged-card{margin:auto;width:min(360px,80vw);background:var(--panel);border:1.5px solid var(--c,var(--line));border-radius:14px;padding:12px 16px;text-align:center;
   box-shadow:0 0 40px rgba(255,140,50,.25);animation:pop .45s ease}
 .forged-title{font-family:Georgia,serif;font-weight:900;letter-spacing:.3em;color:var(--ember-lit);font-size:1rem}
+.forged-title small{font-family:inherit;letter-spacing:.06em;font-size:.78rem;color:var(--ink)}
 .forged-icon{width:84px;height:84px;margin:6px auto;border-radius:12px;border:1.5px solid var(--c);background:radial-gradient(circle,rgba(255,255,255,.1),rgba(0,0,0,.3))}
 .forged-icon img{width:100%;height:100%}
 .forged-name{font-weight:800;font-size:1rem}
@@ -584,9 +649,14 @@ body.portrait-block #rotate-overlay{display:flex}
   .op-grid{grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:5px}
   .opt{padding:3px}
   .opt img{width:28px;height:28px}
-  .forged-card{padding:8px 14px}
-  .forged-icon{width:56px;height:56px;margin:4px auto}
-  .forged-stats{margin:2px 0 7px;line-height:1.35}
+  /* the card goes wide and short: the picture beside the rank and the name */
+  .forged-card{width:min(470px,92vw);padding:8px 14px;display:grid;grid-template-columns:auto 1fr;column-gap:12px;align-items:center;text-align:left;
+    grid-template-areas:"icon title" "icon name" "stats stats" "btns btns"}
+  .forged-icon{grid-area:icon;width:52px;height:52px;margin:0}
+  .forged-title{grid-area:title;letter-spacing:.2em}
+  .forged-name{grid-area:name}
+  .forged-stats{grid-area:stats;margin:5px 0 7px;line-height:1.35}
+  .forged-card .modal-buttons{grid-area:btns}
   .forged-card .mbtn{padding:.5rem .9rem;font-size:.84rem}
   .shop-card{top:calc(var(--safe-t) + 5px);bottom:calc(var(--safe-b) + 5px);right:calc(var(--safe-r) + 5px);padding:5px 7px;gap:5px}
   .shop-card .forge-head h3{font-size:.74rem;letter-spacing:.2em}

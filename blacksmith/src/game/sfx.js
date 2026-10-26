@@ -125,6 +125,17 @@ class Sfx {
         this._noise(0.95, { type: 'lowpass', freq: 380, gain: 0.35, attack: 0.15 });
         this._noise(0.9, { freq: 1500, q: 0.8, gain: 0.05, attack: 0.2 });
         break;
+      case 'chain':
+        for (let i = 0; i < 4; i++) this._noise(0.03, { freq: 3600 + Math.random() * 2000, q: 9, gain: 0.14, at: i * 0.05 + Math.random() * 0.02 });
+        this._tone(2300 * r, 0.08, { type: 'triangle', gain: 0.05, at: 0.06 });
+        break;
+      case 'thud':
+        this._tone(96 * r, 0.2, { gain: 0.4, slide: 0.6 });
+        this._noise(0.1, { type: 'lowpass', freq: 520, gain: 0.35 });
+        break;
+      case 'perfect':
+        [1, 1.5, 2].forEach((m, i) => this._tone(1046 * m, 0.24, { type: 'triangle', gain: 0.1, at: i * 0.045 }));
+        break;
       case 'hiss':
         this._noise(1.0, { type: 'highpass', freq: 2800, gain: 0.32, attack: 0.02 });
         break;
