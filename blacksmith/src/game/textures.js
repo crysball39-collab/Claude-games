@@ -460,7 +460,14 @@ export function signTexture(text, w = 512, h = 192) {
   }
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = `bold ${Math.round(h * 0.62)}px Georgia, "Times New Roman", serif`;
+  // as big as the board allows, and smaller for a longer word
+  let size = Math.round(h * 0.62);
+  ctx.font = `bold ${size}px Georgia, "Times New Roman", serif`;
+  const room = w - 70, wide = ctx.measureText(text).width;
+  if (wide > room) {
+    size = Math.floor(size * room / wide);
+    ctx.font = `bold ${size}px Georgia, "Times New Roman", serif`;
+  }
   // carved: a light lip below, dark cut above
   ctx.fillStyle = 'rgba(230,190,140,0.55)';
   ctx.fillText(text, w / 2 + 2, h / 2 + 5);
@@ -543,14 +550,15 @@ export function drawTag(ctx, text, { fg = '#fff', bg = 'rgba(20,14,10,0.72)', bo
 
 /**
  * The front of a head. `kind` is 'smith' for you, 'rob' for Rob with his
- * beard, 'skull' for the skeletons.
+ * beard, 'jack' for Jack, grey and scarred, 'skull' for the skeletons.
  */
 export function faceTexture(kind, skin = '#e0ac7e') {
   const s = 128;
   const c = makeCanvas(s);
   const ctx = c.getContext('2d');
-  if (kind === 'skull') {
-    ctx.fillStyle = '#e8e0cc';
+  if (kind === 'skull' || kind === 'skull-elite') {
+    const elite = kind === 'skull-elite';
+    ctx.fillStyle = elite ? '#cfc4ac' : '#e8e0cc';
     ctx.fillRect(0, 0, s, s);
     ctx.fillStyle = 'rgba(120,110,90,0.25)';
     ctx.fillRect(0, s * 0.8, s, s * 0.2);
@@ -559,10 +567,11 @@ export function faceTexture(kind, skin = '#e0ac7e') {
     for (const x of [s * 0.3, s * 0.7]) {
       ctx.beginPath(); ctx.ellipse(x, s * 0.42, s * 0.14, s * 0.12, 0, 0, Math.PI * 2); ctx.fill();
     }
-    // the red that lives in them
+    // the red that lives in them - blue, in an elite's
     for (const x of [s * 0.3, s * 0.7]) {
       const g = ctx.createRadialGradient(x, s * 0.43, 0, x, s * 0.43, s * 0.08);
-      g.addColorStop(0, 'rgba(255,80,40,1)'); g.addColorStop(1, 'rgba(255,40,0,0)');
+      if (elite) { g.addColorStop(0, 'rgba(120,210,255,1)'); g.addColorStop(1, 'rgba(40,140,255,0)'); }
+      else { g.addColorStop(0, 'rgba(255,80,40,1)'); g.addColorStop(1, 'rgba(255,40,0,0)'); }
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.arc(x, s * 0.43, s * 0.08, 0, Math.PI * 2); ctx.fill();
     }
@@ -581,15 +590,31 @@ export function faceTexture(kind, skin = '#e0ac7e') {
   for (const x of [s * 0.32, s * 0.68]) {
     ctx.fillStyle = '#fff';
     ctx.fillRect(x - s * 0.08, s * 0.4, s * 0.16, s * 0.11);
-    ctx.fillStyle = kind === 'rob' ? '#3a6b8f' : '#4a3020';
+    ctx.fillStyle = kind === 'rob' ? '#3a6b8f' : kind === 'jack' ? '#5f7a74' : '#4a3020';
     ctx.fillRect(x - s * 0.035, s * 0.41, s * 0.07, s * 0.09);
     ctx.fillStyle = '#111';
     ctx.fillRect(x - s * 0.018, s * 0.43, s * 0.036, s * 0.05);
     // brows
-    ctx.fillStyle = kind === 'rob' ? '#6b4a2a' : '#3b2414';
+    ctx.fillStyle = kind === 'rob' ? '#6b4a2a' : kind === 'jack' ? '#8d8a84' : '#3b2414';
     ctx.fillRect(x - s * 0.1, s * 0.32, s * 0.2, s * 0.045);
   }
-  if (kind === 'rob') {
+  if (kind === 'jack') {
+    // a short grey beard and moustache, and an old scar through one brow
+    ctx.fillStyle = '#9a968e';
+    ctx.beginPath();
+    ctx.moveTo(s * 0.06, s * 0.62);
+    ctx.lineTo(s * 0.26, s * 0.64); ctx.lineTo(s * 0.74, s * 0.64); ctx.lineTo(s * 0.94, s * 0.62);
+    ctx.lineTo(s * 0.86, s); ctx.lineTo(s * 0.14, s); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#7d7972';
+    ctx.fillRect(s * 0.3, s * 0.63, s * 0.4, s * 0.06);
+    ctx.fillStyle = '#4a2a20';
+    ctx.fillRect(s * 0.4, s * 0.76, s * 0.2, s * 0.04);
+    ctx.fillStyle = 'rgba(150,70,60,0.55)';
+    ctx.fillRect(s * 0.45, s * 0.5, s * 0.1, s * 0.08);
+    ctx.strokeStyle = 'rgba(120,50,45,0.75)';
+    ctx.lineWidth = s * 0.025;
+    ctx.beginPath(); ctx.moveTo(s * 0.62, s * 0.27); ctx.lineTo(s * 0.74, s * 0.55); ctx.stroke();
+  } else if (kind === 'rob') {
     // a big ginger beard and moustache
     ctx.fillStyle = '#a5582a';
     ctx.beginPath();

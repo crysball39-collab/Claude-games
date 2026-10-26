@@ -14,7 +14,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { launch, GAME } from './harness.mjs';
-import { ORES, minedOreOdds, rollMinedOre, partsOf, itemStats, afterArmor } from '../src/game/data.js';
+import { mockScript } from './mockcloud.mjs';
+import { ORES, minedOreOdds, rollMinedOre, partsOf, itemStats, afterArmor, ROCK_COUNTS, DEEP_ROCK_COUNTS } from '../src/game/data.js';
 
 const FILE = process.argv.includes('--file');
 const SHOTS = path.join(GAME, '.shots', FILE ? 'file' : 'src');
@@ -264,11 +265,15 @@ try {
           };
         });
       };
-      return { mouth: look(g.areas.overworld, g.areas.overworld.cave.torches), cave: look(g.areas.cave, g.areas.cave.torches) };
+      return {
+        mouth: look(g.areas.overworld, g.areas.overworld.cave.torches),
+        cave: look(g.areas.cave, g.areas.cave.torches),
+        deep: look(g.areas.deep, g.areas.deep.torches),
+      };
     });
-    const all = [...torches.mouth, ...torches.cave];
-    check('every torch has its fire on the tip of its handle, leaning out from the wall it is fixed to',
-      torches.mouth.length === 2 && torches.cave.length === 12 &&
+    const all = [...torches.mouth, ...torches.cave, ...torches.deep];
+    check('every torch, up top and down below, has its fire on the tip of its handle, leaning out from the wall it is fixed to',
+      torches.mouth.length === 2 && torches.cave.length === 14 && torches.deep.length === 8 &&
       all.every((t) => t.onTip && t.out > 0.25 && t.up > 0.8 && t.wall !== null && t.wall < 0.6), JSON.stringify(torches));
   }
 
@@ -630,6 +635,95 @@ try {
   check('with it a boulder takes 15 hits and breaks into 4 ores', boulder.hits === 15 && boulder.got === 4 && boulder.tool === 'pickaxe', JSON.stringify(boulder));
   await ev(() => { const g = window.BLACKSMITH.game; g._skHooks.playerAlive = () => !g.player.dead; });
 
+  /* ------------------------------ the deep mine ---------------------------- */
+  // down the hall in the north wall, on the stick, with the ring's skeletons told to leave you be
+  const down = await ev(() => {
+    const g = window.BLACKSMITH.game;
+    g._skHooks.playerAlive = () => false;
+    g.player.teleport(0, -15, Math.PI);
+    g.camRig.snapBehind(g.player.pos, g.player.yaw);
+    return window.T.walkTo(0, -34, 0.3, 500);
+  });
+  await page.waitForTimeout(800);
+  await ev(() => window.T.step(10));
+  const deep = await ev(() => {
+    const g = window.BLACKSMITH.game;
+    const elites = g.skeletons.alive();
+    const dressed = elites.map((s) => {
+      const iron = (j) => s.rig.joints[j].children.filter((m) => m.material?.userData?.ore === 'iron').length;
+      let blade = null;
+      s.rig.joints.grip.traverse((o) => { if (o.userData.part === 'blade') blade = o.material.userData.ore; });
+      return { chest: iron('torso'), boots: iron('ankleL') + iron('ankleR'), blade };
+    });
+    return {
+      area: g.area.id, walked: g.player.pos.z > 15,
+      boulders: g.rocks.rocks.filter((r) => r.kind === 'boulder').length,
+      caveBoulders: g.fields.cave.rocks.filter((r) => r.kind === 'boulder').length,
+      elites: elites.length, elite: g.skeletons.elite, dressed,
+      blow: g.skeletons.damageFrom(30), hitsYou: g.packs.deep.kind.damage, daggers: g.packs.cave.kind.damage,
+    };
+  });
+  await shot('16a-deep');
+  check('a hall in the cave\'s north wall leads down to the deep mine', down.ok === 'travel' && deep.area === 'deep' && deep.walked,
+    JSON.stringify({ down, area: deep.area }));
+  check('the deep mine has more boulders: twelve to the cave\'s five', deep.boulders === DEEP_ROCK_COUNTS.boulder && DEEP_ROCK_COUNTS.boulder === 12 &&
+    ROCK_COUNTS.boulder === 5 && deep.caveBoulders <= 5, JSON.stringify({ deep: deep.boulders, cave: deep.caveBoulders }));
+  check('three elite skeletons, each in an Iron Chestplate and Iron Boots with an Iron Straight-Sword',
+    deep.elites === 3 && deep.elite && deep.dressed.every((d) => d.chest >= 9 && d.boots === 6 && d.blade === 'iron'), JSON.stringify(deep.dressed));
+  check('their iron takes a share of every blow, and their swords hit harder than daggers',
+    deep.blow < 30 && deep.blow >= 20 && deep.hitsYou > deep.daggers, JSON.stringify({ blow: deep.blow, hitsYou: deep.hitsYou, daggers: deep.daggers }));
+
+  // Jack: no work for a smith under level 5
+  const jackTalk = async () => {
+    await ev(() => { const g = window.BLACKSMITH.game; window.T.faceUp(g.jack.pos.x, g.jack.pos.z, 0.4, 1.2); window.T.step(5); });
+    await page.locator('#btn-interact').tap();
+    await ev(() => window.T.step(5));
+    await page.waitForTimeout(150);
+    return ev(() => ({
+      mode: window.BLACKSMITH.game.mode, level: window.BLACKSMITH.profile.level,
+      choices: [...document.querySelectorAll('#dlg-choices .mbtn')].map((b) => b.textContent),
+      mark: window.BLACKSMITH.game.questState('jack'),
+    }));
+  };
+  const early = await jackTalk();
+  check('Jack, in the deep mine, has no work for a smith under level 5', early.mode === 'talk' && early.level < 5 &&
+    early.mark === 'locked:5' && early.choices.join('|') === 'BYE', JSON.stringify(early));
+  await page.locator('#dlg-choices .mbtn', { hasText: 'BYE' }).tap();
+  await ev(() => { const P = window.BLACKSMITH.profile; P.addExp(1000 - P.exp); window.BLACKSMITH.game.player.refreshGear(); window.T.step(5); });
+  const ready = await jackTalk();
+  check('at level 5 he offers his bounty: five elites', ready.level === 5 && ready.choices.includes('KILL 5 ELITES'), JSON.stringify(ready));
+  await page.locator('#dlg-choices .mbtn', { hasText: 'KILL 5 ELITES' }).tap();
+  await page.locator('#dlg-choices .mbtn', { hasText: 'BYE' }).tap();
+  await ev(() => { const g = window.BLACKSMITH.game; g._skHooks.playerAlive = () => !g.player.dead; g.player.hp = 1e6; });
+  const hunt5 = await killAll(5);
+  const counted = await ev(() => ({ ...window.BLACKSMITH.profile.quests.jack, elites: window.BLACKSMITH.profile.stats.elites, rob: { ...window.BLACKSMITH.profile.quests.rob } }));
+  // a broadsword can cut down two at once, so it may take a few more than five
+  check('killing five elites fills Jack\'s bounty (and they count as skeletons for Rob\'s)', hunt5.kills === 5 && counted.kills === 5 && counted.elites >= 5 && counted.rob.kills === 3,
+    JSON.stringify(counted));
+  await ev(() => { window.BLACKSMITH.game.player.hp = window.BLACKSMITH.profile.maxHp(); window.T.step(60); });
+  const money0 = await ev(() => ({ cash: window.BLACKSMITH.profile.cash, exp: window.BLACKSMITH.profile.exp }));
+  await jackTalk();
+  await page.locator('#dlg-choices .mbtn', { hasText: 'CLAIM' }).tap();
+  await ev(() => window.T.step(20));
+  const jackPaid = await ev(() => { const P = window.BLACKSMITH.profile; return { cash: P.cash, exp: P.exp, level: P.level, q: { ...P.quests.jack } }; });
+  check('Jack pays $5,000 and 1,000 EXP, as often as you like',
+    jackPaid.cash - money0.cash === 5000 && jackPaid.exp - money0.exp === 1000 && jackPaid.q.completed === 1 && !jackPaid.q.active &&
+    (await ev(() => [...document.querySelectorAll('#dlg-choices .mbtn')].some((b) => b.textContent === 'KILL 5 ELITES'))), JSON.stringify({ money0, jackPaid }));
+  await shot('16b-jack');
+  await page.locator('#dlg-choices .mbtn', { hasText: 'BYE' }).tap();
+  // and back up the steps
+  const up = await ev(() => {
+    const g = window.BLACKSMITH.game;
+    g._skHooks.playerAlive = () => false;
+    g.player.teleport(0, 20, 0);
+    return window.T.walkTo(0, 29, 0.3, 300);
+  });
+  await page.waitForTimeout(800);
+  await ev(() => window.T.step(10));
+  const upTo = await ev(() => ({ area: window.BLACKSMITH.game.area.id, z: window.BLACKSMITH.game.player.pos.z }));
+  check('the steps at its south end lead back up into the cave\'s hall', up.ok === 'travel' && upTo.area === 'cave' && upTo.z < -21, JSON.stringify(upTo));
+  await ev(() => { const g = window.BLACKSMITH.game; g._skHooks.playerAlive = () => !g.player.dead; g.enter('cave', { x: 0, z: 12, yaw: Math.PI }, false); window.T.step(5); });
+
   /* -------------------------- dying costs nothing ------------------------- */
   const before = await ev(() => JSON.stringify({ c: window.BLACKSMITH.profile.cash, o: window.BLACKSMITH.profile.ores, i: window.BLACKSMITH.profile.items.length }));
   await ev(() => {
@@ -854,6 +948,136 @@ await h.close();
   const small = s.logs.filter((l) => !l.includes('GPU stall') && !l.includes('Automatic fallback to software WebGL'));
   check('no errors in the console on the small screen', small.length === 0, small.slice(0, 5).join('\n'));
   await s.close();
+}
+
+/* ------------------------------ accounts ------------------------------------ */
+// on the game's Claude page there is a database; here a stand-in plays its part
+{
+  const runs = [];
+  const quiet = (logs) => logs.filter((l) => !l.includes('GPU stall') && !l.includes('Automatic fallback to software WebGL'));
+  const text = (pg, sel) => pg.evaluate((q) => document.querySelector(q)?.textContent || '', sel);
+  const toMenu = async (pg) => { await pg.evaluate(() => document.querySelector('#btn-quit').click()); await pg.waitForSelector('#menu-screen.active'); };
+  const play = async (pg, sel) => {
+    await pg.tap(sel);
+    await pg.waitForFunction(() => window.BLACKSMITH?.state === 'playing', null, { timeout: 180000 });
+    await pg.evaluate(() => { window.BLACKSMITH.state = 'test'; });
+  };
+  try {
+    // the downloaded file: no cloud, and it says so
+    const off = await launch({ url, width: 585, height: 260 });
+    runs.push(off);
+    await off.page.waitForSelector('#menu-screen.active', { timeout: 60000 });
+    await off.page.waitForTimeout(300);
+    await off.page.tap('#btn-account');
+    const offline = { chip: await text(off.page, '#ma-label'), why: await text(off.page, '#acct-off-why') };
+    check('opened without its Claude page, the game says its smith is saved on the device only',
+      offline.chip === 'SAVED HERE' && offline.why.includes('on this device only'), JSON.stringify(offline));
+
+    // one phone: a smith played as a guest, then an account made for it
+    const a = await launch({ url, width: 585, height: 260, init: mockScript() });
+    runs.push(a);
+    const pa = a.page;
+    await pa.waitForSelector('#menu-screen.active', { timeout: 60000 });
+    await pa.waitForFunction(() => document.querySelector('#ma-label').textContent === 'LOG IN', null, { timeout: 15000 });
+    await play(pa, '#btn-newgame');
+    await pa.evaluate(() => { const A = window.BLACKSMITH; A.profile.addCash(250); A.profile.addOre('iron', 7); A.game.save(); });
+    await toMenu(pa);
+    await pa.tap('#btn-account');
+    await pa.tap('#tab-signup');
+    await pa.fill('#acct-name', 'Crys');
+    await pa.fill('#acct-pass', 'forge123');
+    await pa.fill('#acct-pass2', 'forge123');
+    await pa.waitForTimeout(350);
+    const fits = await pa.evaluate(() => {
+      const b = document.querySelector('#acct-submit').getBoundingClientRect();
+      return b.top >= 0 && b.bottom <= innerHeight && b.right <= innerWidth;
+    });
+    await pa.screenshot({ path: path.join(SHOTS, '21-sign-up-585x260.png') });
+    await pa.tap('#acct-submit');
+    await pa.waitForFunction(() => window.BLACKSMITH.cloud.account?.name === 'Crys', null, { timeout: 20000 });
+    const store1 = await pa.evaluate(() => window.__mockStore());
+    const doc = store1['data/users/u_test/smith-crys'];
+    check('SIGN UP makes an account, and the smith already on the phone comes with it', fits && doc?.name === 'Crys' && doc?.save?.cash === 250 &&
+      (await text(pa, '#ma-label')) === 'Crys', JSON.stringify({ fits, save: doc?.save?.cash }));
+    check('the password is never stored, only a salted hash of it', !!doc?.hash && !!doc?.salt && !JSON.stringify(store1).includes('forge123'));
+    await pa.waitForTimeout(800);
+    await play(pa, '#btn-continue');
+    await pa.evaluate(() => { const A = window.BLACKSMITH; A.profile.addCash(1000); A.game.save(); return A.cloud.flush(); });
+    const sent = await pa.evaluate(() => window.__mockStore()['data/users/u_test/smith-crys'].save.cash);
+    check('playing on the account sends your progress to the cloud', sent === 1250, String(sent));
+    await toMenu(pa);
+    await pa.reload({ waitUntil: 'load' });
+    await pa.waitForSelector('#menu-screen.active', { timeout: 60000 });
+    await pa.waitForTimeout(400);
+    const again = { chip: await text(pa, '#ma-label'), save: await text(pa, '#menu-save') };
+    check('coming back later, you are still logged in', again.chip === 'Crys' && again.save.includes('$1,250'), JSON.stringify(again));
+    await pa.tap('#btn-account');
+    await pa.tap('#btn-logout');
+    await pa.waitForFunction(() => !window.BLACKSMITH.cloud.account, null, { timeout: 15000 });
+    await pa.tap('#btn-account');
+    await pa.fill('#acct-name', 'crys');
+    await pa.fill('#acct-pass', 'wrong');
+    await pa.tap('#acct-submit');
+    await pa.waitForFunction(() => document.querySelector('#acct-msg').textContent.length > 0 && !document.querySelector('#acct-submit').disabled, null, { timeout: 20000 });
+    const refused = { msg: await text(pa, '#acct-msg'), account: await pa.evaluate(() => window.BLACKSMITH.cloud.account) };
+    check('LOG OUT leaves the phone, and a wrong password is turned away', refused.account === null && refused.msg.includes('not right'), JSON.stringify(refused));
+    const seed = await pa.evaluate(() => window.__mockStore());
+
+    // another phone, signed in to the same Claude account
+    const b = await launch({ url, width: 844, height: 390, init: mockScript(seed) });
+    runs.push(b);
+    const pb = b.page;
+    await pb.waitForSelector('#menu-screen.active', { timeout: 60000 });
+    await pb.waitForFunction(() => document.querySelector('#ma-label').textContent === 'LOG IN', null, { timeout: 15000 });
+    await pb.tap('#btn-account');
+    await pb.tap('#tab-signup');
+    await pb.fill('#acct-name', 'CRYS');
+    await pb.fill('#acct-pass', 'other1');
+    await pb.fill('#acct-pass2', 'other1');
+    await pb.tap('#acct-submit');
+    await pb.waitForFunction(() => document.querySelector('#acct-msg').textContent.includes('already'), null, { timeout: 20000 });
+    check('a name you already have is not given out twice', (await text(pb, '#acct-msg')).includes('already have a smith called Crys'));
+    await pb.tap('#tab-login');
+    await pb.fill('#acct-name', 'Crys');
+    await pb.fill('#acct-pass', 'forge123');
+    await pb.tap('#acct-submit');
+    await pb.waitForFunction(() => window.BLACKSMITH.cloud.account?.name === 'Crys', null, { timeout: 20000 });
+    await pb.waitForTimeout(800);
+    await play(pb, '#btn-continue');
+    const there = await pb.evaluate(() => ({ cash: window.BLACKSMITH.profile.cash, iron: window.BLACKSMITH.profile.ores.iron }));
+    check('LOG IN on another phone, and it is the same smith', there.cash === 1250 && there.iron === 7, JSON.stringify(there));
+
+    // a third phone, last logged in as Crys, where the cloud takes 9 s to answer
+    const slow = { content: mockScript(seed).content + "\nlocalStorage.setItem('blacksmith.account', 'Crys'); window.__mockDelay = 9000;" };
+    const c = await launch({ url, width: 585, height: 260, init: slow });
+    runs.push(c);
+    const pc = c.page;
+    await pc.waitForSelector('#menu-screen.active', { timeout: 60000 });
+    await pc.tap('#btn-settings');
+    await pc.waitForFunction(() => window.BLACKSMITH.cloud.account?.name === 'Crys', null, { timeout: 20000 });
+    const late = { chip: await text(pc, '#ma-label'), save: await text(pc, '#menu-save'),
+      stayed: await pc.evaluate(() => !document.querySelector('#panel-settings').classList.contains('hidden')) };
+    check('when the cloud is slow, the menu still comes back to your account once it answers', late.chip === 'Crys' &&
+      late.save.includes('$1,250') && late.stayed, JSON.stringify(late));
+    // and when PLAY is pressed before it answers, the smith being played is left alone
+    await pc.reload({ waitUntil: 'load' });
+    await pc.waitForSelector('#menu-screen.active', { timeout: 60000 });
+    await play(pc, '#btn-newgame');
+    await pc.evaluate(() => { const A = window.BLACKSMITH; A.profile.addCash(5); A.game.save(); });
+    await pc.waitForTimeout(9000);
+    const kept = await pc.evaluate(() => ({
+      account: window.BLACKSMITH.cloud.account?.name || null,
+      guest: JSON.parse(localStorage.getItem('blacksmith.save.v1') || 'null')?.cash ?? null,
+      cloud: window.__mockStore()['data/users/u_test/smith-crys'].save.cash,
+    }));
+    check('and if you start playing before it answers, it does not swap smiths under you', kept.account === null &&
+      kept.guest === 5 && kept.cloud === 1250, JSON.stringify(kept));
+    const errs = runs.flatMap((r) => quiet(r.logs));
+    check('no errors in the console with accounts', errs.length === 0, errs.slice(0, 5).join('\n'));
+  } catch (e) {
+    check('the accounts run finished', false, e.message);
+  }
+  for (const r of runs) await r.close();
 }
 
 console.log(fails.length ? `\n${fails.length} FAILED` : '\nALL PASSED');

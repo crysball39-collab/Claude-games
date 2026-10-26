@@ -13,8 +13,10 @@ import { InventoryUI } from './ui/inventory.js';
 import { ForgeUI } from './ui/forge.js';
 import { ShopUI } from './ui/shop.js';
 import { DialogueUI } from './ui/dialogue.js';
+import { AccountUI } from './ui/account.js';
 import { Profile } from './game/profile.js';
-import { readSave, clearSave } from './game/save.js';
+import { readSave, writeSave, clearSave, saveHooks } from './game/save.js';
+import { cloud } from './game/cloud.js';
 import { sfx } from './game/sfx.js';
 
 /* -------------------------------------------------------------------------- */
@@ -77,7 +79,18 @@ const gameScreen = $('#game-screen');
 const viewport = $('#viewport');
 const pauseOverlay = $('#pause-overlay');
 
-async function boot() {
+/**
+ * When a new version of the page arrives while you are playing, the viewer
+ * reloads it; this is how the game picks up again where you were.
+ */
+const hot = typeof window !== 'undefined' ? window.claude?.hot : null;
+hot?.snapshot?.(() => {
+  const playing = app.state === 'playing' || app.state === 'paused';
+  if (playing) app.game?.save();
+  return { playing, save: playing ? readSave() : null };
+});
+
+async function boot(resume = {}) {
   loading.show('HEATING THE FORGE', 'Waking up...');
   await loading.run([
     ['Checking the hardware', async () => {
@@ -91,6 +104,21 @@ async function boot() {
         onContinue: () => startGame(false),
         onNewGame: () => startGame(true),
       });
+      app.account = new AccountUI({
+        showPanel: (id) => app.menu.showPanel(id),
+        onChanged: (note) => app.menu.show(readSave(), note || null),
+      });
+    }],
+    ['Finding your smith', async () => {
+      // every save goes up to the cloud too, when you are logged in
+      saveHooks.onWrite = (data) => { if (cloud.account) cloud.queue(data); };
+      // logged in here before? then straight back into that account - unless the cloud
+      // is so slow to answer that a smith is already being played by then
+      const found = cloud.connect().then(() => cloud.restore(() => app.state === 'boot' || app.state === 'menu'));
+      found.then((back) => { if (back && app.state === 'menu') app.menu.paint(readSave()); });
+      await Promise.race([found, new Promise((r) => setTimeout(r, 6000))]);
+      // the page was replaced while you played: put back what you had
+      if (resume.save) writeSave(resume.save, { notify: false });
     }],
     ['Wiring the controls', async () => {
       input.attach({ viewport, stickZone: $('#stick-zone'), stickBase: $('#stick-base'), stickKnob: $('#stick-knob') });
@@ -102,6 +130,7 @@ async function boot() {
   loading.hide();
   showMenu();
   requestAnimationFrame(loop);
+  if (resume.playing) startGame(false);
 }
 
 function hasWebGL() {
@@ -138,7 +167,7 @@ async function startGame(fresh) {
   app.profile = profile;
   gameScreen.classList.add('active');
   app.hud.setVisible(false);
-  loading.show(profile.where === 'cave' ? 'INTO THE CAVE' : 'OUT TO THE MEADOW', 'Preparing...');
+  loading.show({ cave: 'INTO THE CAVE', deep: 'DOWN TO THE DEEP MINE' }[profile.where] || 'OUT TO THE MEADOW', 'Preparing...');
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
   // the screens that look at your things are made once and handed each new smith
@@ -197,6 +226,7 @@ async function startGame(fresh) {
 function quitToMenu() {
   if (!app.game) return;
   app.game.save();
+  cloud.flush();
   input.enabled = false;
   input.reset();
   app.game.dispose();
@@ -217,9 +247,12 @@ function setPaused(on) {
     input.reset();
     const g = app.game, p = app.profile;
     const mins = Math.floor((p.stats.playTime || 0) / 60);
-    $('#pause-stats').innerHTML = `${p.stats.mined} rocks broken &middot; ${p.stats.ores} ore found &middot; ${p.stats.kills} skeletons<br>` +
-      `${p.stats.crafted} things forged &middot; ${mins} min played &middot; ${g?.stats.fps || 0} fps`;
     app.game?.save();
+    cloud.flush();
+    $('#pause-stats').innerHTML = `${p.stats.mined} rocks broken &middot; ${p.stats.ores} ore found &middot; ${p.stats.kills} skeletons` +
+      (p.stats.elites ? ` (${p.stats.elites} elite)` : '') + '<br>' +
+      `${p.stats.crafted} things forged &middot; ${mins} min played &middot; ${g?.stats.fps || 0} fps<br>` +
+      `<span class="pause-cloud">${cloud.describe()}</span>`;
   } else if (!on && app.state === 'paused') {
     app.state = 'playing';
     pauseOverlay.classList.add('hidden');
@@ -282,11 +315,11 @@ function wireButtons() {
 
   // the first touch anywhere is what lets the page make sound
   window.addEventListener('pointerdown', () => sfx.unlock(), { passive: true });
-  // whatever happens to the tab, the smith is saved first
+  // whatever happens to the tab, the smith is saved first, and sent up if logged in
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { app.game?.save(); if (app.state === 'playing') setPaused(true); }
+    if (document.hidden) { app.game?.save(); cloud.flush(); if (app.state === 'playing') setPaused(true); }
   });
-  window.addEventListener('pagehide', () => app.game?.save());
+  window.addEventListener('pagehide', () => { app.game?.save(); cloud.flush(); });
 }
 
 /* ---------------------------------- loop ----------------------------------- */
@@ -321,13 +354,15 @@ document.addEventListener('gesturestart', (e) => e.preventDefault());
 document.addEventListener('touchmove', (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 
-boot().catch((err) => {
+const start = (data) => boot(data || {}).catch((err) => {
   console.error(err);
   $('#load-status').textContent = 'Failed to start: ' + err.message;
 });
+if (hot?.ready) hot.ready(start); else start(hot?.data ?? {});
 
 // for poking at from the console, and for tools/verify.mjs
 app.input = input;
+app.cloud = cloud;
 window.BLACKSMITH = app;
 
 export { app, settings };

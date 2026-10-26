@@ -3,6 +3,11 @@
    styles, three.js and every module - so it can be downloaded onto a phone
    and opened straight from the filesystem, with no server and no network.
 
+   And dist/blacksmith-page.html: the same game as the content of its Claude
+   page, which is where accounts and cloud saves work. That page is wrapped in
+   its own <html>, <head> and <body> when it is published, so this one leaves
+   them out and starts with its title and styles.
+
      npm install -D esbuild
      npm run build:blacksmith
    ========================================================================== */
@@ -65,3 +70,12 @@ fs.mkdirSync(OUT_DIR, { recursive: true });
 fs.writeFileSync(OUT_FILE, html);
 const kb = (n) => (n / 1024).toFixed(0) + ' KB';
 console.log(`wrote ${path.relative(ROOT, OUT_FILE)}  (${kb(html.length)}; script ${kb(js.length)}, styles ${kb(css.length)})`);
+
+/* ------------------------------ the Claude page ------------------------------ */
+
+const bodyStart = html.indexOf('<body>'), bodyEnd = html.lastIndexOf('</body>');
+if (bodyStart < 0 || bodyEnd < 0) throw new Error('cannot find the body in the built page');
+const PAGE_FILE = path.join(OUT_DIR, 'blacksmith-page.html');
+const page = '<title>Blacksmith</title>\n<style>\n' + css + '\n</style>\n' + html.slice(bodyStart + '<body>'.length, bodyEnd).trim() + '\n';
+fs.writeFileSync(PAGE_FILE, page);
+console.log(`wrote ${path.relative(ROOT, PAGE_FILE)}  (${kb(page.length)})`);

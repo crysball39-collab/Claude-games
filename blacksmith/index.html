@@ -41,11 +41,65 @@
     <div class="menu-buttons">
       <button class="mbtn primary" id="btn-continue">CONTINUE</button>
       <button class="mbtn" id="btn-newgame">NEW GAME</button>
-      <button class="mbtn" id="btn-controls">CONTROLS</button>
-      <button class="mbtn" id="btn-settings">SETTINGS</button>
+      <button class="mbtn half" id="btn-controls">CONTROLS</button>
+      <button class="mbtn half" id="btn-settings">SETTINGS</button>
     </div>
     <div class="menu-save" id="menu-save"></div>
-    <div class="menu-foot">landscape &middot; your progress saves itself</div>
+    <div class="menu-foot" id="menu-foot">landscape &middot; your progress saves itself</div>
+  </div>
+
+  <!-- who is playing: tap for the account screen -->
+  <button class="menu-account" id="btn-account" type="button" aria-label="Account">
+    <span class="ma-icon" aria-hidden="true"></span><span id="ma-label">ACCOUNT</span>
+  </button>
+
+  <div class="menu-panel hidden" id="panel-account">
+    <div class="panel-head">
+      <button class="backbtn" data-back="panel-main" aria-label="Back">&#8592;</button>
+      <h2>ACCOUNT</h2>
+      <div class="acct-tabs hidden" id="acct-tabs">
+        <button type="button" class="acct-tab" data-mode="login" id="tab-login">LOG IN</button>
+        <button type="button" class="acct-tab" data-mode="signup" id="tab-signup">SIGN UP</button>
+      </div>
+    </div>
+    <div class="scroll-body acct-body">
+      <!-- logged in -->
+      <div class="acct-view hidden" id="acct-in">
+        <p class="acct-who">Logged in as <b id="acct-who-name"></b></p>
+        <p class="acct-status" id="acct-status"></p>
+        <button class="mbtn" id="btn-logout" type="button">LOG OUT</button>
+        <p class="acct-note">Log in with the same name and password on any device where you open this game's page signed in to Claude, and your smith comes with you.</p>
+      </div>
+      <!-- no cloud where the game was opened -->
+      <div class="acct-view hidden" id="acct-off">
+        <p class="acct-who">Accounts and cloud saves work on the game's Claude page.</p>
+        <p class="acct-note" id="acct-off-why"></p>
+        <p class="acct-link hidden" id="acct-link-row"><a id="acct-link" href="#" target="_blank" rel="noopener">Open the game's page</a></p>
+      </div>
+      <!-- log in, or sign up -->
+      <form class="acct-view acct-form hidden" id="acct-form" novalidate>
+        <label class="field" for="acct-name"><span>Smith name</span>
+          <input id="acct-name" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="16" />
+        </label>
+        <div class="acct-mine hidden" id="acct-mine"></div>
+        <label class="field" for="acct-pass"><span>Password</span>
+          <input id="acct-pass" name="password" type="password" autocomplete="current-password" maxlength="64" />
+        </label>
+        <label class="field signup-only" for="acct-pass2"><span>Again</span>
+          <input id="acct-pass2" name="password2" type="password" autocomplete="new-password" maxlength="64" />
+        </label>
+        <div class="acct-go">
+          <div class="acct-left">
+            <label class="check signup-only hidden" for="acct-bring" id="acct-bring-row">
+              <input type="checkbox" id="acct-bring" checked /><span id="acct-bring-text">Bring the smith saved on this device</span>
+            </label>
+            <p class="acct-msg" id="acct-msg" role="status" aria-live="polite"></p>
+          </div>
+          <button class="mbtn primary" id="acct-submit" type="submit">LOG IN</button>
+        </div>
+        <p class="acct-note">Accounts are kept privately for your Claude account: nobody else can see them. Your password is never stored, only a scrambled check of it.</p>
+      </form>
+    </div>
   </div>
 
   <div class="menu-panel hidden" id="panel-controls">
@@ -95,7 +149,7 @@
   <div id="confirm-new" class="modal hidden">
     <div class="modal-card">
       <h3>START OVER?</h3>
-      <p>Your saved smith &mdash; ores, gear, cash and level &mdash; will be erased.</p>
+      <p id="confirm-new-text">Your saved smith &mdash; ores, gear, cash and level &mdash; will be erased.</p>
       <div class="modal-buttons">
         <button class="mbtn danger" id="btn-confirm-new">ERASE &amp; START</button>
         <button class="mbtn" id="btn-cancel-new">KEEP MY SAVE</button>

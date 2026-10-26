@@ -118,6 +118,8 @@ export const ROCKS = {
 
 /** How many of each are in the cave at once, and how soon a broken one is replaced. */
 export const ROCK_COUNTS = { pebble: 10, rock: 7, boulder: 5 };
+/** The deep mine below it is mostly boulders. */
+export const DEEP_ROCK_COUNTS = { pebble: 3, rock: 5, boulder: 12 };
 export const ROCK_RESPAWN = [8, 15];
 
 /* ------------------------------- pickaxes -------------------------------- */
@@ -284,10 +286,39 @@ export const PLAYER = {
 export const SKELETON = {
   count: 3, hp: 40, damage: 7, speed: 2.75, wander: 1.1,
   aggro: 9, leash: 16, reach: 1.45, windup: 0.5, recover: 0.6, cooldown: 0.75,
-  respawn: [6, 10], radius: 0.36,
+  respawn: [6, 10], radius: 0.36, defense: 0,
+  attack: { kind: 'skel', time: 0.95, hit: 0.62 },
 };
 
-export const QUEST = { kills: 3, cash: 1000, exp: 100 };
+/**
+ * The deep mine's skeletons: an Iron Chestplate, Iron Boots and an Iron
+ * Straight-Sword each. The armour is worth what it would be on you, so your
+ * blows land for a little over three quarters of their damage; the sword
+ * reaches further and cuts harder than a wooden dagger.
+ */
+export const ELITE_GEAR = {
+  weapon: { kind: 'weapon', type: 'sword', mix: [['iron', 10]] },
+  chest: { kind: 'armor', type: 'chestplate', mix: [['iron', 5]] },
+  boots: { kind: 'armor', type: 'boots', mix: [['iron', 2]] },
+};
+export const ELITE = {
+  ...SKELETON,
+  count: 3, hp: 120, damage: 16, speed: 3.0, wander: 1.2,
+  aggro: 10, leash: 18, reach: 1.85, cooldown: 0.95,
+  respawn: [8, 13], radius: 0.4,
+  attack: { kind: 'slash', time: 1.05, hit: 0.5 },
+  elite: true,
+};
+
+/**
+ * The bounties. Rob pays for any three skeletons; Jack, in the deep mine,
+ * for five elites, and only gives the work to a smith of level 5 or more.
+ */
+export const QUESTS = {
+  rob: { giver: 'Rob', kills: 3, cash: 1000, exp: 100, level: 1, elite: false },
+  jack: { giver: 'Jack', kills: 5, cash: 5000, exp: 1000, level: 5, elite: true },
+};
+export const QUEST = QUESTS.rob;
 
 /** EXP it takes to climb from `level` to the next one. */
 export const expToNext = (level) => 100 * level;
@@ -300,3 +331,6 @@ export function levelFromExp(exp) {
 
 /** Armour takes a share of every hit: 40 defence halves it. */
 export const afterArmor = (raw, defense) => raw * 40 / (40 + Math.max(0, defense));
+
+/** What an elite's iron is worth against your blows. */
+ELITE.defense = Math.round((itemStats(ELITE_GEAR.chest).defense + itemStats(ELITE_GEAR.boots).defense) * 10) / 10;

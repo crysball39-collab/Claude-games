@@ -1,8 +1,10 @@
 /* =============================================================================
    Inside the cave: one round stone room with a great round wall standing in
    the middle of it, so the floor is a ring you can walk all the way round.
-   You come in down a tunnel from the south, where Rob keeps his camp.
+   You come in down a tunnel from the south, where Rob keeps his camp; across
+   the room, a hall through the north wall leads down to the deep mine.
 
+              | |              the hall down to the deep mine
             north (-Z)
           .-'''''''-.
         .'  .-----.  '.        R_OUT  the room's wall
@@ -21,12 +23,13 @@ import {
   HemisphereLight, AmbientLight, PointLight, AdditiveBlending,
 } from 'three';
 import { makeRng, valueNoise2D, fbm, clamp01, lerp, TAU } from '../core/util.js';
-import { rockTexture, slabTexture, woodTexture, flameTexture, softDotTexture } from './textures.js';
+import { rockTexture, slabTexture, woodTexture, flameTexture, softDotTexture, signTexture } from './textures.js';
 import { mergeStatic, flatten, tiledBox, rockGeometry } from './geo.js';
 import { addTorch } from './torch.js';
 import { Collider } from './collide.js';
 import { oreMaterial } from './materials.js';
 import { ORE_ORDER } from './data.js';
+import { segmentHitsCircle } from './skeletons.js';
 
 export const CV = {
   rOut: 22, rIn: 6.5,
@@ -38,7 +41,13 @@ export const CV = {
   exitZ: 32.6,
   camp: { x: 5.6, z: 16.6, r: 6.0 },             // Rob's, and no skeleton comes near it
   rob: { x: 4.3, z: 16.2, yaw: -0.86 },          // facing whoever walks in
+  // the hall down to the deep mine, out of the north wall: walk to the top of
+  // its steps (`down`) and you go below; coming back up, you arrive at `back`
+  hall: { half: 2.0, h: 4.3, steps: -31.0, down: -31.6, back: { x: 0, z: -25.5, yaw: 0 } },
 };
+
+/** The passage out of the ring on this side of it: the tunnel south, or the hall north. */
+const passageOf = (z) => (z > 0 ? CV.tunnel : CV.hall);
 
 /** Torches: angles round the outer wall and round the middle one. */
 const OUTER_TORCHES = Array.from({ length: 8 }, (_, k) => (k + 0.5) * (TAU / 8));
@@ -72,6 +81,7 @@ export function buildCave({ quality }) {
     darkWood: new MeshLambertMaterial({ color: 0x4f321b }),
     iron: new MeshPhongMaterial({ color: 0x3b3f45, specular: 0x777777, shininess: 40 }),
     daylight: new MeshBasicMaterial({ color: 0xeaf6ff, fog: false }),
+    black: new MeshBasicMaterial({ color: 0x000000 }),
     lantern: new MeshBasicMaterial({ color: 0xffd27a }),
     cloth: new MeshLambertMaterial({ color: 0x8c6b45 }),
   };
@@ -138,10 +148,14 @@ export function buildCave({ quality }) {
   const angleDiff = (a, b) => { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
 
   const segs = low ? 64 : 110;
-  // outer wall, all the way round but for the tunnel, and the stretch over
-  // it; flat where it meets the tunnel and behind each torch
-  wallGrid(CV.rOut, phiE, TAU - phiE, 0, CV.wallH + 0.4, segs, 9, true, 0.75, [0, ...OUTER_TORCHES]);
+  // outer wall, all the way round but for the tunnel and the hall, and the
+  // stretches over them; flat where it meets them and behind each torch
+  const phiH = Math.asin((CV.hall.half + 0.1) / CV.rOut);
+  const halfSegs = Math.round(segs / 2);
+  wallGrid(CV.rOut, phiE, Math.PI - phiH, 0, CV.wallH + 0.4, halfSegs, 9, true, 0.75, [0, Math.PI, ...OUTER_TORCHES]);
+  wallGrid(CV.rOut, Math.PI + phiH, TAU - phiE, 0, CV.wallH + 0.4, halfSegs, 9, true, 0.75, [0, Math.PI, ...OUTER_TORCHES]);
   wallGrid(CV.rOut, -phiE, phiE, CV.tunnel.h, CV.wallH + 0.4, 4, 3, true, 0.0);
+  wallGrid(CV.rOut, Math.PI - phiH, Math.PI + phiH, CV.hall.h, CV.wallH + 0.4, 4, 3, true, 0.0);
   // the wall in the middle, floor to ceiling
   wallGrid(CV.rIn, 0, TAU, 0, CV.wallH + 0.4, low ? 40 : 64, 12, false, 0.75, INNER_TORCHES);
 
@@ -242,6 +256,71 @@ export function buildCave({ quality }) {
     }
   }
 
+  /* ------------------------------ the hall down ---------------------------- */
+  // out of the north wall: a timbered hall, then steps going down into the
+  // dark, which is where the deep mine is
+  const hallTorches = [];
+  {
+    const H = CV.hall, z0 = -(CV.rOut - 1.2), zEnd = H.steps - 6.5, len = z0 - zEnd;
+    const zc = (z0 + zEnd) / 2;
+    const part = (w, h, d, x, y, z) => {
+      const g = tiledBox(w, h, d, 1.6);
+      const pp = g.attributes.position;
+      const c = new Float32Array(pp.count * 3);
+      for (let i = 0; i < pp.count; i++) {
+        // darker the further down it goes
+        const wz = z + pp.getZ(i);
+        const k = 0.52 * (0.25 + 0.75 * clamp01((wz - (H.steps - 3)) / (z0 - (H.steps - 3))));
+        c[i * 3] = k; c[i * 3 + 1] = k; c[i * 3 + 2] = k * 1.05;
+      }
+      g.setAttribute('color', new Float32BufferAttribute(c, 3));
+      disposables.push(g);
+      const m = new Mesh(g, M.wall);
+      m.position.set(x, y, z);
+      m.userData.keep = true;
+      world.add(m);
+    };
+    const drop = 3.2;                       // how far below the hall floor the steps go
+    part(0.6, H.h + drop, len, -H.half - 0.3, (H.h - drop) / 2, zc);
+    part(0.6, H.h + drop, len, H.half + 0.3, (H.h - drop) / 2, zc);
+    part(H.half * 2 + 1.2, 0.6, len, 0, H.h + 0.3, zc);
+    // the floor, held back behind the room's own where the two overlap
+    const floorMat = keep(M.floor.clone());
+    floorMat.polygonOffset = true;
+    floorMat.polygonOffsetFactor = 2;
+    floorMat.polygonOffsetUnits = 2;
+    const flLen = z0 + 1.6 - H.steps;
+    const flGeo = new PlaneGeometry(H.half * 2 + 0.2, flLen);
+    flGeo.rotateX(-Math.PI / 2);
+    flGeo.setAttribute('color', new Float32BufferAttribute(new Array(flGeo.attributes.position.count * 3).fill(0.72), 3));
+    const fl = new Mesh(flGeo, floorMat);
+    fl.position.set(0, 0, (z0 + 1.6 + H.steps) / 2);
+    fl.userData.keep = true;
+    world.add(fl);
+    disposables.push(flGeo);
+    // the steps, each a little lower than the last, until there is only dark
+    for (let k = 0; k < 9; k++) {
+      const top = -0.22 * (k + 1);
+      const step = box(H.half * 2 + 0.1, 0.3, 0.62, M.rock, 0, top - 0.15, H.steps - 0.31 - k * 0.62);
+      step.userData.keep = true;
+    }
+    const dark = new Mesh(new PlaneGeometry(H.half * 2 + 0.2, H.h + drop), M.black);
+    dark.position.set(0, (H.h - drop) / 2, zEnd + 0.4);
+    world.add(dark);
+    disposables.push(dark.geometry);
+    for (let z = z0 - 0.6; z > H.steps + 0.5; z -= 3.0) {
+      for (const sx of [-1, 1]) box(0.3, H.h, 0.3, M.beam, sx * (H.half - 0.05), H.h / 2, z);
+      box(H.half * 2 + 0.4, 0.3, 0.32, M.beam, 0, H.h - 0.15, z);
+    }
+    // a sign over the way in, nailed to the hall's lintel, so nobody wanders down by accident
+    const face = keep(new MeshLambertMaterial({ map: keep(signTexture('Deep Mine', 640, 180)) }));
+    const board = new Mesh(new BoxGeometry(1.75, 0.5, 0.07), [M.beam, M.beam, M.beam, M.beam, face, face]);
+    board.position.set(0, H.h + 0.3, z0 + 0.06);
+    world.add(board);
+    disposables.push(board.geometry);
+    hallTorches.push(-25.2, -28.4);
+  }
+
   /* --------------------------------- torches ------------------------------ */
   const flameTex = keep(flameTexture(64));
   const haloTex = keep(softDotTexture(64, 'rgba(255,170,90,0.5)', 'rgba(255,120,40,0)'));
@@ -270,6 +349,14 @@ export function buildCave({ quality }) {
   // with only a few lights to go round, they go to every other torch
   OUTER_TORCHES.forEach((phi, k) => torch(phi, CV.rOut, true, maxLights >= 8 || k % 2 === 0));
   for (const phi of INNER_TORCHES) torch(phi, CV.rIn, false, maxLights >= 10);
+  // and down the hall, one on each wall, staggered
+  hallTorches.forEach((z, k) => {
+    const sx = k % 2 ? 1 : -1;
+    const { flame } = addTorch(world, { x: sx * CV.hall.half, y: 2.3, z }, { x: -sx, z: 0 },
+      { wood: M.darkWood, iron: M.iron, pitch, flameTex, haloTex, size: 1.0, disposables });
+    flame.userData.phase = z;
+    flames.push(flame);
+  });
   // Rob's lantern, by the way in
   {
     const { x, z } = CV.camp;
@@ -301,7 +388,7 @@ export function buildCave({ quality }) {
     }
     for (let i = 0; i < (low ? 16 : 30); i++) {
       const phi = rng() * TAU;
-      if (Math.abs(angleDiff(phi, 0)) < 0.3) continue;
+      if (Math.abs(angleDiff(phi, 0)) < 0.3 || Math.abs(angleDiff(phi, Math.PI)) < 0.25) continue;
       // kept back against the walls, out of the way of your feet
       const outer = rng() < 0.72;
       const d = outer ? CV.rOut - 0.4 - rng() * 0.4 : CV.rIn + 0.25 + rng() * 0.2;
@@ -320,7 +407,7 @@ export function buildCave({ quality }) {
   });
   for (let i = 0; i < (low ? 8 : 14); i++) {
     const phi = rng() * TAU;
-    if (Math.abs(angleDiff(phi, 0)) < 0.45) continue;
+    if (Math.abs(angleDiff(phi, 0)) < 0.45 || Math.abs(angleDiff(phi, Math.PI)) < 0.3) continue;
     const outer = rng() < 0.7;
     const d = outer ? CV.rOut - 0.45 : CV.rIn + 0.4;
     const mat = crystalMats[(rng() * 3) | 0];
@@ -391,7 +478,7 @@ export function buildCave({ quality }) {
       box(0.25, 0.25, 2.2, M.beam, px, 4.1, pz, { ry: phi + Math.PI / 2 });
       col.circle(px, pz, 0.2, { h: 4.2 });
     }
-    for (const [phi, d] of [[1.6, 19.6], [3.1, 19.8], [4.1, 9.0], [5.2, 19.5]]) {
+    for (const [phi, d] of [[1.6, 19.6], [2.7, 19.8], [4.1, 9.0], [5.2, 19.5]]) {
       crate(Math.sin(phi) * d, Math.cos(phi) * d, 0.7, phi);
     }
   }
@@ -399,7 +486,7 @@ export function buildCave({ quality }) {
   mergeStatic(world);
 
   /* ------------------------------- collision ------------------------------ */
-  const T = CV.tunnel;
+  const T = CV.tunnel, H = CV.hall;
   col.constrain((p, r) => {
     let moved = false;
     const d = Math.hypot(p.x, p.z) || 1e-6;
@@ -407,12 +494,21 @@ export function buildCave({ quality }) {
       const k = (CV.inLimit + r) / d;
       p.x *= k; p.z *= k; moved = true;
     }
-    const inMouth = p.z > 0 && Math.abs(p.x) < T.half - r;
-    if (!inMouth && d > CV.outLimit - r) {
-      const k = (CV.outLimit - r) / d;
-      p.x *= k; p.z *= k; moved = true;
+    if (d > CV.outLimit - r) {
+      // past the room's wall: only where a passage goes through it. Once
+      // you are in one, its sides hold you; at its mouth, the room's wall does.
+      const P = passageOf(p.z);
+      const inside = Math.abs(p.z) > Math.sqrt(Math.max(0, (CV.outLimit - r) ** 2 - P.half ** 2)) + 0.25;
+      if (inside && Math.abs(p.x) < P.half + 1.5) {
+        const lim = P.half - r;
+        if (Math.abs(p.x) > lim) { p.x = Math.sign(p.x) * lim; moved = true; }
+      } else if (Math.abs(p.x) > P.half - r) {
+        const k = (CV.outLimit - r) / d;
+        p.x *= k; p.z *= k; moved = true;
+      }
     }
     if (p.z > T.end - r) { p.z = T.end - r; moved = true; }
+    if (p.z < H.down - 0.6 + r) { p.z = H.down - 0.6 + r; moved = true; }
     return moved;
   });
 
@@ -421,7 +517,7 @@ export function buildCave({ quality }) {
   const rockSpots = [];
   for (let i = 0; i < 3000 && rockSpots.length < 64; i++) {
     const phi = rng() * TAU;
-    if (Math.abs(angleDiff(phi, 0)) < 0.42) continue;
+    if (Math.abs(angleDiff(phi, 0)) < 0.42 || Math.abs(angleDiff(phi, Math.PI)) < 0.36) continue;
     const d = lerp(CV.inLimit + 1.6, CV.outLimit - 1.7, Math.sqrt(rng()));
     const x = Math.sin(phi) * d, z = Math.cos(phi) * d;
     if (inCamp(x, z, 1.2)) continue;
@@ -445,12 +541,53 @@ export function buildCave({ quality }) {
     for (const pl of lights) pl.intensity = 34 * (0.86 + 0.14 * Math.sin(t * 11 + pl.userData.phase) * Math.sin(t * 4.7 + pl.userData.phase));
   };
 
-  /** Where the camera may be: inside the room or the tunnel, under the roof. */
+  /** Where the camera may be: inside the room, the tunnel or the hall, under the roof. */
   const cameraAllowed = (x, y, z) => {
     const d = Math.hypot(x, z);
     if (z > CV.rOut - 2 && Math.abs(x) < T.half - 0.35) return y < T.h - 0.35 && z < T.end;
+    if (z < -(CV.rOut - 2) && Math.abs(x) < H.half - 0.35) return y < H.h - 0.35 && z > H.steps - 2;
     if (d < CV.rIn + 1.0 || d > CV.rOut - 1.3) return false;
     return y < ceilingAt(d) - 0.6;
+  };
+
+  /* ------------------------- where the skeletons go ------------------------ */
+  // the ring, round the wall in the middle, never into Rob's camp, the
+  // tunnel or the hall: those are where you get your breath back
+  const arena = {
+    spots: skeletonSpots,
+    playerSafe: (P) => inCamp(P.x, P.z, 0.5) || (Math.abs(P.z) > CV.rOut - 1.4 && Math.abs(P.x) < passageOf(P.z).half),
+    keepIn(pos, r) {
+      col.resolve(pos, r);
+      const d = Math.hypot(pos.x, pos.z) || 1;
+      const lim = CV.outLimit - r - 0.1;
+      if (d > lim) { pos.x *= lim / d; pos.z *= lim / d; }
+      const c = CV.camp;
+      const cx = pos.x - c.x, cz = pos.z - c.z, cd = Math.hypot(cx, cz) || 1;
+      if (cd < c.r) { pos.x = c.x + (cx / cd) * c.r; pos.z = c.z + (cz / cd) * c.r; }
+    },
+    /** Unless the wall in the middle is between you. */
+    sees: (a, b) => !segmentHitsCircle(a, b, CV.inLimit - 0.3),
+    /** Toward `to`, going round the wall in the middle when it is in the way. */
+    steer(from, to) {
+      const dx = to.x - from.x, dz = to.z - from.z;
+      const d = Math.hypot(dx, dz) || 1;
+      if (!segmentHitsCircle(from, to, CV.inLimit + 0.4)) return { x: dx / d, z: dz / d };
+      const r = Math.hypot(from.x, from.z) || 1;
+      const ox = from.x / r, oz = from.z / r;
+      let tx = -oz, tz = ox;
+      if (tx * dx + tz * dz < 0) { tx = -tx; tz = -tz; }
+      const x = tx + ox * 0.2, z = tz + oz * 0.2, l = Math.hypot(x, z);
+      return { x: x / l, z: z / l };
+    },
+    wanderPoint(from, rand) {
+      for (let k = 0; k < 12; k++) {
+        const phi = Math.atan2(from.x, from.z) + (rand() - 0.5) * 1.4;
+        const d = CV.inLimit + 1.5 + rand() * (CV.outLimit - CV.inLimit - 3);
+        const x = Math.sin(phi) * d, z = Math.cos(phi) * d;
+        if (!inCamp(x, z, 1)) return { x, z };
+      }
+      return { x: from.x, z: from.z };
+    },
   };
 
   const dispose = () => {
@@ -461,8 +598,10 @@ export function buildCave({ quality }) {
   return {
     id: 'cave', name: 'The Cave', sub: 'Rob is just inside',
     scene, collider: col, ground: () => 0,
-    spawn: CV.entry, rockSpots, skeletonSpots, inCamp, torches: flames,
+    spawn: CV.entry, rockSpots, skeletonSpots, inCamp, torches: flames, arena, mine: true,
     update, cameraAllowed, dispose,
     leaving: (p) => p.z > CV.exitZ,
+    /** At the top of the steps in the hall: going down. */
+    descending: (p) => p.z < CV.hall.down + 0.3 && Math.abs(p.x) < CV.hall.half,
   };
 }

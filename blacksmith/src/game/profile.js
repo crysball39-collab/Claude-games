@@ -1,12 +1,19 @@
 /* =============================================================================
    Everything about you that outlives a session: cash, EXP, ores, the things
-   you have forged, what you are wearing, Rob's bounty, and where you were.
-   Nothing in here is ever taken away by dying.
+   you have forged, what you are wearing, Rob's and Jack's bounties, and
+   where you were. Nothing in here is ever taken away by dying.
    ========================================================================== */
 import {
-  ORES, ORE_ORDER, PLAYER, PICKAXES, WEAPONS, ARMOR, EQUIP_SLOTS,
+  ORES, ORE_ORDER, PLAYER, PICKAXES, WEAPONS, ARMOR, EQUIP_SLOTS, QUESTS,
   itemStats, slotOf, levelFromExp,
 } from './data.js';
+
+const PLACES = ['overworld', 'cave', 'deep'];
+const bounty = (q) => ({
+  active: !!q?.active,
+  kills: Math.max(0, Math.floor(q?.kills || 0)),
+  completed: Math.max(0, Math.floor(q?.completed || 0)),
+});
 
 const isItem = (it) => it && typeof it.uid === 'number' && (
   (it.kind === 'pickaxe' && PICKAXES[it.type]) ||
@@ -43,25 +50,27 @@ export class Profile {
       this.equipped.pickaxe = this.items.find((it) => it.kind === 'pickaxe').uid;
     }
 
-    this.quest = {
-      active: !!d.quest?.active,
-      kills: Math.max(0, Math.floor(d.quest?.kills || 0)),
-      completed: Math.max(0, Math.floor(d.quest?.completed || 0)),
-    };
-    this.where = d.where === 'cave' ? 'cave' : 'overworld';
+    // one bounty per giver; a save from before Jack kept Rob's as `quest`
+    this.quests = {};
+    for (const id of Object.keys(QUESTS)) this.quests[id] = bounty(d.quests?.[id] ?? (id === 'rob' ? d.quest : null));
+    this.where = PLACES.includes(d.where) ? d.where : 'overworld';
     this.pos = Array.isArray(d.pos) && d.pos.length === 2 && d.pos.every(Number.isFinite) ? d.pos : null;
     this.yaw = Number.isFinite(d.yaw) ? d.yaw : null;
     // who you have met and which hints you have already been given
     this.met = {};
     for (const [k, v] of Object.entries(d.met || {})) if (typeof v === 'boolean') this.met[k] = v;
     this.met.rob = !!this.met.rob;
+    this.met.jack = !!this.met.jack;
     const s = d.stats || {};
     this.stats = {
-      mined: s.mined | 0, kills: s.kills | 0, crafted: s.crafted | 0,
+      mined: s.mined | 0, kills: s.kills | 0, elites: s.elites | 0, crafted: s.crafted | 0,
       deaths: s.deaths | 0, ores: s.ores | 0, playTime: +s.playTime || 0,
     };
     this._listeners = new Set();
   }
+
+  /** Rob's bounty, by its old name. */
+  get quest() { return this.quests.rob; }
 
   /** `fn(what)` whenever something about you changes. */
   onChange(fn) { this._listeners.add(fn); return () => this._listeners.delete(fn); }
@@ -184,10 +193,10 @@ export class Profile {
 
   toJSON() {
     return {
-      v: 1,
+      v: 2,
       cash: this.cash, exp: this.exp, ores: this.ores,
       items: this.items, equipped: this.equipped,
-      quest: this.quest, where: this.where, pos: this.pos, yaw: this.yaw,
+      quests: this.quests, where: this.where, pos: this.pos, yaw: this.yaw,
       met: this.met, stats: this.stats,
       savedAt: Date.now(),
     };

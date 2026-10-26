@@ -399,7 +399,7 @@ export function dressHuman(rig, look = {}) {
   // hair: a cap over the top and down the back
   rig.box('head', h + 0.03, 0.07, h + 0.03, hairM, { y: h + 0.01 });
   rig.box('head', h + 0.03, h * 0.6, 0.05, hairM, { y: h * 0.68, z: -h / 2 - 0.005 });
-  if (beard) rig.box('head', h * 0.86, 0.12, 0.08, rig.mat('#a5582a'), { y: 0.03, z: h / 2 + 0.02 });
+  if (beard) rig.box('head', h * 0.86, 0.12, 0.08, rig.mat(typeof beard === 'string' ? beard : '#a5582a'), { y: 0.03, z: h / 2 + 0.02 });
   if (hat === 'miner') {
     const hatM = rig.mat('#e3b23c');
     rig.box('head', h + 0.08, 0.1, h + 0.1, hatM, { y: h + 0.04 });
@@ -424,12 +424,13 @@ export function dressHuman(rig, look = {}) {
 
 /**
  * Dresses a rig as a skeleton: thin bones where a person has limbs, a
- * ribcage, a skull with something red living in its eyes.
+ * ribcage, a skull with something red living in its eyes. An elite's bones
+ * are older and greyer, and what lives in its eyes burns blue.
  */
-export function dressSkeleton(rig) {
-  const bone = rig.mat('#e6dcc4');
-  const dark = rig.mat('#b9ab8c');
-  const skull = rig.mat(0xffffff, { map: faceTexture('skull') });
+export function dressSkeleton(rig, { elite = false } = {}) {
+  const bone = rig.mat(elite ? '#b9ad92' : '#e6dcc4');
+  const dark = rig.mat(elite ? '#83775f' : '#b9ab8c');
+  const skull = rig.mat(0xffffff, { map: faceTexture(elite ? 'skull-elite' : 'skull') });
   // pelvis and spine
   rig.box('hips', 0.3, 0.12, 0.16, bone, { y: -0.02 });
   rig.box('torso', 0.07, B.torso[1], 0.07, dark, { y: B.torso[1] / 2, z: -0.06 });
@@ -451,7 +452,7 @@ export function dressSkeleton(rig) {
   rig.headMesh = head;
   rig.box('head', h * 0.8, 0.07, h * 0.6, bone, { y: 0.02, z: 0.04 });
   // the eyes glow even when the torches do not reach
-  const glow = rig.mat('#ff3a1a', { emissive: '#ff2a00' });
+  const glow = elite ? rig.mat('#8fd8ff', { emissive: '#3aa8ff' }) : rig.mat('#ff3a1a', { emissive: '#ff2a00' });
   for (const x of [-0.07, 0.07]) rig.box('head', 0.045, 0.035, 0.01, glow, { y: h * 0.57, z: h / 2 + 0.006, shadow: false });
   rig.eyeMat = glow;
   // limbs: bones with knobbly ends

@@ -20,12 +20,14 @@ const LOOK = {
 };
 
 export class RockField {
-  constructor({ scene, collider, spots, fx }) {
+  /** `counts`: how many of each kind are out at once - the cave's, unless told otherwise */
+  constructor({ scene, collider, spots, fx, counts = ROCK_COUNTS, seed = 4242 }) {
     this.scene = scene;
     this.collider = collider;
     this.spots = spots;
     this.fx = fx;
-    this.rng = makeRng(4242);
+    this.counts = counts;
+    this.rng = makeRng(seed);
     this.rocks = [];
     this.pending = [];          // { kind, at } waiting to grow back
     this.time = 0;
@@ -43,9 +45,9 @@ export class RockField {
     }
   }
 
-  /** Fills the cave: every kind up to its count. */
+  /** Fills the place: every kind up to its count. */
   populate(avoid = null) {
-    for (const [kind, n] of Object.entries(ROCK_COUNTS)) {
+    for (const [kind, n] of Object.entries(this.counts)) {
       for (let i = 0; i < n; i++) this.spawn(kind, avoid);
     }
   }

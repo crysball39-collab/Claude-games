@@ -1,9 +1,11 @@
 /* =============================================================================
    The main menu: CONTINUE when there is a smith saved, NEW GAME (which asks
-   first, if there is one to lose), CONTROLS and SETTINGS.
+   first, if there is one to lose), CONTROLS and SETTINGS - and, in the
+   corner, who is playing, which opens the account screen.
    ========================================================================== */
 import { $, $$, money } from '../core/util.js';
 import { levelFromExp } from '../game/data.js';
+import { cloud } from '../game/cloud.js';
 
 export class Menu {
   constructor(settings, { onContinue, onNewGame }) {
@@ -39,11 +41,24 @@ export class Menu {
 
   showPanel(id) {
     for (const p of $$('.menu-panel')) p.classList.toggle('hidden', p.id !== id);
+    $('#btn-account').classList.toggle('hidden', id !== 'panel-main');
   }
 
-  /** `save` is what is in storage, or null. */
-  show(save) {
+  /** `save` is what is in storage for whoever is playing, or null; `note` a word for under the buttons. */
+  show(save, note = null) {
+    this.paint(save, note);
+    this.screen.classList.add('active');
+    this.showPanel('panel-main');
+  }
+
+  /** The buttons and the line about your smith, staying on whichever panel is open. */
+  paint(save, note = null) {
     this.save = save;
+    const who = cloud.account?.name;
+    $('#confirm-new-text').textContent = who
+      ? `${who}'s smith - ores, gear, cash and level - will be erased from your account.`
+      : 'Your saved smith - ores, gear, cash and level - will be erased.';
+    $('#menu-foot').textContent = who ? `landscape · ${who} is saved to the cloud` : 'landscape · your progress saves itself';
     $('#btn-continue').classList.toggle('hidden', !save);
     $('#btn-newgame').textContent = save ? 'NEW GAME' : 'PLAY';
     $('#btn-newgame').classList.toggle('primary', !save);
@@ -51,12 +66,11 @@ export class Menu {
       const lv = levelFromExp(save.exp || 0).level;
       const items = (save.items || []).length;
       const ores = Object.values(save.ores || {}).reduce((a, b) => a + b, 0);
-      $('#menu-save').textContent = `Saved smith: level ${lv} · ${money(save.cash || 0)} · ${items} item${items === 1 ? '' : 's'} · ${ores} ore`;
+      $('#menu-save').textContent = `${who || 'Saved smith'}: level ${lv} · ${money(save.cash || 0)} · ${items} item${items === 1 ? '' : 's'} · ${ores} ore`;
     } else {
-      $('#menu-save').textContent = '';
+      $('#menu-save').textContent = who ? `${who}: a new smith, ready to start` : '';
     }
-    this.screen.classList.add('active');
-    this.showPanel('panel-main');
+    if (note) $('#menu-save').textContent = note;
   }
 
   hide() {

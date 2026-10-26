@@ -444,6 +444,42 @@ export function robPortrait() {
   });
 }
 
+export function jackPortrait() {
+  return cached('jack', (ctx) => {
+    const g = ctx.createLinearGradient(0, 0, 0, S);
+    g.addColorStop(0, '#1c2433'); g.addColorStop(1, '#0c0f16');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, S, S);
+    // shoulders: a leather jerkin, an iron pauldron
+    ctx.beginPath(); ctx.moveTo(14, 128); ctx.quadraticCurveTo(20, 96, 64, 94); ctx.quadraticCurveTo(108, 96, 114, 128); ctx.closePath();
+    plainFill(ctx, '#5a3a22');
+    ctx.beginPath(); ctx.moveTo(14, 128); ctx.quadraticCurveTo(14, 104, 34, 100); ctx.lineTo(40, 128); ctx.closePath();
+    plainFill(ctx, '#6d737b');
+    // face
+    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(34, 34, 60, 62, 10) : ctx.rect(34, 34, 60, 62);
+    plainFill(ctx, '#c98e64');
+    // a short grey beard
+    ctx.beginPath(); ctx.moveTo(34, 72); ctx.quadraticCurveTo(64, 78, 94, 72); ctx.lineTo(90, 94);
+    ctx.quadraticCurveTo(64, 108, 38, 94); ctx.closePath();
+    plainFill(ctx, '#9a968e');
+    ctx.fillStyle = '#7d7972';
+    ctx.fillRect(48, 72, 32, 5);
+    // eyes, and the scar through one brow
+    ctx.fillStyle = '#fff'; ctx.fillRect(44, 56, 12, 8); ctx.fillRect(72, 56, 12, 8);
+    ctx.fillStyle = '#5f7a74'; ctx.fillRect(48, 57, 6, 7); ctx.fillRect(76, 57, 6, 7);
+    ctx.fillStyle = '#8d8a84'; ctx.fillRect(42, 50, 16, 4); ctx.fillRect(70, 50, 16, 4);
+    ctx.strokeStyle = 'rgba(120,50,45,0.85)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(74, 44); ctx.lineTo(84, 68); ctx.stroke();
+    // the hard hat, lamp lit
+    ctx.beginPath(); ctx.moveTo(26, 40); ctx.quadraticCurveTo(64, 2, 102, 40); ctx.closePath();
+    plainFill(ctx, '#e3b23c');
+    ctx.beginPath(); ctx.rect(22, 38, 84, 8);
+    plainFill(ctx, '#c9971f', 3);
+    ctx.beginPath(); ctx.arc(64, 26, 8, 0, Math.PI * 2);
+    plainFill(ctx, '#fff6c8', 3);
+  });
+}
+
 /** The colour of an item's rarity, for borders. */
 export function rarityClass(r) { return 'r-' + r; }
 

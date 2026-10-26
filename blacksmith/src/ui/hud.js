@@ -1,5 +1,5 @@
 /* =============================================================================
-   The HUD: health, stamina and EXP top left, cash top right, Rob's bounty top
+   The HUD: health, stamina and EXP top left, cash top right, the bounties top
    middle, the bag on the right edge, the stick bottom left and the buttons
    under the right thumb. Ore you pick up runs down a feed on the left; rare
    finds and level-ups get the middle of the screen to themselves.
@@ -92,17 +92,14 @@ export class Hud {
     }
   }
 
-  /** Rob's bounty: null when there is none running. */
-  setQuest(q) {
-    const key = q ? `${q.kills}/${q.need}` : '';
+  /** The bounties running: [{ giver, what, kills, need }], one pill each; [] for none. */
+  setQuests(list) {
+    const key = list.map((q) => `${q.giver}${q.kills}/${q.need}`).join(',');
     if (!this._changed('quest', key)) return;
-    if (!q) { this.questEl.classList.add('hidden'); return; }
-    this.questEl.classList.remove('hidden');
-    const done = q.kills >= q.need;
-    this.questEl.classList.toggle('done', done);
-    this.questEl.innerHTML = done
-      ? 'Rob\'s bounty: <b>done</b> &mdash; go and get paid'
-      : `Rob's bounty: skeletons <b>${q.kills} / ${q.need}</b>`;
+    this.questEl.classList.toggle('hidden', !list.length);
+    this.questEl.innerHTML = list.map((q) => q.kills >= q.need
+      ? `<div class="qpill done">${q.giver}'s bounty: <b>done</b> &mdash; go and get paid</div>`
+      : `<div class="qpill">${q.giver}'s bounty: ${q.what} <b>${q.kills} / ${q.need}</b></div>`).join('');
   }
 
   /** The context button: TALK beside Rob, ANVIL at the anvil, nothing elsewhere. */

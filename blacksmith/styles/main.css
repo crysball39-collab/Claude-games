@@ -22,6 +22,7 @@
   --safe-t:env(safe-area-inset-top,0px);
   --safe-b:env(safe-area-inset-bottom,0px);
 }
+:root{color-scheme:dark}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{
   margin:0;padding:0;height:100%;width:100%;overflow:hidden;
@@ -92,7 +93,9 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
   clip-path:polygon(0 0,100% 0,100% 30%,78% 45%,70% 100%,30% 100%,22% 45%,0 30%);
   filter:drop-shadow(0 0 18px rgba(255,122,31,.45))}
 .menu-tagline{margin:.5rem 0 1.1rem;color:var(--muted);font-size:.74rem;letter-spacing:.38em;text-transform:uppercase}
-.menu-buttons{display:flex;flex-direction:column;gap:.5rem;width:min(300px,70vw)}
+.menu-buttons{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;width:min(300px,70vw)}
+.menu-buttons .mbtn{grid-column:1 / -1}
+.menu-buttons .mbtn.half{grid-column:auto;padding-left:.4rem;padding-right:.4rem;font-size:.82rem;letter-spacing:.12em}
 .menu-save{margin-top:.7rem;font-size:.72rem;color:#9b8a7c;min-height:1em;text-align:center}
 .menu-foot{position:absolute;bottom:calc(var(--safe-b) + 10px);color:#6b5d52;font-size:.66rem;letter-spacing:.18em}
 
@@ -120,6 +123,46 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
   border-radius:6px;padding:.3rem;font-family:inherit}
 .setting input[type=checkbox]{width:22px;height:22px;accent-color:var(--ember)}
 .setting-note{margin:.4rem 0;color:#7d6e62;font-size:.72rem;line-height:1.5}
+
+/* who is playing, top right of the menu: tap it for the account screen */
+.menu-account{position:absolute;z-index:3;top:calc(var(--safe-t) + 10px);right:calc(var(--safe-r) + 12px);
+  display:flex;align-items:center;gap:7px;max-width:46vw;padding:6px 12px 6px 9px;border-radius:99px;
+  border:1px solid var(--line);background:rgba(20,14,10,.66);font-size:.66rem;font-weight:800;letter-spacing:.14em;color:var(--ink)}
+.menu-account:active{background:rgba(255,255,255,.12)}
+.menu-account #ma-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.menu-account .ma-icon{flex:0 0 auto;width:14px;height:14px;border-radius:50%;border:2px solid var(--muted);position:relative}
+.menu-account .ma-icon::after{content:"";position:absolute;left:2px;right:2px;bottom:-7px;height:6px;border-radius:6px 6px 0 0;border:2px solid var(--muted);border-bottom:none}
+.menu-account.in .ma-icon,.menu-account.in .ma-icon::after{border-color:var(--uncommon)}
+.menu-account.off{opacity:.7}
+
+/* the account screen: log in, sign up, or who you are */
+.acct-body{width:min(440px,90vw);display:flex;flex-direction:column;gap:.6rem}
+.acct-view{display:flex;flex-direction:column;gap:.55rem}
+.acct-tabs{display:flex;gap:6px;margin-left:auto}
+.acct-tab{padding:.5rem .8rem;border-radius:7px;border:1px solid var(--line);background:rgba(255,255,255,.04);
+  font-weight:800;letter-spacing:.14em;font-size:.7rem;color:var(--muted)}
+.acct-tab.on{border-color:var(--ember-lit);background:rgba(255,122,31,.2);color:var(--ink)}
+.acct-form[data-mode="login"] .signup-only{display:none}
+.field{display:flex;align-items:center;gap:.7rem}
+.field span{flex:0 0 6.4em;font-size:.76rem;color:var(--muted);letter-spacing:.04em}
+.field input{flex:1;min-width:0;padding:.5rem .65rem;border-radius:7px;border:1px solid var(--line);background:rgba(255,255,255,.07);
+  color:var(--ink);font-family:inherit;font-size:16px;user-select:text;-webkit-user-select:text;touch-action:manipulation}
+.field input:focus{outline:none;border-color:var(--ember-lit);box-shadow:0 0 0 2px rgba(255,122,31,.25)}
+.acct-mine{display:flex;flex-wrap:wrap;gap:6px;padding-left:7.1em}
+.acct-mine button{padding:.28rem .62rem;border-radius:99px;border:1px solid var(--line);background:rgba(255,255,255,.05);
+  font-size:.68rem;font-weight:700;letter-spacing:.04em;color:var(--ink)}
+.acct-mine button:active{background:rgba(255,255,255,.14)}
+.check{display:flex;align-items:center;gap:.55rem;font-size:.78rem;color:var(--muted)}
+.check input{flex:0 0 auto;width:20px;height:20px;accent-color:var(--ember)}
+.acct-go{display:flex;align-items:center;gap:.8rem}
+.acct-left{flex:1;min-width:0;display:flex;flex-direction:column;gap:.25rem}
+.acct-go .mbtn{flex:0 0 auto;padding:.6rem 1.2rem}
+.acct-msg{margin:0;min-height:1.1em;font-size:.76rem;color:#ffb08a;line-height:1.3}
+.acct-msg.ok{color:var(--uncommon)}
+.acct-note{margin:0;font-size:.7rem;color:#8a7a6e;line-height:1.45}
+.acct-who{margin:0;font-size:.9rem;line-height:1.4}
+.acct-status{margin:0;font-size:.76rem;color:var(--muted)}
+.acct-link a{color:var(--ember-lit);font-weight:800;word-break:break-all}
 
 .modal{position:absolute;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6)}
 .modal-card{width:min(400px,86vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;text-align:center}
@@ -185,10 +228,11 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
 /* top middle */
 #top-mid{position:absolute;top:calc(var(--safe-t) + 8px);left:50%;transform:translateX(-50%);pointer-events:none;
   display:flex;flex-direction:column;align-items:center;gap:4px}
-#quest-track{padding:5px 12px;border-radius:99px;background:rgba(20,14,10,.6);border:1px solid var(--hud-line);
+#quest-track{display:flex;flex-direction:column;align-items:center;gap:4px}
+.qpill{padding:5px 12px;border-radius:99px;background:rgba(20,14,10,.6);border:1px solid var(--hud-line);
   font-size:.72rem;font-weight:700;letter-spacing:.06em;white-space:nowrap}
-#quest-track b{color:var(--ember-lit)}
-#quest-track.done{border-color:var(--gold);color:var(--gold);animation:pulse 1.2s ease-in-out infinite}
+.qpill b{color:var(--ember-lit)}
+.qpill.done{border-color:var(--gold);color:var(--gold);animation:pulse 1.2s ease-in-out infinite}
 @keyframes pulse{50%{box-shadow:0 0 14px rgba(242,192,58,.6)}}
 #area-banner{position:absolute;top:14%;left:50%;transform:translateX(-50%);text-align:center;pointer-events:none;opacity:0;transition:opacity .6s}
 #area-banner.show{opacity:1}
@@ -482,6 +526,20 @@ body.portrait-block #rotate-overlay{display:flex}
   .vbar.hp{height:14px}
   .menu-buttons .mbtn{padding:.55rem 1rem}
   .menu-anvil{display:none}
+  .logo.big{font-size:clamp(2rem,7vw,3.2rem)}
+  .menu-tagline{margin:.35rem 0 .7rem}
+  .menu-save{margin-top:.45rem}
+  .scroll-body{margin-top:calc(var(--safe-t) + 40px);max-height:calc(100% - 52px);padding:10px 12px}
+  .acct-body{gap:.45rem}
+  .acct-view{gap:.4rem}
+  .acct-tab{padding:.4rem .6rem}
+  .field input{padding:.36rem .6rem}
+  .acct-go .mbtn{padding:.48rem 1rem;font-size:.84rem}
+  .acct-note{font-size:.64rem}
+}
+/* short screens: the menu's footer would run into the save line */
+@media (max-height:360px){
+  .menu-foot{display:none}
 }
 /* narrow phones: the anvil's card takes a little more of the screen, and its
    recipe chips lose their pictures to keep their names */
@@ -543,3 +601,4 @@ body.portrait-block #rotate-overlay{display:flex}
   .sd-buy .mbtn{padding:.5rem .9rem;font-size:.82rem}
   .sd-note{font-size:.6rem;line-height:1.25}
 }
+.pause-cloud{color:#9cc79c}

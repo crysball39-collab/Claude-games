@@ -1,14 +1,17 @@
 /* =============================================================================
-   The game: two places, one smith, and everything that happens between them.
+   The game: three places, one smith, and everything that happens between them.
 
-     The Meadow  - the stone circle you start on, the Forge, the cave mouth
-     The Cave    - the ring-shaped room: rocks to mine, three skeletons, Rob
+     The Meadow     - the stone circle you start on, the Forge, the cave mouth
+     The Cave       - the ring-shaped room: rocks to mine, three skeletons, Rob
+     The Deep Mine  - down the hall from the cave: boulders, three elite
+                      skeletons in iron, and Jack
 
    Walking into the cave mouth takes you inside; walking back out of the
-   tunnel brings you home. The anvil borrows the camera for a close-up and
-   runs the forging - the pour, the hammer, the quench - before it hands you
-   what you made. Rob gives you his bounty and sells you his pickaxe. And
-   all of it is written to the save as it happens.
+   tunnel brings you home. The hall in the cave's north wall goes down to the
+   deep mine, and its steps bring you back up. The anvil borrows the camera
+   for a close-up and runs the forging - the pour, the hammer, the quench -
+   before it hands you what you made. Rob and Jack give out bounties. And all
+   of it is written to the save as it happens.
    ========================================================================== */
 import {
   PerspectiveCamera, WebGLRenderer, SRGBColorSpace, ACESFilmicToneMapping, PCFShadowMap, PCFSoftShadowMap,
@@ -16,18 +19,19 @@ import {
 } from 'three';
 import { buildOverworld, OW } from './overworld.js';
 import { buildCave, CV } from './cave.js';
+import { buildDeep, DM } from './deep.js';
 import { Player } from './player.js';
 import { CameraRig } from './camera.js';
 import { Effects } from './fx.js';
 import { RockField } from './rocks.js';
 import { SkeletonPack } from './skeletons.js';
-import { Rob } from './rob.js';
+import { makeRob, makeJack } from './rob.js';
 import { sfx } from './sfx.js';
 import { updateOreMaterials, hotMetalMaterial, oreMaterial } from './materials.js';
 import { buildWeapon } from './gear.js';
-import { ORES, RARITIES, QUEST, PICKAXES, recipe, itemName, itemRarity, partsOf } from './data.js';
+import { ORES, RARITIES, QUESTS, PICKAXES, SKELETON, ELITE, DEEP_ROCK_COUNTS, recipe, itemName, itemRarity, partsOf } from './data.js';
 import { writeSave } from './save.js';
-import { robPortrait, itemIcon } from '../ui/icons.js';
+import { robPortrait, jackPortrait, itemIcon } from '../ui/icons.js';
 import { yieldToPaint, clamp, clamp01, lerp, smoothstep, easeOutCubic, IS_TOUCH, money } from '../core/util.js';
 
 export const QUALITY = {
@@ -109,16 +113,28 @@ export class Game {
     progress(0.4, 'Lighting the forge');
     await yieldToPaint();
     this.areas.cave = buildCave({ quality: this.quality });
-    progress(0.62, 'Digging out the cave');
+    progress(0.56, 'Digging out the cave');
     await yieldToPaint();
-    const cave = this.areas.cave;
+    this.areas.deep = buildDeep({ quality: this.quality });
+    progress(0.68, 'Going deeper');
+    await yieldToPaint();
+    const cave = this.areas.cave, deep = this.areas.deep;
     this.fx = new Effects(this.areas.overworld.scene, this.camera, document.querySelector('#floaters'));
-    this.rocks = new RockField({ scene: cave.scene, collider: cave.collider, spots: cave.rockSpots, fx: this.fx });
-    this.rocks.populate();
-    this.skeletons = new SkeletonPack({ scene: cave.scene, collider: cave.collider, spots: cave.skeletonSpots, fx: this.fx, inCamp: cave.inCamp });
-    this.skeletons.populate();
-    this.rob = new Rob(cave.scene);
-    progress(0.78, 'Waking the skeletons');
+    // each mine has its own rocks, its own skeletons and its own bounty-giver
+    this.fields = {
+      cave: new RockField({ scene: cave.scene, collider: cave.collider, spots: cave.rockSpots, fx: this.fx }),
+      deep: new RockField({ scene: deep.scene, collider: deep.collider, spots: deep.rockSpots, fx: this.fx, counts: DEEP_ROCK_COUNTS, seed: 777 }),
+    };
+    this.packs = {
+      cave: new SkeletonPack({ scene: cave.scene, arena: cave.arena, fx: this.fx, kind: SKELETON }),
+      deep: new SkeletonPack({ scene: deep.scene, arena: deep.arena, fx: this.fx, kind: ELITE, seed: 2929 }),
+    };
+    for (const f of Object.values(this.fields)) f.populate();
+    for (const k of Object.values(this.packs)) k.populate();
+    this.rob = makeRob(cave.scene);
+    this.jack = makeJack(deep.scene);
+    this.npcs = { rob: this.rob, jack: this.jack };
+    progress(0.8, 'Waking the skeletons');
     await yieldToPaint();
     this.player = new Player(this.profile);
     this.player.onExhausted = () => this.input?.setSprint(false);
@@ -145,6 +161,12 @@ export class Game {
     }
     progress(1, 'Ready');
   }
+
+  /** The rocks and the skeletons where you are, or the cave's when you are in neither mine. */
+  get rocks() { return this.fields[this.area?.id] || this.fields.cave; }
+  get skeletons() { return this.packs[this.area?.id] || this.packs.cave; }
+  /** Who gives out bounties where you are. */
+  get giver() { return this.area?.id === 'deep' ? 'jack' : this.area?.id === 'cave' ? 'rob' : null; }
 
   /** Puts you where the save says you were, or on the stone circle. */
   begin() {
@@ -174,6 +196,7 @@ export class Game {
     if (banner) this.hud.areaBanner(area.name, area.sub);
     this.hud.setInteract(null);
     if (id === 'cave') this._hint('hintCave', 'Hold ATTACK by a pebble or a rock to mine it. Rob is just to your right.', 4200, 2600);
+    if (id === 'deep') this._hint('hintDeep', 'The elites down here wear iron and hit hard. Jack\'s camp, on your left, is safe.', 4600, 2600);
   }
 
   /** A word of advice, once per smith, a moment after `delay` ms. */
@@ -213,10 +236,10 @@ export class Game {
     const playing = this.mode === 'play';
 
     area.update(dt, this.time, { player: p.pos, camera: this.camera, fx: this.fx });
-    if (area.id === 'cave' && this.mode !== 'menu') {
+    if (area.mine && this.mode !== 'menu') {
       this.rocks.update(dt, p.pos);
       if (this.mode !== 'talk') this.skeletons.update(dt, p, this._skHooks);
-      this.rob.update(dt, p.pos, this.questState());
+      this.npcs[this.giver].update(dt, p.pos, this.questState(this.giver));
     }
 
     if (this.mode !== 'menu') {
@@ -251,12 +274,11 @@ export class Game {
   /* ------------------------------ world events ----------------------------- */
 
   _triggers() {
-    const p = this.player.pos;
-    if (this.area.id === 'overworld' && this.area.enteringCave(p)) {
-      this.travel('cave', CV.entry);
-    } else if (this.area.id === 'cave' && this.area.leaving(p)) {
-      this.travel('overworld', OW.caveExit);
-    }
+    const p = this.player.pos, id = this.area.id;
+    if (id === 'overworld' && this.area.enteringCave(p)) this.travel('cave', CV.entry);
+    else if (id === 'cave' && this.area.leaving(p)) this.travel('overworld', OW.caveExit);
+    else if (id === 'cave' && this.area.descending(p)) this.travel('deep', DM.entry);
+    else if (id === 'deep' && this.area.leaving(p)) this.travel('cave', CV.hall.back);
   }
 
   _interactions(input) {
@@ -264,8 +286,9 @@ export class Game {
     let near = null;
     if (this.area.id === 'overworld' && this.area.nearAnvil(p)) near = 'anvil';
     if (this.area.id === 'overworld' && this.area.nearWall(p)) near = 'wall';
-    if (this.area.id === 'cave' && Math.hypot(p.x - this.rob.pos.x, p.z - this.rob.pos.z) < 3.3) near = 'rob';
-    this.hud.setInteract({ anvil: 'ANVIL', wall: 'PICKAXES', rob: 'TALK' }[near] || null);
+    const g = this.giver && this.npcs[this.giver];
+    if (g && Math.hypot(p.x - g.pos.x, p.z - g.pos.z) < 3.3) near = this.giver;
+    this.hud.setInteract({ anvil: 'ANVIL', wall: 'PICKAXES', rob: 'TALK', jack: 'TALK' }[near] || null);
     if (input.pressed.interact && near) this._use(near);
     if (this._tap) {
       const t = this._tap;
@@ -274,7 +297,7 @@ export class Game {
     }
   }
 
-  /** A tap on the screen that was not a drag: did it land on the anvil, the pickaxe wall, or Rob? */
+  /** A tap on the screen that was not a drag: did it land on the anvil, the pickaxe wall, Rob or Jack? */
   onTap(x, y) {
     if (this.mode === 'forge' && this.craft) { this.skipCraft(); return; }
     if (this.mode === 'shop') { this._tapWall(x, y); return; }
@@ -292,10 +315,11 @@ export class Game {
   _tapWorld(x, y) {
     const ray = this._ray(x, y);
     // the things a tap can mean, here, and how near you must be for it to count
+    const g = this.giver && this.npcs[this.giver];
     const things = this.area.id === 'overworld'
       ? [['anvil', this.area.forge.anvil, new Vector3(OW.anvil.x, 0, OW.anvil.z), 13, 'Walk over to the anvil first'],
         ['wall', this.area.pickWall.hit, new Vector3(OW.wall.x, 0, OW.wall.z), 13, 'Walk over to the pickaxe wall first']]
-      : [['rob', this.rob.group, this.rob.pos, 10, 'Walk over to Rob first']];
+      : g ? [[this.giver, g.group, g.pos, 10, `Walk over to ${g.name} first`]] : [];
     let best = null;
     for (const [what, obj, at, reach, far] of things) {
       const hit = ray.intersectObject(obj, true)[0];
@@ -314,7 +338,7 @@ export class Game {
   _use(what) {
     if (what === 'anvil') this.openForge();
     else if (what === 'wall') this.openShop();
-    else if (what === 'rob') this.talkToRob();
+    else if (what === 'rob' || what === 'jack') this.talkTo(what);
   }
 
   /* --------------------------------- combat -------------------------------- */
@@ -322,7 +346,7 @@ export class Game {
   /** Pickaxe for a rock, weapon for a skeleton: whatever is in front of you. */
   _pickTarget(pl) {
     const weapon = this.profile.weapon();
-    if (this.area.id === 'cave') {
+    if (this.area.mine) {
       const sk = this.skeletons.nearest(pl.pos, 3.3);
       if (sk) {
         return { tool: weapon ? 'weapon' : 'pickaxe', target: { skeleton: sk }, face: Math.atan2(sk.pos.x - pl.pos.x, sk.pos.z - pl.pos.z) };
@@ -335,7 +359,7 @@ export class Game {
 
   _impact(pl, s) {
     if (s.tool === 'hammer') { this._hammerBlow(); return; }
-    if (this.area.id !== 'cave') return;
+    if (!this.area.mine) return;
     const pk = this.profile.pickaxe();
     if (s.tool === 'pickaxe') {
       let rock = s.target?.rock;
@@ -393,23 +417,28 @@ export class Game {
     sfx.play('hit');
     this.camRig.shake(0.05, 0.12);
     for (const s of list) {
-      const killed = this.skeletons.hit(s, damage, pl.pos);
-      this.fx.text(new Vector3(s.pos.x, 2.0, s.pos.z), '-' + damage, 'dmg');
-      this.fx.sparks(new Vector3(s.pos.x, 1.25, s.pos.z), 5, { color: new Color('#fff1d0'), speed: 2.5 });
+      const { dealt, killed } = this.skeletons.hit(s, damage, pl.pos);
+      this.fx.text(new Vector3(s.pos.x, s.elite ? 2.15 : 2.0, s.pos.z), '-' + dealt, 'dmg');
+      // iron rings when it is hit; bone just cracks
+      this.fx.sparks(new Vector3(s.pos.x, 1.25, s.pos.z), s.elite ? 9 : 5, { color: new Color(s.elite ? '#ffd9a0' : '#fff1d0'), speed: 2.5 });
       if (killed) this._killed(s);
     }
   }
 
-  _killed() {
-    this.profile.stats.kills++;
-    const q = this.profile.quest;
-    if (q.active && q.kills < QUEST.kills) {
+  /** One fewer: Rob counts any skeleton, Jack only the elites. */
+  _killed(s) {
+    const P = this.profile;
+    P.stats.kills++;
+    if (s?.elite) P.stats.elites++;
+    for (const [id, Q] of Object.entries(QUESTS)) {
+      const q = P.quests[id];
+      if (!q.active || q.kills >= Q.kills || (Q.elite && !s?.elite)) continue;
       q.kills++;
-      if (q.kills >= QUEST.kills) {
-        this.hud.announce('BOUNTY DONE', 'Go back to Rob and get paid', '#f2c03a', 2600);
+      if (q.kills >= Q.kills) {
+        this.hud.announce('BOUNTY DONE', `Go back to ${Q.giver} and get paid`, '#f2c03a', 2600);
         sfx.play('quest');
       } else {
-        this.hud.toast(`Skeletons ${q.kills} / ${QUEST.kills}`, 1400);
+        this.hud.toast(`${Q.elite ? 'Elites' : 'Skeletons'} ${q.kills} / ${Q.kills}`, 1400);
       }
     }
     this._dirty = true;
@@ -436,7 +465,7 @@ export class Game {
     this.camRig.shake(0.1, 0.2);
     if (this.player.dead) this._died();
     else if (this.player.hp < this.profile.maxHp() * 0.35) {
-      this._hint('hintHurt', 'Low on health? Back off to Rob\'s camp: skeletons won\'t follow you there.', 4200);
+      this._hint('hintHurt', `Low on health? Back off to ${this.area.id === 'deep' ? 'Jack' : 'Rob'}'s camp: skeletons won't follow you there.`, 4200);
     }
   }
 
@@ -461,72 +490,98 @@ export class Game {
 
   /* --------------------------------- quests -------------------------------- */
 
-  /** What the mark over Rob's head should say. */
-  questState() {
-    const q = this.profile.quest;
-    if (q.active) return q.kills >= QUEST.kills ? 'ready' : 'active';
+  /** What the mark over a bounty-giver's head should say. */
+  questState(id = 'rob') {
+    const Q = QUESTS[id], q = this.profile.quests[id];
+    if (q.active) return q.kills >= Q.kills ? 'ready' : 'active';
+    if (this.profile.level < Q.level) return 'locked:' + Q.level;
     return 'offer';
   }
 
-  talkToRob() {
+  talkToRob() { this.talkTo('rob'); }
+
+  talkTo(id) {
     if (this.mode !== 'play') return;
+    const npc = this.npcs[id];
     this.mode = 'talk';
+    this.talking = id;
     this.input?.reset();
     this.hud.setBusy(true);
-    this.dlg.open('Rob', robPortrait());
-    // the camera comes round to look at him past your shoulder
-    const r = this.rob.pos, p = this.player.pos;
+    this.dlg.open(npc.name, id === 'jack' ? jackPortrait() : robPortrait());
+    // the camera comes round to look at them past your shoulder
+    const r = npc.pos, p = this.player.pos;
     const dx = r.x - p.x, dz = r.z - p.z, d = Math.hypot(dx, dz) || 1;
     const side = new Vector3(-dz / d, 0, dx / d);
     const camPos = new Vector3(p.x - (dx / d) * 2.2 + side.x * 1.1, 2.1, p.z - (dz / d) * 2.2 + side.z * 1.1);
     this.camRig.lend(camPos, new Vector3(r.x, 1.55, r.z), 0.6);
     this.player.yaw = Math.atan2(dx, dz);
-    this._robSays();
+    this._says(id);
     sfx.play('ui');
   }
 
-  _robSays(override = null) {
-    const P = this.profile, q = P.quest;
+  /** What they say, and what you can say back. */
+  _says(id, override = null) {
+    const P = this.profile, Q = QUESTS[id], q = P.quests[id];
+    const pay = `${money(Q.cash)} and ${Q.exp.toLocaleString('en-US')} EXP`;
     const choices = [];
     let text;
-    if (q.active && q.kills >= QUEST.kills) {
-      text = 'Ha! That\'s three of \'em back in the ground where they belong. Here - $1,000 and a hundred EXP, like I promised.';
-      choices.push({ label: `CLAIM ${money(QUEST.cash)} + ${QUEST.exp} EXP`, primary: true, pick: () => this._claimBounty() });
+    const take = { label: id === 'jack' ? 'KILL 5 ELITES' : 'KILL 3 SKELETONS', primary: true, pick: () => this._accept(id) };
+    if (q.active && q.kills >= Q.kills) {
+      text = id === 'jack'
+        ? `Five of 'em in pieces, iron and all. I keep my word: ${pay}.`
+        : 'Ha! That\'s three of \'em back in the ground where they belong. Here - $1,000 and a hundred EXP, like I promised.';
+      choices.push({ label: `CLAIM ${money(Q.cash)} + ${Q.exp.toLocaleString('en-US')} EXP`, primary: true, pick: () => this._claim(id) });
     } else if (q.active) {
-      const left = QUEST.kills - q.kills;
-      text = `${left} more skeleton${left === 1 ? '' : 's'} to go. Rattly fellas with wooden daggers - they hang about round the far side of the big wall.`;
-    } else if (!P.met.rob) {
-      text = `Well now, a smith! Name's Rob. These mines are crawling with skeletons. Kill three of 'em for me and I'll pay you ${money(QUEST.cash)} - and ${QUEST.exp} EXP for the experience.`;
-      choices.push({ label: 'KILL 3 SKELETONS', primary: true, pick: () => this._acceptBounty() });
+      const left = Q.kills - q.kills;
+      text = id === 'jack'
+        ? `${left} more elite${left === 1 ? '' : 's'}. They keep to the far side of the pillars. Dash when one raises its sword.`
+        : `${left} more skeleton${left === 1 ? '' : 's'} to go. Rattly fellas with wooden daggers - they hang about round the far side of the big wall.`;
+    } else if (id === 'jack' && P.level < Q.level) {
+      text = !P.met.jack
+        ? `Easy, smith. Name's Jack. The skeletons down here aren't Rob's rattlers - they're elites, in iron chestplates and boots, with iron swords. I pay ${pay} for five of them, but I don't send anyone under level ${Q.level}. You're level ${P.level}. Come back when you're ready.`
+        : `Level ${P.level} still. It takes level ${Q.level} for this work. Rob, up top, pays for the small ones - that's how I started.`;
+      P.met.jack = true;
+      this._dirty = true;
+    } else if (!P.met[id]) {
+      text = id === 'jack'
+        ? `Name's Jack. I hunt the elites - skeletons in iron, with iron swords. Kill five for me and I'll pay you ${pay}.`
+        : `Well now, a smith! Name's Rob. These mines are crawling with skeletons. Kill three of 'em for me and I'll pay you ${money(Q.cash)} - and ${Q.exp} EXP for the experience.`;
+      choices.push(take);
     } else {
-      text = q.completed
-        ? `Back for more? Same deal as always: three skeletons, ${money(QUEST.cash)} and ${QUEST.exp} EXP.`
-        : `Still got work if you want it. Three skeletons, ${money(QUEST.cash)} and ${QUEST.exp} EXP.`;
-      choices.push({ label: 'KILL 3 SKELETONS', primary: true, pick: () => this._acceptBounty() });
+      text = id === 'jack'
+        ? (q.completed ? `Back for more? Five elites, ${pay}. Same as always.` : `Level ${P.level} now. Good. Five elites, ${pay}. Keep your armour on.`)
+        : (q.completed
+          ? `Back for more? Same deal as always: three skeletons, ${pay}.`
+          : `Still got work if you want it. Three skeletons, ${pay}.`);
+      choices.push(take);
     }
     choices.push({ label: 'BYE', pick: () => this.closeTalk() });
     this.dlg.say(override || text, choices);
   }
 
-  _acceptBounty() {
-    const P = this.profile;
-    P.met.rob = true;
-    P.quest.active = true;
-    P.quest.kills = 0;
+  _accept(id) {
+    const P = this.profile, Q = QUESTS[id], q = P.quests[id];
+    if (P.level < Q.level) return;
+    P.met[id] = true;
+    q.active = true;
+    q.kills = 0;
     this._dirty = true;
     sfx.play('quest');
-    this.hud.toast('Bounty: kill 3 skeletons', 1800);
-    this._robSays('Good on you. Three skeletons - I\'ll be right here when you\'re done. Mind those daggers; dash out of the way when they wind up.');
+    this.hud.toast(id === 'jack' ? 'Bounty: kill 5 elite skeletons' : 'Bounty: kill 3 skeletons', 1800);
+    this._says(id, id === 'jack'
+      ? 'Five elites. I\'ll be by the fire. They hit harder than anything up top - an armoured smith lasts a lot longer down here.'
+      : 'Good on you. Three skeletons - I\'ll be right here when you\'re done. Mind those daggers; dash out of the way when they wind up.');
   }
 
-  _claimBounty() {
-    const P = this.profile, q = P.quest;
-    if (!(q.active && q.kills >= QUEST.kills)) return;
+  /** Paid, for as many as it took. Repeatable, every time. */
+  _claim(id) {
+    const P = this.profile, Q = QUESTS[id], q = P.quests[id];
+    if (!(q.active && q.kills >= Q.kills)) return;
     q.active = false;
     q.kills = 0;
     q.completed++;
-    P.addCash(QUEST.cash);
-    const levels = P.addExp(QUEST.exp);
+    P.addCash(Q.cash);
+    const levels = P.addExp(Q.exp);
     sfx.play('coin');
     this.save();
     if (levels > 0) {
@@ -538,15 +593,23 @@ export class Game {
         this.fx.sparks(this.player.pos.clone().setY(this.player.pos.y + 1.4), 24, { color: new Color('#ffd36a'), speed: 3, up: 3 });
       }, 300);
     } else {
-      this.hud.announce(`+${money(QUEST.cash)}`, `+${QUEST.exp} EXP`, '#f2c03a', 2000);
+      this.hud.announce(`+${money(Q.cash)}`, `+${Q.exp.toLocaleString('en-US')} EXP`, '#f2c03a', 2000);
     }
-    this._robSays(P.hasPickaxe('stone')
-      ? `There you are: ${money(QUEST.cash)}. Fancy another go? Those bones don't stay down for long.`
-      : `There you are: ${money(QUEST.cash)}. That's just what a Stone Pickaxe costs on the wall outside the cave mouth - the only thing that'll crack a boulder.`);
+    if (id === 'jack') {
+      this._says(id, `There: ${money(Q.cash)}. Fancy another five? They'll be back on their feet soon enough.`);
+      return;
+    }
+    const next = QUESTS.jack;
+    this._says(id, P.level >= next.level && !P.met.jack
+      ? `There you are: ${money(Q.cash)}. Level ${P.level}, eh? Then go and see Jack - down the hall in the north wall, in the deep mine. He pays a lot more, for a lot worse.`
+      : P.hasPickaxe('stone')
+        ? `There you are: ${money(Q.cash)}. Fancy another go? Those bones don't stay down for long.`
+        : `There you are: ${money(Q.cash)}. That's just what a Stone Pickaxe costs on the wall outside the cave mouth - the only thing that'll crack a boulder.`);
   }
 
   closeTalk() {
     if (this.mode !== 'talk') return;
+    this.talking = null;
     this.dlg.close();
     this.camRig.giveBack(0.5);
     this.mode = 'play';
@@ -955,7 +1018,12 @@ export class Game {
     const L = P.levelInfo();
     this.hud.setLevel(L.level, L.into, L.need);
     this.hud.setCash(P.cash);
-    this.hud.setQuest(P.quest.active ? { kills: P.quest.kills, need: QUEST.kills } : null);
+    const running = [];
+    for (const [id, Q] of Object.entries(QUESTS)) {
+      const q = P.quests[id];
+      if (q.active) running.push({ giver: Q.giver, what: Q.elite ? 'elites' : 'skeletons', kills: q.kills, need: Q.kills });
+    }
+    this.hud.setQuests(running);
     const held = p.heldParts();
     this.hud.setAttackIcon(held ? itemIcon(held.item) : null);
   }
@@ -1015,9 +1083,9 @@ export class Game {
     this._unsub?.();
     if (this.craft) this._endCraft();
     this.fx?.dispose();
-    this.rocks?.dispose();
-    this.skeletons?.dispose();
-    this.rob?.dispose();
+    for (const f of Object.values(this.fields || {})) f.dispose();
+    for (const k of Object.values(this.packs || {})) k.dispose();
+    for (const n of Object.values(this.npcs || {})) n.dispose();
     this.player?.dispose();
     for (const a of Object.values(this.areas || {})) a.dispose();
     this.renderer.dispose();
