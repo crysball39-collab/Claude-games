@@ -103,10 +103,11 @@ Levels take 100 EXP times your level to climb, and each one adds 5 max HP.
 ### The anvil
 
 Tap the anvil in the Forge and the camera zooms in on it. Choose what to make,
-then put ore in up to **three slots**, any amount of each. Tap a slot to choose
-its ore, and tap it again whenever you like to change it; choosing an ore that is
-already in another slot swaps the two slots over. Each thing takes at least this
-much ore:
+then put ore in up to **three slots**, any amount of each. Tap a slot's ore (or
+its empty box) to choose the ore, and tap it again whenever you like to change it;
+choosing an ore that is already in another slot swaps the two slots over. On a
+tall screen the slots stand side by side; on a short one they are three rows, so
+every name and button has room. Each thing takes at least this much ore:
 
 | Weapon | Ore | | Armour (Light) | Ore |
 | ------ | --- | - | -------------- | --- |
@@ -194,7 +195,8 @@ path into the cave, mine with ATTACK held, back out and over to the anvil, forge
 dagger from what it found, and go back down to kill a skeleton with it. Then it
 opens the game again on a 585 × 260 screen, a phone on its side with the game
 inside another app, and checks that the anvil's slots and FORGE button, and the
-pickaxe wall's BUY button, all fit on it without overlapping.
+pickaxe wall's BUY button, all fit on it without overlapping, and that nothing on
+the anvil's card lands on anything else with the phone's text made 130% bigger.
 
 ```
 npm run verify:blacksmith            # the source, over http

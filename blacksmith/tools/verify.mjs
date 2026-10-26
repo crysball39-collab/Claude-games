@@ -388,7 +388,7 @@ try {
   const replaced = await slotsNow();
   await pickOre(2, 'Stone');
   const [one, two] = (await slotsNow()).split(' ');
-  await page.tap('#slots .slot:nth-child(1) .snum');
+  await page.tap('#slots .slot:nth-child(1) .sicon');
   await page.locator('#op-grid .opt', { hasText: 'Stone' }).first().tap();
   const swapped = await slotsNow();
   check('tapping a slot that has an ore in it changes the ore, and one from another slot swaps over',
@@ -789,7 +789,7 @@ await h.close();
       const card = r(document.querySelector('#forge-card')), body = r(document.querySelector('.forge-body')), foot = r(document.querySelector('.forge-foot'));
       const slots = [...document.querySelectorAll('#slots .slot')].map(r);
       const btns = [...document.querySelectorAll('#slots .samt button')].map(r);
-      const picks = [...document.querySelectorAll('#slots .spick')].map((e) => Math.round(r(e).height));
+      const picks = [...document.querySelectorAll('#slots .spick')].map((e) => [Math.round(r(e).width), Math.round(r(e).height)]);
       const forgeBtn = r(document.querySelector('#btn-forge'));
       return {
         separate: body.bottom <= foot.top + 0.5,
@@ -799,8 +799,41 @@ await h.close();
       };
     });
     check('on a 585 x 260 screen the anvil\'s three slots, their buttons and FORGE are all on screen, none on top of another',
-      forge.separate && forge.slotsShown && forge.buttonsInSlots && forge.forge && forge.picks.every((hgt) => hgt >= 40), JSON.stringify(forge));
+      forge.separate && forge.slotsShown && forge.buttonsInSlots && forge.forge && forge.picks.every(([w, hgt]) => w >= 100 && hgt >= 28), JSON.stringify(forge));
     await s.page.screenshot({ path: path.join(SHOTS, '19-anvil-585x260.png') });
+    // a phone with its text size turned up: everything on the card still stands clear of
+    // everything else, wherever it can be seen (a scrolled-away part of the list cannot)
+    const bigText = await s.ev(() => {
+      const root = document.documentElement;
+      root.style.fontSize = document.body.style.fontSize = '20.8px';
+      window.BLACKSMITH.forge.render();
+      const card = document.querySelector('#forge-card');
+      const clip = (e, r) => {
+        for (const sc of [e.closest('.recipes'), e.closest('.forge-body')]) {
+          if (!sc) continue;
+          const c = sc.getBoundingClientRect();
+          r = { left: Math.max(r.left, c.left), right: Math.min(r.right, c.right), top: Math.max(r.top, c.top), bottom: Math.min(r.bottom, c.bottom) };
+        }
+        return r;
+      };
+      const els = [...card.querySelectorAll('.forge-head h3, .forge-need, #btn-close-forge, .rchip, .sicon, .sname, .spart, .sall:not(.off), .samt button, .samt b, .picon, .ptext, #btn-forge')]
+        .filter((e) => e.getClientRects().length).map((e) => ({ e, r: clip(e, e.getBoundingClientRect()) }))
+        .filter(({ r }) => r.right - r.left > 1 && r.bottom - r.top > 1);
+      const hits = [];
+      for (let i = 0; i < els.length; i++) for (let j = i + 1; j < els.length; j++) {
+        const a = els[i], b = els[j];
+        if (a.e.contains(b.e) || b.e.contains(a.e)) continue;
+        if (Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left) > 1 && Math.min(a.r.bottom, b.r.bottom) - Math.max(a.r.top, b.r.top) > 1) {
+          hits.push(`${a.e.className || a.e.id} / ${b.e.className || b.e.id}`);
+        }
+      }
+      const spills = [...card.querySelectorAll('.sname, .spart, .samt b, .pname, .pline, #btn-forge')].filter((e) => e.scrollWidth > e.clientWidth + 1 && getComputedStyle(e).textOverflow !== 'ellipsis').length;
+      root.style.fontSize = document.body.style.fontSize = '';
+      window.BLACKSMITH.forge.render();
+      return { hits, spills };
+    });
+    check('and with the phone\'s text 130% bigger, nothing on the anvil\'s card sits on top of anything else',
+      bigText.hits.length === 0 && bigText.spills === 0, JSON.stringify(bigText));
     const shop = await s.ev(() => {
       const A = window.BLACKSMITH, g = A.game;
       g.closeForge();

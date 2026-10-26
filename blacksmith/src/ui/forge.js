@@ -27,6 +27,7 @@ export class ForgeUI {
     this.root = $('#forge');
     this.card = $('#forge-card');
     this.recipesEl = $('#recipes');
+    this.bodyEl = this.card.querySelector('.forge-body');
     this.slotsEl = $('#slots');
     this.needEl = $('#forge-need');
     this.previewEl = $('#forge-preview');
@@ -85,6 +86,7 @@ export class ForgeUI {
       const a = rc.getBoundingClientRect(), b = chip.getBoundingClientRect();
       rc.scrollLeft += (b.left + b.width / 2) - (a.left + a.width / 2);
     }
+    this._edges();
   }
 
   close() {
@@ -124,20 +126,26 @@ export class ForgeUI {
       const el = document.createElement('button');
       el.className = 'rchip';
       el.dataset.type = type;
-      el.innerHTML = `<img alt="" src="${recipeIcon(type)}"><span>${SHORT[type]}<small>${r.weight} &middot; ${r.ores}+ ore</small></span>`;
+      el.innerHTML = `<img alt="" src="${recipeIcon(type)}"><span class="rt"><span class="rn">${SHORT[type]}</span>` +
+        `<small><i>${r.weight} &middot; </i>${r.ores}+ ore</small></span>`;
       el.addEventListener('click', () => { this.type = type; this._clampToOwned(); this.render(); });
       this.recipesEl.appendChild(el);
     }
+    // on a short screen the recipes are one row that scrolls sideways, and with big text the
+    // slots may have to scroll too: each fades out at its edge while there is more to see
+    this.recipesEl.addEventListener('scroll', () => this._edges(), { passive: true });
+    this.bodyEl.addEventListener('scroll', () => this._edges(), { passive: true });
     this.slotsEl.innerHTML = '';
     this.slotEls = this.slots.map((_, i) => {
       const el = document.createElement('div');
       el.className = 'slot';
-      // the top of a slot - its number, ore and name - is one big button for choosing the ore
+      // the ore, its name and the part it will make, all one big button for choosing the
+      // ore; then the count, and ALL. Each sits in the flow beside or under the last (a
+      // column on a tall screen, a row on a short one), so nothing can land on anything else.
       el.innerHTML =
-        `<button class="spick"><span class="snum">SLOT ${i + 1}</span><span class="sicon"></span><span class="sname"></span></button>` +
-        `<button class="sall hidden" title="Put in all you have">ALL</button>` +
+        `<button class="spick"><span class="sicon"></span><span class="stext"><span class="sname"></span><span class="spart"></span></span></button>` +
         `<span class="samt"><button data-d="-1" aria-label="Less">&minus;</button><b></b><button data-d="1" aria-label="More">+</button></span>` +
-        `<span class="spart"></span>`;
+        `<button class="sall off" title="Put in all you have">ALL</button>`;
       const v = {
         el, ore: undefined,
         icon: el.querySelector('.sicon'), name: el.querySelector('.sname'), all: el.querySelector('.sall'),
@@ -187,32 +195,43 @@ export class ForgeUI {
         v.ore = s.ore;
         v.icon.innerHTML = ore ? `<img alt="" src="${oreIcon(s.ore)}">` : '+';
         v.name.textContent = ore ? ore.name : 'Add ore';
-        v.all.classList.toggle('hidden', !ore);
+        v.all.classList.toggle('off', !ore);
       }
       const have = ore ? this.profile.ores[s.ore] || 0 : 0;
       v.amt.textContent = ore ? s.amount : 0;
+      v.amt.classList.toggle('long', s.amount >= 1000);
       v.minus.classList.toggle('off', !ore);
       v.plus.classList.toggle('off', !!ore && s.amount >= have);
-      v.part.textContent = roles.get(i) || ' ';
+      v.part.textContent = roles.get(i) || '';
     });
 
-    // the preview
+    // the preview: always two lines, each cut short rather than wrapped, so it can never grow
+    // up into the slots
     const mix = this.mix();
     if (mix.length) {
       const item = { kind: R.kind, type: this.type, mix };
       const rar = itemRarity(item);
       const st = itemStats(item);
       const stat = R.kind === 'weapon' ? `Damage <b>${st.damage}</b>` : `Defense <b>${st.defense}</b>`;
-      const extra = st.bonus > 1.005 ? `<br><span class="pbonus">+${Math.round((st.bonus - 1) * 100)}% for the extra ore</span>` : '';
+      const extra = st.bonus > 1.005 ? ` &middot; <span class="pbonus">+${Math.round((st.bonus - 1) * 100)}% for extra ore</span>` : '';
+      const line = total < need
+        ? `<span class="pshort">${need - total} more ore</span> &middot; ${stat}`
+        : `${stat} &middot; <span style="color:${RARITIES[rar].color}">${RARITIES[rar].name}</span>${extra}`;
       this.previewEl.innerHTML =
         `<div class="picon r-${rar}"><img alt="" src="${recipeIcon(this.type, partsOf(mix))}"></div>` +
-        `<div class="ptext"><b class="pname">${itemName(item)}</b>${stat} &middot; <span style="color:${RARITIES[rar].color}">${RARITIES[rar].name}</span>` +
-        (total < need ? `<br>${need - total} more ore` : extra) + '</div>';
+        `<div class="ptext"><b class="pname">${itemName(item)}</b><span class="pline">${line}</span></div>`;
     } else {
       this.previewEl.innerHTML = `<div class="picon"><img alt="" src="${recipeIcon(this.type)}"></div>` +
-        `<div class="ptext"><b class="pname">${R.weight} ${SHORT[this.type]}</b>Put ${need} ore in the slots</div>`;
+        `<div class="ptext"><b class="pname">${R.weight} ${SHORT[this.type]}</b><span class="pline">Put ${need} or more ore in the slots</span></div>`;
     }
     this.forgeBtn.disabled = total < need || !this.profile.hasOres(mix);
+    this._edges();
+  }
+
+  _edges() {
+    const rc = this.recipesEl, fb = this.bodyEl;
+    rc.classList.toggle('end', rc.scrollLeft + rc.clientWidth >= rc.scrollWidth - 2);
+    fb.classList.toggle('more', fb.scrollTop + fb.clientHeight < fb.scrollHeight - 2);
   }
 
   /* ------------------------------------ +/- ------------------------------------- */
@@ -272,7 +291,7 @@ export class ForgeUI {
     this._stopHold();
     this.pickingSlot = i;
     const cur = this.slots[i];
-    this.pickerTitle.textContent = cur.ore ? `SLOT ${i + 1}: CHANGE THE ${ORES[cur.ore].name.toUpperCase()}` : `SLOT ${i + 1}: CHOOSE AN ORE`;
+    this.pickerTitle.textContent = cur.ore ? `CHANGE THE ${ORES[cur.ore].name.toUpperCase()}` : 'CHOOSE AN ORE';
     this.pickerGrid.innerHTML = '';
     const clear = document.createElement('button');
     clear.className = 'opt clear';
@@ -289,7 +308,7 @@ export class ForgeUI {
       const el = document.createElement('button');
       el.className = `opt r-${o.rarity}` + (cur.ore === id ? ' cur' : j >= 0 ? ' used' : '');
       el.innerHTML = `<img alt="" src="${oreIcon(id)}"><span class="on">${o.name}</span><span class="oc">&times;${n} &middot; ${RARITIES[o.rarity].name}</span>` +
-        (cur.ore === id ? '<span class="otag">IN HERE</span>' : j >= 0 ? `<span class="otag">SWAP WITH ${j + 1}</span>` : '');
+        (cur.ore === id ? '<span class="otag">IN THIS SLOT</span>' : j >= 0 ? '<span class="otag">SWAPS SLOTS</span>' : '');
       el.addEventListener('click', () => this._choose(i, id));
       this.pickerGrid.appendChild(el);
     }
