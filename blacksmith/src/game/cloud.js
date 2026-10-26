@@ -230,7 +230,8 @@ export class Cloud {
   _body(account, save) {
     return {
       name: account.name, salt: account.salt, hash: account.hash, iter: account.iter, created: account.created,
-      savedAt: save?.savedAt || 0, save: save || null,
+      // a plain-JSON copy, as it is now: the game goes on changing the one it saved
+      savedAt: save?.savedAt || 0, save: save ? JSON.parse(JSON.stringify(save)) : null,
       level: save ? levelFromExp(save.exp || 0).level : 1,
     };
   }
