@@ -85,6 +85,7 @@ export class Camera {
   }
 
   zoomAt(factor, sx, sy) {
+    this.glide = null;
     const before = this.toWorld(sx, sy);
     this.ppm = clamp(this.ppm * factor, this.minPpm, this.maxPpm);
     const after = this.toWorld(sx, sy);
@@ -104,15 +105,16 @@ export class Camera {
 
   shake(amount) { this.shakeAmt = Math.min(1, this.shakeAmt + amount); }
 
-  /** Slides over to look at (x, y) instead of jumping there. */
-  glideTo(x, y) { this.glide = { x, y }; }
+  /** Slides over to look at (x, y) instead of jumping there - and, given `ppm`, zooms to that on the way. */
+  glideTo(x, y, ppm = null) { this.glide = { x, y, ppm: ppm ? clamp(ppm, this.minPpm, this.maxPpm) : null }; this.follow = ppm ? null : this.follow; }
 
   update(dt) {
     if (this.glide) {
-      const k = 1 - Math.exp(-dt * 6);
-      this.x = lerp(this.x, this.glide.x, k);
-      this.y = lerp(this.y, this.glide.y, k);
-      if (Math.abs(this.x - this.glide.x) < 0.02 && Math.abs(this.y - this.glide.y) < 0.02) this.glide = null;
+      const G = this.glide, k = 1 - Math.exp(-dt * (G.ppm ? 3 : 6));
+      if (G.ppm) this.ppm = lerp(this.ppm, G.ppm, k);
+      this.x = lerp(this.x, G.x, k);
+      this.y = lerp(this.y, G.y, k);
+      if (Math.abs(this.x - G.x) < 0.02 && Math.abs(this.y - G.y) < 0.02 && (!G.ppm || Math.abs(this.ppm - G.ppm) < 0.2)) this.glide = null;
       this.clamp();
     }
     const f = this.follow;

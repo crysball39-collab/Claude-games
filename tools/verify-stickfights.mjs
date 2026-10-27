@@ -10,12 +10,14 @@
    Most checks set something up and then run the simulation forward in fixed
    steps inside the page, so they do not depend on how fast the machine is.
    The mods are checked too: off until installed from the MODS screen, the
-   storage each shows, and everything the Murder Drones, Minecraft and
-   Shallow mods add - Steve, crafting a Wither Totem, the Wither from its
-   first skull to its Nether Star, and Shallow from its disguise to the
-   next skin it climbs into. So are the walls and the trees, cell by cell,
-   the freeze tool, moving things with the world paused, the six wires, the
-   AK-47, the Mossberg 500, the crowbar and the four kinds of ammo.
+   storage each shows, and everything the Murder Drones, Minecraft, Shallow
+   and Godzilla mods add - Steve, crafting a Wither Totem, the Wither from
+   its first skull to its Nether Star, Shallow from its disguise to the next
+   skin it climbs into, and Godzilla from his first roar, through every one
+   of his moves, to where he falls. So are the walls and the trees, cell by
+   cell, the City and its buildings coming down, the freeze tool, moving
+   things with the world paused, the six wires, the AK-47, the Mossberg 500,
+   the crowbar and the four kinds of ammo.
 
    Needs playwright and a chromium build:
      npm install -D playwright && npx playwright install chromium
@@ -112,6 +114,7 @@ await page.waitForSelector('#btn-play', { state: 'visible', timeout: 30000 });
 /* --------------------------------- title -------------------------------- */
 
 check('title screen shows PLAY', await page.isVisible('#btn-play'));
+check('...and MAPS and MODS', await page.isVisible('#btn-maps-title') && await page.isVisible('#btn-mods-title'));
 const t0 = await ev(() => window.__sf.sb.people.map((p) => p.pos.x));
 await page.waitForTimeout(2500);
 const t1 = await ev(() => window.__sf.sb.people.map((p) => p.pos.x));
@@ -2726,6 +2729,127 @@ const bar = await ev(() => {
 check('a crowbar is swung like a machete, and one blow puts a glass wall in', bar.strikes.includes('chop') && bar.glass, JSON.stringify(bar));
 check('...on a person, a heavy blow that does not cut', bar.hurt > 10 && !bar.gash, JSON.stringify(bar));
 
+/* ---------------------------------- the City ---------------------------------- */
+
+await fresh();
+await ev(() => { window.__sf.ui.toggleDrawer(true); });
+await page.waitForTimeout(300);
+await page.tap('#btn-maps');
+await page.waitForTimeout(300);
+const mapsList = await ev(() => [...document.querySelectorAll('.map-item')].map((el) => ({
+  id: el.dataset.map, name: el.querySelector('.mod-name').textContent, current: el.classList.contains('current'), btn: el.querySelector('.map-btn').textContent,
+})));
+check('MAPS in the spawn menu: Flat (loaded) and City', mapsList.length === 2 && mapsList[0].id === 'flat' && mapsList[0].current && mapsList[0].btn === 'RELOAD' &&
+  mapsList[1].id === 'city' && !mapsList[1].current && mapsList[1].btn === 'LOAD', JSON.stringify(mapsList));
+await shot('maps');
+await page.tap('.map-item[data-map="city"] .map-btn');
+await page.waitForTimeout(400);
+const city = await ev(() => {
+  const sb = window.__sf.sb;
+  sb.paused = true;
+  const bg = sb.slabs.filter((s) => s.background);
+  const tw = bg.find((s) => s.type === 'tower');
+  return {
+    map: sb.map, types: bg.map((s) => s.type), plants: sb.plants.map((p) => p.kind), skyline: !!sb.skyline, walls: sb.walls.length,
+    open: !document.getElementById('maps').classList.contains('hidden'), toast: document.querySelector('#toast').textContent,
+    glass: tw.mats.some((m) => m.brittle) && Array.from(tw.cellMat).some((k) => tw.mats[k].brittle), floor: sb.surfaceBelow(tw.pos.x, 0.15, 40).y,
+  };
+});
+check('LOAD on City: two office towers, apartments, old brick, two shops, lamps, trees and bushes - and a skyline behind',
+  city.map === 'city' && city.types.filter((t) => t === 'tower').length === 2 && city.types.filter((t) => t === 'shop').length === 2 &&
+  ['apartments', 'brick', 'lamp'].every((t) => city.types.includes(t)) && city.plants.filter((k) => k === 'tree').length >= 3 &&
+  city.plants.filter((k) => k === 'bush').length >= 3 && city.skyline && !city.open && /City loaded/.test(city.toast), JSON.stringify(city));
+check('...the buildings stand behind the street: nobody in it walks into them or stands on them, and their windows are glass',
+  city.walls === 0 && city.floor === 0 && city.glass, JSON.stringify({ walls: city.walls, floor: city.floor, glass: city.glass }));
+await ev(() => { const { cam } = window.__sf; cam.ppm = cam.minPpm; cam.x = 0; cam.y = cam.h / 2 / cam.ppm - 0.4; cam.clamp(); });
+await page.waitForTimeout(200);
+await shot('city');
+
+// pixel by pixel: a knock takes the cells round it, and glass gives long before concrete does
+const cellwise = await ev(() => {
+  const sb = window.__sf.sb, tw = sb.slabs.find((s) => s.type === 'tower');
+  const n0 = tw.cellCount;
+  const gone = tw.damage(tw.pos.x - 1.5, 2.2, 0.25, 6, 'blunt');
+  // a glass cell and a concrete cell, each given the same tap
+  let gi = -1, ci = -1;
+  for (let i = 0; i < tw.hp.length && (gi < 0 || ci < 0); i++) {
+    if (tw.hp[i] <= 0) continue;
+    const c = i % tw.cols, r = (i - c) / tw.cols;
+    if (r < 30 || r > tw.rows - 30) continue;
+    if (tw.matOf(i).brittle) { if (gi < 0) gi = i; } else if (ci < 0) ci = i;
+  }
+  const at = (i) => { const c = i % tw.cols, r = (i - c) / tw.cols; return tw.cellWorld(c, r); };
+  const g = at(gi), cc = at(ci);
+  tw.damage(g.x, g.y, 0.05, 0.8, 'blunt');
+  tw.damage(cc.x, cc.y, 0.05, 0.8, 'blunt');
+  for (let i = 0; i < 10; i++) sb.step(1 / 120);
+  return { n0, gone, after: tw.cellCount, standing: tw.anchored && !tw.removed, glassGone: tw.hp[gi] <= 0, concreteLeft: tw.hp[ci] };
+});
+check('a building comes apart a few cells at a time: a knock takes the cells round it, and the rest still stands',
+  cellwise.gone > 0 && cellwise.gone < 60 && cellwise.after < cellwise.n0 && cellwise.standing, JSON.stringify(cellwise));
+check('...its glass breaks long before its concrete does', cellwise.glassGone && cellwise.concreteLeft > 0.5, JSON.stringify(cellwise));
+
+// the ground floor blown out from under it: what was above comes down, in pieces
+const collapse = await ev(() => {
+  const sb = window.__sf.sb, ap = sb.slabs.find((s) => s.type === 'apartments');
+  const top0 = ap.body.aabb().maxY, x0 = ap.pos.x;
+  const ev = { give: 0, rubble: 0 };
+  sb.on('slabGive', (e) => { if (e.what.type === 'apartments') ev.give++; });
+  sb.on('rubble', () => { ev.rubble++; });
+  for (let x = x0 - 2.6; x <= x0 + 2.6; x += 0.7) sb.blast(x, 1.4, 1.6, 2.2);
+  for (let i = 0; i < 120 * 4; i++) sb.step(1 / 120);
+  const standing = sb.slabs.filter((s) => s.type === 'apartments' && s.anchored && !s.removed);
+  const pieces = sb.slabs.filter((s) => s.type === 'apartments' && s.loose);
+  return { top0: +top0.toFixed(1), top: standing.length ? +Math.max(...standing.map((s) => s.body.aabb().maxY)).toFixed(1) : 0, pieces: pieces.length, lowest: pieces.length ? +Math.max(...pieces.map((s) => s.body.aabb().maxY)).toFixed(1) : 0, ...ev };
+});
+check('blow out a building\'s ground floor and the storeys above it come down - in a heap of rubble, not standing',
+  collapse.give > 0 && collapse.top < collapse.top0 * 0.5 && collapse.pieces >= 4 && collapse.lowest < collapse.top0 * 0.6 && collapse.rubble > 0, JSON.stringify(collapse));
+await ev(() => { const { cam } = window.__sf; cam.ppm = cam.minPpm * 1.4; cam.x = 1; cam.y = cam.h / 2 / cam.ppm - 0.4; cam.clamp(); });
+await page.waitForTimeout(200);
+await shot('city-collapse');
+
+// trees along the street fall when they are cut through; the hand can pull a lump off a building
+const street = await ev(() => {
+  const sb = window.__sf.sb, hand = window.__sf.hand;
+  const t = sb.plants.find((p) => p.kind === 'tree');
+  const logs0 = sb.logs.length;
+  for (let i = 0; i < 12 && !t.removed && t.boughs && t.boughs.length; i++) t.damage(t.x, 0.7, 0.2, 30, 'blade', { dx: 1 });
+  for (let i = 0; i < 240; i++) sb.step(1 / 120);
+  const tw = sb.slabs.filter((s) => s.type === 'tower')[1];
+  const n0 = tw.cellCount;
+  const bb = tw.body.aabb();
+  hand.grab(tw, bb.maxX - 0.3, 6);
+  const held = hand.holding;
+  for (let i = 0; i < 60; i++) { hand.move(bb.maxX + 1 + i * 0.02, 6.5); sb.step(1 / 120); }
+  hand.release();
+  for (let i = 0; i < 240; i++) sb.step(1 / 120);
+  return { fell: sb.logs.length > logs0, lump: !!held && held !== tw && held.loose, cells: held ? held.cellCount : 0, n0, n1: tw.cellCount, landed: held ? +held.pos.y.toFixed(2) : null };
+});
+check('a tree in the street, cut through, falls', street.fell, JSON.stringify(street));
+check('...and the hand pulls a lump off a building, which falls', street.lump && street.cells > 20 && street.n1 < street.n0 && street.landed < 3, JSON.stringify(street));
+
+// the bin: the city as it was; MAPS again: Flat
+await ev(() => { window.__sf.sb.paused = false; });
+await page.tap('#btn-clear');
+await page.waitForTimeout(100);
+await page.tap('#btn-clear');
+await page.waitForTimeout(300);
+const rebuilt = await ev(() => {
+  const sb = window.__sf.sb;
+  return { map: sb.map, aps: sb.slabs.filter((s) => s.type === 'apartments').length, ap: sb.slabs.find((s) => s.type === 'apartments'), toast: document.querySelector('#toast').textContent };
+});
+check('the bin clears the city back to how it was', rebuilt.map === 'city' && rebuilt.aps === 1 && /city is as it was/.test(rebuilt.toast), JSON.stringify({ ...rebuilt, ap: !!rebuilt.ap }));
+await ev(() => { window.__sf.ui.toggleDrawer(true); });
+await page.waitForTimeout(300);
+await page.tap('#btn-maps');
+await page.waitForTimeout(300);
+await page.tap('.map-item[data-map="flat"] .map-btn');
+await page.waitForTimeout(400);
+const flat = await ev(() => ({ map: window.__sf.sb.map, slabs: window.__sf.sb.slabs.length, plants: window.__sf.sb.plants.length, skyline: !!window.__sf.sb.skyline }));
+check('...and LOAD on Flat puts the sandbox back as it always was', flat.map === 'flat' && !flat.slabs && !flat.plants && !flat.skyline, JSON.stringify(flat));
+await ev(() => window.__sf.ui.toggleDrawer(false));
+await page.waitForTimeout(250);
+
 /* ---------------------------------- mods --------------------------------- */
 
 await fresh();
@@ -2740,7 +2864,7 @@ await page.tap('#btn-menu');
 await page.waitForTimeout(300);
 await page.tap('#btn-mods');
 await page.waitForTimeout(300);
-const listed = await ev(() => [...document.querySelectorAll('.mod-item')].map((el) => ({
+const listed = await ev(() => [...document.querySelectorAll('#mods-list .mod-item')].map((el) => ({
   id: el.dataset.mod,
   name: el.querySelector('.mod-name').textContent,
   size: el.querySelector('.mod-size').textContent,
@@ -3436,6 +3560,219 @@ const shGone = await ev(() => ({
 check('removing Shallow takes it (in whatever skin it is wearing) and everything it left out of the world and the menu',
   shGone.people.join() === 'Dee' && !shGone.items && shGone.cards === BASE.length && !shGone.stored.includes('shallow'), JSON.stringify(shGone));
 await page.tap('#mods-close');
+await ev(() => window.__sf.ui.toggleDrawer(false));
+await page.waitForTimeout(250);
+
+/* -------------------------------- Godzilla -------------------------------- */
+
+await fresh();
+await ev(() => { window.__sf.ui.toggleDrawer(true); });
+await page.waitForTimeout(300);
+await page.tap('#btn-mods');
+await page.waitForTimeout(300);
+const gzItem = await ev(() => {
+  const el = document.querySelector('.mod-item[data-mod="godzilla"]');
+  return el && {
+    name: el.querySelector('.mod-name').textContent,
+    size: el.querySelector('.mod-size').textContent,
+    adds: [...el.querySelectorAll('.mod-adds .chip')].map((c) => c.textContent),
+    btn: el.querySelector('.mod-btn').textContent,
+  };
+});
+check("the MODS screen has Godzilla ('54), which adds Godzilla ('54)", !!gzItem && gzItem.name === "Godzilla ('54)" && gzItem.btn === 'INSTALL' && gzItem.adds.join() === "Godzilla ('54)", JSON.stringify(gzItem));
+const gzKB = (measureMods().godzilla / 1024).toFixed(1) + ' KB';
+check('...and shows the storage it needs', !!gzItem && gzItem.size === 'Storage needed: ' + gzKB, `${gzItem && gzItem.size} (its folder: ${gzKB})`);
+await page.tap('.mod-item[data-mod="godzilla"] .mod-btn');
+await page.waitForFunction(() => window.__sf.mods.isInstalled('godzilla'), null, { timeout: 8000 }).catch(() => {});
+await page.waitForTimeout(150);
+await page.tap('#mods-close');
+await page.waitForTimeout(250);
+const gzCards = await ev(() => { window.__sf.ui.toggleDrawer(true); return [...document.querySelectorAll('.card')].map((k) => k.dataset.spawn); });
+check("installed, Godzilla ('54) is in the spawn menu", gzCards.length === BASE.length + 1 && gzCards.includes('gz-godzilla'), gzCards.join(', '));
+
+// in the city, from his card
+await page.tap('#btn-maps');
+await page.waitForTimeout(300);
+await page.tap('.map-item[data-map="city"] .map-btn');
+await page.waitForTimeout(400);
+await ev(() => { window.__sf.ui.toggleDrawer(true); document.querySelector('.card[data-spawn="gz-godzilla"]').scrollIntoView({ block: 'center' }); });
+await page.waitForTimeout(200);
+await page.tap('.card[data-spawn="gz-godzilla"]');
+await page.waitForTimeout(300);
+// (in the middle of the street, with room in front of him and behind him, wherever the view was)
+const gzTap = await ev(() => {
+  const { sb, cam } = window.__sf;
+  sb.paused = true;
+  window.__gzGlass = sb.slabs.filter((s) => s.background).reduce((n, s) => n + Array.from(s.hp).filter((h, i) => h > 0 && s.matOf(i).brittle).length, 0);
+  cam.home();
+  cam.x = -1;
+  cam.clamp();
+  return cam.toScreen(-1, 1.5);
+});
+await tapAt(gzTap.x, gzTap.y);
+await sim(0.2);
+const gz = await ev(() => {
+  const sb = window.__sf.sb, g = sb.people.find((p) => p.species && p.species.giant);
+  window.__g = g;
+  return g && { name: g.name, label: g.species.label, tall: +(g.box.maxY - g.box.minY).toFixed(1), long: +(g.box.maxX - g.box.minX).toFixed(1), hp: g.health.bossHp, max: g.health.bossMax, brain: !!g.brain };
+});
+check("Godzilla ('54) spawns where tapped, called that: a giant, about fourteen metres tall, with his tail behind him", !!gz && gz.name === "Godzilla ('54)" && gz.tall > 12 && gz.tall < 17 && gz.long > 15 && !gz.brain, JSON.stringify(gz));
+const roar = await ev(async () => {
+  const sb = window.__sf.sb, g = window.__g;
+  let roared = false;
+  sb.on('gzRoar', (e) => { if (e.who === g) roared = true; });
+  for (let i = 0; i < 120 * 4; i++) sb.step(1 / 120);
+  const glass = sb.slabs.filter((s) => s.background).reduce((n, s) => n + Array.from(s.hp).filter((h, i) => h > 0 && s.matOf(i).brittle).length, 0);
+  return { roared, glass0: window.__gzGlass, glass };
+});
+check('...and the first thing he does is roar, and the glass goes in the buildings near him', roar.roared && roar.glass < roar.glass0 * 0.85, JSON.stringify(roar));
+await page.waitForTimeout(300);
+const gzBar = await ev(() => {
+  const b = document.querySelector('#bossbars .bossbar');
+  return b && { name: b.querySelector('.boss-name').textContent, hp: b.querySelector('.boss-hp').textContent, kaiju: b.classList.contains('kaiju'), fill: b.querySelector('.boss-fill').style.width };
+});
+check("he has a boss bar along the top, GODZILLA ('54) - and 30,000 health, shown in numbers", !!gzBar && gzBar.name.toUpperCase() === "GODZILLA ('54)" && gzBar.kaiju && /30,000$/.test(gzBar.hp) && gz.max === 30000, JSON.stringify(gzBar));
+await shot('godzilla');
+
+// what a person can do to him: next to nothing - except blow him up
+const hide = await ev(() => {
+  const sb = window.__sf.sb, g = window.__g;
+  g.gz.auto0 = true;
+  const a = sb.spawnStickman(g.pos.x + 9, null, { name: 'Gunner' });
+  a.brain = null;
+  const h0 = g.health.bossHp;
+  for (let i = 0; i < 20; i++) sb.shoot(a, a.pos.x - 0.4, 1.4 + (i % 5) * 0.8, Math.PI, { energy: 1 });
+  const h1 = g.health.bossHp;
+  g.takeHit({ by: a, part: 'torso', x: g.wj.chest.x, y: g.wj.chest.y, dir: -1, power: 30, kind: 'impact', weapon: 'blast' });
+  const h2 = g.health.bossHp;
+  sb.remove(a);
+  return { bullets: +(h0 - h1).toFixed(1), blast: +(h1 - h2).toFixed(1), bleedsOut: !!(g.health.parts.torso.bleed), standing: !g.lying && !g.rag };
+});
+check('twenty bullets take next to nothing off him; a blast takes far more - and nothing knocks him down', hide.bullets > 0 && hide.bullets < 300 && hide.blast > hide.bullets / 2 && hide.standing, JSON.stringify(hide));
+
+// every move, on somebody where it reaches them
+const moves = await ev(() => {
+  const sb = window.__sf.sb, g = window.__g, f = g.facing;
+  const out = {};
+  const run = (secs) => { for (let i = 0; i < Math.round(secs * 120); i++) sb.step(1 / 120); };
+  const ab = (id) => g.species.abilities(g).find((a) => a.id === id);
+  const victim = (dx, name) => {
+    const p = sb.spawnStickman(g.pos.x + f * dx, null, { name });
+    p.brain = null;
+    p.facing = -f;
+    run(0.1);
+    g.gz.target = p;
+    return p;
+  };
+  // (what each move reports doing to whoever it got)
+  const got = new Map();
+  for (const t of ['gzCrush', 'gzKickHit', 'gzGrab', 'gzEat', 'gzThrow', 'gzBite', 'gzClawHit', 'gzTailHit', 'gzBurn']) {
+    sb.on(t, (e) => { if (e.who) got.set(e.who.name, [...(got.get(e.who.name) || []), t]); });
+  }
+  const tryMove = (id, dx, name, secs = 3) => {
+    const p = victim(dx, name);
+    const picked = ab(id).pick();
+    run(secs);
+    const r = { picked, got: got.get(name) || [], dead: p.dead, removed: p.removed, cause: p.health.cause, held: p.heldBy === g, x: +(p.pos.x - g.pos.x).toFixed(1), gx: +g.pos.x.toFixed(1) };
+    if (!p.removed && !(id === 'grab')) sb.remove(p);
+    return { r, p };
+  };
+  out.stomp = tryMove('stomp', 2.4, 'Under').r;
+  out.kick = tryMove('kick', 4.6, 'Kicked').r;
+  const grab = tryMove('grab', 4.4, 'Grabbed', 2.4);
+  out.grab = grab.r;
+  out.eat = { picked: ab('eat').pick() };
+  run(3);
+  out.eat.removed = grab.p.removed;
+  out.eat.eaten = g.gz.eaten;
+  const thrown = tryMove('grab', 4.4, 'Thrown', 2.4);
+  out.throw = { picked: ab('throw').pick() };
+  run(2.5);
+  out.throw.flew = Math.abs(thrown.p.pos.x - g.pos.x) > 8;
+  out.throw.held = thrown.p.heldBy === g;
+  out.throw.got = got.get('Thrown') || [];
+  if (!thrown.p.removed) sb.remove(thrown.p);
+  out.bite = tryMove('bite', 5.2, 'Bitten', 3).r;
+  out.claw = tryMove('claw', 4.6, 'Clawed', 2).r;
+  out.tail = tryMove('tail', 7, 'Swept', 3).r;
+  {
+    const b = tryMove('breath', 16, 'Burned', 5.5);
+    out.breath = { ...b.r, burning: !!b.p.flames };
+  }
+  return out;
+});
+check('STOMP: whoever is under his foot is crushed', moves.stomp.picked && moves.stomp.got.includes('gzCrush') && moves.stomp.dead && moves.stomp.cause === 'crushed', JSON.stringify(moves.stomp));
+check('KICK: whoever is in front of him is sent flying', moves.kick.picked && moves.kick.got.includes('gzKickHit') && (moves.kick.dead || Math.abs(moves.kick.x) > 8), JSON.stringify(moves.kick));
+check('GRAB: he takes hold of somebody and lifts them up', moves.grab.picked && moves.grab.got.includes('gzGrab') && moves.grab.held, JSON.stringify(moves.grab));
+check('EAT: whoever he has hold of goes in his mouth - two bites, and a gulp', moves.eat.picked && moves.eat.removed && moves.eat.eaten >= 1, JSON.stringify(moves.eat));
+check('THROW: or he throws them, a long way', moves.throw.picked && moves.throw.got.includes('gzThrow') && moves.throw.flew && !moves.throw.held, JSON.stringify(moves.throw));
+check('BITE: his jaws shut on somebody in reach', moves.bite.picked && moves.bite.got.includes('gzBite'), JSON.stringify(moves.bite));
+check('CLAW: his claws go through somebody in reach', moves.claw.picked && moves.claw.got.includes('gzClawHit') && moves.claw.dead, JSON.stringify(moves.claw));
+check('TAIL WHIP: a turn on the spot, and his tail comes round through whoever is in front', moves.tail.picked && moves.tail.got.includes('gzTailHit'), JSON.stringify(moves.tail));
+check('ATOMIC BREATH: the plates light up from the tail, and the stream burns whoever is far off', moves.breath.picked && moves.breath.got.includes('gzBurn') && (moves.breath.dead || moves.breath.burning), JSON.stringify(moves.breath));
+
+// with nobody about: the city
+const rampage = await ev(() => {
+  const sb = window.__sf.sb, g = window.__g;
+  g.gz.auto0 = false;
+  g.gz.target = null;
+  const cells = () => sb.slabs.filter((s) => s.background).reduce((n, s) => n + s.cellCount, 0);
+  const c0 = cells();
+  let wrecked = 0;
+  sb.on('gzWreck', () => wrecked++);
+  for (let i = 0; i < 120 * 30; i++) sb.step(1 / 120);
+  return { c0, c1: cells(), wrecked, x: +g.pos.x.toFixed(1) };
+});
+check('with nobody left to go after, he tears into the buildings', rampage.c1 < rampage.c0 * 0.9, JSON.stringify(rampage));
+await ev(() => { const { cam } = window.__sf; cam.ppm = cam.minPpm; cam.x = 0; cam.y = cam.h / 2 / cam.ppm - 0.4; cam.clamp(); });
+await page.waitForTimeout(250);
+await shot('godzilla-city');
+
+// people: one look at him, and they are terrified
+const fear = await ev(() => {
+  const sb = window.__sf.sb, g = window.__g;
+  const said = [];
+  sb.on('speech', (e) => { if (e.kind) said.push(e.kind); });
+  const p = sb.spawnStickman(g.pos.x + g.facing * 10, null, { name: 'Witness', traits: { bravery: 0.4 } });
+  for (let i = 0; i < 120 * 1.5; i++) sb.step(1 / 120);
+  const r = p.brain.rels.get(g);
+  const out = { fear: r ? +r.fear.toFixed(2) : 0, emo: +p.brain.emo.fear.toFixed(2), said: said.slice(0, 6) };
+  sb.remove(p);
+  return out;
+});
+check('one look at him and people are terrified', fear.fear > 0.6 && fear.emo > 0.3, JSON.stringify(fear));
+
+// and he can be killed: a last roar, and down he goes - and stays down
+const gzDeath = await ev(() => {
+  const sb = window.__sf.sb, g = window.__g;
+  let died = null;
+  sb.on('death', (e) => { if (e.who === g) died = e.cause; });
+  g.health.bossHp = 1;
+  g.takeHit({ by: null, part: 'torso', x: g.wj.chest.x, y: g.wj.chest.y, dir: 1, power: 5, kind: 'impact', weapon: 'blast' });
+  for (let i = 0; i < 120 * 6; i++) sb.step(1 / 120);
+  return { died, dead: g.dead, there: !g.removed, low: +(g.box.maxY).toFixed(1) };
+});
+await page.waitForTimeout(300);
+const barGone = await ev(() => document.querySelectorAll('#bossbars .bossbar').length);
+check('out of health, he roars once more and comes down - and lies there, his bar gone', gzDeath.died && gzDeath.dead && gzDeath.there && gzDeath.low < 8 && barGone === 0, JSON.stringify({ ...gzDeath, barGone }));
+
+// removing the mod takes him away
+await ev(() => { window.__sf.ui.toggleDrawer(true); });
+await page.waitForTimeout(300);
+await page.tap('#btn-mods');
+await page.waitForTimeout(300);
+await page.tap('.mod-item[data-mod="godzilla"] .mod-btn');
+await page.waitForTimeout(150);
+await page.tap('.mod-item[data-mod="godzilla"] .mod-btn');
+await page.waitForTimeout(250);
+const gzGone = await ev(() => ({ giants: window.__sf.sb.people.filter((p) => p.species && p.species.giant).length, cards: document.querySelectorAll('.card').length, stored: JSON.parse(localStorage.getItem('sf.mods') || '[]') }));
+check('removing Godzilla takes him out of the world and the menu', !gzGone.giants && gzGone.cards === BASE.length && !gzGone.stored.includes('godzilla'), JSON.stringify(gzGone));
+await page.tap('#mods-close');
+await page.waitForTimeout(200);
+await page.tap('#btn-maps');
+await page.waitForTimeout(300);
+await page.tap('.map-item[data-map="flat"] .map-btn');
+await page.waitForTimeout(300);
 await ev(() => window.__sf.ui.toggleDrawer(false));
 await page.waitForTimeout(250);
 

@@ -418,7 +418,9 @@ export class Brain {
     if (!me.conscious) return;
     for (const o of sb.people) {
       if (o === me || o.removed) continue;
-      if (!this.canSee(o.wj.head.x, o.wj.head.y) && !this.canSee(o.wj.hip.x, o.wj.hip.y + 0.15)) continue;
+      // (something the size of a building is seen, or felt, from anywhere near it: a mod's)
+      const huge = o.species && o.species.unmissable && Math.abs(o.pos.x - me.pos.x) < 30;
+      if (!huge && !this.canSee(o.wj.head.x, o.wj.head.y) && !this.canSee(o.wj.hip.x, o.wj.hip.y + 0.15)) continue;
       this.visible.push(o);
       const r = this.rel(o);
       const first = !r.met;

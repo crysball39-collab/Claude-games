@@ -26,6 +26,10 @@
       <svg viewBox="0 0 24 24" width="18" height="18"><path d="M10 3.5a2 2 0 0 1 4 0V6h4v4h-1.5a2 2 0 0 0 0 4H18v4.5h-4.5V17a2 2 0 0 0-4 0v1.5H5V14h1.5a2 2 0 0 0 0-4H5V6h5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/></svg>
       <span>MODS</span><i class="mods-count" id="mods-count-title"></i>
     </button>
+    <button id="btn-maps-title" class="mods-open" aria-label="Maps">
+      <svg viewBox="0 0 24 24" width="18" height="18"><path d="M3.5 6.5l5.5-2.5 6 2.5 5.5-2.5v13.5l-5.5 2.5-6-2.5-5.5 2.5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/><path d="M9 4v13.5M15 6.5V20" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+      <span>MAPS</span>
+    </button>
     <div class="how">
       <div><b>Spawn</b> &mdash; open the menu, pick a Stickman, a weapon or a Crate, then tap the world.</div>
       <div><b>Drag</b> anything to move it. Let go while moving to throw it. Paused, things go just where they are put.</div>
@@ -161,6 +165,10 @@
         <svg viewBox="0 0 24 24" width="18" height="18"><path d="M10 3.5a2 2 0 0 1 4 0V6h4v4h-1.5a2 2 0 0 0 0 4H18v4.5h-4.5V17a2 2 0 0 0-4 0v1.5H5V14h1.5a2 2 0 0 0 0-4H5V6h5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/></svg>
         <span>MODS</span><i class="mods-count" id="mods-count"></i>
       </button>
+      <button id="btn-maps" class="mods-open small" aria-label="Maps">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path d="M3.5 6.5l5.5-2.5 6 2.5 5.5-2.5v13.5l-5.5 2.5-6-2.5-5.5 2.5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/><path d="M9 4v13.5M15 6.5V20" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+        <span>MAPS</span>
+      </button>
       <button id="btn-close" class="x" aria-label="Close the spawn menu">
         <svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>
       </button>
@@ -284,6 +292,20 @@
     <p class="mods-intro">Things made for STICKFIGHTS that are not part of the game itself, and never will be. Install one and what it adds turns up in the spawn menu; remove it and all of it is gone again, from the menu and from the world.</p>
     <div id="mods-list"></div>
     <div class="mods-foot" id="mods-foot"></div>
+  </div>
+</div>
+
+<!-- ================================= MAPS ================================= -->
+<div id="maps" class="hidden" role="dialog" aria-modal="true" aria-labelledby="maps-title">
+  <div class="mods-card">
+    <div class="drawer-head">
+      <span id="maps-title">MAPS</span>
+      <button id="maps-close" class="x" aria-label="Close maps">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <p class="mods-intro">Where the sandbox is. Loading a map clears everything out of it first. The bin clears a map back to how it was when it was loaded.</p>
+    <div id="maps-list"></div>
   </div>
 </div>
 

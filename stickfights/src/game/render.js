@@ -85,12 +85,16 @@ export class Renderer {
 
     cam.apply(ctx);
     const v = cam.view(1);
+    // a city: its skyline, far off behind everything
+    if (sb.skyline) drawSkyline(ctx, sb.skyline, cam, v);
     ctx.fillStyle = OUTSIDE;
     if (v.minX < sb.left) ctx.fillRect(v.minX, 0, sb.left - v.minX, v.maxY);
     if (v.maxX > sb.right) ctx.fillRect(sb.right, 0, v.maxX - sb.right, v.maxY);
     ctx.fillStyle = FLOOR;
     ctx.fillRect(v.minX, Math.min(v.minY, -1), v.maxX - v.minX, -Math.min(v.minY, -1));
 
+    // the buildings behind the street
+    for (const w of sb.slabs) if (w.background && !(w.body.aabb().maxX < v.minX || w.body.aabb().minX > v.maxX)) this.drawSlab(ctx, w);
     this.drawSplats(ctx, v);
     this.drawWallSplats(ctx, v);
     // the trees, at the very back
@@ -98,7 +102,7 @@ export class Renderer {
     // a mod's things: the big ones that stand at the back first
     for (const it of sb.items) if (it.behind) { it.draw(ctx); drawStains(ctx, it); }
     for (const c of sb.crates) if (!c.carriedBy) this.drawCrate(ctx, c);
-    for (const w of sb.slabs) if (!(w.body.aabb().maxX < v.minX || w.body.aabb().minX > v.maxX)) this.drawSlab(ctx, w);
+    for (const w of sb.slabs) if (!w.background && !(w.body.aabb().maxX < v.minX || w.body.aabb().minX > v.maxX)) this.drawSlab(ctx, w);
     // a gallows' lever, and its noose hanging empty (its timbers are slabs)
     for (const g of sb.gallows) g.draw(ctx);
     for (const l of sb.logs) if (!(l.body.aabb().maxX < v.minX - 3 || l.body.aabb().minX > v.maxX + 3)) this.drawLog(ctx, l);
@@ -140,6 +144,8 @@ export class Renderer {
   }
 
   layer(p, ui) {
+    // (something the size of a building is behind everybody, whoever is looking at it)
+    if (p.species && p.species.giant) return -1;
     if (p === ui.selected) return 4;
     if (p.dead) return 0;
     if (p.lying) return 1;
@@ -549,7 +555,7 @@ export class Renderer {
     ctx.save();
     ctx.globalAlpha = 0.45;
     ctx.translate(g.x, g.y);
-    if (g.draw) g.draw(ctx);
+    if (g.draw) g.draw(ctx, g);
     else if (g.kind === 'crate') drawCrateShape(ctx, 0.78, 0.78, null);
     else if (g.kind === 'knuckles') drawKnuckleShape(ctx, 0.26, 0.11, 0);
     else if (g.kind === 'knife') drawKnifeShape(ctx, KNIFE_W, KNIFE_H, 0);
@@ -763,6 +769,38 @@ function drawBubbleAt(ctx, m, bx, by, tx, ty, loud) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   m.lines.forEach((l, i) => ctx.fillText(l, bx + w / 2, by + 5 + i * m.lh));
+}
+
+/**
+ * A city's skyline, far behind it (city.js): rows of towers, flat, each row
+ * a little lighter and moving a little less with the camera the further off
+ * it is.
+ */
+function drawSkyline(ctx, rows, cam, v) {
+  for (const row of rows) {
+    ctx.save();
+    // (the further off, the less it slides past)
+    ctx.translate(cam.x * row.drift, 0);
+    ctx.fillStyle = row.color;
+    ctx.beginPath();
+    for (const b of row.blocks) {
+      if (b.x + b.w + cam.x * row.drift < v.minX - 2 || b.x + cam.x * row.drift > v.maxX + 2) continue;
+      ctx.rect(b.x, 0, b.w, b.h);
+      if (b.spire) ctx.rect(b.x + b.w / 2 - 0.08, b.h, 0.16, b.spire);
+    }
+    ctx.fill();
+    // windows, faint
+    if (row.lights) {
+      ctx.fillStyle = row.lights;
+      ctx.beginPath();
+      for (const b of row.blocks) {
+        if (b.x + b.w + cam.x * row.drift < v.minX - 2 || b.x + cam.x * row.drift > v.maxX + 2) continue;
+        for (let y = 1.2; y < b.h - 0.8; y += 1.5) for (let x = b.x + 0.4; x < b.x + b.w - 0.5; x += 1.1) ctx.rect(x, y, 0.45, 0.6);
+      }
+      ctx.fill();
+    }
+    ctx.restore();
+  }
 }
 
 /** A thought cloud with an icon in it, trailing little circles back to the head. */

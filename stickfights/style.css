@@ -754,7 +754,7 @@ button {
 }
 .card.mod-card .card-icon { background: #6f6f74; }
 
-#mods {
+#mods, #maps {
   position: fixed;
   inset: 0;
   z-index: 40;
@@ -776,7 +776,11 @@ button {
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
 }
 .mods-intro { margin: 0 4px 10px; font-size: 12px; line-height: 1.45; color: var(--muted); }
-#mods-list { flex: 1; min-height: 0; overflow-y: auto; touch-action: pan-y; }
+#mods-list, #maps-list { flex: 1; min-height: 0; overflow-y: auto; touch-action: pan-y; }
+.mod-item.current { outline-color: rgba(47, 143, 131, 0.9); background: rgba(47, 143, 131, 0.13); }
+.mod-item.current .mod-state { display: inline-block; background: #2f8f83; }
+.mod-icon.map-icon { width: 128px; height: 72px; }
+#btn-maps-title { margin-left: 8px; }
 .mods-none { padding: 20px; text-align: center; color: var(--muted); font-size: 13px; }
 
 .mod-item {
@@ -925,6 +929,12 @@ button {
   background: repeating-linear-gradient(90deg, transparent 0 calc(10% - 2px), rgba(0, 0, 0, 0.35) calc(10% - 2px) 10%);
 }
 .boss-track.armored { box-shadow: 0 0 0 2px rgba(120, 190, 255, 0.55), 0 0 10px rgba(120, 190, 255, 0.7); }
+.boss-hp { font-size: 10.5px; font-weight: 800; letter-spacing: 0.06em; color: #f4e9dc; text-shadow: 1px 1px 0 #2a1a12; font-variant-numeric: tabular-nums; }
+/* a kaiju's: heavier, red-orange, the name like a film's title */
+.bossbar.kaiju .boss-name { font-size: 15px; letter-spacing: 0.22em; text-transform: uppercase; color: #ffe9d6; text-shadow: 0 0 6px rgba(255, 90, 30, 0.6), 2px 2px 0 #2a0d06; }
+.bossbar.kaiju .boss-track { height: 12px; background: #2a0f0a; border: 2px solid #120604; border-radius: 2px; box-shadow: 0 0 0 1px rgba(255, 140, 60, 0.35), 0 2px 8px rgba(0, 0, 0, 0.5); image-rendering: auto; }
+.bossbar.kaiju .boss-fill { background-image: linear-gradient(180deg, rgba(255, 220, 160, 0.45), rgba(255, 255, 255, 0) 55%, rgba(0, 0, 0, 0.25)) !important; background-color: #d9481e; }
+.bossbar.kaiju .boss-track::after { background: repeating-linear-gradient(90deg, transparent 0 calc(5% - 1px), rgba(0, 0, 0, 0.28) calc(5% - 1px) 5%); }
 #hud.has-boss #paused-tag { top: calc(50px + var(--safe-t)); }
 /* no room up there: under the buttons instead, and what is said there moves down out of its way */
 @media (max-width: 760px) {

@@ -48,16 +48,27 @@ together - or to the background - with a **wood rope**, a **metal rope**, a
 **fixed** rope of either (a rod that keeps them exactly as far apart), or a
 **wood** or **metal pin** through them.
 
+The sandbox starts out **Flat** - the grey sky and the black ground - or,
+from **MAPS**, as the **City**: a street of buildings - two office towers, an
+apartment block, old brick and a couple of shops - with lamps over it, trees
+and bushes along it and a skyline far off behind. The buildings come apart
+cell by cell like the walls do, the glass long before the concrete, and knock
+enough out of a storey and everything above it comes down into the street,
+in a heap of rubble.
+
 And you can get inside their heads: drag their feelings up and down, change
 their personality, change who they count as a friend or an enemy, and send
 them off to fight someone.
 
 **Mods** add things that are not part of the game itself: **Murder Drones**
 brings Uzi, N and V, **Minecraft** brings Steve - and the Wither, a boss
-with 600 health that you craft a totem to summon - and **Shallow** is
+with 600 health that you craft a totem to summon - **Shallow** is
 something disguised as a stickman that tears its way out of the skin when it
-is angry, kills whoever did it, and climbs inside somebody else (see
-[Mods](#mods)).
+is angry, kills whoever did it, and climbs inside somebody else - and
+**Godzilla** is the 1954 one: fourteen metres tall, with 30,000 health and a
+boss bar, and a stomp, a kick, his tail, a roar, his jaws, his claws, a hand
+to grab people and eat them or throw them, and the atomic breath - and the
+city to tear apart when there is nobody left (see [Mods](#mods)).
 
 While a stickman is in charge of their own body, every move they make is a
 hand-keyed animation, played frame by frame. The moment they are not -
@@ -101,6 +112,15 @@ npm run build:stickfights     # -> dist/stickfights.html
 The title screen has a few stickmen already going about their business behind
 it, one of them nursing a grudge. **PLAY** clears them away and opens the
 spawn menu.
+
+**MAPS** - beside MODS on the title screen, and at the top of the spawn menu -
+picks what the sandbox is: **Flat**, as it always was, or the **City**. LOAD
+clears the sandbox and makes it that map (the one it is on says RELOAD), and
+clearing everything with the bin clears it back to the map it is on: the
+city as it was, every building standing again. The buildings are behind the
+street - people walk along in front of them, and nothing in the street lands
+on them - but they come apart like walls do (see [Buildings](#buildings-and-the-city)),
+and the hand from above can pull a lump off one.
 
 The spawn menu (☰ **SPAWN**, top left) has twenty-three things in it, in six
 sections:
@@ -413,6 +433,80 @@ the thing has **ABILITIES**: **Kills by** - *Either*, *Tearing in half*,
 *Eating* - and **Do** - *Take a skin* (straight to the nearest person) and
 *Let go*.
 
+### Godzilla ('54)
+
+Gojira, as he was in 1954 - best in the City.
+
+| | What it is |
+| - | ---------- |
+| **Godzilla ('54)** | Fourteen metres of charcoal-grey monster with three rows of pale maple-leaf plates down his back and a tail as long as the rest of him. 30,000 health, and a boss bar - GODZILLA ('54) - to show it. |
+
+**He looks like the 1954 suit**: near enough black all over, as the film had
+him, and covered in raised welts in rough rows across every part of him -
+the suit was made to look like keloid scarring - with the belly paler and
+creased across; a small domed head on a thick neck, a heavy scowling brow
+over small, white-rimmed, glaring eyes, little pointed ears, a short blunt
+snout with the nostrils on top, and a heavy jaw with rows of small sharp
+teeth that always show; short arms held up in front, four curled fingers on
+each hand; thick legs wrinkled round like an elephant's, on four-toed feet.
+His pictures, on his card and on the MODS screen, are stills from the film:
+black and white, grainy, dark at the edges.
+
+**He is big.** The people at his feet come up to his toes; the brick
+buildings come up to his shoulders. He walks one heavy step at a time - every
+step shakes the view, kicks up dust and crushes whatever it comes down on -
+and wades through rubble, shoving it aside. Nothing knocks him down, stumbles
+him, cuts anything off him, sets him on fire, freezes him or picks him up. He
+is hard to miss: people see him (or feel him) from anywhere near, and one
+look at him and they are terrified.
+
+**Very little hurts him.** Bullets stay in him and do a little; blades and
+fists all but nothing; crates and rubble bounce off. Explosions hurt him, and
+the railgun more. Once nothing has hurt him for a few seconds he mends, 8
+health a second. The bar along the top shows his health in numbers, and his
+rage, and what he is doing.
+
+**What he does**, to whoever is nearest - whoever has hurt him first:
+
+- **Stomp**: a foot up, high, a moment - and down on whoever is under it,
+  who is crushed flat. Everyone near is knocked off their feet, crates jump
+  and the nearest windows go.
+- **Kick**: the foot back and through whoever is in front of him, who goes a
+  long way.
+- **Tail whip**: on somebody behind him, his tail rears up and comes down on
+  them; on somebody in front, he turns right round on the spot, the tail low,
+  and the length of it comes round through them - and through the ground
+  floor of whatever building it reaches.
+- **Roar**: head back, jaws wide: rings of air go out from his mouth, the
+  glass goes in every building it reaches, the nearest first, and everyone
+  who hears it is terrified (the faint-hearted, right under it, faint).
+- **Grab**: bent right over if they are on the ground, a hand round them, and
+  up they go, held in front of his face. Then he **eats** them - two bites
+  and a gulp, and they are gone - or **throws** them, a very long way.
+- **Bite**: a lunge, the jaws open, and shut on whoever is there - shaken,
+  and swallowed, or spat out. At a building, he takes a mouthful out of it.
+- **Claw**: a hand up and down through them; on a building, three gouges.
+- **Atomic breath**: the plates light up from the end of his tail to his
+  head, white-blue, his mouth glows - and out comes a white-hot stream of
+  vapour along wherever his head points. Whoever it reaches burns; whatever
+  solid it meets it eats into, cell by cell, and goes on through; the
+  buildings between him and what he is aiming at it passes in front of, and
+  the one behind gets it.
+
+**With nobody left**, he goes for the city: the nearest building, and as
+high up it as he can reach - claws, jaws and tail - until something of it
+gives way, then the next. Everybody who sees any of this says so, is
+terrified of him, and remembers it; whoever loses somebody they care about
+to him, if they are brave, goes for him.
+
+**He can be killed.** Out of health, he roars once more, weaker, sways - and
+comes down onto his front, and lies where he fell. In the inspector he has
+**ABILITIES**: **Mind** - *Rampage* (off, he stands and does only what he is
+told) - and **Do**: *Stomp*, *Tail whip*, *Roar*, *Grab*, *Eat*, *Throw*,
+*Bite*, *Claw*, *Kick* and *Atomic breath*, at whoever he is after (or the
+building he is at); and it shows his health and rage, and how many he has
+killed and eaten and how many buildings he has wrecked.
+
 ### Making one
 
 A mod is a folder under `src/mods/` whose `index.js` calls `registerMod()`
@@ -483,6 +577,21 @@ The game has a few ways in that change nothing until a mod uses them:
   `ignite()`, `extinguish()`, `freezeSolid()`, `thaw()`, `setTemperature()`
   and `warm()` for anything of a mod's that sets people alight, freezes
   them or warms them up
+- for something the size of a building: a species can give its body a
+  `shape` of its own - round-ended pieces, `{ x0, y0, x1, y1, r, part, bone }`,
+  that whatever touches it, grabs it and shoots it goes by instead of the
+  bones - and the `bounds` of all of it; do its own `physics` (how it moves,
+  instead of the walking and falling); be `giant` (drawn behind everybody),
+  `unmissable` (seen from anywhere near, looking its way or not) and
+  `stopsRounds` (bullets stay in it); a `bossbar` can show `hp` in numbers
+  and take a `style`; an ability can `say` what it says when it is pressed;
+  `cam.glideTo(x, y, ppm)` zooms as it goes
+- `defineSlab()` (`game/structures.js`): a new kind of wall or building - its
+  cell size, the materials its cells are made of and where (`layout`), how it
+  is drawn (`paint`), whether it is behind the street (`background`), bears
+  load storey by storey (`load`), crumbles into rubble when it lands
+  (`crumbles`), and can be torn from by the hand (`tear`); `MAPS`
+  (`game/maps.js`) the maps there are
 - blood lands on a mod's things by themselves: on a rigid `body` in its
   frame, on a ragdoll of its own by its nearest point, on anything else by
   where it is (`contains` says what it covers) - or a thing can keep it its
@@ -946,6 +1055,38 @@ up until they are free; a rope round the neck that is holding them up chokes
 them. A blade flying through a hemp rope cuts it, a bullet may, and a wood rope
 tied to something on fire burns through.
 
+### Buildings, and the city
+
+A **building** (`city.js`) is a wall on a bigger scale: a grid of cells twelve
+centimetres square, each made of what it is - concrete, brick, glass in the
+windows, wood in the doors - and each taking a blow as that material does:
+glass goes at a tap, concrete takes a great deal. The office towers are
+concrete with long bands of windows and a box of plant on the roof; the
+apartments have balconies and a water tank; the old brick has arched windows
+and a chimney; the shops have awnings, signs and big windows. Lamps stand
+along the street.
+
+The buildings are **behind the street**: drawn behind it, and nothing in it
+walks into them, lands on them or shoots them - only something big enough to
+reach into them does that, and the hand. What comes off one is in the street:
+pieces, a body like any other, that fall, land and lie there, and hurt
+whoever they come down on (a piece of a building somebody was tearing into is
+their doing).
+
+Each storey **holds up what is above it**: knock out enough of what holds it
+up - its walls and columns; the glass in it holds up nothing - and it gives
+way, and everything above it comes down. A stretch with nothing under it
+reaches out only so far from what does hold it up, and further than that it
+breaks off. A big piece landing hard is crushed at the bottom and cracks
+apart along its floors and its columns, into lumps a couple of metres across
+that spill out as they settle: a heap, not a building standing in the street.
+The hand from above can pull a ragged lump off a building, and carry it, and
+drop it.
+
+The city is one street: seven buildings along it, the lamps, trees and
+bushes in front, and far off behind, two rows of other buildings in the
+haze, drifting a little as the view moves.
+
 ### The gallows
 
 The gallows (`gallows.js`) is seven timbers of wood - a post, a beam out from
@@ -1260,6 +1401,9 @@ stickfights/
       trees.js        trees and bushes: springy limbs, leaves, cells; the logs that fall
       wires.js        ropes, fixed ropes and pins, and the strain on them
       gallows.js      the gallows: its timbers, the noose, the lever and the trapdoor
+      city.js         the City: the buildings, how each kind is laid out and drawn,
+                      the street, the skyline
+      maps.js         the maps: Flat and City
       freeze.js       the freeze tool
       hand.js         dragging and throwing (and, paused, just moving)
       fx.js           blood (drops, streams, splats, the walls, landing on things),
@@ -1272,6 +1416,7 @@ stickfights/
       sandbox.js      the world, the fixed step, ragdolls and knives in it, the event bus
     ui/ui.js          HUD, spawn menu, tools, inspector, settings
     ui/mods-screen.js the MODS screen
+    ui/maps-screen.js the MAPS screen
     mods/
       registry.js     what a mod is; installing, removing, the storage each needs
       sizes.js        written by tools/mod-sizes.mjs: each mod's size
@@ -1284,6 +1429,10 @@ stickfights/
       shallow/        Shallow: the disguise, the thing, its mind, its looks, the
                       skins, halves, skeletons and insides it leaves, what
                       everybody makes of it, lines, animations and sounds
+      godzilla/       Godzilla: his health and hide, his body (the skeleton, the
+                      walk, the tail, his shape), his moves and his mind, what
+                      they do to the world, the breath, his looks, what
+                      everybody says and makes of him, and his noises
 ```
 
 ## Verifying it
@@ -1298,8 +1447,8 @@ npm run poses:stickfights                  # every clip as contact sheets in .sh
 `tools/verify-stickfights.mjs` drives the real game on a phone-sized touch
 screen and checks:
 
-- stickmen are already moving about behind the title, and PLAY opens an empty
-  sandbox with the spawn menu
+- stickmen are already moving about behind the title, which has MAPS and
+  MODS, and PLAY opens an empty sandbox with the spawn menu
 - the spawn menu has exactly twenty-three things in it: a Stickman, an Officer,
   Brass Knuckles, a Combat Knife, a Machete, a Crowbar, a Glock-19, an M1911,
   an AK-47, a Mossberg 500, a Taser, a Crate, a Light Vest, four kinds of
@@ -1464,6 +1613,16 @@ screen and checks:
 - the AK-47 holds 30 rounds of 7.62 and fires in bursts; a Mossberg shell is
   eight pellets; a crowbar is swung like a machete, puts a glass wall in with
   one blow, and does not cut
+- MAPS lists Flat (loaded) and City; LOAD on City makes it: two office
+  towers, apartments, old brick and two shops, lamps, trees and bushes, and a
+  skyline behind; nothing in the street walks into the buildings or stands on
+  them, and their windows are glass
+- a knock takes a few cells out of a building and the rest still stands, and
+  its glass goes long before its concrete; blow out the ground floor and the
+  storeys above come down in a heap of rubble; a tree in the street, cut
+  through, falls; the hand pulls a lump off a building, which falls
+- the bin clears the city back to how it was, and LOAD on Flat puts the
+  sandbox back as it always was
 - no mod is in the game until it is installed; the MODS screen lists
   Murder Drones with what it adds and the storage it needs, which is what
   its files really take up; INSTALL fills a bar and then puts Uzi, N and V in
@@ -1509,6 +1668,22 @@ screen and checks:
   voice; whoever saw it knows that is not them any more, and is afraid
 - removing Shallow takes it, in whatever skin it is wearing, and everything
   it left out of the world and the menu
+- the MODS screen lists Godzilla ('54), with the storage it needs; installed,
+  he is in the spawn menu, and in the City he spawns where tapped, called
+  Godzilla ('54), about fourteen metres tall with his tail behind him; the
+  first thing he does is roar, and the glass goes in the buildings near him;
+  he has a boss bar, GODZILLA ('54), with his 30,000 health in numbers
+- twenty bullets take next to nothing off him, a blast far more, and nothing
+  knocks him down
+- his stomp crushes whoever is under it, his kick sends them flying, he grabs
+  somebody and lifts them up and then eats them or throws them a long way,
+  his jaws shut on somebody in reach, his claws go through them, his tail
+  whip comes round through whoever is in front, and his atomic breath burns
+  whoever is far off
+- with nobody left he tears into the buildings; one look at him and people
+  are terrified
+- out of health he roars, comes down and lies there, and his bar goes;
+  removing the mod takes him out of the world and the menu
 - going for each weapon - the four guns, the taser, the crowbar, the blades
   and the knuckles - a stickman thinks it in a thought cloud that draws, with
   that weapon in it

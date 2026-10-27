@@ -57,6 +57,8 @@ import { clamp } from '../core/util.js';
 import { parseTemperature, setTemperature, fmtTemp, toF, vitalConditions, hasVitals, breathes } from '../game/vitals.js';
 import { installedMods, findSpawnable, modSpawnables, modOption } from '../mods/index.js';
 import { ModsScreen } from './mods-screen.js';
+import { MapsScreen } from './maps-screen.js';
+import { loadMap, getMap } from '../game/maps.js';
 
 const KINDS = {
   stickman: { name: 'Stickman', short: 'STICKMAN', plural: 'stickmen', limit: 'people' },
@@ -94,7 +96,7 @@ const ARM_NAMES = {
 // a padlock: the shackle drops into the body when it is locked (CSS moves it)
 const LOCK_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path class="shackle" d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/><rect x="5" y="11" width="14" height="10" rx="2.5" fill="currentColor"/></svg>';
 // the rows of buttons a mod's people have in the inspector
-const ABILITY_ROWS = { hands: 'Hands', do: 'Do' };
+const ABILITY_ROWS = { hands: 'Hands', do: 'Do', mind: 'Mind' };
 
 const OPTION_NAMES = {
   fight: (t) => 'Fight ' + t.name,
@@ -196,6 +198,7 @@ export class UI {
     });
 
     this.mods = new ModsScreen({ sb, changed: (m, on) => this.modsChanged(m, on) });
+    this.maps = new MapsScreen({ sb, loaded: (m) => this.mapLoaded(m) });
     this.panelThing = null;
     this.panelT = 0;
     this.bars = new Map();
@@ -449,11 +452,38 @@ export class UI {
     $('btn-sound').classList.toggle('off', !this.sound.on);
     for (const b of document.querySelectorAll('.wire-kind')) b.addEventListener('click', () => this.setWireKind(b.dataset.wire));
     for (const id of ['btn-mods', 'btn-mods-title', 'drawer-get-mods']) $(id).addEventListener('click', () => this.openMods());
+    for (const id of ['btn-maps', 'btn-maps-title']) $(id).addEventListener('click', () => this.openMaps());
   }
 
   openMods() {
     this.gestures.reset();
     this.mods.show();
+  }
+
+  openMaps() {
+    this.gestures.reset();
+    this.maps.show();
+  }
+
+  /** A map has been loaded: nobody is selected any more, and the camera takes in the whole of it. */
+  mapLoaded(m) {
+    this.select(null);
+    if (!this.started) { this.cam.titleView(); return; }
+    this.toggleDrawer(false);
+    this.frameMap();
+    this.toast(`${m.name} loaded`);
+  }
+
+  /** The view a map is first seen from: the flat one as ever; a city from further out, the buildings and the sky over them. */
+  frameMap() {
+    const cam = this.cam;
+    cam.home();
+    if (this.sb.map === 'city') {
+      cam.ppm = Math.max(cam.minPpm, cam.homePpm * 0.6);
+      cam.x = 0;
+      cam.y = cam.floorAt(cam.portrait ? 0.3 : 0.12);
+      cam.clamp();
+    }
   }
 
   /** A mod has gone in or come out: the spawn menu, the spawn tool and the inspector catch up. */
@@ -508,16 +538,18 @@ export class UI {
   clearPressed() {
     const b = this.$('btn-clear');
     if (this.clearArmed > 0) {
-      this.sb.clear();
+      // (a map other than the flat one goes back to how it was when it was loaded)
+      const map = this.sb.map;
+      loadMap(this.sb, map);
       this.select(null);
       this.clearArmed = 0;
       b.classList.remove('armed');
-      this.toast('Cleared');
+      this.toast(map === 'flat' ? 'Cleared' : `Cleared: the ${getMap(map).name.toLowerCase()} is as it was`);
       return;
     }
     this.clearArmed = 2.5;
     b.classList.add('armed');
-    this.toast('Tap again to clear everything');
+    this.toast(this.sb.map === 'flat' ? 'Tap again to clear everything' : `Tap again to clear everything, and put the ${getMap(this.sb.map).name.toLowerCase()} back as it was`);
   }
 
   toast(text, secs = 2.2) {
@@ -1387,15 +1419,21 @@ export class UI {
         const fill = document.createElement('div');
         fill.className = 'boss-fill';
         track.appendChild(fill);
-        root.append(name, track);
+        // (how much health, in numbers, for a boss that shows it)
+        const hp = document.createElement('div');
+        hp.className = 'boss-hp';
+        root.append(name, track, hp);
         box.appendChild(root);
-        el = { root, name, fill, track };
+        el = { root, name, fill, track, hp };
         this.bars.set(k, el);
       }
       el.name.textContent = b.name + (b.note ? ` - ${b.note}` : '');
       el.fill.style.width = (clamp(b.frac, 0, 1) * 100).toFixed(2) + '%';
       el.fill.style.background = b.color || '#b23cd1';
       el.track.classList.toggle('armored', !!b.armored);
+      if (b.style && !el.root.classList.contains(b.style)) el.root.classList.add(b.style);
+      el.hp.textContent = b.hp || '';
+      el.hp.classList.toggle('hidden', !b.hp);
       el.root.title = b.text || '';
     }
   }
@@ -1485,7 +1523,8 @@ export class UI {
     if (a.group === 'hands') {
       this.toast(id === 'auto' ? `${p.name} picks their own hands again` : id === 'hands' ? `${p.name} keeps their hands as hands`
         : `${p.name}: ${a.label.toLowerCase()} for hands`);
-    } else this.toast(done === false ? `${p.name} can't do that right now` : `${p.name}: ${a.label.toLowerCase()}!`);
+    } else if (a.say) this.toast(a.say(done));
+    else this.toast(done === false ? `${p.name} can't do that right now` : `${p.name}: ${a.label.toLowerCase()}!`);
     this.insT = 0;
   }
 

@@ -16,7 +16,7 @@
      name, version, about, adds (the names of what it adds)
      icon(ctx, w, h)              its picture on the MODS screen
      spawnables  [{ kind, name, short, plural, limit, blurb, living,
-                    icon(ctx, w, h, card), spawn(sb, x, y), said?(made), ghost?(ctx) }]
+                    icon(ctx, w, h, card), spawn(sb, x, y), said?(made), ghost?(ctx, at) }]
      options     { kind: (target) => text }   names for what its people may decide to do
      owns(thing)                  whether something in the world is the mod's
      cleanup(sb)                  anything else to forget when it is removed

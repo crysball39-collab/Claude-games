@@ -61,6 +61,23 @@ export const MATERIALS = {
     take: { bullet: 1, blade: 0.7, blunt: 1, impact: 1, blast: 1 },
     bits: ['#cfe9f5', '#a9d4ea', '#eef8fc'],
   },
+  // what a city is built of (city.js): its cells are bigger, and much heavier
+  concrete: {
+    name: 'concrete', mass: 9, tough: 3.2, resist: 0.5, friction: 0.8, restitution: 0.02,
+    take: { bullet: 0.25, blade: 0.03, blunt: 0.45, impact: 0.55, blast: 1 },
+    bits: ['#b9b6ae', '#8e8b84', '#d2cfc7'], hole: '#3a3936', chip: 'rgba(40, 38, 34, 0.4)',
+  },
+  brick: {
+    name: 'brick', mass: 7, tough: 2.4, resist: 0.42, friction: 0.8, restitution: 0.02,
+    take: { bullet: 0.3, blade: 0.04, blunt: 0.55, impact: 0.65, blast: 1.1 },
+    bits: ['#9a5a44', '#7b4433', '#b9735a'], hole: '#33211a', chip: 'rgba(52, 28, 20, 0.45)',
+  },
+  pane: {
+    // a window: glass, but in a building - its own cell or so of it gives, not the whole of it
+    name: 'glass', mass: 1.2, tough: 0.3, resist: 0.03, friction: 0.3, restitution: 0.02, brittle: true,
+    take: { bullet: 1, blade: 0.8, blunt: 1, impact: 1.2, blast: 1.4 },
+    bits: ['#cfe9f5', '#a9d4ea', '#eef8fc'],
+  },
 };
 
 /** The three walls: what each is called, made of, and how big it is (wide, tall). */
@@ -75,6 +92,29 @@ export const isWall = (kind) => !!WALLS[kind];
 export const TIMBERS = {
   gallows: { name: 'Gallows', mat: 'wood', w: 0.2, h: 1, timber: true },
 };
+
+/**
+ * Every kind of slab there is, by type: the walls, the timbers, and whatever
+ * else is defined (the buildings of the city, city.js). Besides a name, what
+ * it is made of and how big it is, a type may have:
+ *   cell, px    how big its cells are (m), and the pixels of picture to each
+ *   mats, layout(slab)  more materials than one: layout says which cell is
+ *               which (0 its own, 1 the first of mats...) - and may leave
+ *               some out from the start
+ *   paint(slab) its own picture, whole
+ *   background  standing, it is behind the street: people walk and shoot past
+ *               it, nothing lands on it or bumps into it - though anything
+ *               that comes off it is as solid as anything else
+ *   load, span  its storeys bear what is above them: a storey mostly gone, or
+ *               a stretch more than `span` metres across with nothing on the
+ *               ground under it, gives way
+ *   crumbles    a piece of it landing hard breaks up
+ *   tear        the hand pulls a lump off it, rather than the whole of it up
+ */
+export const SLAB_TYPES = { ...WALLS, ...TIMBERS };
+export function defineSlab(type, spec) { SLAB_TYPES[type] = spec; return spec; }
+// a slab with more cells than this (a building) takes what happens to it in a step all at once, after it
+const BIG = 4000;
 
 // what a shard of glass does to somebody it falls on, or who goes through a pane
 defineArm('glass', {
@@ -92,12 +132,17 @@ export class Slab {
    * and o.vel how it was lying and moving.
    */
   constructor(sb, type, x, y, o = {}) {
-    const spec = WALLS[type] || TIMBERS[type];
+    const spec = SLAB_TYPES[type];
     this.id = nextId++;
     this.sandbox = sb;
     this.type = type;
     this.spec = spec;
     this.mat = MATERIALS[spec.mat];
+    this.cs = spec.cell || CELL;
+    this.px = spec.px || PX;
+    // what each cell is made of, where a slab is made of more than one thing (glass in a building's windows)
+    this.mats = [this.mat, ...(spec.mats || []).map((m) => MATERIALS[m])];
+    this.cellMat = null;
     this.timber = !!spec.timber;
     this.kind = o.from ? 'piece' : 'wall';
     this.name = o.from ? `Piece of ${spec.name.toLowerCase()}` : o.name || spec.name;
@@ -116,23 +161,28 @@ export class Slab {
     this.age = 0;
     this.tex = null;
     this.dirty = true;
+    this.seed = o.seed ?? Math.floor(rand(0, 1e6));
     if (o.grid) {
       this.cols = o.grid.cols;
       this.rows = o.grid.rows;
       this.hp = o.grid.hp;
       this.marks = o.grid.marks || [];
+      this.cellMat = o.grid.mat || null;
     } else {
       const size = o.size || spec;
-      this.cols = Math.max(1, Math.round(size.w / CELL));
-      this.rows = Math.max(1, Math.round(size.h / CELL));
+      this.cols = Math.max(1, Math.round(size.w / this.cs));
+      this.rows = Math.max(1, Math.round(size.h / this.cs));
       this.hp = new Float32Array(this.cols * this.rows).fill(1);
       this.marks = [];            // { c, r (fractional), kind: 'hole' | 'dent' | 'crack', s, a }
+      if (spec.layout) this.cellMat = spec.layout(this);
     }
-    this.seed = o.seed ?? Math.floor(rand(0, 1e6));
+    this.big = this.cols * this.rows > BIG;
+    // (a building: how much of each storey holds it up, as built)
+    this.rowBase = spec.load ? this.structure() : null;
     // the box round what is left, and where it sits in the grid
     this.ox = 0;
     this.oy = 0;
-    const gw = this.cols * CELL, gh = this.rows * CELL;
+    const gw = this.cols * this.cs, gh = this.rows * this.cs;
     const at = o.at || { x, y: y + gh / 2 };
     const mass = this.anchored ? Infinity : 1;
     this.body = new Body(gw, gh, mass, {
@@ -145,14 +195,18 @@ export class Slab {
 
   get pos() { return this.body.pos; }
   get loose() { return !this.anchored && !this.removed; }
-  get gw() { return this.cols * CELL; }
-  get gh() { return this.rows * CELL; }
+  /** Standing behind the street (a building): nothing in the street touches it, or is stopped by it. */
+  get background() { return !!this.spec.background && this.anchored && !this.removed; }
+  get gw() { return this.cols * this.cs; }
+  get gh() { return this.rows * this.cs; }
   get alive() { let n = 0; for (let i = 0; i < this.hp.length; i++) if (this.hp[i] > 0) n++; return n; }
   /** Whether people can see through it. */
   get clear() { return this.mat.brittle; }
 
   idx(c, r) { return r * this.cols + c; }
   cellOk(c, r) { return c >= 0 && r >= 0 && c < this.cols && r < this.rows && this.hp[r * this.cols + c] > 0; }
+  /** What cell i is made of. */
+  matOf(i) { return this.cellMat ? this.mats[this.cellMat[i]] || this.mat : this.mat; }
 
   /** The middle of the grid, in the world. */
   gridCentre() {
@@ -173,7 +227,7 @@ export class Slab {
 
   /** The middle of cell (c, r), in the world. */
   cellWorld(c, r) {
-    return this.body.toWorld((c + 0.5) * CELL - this.gw / 2 - this.ox, (r + 0.5) * CELL - this.gh / 2 - this.oy);
+    return this.body.toWorld((c + 0.5) * this.cs - this.gw / 2 - this.ox, (r + 0.5) * this.cs - this.gh / 2 - this.oy);
   }
 
   /**
@@ -181,29 +235,31 @@ export class Slab {
    * grid stays where it is in the world while the box round it shrinks.
    */
   fit() {
-    let c0 = Infinity, c1 = -1, r0 = Infinity, r1 = -1, n = 0;
+    let c0 = Infinity, c1 = -1, r0 = Infinity, r1 = -1, n = 0, mass = 0;
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
-        if (this.hp[r * this.cols + c] <= 0) continue;
+        const i = r * this.cols + c;
+        if (this.hp[i] <= 0) continue;
         n++;
+        if (this.cellMat) mass += this.matOf(i).mass;
         if (c < c0) c0 = c; if (c > c1) c1 = c;
         if (r < r0) r0 = r; if (r > r1) r1 = r;
       }
     }
     if (!n) return false;
     const g = this.gridCentre();
-    const ox = ((c0 + c1 + 1) / 2) * CELL - this.gw / 2, oy = ((r0 + r1 + 1) / 2) * CELL - this.gh / 2;
+    const ox = ((c0 + c1 + 1) / 2) * this.cs - this.gw / 2, oy = ((r0 + r1 + 1) / 2) * this.cs - this.gh / 2;
     const b = this.body, cs = Math.cos(b.rot), sn = Math.sin(b.rot);
     this.ox = ox;
     this.oy = oy;
     b.pos.x = g.x + cs * ox - sn * oy;
     b.pos.y = g.y + sn * ox + cs * oy;
-    b.w = (c1 - c0 + 1) * CELL;
-    b.h = (r1 - r0 + 1) * CELL;
+    b.w = (c1 - c0 + 1) * this.cs;
+    b.h = (r1 - r0 + 1) * this.cs;
     this.box = { c0, c1, r0, r1 };
     // standing, nothing moves it; loose, it weighs what is left of it; frozen in place, it weighs that but goes nowhere
     if (this.anchored) b.setKinematic(false, Infinity);
-    else b.setKinematic(this.frozenInPlace, n * this.mat.mass);
+    else b.setKinematic(this.frozenInPlace, this.cellMat ? mass : n * this.mat.mass);
     this.cellCount = n;
     return true;
   }
@@ -211,14 +267,14 @@ export class Slab {
   contains(x, y, r = 0) {
     if (!this.body.contains(x, y, r)) return false;
     const g = this.toGrid(x, y);
-    const c = Math.floor(g.gx / CELL), rr = Math.floor(g.gy / CELL), k = Math.ceil(r / CELL);
+    const c = Math.floor(g.gx / this.cs), rr = Math.floor(g.gy / this.cs), k = Math.ceil(r / this.cs);
     for (let dr = -k; dr <= k; dr++) for (let dc = -k; dc <= k; dc++) if (this.cellOk(c + dc, rr + dr)) return true;
     return false;
   }
 
   /** Going from (x, y) along (dx, dy), the first point in what is left of it, within `max`: where a blow lands. */
   firstSolid(x, y, dx, dy, max) {
-    for (let t = 0; t <= max; t += CELL * 0.5) {
+    for (let t = 0; t <= max; t += this.cs * 0.5) {
       if (this.contains(x + dx * t, y + dy * t, 0)) return { x: x + dx * t, y: y + dy * t };
     }
     return null;
@@ -233,30 +289,37 @@ export class Slab {
    */
   damage(x, y, r, amount, kind = 'blunt', o = {}) {
     if (this.removed || amount <= 0) return 0;
-    const take = (this.mat.take[kind] ?? 1) * amount / this.mat.tough;
+    let take = (this.mat.take[kind] ?? 1) * amount / this.mat.tough;
     const g = this.toGrid(x, y);
-    const k = Math.ceil(r / CELL) + 1;
-    const c0 = Math.floor(g.gx / CELL), r0 = Math.floor(g.gy / CELL);
+    const k = Math.ceil(r / this.cs) + 1;
+    const c0 = Math.floor(g.gx / this.cs), r0 = Math.floor(g.gy / this.cs);
     let gone = 0, hit = 0;
-    for (let dr = -k; dr <= k; dr++) {
-      for (let dc = -k; dc <= k; dc++) {
-        const c = c0 + dc, rr = r0 + dr;
+    // (only what is on the grid: a blast as big as a street need not look at cells there are not)
+    for (let rr = Math.max(0, r0 - k), rEnd = Math.min(this.rows - 1, r0 + k); rr <= rEnd; rr++) {
+      for (let c = Math.max(0, c0 - k), cEnd = Math.min(this.cols - 1, c0 + k); c <= cEnd; c++) {
         if (!this.cellOk(c, rr)) continue;
-        const d = Math.hypot((c + 0.5) * CELL - g.gx, (rr + 0.5) * CELL - g.gy);
+        const d = Math.hypot((c + 0.5) * this.cs - g.gx, (rr + 0.5) * this.cs - g.gy);
         if (d > r) continue;
         const i = this.idx(c, rr);
+        // (made of more than one thing: each cell takes it as what it is made of)
+        let t = take;
+        if (this.cellMat) {
+          const m = this.matOf(i);
+          if (o.only && !o.only(m)) continue;
+          t = (m.take[kind] ?? 1) * amount / m.tough;
+        }
         hit++;
-        this.hp[i] -= take * Math.sqrt(1 - d / r) * rand(0.75, 1.25);
-        if (this.hp[i] <= 0) { this.hp[i] = 0; gone++; this.bits(c, rr, o.dx || 0, o.dy || 0, o.speed || 1); }
+        this.hp[i] -= t * Math.sqrt(1 - d / r) * rand(0.75, 1.25);
+        if (this.hp[i] <= 0) { this.hp[i] = 0; gone++; this.bits(c, rr, o.dx || 0, o.dy || 0, o.speed || 1, o); }
       }
     }
     if (!hit) return 0;
     // glass: every knock cracks it further
     if (this.mat.brittle) {
       this.strain += take * 0.22 + gone * 0.035;
-      if (o.mark !== false) this.mark(g.gx / CELL, g.gy / CELL, 'crack', clamp(take, 0.4, 2.5));
+      if (o.mark !== false) this.mark(g.gx / this.cs, g.gy / this.cs, 'crack', clamp(take, 0.4, 2.5));
     } else if (o.mark !== false && kind !== 'blast') {
-      this.mark(g.gx / CELL, g.gy / CELL, this.mat.name === 'metal' ? 'dent' : 'chip', clamp(take * 2, 0.4, 1.6));
+      this.mark(g.gx / this.cs, g.gy / this.cs, this.mat.name === 'metal' ? 'dent' : 'chip', clamp(take * 2, 0.4, 1.6));
     }
     this.dirty = true;
     this.after(o);
@@ -270,22 +333,23 @@ export class Slab {
    * with, and how far along it came out (or stopped).
    */
   bullet(x, y, dx, dy, energy, max) {
-    const step = CELL * 0.5;
+    const step = this.cs * 0.5;
     let t = 0, first = null, last = null, lastCell = -1;
     const take = this.mat.take.bullet / this.mat.tough;
     while (t <= max && energy > 0.15) {
       const px = x + dx * t, py = y + dy * t;
       const g = this.toGrid(px, py);
-      const c = Math.floor(g.gx / CELL), r = Math.floor(g.gy / CELL);
+      const c = Math.floor(g.gx / this.cs), r = Math.floor(g.gy / this.cs);
       const i = c >= 0 && r >= 0 && c < this.cols && r < this.rows ? this.idx(c, r) : -1;
       if (i >= 0 && i !== lastCell && this.hp[i] > 0) {
         lastCell = i;
-        if (!first) first = { x: px, y: py, c: g.gx / CELL, r: g.gy / CELL };
-        last = { x: px, y: py, c: g.gx / CELL, r: g.gy / CELL, t };
+        if (!first) first = { x: px, y: py, c: g.gx / this.cs, r: g.gy / this.cs };
+        last = { x: px, y: py, c: g.gx / this.cs, r: g.gy / this.cs, t };
+        const m = this.cellMat ? this.matOf(i) : this.mat, tk = this.cellMat ? m.take.bullet / m.tough : take;
         // (glass: it goes straight through, cracking what is round the hole - one alone does not cut a pane in two)
-        this.hp[i] -= this.mat.brittle ? Math.min(0.8, energy * take) : energy * take;
+        this.hp[i] -= m.brittle ? Math.min(0.8, energy * tk) : energy * tk;
         if (this.hp[i] <= 0) { this.hp[i] = 0; this.bits(c, r, dx, dy, 2); }
-        energy -= this.mat.resist;
+        energy -= m.resist;
       }
       t += step;
     }
@@ -318,13 +382,31 @@ export class Slab {
     this.marks.push({ c, r, kind, s, a: rand(0, Math.PI * 2), n: Math.floor(rand(3, 6)) });
   }
 
-  /** What comes off a cell that went: splinters, scraps, shards. */
-  bits(c, r, dx, dy, speed = 1) {
+  /**
+   * What comes off a cell that went: splinters, scraps, shards. (o.bulk: one
+   * of a great many going at once - only a few of those throw anything; o.soft:
+   * glass that comes down as a glitter, not as blades.)
+   */
+  bits(c, r, dx, dy, speed = 1, o = {}) {
     const fx = this.sandbox.fx, p = this.cellWorld(c, r);
-    const cols = this.mat.bits;
+    const m = this.matOf(this.idx(c, r)), cols = m.bits;
+    // (a building's worth of cells: not every one of them throws something off)
+    if (this.big && chance(o.bulk ? 0.88 : 0.45)) return;
     fx.bits(p.x, p.y, chance(0.5) ? 2 : 1, cols[Math.floor(Math.random() * cols.length)], dx * speed + rand(-1, 1), dy * speed + rand(0, 1.6), {
-      size: CELL * rand(0.35, 0.6), sharp: this.mat.brittle, glow: this.mat.name === 'metal' && chance(0.35),
+      size: this.cs * rand(0.35, 0.6), sharp: m.brittle && !o.soft, glow: m.name === 'metal' && chance(0.35),
     });
+  }
+
+  /** How much of each row is still there that holds anything up: its cells that are not glass. */
+  structure() {
+    const { cols, rows, hp } = this;
+    const count = new Int32Array(rows);
+    for (let r = 0; r < rows; r++) {
+      let n = 0;
+      for (let c = 0; c < cols; c++) { const i = r * cols + c; if (hp[i] > 0 && !(this.cellMat && this.matOf(i).brittle)) n++; }
+      count[r] = n;
+    }
+    return count;
   }
 
   /**
@@ -335,27 +417,166 @@ export class Slab {
   after(o = {}) {
     if (this.removed) return;
     if (this.mat.brittle && this.strain >= 1) { this.shatter(o); return; }
+    // (a building: everything that happened to it this step, sorted out once, after it - see update)
+    if (this.big) { this.splitDue = this.splitDue || o; return; }
     this.split(o);
+  }
+
+  /**
+   * A building's storeys bearing what is above them. A storey with most of it
+   * gone gives way under the rest; so does a stretch with nothing on the
+   * ground under it wider than it can span (from one side, or across the
+   * middle) - and whatever it was holding up comes down. Cuts what gives way
+   * through, and says whether anything did.
+   */
+  bearLoad() {
+    const { cols, rows, hp } = this;
+    let gave = false;
+    const cut = (cells) => {
+      for (const i of cells) {
+        if (hp[i] <= 0) continue;
+        hp[i] = 0;
+        if (chance(0.3)) { const c = i % cols; this.bits(c, (i - c) / cols, 0, -0.5, 1); }
+        gave = true;
+      }
+    };
+    // a storey: what is left of what holds it up - its walls and columns, not its glass - against
+    // what there was of them to begin with, with anything above it to hold up
+    const count = this.structure();
+    const base = this.rowBase || (this.rowBase = count);
+    let above = 0, fail = -1;
+    for (let r = rows - 2; r >= 0; r--) {
+      above = Math.max(above, count[r + 1]);
+      if (above >= 10 && base[r] >= 6 && count[r] < base[r] * 0.3) fail = r;
+    }
+    if (fail >= 0) {
+      const row = [];
+      for (let c = 0; c < cols; c++) row.push(fail * cols + c);
+      cut(row);
+    }
+    // a stretch with nothing on the ground: as far as it can reach out, and no further
+    const span = Math.round((this.spec.span || 3) / this.cs);
+    const grounded = (c) => hp[c] > 0 || (rows > 1 && hp[cols + c] > 0);
+    const column = (c) => { const out = []; for (let r = 0; r < rows; r++) out.push(r * cols + c); return out; };
+    for (let c = 0; c < cols;) {
+      if (grounded(c)) { c++; continue; }
+      let e = c;
+      while (e < cols && !grounded(e)) e++;
+      const len = e - c, left = c > 0, right = e < cols;
+      if (left && right && len > span * 2) { cut(column(c + span)); cut(column(e - 1 - span)); }
+      else if (left && !right && len > span) cut(column(c + span));
+      else if (right && !left && len > span) cut(column(e - 1 - span));
+      c = e;
+    }
+    if (gave) this.sandbox.emit('slabGive', { what: this, x: this.pos.x, y: this.pos.y });
+    return gave;
+  }
+
+  /**
+   * A piece of a building landing hard at (x, y). A small one cracks across,
+   * a line or two. A big one is crushed at the bottom - as far up as how hard
+   * it came down - and cracks right through, along its floors and its
+   * columns mostly, into lumps a couple of metres across that spill outwards
+   * as they come apart: a heap, not a building standing in the street.
+   */
+  fracture(x, y, speed) {
+    if (this.removed || this.anchored) return;
+    const cs = this.cs, sb = this.sandbox, before = new Set(sb.slabs);
+    const L = Math.hypot(this.gw, this.gh);
+    const cut = (px, py, a) => {
+      const ux = Math.cos(a), uy = Math.sin(a);
+      for (let t = -L; t <= L; t += cs * 0.5) {
+        const c = Math.floor((px + ux * t) / cs), r = Math.floor((py + uy * t) / cs);
+        if (!this.cellOk(c, r)) continue;
+        this.hp[this.idx(c, r)] = 0;
+        if (chance(0.2)) this.bits(c, r, ux * 0.4, 0.5, 1.2);
+      }
+    };
+    const big = this.cellCount > 160;
+    if (!big) {
+      // through somewhere near where it hit, along it or across it (or any way)
+      const g = this.toGrid(x, y);
+      for (let k = clamp(Math.round(speed / 5), 1, 2); k > 0; k--) {
+        const a = chance(0.7) ? (chance(0.5) ? 0 : Math.PI / 2) + rand(-0.06, 0.06) : rand(0, Math.PI);
+        cut(clamp(g.gx + rand(-1, 1) * this.gw * 0.3, 0, this.gw), clamp(g.gy + rand(-1, 1) * this.gh * 0.3, 0, this.gh), a);
+      }
+    } else {
+      // the bottom of it, crushed
+      const low = this.body.aabb().minY, crush = clamp(speed * 0.1, 0.2, 1.3);
+      for (let r = 0; r < this.rows; r++) {
+        for (let c = 0; c < this.cols; c++) {
+          const i = r * this.cols + c;
+          if (this.hp[i] <= 0 || this.cellWorld(c, r).y - low >= crush) continue;
+          this.hp[i] = 0;
+          if (chance(0.1)) this.bits(c, r, rand(-1.5, 1.5), 0.8, 1.5);
+        }
+      }
+      // and the rest, through and through
+      const size = clamp(2.8 - speed * 0.1, 1.3, 2.8);
+      for (let gy = size * rand(0.6, 1.1); gy < this.gh - size * 0.4; gy += size * rand(0.8, 1.2)) cut(this.gw / 2, gy, rand(-0.05, 0.05));
+      for (let gx = size * rand(0.5, 1); gx < this.gw - size * 0.4; gx += size * rand(0.8, 1.2)) cut(gx, this.gh / 2, Math.PI / 2 + rand(-0.05, 0.05));
+      if (speed > 6 && chance(0.6)) cut(rand(0, this.gw), rand(0, this.gh), rand(0.4, 1.2));
+      for (let k = 0; k < 5; k++) sb.fx.dust(x + rand(-1, 1) * this.body.w * 0.45, low + 0.2, 6, Math.min(2, speed / 5));
+    }
+    this.dirty = true;
+    sb.fx.dust(x, y, 6, Math.min(1.6, speed / 6));
+    sb.emit('rubble', { what: this, x, y, speed, cells: this.cellCount, big });
+    const mid = this.body.pos.x, h0 = this.body.aabb().minY, tall = Math.max(0.5, this.body.aabb().maxY - h0);
+    // (all at once, now: it is landing)
+    this.split({ dx: 0, dy: 0.5, speed: 1 });
+    if (!big) return;
+    // the lumps of it spill out sideways as it comes down, the higher up the further
+    for (const s of sb.slabs) {
+      if (s !== this && before.has(s)) continue;
+      if (s.removed || s.anchored) continue;
+      const v = s.body.vel, up = clamp((s.body.pos.y - h0) / tall, 0, 1);
+      v.x += (Math.sign(s.body.pos.x - mid) || (chance(0.5) ? 1 : -1)) * rand(0.4, 1.8) * (0.3 + up);
+      s.body.angVel += rand(-1.2, 1.2) * (0.4 + up);
+      s.body.gentle = Math.max(s.body.gentle || 0, 1.2);
+    }
+  }
+
+  /** Taken hold of by the hand at (x, y): a lump of it, out to r, comes away in the hand. */
+  tearAt(x, y, r = 0.7) {
+    const g = this.toGrid(x, y), cs = this.cs, k = Math.ceil(r / cs) + 1;
+    const c0 = Math.floor(g.gx / cs), r0 = Math.floor(g.gy / cs);
+    const lump = [];
+    for (let dr = -k; dr <= k; dr++) {
+      for (let dc = -k; dc <= k; dc++) {
+        const c = c0 + dc, rr = r0 + dr;
+        // (a ragged lump, not a round one)
+        if (!this.cellOk(c, rr) || Math.hypot(dc, dr) * cs > r * (0.75 + 0.35 * Math.sin(c * 1.7 + rr * 2.3 + this.seed))) continue;
+        lump.push(this.idx(c, rr));
+      }
+    }
+    if (lump.length < CRUMBS) return null;
+    const piece = this.breakAway(lump, false, {});
+    if (!piece) return null;
+    this.dirty = true;
+    // (what is left may not stand up without it)
+    this.after({});
+    this.sandbox.emit('slabTear', { what: this, piece, x, y });
+    return piece;
   }
 
   /** Every cell left, in pieces joined to each other: [[index, ...], ...]. */
   parts() {
-    const seen = new Uint8Array(this.hp.length), out = [];
+    const hp = this.hp, cols = this.cols, rows = this.rows, seen = new Uint8Array(hp.length), out = [];
     const stack = [];
-    for (let i = 0; i < this.hp.length; i++) {
-      if (this.hp[i] <= 0 || seen[i]) continue;
+    const reach = (k) => { if (!seen[k] && hp[k] > 0) { seen[k] = 1; stack.push(k); } };
+    for (let i = 0; i < hp.length; i++) {
+      if (hp[i] <= 0 || seen[i]) continue;
       const part = [];
       stack.push(i);
       seen[i] = 1;
       while (stack.length) {
         const j = stack.pop();
         part.push(j);
-        const c = j % this.cols, r = (j - c) / this.cols;
-        for (const [nc, nr] of [[c + 1, r], [c - 1, r], [c, r + 1], [c, r - 1]]) {
-          if (nc < 0 || nr < 0 || nc >= this.cols || nr >= this.rows) continue;
-          const k = nr * this.cols + nc;
-          if (!seen[k] && this.hp[k] > 0) { seen[k] = 1; stack.push(k); }
-        }
+        const c = j % cols, r = (j - c) / cols;
+        if (c + 1 < cols) reach(j + 1);
+        if (c > 0) reach(j - 1);
+        if (r + 1 < rows) reach(j + cols);
+        if (r > 0) reach(j - cols);
       }
       out.push(part);
     }
@@ -383,7 +604,7 @@ export class Slab {
     const by = h.by;
     if (!by || by.removed || !by.anchored) return false;
     const p = this.fromGrid(h.gx, h.gy);
-    return by.contains(p.x, p.y, CELL * 0.75);
+    return by.contains(p.x, p.y, by.cs * 0.75);
   }
 
   split(o = {}) {
@@ -412,7 +633,7 @@ export class Slab {
       if (this.anchored && standing(p)) this.breakAway(p, true, o, held);
       else this.breakAway(p, false, o);
     }
-    if (keep.length < CRUMBS && !this.anchored) {
+    if (keep.length < (this.spec.crumbs || CRUMBS) && !this.anchored) {
       for (const i of keep) { this.crumb(i); this.hp[i] = 0; }
       this.sandbox.remove(this, { quiet: true });
       return;
@@ -428,7 +649,7 @@ export class Slab {
 
   /** The cells of part `p` out of this slab and into one of their own (standing, if `stands`: held up by what held them). */
   breakAway(p, stands, o = {}, held = null) {
-    if (p.length < CRUMBS && !stands) {
+    if (p.length < (this.spec.crumbs || CRUMBS) && !stands) {
       for (const i of p) { this.crumb(i); this.hp[i] = 0; }
       return null;
     }
@@ -440,25 +661,30 @@ export class Slab {
     }
     const cols = c1 - c0 + 1, rows = r1 - r0 + 1;
     const hp = new Float32Array(cols * rows);
+    const mat = this.cellMat ? new Uint8Array(cols * rows) : null;
     for (const i of p) {
       const c = i % this.cols, r = (i - c) / this.cols;
       hp[(r - r0) * cols + (c - c0)] = this.hp[i];
+      if (mat) mat[(r - r0) * cols + (c - c0)] = this.cellMat[i];
       this.hp[i] = 0;
     }
     const marks = this.marks.filter((m) => m.c >= c0 && m.c < c1 + 1 && m.r >= r0 && m.r < r1 + 1).map((m) => ({ ...m, c: m.c - c0, r: m.r - r0 }));
     const stains = this.stains.filter((s) => s.c >= c0 && s.c < c1 + 1 && s.r >= r0 && s.r < r1 + 1).map((s) => ({ ...s, c: s.c - c0, r: s.r - r0 }));
     // the middle of it, in the world, and how fast that is moving
     const b = this.body;
-    const mid = b.toWorld(((c0 + c1 + 1) / 2) * CELL - this.gw / 2 - this.ox, ((r0 + r1 + 1) / 2) * CELL - this.gh / 2 - this.oy);
+    const mid = b.toWorld(((c0 + c1 + 1) / 2) * this.cs - this.gw / 2 - this.ox, ((r0 + r1 + 1) / 2) * this.cs - this.gh / 2 - this.oy);
     const v = b.velAt(mid.x, mid.y);
     const kick = o.dx || o.dy ? { x: (o.dx || 0) * 0.6, y: (o.dy || 0) * 0.6 } : { x: 0, y: 0 };
     const piece = this.sandbox.addSlab(new Slab(this.sandbox, this.type, 0, 0, {
-      from: this, grid: { cols, rows, hp, marks }, at: mid, rot: b.rot, seed: this.seed + c0 * 31 + r0 * 17,
+      from: this, grid: { cols, rows, hp, marks, mat }, at: mid, rot: b.rot, seed: this.seed + c0 * 31 + r0 * 17,
       vel: { x: v.x + kick.x + rand(-0.2, 0.2), y: v.y + kick.y, w: b.angVel + rand(-0.6, 0.6) }, strain: this.strain,
     }));
     if (!piece) return null;
     piece.stains = stains;
     piece.paintFrom = { src: this, c0, r0 };
+    // (whoever brought it down is to blame for where the pieces land)
+    piece.thrownBy = this.thrownBy || null;
+    piece.thrownAt = this.thrownAt ?? -99;
     if (stands) {
       // standing on its own bottom row, like the wall it was part of - or resting where that rested
       piece.anchored = true;
@@ -476,15 +702,17 @@ export class Slab {
           const c = i % this.cols, r = (i - c) / this.cols;
           cells.add((r - r0) * cols + (c - c0));
         }
-        if (cells.size) piece.holds.push({ cells, by: h.by, gx: h.gx - c0 * CELL, gy: h.gy - r0 * CELL });
+        if (cells.size) piece.holds.push({ cells, by: h.by, gx: h.gx - c0 * this.cs, gy: h.gy - r0 * this.cs });
       }
       piece.body.setMass(Infinity);
       piece.body.vel.x = piece.body.vel.y = piece.body.angVel = 0;
       piece.fit();
     } else {
-      // (for a moment it passes through what it came off, so the two do not fly apart)
+      // (for a moment it passes through what it came off, so the two do not fly apart - and,
+      // lying in among what came off with it, eases its way out rather than being thrown out)
       piece.body.ignore = new Set([b]);
       piece.unIgnoreT = 0.25;
+      if (this.spec.crumbles) piece.body.gentle = 1.2;
       this.sandbox.emit('slabBreak', { what: this, piece, x: mid.x, y: mid.y, cells: p.length });
     }
     return piece;
@@ -502,7 +730,7 @@ export class Slab {
         if (chance(0.55)) continue;
         const p = this.cellWorld(c, r), v = b.velAt(p.x, p.y);
         fx.bits(p.x, p.y, 1, this.mat.bits[(c + r) % 3], v.x + (o.dx || 0) * rand(0.5, 2.5) + rand(-1.4, 1.4), v.y + (o.dy || 0) * rand(0.5, 2) + rand(-0.5, 1.5), {
-          size: CELL * rand(0.6, 1.3), sharp: true, spin: true,
+          size: this.cs * rand(0.6, 1.3), sharp: true, spin: true,
         });
       }
     }
@@ -513,10 +741,10 @@ export class Slab {
   /** Blood landing on it: kept on the cell it landed on. */
   stain(wx, wy, r, tint = null) {
     const g = this.toGrid(wx, wy);
-    const c = g.gx / CELL, rr = g.gy / CELL;
+    const c = g.gx / this.cs, rr = g.gy / this.cs;
     if (!this.cellOk(Math.floor(c), Math.floor(rr))) return;
     for (const s of this.stains) {
-      if (s.tint === tint && Math.hypot(s.c - c, s.r - rr) * CELL < s.r0) { s.r0 = Math.min(0.07, s.r0 + r * 0.15); this.dirty = true; return; }
+      if (s.tint === tint && Math.hypot(s.c - c, s.r - rr) * this.cs < s.r0) { s.r0 = Math.min(0.07, s.r0 + r * 0.15); this.dirty = true; return; }
     }
     if (this.stains.length > 60) this.stains.shift();
     this.stains.push({ c, r: rr, r0: r, a: rand(0, Math.PI), flat: rand(0.55, 1), dark: chance(0.3), tint });
@@ -549,7 +777,9 @@ export class Slab {
    * body like any other from now on - it hangs from the hand at the point it
    * was taken by, and swings and turns with it, and falls when let go.
    */
-  uproot() {
+  uproot(x, y) {
+    // too big to come up whole: a lump of it comes away instead
+    if (this.spec.tear && this.anchored) return x === undefined ? null : this.tearAt(x, y);
     if (this.anchored) {
       this.anchored = false;
       this.holds = [];
@@ -564,7 +794,7 @@ export class Slab {
    */
   tryStand() {
     const b = this.body, sb = this.sandbox;
-    if (!this.box || this.box.r0 !== 0 || b.h < b.w * 1.5) return false;
+    if (this.spec.noStand || !this.box || this.box.r0 !== 0 || b.h < b.w * 1.5) return false;
     if (Math.abs(Math.atan2(Math.sin(b.rot), Math.cos(b.rot))) > 0.07) return false;
     if (Math.hypot(b.vel.x, b.vel.y) > 0.5 || Math.abs(b.angVel) > 0.5) return false;
     const bb = b.aabb();
@@ -595,6 +825,15 @@ export class Slab {
   update(dt) {
     this.age += dt;
     if (this.unIgnoreT !== undefined && (this.unIgnoreT -= dt) <= 0) { this.body.ignore = null; this.unIgnoreT = undefined; }
+    if (this.body.gentle > 0) this.body.gentle -= dt;
+    // a building: what happened to it this step, sorted out - and whether what is left still stands
+    if (this.splitDue && !this.removed) {
+      const o = this.splitDue;
+      this.splitDue = null;
+      if (this.spec.load && this.anchored) this.bearLoad();
+      this.split(o);
+      if (this.removed) return;
+    }
     // nothing holds a standing slab up but what it stands on: knocked about, it stays put
     if (this.anchored) {
       this.body.vel.x = this.body.vel.y = this.body.angVel = 0;
@@ -631,30 +870,30 @@ export class Slab {
   /** The picture as it is now: the cells that are left, worn as far as they are, and what landed on them. */
   redraw() {
     this.dirty = false;
-    const W = this.cols * PX, H = this.rows * PX;
+    const W = this.cols * this.px, H = this.rows * this.px;
     if (!this.tex) { this.tex = document.createElement('canvas'); this.tex.width = W; this.tex.height = H; }
     const g = this.tex.getContext('2d');
     g.clearRect(0, 0, W, H);
     g.drawImage(this.base, 0, 0);
-    const y = (r) => (this.rows - 1 - r) * PX;
+    const y = (r) => (this.rows - 1 - r) * this.px;
     for (let r = 0; r < this.rows; r++) {
       for (let c = 0; c < this.cols; c++) {
         const h = this.hp[r * this.cols + c];
-        if (h <= 0) g.clearRect(c * PX, y(r), PX, PX);
-        else if (h < 0.92 && !this.mat.brittle) {
+        if (h <= 0) g.clearRect(c * this.px, y(r), this.px, this.px);
+        else if (h < 0.92 && !(this.cellMat ? this.matOf(r * this.cols + c) : this.mat).brittle) {
           g.fillStyle = `rgba(20, 14, 8, ${((1 - h) * 0.45).toFixed(3)})`;
-          g.fillRect(c * PX, y(r), PX, PX);
+          g.fillRect(c * this.px, y(r), this.px, this.px);
         }
       }
     }
     // only on what is still there
     g.save();
     g.globalCompositeOperation = 'source-atop';
-    for (const m of this.marks) drawMark(g, this, m, (m.c) * PX, (this.rows - m.r) * PX);
+    for (const m of this.marks) drawMark(g, this, m, (m.c) * this.px, (this.rows - m.r) * this.px);
     for (const s of this.stains) {
       g.fillStyle = s.tint ? s.tint[s.dark ? 1 : 0] : s.dark ? 'rgba(110, 7, 16, 0.9)' : 'rgba(163, 16, 28, 0.85)';
       g.beginPath();
-      g.ellipse(s.c * PX, (this.rows - s.r) * PX, (s.r0 / CELL) * PX, (s.r0 / CELL) * PX * s.flat, s.a, 0, Math.PI * 2);
+      g.ellipse(s.c * this.px, (this.rows - s.r) * this.px, (s.r0 / this.cs) * this.px, (s.r0 / this.cs) * this.px * s.flat, s.a, 0, Math.PI * 2);
       g.fill();
     }
     g.restore();
@@ -663,9 +902,9 @@ export class Slab {
 
 /** A mark drawn on a slab's picture at (x, y), in its pixels. */
 function drawMark(g, s, m, x, y) {
-  const k = m.s * PX;
+  const k = m.s * s.px;
   if (m.kind === 'hole') {
-    g.fillStyle = s.mat.name === 'glass' ? 'rgba(255,255,255,0.5)' : '#2a1a0e';
+    g.fillStyle = s.mat.name === 'glass' ? 'rgba(255,255,255,0.5)' : s.mat.hole || '#2a1a0e';
     g.beginPath(); g.arc(x, y, k * 0.45, 0, Math.PI * 2); g.fill();
     g.strokeStyle = 'rgba(40, 24, 10, 0.55)';
     g.lineWidth = 1;
@@ -680,7 +919,7 @@ function drawMark(g, s, m, x, y) {
     g.lineWidth = 1.2;
     g.beginPath(); g.arc(x, y, k * 0.62, m.a, m.a + 2.2); g.stroke();
   } else if (m.kind === 'chip') {
-    g.fillStyle = 'rgba(60, 36, 16, 0.45)';
+    g.fillStyle = s.mat.chip || 'rgba(60, 36, 16, 0.45)';
     g.beginPath(); g.ellipse(x, y, k * 0.7, k * 0.4, m.a, 0, Math.PI * 2); g.fill();
   } else if (m.kind === 'crack') {
     g.strokeStyle = 'rgba(255, 255, 255, 0.85)';
@@ -700,13 +939,13 @@ function drawMark(g, s, m, x, y) {
 
 /** A piece's picture: the part of what it came off that it was. */
 function cropOf(from, cols, rows) {
-  const src = from.src;
+  const src = from.src, P = src.px;
   if (!src.base) src.base = src.paintFrom ? cropOf(src.paintFrom, src.cols, src.rows) : paint(src);
   const cv = document.createElement('canvas');
-  cv.width = cols * PX; cv.height = rows * PX;
+  cv.width = cols * P; cv.height = rows * P;
   // (rows count up from the bottom; the picture's from the top)
-  const sy = (src.rows - from.r0 - rows) * PX;
-  cv.getContext('2d').drawImage(src.base, from.c0 * PX, sy, cols * PX, rows * PX, 0, 0, cols * PX, rows * PX);
+  const sy = (src.rows - from.r0 - rows) * P;
+  cv.getContext('2d').drawImage(src.base, from.c0 * P, sy, cols * P, rows * P, 0, 0, cols * P, rows * P);
   return cv;
 }
 
@@ -718,6 +957,8 @@ function rng(seed) {
 
 /** The slab's picture whole, before anything happened to it: planks, a steel plate, a pane. */
 function paint(s) {
+  // (a slab of a kind of its own - a building - paints itself)
+  if (s.spec && s.spec.paint) return s.spec.paint(s);
   const W = s.cols * PX, H = s.rows * PX;
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = H;

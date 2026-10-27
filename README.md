@@ -31,7 +31,10 @@ texture in the game is drawn procedurally onto a canvas at load time.
 > background) with wood or metal rope, fixed rods or pins, which take the strain
 > until they snap. You can change their feelings (or lock them where they are), their
 > personality and who they count as friends and enemies, and send them to
-> fight. Mods add what is not part of the game itself: **Murder Drones**
+> fight. It starts out flat, or, from MAPS, as a **City**: a street of office
+> towers, apartments, old brick and shops whose concrete, brick and glass come
+> apart cell by cell, until a storey gives way and everything above it comes
+> down in a heap of rubble. Mods add what is not part of the game itself: **Murder Drones**
 > brings worker drone Uzi with her railgun, and disassembly drones N and V, who
 > crash-land out of the sky and have hands that turn into chainsaws, guns,
 > swords, claws, lasers and missiles, and tails full of nanite acid; **Minecraft**
@@ -42,7 +45,10 @@ texture in the game is drawn procedurally onto a canvas at load time.
 > stickman that, made angry, tears out of the skin - tall and black, with white
 > pupils, a grin of sharp teeth and five long claws on each hand - tears whoever
 > did it in half or eats them, then empties out the nearest person, climbs
-> inside and becomes them. The single-file build is `dist/stickfights.html`,
+> inside and becomes them; and **Godzilla ('54)** is Gojira as he was in 1954 - fourteen metres
+> tall, 30,000 health and a boss bar - who stomps, kicks, tail-whips, roars the
+> windows out, grabs people and eats or throws them, bites, claws and breathes
+> his atomic breath, and tears the city apart. The single-file build is `dist/stickfights.html`,
 > the source lives in `stickfights/`, and
 > [`stickfights/README.md`](stickfights/README.md) has the details.
 

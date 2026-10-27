@@ -357,7 +357,8 @@ class Arbiter {
       if (-vn > this.approach) this.approach = -vn;
       const bounce = vn < -BOUNCE_THRESHOLD ? -this.restitution * vn : 0;
       const push = -TUNING.bias * invDt * Math.min(0, c.sep + TUNING.allowed);
-      c.bias = Math.max(bounce, Math.min(push, 4));
+      // (something just broken off something else, still lying in it, eases its way out rather than being fired out)
+      c.bias = Math.max(bounce, Math.min(push, b1.gentle > 0 || b2.gentle > 0 ? 0.5 : 4));
     }
   }
 

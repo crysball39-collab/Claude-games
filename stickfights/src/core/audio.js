@@ -265,6 +265,33 @@ export class Sound {
     this.splinter(x, true);
   }
 
+  /** A building coming down, or a lump of one landing: a heavy crash, and gravel after it. */
+  rubble(x, big = false) {
+    if (!this.ready) return;
+    const v = this.near(x) * (big ? 1 : 0.6);
+    this.tone('sine', big ? 70 : 110, big ? 32 : 55, big ? 0.7 : 0.25, 0.85 * v);
+    this.hiss(big ? 0.9 : 0.3, 520, 0.7, 0.55 * v, 'lowpass');
+    for (let i = 0; i < (big ? 9 : 4); i++) this.hiss(0.03, 1200 + rand(0, 2600), 2, 0.22 * v, 'bandpass', 0.05 + i * rand(0.03, 0.08));
+  }
+
+  /** Concrete giving way under what it holds up: a deep groan, and a crack. */
+  groan(x) {
+    if (!this.ready) return;
+    const v = this.near(x) * 0.8;
+    const c = this.ctx, t = c.currentTime;
+    const o = c.createOscillator(), f = c.createBiquadFilter(), g = c.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(58, t);
+    o.frequency.linearRampToValueAtTime(38, t + 0.9);
+    f.type = 'bandpass'; f.frequency.value = 220; f.Q.value = 2.5;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.25 * v, t + 0.15);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1);
+    o.connect(f); f.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t + 1.05);
+    this.hiss(0.08, 2600, 2, 0.5 * v, 'bandpass', 0.05);
+  }
+
   /** Leaves: a soft rush of them. */
   rustle(x, hard = false) {
     if (!this.ready) return;

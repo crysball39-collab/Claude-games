@@ -83,12 +83,13 @@ export class FX {
    */
   bits(x, y, n, colour, vx = 0, vy = 0, o = {}) {
     for (let i = 0; i < n; i++) {
-      if (this.debris.length >= MAX_DEBRIS) {
-        // the oldest that have come to rest make room
+      // full: the oldest that has come to rest makes room (or just the oldest)
+      let at = this.debris.length;
+      if (at >= MAX_DEBRIS) {
         const k = this.debris.findIndex((d) => d.rest);
-        this.debris.splice(k >= 0 ? k : 0, 1);
+        if (k >= 0) at = k; else { this.debris.shift(); at = this.debris.length; }
       }
-      this.debris.push({
+      this.debris[at] = ({
         x: x + rand(-0.01, 0.01), y: y + rand(-0.01, 0.01), vx: vx + rand(-0.4, 0.4), vy: vy + rand(-0.3, 0.5),
         s: o.size || 0.018, c: colour, a: rand(0, Math.PI), va: o.spin || o.leaf ? rand(-14, 14) : rand(-6, 6),
         rest: false, age: 0, sharp: !!o.sharp, leaf: !!o.leaf, glow: o.glow ? rand(0.4, 0.9) : 0, from: o.from || null,
@@ -566,7 +567,7 @@ export class FX {
       top = Math.max(top, c.body.topAt(x) + 0.006);
     }
     for (const s of this.sb.slabs) {
-      if (s.removed || !s.body.contains(x, y - 0.02, 0.01)) continue;
+      if (s.removed || s.background || !s.body.contains(x, y - 0.02, 0.01)) continue;
       top = Math.max(top, s.body.topAt(x) + 0.006);
     }
     return top;

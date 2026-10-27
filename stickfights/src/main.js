@@ -13,6 +13,7 @@ import { Hand } from './game/hand.js';
 import { STYLE } from './game/animator.js';
 import { Sound } from './core/audio.js';
 import { UI } from './ui/ui.js';
+import { loadMap } from './game/maps.js';
 import { CLIPS } from './game/clips.js';
 import { LINES } from './game/lines.js';
 import { armOf } from './game/props.js';
@@ -139,9 +140,17 @@ sb.on('slabBreak', (e) => {
   const mat = e.what.mat.name;
   if (mat === 'metal') sound.clang(1.5, e.x);
   else if (mat === 'glass') sound.tink(e.x, 1.5);
+  else if (mat === 'concrete' || mat === 'brick') sound.rubble(e.x, e.cells > 300);
   else sound.splinter(e.x, e.cells > 40);
 });
-sb.on('slabFree', (e) => { if (e.what.mat.name === 'wood') sound.creak(e.x); else if (e.what.mat.name === 'metal') sound.clang(2, e.x); });
+sb.on('slabFree', (e) => {
+  const mat = e.what.mat.name;
+  if (mat === 'wood') sound.creak(e.x); else if (mat === 'metal') sound.clang(2, e.x); else if (mat === 'concrete' || mat === 'brick') sound.groan(e.x);
+});
+// a building: a storey giving way, a lump of it landing, a lump pulled off it
+sb.on('slabGive', (e) => { sound.groan(e.x); cam.shake(0.25); });
+sb.on('rubble', (e) => { sound.rubble(e.x, e.big); cam.shake(e.big ? 0.4 : 0.08); });
+sb.on('slabTear', (e) => sound.rubble(e.x, false));
 sb.on('limbFall', (e) => { if (e.tree) sound.creak(e.x); else sound.splinter(e.x, e.big); });
 sb.on('snapBough', (e) => sound.splinter(e.x, e.big));
 sb.on('rustle', (e) => sound.rustle(e.x, e.hard));
@@ -249,9 +258,10 @@ function start() {
   ui.started = true;
   document.getElementById('title').classList.remove('active');
   document.getElementById('hud').classList.remove('hidden');
-  sb.clear();
+  // (the map chosen behind the title, made afresh: the people from the title gone)
+  loadMap(sb, sb.map);
   sb.paused = false;
-  cam.home();
+  ui.frameMap();
   sound.unlock();
   ui.toggleDrawer(true);
   // full screen and landscape where the browser allows it; harmless where not

@@ -723,6 +723,8 @@ export class Stickman {
   touch(x, y, r) {
     const j = this.wj, s = this.scale, half = (DIM.line / 2) * s;
     if (x < this.box.minX - r || x > this.box.maxX + r || y < this.box.minY - r || y > this.box.maxY + r) return null;
+    // a body of some other shape (a mod's) goes by its own pieces
+    if (this.species && this.species.shape) { const n = shapeNearest(this.species.shape(this), x, y); return n && n.d <= r ? n : null; }
     let best = null;
     const dh = Math.hypot(x - j.head.x, y - j.head.y) - DIM.headR * s - half;
     if (dh <= r) best = { part: 'head', d: dh, x: j.head.x + (x - j.head.x) * 0.7, y: j.head.y + (y - j.head.y) * 0.7, bone: HEAD_BONE, t: 1 };
@@ -745,6 +747,7 @@ export class Stickman {
   rayHit(px, py, dx, dy, max) {
     const bb = this.box, s = this.scale, R = (DIM.line / 2) * s + 0.015;
     if (!rayAabb(px, py, dx, dy, max, bb.minX - R, bb.maxX + R, bb.minY - R, bb.maxY + R)) return null;
+    if (this.species && this.species.shape) return shapeRay(this.species.shape(this), px, py, dx, dy, max);
     const j = this.wj;
     let best = null;
     const hr = DIM.headR * s + R * 0.6;
@@ -1199,7 +1202,8 @@ export class Stickman {
         return 0;
       }
     }
-    const stop = (part === 'torso' ? 0.64 : part === 'head' ? 0.68 : 0.4) * rand(0.8, 1.2);
+    // (a body metres thick keeps whatever goes into it: a mod's giant)
+    const stop = this.species && this.species.stopsRounds ? energy : (part === 'torso' ? 0.64 : part === 'head' ? 0.68 : 0.4) * rand(0.8, 1.2);
     const left = energy - stop;
     const through = left > 0.15;
     const sb = this.sandbox;
@@ -1689,6 +1693,8 @@ export class Stickman {
     this.box.maxX = Math.max(maxX, w.head.x + r);
     this.box.minY = Math.min(minY, w.head.y - r);
     this.box.maxY = Math.max(maxY, w.head.y + r);
+    // (a body with more to it than its joints - a tail, say - takes in the rest: a mod's)
+    if (this.species && this.species.bounds) this.species.bounds(this, this.box);
   }
 
   /* -------------------------------------------------------------------------- */
@@ -1718,6 +1724,7 @@ export class Stickman {
 
   /** Which bone is nearest a world point, for grabbing and blood. */
   nearestPart(x, y) {
+    if (this.species && this.species.shape) return shapeNearest(this.species.shape(this), x, y);
     let best = null;
     for (let b = 0; b < BONES.length; b++) {
       for (const g of boneSegments(this.wj, b)) {
@@ -2443,6 +2450,8 @@ export class Stickman {
   /* -------------------------------------------------------------------------- */
 
   physics(dt) {
+    // something that moves its own way (a mod's giant) does all of this itself
+    if (this.species && this.species.physics && this.species.physics(this, dt)) return;
     const sb = this.sandbox;
     const lying = this.lying || this.state === 'thrown' && !this.conscious;
     const hw = (lying ? 0.12 : HALF_W) * this.scale;
@@ -2497,7 +2506,7 @@ export class Stickman {
     const sb = this.sandbox;
     for (const c of sb.slabs.length || sb.logs.length ? [...sb.crates, ...sb.slabs, ...sb.logs] : sb.crates) {
       // (a trapdoor dropping open from under them is not a wall either)
-      if (c.carriedBy || c.removed || c.body === this.support || c.dropping) continue;
+      if (c.carriedBy || c.removed || c.body === this.support || c.dropping || c.background) continue;
       // something flying at them, or coming down on their head, is the
       // physics' business - that is a hit, not a wall to step back from
       const cv = c.body.vel;
@@ -2655,7 +2664,7 @@ export class Stickman {
     const spares = this.species && this.species.spares;
     for (const o of sb.people) {
       if (o === this || o.removed || s.hit.has(o) || o.state === 'held') continue;
-      if (Math.abs(o.pos.x - limb.x) > 2.4) continue;
+      if (limb.x < o.box.minX - 2 || limb.x > o.box.maxX + 2) continue;
       // (some of a mod's would never cut one of their own, even by mistake)
       if (spares && spares(this, o)) continue;
       let hit = null;
@@ -2685,7 +2694,8 @@ export class Stickman {
     // a wall, a log - or a tree, but only with a blade or a crowbar, and only a blow that hit nobody
     const struck = [...s.hit].some((o) => o.kind === 'stickman');
     for (const w of sb.slabs.length || sb.logs.length || sb.plants.length ? [...sb.slabs, ...sb.logs, ...sb.plants] : []) {
-      if (s.hit.has(w) || w.removed) continue;
+      // (not a building: that is behind the street, out of reach)
+      if (s.hit.has(w) || w.removed || w.background) continue;
       if (w.kind === 'tree' || w.kind === 'bush') {
         if (struck || !(blade || (armed && armOf(this.armedWith) && armOf(this.armedWith).wrecks))) continue;
       }
@@ -3318,6 +3328,40 @@ function bleedsFrom(tk) {
 
 /** About normally distributed, mean 0, standard deviation 1. */
 function gauss() { return (Math.random() + Math.random() + Math.random() + Math.random() - 2) * 1.73; }
+
+/*
+ * A body of some other shape (a mod's species.shape) is a set of round-ended
+ * pieces { x0, y0, x1, y1, r, part, bone }: what touches it, grabs it and
+ * shoots it goes by those instead of the bones.
+ */
+/** The piece nearest (x, y), and the point on its surface nearest it: { part, d, bone, t, x, y }. */
+function shapeNearest(caps, x, y) {
+  let best = null;
+  for (const c of caps) {
+    const sd = segDist(x, y, c.x0, c.y0, c.x1, c.y1);
+    const d = Math.max(0, sd.d - c.r);
+    if (best && d >= best.d) continue;
+    const k = sd.d > 1e-6 ? Math.min(1, c.r / sd.d) : 0;
+    best = { part: c.part, d, bone: c.bone, t: sd.t, x: sd.x + (x - sd.x) * k, y: sd.y + (y - sd.y) * k };
+  }
+  return best;
+}
+
+/** Where a ray first meets one of the pieces: { t, part, bone, tb, x, y }, or null. */
+function shapeRay(caps, px, py, dx, dy, max) {
+  const ex = px + dx * max, ey = py + dy * max;
+  let best = null;
+  for (const c of caps) {
+    const r = segSeg(px, py, ex, ey, c.x0, c.y0, c.x1, c.y1);
+    if (r.d > c.r) continue;
+    let t = r.s * max - Math.sqrt(Math.max(0, c.r * c.r - r.d * r.d));
+    // (from inside it: it is hit straight away)
+    if (t <= 1e-4) { if (segDist(px, py, c.x0, c.y0, c.x1, c.y1).d > c.r) continue; t = 1e-3; }
+    if (!best || t < best.t) best = { t, part: c.part, bone: c.bone, tb: r.u };
+  }
+  if (best) { best.x = px + dx * best.t; best.y = py + dy * best.t; }
+  return best;
+}
 
 /** Whether the ray from (px, py) along (dx, dy), out to max, touches an axis-aligned box. */
 function rayAabb(px, py, dx, dy, max, x0, x1, y0, y1) {

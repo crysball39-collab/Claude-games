@@ -36,7 +36,7 @@ export const HALF_WIDTH = 20;
 /** Too big to be bowled over by a body flying into them (a mod's). */
 const sturdy = (q) => !!(q.species && q.species.sturdy);
 
-export const LIMITS = { people: 24, crates: 40, knuckles: 16, knives: 16, machetes: 16, crowbars: 16, guns: 16, limbs: 40, items: 40, vests: 12, ammo: 16, walls: 16, slabs: 70, plants: 12, logs: 40, gallows: 4 };
+export const LIMITS = { people: 24, crates: 40, knuckles: 16, knives: 16, machetes: 16, crowbars: 16, guns: 16, limbs: 40, items: 40, vests: 12, ammo: 16, walls: 16, slabs: 130, plants: 24, logs: 40, gallows: 4 };
 // how likely a bullet is to hit someone in its way who it was not aimed at
 const STRAY_HIT = 0.4;
 
@@ -101,6 +101,8 @@ export class Sandbox {
     this.plants = [];         // trees and bushes (trees.js)
     this.logs = [];           // what has come off them: branches, twigs, whole trees
     this.gallows = [];        // gallows.js: their timbers are slabs, their ropes wires
+    this.map = 'flat';        // what it was made into (maps.js), and a city's skyline
+    this.skyline = null;
     this.fx = new FX(this);
     // things a mod puts in the world that are not bodies: beams, missiles, blasts.
     // Each is { update(dt, sandbox) -> false when it is over, draw(ctx) }
@@ -153,14 +155,14 @@ export class Sandbox {
       walls: this.walls.length, plants: this.plants.length, gallows: this.gallows.length };
   }
 
-  /** The walls standing, whole or not (not the pieces that came off them, nor the timbers of a gallows). */
-  get walls() { return this.slabs.filter((s) => s.kind === 'wall' && !s.group && !s.removed); }
+  /** The walls standing, whole or not (not the pieces that came off them, nor the timbers of a gallows, nor the buildings of a city). */
+  get walls() { return this.slabs.filter((s) => s.kind === 'wall' && !s.group && !s.spec.background && !s.removed); }
 
-  /** Every box things land on and bump into: the crates, the walls and the pieces off them. */
+  /** Every box things land on and bump into: the crates, the walls and the pieces off them (not the buildings behind the street). */
   solidBoxes() {
     const out = [];
     for (const c of this.crates) if (!c.carriedBy && !c.removed) out.push(c.body);
-    for (const w of this.slabs) if (!w.removed) out.push(w.body);
+    for (const w of this.slabs) if (!w.removed && !w.background) out.push(w.body);
     for (const l of this.logs) if (!l.removed) out.push(l.body);
     return out;
   }
@@ -820,7 +822,7 @@ export class Sandbox {
 
       // a wooden wall: in it goes; steel and glass it only marks (and glass, hard enough, it goes through)
       for (const w of this.slabs) {
-        if (w.removed || !w.contains(nx, ny, 0)) continue;
+        if (w.removed || w.background || !w.contains(nx, ny, 0)) continue;
         if (w.mat.name === 'wood') this.stickInWall(k, w, ux, uy);
         else {
           w.damage(nx, ny, 0.03, sp * 0.05, 'blade', { dx: ux, dy: uy });
@@ -945,7 +947,8 @@ export class Sandbox {
         if (h && (!best || h.t < best.t)) best = { t: h.t, what: 'crate', crate: c, out: h.out };
       }
       for (const w of this.slabs) {
-        if (w.removed || hit.has(w)) continue;
+        // (a building behind the street is behind the line of fire)
+        if (w.removed || w.background || hit.has(w)) continue;
         const h = rayBox(w.body, px, py, dx, dy, range);
         if (h && (!best || h.t < best.t)) best = { t: h.t, what: 'slab', slab: w, out: h.out };
       }
@@ -1124,8 +1127,9 @@ export class Sandbox {
 
   /** Which body pairs are allowed to touch. */
   collides(a, b) {
-    // a crate up in someone's hands is held clear of everything
+    // a crate up in someone's hands is held clear of everything; a building is behind it all
     if ((a.owner && a.owner.carriedBy) || (b.owner && b.owner.carriedBy)) return false;
+    if ((a.owner && a.owner.background) || (b.owner && b.owner.background)) return false;
     const ma = a.owner && a.owner.kind === 'stickman' ? a.owner : null;
     const mb = b.owner && b.owner.kind === 'stickman' ? b.owner : null;
     if (!ma && !mb) return true;
@@ -1162,6 +1166,13 @@ export class Sandbox {
     for (const [me, other] of [[arb.b1, arb.b2], [arb.b2, arb.b1]]) {
       const w = me.owner;
       if (!w || (w.kind !== 'wall' && w.kind !== 'piece') || w.removed) continue;
+      // a lump of a building landing hard - or with something heavy landing on it - breaks up there and then
+      if (w.spec.crumbles && w.loose && arb.approach > 3.5 && w.cellCount > 30 && this.time - (w.fracT ?? -9) > 0.4) {
+        w.fracT = this.time;
+        arb.slabT = this.time;
+        w.fracture(p.x, p.y, arb.approach);
+        continue;
+      }
       // what hit it: something moving, with its weight behind it - or the floor, coming up to meet a piece
       const mass = other.invMass > 0 ? other.mass : me.invMass > 0 ? me.mass : 0;
       if (!mass) continue;
@@ -1228,8 +1239,8 @@ export class Sandbox {
       best = { y: top, body };
     };
     for (const c of this.crates) if (!c.removed && !c.carriedBy && c !== except) consider(c.body);
-    // (a trapdoor dropping open is nothing to stand on)
-    for (const w of this.slabs) if (!w.removed && w !== except && !w.dropping) consider(w.body);
+    // (a trapdoor dropping open is nothing to stand on; nor is a building, behind the street)
+    for (const w of this.slabs) if (!w.removed && w !== except && !w.dropping && !w.background) consider(w.body);
     for (const l of this.logs) if (!l.removed && l !== except) consider(l.body);
     return best;
   }
@@ -1279,7 +1290,7 @@ export class Sandbox {
       if (b === ignore || !o) return false;
       if (o.kind === 'crate') return !o.carriedBy;
       if (o.kind === 'log') return o.body.h > 0.15;
-      return (o.kind === 'wall' || o.kind === 'piece') && !o.clear;
+      return (o.kind === 'wall' || o.kind === 'piece') && !o.clear && !o.background;
     });
     return !hit;
   }
@@ -1351,7 +1362,7 @@ export class Sandbox {
     }
     for (let i = this.slabs.length - 1; i >= 0; i--) {
       const w = this.slabs[i];
-      if (!w.loose && w.contains(x, y, r * 0.5)) return w;
+      if (!w.loose && !w.background && w.contains(x, y, r * 0.5)) return w;
     }
     for (let i = this.items.length - 1; i >= 0; i--) {
       const it = this.items[i];
@@ -1367,6 +1378,11 @@ export class Sandbox {
     for (let i = this.plants.length - 1; i >= 0; i--) {
       const t = this.plants[i];
       if (!t.removed && t.hitTest(x, y, r * 0.5, true)) return t;
+    }
+    // and the buildings behind all of it
+    for (let i = this.slabs.length - 1; i >= 0; i--) {
+      const w = this.slabs[i];
+      if (w.background && w.contains(x, y, r * 0.3)) return w;
     }
     return null;
   }
