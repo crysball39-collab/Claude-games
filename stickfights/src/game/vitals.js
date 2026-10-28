@@ -109,7 +109,19 @@ export function airway(man) {
 }
 
 function vit(man) {
-  return man.vit || (man.vit = { painWas: man.health.pain, warmth: 0, air: null, airWas: null, smokeT: 0, steamT: 0, frostT: 0, afterFire: 0 });
+  return man.vit || (man.vit = { painWas: man.health.pain, warmth: 0, air: null, airWas: null, smokeT: 0, steamT: 0, frostT: 0, afterFire: 0, smog: 0 });
+}
+
+/**
+ * Somebody in thick smoke (a mod's smog, say), k 0..1 how thick: every
+ * breath of it is mostly smoke, so the air in them falls while they are in it
+ * - keep them there long enough and they black out. Call it every step they
+ * are in it; it clears once they are out.
+ */
+export function breatheSmoke(man, k) {
+  if (!hasVitals(man) || !breathes(man) || man.removed) return;
+  const v = vit(man);
+  v.smog = Math.max(v.smog || 0, clamp01(k));
 }
 
 /* -------------------------------- every step -------------------------------- */
@@ -185,7 +197,10 @@ function updateAir(man, h, v, dt) {
   const f = man.flames;
   if (f) target -= 0.2 * f.power * (0.6 + 0.4 * (f.parts.head || 0));
   if (h.blood < 0.7) target -= (0.7 - h.blood) * 0.35;
-  target = clamp(target, 0.3, 1);
+  // thick smoke: every breath mostly that
+  const smog = v.smog || 0;
+  if (smog > 0) { target -= 0.55 * smog; v.smog = Math.max(0, smog - dt * 0.9); }
+  target = clamp(target, smog > 0 ? 0.25 : 0.3, 1);
   const k = h.oxygen < target ? 0.55 * (1 + h.adrenaline * 0.6) : 1.2;
   h.oxygen += (target - h.oxygen) * (1 - Math.exp(-k * dt));
   // the first breath after going without

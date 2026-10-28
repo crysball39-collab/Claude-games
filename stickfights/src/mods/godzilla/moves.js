@@ -305,11 +305,12 @@ const MOVES = {
           if (m.pt > 0.5) return false;
         }
       } else {
+        // (raised high behind him - and brought down, flat, on whatever is there)
         if (m.phase === 'up') {
-          G.tailLift = -0.75; G.bend = 0.25; G.head = -0.15; g.rate = 3;
+          G.tailLift = 0.75; G.bend = 0.25; G.head = -0.15; g.rate = 3;
           if (m.pt > 0.7) { setPhase(m, 'down'); man.sandbox.emit('gzTailSwing', { who: man, x: man.pos.x }); }
         } else if (m.phase === 'down') {
-          G.tailLift = 0.08; G.bend = 0.05; g.rate = 14;
+          G.tailLift = -0.1; G.bend = 0.05; g.rate = 14;
           if (m.pt > 0.12) tailHits(man, m, -man.facing, 0.9);
           if (m.pt > 0.35) setPhase(m, 'settle');
         } else if (m.pt > 0.5) return false;

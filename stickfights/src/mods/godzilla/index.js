@@ -9,12 +9,17 @@
    or throws them, bites, claws, and breathes his white-hot breath at
    whatever is far off - and with nobody left, he starts on the buildings.
 
-   SHIN GODZILLA - bigger, slower, worse: near black, cracked all over with
-   red, with rows of jagged plates, a tiny blank eye and a tail held high
-   that ends in a knot of bone. He stomps, brings his tail down, roars and
-   bites - and his atomic breath is a flood of fire that narrows to a purple
-   beam, which cuts clean through anything it crosses. Hurt him badly and
-   every plate on his back fires at once; the end of his tail fires too.
+   SHIN GODZILLA - bigger, slower, worse - and he changes. He comes as his
+   second form: a thing that drags its belly up the street, with round
+   staring eyes and gills that pour out red. In a cloud of steam it rises
+   onto two legs, red and unsteady (the third); and in the steam again it is
+   him, the fourth: near black, cracked all over with red, with rows of
+   jagged plates, a tiny blank eye and a tail held high that ends in a knot
+   of bone. He stomps, brings his tail down, roars and bites - and his atomic
+   breath is black smog that catches and becomes a flood of fire, which draws
+   in, purple, to a beam that cuts clean through anything it crosses. Hurt
+   him badly and every plate on his back fires at once, the end of his tail
+   with them; the end of his tail fires on its own, too.
 
    Each has more health than anything else in the game, and a bar along the
    top of the screen to show it, and very little anyone can carry does them
@@ -30,10 +35,11 @@
      world.js        what each of those does to everything else
      effects.js      the 1954 one's breath, and the roar's rings
      look.js         how the 1954 one is drawn
-     shin.js         Shin Godzilla: what he is, what he does, his AI
-     shin-body.js    his build
-     shin-effects.js his beams, and the fire before them
-     shin-look.js    how he is drawn
+     shin.js         Shin Godzilla: what he is, his forms, what he does, his AI
+     shin-body.js    his builds, one for each form
+     shin-effects.js his beams; the smog and fire before them; the steam he
+                     changes in; what pours out of his gills
+     shin-look.js    how he is drawn, in each form
      lines.js        what everybody says about them
      reactions.js    what everybody makes of them
      sounds.js       their noises
@@ -51,8 +57,8 @@ import { drawShinIcon, drawShinGhost, shinHalf } from './shin-look.js';
 registerMod({
   id: MOD,
   name: 'Godzilla',
-  version: '1.1',
-  about: "Two of the King of the Monsters. Godzilla ('54), as he was in 1954: fourteen metres of charcoal-grey, scarred monster with 30,000 health - he stomps, kicks, swings his tail, roars the windows out, grabs people and eats them or throws them, bites and claws, and breathes his white-hot atomic breath. And Shin Godzilla: eighteen metres, near black and cracked with red, 50,000 health - his breath is a flood of fire that narrows to a purple beam that cuts clean through buildings, and when he is hurt every plate on his back fires. With nobody left to go after, they start on the city. Best in the City map.",
+  version: '1.2',
+  about: "Two of the King of the Monsters. Godzilla ('54), as he was in 1954: fourteen metres of charcoal-grey, scarred monster with 30,000 health - he stomps, kicks, swings his tail, roars the windows out, grabs people and eats them or throws them, bites and claws, and breathes his white-hot atomic breath. And Shin Godzilla, who changes: he comes up crawling, rises onto two legs in a cloud of steam, and then is himself - eighteen metres, near black and cracked with red, 50,000 health. His breath is black smog that catches into a flood of fire, which draws in to a purple beam that cuts clean through buildings; when he is hurt every plate on his back fires, and the end of his tail. With nobody left to go after, they start on the city. Best in the City map.",
   adds: ["Godzilla ('54)", 'Shin Godzilla'],
   icon: (ctx, w, h) => drawModIcon(ctx, w, h, shinHalf),
   spawnables: [{
@@ -76,7 +82,7 @@ registerMod({
     limit: 'people',
     living: true,
     proper: true,
-    blurb: 'Bigger, slower and worse: eighteen metres of black hide cracked with red, with 50,000 health. Stomps, tail, roar, bite - and an atomic beam that cuts clean through buildings, beams from every plate on his back, and one from the end of his tail.',
+    blurb: 'Bigger, slower and worse - and he changes. He comes up crawling (his second form), rises onto two legs in a cloud of steam (his third), and then is himself: eighteen metres of black hide cracked with red, 50,000 health. Black smog, then fire, then an atomic beam that cuts clean through buildings; beams from every plate on his back, and from the end of his tail.',
     said: (man) => `${man.name} rises out of the ground's shaking`,
     icon: (ctx, w, h, card) => drawShinIcon(ctx, w, h, card),
     ghost: (ctx, at) => drawShinGhost(ctx, at),

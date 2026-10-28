@@ -14,8 +14,10 @@
    and Godzilla mods add - Steve, crafting a Wither Totem, the Wither from
    its first skull to its Nether Star, Shallow from its disguise to the next
    skin it climbs into, Godzilla ('54) from his first roar, through every
-   one of his moves, to where he falls, and Shin Godzilla from his beams to
-   where he freezes - and the two of them fighting. So are the walls and the
+   one of his moves, to where he falls, and Shin Godzilla from his second
+   form, crawling, through the steam into his third and his fourth, to his
+   breath (smog, fire, and the beam), his beams and where he freezes - and
+   the two of them fighting. So are the walls and the
    trees, cell by cell, the City and its buildings coming down, the freeze
    tool, the explode tool, moving things with the world paused, the six
    wires, the AK-47, the Mossberg 500, the crowbar and the four kinds of
@@ -3852,80 +3854,149 @@ await sim(0.2);
 const shin = await ev(() => {
   const sb = window.__sf.sb, g = sb.people.find((p) => p.species && p.species.giant);
   window.__s = g;
-  const caps = g.species.shape(g), tail = caps.slice(4, 18);
+  const caps = g.species.shape(g), tail = caps.slice(3, g.gz.body.b.tailN);
   return g && {
-    name: g.name, tall: +(g.box.maxY - g.box.minY).toFixed(1), hp: g.health.bossHp, max: g.health.bossMax, brain: !!g.brain,
-    tailUp: +Math.min(...tail.map((c) => Math.min(c.y0, c.y1))).toFixed(1),
+    name: g.name, form: g.gz.form, tall: +(g.box.maxY - g.box.minY).toFixed(1), long: +(g.box.maxX - g.box.minX).toFixed(1), hp: g.health.bossHp, max: g.health.bossMax,
+    brain: !!g.brain, tailLow: +Math.max(...tail.map((c) => Math.min(c.y0, c.y1))).toFixed(1),
   };
 });
-check('SHIN GODZILLA spawns where tapped, called that: bigger than the 1954 one, his tail held up off the ground behind him',
-  !!shin && shin.name === 'Shin Godzilla' && shin.tall > 16 && shin.tall < 25 && shin.tailUp > 3 && !shin.brain, JSON.stringify(shin));
+check('SHIN GODZILLA spawns where tapped, called that - in his second form: long and low, crawling, his tail along the ground behind him',
+  !!shin && shin.name === 'Shin Godzilla' && shin.form === 2 && shin.tall < 10 && shin.long > 18 && shin.tailLow < 2 && !shin.brain, JSON.stringify(shin));
 await sim(3.5);
 await page.waitForTimeout(300);
 const shinBar = await ev(() => {
   const b = [...document.querySelectorAll('#bossbars .bossbar')].find((el) => /shin/i.test(el.querySelector('.boss-name').textContent));
   return b && { name: b.querySelector('.boss-name').textContent, hp: b.querySelector('.boss-hp').textContent, kaiju: b.classList.contains('kaiju'), shin: b.classList.contains('shin') };
 });
-check('...his boss bar along the top, SHIN GODZILLA - and 50,000 health', !!shinBar && shinBar.name.toUpperCase() === 'SHIN GODZILLA' && shinBar.kaiju && shinBar.shin && /50,000$/.test(shinBar.hp) && shin.max === 50000,
+check('...his boss bar along the top, SHIN GODZILLA - SECOND FORM - and 50,000 health', !!shinBar && shinBar.name.toUpperCase() === 'SHIN GODZILLA - SECOND FORM' && shinBar.kaiju && shinBar.shin && /50,000$/.test(shinBar.hp) && shin.max === 50000,
   JSON.stringify(shinBar));
-await shot('shin');
+await shot('shin-2');
 const shinHide = await ev(() => {
   const sb = window.__sf.sb, g = window.__s;
   g.gz.auto0 = true;
   const a = sb.spawnStickman(g.pos.x + 12, null, { name: 'Gunner' });
   a.brain = null;
   const h0 = g.health.bossHp;
-  for (let i = 0; i < 20; i++) sb.shoot(a, a.pos.x - 0.4, 2 + (i % 5) * 1, Math.PI, { energy: 1 });
+  for (let i = 0; i < 20; i++) sb.shoot(a, a.pos.x - 0.4, 1.5 + (i % 5) * 0.8, Math.PI, { energy: 1 });
   const h1 = g.health.bossHp;
   sb.remove(a);
   return { bullets: +(h0 - h1).toFixed(1), standing: !g.lying && !g.rag };
 });
-check('twenty bullets take next to nothing off him, and he stands there', shinHide.bullets > 0 && shinHide.bullets < 120 && shinHide.standing, JSON.stringify(shinHide));
+check('twenty bullets take next to nothing off him', shinHide.bullets > 0 && shinHide.bullets < 120 && shinHide.standing, JSON.stringify(shinHide));
 
-// his moves, on somebody where each reaches them
-const shinMoves = await ev(() => {
-  const sb = window.__sf.sb, g = window.__s, f = g.facing;
-  const run = (secs) => { for (let i = 0; i < Math.round(secs * 120); i++) sb.step(1 / 120); };
-  const ab = (id) => g.species.abilities(g).find((a) => a.id === id);
-  const cells = () => sb.slabs.filter((s) => s.background).reduce((n, s) => n + s.cellCount, 0);
-  const evs = new Map();
-  for (const t of ['gzCrush', 'gzBite', 'gzTailHit', 'shinSpew', 'shinBeam', 'shinDorsal', 'shinTailBeam', 'shinBeamHit']) sb.on(t, (e) => { evs.set(t, (evs.get(t) || 0) + 1); });
-  const out = {};
-  const tryMove = (id, dx, secs) => {
+// somebody where one of his moves reaches them: what happens to them
+await ev(() => {
+  const sb = window.__sf.sb, g = window.__s;
+  window.__run = (secs, each) => { for (let i = 0; i < Math.round(secs * 120); i++) { sb.step(1 / 120); if (each) each(); } };
+  window.__cells = () => sb.slabs.filter((s) => s.background).reduce((n, s) => n + s.cellCount, 0);
+  window.__evs = new Map();
+  for (const t of ['gzCrush', 'gzTailHit', 'shinGills', 'shinChanging', 'shinEvolve', 'shinCharge', 'shinSmog', 'shinIgnite', 'shinBuild', 'shinBeam', 'shinDorsal', 'shinTailBeam', 'shinBeamHit']) {
+    sb.on(t, () => { window.__evs.set(t, [...(window.__evs.get(t) || []), +sb.time.toFixed(2)]); });
+  }
+  window.__try = (id, dx, secs, each) => {
+    const f = g.facing;
     const p = sb.spawnStickman(g.pos.x + f * dx, null, { name: 'S-' + id });
     p.brain = null;
     p.facing = -f;
-    run(0.1);
+    window.__run(0.1);
     g.gz.target = p;
-    const c0 = cells();
-    const picked = ab(id).pick();
+    const c0 = window.__cells(), x0 = p.pos.x;
+    const picked = g.species.abilities(g).find((a) => a.id === id).pick();
     let beams = 0;
-    for (let i = 0; i < Math.round(secs * 120); i++) {
-      sb.step(1 / 120);
-      if (g.gz.move && g.gz.move.beams) beams = Math.max(beams, g.gz.move.beams.length);
-    }
-    const r = { picked, dead: p.dead || p.removed, cause: p.removed ? 'gone' : p.health.cause, cut: c0 - cells(), beams };
+    window.__run(secs, () => { if (g.gz.move && g.gz.move.beams) beams = Math.max(beams, g.gz.move.beams.length); if (each) each(); });
+    const r = { picked, dead: p.dead || p.removed, cause: p.removed ? 'gone' : p.health.cause, flung: p.removed ? 0 : +Math.abs(p.pos.x - x0).toFixed(1), cut: c0 - window.__cells(), beams };
     if (!p.removed) sb.remove(p);
     return r;
   };
-  out.stomp = tryMove('stomp', 3, 3);
-  out.bite = tryMove('bite', 7.5, 3);
-  out.tail = tryMove('tail', -9, 3);
-  out.breath = tryMove('breath', 18, 9);
-  out.tailBeam = tryMove('tailBeam', -16, 4.5);
-  out.dorsal = tryMove('dorsal', 10, 6.5);
-  out.events = Object.fromEntries(evs);
+});
+const evs = () => ev(() => Object.fromEntries(window.__evs));
+
+// the second form's: its head down on them, its tail on them, its gills - and its belly over them
+const shin2 = await ev(() => {
+  const sb = window.__sf.sb, g = window.__s;
+  const out = { moves: g.species.abilities(g).map((a) => a.id).join(' ') };
+  out.lunge = window.__try('lunge', 9, 2.5);
+  const tailHits = () => (window.__evs.get('gzTailHit') || []).length, th0 = tailHits();
+  out.thrash = window.__try('thrash', -8, 3);
+  out.thrash.hits = tailHits() - th0;
+  // (the gills open, pour, and shut again)
+  let gush = 0, open = 0;
+  out.gills = window.__try('gills', 14, 3.6, () => { const m = g.gz.move; if (m && m.gush) gush = Math.max(gush, m.gush.drops.length); open = Math.max(open, g.gz.gills); });
+  out.gills.gush = gush;
+  out.gills.open = +open.toFixed(2);
+  // (crawling on over somebody in front of its hips)
+  const p = sb.spawnStickman(g.pos.x + g.facing * 3.5, null, { name: 'Under' });
+  p.brain = null;
+  window.__run(0.1);
+  g.gz.wantV = g.facing;
+  window.__run(1.5);
+  g.gz.wantV = 0;
+  window.__run(1);
+  out.crawl = { dead: p.dead || p.removed, cause: p.removed ? 'gone' : p.health.cause };
+  if (!p.removed) sb.remove(p);
   return out;
 });
+check('SECOND FORM: it brings its head down on whoever is in front of it, thrashes its tail at whoever is behind, and crushes whoever it crawls over',
+  shin2.lunge.picked && shin2.lunge.dead && shin2.thrash.picked && shin2.thrash.hits >= 1 && shin2.crawl.dead && shin2.crawl.cause === 'crushed' && shin2.moves === 'auto thrash lunge roar gills evolve',
+  JSON.stringify(shin2));
+check('...and its gills open, and pour out red', shin2.gills.picked && shin2.gills.gush > 20 && shin2.gills.open > 0.8 && (await evs()).shinGills.length >= 1, JSON.stringify(shin2.gills));
+
+// EVOLVE: into the third form, and the fourth, in the steam
+const shinEvolve = await ev(() => {
+  const sb = window.__sf.sb, g = window.__s;
+  const out = [];
+  for (let n = 0; n < 2; n++) {
+    const picked = g.species.abilities(g).find((a) => a.id === 'evolve').pick();
+    let steam = 0;
+    window.__run(6, () => { const m = g.gz.move; if (m && m.cloud) steam = Math.max(steam, m.cloud.parts.length); });
+    out.push({ picked, form: g.gz.form, steam, move: g.gz.move && g.gz.move.name, tall: +(g.box.maxY - g.box.minY).toFixed(1), moves: g.species.abilities(g).map((a) => a.id).join(' ') });
+  }
+  return out;
+});
+const evolveEvs = await evs();
+check('EVOLVE: steam pours off him, and out of it he rises onto two legs - his third form...',
+  shinEvolve[0].picked && shinEvolve[0].form === 3 && shinEvolve[0].steam > 100 && shinEvolve[0].tall > 8 && shinEvolve[0].tall < 14 && !shinEvolve[0].move &&
+  shinEvolve[0].moves === 'auto stomp tail roar bite gills evolve', JSON.stringify(shinEvolve[0]));
+check('...and in the steam again, the fourth: eighteen metres, with the breath and the beams, and nothing more to change into',
+  shinEvolve[1].picked && shinEvolve[1].form === 4 && shinEvolve[1].steam > 100 && shinEvolve[1].tall > 16 && shinEvolve[1].tall < 25 && !shinEvolve[1].move &&
+  shinEvolve[1].moves === 'auto stomp tail roar bite breath dorsal tailBeam' && evolveEvs.shinChanging.length === 2 && evolveEvs.shinEvolve.length === 2,
+  JSON.stringify({ ...shinEvolve[1], events: { shinChanging: evolveEvs.shinChanging, shinEvolve: evolveEvs.shinEvolve } }));
+await page.waitForTimeout(300);
+const shinBar4 = await ev(() => { const b = [...document.querySelectorAll('#bossbars .bossbar')].find((el) => /shin/i.test(el.querySelector('.boss-name').textContent)); return b && b.querySelector('.boss-name').textContent; });
+check('...his bar now just SHIN GODZILLA', !!shinBar4 && shinBar4.toUpperCase() === 'SHIN GODZILLA', shinBar4);
+await shot('shin-4');
+
+// the fourth form's moves, on somebody where each reaches them
+const shinMoves = await ev(() => {
+  const sb = window.__sf.sb, g = window.__s;
+  const out = {};
+  out.stomp = window.__try('stomp', 3, 3);
+  out.bite = window.__try('bite', 7.5, 3);
+  out.tail = window.__try('tail', -9, 3);
+  // (and somebody standing in the street between him and whoever it is aimed at: where the smog comes down)
+  const by = sb.spawnStickman(g.pos.x + g.facing * 9, null, { name: 'Bystander' });
+  by.brain = null;
+  let o2 = 1, smog = 0;
+  out.breath = window.__try('breath', 18, 12.5, () => { if (!by.removed && !by.dead) { o2 = Math.min(o2, by.health.oxygen); smog = Math.max(smog, (by.vit && by.vit.smog) || 0); } });
+  out.breath.bystander = { o2: +o2.toFixed(2), smog: +smog.toFixed(2) };
+  if (!by.removed) sb.remove(by);
+  out.tailBeam = window.__try('tailBeam', -16, 4.5);
+  out.dorsal = window.__try('dorsal', 10, 6.5);
+  return out;
+});
+const moveEvs = await evs();
 check('STOMP, BITE, TAIL: whoever is under his foot, in his jaws or behind him is killed',
   shinMoves.stomp.picked && shinMoves.stomp.dead && shinMoves.bite.picked && shinMoves.bite.dead && shinMoves.tail.picked && shinMoves.tail.dead,
   JSON.stringify({ stomp: shinMoves.stomp, bite: shinMoves.bite, tail: shinMoves.tail }));
-check('ATOMIC BREATH: his jaw splits, fire pours out - and the beam, which kills whoever it touches and cuts clean through buildings',
-  shinMoves.breath.picked && shinMoves.events.shinSpew >= 1 && shinMoves.events.shinBeam >= 1 && shinMoves.breath.dead && shinMoves.breath.cut > 300,
-  JSON.stringify({ breath: shinMoves.breath, events: shinMoves.events }));
-check('TAIL BEAM: the end of his tail opens, and a beam comes out of it at whoever is behind him', shinMoves.tailBeam.picked && shinMoves.events.shinTailBeam >= 1 && shinMoves.tailBeam.dead,
+const stage = (t) => (moveEvs[t] || [])[0] ?? Infinity;
+check('ATOMIC BREATH: the plates light up and his jaw splits; black smog pours out, catches, and floods the street with fire; the fire draws in - and it is a beam',
+  shinMoves.breath.picked && stage('shinCharge') < stage('shinSmog') && stage('shinSmog') < stage('shinIgnite') && stage('shinIgnite') < stage('shinBuild') && stage('shinBuild') < stage('shinBeam') && stage('shinBeam') < Infinity,
+  JSON.stringify({ charge: stage('shinCharge'), smog: stage('shinSmog'), ignite: stage('shinIgnite'), build: stage('shinBuild'), beam: stage('shinBeam') }));
+check('...whoever is in the smog can hardly breathe, and the beam kills whoever it touches and cuts clean through buildings',
+  shinMoves.breath.bystander.smog > 0.3 && shinMoves.breath.bystander.o2 < 0.9 && shinMoves.breath.dead && shinMoves.breath.cut > 300, JSON.stringify(shinMoves.breath));
+check('TAIL BEAM: the end of his tail opens, and a beam comes out of it at whoever is behind him', shinMoves.tailBeam.picked && moveEvs.shinTailBeam.length >= 1 && shinMoves.tailBeam.dead,
   JSON.stringify(shinMoves.tailBeam));
-check('DORSAL BEAMS: every plate on his back fires at once', shinMoves.dorsal.picked && shinMoves.events.shinDorsal >= 1 && shinMoves.dorsal.beams >= 8, JSON.stringify(shinMoves.dorsal));
+check('DORSAL BEAMS: every plate on his back fires at once - and the end of his tail with them', shinMoves.dorsal.picked && moveEvs.shinDorsal.length >= 1 && shinMoves.dorsal.beams >= 10, JSON.stringify(shinMoves.dorsal));
 await ev(() => { const { cam } = window.__sf; cam.ppm = cam.minPpm; cam.x = 0; cam.y = cam.h / 2 / cam.ppm - 0.4; cam.clamp(); });
 await page.waitForTimeout(250);
 await shot('shin-city');

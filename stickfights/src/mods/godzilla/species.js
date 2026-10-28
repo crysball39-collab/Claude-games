@@ -12,7 +12,7 @@
    ========================================================================== */
 import { Health } from '../../game/health.js';
 import { armOf, isBlade } from '../../game/props.js';
-import { clamp, rand } from '../../core/util.js';
+import { rand } from '../../core/util.js';
 import { newBody, stepBody, boundsOf, G54 } from './body.js';
 import { godzillaSkin, makeMarks, facingAt } from './look.js';
 import { think, doing, abilities, startDeath, updateDeath, onHurt, MOD } from './moves.js';
@@ -72,12 +72,15 @@ export function harmOf(h, weapon) {
 
 /**
  * What any of them is to the game, from what is particular to one kind: its
- * build, its health and hide, how it looks, what it does (its moves module:
- * think, doing, abilities, startDeath, updateDeath) - o, filled in below
- * for the 1954 one (and in shin.js for Shin).
+ * build (or, for one that changes, a function of him giving it), its health
+ * and hide, how it looks, what it does (its moves module: think, doing,
+ * abilities, startDeath, updateDeath) - o, filled in below for the 1954 one
+ * (and in shin.js for Shin). The lines his inspector shows and what people
+ * say at the first sight of him can be functions of him too.
  */
 export function kaiju(o) {
   const MAX = o.maxHp, HIDE_OF = o.hide, MEND = o.mends, AFTER = o.mendAfter;
+  const of = (v, man) => (typeof v === 'function' ? v(man) : v);
   return {
     mod: MOD,
     kind: o.kind,
@@ -117,7 +120,7 @@ export function kaiju(o) {
     spawned(man) {
       man.setState('air');
       man.onGround = true;
-      man.gz.body = newBody(man, o.build);
+      man.gz.body = newBody(man, of(o.build, man));
       stepBody(man, 0);
       man.health.shield = 1;
     },
@@ -140,23 +143,37 @@ export function kaiju(o) {
     air() { return true; },
     touchDown() { return true; },
 
-    /** Where he goes: along the ground at the pace his moves set, never off the edge of the world. */
+    /**
+     * Where he goes: along the ground at the pace his moves set, never off the
+     * edge of the world - with room at each end for as far as he reaches out
+     * in front of himself and behind (his build's front and back, if it has
+     * them). Turned round or grown too near the end, he is walked back in.
+     */
     physics(man, dt) {
-      const sb = man.sandbox, gz = man.gz;
+      const sb = man.sandbox, gz = man.gz, b = gz.body.b, f = man.facing;
       const k = 1 - Math.exp(-dt * 2.2);
       gz.v += ((gz.wantV || 0) - gz.v) * k;
       if (gz.dead || gz.state === 'dying') gz.v = 0;
       man.vel.x = gz.v;
       man.vel.y = 0;
-      const room = o.room;
-      // (another of them in the way: he does not walk through him)
+      const front = b.front ?? o.room, back = b.back ?? o.room;
+      // (another of them in the way: he does not walk through him - nor reach his head into him)
+      const gap = Math.max(7, front * 0.8);
       for (const q of sb.people) {
         if (q === man || q.removed || !q.gz || !(q.species && q.species.giant)) continue;
         const dx = q.pos.x - man.pos.x;
-        if (Math.abs(dx) < 7 && Math.sign(man.vel.x) === Math.sign(dx) && man.vel.x !== 0) { man.vel.x = 0; gz.v = 0; }
+        if (Math.abs(dx) < (Math.sign(dx) === f ? gap : 7) && Math.sign(man.vel.x) === Math.sign(dx) && man.vel.x !== 0) { man.vel.x = 0; gz.v = 0; }
       }
-      man.pos.x = clamp(man.pos.x + man.vel.x * dt, sb.left + room, sb.right - room);
-      if (man.pos.x <= sb.left + room + 1e-6 || man.pos.x >= sb.right - room - 1e-6) gz.v = 0;
+      const lo = sb.left + (f > 0 ? back : front), hi = sb.right - (f > 0 ? front : back);
+      let x = man.pos.x + man.vel.x * dt;
+      if (x < lo) {
+        if (man.vel.x < 0) { x = man.pos.x; gz.v = 0; }
+        x = Math.min(lo, x + 4 * dt);
+      } else if (x > hi) {
+        if (man.vel.x > 0) { x = man.pos.x; gz.v = 0; }
+        x = Math.max(hi, x - 4 * dt);
+      }
+      man.pos.x = x;
       man.pos.y = 0;
       man.onGround = true;
       man.support = null;
@@ -172,12 +189,22 @@ export function kaiju(o) {
     shape(man) { return man.gz && man.gz.body ? man.gz.body.caps : []; },
     bounds(man, box) { if (man.gz && man.gz.body) boundsOf(man.gz.body, box); },
 
-    /** The stand-in among the crates: his legs and body, not his tail or his head. */
+    /**
+     * The stand-in among the crates: his legs and body, not his tail or his
+     * head - or, for a body that lies along the ground (wideProxy), all the
+     * length of it from his hips to his chest, shoving along whatever it
+     * drags itself into.
+     */
     proxy(man) {
       const g = man.gz && man.gz.body;
       const sk = g && g.sk;
       if (!sk) return { x: man.pos.x, y: 5, w: 3, h: 9 };
       const K = g.b.K, D = g.b.D;
+      if (g.b.wideProxy) {
+        const x0 = man.pos.x + g.sx * sk.hip.x, x1 = man.pos.x + g.sx * sk.chest.x;
+        const top = Math.max(sk.hip.y, sk.chest.y) + D.chestR * 0.6;
+        return { x: (x0 + x1) / 2, y: (0.5 + top) / 2, w: Math.max(1.2, Math.abs(x1 - x0)), h: Math.max(1, top - 0.5) };
+      }
       const x = man.pos.x + g.sx * (sk.hip.x + 0.6 * K);
       const top = Math.max(sk.chest.y, sk.belly.y + D.belly);
       return { x, y: (0.5 + top) / 2, w: Math.max(1.2, 3.6 * K * Math.abs(g.sx)), h: Math.max(1, top - 0.5) };
@@ -210,7 +237,7 @@ export function kaiju(o) {
     inspect(man) {
       const h = man.health, gz = man.gz;
       const lines = [
-        ...o.hideLines,
+        ...of(o.hideLines, man),
         { text: `He mends ${MEND} health a second, once nothing has hurt him for ${AFTER} seconds` },
         o.tally(gz),
       ];
@@ -219,7 +246,7 @@ export function kaiju(o) {
         doing: o.doing(man),
         dead: man.dead,
         bars: [{ label: 'Health', frac: h.bossHp / h.bossMax, color: o.color, text: `${Math.ceil(h.bossHp).toLocaleString('en-US')} / ${h.bossMax.toLocaleString('en-US')}` },
-          { label: 'Rage', frac: gz.rage, color: '#b0281a', text: `${Math.round(gz.rage * 100)}%` }],
+          { label: 'Rage', frac: gz.rage, color: '#b0281a', text: `${Math.round(gz.rage * 100)}%` }, ...(o.bars ? o.bars(man) : [])],
         lines,
       };
     },
@@ -234,7 +261,7 @@ export function kaiju(o) {
       r.like = Math.min(r.like, -0.6);
       brain.emo.bump('fear', 0.55 * (1.25 - T.bravery * 0.6));
       brain.emo.bump('surprise', 0.9);
-      brain.speak(o.seeLine, { other: me.name }, 1, me, true);
+      brain.speak(of(o.seeLine, me), { other: me.name }, 1, me, true);
     },
 
     healed(man) {

@@ -72,11 +72,14 @@ is angry, kills whoever did it, and climbs inside somebody else - and
 **Godzilla** brings two of him: **Godzilla ('54)**, the 1954 one, fourteen
 metres tall, with 30,000 health and a boss bar, and a stomp, a kick, his
 tail, a roar, his jaws, his claws, a hand to grab people and eat them or
-throw them, and the atomic breath; and **Shin Godzilla**, eighteen metres of
-black hide cracked with red, with 50,000 health, whose breath narrows to a
-purple beam that cuts clean through buildings - and who, hurt badly, fires
-from every plate on his back. With nobody left, they tear the city apart;
-put both down and they go for each other (see [Mods](#mods)).
+throw them, and the atomic breath; and **Shin Godzilla**, who comes up
+crawling - his second form - and changes in clouds of steam into his third
+and then his fourth: eighteen metres of black hide cracked with red, with
+50,000 health, whose breath is black smog that catches into a flood of fire,
+which draws in to a purple beam that cuts clean through buildings - and who,
+hurt badly, fires from every plate on his back and the end of his tail. With
+nobody left, they tear the city apart; put both down and they go for each
+other (see [Mods](#mods)).
 
 While a stickman is in charge of their own body, every move they make is a
 hand-keyed animation, played frame by frame. The moment they are not -
@@ -471,7 +474,7 @@ the right of it, in colour, lit up purple.
 | | What it is |
 | - | ---------- |
 | **Godzilla ('54)** | Fourteen metres of charcoal-grey monster with three rows of pale maple-leaf plates down his back and a tail as long as the rest of him. 30,000 health, and a boss bar - GODZILLA ('54) - to show it. |
-| **Shin Godzilla** | Eighteen metres: near black, cracked all over with red, rows of jagged plates, a tiny blank eye, and a tail held high that ends in a knot of bone. 50,000 health, and a boss bar - SHIN GODZILLA - going from red to purple. |
+| **Shin Godzilla** | Comes up crawling - his second form: mottled brown, huge round eyes, gills - and changes in steam into his third (red, up on two legs) and then his fourth: eighteen metres, near black, cracked all over with red, rows of jagged plates, a tiny blank eye, and a tail held high that ends in a knot of bone. 50,000 health, and a boss bar - SHIN GODZILLA, and which form he is in - going from red to purple. |
 
 #### Godzilla ('54)
 
@@ -543,7 +546,34 @@ killed and eaten and how many buildings he has wrecked.
 
 #### Shin Godzilla
 
-**He looks like the one from 2016**, the last of its forms: near black with a
+**He changes.** He comes up out of the ground as his **second form**: a thing
+like a huge eel that has grown legs, long and low, mottled brown with a pale
+belly, dragging itself up the street on its belly - its head big and wide,
+with enormous round staring eyes, gills down the sides of its neck, two little
+stumps for arms and a row of small fins down its back, and its tail lying
+along the ground behind it, wriggling as it goes. Whoever is under its belly
+as it crawls is crushed. It **headbutts** - the front of it lifted right up,
+then brought down, all its weight behind it, on whoever is in front of it
+(and on the ground floor of whatever building is there; everyone near is
+thrown off their feet); it **thrashes its tail**, up and down three times, at
+whoever is behind it; its **gills** open wide and pour out red, down its neck
+and onto the street; and it **roars** - a wet, bubbling noise, as if through
+water.
+
+Before long - about twenty-four seconds, sooner the more it is hurt - it
+stops, and shudders, and **steam pours off all of it** until there is hardly
+anything of it to be seen; in the thick of it it changes, and out of the
+steam rises its **third form**: up on its back legs for the first time,
+smaller than it will be, red-brown going to orange with the first red cracks
+showing, the gills still there and its eyes smaller, two little arms held up
+in front, swaying. It stomps, bites, brings its tail down, opens its gills
+and roars - and about twenty seconds later (again, sooner hurt) the steam
+comes again, and out of it rises the **fourth form**, what he becomes. Each
+time the view backs off to take all of him in. In the inspector, a bar shows
+how near he is to changing, and his **Do** abilities have *Evolve*, to make
+him change now.
+
+**The fourth form looks like the one from 2016** at its last: near black with a
 red-brown cast, and everywhere the hide has split a crack of red light shows
 through, as if what is inside him were burning; the hide itself rough and
 lumped like scar tissue. Rows on rows of plates down his back and tail,
@@ -567,31 +597,44 @@ arms. **What he does**:
   them - and on whatever building is there.
 - **Roar**: lower, longer and harsher than the 1954 one's; the glass goes.
 - **Bite**: a lunge, and the jaws shut on them; they are dropped, dead.
-- **Atomic breath**: he lowers his head; the plates light up purple from the
-  end of his tail up, and so do the cracks in him; his lower jaw splits in
-  two down the middle and drops open, his throat glowing - then black smoke
-  and fire pour out of it in a flood, down over the street and along it,
-  setting everything alight; and it narrows to a **beam**: a thin line of
-  purple light that goes straight through whatever is in its way. Whoever it
-  touches is gone; a building it crosses is cut clean through along it, and
-  whatever that leaves hanging comes down; where it meets the ground, the
-  ground goes up in flames. He holds it on what he is aiming at, then sweeps
-  it slowly up through everything behind it.
+- **Atomic breath**, in five stages. He lowers his head; the plates light up
+  purple from the end of his tail up, and so do the cracks in him; his lower
+  jaw splits in two down the middle and drops open, his throat glowing. Then
+  **black smog** pours out of it - thick and heavy, it comes down on the
+  street and rolls out along it, and lies there; whoever is in it can hardly
+  breathe, and coughs, and goes blue. Then the smog **catches**: out from his
+  mouth along all of it, in a flash, and **fire** floods out after it, down
+  over the street and along it, setting everything alight. Then the fire
+  **draws in** - thinner and faster, going from orange to purple, the plates
+  blazing and the light in his throat building, a thread of light down the
+  middle of it - as he lifts his head onto what he is aiming at; and it is a
+  **beam**: a thin line of purple light that goes straight through whatever
+  is in its way. Whoever it touches is gone; a building it crosses is cut
+  clean through along it, and whatever that leaves hanging comes down; where
+  it meets the ground, the ground goes up in flames. He holds it on what he
+  is aiming at, then sweeps it slowly up through everything behind it. The
+  inspector says which stage it is at.
 - **Dorsal beams**: hunched over, the plates all lit, and from his neck to the
-  end of his tail they fire at once: nine beams fanned out round him from in
-  front to behind, sweeping, cutting up everything they cross. He does it
-  when he has been badly hurt, when there is a crowd round him - and now and
-  then just because.
+  end of his tail they fire at once - nine beams fanned out round him from in
+  front to behind, and one more out of the end of his tail - sweeping,
+  cutting up everything they cross. He does it when he has been badly hurt,
+  when there is a crowd round him - and now and then just because.
 - **Tail beam**: the end of his tail lights up and opens, and a beam comes
   out of it at whoever is behind him, swept either side of them.
 
 **With nobody left**, he cuts the city down - mostly with the beam, from
-wherever he is, since it reaches right across - and bites and smashes what
-is near. **He can be killed**, but he does not fall: out of health, he
-roars once more, lifts his head - and freezes solid where he stands, going
-pale from his feet up, the fire in him going out, and stays there, standing,
-like a statue. In the inspector his **Do** abilities are *Stomp*, *Tail
-whip*, *Roar*, *Bite*, *Atomic breath*, *Dorsal beams* and *Tail beam*.
+wherever he is, since it reaches right across - and bites, smashes and
+tail-beams what is near; the second form brings its head down on the
+buildings as it crawls past them. **He can be killed**, in any form, but he
+does not fall: out of health, he roars once more, lifts his head - and
+freezes solid where he is, going pale from his feet up, the fire in him going
+out, and stays there like a statue; on the end of the fourth form's tail, as
+he freezes, is a knot of figures, something like people, reaching up out of
+it - what he would have become next. In the inspector his **Do** abilities
+are his form's: *Tail thrash*, *Headbutt*, *Roar*, *Gills* and *Evolve* in
+the second; *Stomp*, *Tail whip*, *Roar*, *Bite*, *Gills* and *Evolve* in the
+third; and *Stomp*, *Tail whip*, *Roar*, *Bite*, *Atomic breath*, *Dorsal
+beams* and *Tail beam* in the fourth.
 
 #### The two of them
 
@@ -1533,10 +1576,11 @@ stickfights/
                       everybody makes of it, lines, animations and sounds
       godzilla/       Godzilla ('54) and Shin Godzilla: a kaiju's health and hide,
                       its body (the skeleton, the walk, the tail, its shape) and
-                      each one's build, their moves and their minds, what they do
-                      to the world and to each other, the breath, the beams and
-                      the fire, their looks, what everybody says and makes of
-                      them, and their noises
+                      each one's build - Shin's, one for each of his forms -
+                      their moves and their minds, what they do to the world and
+                      to each other, the breath, the smog, the fire and the
+                      beams, the steam he changes in, their looks, what everybody
+                      says and makes of them, and their noises
 ```
 
 ## Verifying it
@@ -1794,12 +1838,20 @@ screen and checks:
 - with nobody left he tears into the buildings; one look at him and people
   are terrified
 - out of health he roars, comes down and lies there, and his bar goes
-- Shin Godzilla spawns where tapped, bigger, his tail held up off the ground,
-  with a boss bar, SHIN GODZILLA, and 50,000 health; twenty bullets take next
-  to nothing off him; his stomp, bite and tail kill; his atomic breath splits
-  his jaw, pours out fire and becomes the beam, which kills and cuts clean
-  through buildings; the tail beam fires at whoever is behind him; every
-  plate on his back fires at once
+- Shin Godzilla spawns where tapped in his second form, long and low, his
+  tail along the ground, with a boss bar, SHIN GODZILLA - SECOND FORM, and
+  50,000 health; twenty bullets take next to nothing off him; its headbutt
+  kills, its tail thrash hits, it crushes whoever it crawls over, and its
+  gills open and pour out red
+- EVOLVE: in a cloud of steam he rises onto two legs as his third form, and
+  in the steam again becomes the fourth, eighteen metres tall, with the
+  breath and the beams among his abilities, and his bar just SHIN GODZILLA
+- his stomp, bite and tail kill; his atomic breath goes through its stages
+  in order - the plates lit and the jaw split, black smog, the smog catching
+  and fire, the fire drawn in, the beam - whoever is in the smog can hardly
+  breathe, and the beam kills and cuts clean through buildings; the tail beam
+  fires at whoever is behind him; every plate on his back fires at once, and
+  the end of his tail with them
 - with the 1954 one there too, the two of them go for each other
 - out of health Shin Godzilla freezes solid, still standing, and his bar goes;
   removing the mod takes them out of the world and the menu

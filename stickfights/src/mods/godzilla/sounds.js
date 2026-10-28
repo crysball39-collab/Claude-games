@@ -9,9 +9,11 @@
    hear; a stomp is a bigger one, with the ground cracking. His breath
    builds as a crackling hum, and comes out as a roaring hiss.
 
-   Shin Godzilla's roar is lower, longer and harsher; his beam is a hum and
-   a whine that hold as long as it does, and the fire before it a roar of
-   its own.
+   Shin Godzilla's roar is lower, longer and harsher (in his second form,
+   wet, and bubbling, as if through water); before the beam, the smog comes
+   out with a rush, catches with a thump, and the fire draws in to a whine
+   that climbs; the beam is a hum and a whine that hold as long as it does.
+   He changes form in a hiss of steam, and his gills pour with a gush.
    ========================================================================== */
 import { soundRand as rand } from '../../core/audio.js';
 
@@ -132,14 +134,52 @@ function beamHum(sound, v, dur, pitch = 1) {
   sound.hiss(dur, 3200 * pitch, 1.2, 0.08 * v, 'bandpass');
 }
 
-/** Shin Godzilla's roar: lower than the 1954 one's, longer, and harsher, with a growl under it. */
-function shinRoar(sound, v, weak = false) {
-  roar(sound, v, weak ? 0.66 : 0.74, weak ? 2.8 : 3.3, weak);
-  sound.tone('sawtooth', 62, 44, weak ? 2.4 : 3.1, 0.12 * v);
-  sound.hiss(weak ? 2.2 : 3, 240, 0.6, 0.22 * v, 'lowpass');
+/**
+ * Shin Godzilla's roar: lower than the 1954 one's, longer, and harsher, with
+ * a growl under it - in his second form a wet bubbling one, and in his third
+ * something between.
+ */
+function shinRoar(sound, v, weak = false, form = 4) {
+  if (form === 2) { gurgle(sound, v, weak ? 2 : 2.4); return; }
+  const k = form === 3 ? 0.85 : 1;
+  roar(sound, v, (weak ? 0.66 : 0.74) / k, (weak ? 2.8 : 3.3) * k, weak);
+  sound.tone('sawtooth', 62, 44, (weak ? 2.4 : 3.1) * k, 0.12 * v);
+  sound.hiss((weak ? 2.2 : 3) * k, 240, 0.6, 0.22 * v, 'lowpass');
+  if (form === 3) bubbles(sound, v * 0.5, 2.2, 0.3);
+}
+
+/** A low noise gated on and off, fast and unevenly: bubbling, for `dur`. */
+function bubbles(sound, v, dur, delay = 0) {
+  const c = sound.ctx, t = c.currentTime + delay;
+  const s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain(), env = c.createGain();
+  const lfo = c.createOscillator(), lg = c.createGain();
+  s.buffer = sound.noise;
+  s.loop = true;
+  f.type = 'bandpass'; f.frequency.value = 420; f.Q.value = 2.5;
+  g.gain.value = 0;
+  lfo.type = 'square';
+  lfo.frequency.setValueAtTime(14, t);
+  lfo.frequency.linearRampToValueAtTime(8, t + dur);
+  lg.gain.value = 0.35 * v;
+  lfo.connect(lg); lg.connect(g.gain);
+  env.gain.setValueAtTime(0.0001, t);
+  env.gain.exponentialRampToValueAtTime(1, t + 0.15);
+  env.gain.setValueAtTime(1, t + dur * 0.7);
+  env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.connect(f); f.connect(g); g.connect(env); env.connect(sound.master);
+  s.start(t); s.stop(t + dur + 0.05);
+  lfo.start(t); lfo.stop(t + dur + 0.05);
+}
+
+/** The second form's roar: low and wet, bubbling, as if through water. */
+function gurgle(sound, v, dur) {
+  roar(sound, v * 0.7, 0.55, dur, true);
+  bubbles(sound, v, dur);
+  sound.tone('sine', 70, 40, dur * 0.8, 0.3 * v);
 }
 
 const isShin = (who) => !!(who && who.gz && who.gz.kind === 'shin');
+const formOf = (who) => (isShin(who) ? who.gz.form || 4 : 0);
 
 export function setupSounds(sb, sound, cam) {
   const ok = () => sound.ready;
@@ -147,27 +187,29 @@ export function setupSounds(sb, sound, cam) {
   // (he is too big to be quiet anywhere: what he does shakes the view wherever it is)
   const shake = (x, k) => cam.shake(Math.min(0.9, k / (1 + Math.abs(x - cam.x) / 14)));
 
+  // (the view backs off until all of him is in it: tall enough for him rearing up to roar - and, for one lying
+  // along the ground, long enough for all of him)
+  const fit = (e) => {
+    const tall = e.tall || 19.5, wide = e.wide || 0;
+    if (cam.h / cam.ppm >= tall && cam.w / cam.ppm >= wide) return;
+    const ppm = Math.max(cam.minPpm, Math.min(cam.h / tall, wide ? cam.w / wide : Infinity, cam.ppm));
+    cam.glideTo(e.x, (cam.h / 2 / ppm) * (1 - 2 * (cam.portrait ? 0.25 : 0.04)), ppm);
+  };
   sb.on('gzSpawn', (e) => {
     shake(e.x, 0.6);
-    // (the view backs off until all of him is in it)
-    // (tall enough for him rearing up to roar)
-    const tall = e.tall || 19.5;
-    if (cam.h / cam.ppm < tall) {
-      const ppm = Math.max(cam.minPpm, cam.h / tall);
-      cam.glideTo(e.x, (cam.h / 2 / ppm) * (1 - 2 * (cam.portrait ? 0.25 : 0.04)), ppm);
-    }
+    fit(e);
     if (!ok()) return;
     boom(sound, near(e.x), 1);
   });
   sb.on('gzRoar', (e) => {
     shake(e.x, isShin(e.who) ? 0.45 : 0.35);
     if (!ok()) return;
-    if (isShin(e.who)) shinRoar(sound, near(e.x));
+    if (isShin(e.who)) shinRoar(sound, near(e.x), false, formOf(e.who));
     else roar(sound, near(e.x), 1, 2.6);
   });
   sb.on('gzDeathRoar', (e) => {
     if (!ok()) return;
-    if (isShin(e.who)) shinRoar(sound, near(e.x) * 0.85, true);
+    if (isShin(e.who)) shinRoar(sound, near(e.x) * 0.85, true, formOf(e.who));
     else roar(sound, near(e.x) * 0.85, 0.82, 2.4, true);
   });
   sb.on('gzStep', (e) => {
@@ -270,13 +312,58 @@ export function setupSounds(sb, sound, cam) {
     o.start(t); o.stop(t + dur + 0.15);
     for (let i = 0; i < 18; i++) sound.tone('square', 2400 + rand(-900, 1600), 1200, 0.012, 0.13 * v * (0.3 + i / 18), 0.1 + i * dur / 18 + rand(0, 0.04));
   });
-  sb.on('shinSpew', (e) => {
-    shake(e.x, 0.35);
+  // the smog: a great rush of breath, low
+  sb.on('shinSmog', (e) => {
+    shake(e.x, 0.25);
     if (!ok()) return;
     const v = near(e.x);
-    sound.hiss(1.6, 300, 0.5, 0.65 * v, 'lowpass');
-    sound.sweep('bandpass', 380, 1500, 1.5, 0.4 * v, 0.6);
-    for (let i = 0; i < 10; i++) sound.hiss(0.02, 1800 + rand(0, 2600), 2, 0.2 * v, 'bandpass', 0.1 + i * rand(0.08, 0.16));
+    sound.hiss(1.8, 220, 0.5, 0.6 * v, 'lowpass');
+    sound.sweep('bandpass', 160, 520, 1.7, 0.3 * v, 0.5);
+    sound.tone('sawtooth', 48, 40, 1.7, 0.06 * v);
+  });
+  // it catching: a thump, and the roar of the fire after it
+  sb.on('shinIgnite', (e) => {
+    shake(e.x, 0.45);
+    if (!ok()) return;
+    const v = near(e.x);
+    sound.tone('sine', 90, 34, 0.6, 0.7 * v);
+    sound.hiss(0.5, 500, 0.6, 0.6 * v, 'lowpass');
+    sound.hiss(1.8, 300, 0.5, 0.55 * v, 'lowpass', 0.15);
+    sound.sweep('bandpass', 380, 1500, 1.6, 0.35 * v, 0.6, 0.1);
+    for (let i = 0; i < 12; i++) sound.hiss(0.02, 1800 + rand(0, 2600), 2, 0.2 * v, 'bandpass', 0.15 + i * rand(0.08, 0.14));
+  });
+  // the fire drawn in: a whine climbing, crackling, as the beam comes
+  sb.on('shinBuild', (e) => {
+    shake(e.x, 0.3);
+    if (!ok()) return;
+    const v = near(e.x), dur = e.dur || 1.2;
+    sound.sweep('bandpass', 300, 2200, dur, 0.3 * v, 4);
+    sound.tone('sawtooth', 110, 440, dur, 0.1 * v);
+    for (let i = 0; i < 16; i++) sound.tone('square', 2600 + rand(-800, 1600), 1400, 0.012, 0.14 * v * (0.3 + i / 16), i * dur / 16 + rand(0, 0.03));
+  });
+  // changing form: a long hiss of steam, and a groan inside it
+  sb.on('shinChanging', (e) => {
+    shake(e.x, 0.4);
+    if (!ok()) return;
+    const v = near(e.x);
+    sound.hiss(3.4, 3800, 0.5, 0.35 * v, 'highpass');
+    sound.hiss(3.2, 900, 0.6, 0.3 * v, 'bandpass', 0.2);
+    sound.tone('sawtooth', 70, 46, 2.6, 0.1 * v, 0.3);
+    if (formOf(e.who) <= 3) bubbles(sound, v * 0.6, 1.8, 0.2);
+  });
+  sb.on('shinEvolve', (e) => {
+    shake(e.x, 0.7);
+    fit(e);
+    if (!ok()) return;
+    boom(sound, near(e.x), 0.9);
+  });
+  // the gills: a wet gush, and the splashing
+  sb.on('shinGills', (e) => {
+    if (!ok()) return;
+    const v = near(e.x);
+    sound.hiss(2.4, 600, 0.7, 0.4 * v, 'lowpass');
+    bubbles(sound, v * 0.8, 2.4);
+    for (let i = 0; i < 10; i++) sound.hiss(0.05, 1200 + rand(0, 1200), 1.5, 0.15 * v, 'bandpass', 0.3 + i * rand(0.15, 0.25));
   });
   sb.on('shinBeam', (e) => {
     shake(e.x, 0.5);

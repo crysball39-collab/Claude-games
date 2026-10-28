@@ -61,6 +61,21 @@ addLines({
   sawShinDorsal: ["Lasers! From its BACK!", "They're coming out of its back!", 'Nowhere is safe!', 'The sky is full of light!', 'Everybody down! DOWN!'],
   sawShinTail: ['Its TAIL is firing too!', 'The tail! Watch the tail!', 'Even the end of its tail...!'],
   sawShinBurn: ['{victim}...! The light just went through {victim}!', '{victim} is gone!', 'There is nothing left of {victim}...'],
+  // its second form, crawling up the street; its third, up on two legs
+  seeShin2: [
+    'What is that thing?!', 'Its eyes... look at its EYES!', "It's crawling up the street!", 'Is that a fish? Is that a giant FISH?!',
+    "It's dragging itself along on its belly!", 'Something came up out of the ground!', "Don't let it crawl over you!", 'What are those slits on its neck?',
+  ],
+  seeShin3: ["It's standing up!", "It's walking on two legs now!", "That's not the same thing - it's RED now!", 'It keeps changing!', 'Why is it getting bigger?!'],
+  sawShinGills: ['Its gills! What is pouring out of them?!', "It's bleeding everywhere!", 'Red - the whole street is red!', "Don't touch that stuff!", 'Is it hurt? Is that blood?'],
+  sawShinChange: ["It's... steaming?!", "What's happening to it?!", "It's changing!", 'Get back! Get back from the steam!', 'Something is happening to it - RUN!'],
+  sawShinStand: ['It stood up!', 'On two legs - it stood UP!', "It's... bigger. It's getting BIGGER.", 'It changed into something else!'],
+  sawShinGrown: ['It grew - it GREW!', 'Look how big it is now...', 'It is not stopping. It is never going to stop.', "That's not the same monster anymore.", 'Oh no. Oh no, it is HUGE.'],
+  // the breath, coming
+  sawShinSmog: ['Black smoke! It is breathing out smoke!', 'Get away from the smoke!', 'Cover your mouth!', "I can't see anything!", 'The smoke is coming this way!'],
+  sawShinFire: ["The smoke's on FIRE!", 'FIRE! It is all on fire!', 'Run from the flames!', 'The whole street is burning!', 'It caught - EVERYTHING caught!'],
+  sawShinBuild: ['The fire... it is turning purple!', "It's focusing it!", 'Something worse is coming - GET DOWN!', 'Its back is blazing!', 'The light is getting brighter!'],
+  inSmog: ['*cough* *cough*', "Can't... breathe...", '*hack* *cough*', 'The smoke- *cough*', "I can't see!", '*wheeze*', 'Get out of the smoke!'],
   shinFrozen: ["It's... frozen. It's frozen solid.", 'It stopped. It just stopped.', 'Is it dead? Or is it waiting?', "Don't go near it. Just... don't.", 'We did it. I think we did it.'],
   // and when it is over
   gzDown: ["It's... down. It's really down.", 'We did it... we actually did it.', 'Is it dead? Tell me it is dead.', 'The monster is dead!', "It's over.", 'Rest now, big guy.'],

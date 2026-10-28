@@ -146,4 +146,22 @@ export function setupReactions(sb) {
     terror(B, e.by, 0.8);
     B.speak('sawShinBurn', { victim: e.who.name, other: e.by.name }, 0.5, null, true);
   }));
+  // the breath, coming: the smog, the fire, the light drawn in
+  const breath = (say, k, p) => (e) => witnesses(sb, e, (B) => {
+    terror(B, e.who, k);
+    B.speak(say, { other: e.who.name }, p, null, true);
+  });
+  sb.on('shinSmog', breath('sawShinSmog', 0.6, 0.6));
+  sb.on('shinIgnite', breath('sawShinFire', 0.9, 0.7));
+  sb.on('shinBuild', breath('sawShinBuild', 0.9, 0.6));
+  // his gills; his changing - and what he changes into
+  sb.on('shinGills', breath('sawShinGills', 0.4, 0.5));
+  sb.on('shinChanging', breath('sawShinChange', 0.5, 0.7));
+  sb.on('shinEvolve', (e) => {
+    hearers(sb, e, 40, (B) => { B.emo.bump('surprise', 0.5); B.heard = { x: e.x, y: 4, t: sb.time }; });
+    witnesses(sb, e, (B) => {
+      terror(B, e.who, 1);
+      B.speak(e.form === 3 ? 'sawShinStand' : 'sawShinGrown', { other: e.who.name }, 0.8, null, true);
+    });
+  });
 }

@@ -1446,6 +1446,11 @@ export class UI {
         root.className = 'bossbar';
         const name = document.createElement('div');
         name.className = 'boss-name';
+        // (its name, and - smaller, after it - what is coming, or what it is now)
+        const title = document.createElement('span');
+        const note = document.createElement('span');
+        note.className = 'boss-note';
+        name.append(title, note);
         const track = document.createElement('div');
         track.className = 'boss-track';
         const fill = document.createElement('div');
@@ -1456,10 +1461,11 @@ export class UI {
         hp.className = 'boss-hp';
         root.append(name, track, hp);
         box.appendChild(root);
-        el = { root, name, fill, track, hp };
+        el = { root, name, title, note, fill, track, hp };
         this.bars.set(k, el);
       }
-      el.name.textContent = b.name + (b.note ? ` - ${b.note}` : '');
+      el.title.textContent = b.name;
+      el.note.textContent = b.note ? ` - ${b.note}` : '';
       el.fill.style.width = (clamp(b.frac, 0, 1) * 100).toFixed(2) + '%';
       el.fill.style.background = b.color || '#b23cd1';
       el.track.classList.toggle('armored', !!b.armored);

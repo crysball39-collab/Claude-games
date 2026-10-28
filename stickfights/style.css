@@ -910,12 +910,17 @@ button {
 }
 .bossbar { display: flex; flex-direction: column; align-items: center; gap: 3px; }
 .boss-name {
+  max-width: 100%;
+  overflow: hidden;
   font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.04em;
   color: #fff;
   text-shadow: 2px 2px 0 #3a3a3a;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
+.boss-note { font-size: 0.75em; letter-spacing: 0.08em; }
 .boss-track {
   position: relative;
   width: 100%;

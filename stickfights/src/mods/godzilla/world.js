@@ -181,36 +181,42 @@ export function footDown(man, foot, k) {
     if (b.x1 < x0 || b.x0 > x1) continue;
     t.damage(Math.max(x0, Math.min(x1, t.x)), 0.4, 0.9, 30 * Math.max(0.5, k), CRUSH, { dx: 0, dy: 1, speed: 2 });
   }
-  // the ground shaking: everybody near it, off their feet
-  const R = 2.5 + 6 * k;
-  if (k >= 0.5) {
-    for (const p of sb.people) {
-      if (p === man || !alive(p) || giant(p) || p.state === 'held' || p.lying || p.rag) continue;
-      const d = Math.abs(p.pos.x - cx);
-      if (d > R || p.pos.y > 2) continue;
-      const q = 1 - d / R;
-      if (q > 0.35 || chance(q * 1.6)) {
-        struck(man, p);
-        p.takeHit({ by: man, part: chance(0.5) ? 'legA' : 'legB', x: p.pos.x, y: 0.3, dir: sign(p.pos.x - cx) || 1, power: 0.6 + q * 1.4, kind: 'impact', weapon: 'gzQuake' });
-        if (!p.removed && p.alive && !p.lying && !p.rag) {
-          if (q > 0.5) p.launch(sign(p.pos.x - cx) * (2 + q * 5), 2 + q * 4);
-          else p.knockDown(sign(p.pos.x - cx), 0.8 + q);
-        }
-      }
-    }
-    for (const c of sb.crates) {
-      if (c.removed || c.carriedBy) continue;
-      const d = Math.abs(c.body.pos.x - cx);
-      if (d < R) c.body.applyImpulse(0, c.body.mass * (1 - d / R) * 4, c.body.pos.x + rand(-0.2, 0.2), c.body.pos.y);
-    }
-    // the glass in the nearest windows goes
-    for (const w of thingsNear(sb, cx, 2, 5 * k, { standing: true, plants: false })) {
-      if (!w.cellMat) continue;
-      w.damage(cx, 2.5, 6 * k, 0.5 * k, 'blast', { only: (m) => m.brittle, mark: false, dx: 0, dy: 1, speed: 2, bulk: true, soft: true });
-    }
-  }
+  if (k >= 0.5) quake(man, cx, k);
   sb.fx.dust(cx, 0.05, Math.round(8 + 22 * k), 1 + k * 2.5);
   sb.emit('gzStep', { who: man, x: cx, k, foot });
+}
+
+/**
+ * The ground shaking at cx (k 1 a stomp): everybody near it off their feet,
+ * the crates jumping, and the glass in the nearest windows going.
+ */
+export function quake(man, cx, k) {
+  const sb = man.sandbox;
+  const R = 2.5 + 6 * k;
+  for (const p of sb.people) {
+    if (p === man || !alive(p) || giant(p) || p.state === 'held' || p.lying || p.rag) continue;
+    const d = Math.abs(p.pos.x - cx);
+    if (d > R || p.pos.y > 2) continue;
+    const q = 1 - d / R;
+    if (q > 0.35 || chance(q * 1.6)) {
+      struck(man, p);
+      p.takeHit({ by: man, part: chance(0.5) ? 'legA' : 'legB', x: p.pos.x, y: 0.3, dir: sign(p.pos.x - cx) || 1, power: 0.6 + q * 1.4, kind: 'impact', weapon: 'gzQuake' });
+      if (!p.removed && p.alive && !p.lying && !p.rag) {
+        if (q > 0.5) p.launch(sign(p.pos.x - cx) * (2 + q * 5), 2 + q * 4);
+        else p.knockDown(sign(p.pos.x - cx), 0.8 + q);
+      }
+    }
+  }
+  for (const c of sb.crates) {
+    if (c.removed || c.carriedBy) continue;
+    const d = Math.abs(c.body.pos.x - cx);
+    if (d < R) c.body.applyImpulse(0, c.body.mass * (1 - d / R) * 4, c.body.pos.x + rand(-0.2, 0.2), c.body.pos.y);
+  }
+  // the glass in the nearest windows goes
+  for (const w of thingsNear(sb, cx, 2, 5 * k, { standing: true, plants: false })) {
+    if (!w.cellMat) continue;
+    w.damage(cx, 2.5, 6 * k, 0.5 * k, 'blast', { only: (m) => m.brittle, mark: false, dx: 0, dy: 1, speed: 2, bulk: true, soft: true });
+  }
 }
 
 /** Walking: the rubble and loose things in front of his feet shoved out of the way, a little ground down. */
@@ -532,4 +538,4 @@ export function buildingPoint(man, w) {
   return null;
 }
 
-export { crush };
+export { crush, smash };
