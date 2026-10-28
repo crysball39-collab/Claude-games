@@ -47,6 +47,21 @@ addLines({
   gzHurt: ['AAAAGH!', 'HELP!', 'No-!', 'AAAH!'],
   gzBurned: ['IT BURNS!', 'AAAH! FIRE!', 'Put it out! PUT IT OUT!'],
   gzGrabbed: ['PUT ME DOWN!', 'No no no no no!', 'Somebody help me!', 'Let go of me!', "I don't want to die!", 'HELP!', 'Not the mouth- NOT THE MOUTH!'],
+  // Shin Godzilla
+  seeShin: [
+    'What... is THAT?!', "It's even bigger than the other one!", 'Look at its eyes. There is nothing in them.', "It's cracked all over - like it is burning inside!",
+    'Its tail! Something is moving on the end of its tail!', 'That is not an animal. That is a disaster.', 'RUN! Just run!', 'Is it... evolving?',
+    'Godzilla...?', "Don't look at it! Don't let it see you!",
+  ],
+  sawShinGlow: ['Its back is turning purple!', 'Something is coming out of its mouth - GET DOWN!', 'Its jaw - its jaw just SPLIT!', 'The light! Get away from the light!'],
+  sawShinBeam: [
+    'It cut the building in HALF!', 'Purple light - everywhere!', 'GET DOWN!', 'The whole street is on fire!', "It's slicing through everything!",
+    'Nothing can stop that!', 'The buildings! THE BUILDINGS!',
+  ],
+  sawShinDorsal: ["Lasers! From its BACK!", "They're coming out of its back!", 'Nowhere is safe!', 'The sky is full of light!', 'Everybody down! DOWN!'],
+  sawShinTail: ['Its TAIL is firing too!', 'The tail! Watch the tail!', 'Even the end of its tail...!'],
+  sawShinBurn: ['{victim}...! The light just went through {victim}!', '{victim} is gone!', 'There is nothing left of {victim}...'],
+  shinFrozen: ["It's... frozen. It's frozen solid.", 'It stopped. It just stopped.', 'Is it dead? Or is it waiting?', "Don't go near it. Just... don't.", 'We did it. I think we did it.'],
   // and when it is over
   gzDown: ["It's... down. It's really down.", 'We did it... we actually did it.', 'Is it dead? Tell me it is dead.', 'The monster is dead!', "It's over.", 'Rest now, big guy.'],
 });

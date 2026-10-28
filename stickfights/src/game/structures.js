@@ -327,6 +327,40 @@ export class Slab {
   }
 
   /**
+   * A line cut clean through it, from (x0, y0) to (x1, y1), r either side of
+   * it (a mod's beam): every cell along it gone at once, whatever it is made
+   * of. Whatever that leaves hanging comes away. Returns how many went.
+   */
+  carve(x0, y0, x1, y1, r, o = {}) {
+    if (this.removed) return 0;
+    const a = this.toGrid(x0, y0), b = this.toGrid(x1, y1), cs = this.cs;
+    const c0 = Math.max(0, Math.floor((Math.min(a.gx, b.gx) - r) / cs)), c1 = Math.min(this.cols - 1, Math.floor((Math.max(a.gx, b.gx) + r) / cs));
+    const r0 = Math.max(0, Math.floor((Math.min(a.gy, b.gy) - r) / cs)), r1 = Math.min(this.rows - 1, Math.floor((Math.max(a.gy, b.gy) + r) / cs));
+    if (c0 > c1 || r0 > r1) return 0;
+    const dx = b.gx - a.gx, dy = b.gy - a.gy, L2 = dx * dx + dy * dy || 1e-9;
+    let gone = 0;
+    for (let rr = r0; rr <= r1; rr++) {
+      const cy = (rr + 0.5) * cs;
+      for (let c = c0; c <= c1; c++) {
+        const i = rr * this.cols + c;
+        if (this.hp[i] <= 0) continue;
+        const cx = (c + 0.5) * cs;
+        const t = clamp(((cx - a.gx) * dx + (cy - a.gy) * dy) / L2, 0, 1);
+        if (Math.hypot(cx - (a.gx + dx * t), cy - (a.gy + dy * t)) > r) continue;
+        this.hp[i] = 0;
+        gone++;
+        this.bits(c, rr, o.dx || 0, o.dy || 0, o.speed || 1, o);
+      }
+    }
+    if (!gone) return 0;
+    if (this.mat.brittle) this.strain += gone * 0.05;
+    else if (o.mark !== false) this.mark(a.gx / cs, a.gy / cs, 'chip', 1);
+    this.dirty = true;
+    this.after(o);
+    return gone;
+  }
+
+  /**
    * A bullet going in at (x, y) along (dx, dy) with `energy`, out to `max`:
    * cell by cell through whatever is left of it, each taking its share of
    * the energy and of the cell. Returns { energy, out } - what it comes out
@@ -385,13 +419,15 @@ export class Slab {
   /**
    * What comes off a cell that went: splinters, scraps, shards. (o.bulk: one
    * of a great many going at once - only a few of those throw anything; o.soft:
-   * glass that comes down as a glitter, not as blades.)
+   * glass that comes down as a glitter, not as blades; o.out: blown out from
+   * that point, every bit away from it.)
    */
   bits(c, r, dx, dy, speed = 1, o = {}) {
     const fx = this.sandbox.fx, p = this.cellWorld(c, r);
     const m = this.matOf(this.idx(c, r)), cols = m.bits;
     // (a building's worth of cells: not every one of them throws something off)
     if (this.big && chance(o.bulk ? 0.88 : 0.45)) return;
+    if (o.out) { const ux = p.x - o.out.x, uy = p.y - o.out.y, d = Math.hypot(ux, uy) || 1; dx = ux / d; dy = uy / d; }
     fx.bits(p.x, p.y, chance(0.5) ? 2 : 1, cols[Math.floor(Math.random() * cols.length)], dx * speed + rand(-1, 1), dy * speed + rand(0, 1.6), {
       size: this.cs * rand(0.35, 0.6), sharp: m.brittle && !o.soft, glow: m.name === 'metal' && chance(0.35),
     });

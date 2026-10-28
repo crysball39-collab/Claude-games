@@ -65,6 +65,8 @@ const HEAR = {
   // fire and ice
   ignite: 12, extinguish: 6, freeze: 7, thaw: 5, iceSnap: 9, shatter: 16, gasp: 6, dropRoll: 6,
   glassShatter: 14, slabFree: 12, slabBreak: 7, noosed: 9, trapdoor: 12, limbFall: 14, snapBough: 7, wireSnap: 8, freezeInPlace: 8, unfreeze: 6, wire: 6,
+  // and something blowing up, further still
+  explode: 60,
 };
 // what counts as violence done to them, for fear and grudges
 const VIOLENT = new Set(['koMe', 'cutMe', 'stabbedMe', 'choppedMe', 'severedMe', 'shotMe', 'shotAtMe', 'aimedAtMe', 'sawStab', 'sawShoot', 'sawSever', 'sawKill', 'sawThreat', 'tasedMe', 'burnedMe', 'sawBurn']);
@@ -138,6 +140,7 @@ export function relCategory(r) {
 const REPEAT = {
   beg: 4, surrender: 4, surrenderGun: 4, comfort: 4.5, crawl: 5, flee: 3.5, pinned: 3, paralysed: 4, shot: 1.5,
   gunFear: 6, knifeFear: 6, macheteFear: 6, weaponFear: 6, gunshots: 3, sawShooting: 3, nearMiss: 2.5, hurtSmall: 2,
+  heardBlast: 3, sawBlast: 3, blastHurt: 1.5, shrapnelHit: 1.5,
 };
 // ...and the ones that are really the same plea
 const SAID_AS = { surrender: 'beg', surrenderGun: 'beg' };
@@ -731,6 +734,7 @@ export class Brain {
         E.bump('fear', 0.05 * (1 - T.bravery));
         break;
       case 'shot': this.heardShot(ev, seen, x, y); break;
+      case 'explode': this.heardBlast(ev, seen, x, y, d); break;
       case 'ricochet':
         E.bump('surprise', 0.3);
         if (d < 3) E.bump('fear', 0.15 * (1.2 - T.bravery));
@@ -973,6 +977,39 @@ export class Brain {
       else if (by && ev.target && ev.target !== me) this.speak('sawShooting', { other: by.name, victim: ev.target.name }, 0.6, null, true);
       else if (by) this.speak('takeCover', { other: by.name }, 0.6, null, true);
     }
+    if (!seen) { this.heard = { x, y, t: now }; this.hearLoud(x); }
+    this.react = Math.max(this.react, 0.15 + (1 - T.skill) * 0.15);
+    this.thinkT = 0;
+  }
+
+  /**
+   * Something blowing up. It is heard from anywhere: everyone jumps, and the
+   * nearer it was the more it frightens them - close enough, they throw
+   * themselves down, or freeze where they are. Whoever set it off is now the
+   * most frightening person there.
+   */
+  heardBlast(ev, seen, x, y, d) {
+    const me = this.man, E = this.emo, T = this.traits, now = this.sb.time;
+    const by = ev.who && !ev.who.removed && ev.who !== me ? ev.who : null;
+    const near = clamp01(1 - d / ((ev.r || 3) * 3 + 6));
+    E.bump('surprise', 0.9);
+    E.bump('fear', (0.12 + near * 0.55) * (1.3 - T.bravery) * Math.min(1.4, 0.6 + (ev.power || 1) * 0.25));
+    if (by) {
+      const r = this.rel(by);
+      r.violent += 2;
+      r.fear = clamp01(r.fear + 0.4 * (1.15 - T.bravery));
+    }
+    // the startle: a flinch, a duck, hands over the head
+    if (me.ready && !this.fighting && now - (this.startleT || -9) > 1.2 && chance(0.95 - T.bravery * 0.35)) {
+      this.startleT = now;
+      me.perform(near > 0.3 || chance(0.6) ? 'duck' : 'flinch', { fadeIn: 0.03, fadeOut: 0.15 });
+    }
+    if (now - (this.blastSaidT || -9) > 4) {
+      this.blastSaidT = now;
+      this.speak(seen ? 'sawBlast' : 'heardBlast', {}, 0.8, null, true);
+    }
+    this.note(seen ? (near > 0.4 ? 'Something blew up right in front of me!' : 'Something blew up over there!') : 'An explosion! Somewhere close.');
+    if (seen && near > 0.3) this.shaken(0.25 * near);
     if (!seen) { this.heard = { x, y, t: now }; this.hearLoud(x); }
     this.react = Math.max(this.react, 0.15 + (1 - T.skill) * 0.15);
     this.thinkT = 0;
@@ -1532,6 +1569,11 @@ export class Brain {
       this.speak('stabbed', { other: 'someone' }, 0.9, null, true);
       this.note('A knife came out of nowhere and went into me!');
       this.blame();
+    } else if (d.weapon === 'explosion' || d.weapon === 'shrapnel') {
+      // (nobody to blame: it just went off)
+      E.bump('fear', 0.4 * (1.2 - T.bravery));
+      this.speak(d.weapon === 'shrapnel' ? 'shrapnelHit' : 'blastHurt', {}, 1, null, true);
+      this.note(d.weapon === 'shrapnel' ? 'Bits of it went into me.' : 'It went off right next to me!');
     } else if (d.kind === 'impact' && d.object && d.object.kind === 'stickman') {
       const o = d.object;
       if (me.state === 'thrown' || me.state === 'held') this.speak('sorry', { other: o.name }, 0.7, o, true);

@@ -46,7 +46,11 @@ until it is tapped again. With the world **paused**, the hand just picks
 things up and puts them down somewhere else. The **wire tool** ties things
 together - or to the background - with a **wood rope**, a **metal rope**, a
 **fixed** rope of either (a rod that keeps them exactly as far apart), or a
-**wood** or **metal pin** through them.
+**wood** or **metal pin** through them. The **explode tool** sets something
+off wherever it is tapped - a **grenade**, a stick of **dynamite**, a block
+of **C4** or a **bomb** - and everybody near it is hurt by how near they
+were, thrown, burned and torn apart; walls, buildings and trees are blown out
+cell by cell.
 
 The sandbox starts out **Flat** - the grey sky and the black ground - or,
 from **MAPS**, as the **City**: a street of buildings - two office towers, an
@@ -65,10 +69,14 @@ brings Uzi, N and V, **Minecraft** brings Steve - and the Wither, a boss
 with 600 health that you craft a totem to summon - **Shallow** is
 something disguised as a stickman that tears its way out of the skin when it
 is angry, kills whoever did it, and climbs inside somebody else - and
-**Godzilla** is the 1954 one: fourteen metres tall, with 30,000 health and a
-boss bar, and a stomp, a kick, his tail, a roar, his jaws, his claws, a hand
-to grab people and eat them or throw them, and the atomic breath - and the
-city to tear apart when there is nobody left (see [Mods](#mods)).
+**Godzilla** brings two of him: **Godzilla ('54)**, the 1954 one, fourteen
+metres tall, with 30,000 health and a boss bar, and a stomp, a kick, his
+tail, a roar, his jaws, his claws, a hand to grab people and eat them or
+throw them, and the atomic breath; and **Shin Godzilla**, eighteen metres of
+black hide cracked with red, with 50,000 health, whose breath narrows to a
+purple beam that cuts clean through buildings - and who, hurt badly, fires
+from every plate on his back. With nobody left, they tear the city apart;
+put both down and they go for each other (see [Mods](#mods)).
 
 While a stickman is in charge of their own body, every move they make is a
 hand-keyed animation, played frame by frame. The moment they are not -
@@ -152,7 +160,7 @@ Pick one and the menu closes with the **spawn tool** armed: every tap on the
 world places another. A stickman, a wall or a tree appears on whatever is
 under the tap; anything else appears exactly where you tapped and falls.
 
-The five tools along the bottom:
+The six tools along the bottom:
 
 | Tool | What it does |
 | ---- | ------------ |
@@ -160,7 +168,28 @@ The five tools along the bottom:
 | **SPAWN** (shows what is picked) | Tap the world to place it. |
 | 🔒 **FREEZE** | Tap something to freeze it in place - a crate in mid-air, a falling knife, a wall, a tree, a person mid-stride - and tap it again to let it go. Nothing moves it: not gravity, not a blow, not something landing on it. A frozen person can still see, think and talk; they just cannot move a muscle. It has a pale dashed line round it. |
 | ⌇ **WIRE** | Pick a wire from the bar above the tools, then drag from one thing to another - or tap one, then the other. Either end can be the background, where it stays. A pin goes in with one tap: through the two things there, or through one into the background. Tied by somebody's neck, a wrist or an ankle, they go limp and hang there until they are free. |
+| 💥 **EXPLODE** | Pick what goes off from the bar above the tools - a grenade, dynamite, C4 or a bomb - then tap anywhere: it goes off there. On a computer, a ring under the pointer shows how far it reaches. |
 | ✖ **ERASE** | Tap something to remove it - a wire too. |
+
+The four bangs (`explode.js`):
+
+| Bang | What it does |
+| ---- | ------------ |
+| **Grenade** | The smallest: anyone right by it is killed, a few steps off they are hurt and knocked over - and the bits of its casing fly three times as far as the blast, into whoever is in sight of it. |
+| **Dynamite** | Bigger, and dirtier: more fire, more smoke, more of the ground thrown up. |
+| **C4** | Bigger again, and sharper. |
+| **Bomb** | Kills everyone for metres round, tears them apart, throws what is left, blows a great hole in a building - and a cloud climbs out of it and spreads at the top. |
+
+Each one hurts every part of a body by how near that part was - the body is
+what kills - and close in it burns them too, sometimes sets them alight, and
+the big ones tear arms and legs off. A wall between them and it takes most
+of it. People are thrown away from it, as are crates and anything lying
+loose; walls, buildings, trees and what has come off them are blown out cell
+by cell, the bits flying out from the middle of it. It flashes, a ball of
+fire rolls up into smoke, a ring of air goes out, dirt and sparks are thrown
+up and the ground is scorched - and the view shakes, the nearer the more.
+Everyone hears it from anywhere: they jump, most duck, the near ones are
+shaken by it, and they say so; whoever is caught in it says that too.
 
 The six wires:
 
@@ -225,7 +254,7 @@ for the old animated falls.
 
 Keyboard: `1` to `6` pick a stickman, knuckles, a crate, a knife, a machete
 or a Glock-19 to spawn, `7` to `9` the first three things the installed mods
-add, `H` hand, `Z` freeze, `W` wire, `X` erase, `Space` pause, `S` slow
+add, `H` hand, `Z` freeze, `W` wire, `E` explode, `X` erase, `Space` pause, `S` slow
 motion, `F` follow, `Tab` spawn menu, `+` `-` zoom, `0` reset the camera, `M`
 sound, `Delete` removes whoever is selected, `Esc` closes things (and lets go
 of a wire's first end).
@@ -433,13 +462,18 @@ the thing has **ABILITIES**: **Kills by** - *Either*, *Tearing in half*,
 *Eating* - and **Do** - *Take a skin* (straight to the nearest person) and
 *Let go*.
 
-### Godzilla ('54)
+### Godzilla
 
-Gojira, as he was in 1954 - best in the City.
+Two of the King of the Monsters - best in the City. The mod's picture is the
+two of them: the 1954 one in black and white, and Shin Godzilla cut in down
+the right of it, in colour, lit up purple.
 
 | | What it is |
 | - | ---------- |
 | **Godzilla ('54)** | Fourteen metres of charcoal-grey monster with three rows of pale maple-leaf plates down his back and a tail as long as the rest of him. 30,000 health, and a boss bar - GODZILLA ('54) - to show it. |
+| **Shin Godzilla** | Eighteen metres: near black, cracked all over with red, rows of jagged plates, a tiny blank eye, and a tail held high that ends in a knot of bone. 50,000 health, and a boss bar - SHIN GODZILLA - going from red to purple. |
+
+#### Godzilla ('54)
 
 **He looks like the 1954 suit**: near enough black all over, as the film had
 him, and covered in raised welts in rough rows across every part of him -
@@ -506,6 +540,66 @@ told) - and **Do**: *Stomp*, *Tail whip*, *Roar*, *Grab*, *Eat*, *Throw*,
 *Bite*, *Claw*, *Kick* and *Atomic breath*, at whoever he is after (or the
 building he is at); and it shows his health and rage, and how many he has
 killed and eaten and how many buildings he has wrecked.
+
+#### Shin Godzilla
+
+**He looks like the one from 2016**, the last of its forms: near black with a
+red-brown cast, and everywhere the hide has split a crack of red light shows
+through, as if what is inside him were burning; the hide itself rough and
+lumped like scar tissue. Rows on rows of plates down his back and tail,
+jagged as broken rock, dark, with red under them. A small head on a long
+neck, held out level or lower: a flat skull, a long lower jaw that juts past
+the upper one, full of uneven teeth that stick out every way - even shut -
+and a tiny white eye with a pinprick of black in it. Legs like towers, huge
+in the thigh, on four-toed feet with dark claws; two tiny arms hanging limp
+from his chest, the long fingers drooping. His tail is longer than all the
+rest of him and is not dragged: it is held up behind him in a long rising
+curve, and ends in a knot of pale bone with spines and a slot in it. His card
+is his head over a city burning at night.
+
+**He is bigger and slower** than the 1954 one, and harder to hurt: bullets and
+blades do next to nothing, explosions a little, and he mends 15 health a
+second once nothing has hurt him for eight seconds. He has no use for his
+arms. **What he does**:
+
+- **Stomp**: as the 1954 one does - whoever is under the foot is crushed.
+- **Tail**: on somebody behind him, his tail goes up high and comes down on
+  them - and on whatever building is there.
+- **Roar**: lower, longer and harsher than the 1954 one's; the glass goes.
+- **Bite**: a lunge, and the jaws shut on them; they are dropped, dead.
+- **Atomic breath**: he lowers his head; the plates light up purple from the
+  end of his tail up, and so do the cracks in him; his lower jaw splits in
+  two down the middle and drops open, his throat glowing - then black smoke
+  and fire pour out of it in a flood, down over the street and along it,
+  setting everything alight; and it narrows to a **beam**: a thin line of
+  purple light that goes straight through whatever is in its way. Whoever it
+  touches is gone; a building it crosses is cut clean through along it, and
+  whatever that leaves hanging comes down; where it meets the ground, the
+  ground goes up in flames. He holds it on what he is aiming at, then sweeps
+  it slowly up through everything behind it.
+- **Dorsal beams**: hunched over, the plates all lit, and from his neck to the
+  end of his tail they fire at once: nine beams fanned out round him from in
+  front to behind, sweeping, cutting up everything they cross. He does it
+  when he has been badly hurt, when there is a crowd round him - and now and
+  then just because.
+- **Tail beam**: the end of his tail lights up and opens, and a beam comes
+  out of it at whoever is behind him, swept either side of them.
+
+**With nobody left**, he cuts the city down - mostly with the beam, from
+wherever he is, since it reaches right across - and bites and smashes what
+is near. **He can be killed**, but he does not fall: out of health, he
+roars once more, lifts his head - and freezes solid where he stands, going
+pale from his feet up, the fire in him going out, and stays there, standing,
+like a statue. In the inspector his **Do** abilities are *Stomp*, *Tail
+whip*, *Roar*, *Bite*, *Atomic breath*, *Dorsal beams* and *Tail beam*.
+
+#### The two of them
+
+Put both down and they go for each other (each goes for whoever is nearest,
+and whoever hurts him first): the 1954 one's breath across the street, Shin's
+beam back at him, then close in - claws, jaws, tails and kicks, each a blow
+on their own scale, a few hundred health at a time. Neither walks through
+the other. Everybody else runs.
 
 ### Making one
 
@@ -586,6 +680,12 @@ The game has a few ways in that change nothing until a mod uses them:
   `stopsRounds` (bullets stay in it); a `bossbar` can show `hp` in numbers
   and take a `style`; an ability can `say` what it says when it is pressed;
   `cam.glideTo(x, y, ppm)` zooms as it goes
+- `explode()` (`game/explode.js`): one of the explode tool's bangs (or
+  `flare`, a smaller one with no casing) for a mod's thing to set off, and who
+  set it off; the `explode` event; `slab.carve(x0, y0, x1, y1, r)`: a line cut
+  clean through a wall or building (whatever it no longer holds up comes
+  down), and `o.out` on a slab's damage blows its bits out from a point; a
+  bossbar's `style` can be more than one class
 - `defineSlab()` (`game/structures.js`): a new kind of wall or building - its
   cell size, the materials its cells are made of and where (`layout`), how it
   is drawn (`paint`), whether it is behind the street (`background`), bears
@@ -1405,6 +1505,8 @@ stickfights/
                       the street, the skyline
       maps.js         the maps: Flat and City
       freeze.js       the freeze tool
+      explode.js      the explode tool's bangs: what they do to people and things,
+                      and the look of them (fire, smoke, the ring of air, a bomb's cloud)
       hand.js         dragging and throwing (and, paused, just moving)
       fx.js           blood (drops, streams, splats, the walls, landing on things),
                       dust, hit bursts, muzzle flashes, tracers, splinters, casings,
@@ -1429,10 +1531,12 @@ stickfights/
       shallow/        Shallow: the disguise, the thing, its mind, its looks, the
                       skins, halves, skeletons and insides it leaves, what
                       everybody makes of it, lines, animations and sounds
-      godzilla/       Godzilla: his health and hide, his body (the skeleton, the
-                      walk, the tail, his shape), his moves and his mind, what
-                      they do to the world, the breath, his looks, what
-                      everybody says and makes of him, and his noises
+      godzilla/       Godzilla ('54) and Shin Godzilla: a kaiju's health and hide,
+                      its body (the skeleton, the walk, the tail, its shape) and
+                      each one's build, their moves and their minds, what they do
+                      to the world and to each other, the breath, the beams and
+                      the fire, their looks, what everybody says and makes of
+                      them, and their noises
 ```
 
 ## Verifying it
@@ -1621,8 +1725,14 @@ screen and checks:
   its glass goes long before its concrete; blow out the ground floor and the
   storeys above come down in a heap of rubble; a tree in the street, cut
   through, falls; the hand pulls a lump off a building, which falls
+- a bomb from the explode tool, against a building, blows a great hole in it
+  and kills whoever was in the street by it
 - the bin clears the city back to how it was, and LOAD on Flat puts the
   sandbox back as it always was
+- the explode tool has its four bangs over it; a grenade tapped down among
+  people kills whoever is right by it, hurts them a few steps off and flings
+  what is lying about; its casing hits somebody further off than the blast
+  goes; and everyone who hears it is frightened, and says so
 - no mod is in the game until it is installed; the MODS screen lists
   Murder Drones with what it adds and the storage it needs, which is what
   its files really take up; INSTALL fills a bar and then puts Uzi, N and V in
@@ -1668,8 +1778,9 @@ screen and checks:
   voice; whoever saw it knows that is not them any more, and is afraid
 - removing Shallow takes it, in whatever skin it is wearing, and everything
   it left out of the world and the menu
-- the MODS screen lists Godzilla ('54), with the storage it needs; installed,
-  he is in the spawn menu, and in the City he spawns where tapped, called
+- the MODS screen lists Godzilla, which adds Godzilla ('54) and Shin Godzilla,
+  with the storage it needs; installed, both are in the spawn menu, and in
+  the City the 1954 one spawns where tapped, called
   Godzilla ('54), about fourteen metres tall with his tail behind him; the
   first thing he does is roar, and the glass goes in the buildings near him;
   he has a boss bar, GODZILLA ('54), with his 30,000 health in numbers
@@ -1682,8 +1793,16 @@ screen and checks:
   whoever is far off
 - with nobody left he tears into the buildings; one look at him and people
   are terrified
-- out of health he roars, comes down and lies there, and his bar goes;
-  removing the mod takes him out of the world and the menu
+- out of health he roars, comes down and lies there, and his bar goes
+- Shin Godzilla spawns where tapped, bigger, his tail held up off the ground,
+  with a boss bar, SHIN GODZILLA, and 50,000 health; twenty bullets take next
+  to nothing off him; his stomp, bite and tail kill; his atomic breath splits
+  his jaw, pours out fire and becomes the beam, which kills and cuts clean
+  through buildings; the tail beam fires at whoever is behind him; every
+  plate on his back fires at once
+- with the 1954 one there too, the two of them go for each other
+- out of health Shin Godzilla freezes solid, still standing, and his bar goes;
+  removing the mod takes them out of the world and the menu
 - going for each weapon - the four guns, the taser, the crowbar, the blades
   and the knuckles - a stickman thinks it in a thought cloud that draws, with
   that weapon in it

@@ -8,6 +8,10 @@
    giving it back a moment later. His steps are booms you feel more than
    hear; a stomp is a bigger one, with the ground cracking. His breath
    builds as a crackling hum, and comes out as a roaring hiss.
+
+   Shin Godzilla's roar is lower, longer and harsher; his beam is a hum and
+   a whine that hold as long as it does, and the fire before it a roar of
+   its own.
    ========================================================================== */
 import { soundRand as rand } from '../../core/audio.js';
 
@@ -97,6 +101,46 @@ function boom(sound, v, k) {
   if (k > 0.5) for (let i = 0; i < 6; i++) sound.hiss(0.03, 1400 + rand(0, 2400), 2, 0.2 * v, 'bandpass', 0.06 + i * rand(0.03, 0.07));
 }
 
+/** A beam's sound: a hum with a whine over it, wavering, for as long as it lasts. */
+function beamHum(sound, v, dur, pitch = 1) {
+  const c = sound.ctx, t = c.currentTime;
+  const out = c.createGain(), bp = c.createBiquadFilter();
+  bp.type = 'bandpass'; bp.frequency.value = 900 * pitch; bp.Q.value = 0.7;
+  out.gain.setValueAtTime(0.0001, t);
+  out.gain.exponentialRampToValueAtTime(0.3 * v, t + 0.08);
+  out.gain.setValueAtTime(0.3 * v, t + Math.max(0.1, dur - 0.25));
+  out.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  bp.connect(out);
+  out.connect(sound.master);
+  const lfo = c.createOscillator(), lg = c.createGain();
+  lfo.frequency.value = 11;
+  lg.gain.value = 16 * pitch;
+  lfo.connect(lg);
+  for (const [f, type, g] of [[110, 'sawtooth', 0.5], [111.6, 'sawtooth', 0.4], [220, 'square', 0.14], [1650, 'sine', 0.13]]) {
+    const o = c.createOscillator(), og = c.createGain();
+    o.type = type;
+    o.frequency.value = f * pitch;
+    og.gain.value = g;
+    lg.connect(o.frequency);
+    o.connect(og);
+    og.connect(bp);
+    o.start(t);
+    o.stop(t + dur + 0.05);
+  }
+  lfo.start(t);
+  lfo.stop(t + dur + 0.05);
+  sound.hiss(dur, 3200 * pitch, 1.2, 0.08 * v, 'bandpass');
+}
+
+/** Shin Godzilla's roar: lower than the 1954 one's, longer, and harsher, with a growl under it. */
+function shinRoar(sound, v, weak = false) {
+  roar(sound, v, weak ? 0.66 : 0.74, weak ? 2.8 : 3.3, weak);
+  sound.tone('sawtooth', 62, 44, weak ? 2.4 : 3.1, 0.12 * v);
+  sound.hiss(weak ? 2.2 : 3, 240, 0.6, 0.22 * v, 'lowpass');
+}
+
+const isShin = (who) => !!(who && who.gz && who.gz.kind === 'shin');
+
 export function setupSounds(sb, sound, cam) {
   const ok = () => sound.ready;
   const near = (x) => Math.max(0.25, sound.near(x));
@@ -107,7 +151,7 @@ export function setupSounds(sb, sound, cam) {
     shake(e.x, 0.6);
     // (the view backs off until all of him is in it)
     // (tall enough for him rearing up to roar)
-    const tall = 19.5;
+    const tall = e.tall || 19.5;
     if (cam.h / cam.ppm < tall) {
       const ppm = Math.max(cam.minPpm, cam.h / tall);
       cam.glideTo(e.x, (cam.h / 2 / ppm) * (1 - 2 * (cam.portrait ? 0.25 : 0.04)), ppm);
@@ -116,13 +160,15 @@ export function setupSounds(sb, sound, cam) {
     boom(sound, near(e.x), 1);
   });
   sb.on('gzRoar', (e) => {
-    shake(e.x, 0.35);
+    shake(e.x, isShin(e.who) ? 0.45 : 0.35);
     if (!ok()) return;
-    roar(sound, near(e.x), 1, 2.6);
+    if (isShin(e.who)) shinRoar(sound, near(e.x));
+    else roar(sound, near(e.x), 1, 2.6);
   });
   sb.on('gzDeathRoar', (e) => {
     if (!ok()) return;
-    roar(sound, near(e.x) * 0.85, 0.82, 2.4, true);
+    if (isShin(e.who)) shinRoar(sound, near(e.x) * 0.85, true);
+    else roar(sound, near(e.x) * 0.85, 0.82, 2.4, true);
   });
   sb.on('gzStep', (e) => {
     shake(e.x, 0.12 + e.k * 0.55);
@@ -207,4 +253,51 @@ export function setupSounds(sb, sound, cam) {
     roar(sound, v * 0.55, 1.08, 2.4);
   });
   sb.on('gzWreck', (e) => { shake(e.x, 0.4); });
+
+  // Shin Godzilla's: the light coming, the fire, the beams
+  sb.on('shinCharge', (e) => {
+    if (!ok()) return;
+    const v = near(e.x), c = sound.ctx, t = c.currentTime, dur = e.tail ? 1.05 : e.dorsal ? 1.4 : 1.9;
+    const o = c.createOscillator(), g = c.createGain(), f = c.createBiquadFilter();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(e.tail ? 90 : 40, t);
+    o.frequency.exponentialRampToValueAtTime(e.tail ? 360 : 180, t + dur);
+    f.type = 'bandpass'; f.frequency.value = 500; f.Q.value = 1.3;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.2 * v, t + dur * 0.9);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.1);
+    o.connect(f); f.connect(g); g.connect(sound.master);
+    o.start(t); o.stop(t + dur + 0.15);
+    for (let i = 0; i < 18; i++) sound.tone('square', 2400 + rand(-900, 1600), 1200, 0.012, 0.13 * v * (0.3 + i / 18), 0.1 + i * dur / 18 + rand(0, 0.04));
+  });
+  sb.on('shinSpew', (e) => {
+    shake(e.x, 0.35);
+    if (!ok()) return;
+    const v = near(e.x);
+    sound.hiss(1.6, 300, 0.5, 0.65 * v, 'lowpass');
+    sound.sweep('bandpass', 380, 1500, 1.5, 0.4 * v, 0.6);
+    for (let i = 0; i < 10; i++) sound.hiss(0.02, 1800 + rand(0, 2600), 2, 0.2 * v, 'bandpass', 0.1 + i * rand(0.08, 0.16));
+  });
+  sb.on('shinBeam', (e) => {
+    shake(e.x, 0.5);
+    if (!ok()) return;
+    const v = near(e.x);
+    sound.hiss(0.25, 2400, 0.6, 0.7 * v);
+    beamHum(sound, v, e.dur || 3.8, 1);
+  });
+  sb.on('shinDorsal', (e) => {
+    shake(e.x, 0.6);
+    if (!ok()) return;
+    const v = near(e.x);
+    sound.hiss(0.3, 2600, 0.6, 0.6 * v);
+    beamHum(sound, v * 0.8, e.dur || 4.2, 1.35);
+    beamHum(sound, v * 0.6, e.dur || 4.2, 1.9);
+  });
+  sb.on('shinTailBeam', (e) => {
+    shake(e.x, 0.3);
+    if (!ok()) return;
+    beamHum(sound, near(e.x) * 0.8, e.dur || 2.6, 1.6);
+  });
+  sb.on('shinBeamEnd', (e) => { if (ok()) sound.sweep('bandpass', 1800, 160, 0.7, 0.3 * near(e.x), 1); });
+  sb.on('shinBeamHit', (e) => { if (ok()) sound.hiss(0.18, 3600, 1, 0.3 * near(e.x), 'highpass'); });
 }

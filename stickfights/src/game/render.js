@@ -126,6 +126,7 @@ export class Renderer {
     for (const t of sb.plants) if (t.kind === 'bush') this.drawPlant(ctx, t, v);
     for (const w of sb.wires) w.draw(ctx);
     if (ui.wire) this.drawWirePreview(ctx, ui.wire);
+    if (ui.blast) this.drawBlastPreview(ctx, ui.blast);
     this.drawFrozen(ctx, v);
     this.drawFx(ctx);
     // a mod's beams, missiles and blasts
@@ -283,6 +284,24 @@ export class Renderer {
     for (const [x, y] of spec.pin ? [[w.x1, w.y1]] : [[w.x0, w.y0], [w.x1, w.y1]]) {
       ctx.beginPath(); ctx.arc(x, y, Math.max(spec.width, 0.035), 0, TAU); ctx.fill();
     }
+    ctx.restore();
+  }
+
+  /** Where the explode tool would set something off, and how far it would reach. */
+  drawBlastPreview(ctx, b) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 150, 60, 0.6)';
+    ctx.lineWidth = Math.max(0.025, 1.5 / this.cam.ppm);
+    ctx.setLineDash([0.18, 0.12]);
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, TAU);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const s = Math.max(0.08, 9 / this.cam.ppm);
+    ctx.beginPath();
+    ctx.moveTo(b.x - s, b.y); ctx.lineTo(b.x + s, b.y);
+    ctx.moveTo(b.x, b.y - s); ctx.lineTo(b.x, b.y + s);
+    ctx.stroke();
     ctx.restore();
   }
 

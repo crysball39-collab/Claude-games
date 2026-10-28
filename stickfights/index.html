@@ -82,6 +82,10 @@
       <svg viewBox="0 0 24 24" width="18" height="18"><circle cx="5" cy="6" r="2.4" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="19" cy="17" r="2.4" stroke="currentColor" stroke-width="2" fill="none"/><path d="M6.8 7.6c3 6 7 2 10.4 7.8" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
       <span id="tool-wire-name">WIRE</span>
     </button>
+    <button class="tool" data-tool="explode" id="tool-explode" aria-label="Explode: tap anywhere to set something off">
+      <svg viewBox="0 0 24 24" width="18" height="18"><path d="M12.0 2.4 13.8 7.7 17.6 5.9 16.5 10.0 21.4 10.9 17.1 13.5 20.8 17.7 15.3 16.6 15.1 21.2 12.0 17.8 8.6 21.9 8.7 16.6 4.2 17.1 6.9 13.5 2.0 10.8 7.5 10.0 6.0 5.4 10.2 7.7z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" fill="none"/><circle cx="12" cy="12.6" r="2.3" fill="currentColor"/></svg>
+      <span>EXPLODE</span>
+    </button>
     <button class="tool" data-tool="erase" aria-label="Erase: tap something to remove it">
       <svg viewBox="0 0 24 24" width="18" height="18"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
       <span>ERASE</span>
@@ -96,6 +100,14 @@
     <button class="wire-kind" data-wire="metalRod" role="radio" aria-checked="false"><i class="wk wk-metal-rod"></i><span>FIXED METAL ROPE</span></button>
     <button class="wire-kind" data-wire="woodPin" role="radio" aria-checked="false"><i class="wk wk-wood-pin"></i><span>WOOD PIN</span></button>
     <button class="wire-kind" data-wire="metalPin" role="radio" aria-checked="false"><i class="wk wk-metal-pin"></i><span>METAL PIN</span></button>
+  </div>
+
+  <!-- how big a bang, while the explode tool is picked -->
+  <div id="blastbar" class="hidden" role="radiogroup" aria-label="Size of explosion">
+    <button class="blast-kind active" data-blast="grenade" role="radio" aria-checked="true"><svg viewBox="0 0 24 24" width="20" height="20"><ellipse cx="11" cy="15" rx="6" ry="7" fill="#5f6d3b"/><path d="M5.2 13h11.6M5.2 17h11.6M11 8.2v13.6" stroke="#3d4626" stroke-width="1.2"/><rect x="8.5" y="5.4" width="5" height="3.4" rx="1" fill="#8d9298"/><path d="M13 6.4l5 4.2" stroke="#8d9298" stroke-width="2" stroke-linecap="round"/><circle cx="7" cy="5" r="2.1" fill="none" stroke="#c9ccd0" stroke-width="1.3"/></svg><span>GRENADE</span></button>
+    <button class="blast-kind" data-blast="dynamite" role="radio" aria-checked="false"><svg viewBox="0 0 24 24" width="20" height="20"><rect x="9" y="7.5" width="6" height="14.5" rx="1.2" fill="#c8302b"/><rect x="9" y="10.5" width="6" height="1.8" fill="#8f1f1b"/><rect x="9" y="17.5" width="6" height="1.8" fill="#8f1f1b"/><path d="M12 7.5c0-2.2 1.6-3.2 3.3-3.6" stroke="#d9cfb6" stroke-width="1.3" fill="none"/><circle cx="16.2" cy="3.6" r="1.9" fill="#ffd34d"/></svg><span>DYNAMITE</span></button>
+    <button class="blast-kind" data-blast="c4" role="radio" aria-checked="false"><svg viewBox="0 0 24 24" width="20" height="20"><rect x="3" y="8" width="18" height="11" rx="1.2" fill="#d6cba5"/><rect x="3" y="10.6" width="18" height="1.3" fill="#a99e78"/><rect x="8" y="12.6" width="8" height="5" rx="0.8" fill="#222"/><rect x="9.2" y="13.9" width="5.6" height="2.4" fill="#e3442a"/><path d="M15.5 9c1.6-3 3.6-2.2 5-4.4" stroke="#3a7bd5" stroke-width="1.3" fill="none"/><path d="M8.5 9C7 6 5 6.8 3.5 4.6" stroke="#e3442a" stroke-width="1.3" fill="none"/></svg><span>C4</span></button>
+    <button class="blast-kind" data-blast="bomb" role="radio" aria-checked="false"><svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 22.5c-3.2-1.6-4.6-5.2-4.6-9.6S9.4 5.2 12 5.2s4.6 3.3 4.6 7.7-1.4 8-4.6 9.6z" fill="#56614a"/><path d="M9.2 6.4 6.4 2h11.2l-2.8 4.4z" fill="#3a4231"/><path d="M7.5 13.4h9" stroke="#e8c547" stroke-width="1.5"/></svg><span>BOMB</span></button>
   </div>
 
   <div id="hint"></div>

@@ -846,16 +846,24 @@ export function drawGodzillaIcon(ctx, w, h, card) {
   if (card) filmStill(ctx, w, h);
 }
 
-/** The mod's picture: him over a city at night, the plates lit - a still from the film. */
-export function drawModIcon(ctx, w, h) {
+/**
+ * The mod's picture: him over a city at night, the plates lit - a still from
+ * the film; and (a mod that has another of him draws it in) whatever else
+ * goes over it, after.
+ */
+export function drawModIcon(ctx, w, h, then = null) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, w, h);
   nightCity(ctx, w, h, 1954);
   const man = standIn({ glow: 0.75, pose: { jaw: 0.5, goal: { jaw: 0.5 }, rear: 0.4 } });
   const sk = man.gz.body.sk;
   const s = h / (11.5 * K);
-  ctx.setTransform(s, 0, 0, -s, w * 0.42, h * 1.32);
+  ctx.setTransform(s, 0, 0, -s, w * (then ? 0.3 : 0.42), h * 1.32);
   drawGodzilla(ctx, sk, man.gz);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   filmStill(ctx, w, h, 1955);
+  if (then) then(ctx, w, h);
 }
+
+// (for the other kinds of him: the same way of drawing, and the same kind of picture)
+export { taper, circle, poly, blob, mixHex, filmStill, nightCity, OUT };

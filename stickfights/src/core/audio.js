@@ -292,6 +292,24 @@ export class Sound {
     this.hiss(0.08, 2600, 2, 0.5 * v, 'bandpass', 0.05);
   }
 
+  /**
+   * Something going off: a crack, a deep thump under it, the roar of the air
+   * and the fire, bits coming down - and the bang rolling back off everything,
+   * longer the bigger it was. size 0..1, a grenade to a bomb.
+   */
+  explosion(x, size = 0.5) {
+    if (!this.ready) return;
+    const v = 0.5 + this.near(x) * 0.7, s = clamp(size, 0, 1);
+    this.hiss(0.07 + s * 0.05, 2600 - s * 900, 0.6, 1.2 * v);
+    this.hiss(0.05, 6000, 0.6, 0.45 * v, 'highpass');
+    this.tone('sine', 120 - s * 60, 24, 0.5 + s * 1.5, (1.2 + s * 0.4) * v);
+    this.tone('triangle', 260 - s * 120, 40, 0.25 + s * 0.4, 0.35 * v);
+    this.hiss(0.7 + s * 2.4, 420 - s * 220, 0.5, (0.95 + s * 0.35) * v, 'lowpass');
+    this.sweep('lowpass', 2600, 160, 0.9 + s * 1.8, 0.55 * v, 0.7);
+    for (let i = 0; i < 5 + s * 10; i++) this.hiss(0.03, 1400 + rand(0, 2600), 2, 0.14 * v, 'bandpass', 0.25 + i * rand(0.05, 0.14) * (1 + s));
+    for (const [d, k] of [[0.22, 0.4], [0.5, 0.24], [0.85, 0.12], [1.3, 0.06]]) this.hiss(0.45 + s * 0.6, 320 - s * 120, 0.5, k * v, 'lowpass', d * (0.8 + s * 0.8));
+  }
+
   /** Leaves: a soft rush of them. */
   rustle(x, hard = false) {
     if (!this.ready) return;

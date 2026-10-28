@@ -45,10 +45,14 @@ texture in the game is drawn procedurally onto a canvas at load time.
 > stickman that, made angry, tears out of the skin - tall and black, with white
 > pupils, a grin of sharp teeth and five long claws on each hand - tears whoever
 > did it in half or eats them, then empties out the nearest person, climbs
-> inside and becomes them; and **Godzilla ('54)** is Gojira as he was in 1954 - fourteen metres
-> tall, 30,000 health and a boss bar - who stomps, kicks, tail-whips, roars the
-> windows out, grabs people and eats or throws them, bites, claws and breathes
-> his atomic breath, and tears the city apart. The single-file build is `dist/stickfights.html`,
+> inside and becomes them; and **Godzilla** brings **Godzilla ('54)**, Gojira as he was in
+> 1954 - fourteen metres tall, 30,000 health and a boss bar - who stomps, kicks, tail-whips,
+> roars the windows out, grabs people and eats or throws them, bites, claws and breathes his
+> atomic breath, and **Shin Godzilla** - eighteen metres, 50,000 health - whose breath narrows
+> to a purple beam that cuts buildings in half, who fires beams from every plate on his back and
+> from the end of his tail, and who freezes solid where he stands when he dies; they tear the
+> city apart, and put down together they fight. The **explode tool** sets off a grenade,
+> dynamite, C4 or a bomb wherever you tap. The single-file build is `dist/stickfights.html`,
 > the source lives in `stickfights/`, and
 > [`stickfights/README.md`](stickfights/README.md) has the details.
 

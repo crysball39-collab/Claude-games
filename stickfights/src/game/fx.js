@@ -277,6 +277,8 @@ export class FX {
   }
 
   burst(x, y, power = 1) {
+    // (an explosion's blow is far harder than any punch: it does not get a star the size of a car)
+    power = Math.min(power, 4);
     this.bursts.push({ x, y, r: 0.1 + power * 0.06, age: 0, life: 0.13 + power * 0.03, a: rand(0, Math.PI) });
   }
 

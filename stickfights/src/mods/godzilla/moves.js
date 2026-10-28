@@ -25,7 +25,7 @@
    ========================================================================== */
 import { clamp, lerp, rand, chance, sign } from '../../core/util.js';
 import { defineArm } from '../../game/props.js';
-import { toLocal, toWorld, walk, aimMouth, K } from './body.js';
+import { toLocal, toWorld, walk, aimMouth, kOf } from './body.js';
 import { footDown, roarAt, bite as biteAt, claw as clawAt, kickAt, tailHits, crushIn, wreckable, nearestBuilding, buildingPoint, struck } from './world.js';
 import { Breath, RoarRings } from './effects.js';
 
@@ -44,9 +44,14 @@ defineArm('gzBite', {
 });
 defineArm('gzBreath', { name: 'Atomic breath', noun: 'breath', cause: 'atomic breath', burn: true, shove: 0.8, nasty: 3, memory: 'hurtMe', hurt: 'gzBurned', verb: 'burned me', power: 12 });
 defineArm('gzQuake', { name: 'The ground shaking', noun: 'quake', cause: 'the ground shaking', shove: 2, nasty: 1, memory: 'hurtMe', hurt: 'gzHurt', verb: 'knocked me flat', power: 3 });
+// one of them, on another of them: a blow on that scale (a claw, a tail, a kick, the jaws), and a breath
+defineArm('kaijuBlow', { name: "A kaiju's blow", noun: 'blow', cause: 'another kaiju', shove: 0, nasty: 3, memory: 'hurtMe', hurt: 'gzHurt', verb: 'hit me', power: 14 });
+defineArm('kaijuBreath', { name: "A kaiju's breath", noun: 'breath', cause: 'another kaiju', burn: true, ignite: false, shove: 0, nasty: 3, memory: 'hurtMe', hurt: 'gzBurned', verb: 'burned me', power: 14 });
 
 const alive = (p) => !!p && !p.removed && !p.dead;
 const giant = (p) => !!(p && p.species && p.species.giant);
+/** Another of them (a kaiju of this mod): something to fight, not to eat. */
+export const rival = (man, p) => !!p && p !== man && giant(p) && p.species.mod === MOD && !!p.gz;
 const B = (man) => man.gz.body;
 const S = (man) => man.gz.body.sk;
 const L = (man, x, y) => toLocal(B(man), man, x, y);
@@ -59,12 +64,14 @@ const aimAt = (o) => (o.lying || o.rag ? o.wj.hip : o.wj.chest);
 
 /** Who he goes after: the nearest of the living - unless somebody has just hurt him. */
 function pickTarget(man) {
+  const K = kOf(man);
   const sb = man.sandbox, gz = man.gz, now = sb.time;
   let best = null, bs = -Infinity;
   for (const p of sb.people) {
-    if (p === man || !alive(p) || giant(p) || p.state === 'held' && p.heldBy === man) continue;
+    if (p === man || !alive(p) || (giant(p) && !rival(man, p)) || p.state === 'held' && p.heldBy === man) continue;
+    // (another of them: only once he is close, or has hurt him)
     const d = Math.abs(p.pos.x - man.pos.x) + Math.max(0, p.pos.y - 4) * 0.5;
-    if (d > 36) continue;
+    if (d > 36 || (giant(p) && d > 26 && gz.hurtBy.get(p) === undefined)) continue;
     const hurt = gz.hurtBy.get(p);
     // (whoever is in front of him, rather than turning round for somebody no nearer behind)
     const behind = sign(p.pos.x - man.pos.x) !== man.facing && Math.abs(p.pos.x - man.pos.x) > 2 * K;
@@ -88,6 +95,7 @@ const PACE = 1.55;
 
 /** Walking to stand so that x is `gap` in front of him; true once he is there. */
 function approach(man, x, gap, dt) {
+  const K = kOf(man);
   const gz = man.gz;
   const f = man.facing;
   const want = x - f * gap;
@@ -101,6 +109,7 @@ function approach(man, x, gap, dt) {
 
 /** The goals his posture goes back to between moves: upright, the mouth just open, looking at whatever he is after. */
 function rest(man) {
+  const K = kOf(man);
   const g = B(man), G = g.goal, gz = man.gz;
   G.bend = 0.04 + Math.min(0.1, Math.abs(gz.v) * 0.05);
   G.crouch = 0; G.rear = 0; G.neck = 0; G.head = 0; G.lean = 0;
@@ -161,6 +170,7 @@ const MOVES = {
   stomp: {
     label: 'Stomp',
     start(man, m) {
+      const K = kOf(man);
       const g = B(man);
       const p = targetPoint(m);
       const lx = p ? L(man, p.x, 0).x : 2.2 * K;
@@ -172,6 +182,7 @@ const MOVES = {
       return true;
     },
     update(man, m, dt) {
+      const K = kOf(man);
       const g = B(man), G = g.goal;
       m.pt += dt;
       const p = targetPoint(m);
@@ -225,6 +236,7 @@ const MOVES = {
       return true;
     },
     update(man, m, dt) {
+      const K = kOf(man);
       const g = B(man), G = g.goal;
       m.pt += dt;
       if (m.phase === 'back') {
@@ -259,6 +271,7 @@ const MOVES = {
   tail: {
     label: 'Tail whip',
     start(man, m) {
+      const K = kOf(man);
       const p = targetPoint(m);
       const behind = p ? L(man, p.x, p.y).x < -1.5 * K : false;
       m.spin = !behind || m.spinForce;
@@ -269,6 +282,7 @@ const MOVES = {
       return true;
     },
     update(man, m, dt) {
+      const K = kOf(man);
       const g = B(man), G = g.goal;
       m.pt += dt;
       if (m.spin) {
@@ -310,6 +324,7 @@ const MOVES = {
     label: 'Roar',
     start(man, m) { setPhase(m, 'draw'); return true; },
     update(man, m, dt) {
+      const K = kOf(man);
       const g = B(man), G = g.goal, gz = man.gz;
       m.pt += dt;
       if (m.phase === 'draw') {
@@ -338,6 +353,7 @@ const MOVES = {
       return true;
     },
     update(man, m, dt) {
+      const K = kOf(man);
       const g = B(man), G = g.goal, gz = man.gz, sk = S(man);
       m.pt += dt;
       const o = m.o;
@@ -385,6 +401,7 @@ const MOVES = {
       return true;
     },
     update(man, m, dt) {
+      const K = kOf(man);
       const g = B(man), G = g.goal, gz = man.gz, sk = S(man);
       m.pt += dt;
       const o = m.o;
@@ -427,6 +444,7 @@ const MOVES = {
       return true;
     },
     update(man, m, dt) {
+      const K = kOf(man);
       const g = B(man), G = g.goal, gz = man.gz, sk = S(man);
       m.pt += dt;
       if (m.phase === 'wind') {
@@ -469,13 +487,14 @@ const MOVES = {
       return true;
     },
     update(man, m, dt) {
+      const K = kOf(man);
       const g = B(man), G = g.goal, gz = man.gz, sk = S(man);
       m.pt += dt;
       if (m.phase === 'reach') {
         const p = targetPoint(m, Math.max(0, 0.5 - m.pt));
         if (!p) return false;
         const lp = L(man, p.x, p.y);
-        const a = aimMouth({ x: lp.x, y: lp.y });
+        const a = aimMouth(B(man).b, { x: lp.x, y: lp.y });
         m.pose = a;
         G.bend = a.bend; G.rear = a.rear; G.crouch = a.crouch; G.neck = a.neck; G.head = a.head; G.jaw = 1;
         G.tailLift = a.bend * 0.8;
@@ -507,7 +526,7 @@ const MOVES = {
         o.holdAt(W(man, sk.mouth).x, W(man, sk.mouth).y);
         if (m.pt > 1.0) {
           // down it goes - or away, now and then
-          if (chance(0.7)) { biteAt(man, W(man, sk.mouth), o, 2); gz.mouthful = null; setPhase(m, 'gulp'); } else {
+          if (!m.noEat && chance(0.7)) { biteAt(man, W(man, sk.mouth), o, 2); gz.mouthful = null; setPhase(m, 'gulp'); } else {
             o.held.vx = man.facing * 6;
             o.held.vy = 3;
             o.release();
@@ -541,6 +560,7 @@ const MOVES = {
       return true;
     },
     update(man, m, dt) {
+      const K = kOf(man);
       const g = B(man), G = g.goal, gz = man.gz, sk = S(man);
       m.pt += dt;
       const s = m.hand, sh = sk.arms[s].shoulder;
@@ -631,11 +651,14 @@ function holding(man) {
   return !!o && !o.removed && o.heldBy === man && o.state === 'held';
 }
 
+/** The moves he has (another kind of him may have moves of its own: gz.moveset). */
+const movesOf = (man) => man.gz.moveset || MOVES;
+
 /** Starts a move (if he is not in the middle of one): false if it cannot start. */
 export function begin(man, name, o = {}) {
   const gz = man.gz;
   if (gz.move || man.dead || gz.state === 'dying') return false;
-  const def = MOVES[name];
+  const def = movesOf(man)[name];
   if (!def) return false;
   const m = { name, t: 0, pt: 0, phase: '', ...o };
   if (!def.start(man, m)) return false;
@@ -645,10 +668,10 @@ export function begin(man, name, o = {}) {
   return true;
 }
 
-function endMove(man) {
+export function endMove(man) {
   const gz = man.gz, m = gz.move;
   if (!m) return;
-  const def = MOVES[m.name];
+  const def = movesOf(man)[m.name];
   if (def.stop) def.stop(man, m);
   gz.move = null;
   gz.cool[m.name] = man.sandbox.time;
@@ -657,7 +680,7 @@ function endMove(man) {
 /* ------------------------------------ the AI ---------------------------------- */
 
 const COOL = { stomp: 2.2, kick: 3, tail: 5, roar: 16, grab: 3, bite: 2.5, claw: 2, breath: 13, eat: 0, throw: 0, turn: 0.5 };
-const ready = (man, name) => man.sandbox.time - (man.gz.cool[name] ?? -99) > COOL[name] * (1.15 - man.gz.rage * 0.45);
+export const ready = (man, name) => man.sandbox.time - (man.gz.cool[name] ?? -99) > (man.gz.cooling || COOL)[name] * (1.15 - man.gz.rage * 0.45);
 
 /** Every step: the move he is in the middle of, or what to do next - and his feet, either way. */
 export function think(man, dt) {
@@ -684,7 +707,7 @@ export function think(man, dt) {
   }
   if (gz.move) {
     gz.move.t += dt;
-    if (!MOVES[gz.move.name].update(man, gz.move, dt)) endMove(man);
+    if (!movesOf(man)[gz.move.name].update(man, gz.move, dt)) endMove(man);
     // (a move keeps his feet where they are - or takes him a step or two, if it says so)
     if (gz.move && gz.move.name !== 'turn') gz.wantV = gz.move.v || 0;
   } else if (gz.state === 'hunt' && !gz.auto0) decide(man, dt);
@@ -719,11 +742,13 @@ function decide(man, dt) {
 
 /** Going after somebody. */
 function fight(man, o, dt) {
+  const K = kOf(man);
   const gz = man.gz;
   const p = aimAt(o);
   const lp = L(man, p.x, p.y);
   const lf = L(man, o.pos.x, o.pos.y);
   gz.aimAt = null;
+  if (rival(man, o)) { fightRival(man, o, lf); return; }
   // behind him
   if (lf.x < -1.2 * K) {
     gz.wantV = 0;
@@ -747,7 +772,7 @@ function fight(man, o, dt) {
   } else if (x < 5.4 * K && high < 4) {
     if (pickOne([['kick', 2], ['stomp', 2.5], ['grab', 2.2], ['claw', 1.5], ['bite', 1.2]])) return;
   } else if (x < 7.6 * K && high < 15) {
-    const reach = aimMouth({ x: lp.x + clamp(o.vel.x * man.facing, -4, 4) * 0.4, y: lp.y }).d;
+    const reach = aimMouth(B(man).b, { x: lp.x + clamp(o.vel.x * man.facing, -4, 4) * 0.4, y: lp.y }).d;
     if (pickOne([['bite', reach < 0.9 * K ? 2.6 : 0], ['claw', 2], ['grab', 1.6], ['tail', 0.6]])) return;
   } else if (x < 34 && ready(man, 'breath') && chance(0.012 + gz.rage * 0.02)) {
     begin(man, 'breath', { o });
@@ -757,8 +782,34 @@ function fight(man, o, dt) {
   approach(man, o.pos.x, (high > 4 ? 5.6 : 4.4) * K, dt);
 }
 
+/**
+ * Another of them: his hands, his jaws, his tail and his breath, close
+ * enough to land them - nothing he could pick up or stand on.
+ */
+function fightRival(man, o, lf) {
+  const K = kOf(man), gz = man.gz;
+  if (lf.x < -2 * K) { gz.wantV = 0; if (ready(man, 'tail') && chance(0.4)) begin(man, 'tail', { o }); else begin(man, 'turn'); return; }
+  const x = lf.x;
+  if (x < 8 * K) {
+    gz.wantV = 0;
+    const opts = [['claw', 2.5], ['bite', 2], ['tail', 1.2], ['kick', 1.2], ['roar', 0.3]].filter(([n]) => ready(man, n));
+    if (opts.length) {
+      let total = 0;
+      for (const e of opts) total += e[1];
+      let r = rand(0, total);
+      for (const [n, w] of opts) { r -= w; if (r <= 0) { begin(man, n, { o, spinForce: n === 'tail' }); return; } }
+    }
+    // (in too close: a step back)
+    if (x < 6 * K) gz.wantV = -man.facing * 0.6;
+    return;
+  }
+  if (x < 34 && ready(man, 'breath') && chance(0.03)) { begin(man, 'breath', { o }); return; }
+  approach(man, o.pos.x, 6.2 * K, 0);
+}
+
 /** With nobody to go after: a building, torn into. */
 function rampage(man, dt) {
+  const K = kOf(man);
   const gz = man.gz, sb = man.sandbox;
   let w = gz.building;
   // (one he has been at a while without getting anywhere: leave it)
@@ -829,6 +880,7 @@ export function startDeath(man) {
 
 /** A last roar, weaker; he sways - and comes down, onto his front, and lies there. */
 export function updateDeath(man, dt) {
+  const K = kOf(man);
   const gz = man.gz, g = B(man), G = g.goal, sb = man.sandbox;
   gz.wantV = 0;
   walk(man, dt, 0, null);
@@ -932,4 +984,4 @@ export function abilities(man) {
   ];
 }
 
-export { MOVES, pickTarget, holding };
+export { MOVES, pickTarget, holding, rest, approach, targetPoint, setPhase, aimAt, alive, giant, PACE };

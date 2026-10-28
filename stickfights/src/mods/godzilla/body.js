@@ -17,12 +17,18 @@
 
    His feet are planted in the world and stay there until they step: a step
    is one foot lifted, carried forward and put down again, heavily.
+
+   All of that is the same for every one of them; what each kind is built
+   like - how long each bone is, how thick, how he stands, how his tail
+   lies - is a build (the 1954 one is here; Shin's is shin-body.js), and
+   every body keeps its own (g.b).
    ========================================================================== */
 import { clamp, lerp, smooth } from '../../core/util.js';
 import { HEAD_BONE } from '../../game/skeleton.js';
 
 /** How much bigger than the suit this is all drawn: the suit's numbers are below. */
 const K = 1.15;
+/* (the 1954 build: what the rest of this file calls K, D, HK, STANCE and tailR) */
 export const D = {
   hipY: 5.3 * K, hipX: -0.3 * K, thigh: 2.75 * K, shin: 2.65 * K, ankle: 0.8 * K,
   torso: 4.3 * K, neck: 2.2 * K, upper: 1.8 * K, fore: 1.7 * K,
@@ -41,25 +47,29 @@ export const tailR = (i) => K * (1.3 * Math.pow(Math.max(0, 1 - i / D.tailN), 1.
 
 const POSTURE = ['bend', 'crouch', 'rear', 'neck', 'head', 'jaw', 'tailLift', 'tailHover', 'lean'];
 
-export function newBody(man) {
+/**
+ * A new body for him, standing where he is, built to `b` (a build: this
+ * file's G54, or another kind's).
+ */
+export function newBody(man, b = G54) {
   const f = man.facing, x = man.pos.x;
   const g = {
-    goal: {}, rate: 3.5,
+    b, goal: {}, rate: 3.5,
     hands: { A: null, B: null },
     hand: { A: null, B: null },
-    feet: { A: { x: x + f * STANCE.A, lx: STANCE.A, lift: 0, tilt: 0 }, B: { x: x + f * STANCE.B, lx: STANCE.B, lift: 0, tilt: 0 } },
+    feet: { A: { x: x + f * b.STANCE.A, lx: b.STANCE.A, lift: 0, tilt: 0 }, B: { x: x + f * b.STANCE.B, lx: b.STANCE.B, lift: 0, tilt: 0 } },
     swing: null, lastLand: -9, lastFoot: 'B', walkV: 0,
     raised: null,
     yaw: 0, sx: f, bob: 0, t: 0,
     tail: [], tailV: [],
     sk: null, caps: [], lastX: x,
   };
-  for (const k of POSTURE) g[k] = g.goal[k] = 0;
-  g.jaw = g.goal.jaw = 0.06;
+  for (const k of b.posture) g[k] = g.goal[k] = 0;
+  g.jaw = g.goal.jaw = b.jaw0 ?? 0.06;
   // the tail laid out where it would rest
-  const sk = solve(g);
-  for (const p of tailTargets(g, sk, 0)) { g.tail.push({ x: p.x, y: p.y }); g.tailV.push({ x: 0, y: 0 }); }
-  g.sk = solve(g);
+  const sk = b.solve(g);
+  for (const p of b.tailTargets(g, sk, 0)) { g.tail.push({ x: p.x, y: p.y }); g.tailV.push({ x: 0, y: 0 }); }
+  g.sk = b.solve(g);
   return g;
 }
 
@@ -70,10 +80,10 @@ export function toWorld(g, man, p) { return { x: man.pos.x + g.sx * p.x, y: man.
 /** A point in the world, in his frame. */
 export function toLocal(g, man, x, y) { return { x: (x - man.pos.x) / g.sx, y: y - man.pos.y }; }
 
-const add = (p, x, y) => ({ x: p.x + x, y: p.y + y });
+export const add = (p, x, y) => ({ x: p.x + x, y: p.y + y });
 
 /** Two bones from `a` toward `t`, lengths l1 and l2, the joint between them bent to `side` (+1 counter-clockwise). */
-function ik(a, t, l1, l2, side) {
+export function ik(a, t, l1, l2, side) {
   let dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy) || 1e-6;
   const max = (l1 + l2) * 0.998, min = Math.abs(l1 - l2) + 0.05;
   if (d > max) { dx *= max / d; dy *= max / d; d = max; }
@@ -86,9 +96,10 @@ function ik(a, t, l1, l2, side) {
 
 /**
  * The skeleton, in his frame, from the posture and where his feet and hands
- * are. Every point the drawing and the shape need.
+ * are. Every point the drawing and the shape need. (The 1954 build's: any
+ * other build's has the same points, worked out its own way.)
  */
-export function solve(g) {
+function solve54(g) {
   const sk = {};
   // the body: bent over from the hips, the hips going back and down as it does
   const a = 0.22 + g.bend * 1.05 - g.rear * 0.32 + g.lean;
@@ -137,8 +148,7 @@ export function solve(g) {
   sk.arms = {};
   for (const s of ['A', 'B']) {
     const sh = s === 'A' ? sk.shoulder : sk.shoulderB;
-    const rest = s === 'A' ? add(sh, 2.1 * K, -0.45 * K) : add(sh, 1.85 * K, -0.3 * K);
-    const t = g.hand[s] || rest;
+    const t = g.hand[s] || armRest54(sh, s);
     const r = ik(sh, t, D.upper, D.fore, -1);
     sk.arms[s] = { shoulder: sh, elbow: r.mid, hand: r.end };
   }
@@ -147,8 +157,11 @@ export function solve(g) {
   return sk;
 }
 
+/** Where a hand of his goes back to, held up in front of him, from its shoulder. */
+const armRest54 = (sh, s) => (s === 'A' ? add(sh, 2.1 * K, -0.45 * K) : add(sh, 1.85 * K, -0.3 * K));
+
 /** Where the tail would be, at rest, held as the posture holds it: point by point from where it joins him. */
-export function tailTargets(g, sk, t) {
+function tailTargets54(g, sk, t) {
   const out = [];
   let p = { x: sk.tailBase.x, y: sk.tailBase.y };
   const N = D.tailN, L = D.tailSeg;
@@ -178,10 +191,10 @@ export function tailTargets(g, sk, t) {
  * from all of it. `dt` 0 just works the skeleton out again.
  */
 export function stepBody(man, dt) {
-  const g = man.gz.body;
+  const g = man.gz.body, b = g.b;
   g.t += dt;
   // (each at the pace set for it, or the posture's pace)
-  for (const key of POSTURE) {
+  for (const key of b.posture) {
     if (g.goal[key] === undefined) continue;
     const r = (g.rates && g.rates[key]) || g.rate;
     g[key] = lerp(g[key], g.goal[key], 1 - Math.exp(-dt * r));
@@ -201,31 +214,31 @@ export function stepBody(man, dt) {
     if (r.x !== undefined) { ft.lx = lerp(ft.lx, r.x, kk); ft.x = man.pos.x + g.sx * ft.lx; }
   }
   // the hands: toward where they are reaching, at the speed a hand that size moves
-  const sk0 = g.sk || solve(g);
+  const sk0 = g.sk || b.solve(g);
   for (const s of ['A', 'B']) {
     const want = g.hands[s];
     const arm = sk0.arms[s];
     const cur = g.hand[s] || { x: arm.hand.x, y: arm.hand.y };
     if (!want && !g.hand[s]) continue;
-    const goal = want || (s === 'A' ? add(arm.shoulder, 2.1 * K, -0.45 * K) : add(arm.shoulder, 1.85 * K, -0.3 * K));
+    const goal = want || b.armRest(arm.shoulder, s);
     const kk = 1 - Math.exp(-dt * (want && want.rate ? want.rate : 6));
     const nx = lerp(cur.x, goal.x, kk), ny = lerp(cur.y, goal.y, kk);
     g.hand[s] = !want && Math.hypot(nx - goal.x, ny - goal.y) < 0.05 ? null : { x: nx, y: ny };
   }
-  let sk = solve(g);
+  let sk = b.solve(g);
   // the tail: it lags behind as he goes, and swings into place
   if (dt > 0) {
     const moved = (man.pos.x - g.lastX) / (g.sx || 1);
     g.lastX = man.pos.x;
-    const tgt = tailTargets(g, sk, g.t);
-    const T = g.tail, V = g.tailV, N = D.tailN;
+    const tgt = b.tailTargets(g, sk, g.t);
+    const T = g.tail, V = g.tailV, N = b.tailN, sp = b.spring;
     for (let i = 0; i <= N; i++) {
       const q = T[i], kk = i / N;
       if (i === 0) { q.x = tgt[0].x; q.y = tgt[0].y; continue; }
       // (points along it stay where they were in the world a moment, the further out the longer)
       q.x -= moved * clamp(kk * 1.2, 0, 0.85);
       // a spring to where it would be: stiff near him, looser - and swinging further - toward the end
-      const w = lerp(15, 4.2, kk), z = lerp(0.95, 0.5, kk);
+      const w = lerp(sp.w0, sp.w1, kk), z = lerp(sp.z0, sp.z1, kk);
       V[i].x += (w * w * (tgt[i].x - q.x) - 2 * z * w * V[i].x) * dt;
       V[i].y += (w * w * (tgt[i].y - q.y) - 2 * z * w * V[i].y) * dt;
       q.x += V[i].x * dt;
@@ -236,21 +249,22 @@ export function stepBody(man, dt) {
       for (let i = 1; i <= N; i++) {
         const p = T[i - 1], q = T[i];
         const dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy) || 1e-6;
-        const e = (d - D.tailSeg) / d;
+        const e = (d - b.tailSeg) / d;
         q.x -= dx * e;
         q.y -= dy * e;
-        const floor = tailR(i) * 0.9;
+        const floor = b.tailR(i) * 0.9;
         if (q.y < floor) q.y = floor;
       }
     }
-    // and never through the walls at the ends of the world
+    // and never through the walls at the ends of the world (a tail held up in the air goes on past them, out of sight,
+    // rather than standing up against them)
     const sb = man.sandbox;
-    for (let i = 1; i <= N; i++) {
-      const q = T[i], wx = man.pos.x + g.sx * q.x, r = tailR(i);
+    if (b.tailInside !== false) for (let i = 1; i <= N; i++) {
+      const q = T[i], wx = man.pos.x + g.sx * q.x, r = b.tailR(i);
       const cx = clamp(wx, sb.left + r, sb.right - r);
       if (cx !== wx) q.x = (cx - man.pos.x) / g.sx;
     }
-    sk = solve(g);
+    sk = b.solve(g);
   }
   g.sk = sk;
   g.caps = shape(man, g, sk);
@@ -262,13 +276,13 @@ export function stepBody(man, dt) {
 
 /** The round-ended pieces he is made of, in the world, for whatever touches, grabs or shoots him. */
 function shape(man, g, sk) {
-  const out = [];
+  const out = [], b = g.b, D = b.D, K = b.K;
   const W = (p) => toWorld(g, man, p);
   const cap = (p, q, r, part, bone) => {
-    const a = W(p), b = W(q);
-    out.push({ x0: a.x, y0: a.y, x1: b.x, y1: b.y, r, part, bone });
+    const a = W(p), c = W(q);
+    out.push({ x0: a.x, y0: a.y, x1: c.x, y1: c.y, r, part, bone });
   };
-  for (let i = 0; i < D.tailN; i++) cap(sk.tail[i], sk.tail[i + 1], (tailR(i) + tailR(i + 1)) / 2, 'torso', 0);
+  for (let i = 0; i < b.tailN; i++) cap(sk.tail[i], sk.tail[i + 1], (b.tailR(i) + b.tailR(i + 1)) / 2, 'torso', 0);
   for (const s of ['B', 'A']) {
     const L = sk.legs[s], bones = s === 'A' ? [7, 8, 9] : [10, 11, 12], part = 'leg' + s;
     cap(L.hip, L.knee, D.thighR, part, bones[0]);
@@ -326,16 +340,14 @@ export function boundsOf(g, box) {
 
 /* ----------------------------------- walking ---------------------------------- */
 
-const SWING = 0.85;   // how long a foot is in the air, for a step
-const STAND = 0.38;   // and how long both are down between steps
-
 /**
  * His walk: the body goes along at `v` (m/s, signed), and the feet keep up
  * with it, one heavy step at a time; standing still, they come back under
  * him. Calls `landed(foot, x)` when a foot comes down.
  */
 export function walk(man, dt, v, landed) {
-  const g = man.gz.body, now = man.sandbox.time;
+  const g = man.gz.body, now = man.sandbox.time, b = g.b, K = b.K, STANCE = b.STANCE;
+  const { SWING, STAND } = b.gait;
   g.walkV = v;
   const sw = g.swing;
   if (sw) {
@@ -345,7 +357,7 @@ export function walk(man, dt, v, landed) {
     ft.lift = Math.sin(Math.PI * Math.min(1, u * 1.08)) * sw.h;
     ft.tilt = Math.sin(Math.PI * u) * 0.22 * Math.sign(sw.x1 - sw.x0) * Math.sign(g.sx) * (u < 0.5 ? -0.6 : 1);
     // the body dips as the weight comes down on the other leg
-    g.bob = Math.sin(Math.PI * u) * 0.16 * K;
+    g.bob = Math.sin(Math.PI * u) * b.gait.bob;
     if (u >= 1) {
       ft.lift = 0; ft.tilt = 0; g.bob = 0;
       g.swing = null;
@@ -367,7 +379,7 @@ export function walk(man, dt, v, landed) {
     const land = man.pos.x + v * SWING;
     const x1 = land + dir * s * 0.5 + (foot === 'A' ? 0.12 : -0.12) * f * K;
     if (Math.abs(x1 - g.feet[foot].x) < 0.25) return;
-    g.swing = { foot, x0: g.feet[foot].x, x1, t: 0, dur: SWING, h: clamp(Math.abs(x1 - g.feet[foot].x) * 0.32, 0.45, 1.25) * K };
+    g.swing = { foot, x0: g.feet[foot].x, x1, t: 0, dur: SWING, h: clamp(Math.abs(x1 - g.feet[foot].x) * 0.32, 0.45, b.gait.lift) * K };
     return;
   }
   // standing: a foot that is not where it stands goes back there
@@ -382,13 +394,15 @@ export function walk(man, dt, v, landed) {
 
 /* ------------------------------ aiming his mouth ------------------------------ */
 
-let table = null;
-
-/** The posture that puts his mouth nearest a point in his frame: { bend, crouch, neck, head, at }. */
-export function aimMouth(target) {
-  if (!table) {
-    table = [];
-    const g = { bend: 0, crouch: 0, rear: 0, neck: 0, head: 0, jaw: 0.5, tailLift: 0, lean: 0, bob: 0, feet: { A: { lx: 0.6, lift: 0, tilt: 0 }, B: { lx: -0.6, lift: 0, tilt: 0 } }, hand: {}, tail: [] };
+/**
+ * The posture that puts his mouth nearest a point in his frame: { bend,
+ * crouch, neck, head, at } - for a body built to `B` (looked up in a table
+ * of them, made the first time it is asked).
+ */
+export function aimMouth(B, target) {
+  if (!B.mouthTable) {
+    const table = B.mouthTable = [];
+    const g = { b: B, bend: 0, crouch: 0, rear: 0, neck: 0, head: 0, jaw: 0.5, split: 0, tailLift: 0, lean: 0, bob: 0, feet: { A: { lx: 0.6, lift: 0, tilt: 0 }, B: { lx: -0.6, lift: 0, tilt: 0 } }, hand: {}, tail: [] };
     for (let b = -0.3; b <= 1.001; b += 0.1) {
       for (let nk = -0.5; nk <= 0.7; nk += 0.1) {
         for (const hd of [-0.6, -0.2, 0.2]) {
@@ -397,12 +411,13 @@ export function aimMouth(target) {
           g.crouch = Math.max(0, b) * 0.7;
           g.neck = nk;
           g.head = hd;
-          const sk = solve(g);
+          const sk = B.solve(g);
           table.push({ bend: g.bend, rear: g.rear, crouch: g.crouch, neck: nk, head: hd, at: sk.mouth });
         }
       }
     }
   }
+  const table = B.mouthTable;
   let best = null, bd = Infinity;
   for (const e of table) {
     const d = Math.hypot(e.at.x - target.x, e.at.y - target.y) + Math.abs(e.neck) * 0.15 + e.bend * 0.1;
@@ -411,6 +426,21 @@ export function aimMouth(target) {
   return { ...best, d: Math.hypot(best.at.x - target.x, best.at.y - target.y) };
 }
 
-/** How far in front of his feet, and how high, his mouth can reach: for the moves to know when to walk closer. */
-export const REACH = { mouthNear: 3.4 * K, mouthFar: 6.6 * K, hand: 4.0 * K, foot: 3.6 * K, tail: 13 * K };
+/* ------------------------------ the 1954 build ------------------------------ */
+
+export const G54 = {
+  key: 'g54', K, D, HK, STANCE,
+  tailN: D.tailN, tailSeg: D.tailSeg, tailR,
+  posture: POSTURE,
+  solve: solve54, tailTargets: tailTargets54, armRest: armRest54,
+  // the tail's spring: how stiff (w) and how damped (z), near him and at the end of it
+  spring: { w0: 15, w1: 4.2, z0: 0.95, z1: 0.5 },
+  // a step: how long a foot is in the air, how long both are down between steps, how far the body dips, how high a foot goes (in K)
+  gait: { SWING: 0.85, STAND: 0.38, bob: 0.16 * K, lift: 1.25 },
+  /** How far in front of his feet, and how high, his mouth can reach: for the moves to know when to walk closer. */
+  REACH: { mouthNear: 3.4 * K, mouthFar: 6.6 * K, hand: 4.0 * K, foot: 3.6 * K, tail: 13 * K },
+};
+export const REACH = G54.REACH;
+/** How big the suit is drawn, for a body built to its build: K. */
+export const kOf = (man) => man.gz.body.b.K;
 export { K };

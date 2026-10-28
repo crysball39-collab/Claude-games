@@ -147,6 +147,14 @@ sb.on('slabFree', (e) => {
   const mat = e.what.mat.name;
   if (mat === 'wood') sound.creak(e.x); else if (mat === 'metal') sound.clang(2, e.x); else if (mat === 'concrete' || mat === 'brick') sound.groan(e.x);
 });
+// something going off (the explode tool): the bang, and the view jumping with it - the nearer the middle of it, the more
+sb.on('explode', (e) => {
+  sound.explosion(e.x, e.size);
+  const k = Math.min(1, e.shake / (1 + Math.abs(e.x - cam.x) / (e.r * 3)));
+  cam.shake(k);
+  // (a big one goes on rumbling)
+  if (e.size > 0.5) for (const t of [0.18, 0.4, 0.7]) sb.later(t, () => cam.shake(k * e.size * 0.45));
+});
 // a building: a storey giving way, a lump of it landing, a lump pulled off it
 sb.on('slabGive', (e) => { sound.groan(e.x); cam.shake(0.25); });
 sb.on('rubble', (e) => { sound.rubble(e.x, e.big); cam.shake(e.big ? 0.4 : 0.08); });

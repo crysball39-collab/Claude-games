@@ -129,6 +129,11 @@ export const LINES = {
   sawShooting: ['{other} is shooting at {victim}!', '{other} has a gun!', 'Stop shooting, {other}!', 'Get down, {victim}!'],
   takeCover: ['Take cover!', 'Get behind something!', 'Down! Down!', "{other}'s shooting!", 'Everyone get down!'],
   nearMiss: ['That was close!', 'Whoa! That nearly got me!', 'I felt that one go past!', 'Missed me!', 'Too close!'],
+  // something blowing up: heard, seen, and caught in it
+  heardBlast: ['What was that?!', 'Was that an explosion?!', 'Something just blew up!', 'That came from over there!', 'Did you feel that?!', 'Everybody down!', 'That was a bomb!'],
+  sawBlast: ['WHOA!', 'It blew up!', 'GET DOWN!', 'Did you see that?!', 'Take cover!', 'That was way too close!', 'Run! It could go again!', 'My eyebrows!'],
+  blastHurt: ['AAAAH!', "My ears! I can't hear anything!", 'Everything is ringing...', 'It went off right next to me!', 'What... what just happened?', 'I can taste smoke...', 'Ow. Ow. OW.'],
+  shrapnelHit: ['Something hit me! Something sharp!', "There's metal in me!", 'Agh! Bits of it got me!', "I'm hit! I'm hit!", "It's in my leg!"],
   shot: ["I'm hit!", "I've been shot!", 'AAAH! {other} shot me!', 'It burns!', "I'm shot! I'm shot!", 'Medic!'],
   sawShot: ['{other} shot {victim}!', '{victim}! No!', "They shot {victim}!", "{victim}'s hit!", 'Somebody help {victim}!'],
 

@@ -13,11 +13,13 @@
    storage each shows, and everything the Murder Drones, Minecraft, Shallow
    and Godzilla mods add - Steve, crafting a Wither Totem, the Wither from
    its first skull to its Nether Star, Shallow from its disguise to the next
-   skin it climbs into, and Godzilla from his first roar, through every one
-   of his moves, to where he falls. So are the walls and the trees, cell by
-   cell, the City and its buildings coming down, the freeze tool, moving
-   things with the world paused, the six wires, the AK-47, the Mossberg 500,
-   the crowbar and the four kinds of ammo.
+   skin it climbs into, Godzilla ('54) from his first roar, through every
+   one of his moves, to where he falls, and Shin Godzilla from his beams to
+   where he freezes - and the two of them fighting. So are the walls and the
+   trees, cell by cell, the City and its buildings coming down, the freeze
+   tool, the explode tool, moving things with the world paused, the six
+   wires, the AK-47, the Mossberg 500, the crowbar and the four kinds of
+   ammo.
 
    Needs playwright and a chromium build:
      npm install -D playwright && npx playwright install chromium
@@ -2828,6 +2830,28 @@ const street = await ev(() => {
 check('a tree in the street, cut through, falls', street.fell, JSON.stringify(street));
 check('...and the hand pulls a lump off a building, which falls', street.lump && street.cells > 20 && street.n1 < street.n0 && street.landed < 3, JSON.stringify(street));
 
+// the explode tool's bomb, against a building: a great hole blown in it, and whoever was in the street by it, killed
+const bombed = await ev(() => {
+  const sf = window.__sf, sb = sf.sb, ui = sf.ui, cam = sf.cam;
+  const br = sb.slabs.find((s) => s.type === 'brick');
+  const n0 = br.cellCount, b = br.body.aabb(), x = (b.minX + b.maxX) / 2;
+  const p = sb.spawnStickman(x + 1.5, null, { name: 'Passer' });
+  for (let i = 0; i < 12; i++) sb.step(1 / 120);
+  cam.follow = null; cam.ppm = cam.minPpm; cam.x = x; cam.clamp();
+  ui.setTool('explode');
+  ui.setBlastKind('bomb');
+  const q = cam.toScreen(x, 1);
+  ui.tap(q.x, q.y);
+  for (let i = 0; i < 120 * 3; i++) sb.step(1 / 120);
+  ui.setBlastKind('grenade');
+  ui.setTool('hand');
+  const left = sb.slabs.filter((s) => s.type === 'brick' && !s.removed && s.background && s.body.aabb().minX < x && s.body.aabb().maxX > x).reduce((n, s) => n + s.cellCount, 0);
+  return { n0, left, dead: p.dead || p.removed, cause: p.removed ? 'gone' : p.health.cause };
+});
+check('a BOMB from the explode tool, against a building: a great hole blown in it - and whoever was in the street by it, killed',
+  bombed.left < bombed.n0 - 400 && bombed.dead, JSON.stringify(bombed));
+await shot('city-bomb');
+
 // the bin: the city as it was; MAPS again: Flat
 await ev(() => { window.__sf.sb.paused = false; });
 await page.tap('#btn-clear');
@@ -2849,6 +2873,53 @@ const flat = await ev(() => ({ map: window.__sf.sb.map, slabs: window.__sf.sb.sl
 check('...and LOAD on Flat puts the sandbox back as it always was', flat.map === 'flat' && !flat.slabs && !flat.plants && !flat.skyline, JSON.stringify(flat));
 await ev(() => window.__sf.ui.toggleDrawer(false));
 await page.waitForTimeout(250);
+
+/* -------------------------------- explosions -------------------------------- */
+
+await fresh();
+const blastbar = await ev(() => {
+  window.__sf.ui.setTool('explode');
+  const bar = document.querySelector('#blastbar');
+  return {
+    shown: !bar.classList.contains('hidden'), kinds: [...bar.querySelectorAll('.blast-kind')].map((b) => b.dataset.blast + ':' + b.textContent.trim()),
+    active: bar.querySelector('.blast-kind.active').dataset.blast, label: document.querySelector('.tool[data-tool="explode"]').textContent.trim(),
+    hint: document.querySelector('#hint').textContent,
+  };
+});
+check('EXPLODE on the toolbar, and over it what goes off: a grenade, dynamite, C4 or a bomb',
+  blastbar.shown && blastbar.label === 'EXPLODE' && blastbar.kinds.join() === 'grenade:GRENADE,dynamite:DYNAMITE,c4:C4,bomb:BOMB' && blastbar.active === 'grenade' && /Grenade/.test(blastbar.hint),
+  JSON.stringify(blastbar));
+// a grenade, tapped down among people
+const grenade = await ev(() => {
+  const sf = window.__sf, sb = sf.sb, ui = sf.ui, cam = sf.cam;
+  cam.follow = null; cam.ppm = cam.homePpm; cam.x = 1; cam.y = 2; cam.clamp();
+  const near = sb.spawnStickman(0.3, null, { name: 'Near' }), mid = sb.spawnStickman(-2.2, null, { name: 'Mid' }), far = sb.spawnStickman(6.4, null, { name: 'Far' });
+  // (a knife lying there: something to be flung - a crate would stand between it and whoever is past it)
+  const c = sb.spawnKnife(1.2, 0.1);
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  const said = new Set(), hits = new Set();
+  sb.on('speech', (e) => { if (e.kind && /Blast|blast|shrapnel/.test(e.kind)) said.add(e.kind); });
+  sb.on('hit', (e) => { if (e.weapon === 'explosion' || e.weapon === 'shrapnel') hits.add(e.who.name + ':' + e.weapon); });
+  let boom = null;
+  sb.on('explode', (e) => { boom = { kind: e.kind, x: +e.x.toFixed(1) }; });
+  const cx = c.body.pos.x;
+  const q = cam.toScreen(0, 0.3);
+  ui.tap(q.x, q.y);
+  const fx = sb.effects.length;
+  for (let i = 0; i < 120 * 2.5; i++) sb.step(1 / 120);
+  const hurt = (p) => Object.values(p.health.parts).some((pt) => pt.hp < pt.max);
+  ui.setTool('hand');
+  return {
+    boom, fx, near: { dead: near.dead || near.removed, cause: near.health.cause }, mid: { hurt: hurt(mid), dead: mid.dead }, far: { hurt: hurt(far), dead: far.dead },
+    hits: [...hits], said: [...said], crate: +Math.hypot(c.body.pos.x - cx, c.body.pos.y - 0.1).toFixed(1),
+  };
+});
+check('a GRENADE goes off where it is tapped: whoever is right by it is killed by it, a few steps off they are hurt - and what is lying about is flung',
+  grenade.boom && grenade.boom.kind === 'grenade' && Math.abs(grenade.boom.x) < 0.3 && grenade.fx > 0 && grenade.near.dead &&
+  grenade.mid.hurt && grenade.crate > 1, JSON.stringify(grenade));
+check('...its casing flies further than the blast does, into whoever is in the way', grenade.hits.includes('Far:shrapnel') && grenade.far.hurt, JSON.stringify(grenade.hits));
+check('...and everyone who hears it is frightened, and says so', grenade.said.length > 0, JSON.stringify(grenade.said));
+await ev(() => { window.__sf.sb.paused = true; });
 
 /* ---------------------------------- mods --------------------------------- */
 
@@ -3579,7 +3650,7 @@ const gzItem = await ev(() => {
     btn: el.querySelector('.mod-btn').textContent,
   };
 });
-check("the MODS screen has Godzilla ('54), which adds Godzilla ('54)", !!gzItem && gzItem.name === "Godzilla ('54)" && gzItem.btn === 'INSTALL' && gzItem.adds.join() === "Godzilla ('54)", JSON.stringify(gzItem));
+check("the MODS screen has Godzilla, which adds Godzilla ('54) and Shin Godzilla", !!gzItem && gzItem.name === 'Godzilla' && gzItem.btn === 'INSTALL' && gzItem.adds.join() === "Godzilla ('54),Shin Godzilla", JSON.stringify(gzItem));
 const gzKB = (measureMods().godzilla / 1024).toFixed(1) + ' KB';
 check('...and shows the storage it needs', !!gzItem && gzItem.size === 'Storage needed: ' + gzKB, `${gzItem && gzItem.size} (its folder: ${gzKB})`);
 await page.tap('.mod-item[data-mod="godzilla"] .mod-btn');
@@ -3588,7 +3659,7 @@ await page.waitForTimeout(150);
 await page.tap('#mods-close');
 await page.waitForTimeout(250);
 const gzCards = await ev(() => { window.__sf.ui.toggleDrawer(true); return [...document.querySelectorAll('.card')].map((k) => k.dataset.spawn); });
-check("installed, Godzilla ('54) is in the spawn menu", gzCards.length === BASE.length + 1 && gzCards.includes('gz-godzilla'), gzCards.join(', '));
+check("installed, Godzilla ('54) and Shin Godzilla are in the spawn menu", gzCards.length === BASE.length + 2 && gzCards.includes('gz-godzilla') && gzCards.includes('gz-shin'), gzCards.join(', '));
 
 // in the city, from his card
 await page.tap('#btn-maps');
@@ -3755,6 +3826,143 @@ const gzDeath = await ev(() => {
 await page.waitForTimeout(300);
 const barGone = await ev(() => document.querySelectorAll('#bossbars .bossbar').length);
 check('out of health, he roars once more and comes down - and lies there, his bar gone', gzDeath.died && gzDeath.dead && gzDeath.there && gzDeath.low < 8 && barGone === 0, JSON.stringify({ ...gzDeath, barGone }));
+
+/* ---- Shin Godzilla ---- */
+
+// the city as it was (the bin), and him in it, from his card
+await ev(() => { window.__sf.sb.paused = false; });
+await page.tap('#btn-clear');
+await page.waitForTimeout(100);
+await page.tap('#btn-clear');
+await page.waitForTimeout(300);
+await ev(() => { window.__sf.ui.toggleDrawer(true); document.querySelector('.card[data-spawn="gz-shin"]').scrollIntoView({ block: 'center' }); });
+await page.waitForTimeout(200);
+await page.tap('.card[data-spawn="gz-shin"]');
+await page.waitForTimeout(300);
+const shinTap = await ev(() => {
+  const { sb, cam } = window.__sf;
+  sb.paused = true;
+  cam.home();
+  cam.x = -1;
+  cam.clamp();
+  return cam.toScreen(-1, 1.5);
+});
+await tapAt(shinTap.x, shinTap.y);
+await sim(0.2);
+const shin = await ev(() => {
+  const sb = window.__sf.sb, g = sb.people.find((p) => p.species && p.species.giant);
+  window.__s = g;
+  const caps = g.species.shape(g), tail = caps.slice(4, 18);
+  return g && {
+    name: g.name, tall: +(g.box.maxY - g.box.minY).toFixed(1), hp: g.health.bossHp, max: g.health.bossMax, brain: !!g.brain,
+    tailUp: +Math.min(...tail.map((c) => Math.min(c.y0, c.y1))).toFixed(1),
+  };
+});
+check('SHIN GODZILLA spawns where tapped, called that: bigger than the 1954 one, his tail held up off the ground behind him',
+  !!shin && shin.name === 'Shin Godzilla' && shin.tall > 16 && shin.tall < 25 && shin.tailUp > 3 && !shin.brain, JSON.stringify(shin));
+await sim(3.5);
+await page.waitForTimeout(300);
+const shinBar = await ev(() => {
+  const b = [...document.querySelectorAll('#bossbars .bossbar')].find((el) => /shin/i.test(el.querySelector('.boss-name').textContent));
+  return b && { name: b.querySelector('.boss-name').textContent, hp: b.querySelector('.boss-hp').textContent, kaiju: b.classList.contains('kaiju'), shin: b.classList.contains('shin') };
+});
+check('...his boss bar along the top, SHIN GODZILLA - and 50,000 health', !!shinBar && shinBar.name.toUpperCase() === 'SHIN GODZILLA' && shinBar.kaiju && shinBar.shin && /50,000$/.test(shinBar.hp) && shin.max === 50000,
+  JSON.stringify(shinBar));
+await shot('shin');
+const shinHide = await ev(() => {
+  const sb = window.__sf.sb, g = window.__s;
+  g.gz.auto0 = true;
+  const a = sb.spawnStickman(g.pos.x + 12, null, { name: 'Gunner' });
+  a.brain = null;
+  const h0 = g.health.bossHp;
+  for (let i = 0; i < 20; i++) sb.shoot(a, a.pos.x - 0.4, 2 + (i % 5) * 1, Math.PI, { energy: 1 });
+  const h1 = g.health.bossHp;
+  sb.remove(a);
+  return { bullets: +(h0 - h1).toFixed(1), standing: !g.lying && !g.rag };
+});
+check('twenty bullets take next to nothing off him, and he stands there', shinHide.bullets > 0 && shinHide.bullets < 120 && shinHide.standing, JSON.stringify(shinHide));
+
+// his moves, on somebody where each reaches them
+const shinMoves = await ev(() => {
+  const sb = window.__sf.sb, g = window.__s, f = g.facing;
+  const run = (secs) => { for (let i = 0; i < Math.round(secs * 120); i++) sb.step(1 / 120); };
+  const ab = (id) => g.species.abilities(g).find((a) => a.id === id);
+  const cells = () => sb.slabs.filter((s) => s.background).reduce((n, s) => n + s.cellCount, 0);
+  const evs = new Map();
+  for (const t of ['gzCrush', 'gzBite', 'gzTailHit', 'shinSpew', 'shinBeam', 'shinDorsal', 'shinTailBeam', 'shinBeamHit']) sb.on(t, (e) => { evs.set(t, (evs.get(t) || 0) + 1); });
+  const out = {};
+  const tryMove = (id, dx, secs) => {
+    const p = sb.spawnStickman(g.pos.x + f * dx, null, { name: 'S-' + id });
+    p.brain = null;
+    p.facing = -f;
+    run(0.1);
+    g.gz.target = p;
+    const c0 = cells();
+    const picked = ab(id).pick();
+    let beams = 0;
+    for (let i = 0; i < Math.round(secs * 120); i++) {
+      sb.step(1 / 120);
+      if (g.gz.move && g.gz.move.beams) beams = Math.max(beams, g.gz.move.beams.length);
+    }
+    const r = { picked, dead: p.dead || p.removed, cause: p.removed ? 'gone' : p.health.cause, cut: c0 - cells(), beams };
+    if (!p.removed) sb.remove(p);
+    return r;
+  };
+  out.stomp = tryMove('stomp', 3, 3);
+  out.bite = tryMove('bite', 7.5, 3);
+  out.tail = tryMove('tail', -9, 3);
+  out.breath = tryMove('breath', 18, 9);
+  out.tailBeam = tryMove('tailBeam', -16, 4.5);
+  out.dorsal = tryMove('dorsal', 10, 6.5);
+  out.events = Object.fromEntries(evs);
+  return out;
+});
+check('STOMP, BITE, TAIL: whoever is under his foot, in his jaws or behind him is killed',
+  shinMoves.stomp.picked && shinMoves.stomp.dead && shinMoves.bite.picked && shinMoves.bite.dead && shinMoves.tail.picked && shinMoves.tail.dead,
+  JSON.stringify({ stomp: shinMoves.stomp, bite: shinMoves.bite, tail: shinMoves.tail }));
+check('ATOMIC BREATH: his jaw splits, fire pours out - and the beam, which kills whoever it touches and cuts clean through buildings',
+  shinMoves.breath.picked && shinMoves.events.shinSpew >= 1 && shinMoves.events.shinBeam >= 1 && shinMoves.breath.dead && shinMoves.breath.cut > 300,
+  JSON.stringify({ breath: shinMoves.breath, events: shinMoves.events }));
+check('TAIL BEAM: the end of his tail opens, and a beam comes out of it at whoever is behind him', shinMoves.tailBeam.picked && shinMoves.events.shinTailBeam >= 1 && shinMoves.tailBeam.dead,
+  JSON.stringify(shinMoves.tailBeam));
+check('DORSAL BEAMS: every plate on his back fires at once', shinMoves.dorsal.picked && shinMoves.events.shinDorsal >= 1 && shinMoves.dorsal.beams >= 8, JSON.stringify(shinMoves.dorsal));
+await ev(() => { const { cam } = window.__sf; cam.ppm = cam.minPpm; cam.x = 0; cam.y = cam.h / 2 / cam.ppm - 0.4; cam.clamp(); });
+await page.waitForTimeout(250);
+await shot('shin-city');
+
+// and the 1954 one: the two of them go for each other
+const rivals = await ev(() => {
+  const sf = window.__sf, sb = sf.sb, g = window.__s;
+  g.gz.auto0 = false;
+  g.gz.target = null;
+  sf.ui.setSpawnKind('gz-godzilla');
+  const o = sf.ui.spawnAt(g.pos.x + g.facing * 16, 0);
+  const hits = new Set();
+  sb.on('gzRivalHit', (e) => hits.add(e.by.name + '>' + e.who.name));
+  const h0 = [g.health.bossHp, o.health.bossHp];
+  for (let i = 0; i < 120 * 40 && hits.size < 2; i++) sb.step(1 / 120);
+  const r = { hits: [...hits], shin: Math.round(h0[0] - g.health.bossHp), g54: Math.round(h0[1] - o.health.bossHp) };
+  sb.remove(o);
+  sf.ui.setSpawnKind('stickman');
+  return r;
+});
+check("...and with Godzilla ('54) there too, the two of them go for each other", rivals.hits.length >= 2 && rivals.shin > 0 && rivals.g54 > 0, JSON.stringify(rivals));
+
+// out of health, he does not fall: he freezes solid where he stands
+const shinDeath = await ev(() => {
+  const sb = window.__sf.sb, g = window.__s;
+  let died = null;
+  sb.on('death', (e) => { if (e.who === g) died = e.cause; });
+  g.health.bossHp = 1;
+  g.takeHit({ by: null, part: 'torso', x: g.wj.chest.x, y: g.wj.chest.y, dir: 1, power: 5, kind: 'impact', weapon: 'blast' });
+  for (let i = 0; i < 120 * 6.5; i++) sb.step(1 / 120);
+  return { died, dead: g.dead, there: !g.removed, tall: +(g.box.maxY).toFixed(1), frost: g.gz.frost };
+});
+await page.waitForTimeout(300);
+const shinBarGone = await ev(() => document.querySelectorAll('#bossbars .bossbar').length);
+check('out of health, Shin Godzilla roars once more - and freezes solid, still standing, his bar gone',
+  shinDeath.died === 'frozen solid' && shinDeath.dead && shinDeath.there && shinDeath.tall > 15 && shinDeath.frost === 1 && shinBarGone === 0, JSON.stringify({ ...shinDeath, shinBarGone }));
+await shot('shin-frozen');
 
 // removing the mod takes him away
 await ev(() => { window.__sf.ui.toggleDrawer(true); });

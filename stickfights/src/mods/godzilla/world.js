@@ -20,7 +20,10 @@
    he is big enough to reach into them.
    ========================================================================== */
 import { clamp, rand, chance, sign } from '../../core/util.js';
-import { toWorld, K } from './body.js';
+import { toWorld, kOf } from './body.js';
+
+/** Another of them, other than `man`: a kaiju of this mod. */
+const rivalOf = (man, p) => !!p && p !== man && !!(p.species && p.species.giant) && !!p.gz;
 
 const alive = (p) => !!p && !p.removed && !p.dead;
 const giant = (p) => !!(p && p.species && p.species.giant);
@@ -62,13 +65,13 @@ export function wreck(man, x, y, r, amount, o = {}) {
 }
 
 /** A building he has had most of: that one counts as wrecked (once). */
-function mostlyGone(man, w) {
+export function mostlyGone(man, w) {
   if (w.gzCells0 === undefined) w.gzCells0 = w.cellCount;
   if (!w.gzWrecked && w.gzCells0 > 300 && (w.removed || w.cellCount < w.gzCells0 * 0.4)) noteWrecked(man, w);
 }
 
 /** Whatever comes down off it in the next few seconds, and lands on somebody, is his doing. */
-function blame(man, w) {
+export function blame(man, w) {
   w.thrownBy = man;
   w.thrownAt = man.sandbox.time;
 }
@@ -141,6 +144,7 @@ function smash(man, c) {
  * and - hard enough - everyone near it knocked off their feet.
  */
 export function footDown(man, foot, k) {
+  const K = kOf(man);
   const sb = man.sandbox, sk = S(man), L = sk.legs[foot];
   const heel = W(man, L.heel), toe = W(man, L.toe);
   const x0 = Math.min(heel.x, toe.x) - 0.1, x1 = Math.max(heel.x, toe.x) + 0.1, cx = (x0 + x1) / 2;
@@ -211,6 +215,7 @@ export function footDown(man, foot, k) {
 
 /** Walking: the rubble and loose things in front of his feet shoved out of the way, a little ground down. */
 export function crushIn(man, dt) {
+  const K = kOf(man);
   const sb = man.sandbox, sk = S(man), g = B(man);
   const dir = Math.sign(man.gz.v) || man.facing;
   for (const foot of ['A', 'B']) {
@@ -286,6 +291,7 @@ export function roarAt(man) {
  * whoever he is eating; n 2: the last, and they are gone.
  */
 export function bite(man, mo, o, n, m = null) {
+  const K = kOf(man);
   const sb = man.sandbox, gz = man.gz, f = man.facing;
   sb.emit('gzChomp', { who: man, x: mo.x, y: mo.y, n });
   if (n === 0) {
@@ -295,6 +301,17 @@ export function bite(man, mo, o, n, m = null) {
       if (p.box.maxX < mo.x - 2 || p.box.minX > mo.x + 2 || p.box.maxY < mo.y - 2 || p.box.minY > mo.y + 2) continue;
       const q = p.nearestPart(mo.x, mo.y);
       if (q && q.d < bd) { bd = q.d; best = { p, q }; }
+    }
+    // (another of them, in reach of his jaws: a bite on that scale - and nothing he can hold in his mouth)
+    for (const p of sb.people) {
+      if (!rivalOf(man, p) || p.removed) continue;
+      const q = p.nearestPart(mo.x, mo.y);
+      if (q && q.d < 1.2 * K) {
+        p.takeHit({ by: man, part: q.part, x: q.x, y: q.y, dir: f, power: 38, kind: 'bite', weapon: 'kaijuBlow', bone: p.boneName(q.bone, q.t) });
+        sb.fx.blood(mo.x, mo.y, f * 2, 1, 30, 1.6, p, p.tint);
+        sb.emit('gzRivalHit', { who: p, by: man, x: q.x, y: q.y, how: 'bite' });
+        return null;
+      }
     }
     if (best) {
       const p = best.p, q = best.q;
@@ -348,11 +365,29 @@ export function bite(man, mo, o, n, m = null) {
 
 /* ------------------------------ claws, foot, tail ------------------------------- */
 
-/** Whoever a part of him going through (a, b), radius r, catches - once each move - and what happens to them. */
-function strikeAlong(man, m, a, b, r, hitFn) {
+/**
+ * Whoever a part of him going through (a, b), radius r, catches - once each
+ * move - and what happens to them. (Another of them takes a blow on that
+ * scale instead: `big` how hard.)
+ */
+function strikeAlong(man, m, a, b, r, hitFn, big = 30) {
   const sb = man.sandbox;
   const minX = Math.min(a.x, b.x) - r - 1, maxX = Math.max(a.x, b.x) + r + 1;
   for (const p of sb.people) {
+    if (rivalOf(man, p) && !m.hit.has(p) && !p.removed && p.box.maxX >= minX && p.box.minX <= maxX) {
+      let best = null;
+      for (const t of [0, 0.5, 1]) {
+        const q = p.nearestPart(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
+        if (q && (!best || q.d < best.d)) best = q;
+      }
+      if (best && best.d <= r) {
+        m.hit.add(p);
+        p.takeHit({ by: man, part: best.part, x: best.x, y: best.y, dir: Math.sign(b.x - a.x) || man.facing, power: big, kind: 'impact', weapon: 'kaijuBlow', bone: p.boneName(best.bone, best.t) });
+        sb.fx.dust(best.x, best.y, 8, 1.5);
+        sb.emit('gzRivalHit', { who: p, by: man, x: best.x, y: best.y, how: m.name });
+      }
+      continue;
+    }
     if (p === man || p.removed || giant(p) || m.hit.has(p) || p.heldBy === man) continue;
     if (p.box.maxX < minX || p.box.minX > maxX) continue;
     // (the nearest point of them to the line)
@@ -371,6 +406,7 @@ function strikeAlong(man, m, a, b, r, hitFn) {
 
 /** His claws going through `hand`: whoever is there, and three gouges in whatever is solid. */
 export function claw(man, m, hand, side) {
+  const K = kOf(man);
   const sb = man.sandbox, f = man.facing;
   const prev = m.prevHand || hand;
   m.prevHand = { x: hand.x, y: hand.y };
@@ -399,6 +435,7 @@ export function claw(man, m, hand, side) {
 
 /** A kick: the foot from `ank` to `toe`, through whoever and whatever is there. */
 export function kickAt(man, m, ank, toe) {
+  const K = kOf(man);
   const sb = man.sandbox, f = man.facing;
   m.hit = m.hit || new Set();
   strikeAlong(man, m, ank, toe, 0.85 * K, (p, q) => {
@@ -431,7 +468,8 @@ export function kickAt(man, m, ank, toe) {
  */
 export function tailHits(man, m, dir, k) {
   const sb = man.sandbox, caps = B(man).caps;
-  const tail = caps.slice(3, 16);
+  // (the tail is the first pieces of him: from a little way out from where it joins him to the end of it)
+  const tail = caps.slice(3, B(man).b.tailN);
   for (const c of tail) {
     const a = { x: c.x0, y: c.y0 }, b = { x: c.x1, y: c.y1 };
     strikeAlong(man, m, a, b, c.r + 0.35, (p, q) => {
@@ -481,6 +519,7 @@ export function nearestBuilding(man) {
 
 /** A point on a building to go for: on his side of it, as high up as he can reach. */
 export function buildingPoint(man, w) {
+  const K = kOf(man);
   const b = w.body.aabb();
   const from = man.pos.x < (b.minX + b.maxX) / 2 ? -1 : 1;
   const x = from < 0 ? b.minX - 0.2 : b.maxX + 0.2;

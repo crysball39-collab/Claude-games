@@ -123,8 +123,18 @@ export class Breath {
     const sb = this.sb, man = this.man;
     const ex = s.x + s.dx * hit.d, ey = s.y + s.dy * hit.d;
     for (const p of sb.people) {
-      if (p === man || p.removed || (p.species && p.species.giant)) continue;
+      if (p === man || p.removed) continue;
       if (p.box.maxX < Math.min(s.x, ex) - 1 || p.box.minX > Math.max(s.x, ex) + 1) continue;
+      // another of them, in the way of it: burned, on that scale
+      if (p.species && p.species.giant) {
+        if (!p.gz) continue;
+        const r = p.rayHit(s.x, s.y, s.dx, s.dy, hit.d + 0.5);
+        if (r) {
+          p.takeHit({ by: man, part: r.part, x: r.x, y: r.y, dir: Math.sign(s.dx) || 1, power: 11, kind: 'burn', weapon: 'kaijuBreath', bone: p.boneName(r.bone, r.tb) });
+          if (!this.rivalSaid) { this.rivalSaid = true; sb.emit('gzRivalHit', { who: p, by: man, x: r.x, y: r.y, how: 'breath' }); }
+        }
+        continue;
+      }
       // the nearest point of them to the stream
       let best = null;
       for (let t = 0; t <= 1; t += 0.1) {

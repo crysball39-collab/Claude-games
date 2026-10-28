@@ -1,6 +1,7 @@
 /* =============================================================================
-   The HUD: the spawn menu, the three tools, the buttons along the top, the
-   settings, and the inspector that shows what a stickman thinks and feels.
+   The HUD: the spawn menu, the tools along the bottom, the buttons along the
+   top, the settings, and the inspector that shows what a stickman thinks and
+   feels.
 
    Tools:
      HAND    drag anything to move it, let go while moving to throw it; tap a
@@ -13,12 +14,14 @@
              fixed rope or a pin: drag from one thing to another (or tap one,
              then the other); a pin goes in with one tap, through whatever is
              there
+     EXPLODE tap anywhere to set something off there: a grenade, a stick
+             of dynamite, a block of C4 or a bomb
      ERASE   tap something to remove it (a wire too)
 
    Pinching zooms and pans with any tool. Keyboard: 1 to 6 pick a thing to
    spawn (a stickman, knuckles, a crate, a knife, a machete, a Glock-19), 7
    to 9 the first three things the installed mods add, H hand, Z freeze, W
-   wire, X erase, Space pause, S slow motion, F follow, Tab spawn menu, + and
+   wire, E explode, X erase, Space pause, S slow motion, F follow, Tab spawn menu, + and
    - zoom, 0 reset the camera, M sound, Delete removes whoever is selected,
    Esc closes things. Tapping a gun lying on the floor fires it.
 
@@ -43,6 +46,7 @@ import { drawWallShape, WALLS } from '../game/structures.js';
 import { drawPlantShape } from '../game/trees.js';
 import { drawGallowsShape } from '../game/gallows.js';
 import { WIRES, tie, pinAt } from '../game/wires.js';
+import { BLASTS, explode } from '../game/explode.js';
 import { setFrozen, frozenSaid, freezable } from '../game/freeze.js';
 import { POLICE_UNIFORM } from '../game/render.js';
 import { spawnOfficer } from '../game/police.js';
@@ -177,6 +181,7 @@ export class UI {
     this.wireKind = 'woodRope';
     this.wireStart = null;     // the wire tool: where the first end went { t, x, y }, until the second goes in
     this.wireEnd = null;       // ...and where the other end would go, as the pointer moves
+    this.blastKind = 'grenade';
     this.selected = null;
     this.hover = null;
     this.toastT = 0;
@@ -241,6 +246,7 @@ export class UI {
     this.sound.unlock();
     const w = this.world(sx, sy);
     if (this.tool === 'wire') { this.wireTap(w.x, w.y); return; }
+    if (this.tool === 'explode') { explode(this.sb, w.x, w.y, this.blastKind); return; }
     const thing = this.sb.thingAt(w.x, w.y, this.tol);
     if (this.tool === 'erase') {
       // (a timber of a gallows: the whole gallows)
@@ -311,7 +317,7 @@ export class UI {
       this.wireEnd = { x: w.x, y: w.y };
       return 'wire';
     }
-    const thing = this.tool === 'erase' || this.tool === 'freeze' ? null : this.sb.thingAt(w.x, w.y, this.tol);
+    const thing = this.tool === 'erase' || this.tool === 'freeze' || this.tool === 'explode' ? null : this.sb.thingAt(w.x, w.y, this.tol);
     if (thing && this.hand.grab(thing, w.x, w.y)) {
       this.cam.follow = null;
       return 'grab';
@@ -402,6 +408,29 @@ export class UI {
     this.wireHint();
   }
 
+  /* --------------------------------- explosions --------------------------------- */
+
+  setBlastKind(k) {
+    if (!BLASTS[k] || !document.querySelector(`.blast-kind[data-blast="${k}"]`)) return;
+    this.blastKind = k;
+    for (const b of document.querySelectorAll('.blast-kind')) {
+      const on = b.dataset.blast === k;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+    }
+    this.blastHint();
+  }
+
+  /** What the explode tool will do. */
+  blastHint() {
+    if (this.tool !== 'explode') return;
+    const k = this.blastKind;
+    this.hint(k === 'grenade' ? 'Grenade: tap anywhere to set one off - its casing flies further than the blast'
+      : k === 'dynamite' ? 'Dynamite: tap anywhere to set a stick off'
+        : k === 'c4' ? 'C4: tap anywhere to set it off'
+          : 'Bomb: tap anywhere - and stand well back');
+  }
+
   spawnAt(x, y) {
     const k = this.spawnKind, sb = this.sb;
     const mod = KINDS[k] ? null : findSpawnable(k);
@@ -451,6 +480,7 @@ export class UI {
     $('btn-clear').addEventListener('click', () => this.clearPressed());
     $('btn-sound').classList.toggle('off', !this.sound.on);
     for (const b of document.querySelectorAll('.wire-kind')) b.addEventListener('click', () => this.setWireKind(b.dataset.wire));
+    for (const b of document.querySelectorAll('.blast-kind')) b.addEventListener('click', () => this.setBlastKind(b.dataset.blast));
     for (const id of ['btn-mods', 'btn-mods-title', 'drawer-get-mods']) $(id).addEventListener('click', () => this.openMods());
     for (const id of ['btn-maps', 'btn-maps-title']) $(id).addEventListener('click', () => this.openMaps());
   }
@@ -503,11 +533,13 @@ export class UI {
     this.wireEnd = null;
     for (const b of document.querySelectorAll('.tool')) b.classList.toggle('active', b.dataset.tool === t);
     this.$('wirebar').classList.toggle('hidden', t !== 'wire');
+    this.$('blastbar').classList.toggle('hidden', t !== 'explode');
     this.drawIcon(document.querySelector('#tool-spawn .tool-icon'), this.spawnKind);
     if (t === 'spawn') this.hint(`Tap the world to place ${placeName(this.kindInfo(this.spawnKind))}`);
     else if (t === 'erase') this.hint('Tap something to remove it');
     else if (t === 'freeze') this.hint('Tap something to freeze it in place - tap it again to let it go');
     else if (t === 'wire') this.wireHint();
+    else if (t === 'explode') this.blastHint();
     else if (this.sb.paused) this.hint('Paused: drag anything to move it');
     else this.hint('');
   }
@@ -1431,7 +1463,8 @@ export class UI {
       el.fill.style.width = (clamp(b.frac, 0, 1) * 100).toFixed(2) + '%';
       el.fill.style.background = b.color || '#b23cd1';
       el.track.classList.toggle('armored', !!b.armored);
-      if (b.style && !el.root.classList.contains(b.style)) el.root.classList.add(b.style);
+      // (a style can be more than one class: 'kaiju shin')
+      if (b.style) for (const c of b.style.split(' ')) if (!el.root.classList.contains(c)) el.root.classList.add(c);
       el.hp.textContent = b.hp || '';
       el.hp.classList.toggle('hidden', !b.hp);
       el.root.title = b.text || '';
@@ -1834,6 +1867,7 @@ export class UI {
       else if (k === 'h' || k === 'H') this.setTool('hand');
       else if (k === 'z' || k === 'Z') this.setTool('freeze');
       else if (k === 'w' || k === 'W') this.setTool('wire');
+      else if (k === 'e' || k === 'E') this.setTool('explode');
       else if (k === 'x' || k === 'X') this.setTool('erase');
       else if (k === ' ') { e.preventDefault(); this.togglePause(); }
       else if (k === 's' || k === 'S') this.toggleSlow();
@@ -1891,10 +1925,17 @@ export class UI {
       if (this.wireStart && at) wire = { type: this.wireKind, x0: this.wireStart.x, y0: this.wireStart.y, x1: at.x, y1: at.y };
       else if (WIRES[this.wireKind].pin && at) wire = { type: this.wireKind, x0: at.x, y0: at.y, x1: at.x, y1: at.y };
     }
+    // the explode tool: how far what it would set off reaches
+    let blast = null;
+    if (this.tool === 'explode' && this.hover && !this.hand.active) {
+      const w = this.world(this.hover.x, this.hover.y);
+      blast = { x: w.x, y: Math.max(0.05, w.y), r: BLASTS[this.blastKind].r };
+    }
     return {
       selected: this.selected,
       ghost,
       wire,
+      blast,
       hand: { active: this.hand.active, x: this.hand.x, y: this.hand.y },
     };
   }

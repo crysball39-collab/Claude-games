@@ -127,6 +127,23 @@ export function setupReactions(sb) {
     B.emo.bump('fear', -0.5);
     B.emo.bump('surprise', 0.5);
     B.emo.bump('joy', 0.3);
-    B.speak('gzDown', {}, 0.6, null, true);
+    B.speak(e.frozen ? 'shinFrozen' : 'gzDown', {}, 0.6, null, true);
+  }));
+  // Shin Godzilla's light: the plates going purple, the beams, whoever they go through
+  sb.on('shinCharge', (e) => witnesses(sb, e, (B) => {
+    terror(B, e.who, 0.7);
+    B.speak(e.dorsal ? 'sawShinDorsal' : e.tail ? 'sawShinTail' : 'sawShinGlow', { other: e.who.name }, 0.6, null, true);
+  }));
+  sb.on('shinBeam', (e) => witnesses(sb, e, (B) => {
+    terror(B, e.who, 1);
+    B.speak('sawShinBeam', { other: e.who.name }, 0.7, null, true);
+  }));
+  sb.on('shinDorsal', (e) => witnesses(sb, e, (B) => {
+    terror(B, e.who, 1.1);
+    B.speak('sawShinDorsal', { other: e.who.name }, 0.8, null, true);
+  }));
+  sb.on('shinBeamHit', (e) => witnesses(sb, e, (B) => {
+    terror(B, e.by, 0.8);
+    B.speak('sawShinBurn', { victim: e.who.name, other: e.by.name }, 0.5, null, true);
   }));
 }
