@@ -246,6 +246,7 @@ bullets hit whoever is in the way and leave bullet holes; you can fall and start
 again with your coins; saves survive a reload; and, against a stand-in for the
 Claude page's database, that sign up, cloud saving, log out, a wrong password and
 log in all work and only a salted hash is stored. With `--file` it opens the
-built file and fails if it fetches anything at all.
+built file and fails if it fetches anything at all; `--accounts` runs only the
+account checks.
 
 Fonts: Bungee and Barlow Condensed, SIL Open Font License (`fonts/OFL-*.txt`).

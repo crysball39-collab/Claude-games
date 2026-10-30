@@ -21,6 +21,7 @@ import { mockScript } from './mockcloud.mjs';
 const GAME = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const ROOT = path.resolve(GAME, '..');
 const FILE_MODE = process.argv.includes('--file');
+const ACCOUNTS_ONLY = process.argv.includes('--accounts');
 const SHOTS = path.join(ROOT, '.shots');
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2' };
 
@@ -58,8 +59,8 @@ const browser = await chromium.launch({
 const errors = [];
 const network = [];
 
-async function open(init = null) {
-  const ctx = await browser.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+async function open(init = null, on = browser) {
+  const ctx = await on.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
   if (init) await ctx.addInitScript(init);
   const page = await ctx.newPage();
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
@@ -86,6 +87,8 @@ const act = (name) => ev((n) => { const i = window.__barrage.input; i.press(n); 
 const finite = () => ev(() => window.__barrage.game.world.bodies.every((b) => Number.isFinite(b.x.x + b.x.y + b.x.z + b.q.x + b.q.w)));
 
 /* --------------------------------- title -------------------------------- */
+
+if (!ACCOUNTS_ONLY) {
 
 check('the title shows PLAY, LOG IN and SIGN UP', await page.isVisible('#btn-play') && await page.isVisible('#btn-login') && await page.isVisible('#btn-signup'));
 check('box ragdolls fight behind the title', await ev(() => window.__barrage.game.fighters.length >= 6));
@@ -283,6 +286,8 @@ await tap('#shop-close');
 /* -------------------------------- inventory ------------------------------ */
 
 await tap('#btn-inv');
+// the tap is read on the next frame, which is slow under software rendering
+await page.waitForFunction(() => window.__barrage.state === 'bag', null, { timeout: 30000, polling: 50 }).catch(() => {});
 check('the bag button opens the inventory', await ev(() => window.__barrage.state === 'bag'));
 const slots = await ev(() => ({
   bag: document.querySelectorAll('#inv-grid .slot').length,
@@ -426,20 +431,26 @@ check('BACK TO THE ARENA: on your feet again, doors open, wave 1 next, coins kep
 /* ---------------------------------- saving -------------------------------- */
 
 const saved = await ev(() => { const b = window.__barrage; return { coins: b.profile.coins, eq: b.profile.gear() }; });
-await page.waitForTimeout(400);
+await page.waitForTimeout(2500);
 await page.reload({ waitUntil: 'load' });
 await page.waitForFunction(() => window.__barrage && window.__barrage.state === 'title', null, { timeout: 90000 });
 const loaded = await ev(() => { const b = window.__barrage; return { coins: b.profile.coins, eq: b.profile.gear() }; });
 check('your coins and gear are still there after a reload', JSON.stringify(saved) === JSON.stringify(loaded), JSON.stringify(loaded));
 check('nothing went wrong in the console', errors.length === 0, errors.slice(0, 3).join(' | '));
+}
 await ctx.close();
 
 /* --------------------------------- accounts ------------------------------- */
 
+// the accounts get a browser of their own, fresh, as a phone opening the page would be
+const browser2 = await chromium.launch({
+  executablePath: process.env.CHROMIUM_PATH || undefined,
+  args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage'],
+});
 {
-  ({ ctx, page } = await open(mockScript(null, 'u_tester')));
-  const P = page;
-  const ev2 = (fn, arg) => P.evaluate(fn, arg);
+  ({ ctx, page } = await open(mockScript(null, 'u_tester'), browser2));
+  let P = page;
+  let ev2 = (fn, arg) => P.evaluate(fn, arg);
   await P.waitForFunction(() => window.__barrage && window.__barrage.state === 'title', null, { timeout: 90000 });
   await P.tap('#btn-signup');
   await P.waitForTimeout(150);
@@ -471,9 +482,20 @@ await ctx.close();
   await P.waitForFunction(() => document.querySelector('#who').classList.contains('in'), null, { timeout: 30000 }).catch(() => {});
   await P.waitForTimeout(900);
   check('LOG IN brings your coins back', await ev2(() => window.__barrage.profile.coins === 77), `${await ev2(() => window.__barrage.profile.coins)}`);
-  await P.reload({ waitUntil: 'load' });
+  // close the tab and come back to the page in a new one
+  await P.waitForTimeout(1500);
+  await P.close();
+  P = await ctx.newPage();
+  ev2 = (fn, arg) => P.evaluate(fn, arg);
+  P.on('pageerror', (e) => errors.push(e.message));
+  await P.goto(url, { waitUntil: 'load' });
   await P.waitForFunction(() => window.__barrage && window.__barrage.state === 'title' && document.querySelector('#who').classList.contains('in'), null, { timeout: 60000 }).catch(() => {});
-  check('coming back later, you are still logged in', await ev2(() => document.querySelector('#who-text').textContent.includes('Nova')));
+  const back = await ev2(() => ({
+    who: document.querySelector('#who-text').textContent, state: window.__barrage.lib.cloud.state,
+    remembered: (() => { try { return localStorage.getItem('barrage.account'); } catch { return 'n/a'; } })(),
+    keys: Object.keys(localStorage).join(','),
+  }));
+  check('coming back later, you are still logged in', back.who.includes('Nova'), JSON.stringify(back));
   await ctx.close();
 }
 
@@ -481,6 +503,7 @@ if (FILE_MODE) check('the single file fetched nothing from the network', network
 check('no errors anywhere', errors.length === 0, errors.slice(0, 3).join(' | '));
 
 await browser.close();
+await browser2.close();
 if (server) server.close();
 const failed = results.filter((r) => !r.ok);
 console.log(`\n${results.length - failed.length}/${results.length} passed`);
