@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="claude:viewport-fit-sides" content="cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="theme-color" content="#140e0a" />
+<meta name="description" content="Barrage - fight wave after wave of box ragdolls in the arena, then spend your coins at the Stall" />
+<title>Barrage</title>
+<link rel="icon" href="data:," />
+<link rel="stylesheet" href="style.css" />
+<script type="importmap">
+{ "imports": { "three": "../vendor/three.module.js" } }
+</script>
+</head>
+<body>
+
+<canvas id="view"></canvas>
+
+<!-- ================================ LOADING ================================= -->
+<div id="loading" class="screen show">
+  <div class="load-inner">
+    <h1 class="logo">BARRAGE</h1>
+    <div class="load-bar"><i id="load-bar"></i></div>
+    <div class="load-text" id="load-text">Raking the sand&hellip;</div>
+  </div>
+</div>
+
+<!-- ================================= TITLE ================================== -->
+<div id="title" class="screen">
+  <div class="title-shade"></div>
+
+  <section class="card title-card" id="panel-main">
+    <h1 class="logo">BARRAGE</h1>
+    <p class="tagline">The doors open. Box ragdolls come out. You stay standing.</p>
+    <div class="who" id="who"><span class="who-dot"></span><span id="who-text">Guest</span></div>
+    <div class="title-buttons">
+      <button id="btn-play" class="btn primary" type="button">PLAY</button>
+      <div class="row" id="row-auth">
+        <button id="btn-login" class="btn" type="button">LOG IN</button>
+        <button id="btn-signup" class="btn" type="button">SIGN UP</button>
+      </div>
+      <div class="row hidden" id="row-out">
+        <button id="btn-logout" class="btn" type="button">LOG OUT</button>
+      </div>
+      <button id="btn-settings" class="btn ghost" type="button">SETTINGS</button>
+    </div>
+    <dl class="record" id="record">
+      <div><dt>Coins</dt><dd id="rec-coins">0</dd></div>
+      <div><dt>Best wave</dt><dd id="rec-best">&mdash;</dd></div>
+      <div><dt>Kills</dt><dd id="rec-kills">0</dd></div>
+    </dl>
+    <p class="save-line" id="save-line">Saved on this device</p>
+  </section>
+
+  <form class="card panel hidden" id="panel-account" novalidate autocomplete="on">
+    <div class="panel-head">
+      <button class="back" type="button" data-back aria-label="Back">&larr;</button>
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab on" data-mode="login" role="tab">LOG IN</button>
+        <button type="button" class="tab" data-mode="signup" role="tab">SIGN UP</button>
+      </div>
+    </div>
+    <div class="mine hidden" id="acct-mine"></div>
+    <label class="field"><span>Fighter name</span>
+      <input id="acct-name" name="username" type="text" autocomplete="username" autocapitalize="off" spellcheck="false" maxlength="16" placeholder="3 to 16 letters or numbers" />
+    </label>
+    <label class="field"><span>Password</span>
+      <input id="acct-pass" name="password" type="password" autocomplete="current-password" maxlength="64" placeholder="At least 4 characters" />
+    </label>
+    <label class="field signup-only"><span>Password again</span>
+      <input id="acct-pass2" name="password2" type="password" autocomplete="new-password" maxlength="64" />
+    </label>
+    <label class="check signup-only hidden" id="acct-bring-row">
+      <input type="checkbox" id="acct-bring" checked /> <span id="acct-bring-text">Bring the coins and gear saved on this device</span>
+    </label>
+    <p class="msg" id="acct-msg" role="status"></p>
+    <button class="btn primary" id="acct-submit" type="submit">LOG IN</button>
+    <p class="fine">Your account lives in this page's private storage, under your Claude account. Passwords are never stored, only a salted hash.</p>
+  </form>
+
+  <section class="card panel hidden" id="panel-offline">
+    <div class="panel-head">
+      <button class="back" type="button" data-back aria-label="Back">&larr;</button>
+      <h2>ACCOUNTS</h2>
+    </div>
+    <p id="offline-why">Accounts and cloud saves work on the game's Claude page.</p>
+    <p class="link-row hidden" id="offline-link-row">Open it here: <a id="offline-link" href="#" target="_blank" rel="noopener"></a></p>
+    <p class="fine">Until then your coins and gear are saved on this device.</p>
+  </section>
+
+  <section class="card panel hidden" id="panel-settings">
+    <div class="panel-head">
+      <button class="back" type="button" data-back aria-label="Back">&larr;</button>
+      <h2>SETTINGS</h2>
+    </div>
+    <div class="settings" id="settings-list"></div>
+  </section>
+</div>
+
+<!-- ================================== HUD =================================== -->
+<div id="hud" class="hidden">
+  <div class="vitals">
+    <div class="meter hp" id="hp"><i class="lag" id="hp-lag"></i><i class="fill" id="hp-fill"></i><b>HP</b><span id="hp-text">100</span></div>
+    <div class="meter st" id="st"><i class="fill" id="st-fill"></i><b>STAMINA</b></div>
+  </div>
+
+  <div class="wave-chip" id="wave-chip"><span id="wave-label">WAVE 1</span><span id="wave-left"></span></div>
+
+  <div class="top-right">
+    <div class="coins" id="coins-box"><span class="coin-icon" aria-hidden="true"></span><span id="coins">0</span></div>
+    <button class="hud-btn" data-act="inventory" id="btn-inv" aria-label="Inventory">
+      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M8 8V6.5a4 4 0 0 1 8 0V8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M4.5 8h15l-1.3 12.2a1 1 0 0 1-1 .8H6.8a1 1 0 0 1-1-.8z" fill="currentColor"/><path d="M9 12.5h6" stroke="#231812" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <button class="hud-btn" data-act="pause" id="btn-pause" aria-label="Pause">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M8 5v14M16 5v14" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+
+  <div id="floaters"></div>
+  <div id="hurt"></div>
+
+  <div id="stick-zone"><div id="stick-base"><div id="stick-knob"></div></div></div>
+
+  <div class="actions" id="actions">
+    <button class="act big" data-act="punch" id="btn-punch" type="button"><span id="punch-label">PUNCH</span></button>
+    <button class="act" data-act="kick" id="btn-kick" type="button"><span>KICK</span></button>
+    <button class="act" data-act="block" id="btn-block" type="button"><span>BLOCK</span></button>
+    <button class="act" data-act="jump" id="btn-jump" type="button"><span>JUMP</span></button>
+    <button class="act small" data-act="crouch" id="btn-crouch" type="button"><span>CROUCH</span></button>
+    <button class="act small" data-act="sprint" id="btn-sprint" type="button"><span>SPRINT</span></button>
+  </div>
+
+  <button id="btn-context" class="context hidden" data-act="use" type="button"></button>
+  <div id="hint" class="hint"></div>
+  <div id="banner" class="banner"><div class="banner-big" id="banner-big"></div><div class="banner-small" id="banner-small"></div></div>
+  <div id="toast" class="toast" role="status"></div>
+</div>
+
+<!-- =============================== INVENTORY ================================ -->
+<div id="inventory" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Inventory">
+  <div class="sheet inv-sheet">
+    <header class="sheet-head">
+      <h2>INVENTORY</h2>
+      <div class="coins small"><span class="coin-icon" aria-hidden="true"></span><span id="inv-coins">0</span></div>
+      <button class="x" id="inv-close" type="button" aria-label="Close the inventory">&times;</button>
+    </header>
+    <div class="inv-body">
+      <section class="equip">
+        <div class="doll">
+          <div class="slot-col" id="eq-left"></div>
+          <div class="figure" aria-hidden="true"></div>
+          <div class="slot-col" id="eq-right"></div>
+        </div>
+        <div class="detail" id="inv-detail"></div>
+      </section>
+      <section class="bag">
+        <div class="bag-head"><span>BAG</span><span id="inv-count">0 / 60</span></div>
+        <div class="grid" id="inv-grid"></div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<!-- ================================= STALL ================================== -->
+<div id="shop" class="overlay hidden" role="dialog" aria-modal="true" aria-label="The Stall">
+  <div class="sheet shop-sheet">
+    <header class="sheet-head">
+      <h2>THE STALL</h2>
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab on" data-tab="buy" role="tab">BUY</button>
+        <button type="button" class="tab" data-tab="sell" role="tab">SELL</button>
+      </div>
+      <div class="coins small"><span class="coin-icon" aria-hidden="true"></span><span id="shop-coins">0</span></div>
+      <button class="x" id="shop-close" type="button" aria-label="Leave the Stall">&times;</button>
+    </header>
+    <p class="keeper-line" id="keeper-line"></p>
+    <div class="shop-buy" id="shop-buy"></div>
+    <div class="shop-sell hidden" id="shop-sell"></div>
+  </div>
+</div>
+
+<!-- ================================= PAUSE ================================== -->
+<div id="pause" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Paused">
+  <div class="sheet small-sheet">
+    <h2>PAUSED</h2>
+    <div class="pause-buttons">
+      <button class="btn primary" id="btn-resume" type="button">RESUME</button>
+      <button class="btn" id="btn-pause-settings" type="button">SETTINGS</button>
+      <button class="btn ghost" id="btn-quit" type="button">QUIT TO TITLE</button>
+    </div>
+    <div class="settings hidden" id="pause-settings"></div>
+    <p class="save-line" id="pause-save"></p>
+  </div>
+</div>
+
+<!-- ================================= DEATH ================================== -->
+<div id="death" class="overlay hidden" role="dialog" aria-modal="true" aria-label="You fell">
+  <div class="sheet small-sheet death-sheet">
+    <h2>YOU FELL</h2>
+    <p class="death-wave" id="death-wave"></p>
+    <dl class="record">
+      <div><dt>Kills this run</dt><dd id="death-kills">0</dd></div>
+      <div><dt>Coins this run</dt><dd id="death-coins">0</dd></div>
+      <div><dt>Best wave</dt><dd id="death-best">0</dd></div>
+    </dl>
+    <p class="fine">You keep your coins and your gear. The next run starts at wave 1.</p>
+    <button class="btn primary" id="btn-again" type="button">BACK TO THE ARENA</button>
+  </div>
+</div>
+
+<div id="rotate" class="rotate" aria-hidden="true"><div>Turn your phone sideways for the best view</div></div>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

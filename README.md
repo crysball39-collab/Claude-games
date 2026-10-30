@@ -4,6 +4,11 @@ A 3D, first person, mobile-first physics sandbox that runs in a browser. Landsca
 orientation, touch controls, no install, no build step, no assets on disk — every
 texture in the game is drawn procedurally onto a canvas at load time.
 
+> **Also in this repository: [BARRAGE](barrage/README.md)**, a third person arena
+> brawler. The gates open and box ragdolls come out to fight you; clear the wave,
+> spend your coins at the Stall outside, and go back in for the next one.
+> `dist/barrage.html` is the whole game in one file.
+
 ## Getting it onto a phone
 
 **`dist/gorebox.html` is the whole game in one file.** Download it, open it, play —
