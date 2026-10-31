@@ -92,13 +92,15 @@ export class Blood {
    *   wood                the same, harder, and now and then a split in the skin
    *   blade               a cut, or a slash along the way the blade was travelling, torn cloth, a lot of blood
    *   bullet              a hole where it went in and, through a limb or the body, a bigger one where it came out
+   *   claw                three slashes side by side, along the rake
    */
   onHit(victim, hit) {
     const part = hit.part;
     const body = victim.bodies[part];
     const def = PARTS[part];
     const tiles = victim.layout.tiles[part];
-    const local = body.toLocal(hit.point, _l).clone();
+    // in the part's frame, at the size it was built (a grown body is drawn bigger, not repainted)
+    const local = body.toLocal(hit.point, _l).clone().divideScalar(victim.scale);
     // the outward normal at that spot, in the part's frame
     const n = outward(local, def.half);
     const cloth = victim.look.surface[part];
@@ -131,7 +133,7 @@ export class Blood {
         const dirL = _d.copy(hit.dir).applyQuaternion(inv);
         const exit = exitPoint(local, dirL, def.half);
         if (exit) victim.paint.splat(exit, def.size, tiles, 0.014, { kind: 'exit', cloth, skin, down });
-        const worldExit = exit ? body.toWorld(exit, _v).clone() : hit.point;
+        const worldExit = exit ? body.toWorld(_v.copy(exit).multiplyScalar(victim.scale), _v).clone() : hit.point;
         this.spray(worldExit, hit.dir, 14, 3.2, 0.35, 0.012, victim, body.v);
       }
       const worldN = _w.copy(n).applyQuaternion(body.q);
@@ -140,7 +142,18 @@ export class Blood {
       return;
     }
 
-    if (kind === 'blade') {
+    if (kind === 'claw') {
+      // three claws, three slashes: side by side across the way the hand raked
+      const dirL = _d.copy(hit.swing || hit.dir).applyQuaternion(inv).clone();
+      const across = _w.crossVectors(n, dirL);
+      if (across.lengthSq() < 1e-6) across.set(1, 0, 0);
+      across.normalize();
+      for (const k of [-1, 0, 1]) {
+        const at = local.clone().addScaledVector(across, k * 0.032);
+        victim.paint.splat(at, def.size, tiles, 0.02, { kind: 'slash', length: 0.09 + Math.min(0.08, hit.speed * 0.006), dir: dirL, cloth, skin, down });
+      }
+      marks.slash += 3;
+    } else if (kind === 'blade') {
       const dirL = _d.copy(hit.swing || hit.dir).applyQuaternion(inv);
       const slash = hit.speed > 4.5;
       victim.paint.splat(local, def.size, tiles, 0.02, {
@@ -165,7 +178,7 @@ export class Blood {
 
     let amount = 0;
     if (kind === 'impact') amount = hit.damage > 6 ? 0.2 : 0;
-    else if (kind === 'blade') amount = clamp(0.6 + hit.damage / 40, 0.6, 1.25);
+    else if (kind === 'blade' || kind === 'claw') amount = clamp(0.6 + hit.damage / 40, 0.6, 1.25);
     else if (kind === 'wood') amount = hit.damage > 12 ? clamp(hit.damage / 40, 0.3, 0.8) : 0.15;
     else {
       const face = part === P.head || part === P.neck;
@@ -180,9 +193,9 @@ export class Blood {
     const count = 6 + amount * 34 + hit.speed * 1.2;
     this.spray(hit.point, out, count, 1.4 + hit.speed * 0.38, 0.75, 0.011 + amount * 0.006, victim, body.v);
     // blood at the wound itself
-    if (kind !== 'blade') victim.paint.splat(local, def.size, tiles, 0.014 + amount * 0.025, { sats: 4 });
+    if (kind !== 'blade' && kind !== 'claw') victim.paint.splat(local, def.size, tiles, 0.014 + amount * 0.025, { sats: 4 });
     this.addWound(victim, part, local, n, 3 + amount * 12, 5 + amount * 18);
-    if (part === P.head && kind !== 'blade' && chance(0.6)) {
+    if (part === P.head && kind !== 'blade' && kind !== 'claw' && chance(0.6)) {
       // a nose bleed: just under the middle of the face
       this.addWound(victim, part, new Vector3(0, -0.04, def.half.z), new Vector3(0, 0, 1), 2.5 + amount * 4, 8 + amount * 10);
     }
@@ -192,7 +205,7 @@ export class Blood {
     if (s && s.owner) {
       if (s.owner.paint && s.owner.bodies) {
         const h = s.owner;
-        const sl = s.toLocal(hit.point, _l).clone();
+        const sl = s.toLocal(hit.point, _l).clone().divideScalar(h.scale);
         h.paint.splat(sl, PARTS[s.part].size, h.layout.tiles[s.part], 0.012 + amount * 0.02, { sats: 3 });
       } else if (s.owner.splat) {
         s.owner.splat(hit.point, 0.018 + amount * 0.035, { sats: 5 });
@@ -205,7 +218,7 @@ export class Blood {
   impact(h, part, point, speed) {
     const body = h.bodies[part];
     const def = PARTS[part];
-    const local = body.toLocal(point, _l).clone();
+    const local = body.toLocal(point, _l).clone().divideScalar(h.scale);
     const n = outward(local, def.half);
     const amount = clamp((speed - 6) / 8, 0.1, 0.8);
     this.spray(point, UP, 4 + amount * 18, 1 + speed * 0.2, 0.9, 0.011, h);
@@ -227,7 +240,7 @@ export class Blood {
       w.acc += w.rate * fade * dt * this.amount;
       while (w.acc >= 1) {
         w.acc -= 1;
-        const wp = body.toWorld(w.local, _v);
+        const wp = body.toWorld(_v.copy(w.local).multiplyScalar(w.h.scale), _v);
         const wn = _w.copy(w.normal).applyQuaternion(body.q);
         const s = rand(0.15, 0.7);
         const bl = body.v.length(), k = bl > 3 ? 3 / bl : 1;
@@ -251,7 +264,7 @@ export class Blood {
         w.poolT += dt;
         if (w.poolT > 0.35) {
           w.poolT = 0;
-          const wp = body.toWorld(w.local, _v);
+          const wp = body.toWorld(_v.copy(w.local).multiplyScalar(w.h.scale), _v);
           const gy = g.groundAt(wp.x, wp.z);
           if (isFinite(gy) && wp.y - gy < 0.3 && body.v.lengthSq() < 0.05) {
             w.pool = Math.min(0.5, w.pool + 0.012 * fade + 0.004);
@@ -299,9 +312,9 @@ export class Blood {
           if (dx * dx + dy * dy + dz * dz > 1.3 * 1.3) continue;
           for (let pi = 0; pi < NP; pi++) {
             const b = h.bodies[pi];
-            if (!pointInBox(x, y, z, b.x, b.axes, b.half, h.outfit.pad[pi])) continue;
+            if (!pointInBox(x, y, z, b.x, b.axes, b.half, h.outfit.pad[pi] * h.scale)) continue;
             _v.set(x, y, z);
-            const local = b.toLocal(_v, _l);
+            const local = b.toLocal(_v, _l).divideScalar(h.scale);
             const dir = _d.set(v[j], v[j + 1], v[j + 2]).applyQuaternion(_qInv.copy(b.q).invert()).multiplyScalar(0.15);
             // on whatever they are wearing there, or on them
             if (!h.outfit.splat(pi, local, this.size[i] * 1.1, { dir, sats: 1 })) {

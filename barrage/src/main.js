@@ -15,11 +15,13 @@ import { Game } from './game/game.js';
 import * as anim from './game/anim.js';
 import { roster } from './game/waves.js';
 import { R } from './game/arena.js';
-import { Held, STOCK, ITEMS } from './game/gear.js';
+import { Held, ITEMS, RARITY, rollDrop } from './game/gear.js';
 import { Hud } from './ui/hud.js';
 import { InventoryUI } from './ui/inventory.js';
 import { ShopUI } from './ui/shop.js';
 import { AccountUI } from './ui/account.js';
+import { AdminUI, isAdmin } from './ui/admin.js';
+import { MORPHS } from './game/morph.js';
 import { settings, renderSettings } from './ui/settings.js';
 import { Profile } from './data/profile.js';
 import { readSave, writeSave, saveHooks } from './data/save.js';
@@ -139,10 +141,58 @@ function loadProfile() {
   app.profile.onChange = () => {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(saveNow, 250);
-    app.hud.setCoins(app.profile.coins);
+    showCoins();
   };
+  app.profile.adminOn = isAdmin(cloud.account);
   paintRecord();
-  app.hud.setCoins(app.profile.coins);
+  paintAdmin();
+  showCoins();
+}
+
+/** The coins in the corner: or, with infinite coins on, infinity. */
+function showCoins(bump = false) {
+  if (app.profile) app.hud.setCoins(app.profile.infinite ? '∞' : app.profile.coins, bump);
+}
+
+/** The crown beside the bag and ADMIN PANEL in the pause menu, for the admin only. */
+function paintAdmin() {
+  const on = !!(app.profile && app.profile.adminOn);
+  $('#btn-admin').classList.toggle('hidden', !on);
+  $('#btn-pause-admin').classList.toggle('hidden', !on);
+}
+
+/**
+ * What the admin panel says, on you: God mode, your most health and stamina,
+ * your speed, your morph. Anyone else, or the admin with it all off, is
+ * plain you.
+ */
+function applyAdmin(changed = null) {
+  const p = app.game.player;
+  if (!p) return;
+  const a = app.profile.admin;
+  p.invulnerable = !!(a && a.god);
+  p.baseHealth = a ? a.maxHp : 100;
+  p.maxStamina = a ? a.maxStamina : 100;
+  p.speedMul = a ? a.speed : 1;
+  const morph = a ? a.morph : null;
+  if ((p.morph ? p.morph.id : null) !== morph) {
+    p.setMorph(morph);
+    // back to yourself: your sword, shield and armour come back
+    if (!morph) equipFromProfile();
+  }
+  p.refreshMax();
+  if (changed === 'maxHp') p.health = p.maxHealth;
+  p.stamina = changed === 'maxStamina' ? p.maxStamina : Math.min(p.stamina, p.maxStamina);
+  showCoins();
+}
+
+/** You, in the middle of the sand: as you are kitted out, as the admin panel says, fresh. */
+function spawnYou() {
+  const p = app.game.spawnPlayer(app.input, app.profile.gear());
+  applyAdmin();
+  p.health = p.maxHealth;
+  p.stamina = p.maxStamina;
+  return p;
 }
 
 function saveNow() {
@@ -199,9 +249,16 @@ function wireMenus() {
     sound: s,
     toast: (t, d) => app.hud.toast(t, d),
   });
+  app.admin = new AdminUI({
+    profile: () => app.profile,
+    onChange: (k) => applyAdmin(k),
+    onClose: () => resume(),
+    sound: s,
+  });
+  cloud.onChange(() => { if (app.profile) { app.profile.adminOn = isAdmin(cloud.account); paintAdmin(); } });
   app.shop = new ShopUI({
     profile: () => app.profile,
-    onChange: () => { app.hud.setCoins(app.profile.coins, true); },
+    onChange: () => { showCoins(true); },
     onClose: () => resume(),
     sound: s,
     toast: (t, d) => app.hud.toast(t, d),
@@ -214,6 +271,7 @@ function wireMenus() {
     box.classList.toggle('hidden');
     if (!box.classList.contains('hidden')) renderSettings(box, s);
   });
+  $('#btn-pause-admin').addEventListener('click', () => { s.click(); $('#pause').classList.add('hidden'); app.state = 'playing'; openAdmin(); });
   $('#btn-quit').addEventListener('click', () => { s.click(); quit(); });
   $('#btn-again').addEventListener('click', () => { s.click(); again(); });
 
@@ -223,6 +281,7 @@ function wireMenus() {
     const k = e.code;
     if (app.state === 'bag' && (k === 'Escape' || k === 'KeyI' || k === 'Tab')) { e.preventDefault(); app.inventory.close(); }
     else if (app.state === 'shop' && (k === 'Escape' || k === 'KeyE')) app.shop.close();
+    else if (app.state === 'admin' && k === 'Escape') app.admin.close();
     else if (app.state === 'paused' && (k === 'Escape' || k === 'KeyP')) { $('#pause').classList.add('hidden'); resume(); }
   });
 
@@ -251,6 +310,12 @@ function openBag() {
   if (app.state !== 'playing') return;
   app.state = 'bag';
   app.inventory.show();
+}
+
+function openAdmin() {
+  if (app.state !== 'playing' || !app.profile.adminOn) return;
+  app.state = 'admin';
+  app.admin.show();
 }
 
 function openShop() {
@@ -290,10 +355,10 @@ function play() {
   app.hud.clearFloaters();
   g.clearAll();
   g.spawnKeeper();
-  g.spawnPlayer(app.input, app.profile.gear());
+  spawnYou();
   app.input.releaseAll();
   app.state = 'playing';
-  app.hud.setCoins(app.profile.coins);
+  showCoins();
   const wave = app.profile.d.wave;
   g.waves.wave = wave;
   if (wave <= 1) g.waves.begin(1);
@@ -310,20 +375,36 @@ function again() {
   g.blood.clear();
   g.arena.clearBlood();
   app.hud.clearFloaters();
-  g.spawnPlayer(app.input, app.profile.gear());
+  spawnYou();
   g.waves.wave = 1;
   g.waves.rest();
   app.state = 'playing';
   app.input.releaseAll();
 }
 
-/** The sword and shield in your hands, and what you wear, match the slots. */
+/** One you put down may drop a sword - a champion always does - straight into your bag. */
+function lootFrom(f) {
+  const g = app.game;
+  const kind = rollDrop(!!(f.spec && f.spec.boss), g.waves.wave);
+  if (!kind) return;
+  const T = ITEMS[kind], R = RARITY[T.rarity];
+  g.fx.beam(f.pelvis.x, R.color, R.tier);
+  const res = app.profile.give(kind);
+  if (res.error) { app.hud.toast(`A ${R.name} ${T.name} dropped, but your bag is full`, 3.2); return; }
+  app.sound.loot(R.tier);
+  if (R.tier >= 5) app.hud.banner(R.name.toUpperCase() + '!', `${T.name} dropped`, 2.6);
+  app.hud.toast(`${R.name} drop: ${T.name} is in your bag`, 3.2);
+}
+
+/** The sword and shield in your hands, and what you wear, match the slots. (Under a morph's goo, nothing is held.) */
 function equipFromProfile() {
   const p = app.game.player;
   if (!p || !p.alive) return;
   const gear = app.profile.gear();
-  p.equip('weapon', gear.weapon);
-  p.equip('offhand', gear.offhand);
+  if (!p.morph) {
+    p.equip('weapon', gear.weapon);
+    p.equip('offhand', gear.offhand);
+  }
   p.wear(gear);
 }
 
@@ -357,7 +438,14 @@ function wireGame() {
     if (f === g.player) g.cam.shake(0.02);
   });
   g.on('guardbreak', (f) => { if (f === g.player) app.hud.toast('Guard broken: out of stamina'); });
-  g.on('swing', (f, at, kind) => s.whoosh(at, f.weapon ? 'swing' : kind === 'kick' ? 'kick' : 'jab'));
+  g.on('swing', (f, at, kind) => s.whoosh(at, f.weapon || f.morph ? 'swing' : kind === 'kick' ? 'kick' : 'jab'));
+  // a morph
+  g.on('morph', (f, id) => { if (f === g.player) { s.goo(); app.hud.banner(MORPHS[id].name.toUpperCase(), 'The goo takes you over', 2.6); } });
+  g.on('morphed', (f) => { if (f === g.player) { s.roar(); g.cam.shake(0.25); g.arena.cheer(1); } });
+  g.on('surge', () => g.cam.shake(0.15));
+  g.on('spike', (at) => s.spike(at));
+  g.on('lash', () => s.lash());
+  g.on('chomp', () => { s.chomp(); g.cam.shake(0.22); });
   g.on('thud', (p, sp) => s.thud(sp, p));
   g.on('shot', (f, at) => s.shot(at));
   g.on('ricochet', (at, kind) => s.ricochet(at, kind));
@@ -387,8 +475,9 @@ function wireGame() {
       app.profile.kill();
       app.profile.addCoins(coins);
       app.hud.coinPop(f.chest.x, coins);
-      app.hud.setCoins(app.profile.coins, true);
+      showCoins(true);
       s.coin();
+      lootFrom(f);
     }
   });
 
@@ -405,7 +494,7 @@ function wireGame() {
     if (app.profile) {
       app.profile.addCoins(coins);
       app.profile.cleared(n);
-      app.hud.setCoins(app.profile.coins, true);
+      showCoins(true);
     }
     s.victory();
     s.cheer(1.4);
@@ -480,8 +569,8 @@ function adapt(dt) {
 
 /** What is for sale hangs on the back wall of the Stall. */
 function dressStall() {
-  // what is held hangs on the wall; the armour and the trinkets are on the counter's card
-  const models = STOCK.filter((kind) => ITEMS[kind].slot === 'weapon' || ITEMS[kind].slot === 'offhand').map((kind) => {
+  // the two plainest swords and the shield hang on the wall; the rest are on the counter's card
+  const models = ['wooden_sword', 'rusty_sword', 'wood_shield'].map((kind) => {
     const h = new Held(app.game, kind, true);
     const m = h.mesh;
     if (ITEMS[kind].slot === 'weapon') {
@@ -523,6 +612,7 @@ function playTick(dt) {
   const p = g.player;
   if (inp.pressed('inventory')) { openBag(); return; }
   if (inp.pressed('pause')) { openPause(); return; }
+  if (inp.pressed('admin')) { openAdmin(); return; }
   if (!p) return;
 
   // what the big button in the middle does right now
@@ -576,5 +666,5 @@ if (hot?.ready) hot.ready((data) => boot(data || {}));
 else boot(hot?.data ?? {});
 
 // for tests and the curious
-app.lib = { anim, roster, cloud };
+app.lib = { anim, roster, cloud, rollDrop };
 window.__barrage = app;

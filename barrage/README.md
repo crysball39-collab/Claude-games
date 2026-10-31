@@ -98,13 +98,22 @@ and during a wave you slowly regain health once nobody has hit you for five seco
 | A champion | 10 + the wave number |
 | Clearing a wave | 5 + twice the wave number |
 
-Between waves the south doors stay open. Walk out onto the plaza and up to the
-Stall's counter and it opens:
+Between waves the south doors stay open. A flagstone path runs out of them
+across the plaza, and the Stall stands at the side of it, its counter facing the
+path. Walk up to the counter and it opens:
 
 | Item | Price | Sells back for | Goes in | What it does |
 | ---- | ----- | -------------- | ------- | ------------ |
-| **Wooden Sword** | 10 | 5 | Weapon slot | Bruises, and splits the skin when it lands hard |
-| **Rusty Steel Sword** | 50 | 25 | Weapon slot | Cuts, and a full swing opens a slash |
+| **Wooden Sword** (Common) | 10 | 5 | Weapon slot | Bruises, and splits the skin when it lands hard |
+| **Rusty Steel Sword** (Uncommon) | 50 | 25 | Weapon slot | Cuts, and a full swing opens a slash |
+| **Iron Sword** (Rare) | 120 | 60 | Weapon slot | Cuts deeper, swings as quick |
+| **Bronze Gladius** (Epic) | 250 | 125 | Weapon slot | Short and fast |
+| **Crimson Falchion** (Super Epic) | 500 | 250 | Weapon slot | Heavy; long slashes |
+| **Golden Spatha** (Legendary) | 1,000 | 500 | Weapon slot | Long reach, and it gleams |
+| **Dragonbone Blade** (Mythic) | 2,500 | 1,250 | Weapon slot | Bone-white, veined with embers |
+| **Starsteel Edge** (Transcendent) | 5,000 | 2,500 | Weapon slot | Light as a thought, with a cold blue glow |
+| **Shadow Fang** (Secret) | not for sale | 5,000 | Weapon slot | Black glass; only ever dropped |
+| **Sunforged Greatsword** (Godly) | 25,000 | 12,500 | Weapon slot | The best there is |
 | **Wood Shield** | 10 | 5 | Offhand slot | Hold BLOCK to raise it: stops fists, blades and bullets from the front |
 | **Wooden Helmet** | 12 | 6 | Helmet slot | An oak cap, a guard down the back and one over the nose |
 | **Wooden Chestplate** | 20 | 10 | Chestplate slot | Oak slats over the chest and belly, pads on the shoulders |
@@ -122,6 +131,22 @@ of a kind add up: two charms are 40 more health.
 What you buy goes into your bag. **SELL** buys anything back for half what it
 cost, equipped or not.
 
+### Weapon rarities
+
+Every sword has a rarity, one sword to each, from the commonest to the rarest:
+**Common**, **Uncommon**, **Rare**, **Epic**, **Super Epic**, **Legendary**,
+**Mythic**, **Transcendent**, **Secret** and **Godly**. Each has its own colour on
+the sword's picture, its name, its card at the Stall and its slot in the bag;
+the rarest blades glow in your hand, and Godly's name runs through every colour.
+The rarer the sword, the harder it hits.
+
+Swords also drop. Any box ragdoll you put down may drop one straight into your
+bag (about one in sixteen do), and a champion always does; the rarer the sword,
+the less often it drops, and the further into a run you are, the better the odds
+of a rare one. A beam of the sword's colour stands where it fell. The Secret
+sword is never on the counter - the Stall shows only a shape under a cloth - so
+a drop is the only way to get one.
+
 ### The inventory
 
 Sixty slots of bag, and eight on the figure: **Helmet**, **Chestplate**,
@@ -131,6 +156,36 @@ tap it and then tap a slot, or drag it there. Swords go in the weapon slot, the
 shield in the offhand, each piece of armour in its own slot, and the bracelet and
 the charm in either accessory slot; **EQUIP** picks an empty one. What you put
 on, you wear at once. Opening the bag pauses the fight.
+
+### The admin panel
+
+Logged in as **Chibble**, a crown appears beside the bag, and **ADMIN PANEL** in
+the pause menu. Its settings are saved with the account, like everything else:
+
+| | |
+| - | - |
+| **God mode** | Nothing can hurt you or knock you down |
+| **Infinite coins** | Everything at the Stall is free; the coins read ∞ |
+| **Max HP** | 50 to 10,000 |
+| **Max stamina** | 50 to 10,000 |
+| **Speed** | 0.5x to 4x |
+| **Morphs** | Turn into something else, and back |
+
+Morph 1 is **Venom**. A black goo wells up on your head and runs down over you,
+part by part, while you grow half as big again - really that big: your boxes,
+their weight and your joints, so blows land where they look like they land. You
+end up black and glossy, with great white eyes, a mouth full of teeth and claws,
+and 5,000 max HP. Its moves:
+
+| Move | Button (key) | What it does |
+| ---- | ------------ | ------------ |
+| **Claw** | CLAW, in place of PUNCH (J, click) | A raking swipe that tears three slashes at a time and knocks people flying |
+| **Venom Surge** | SURGE (R) | A line of black spikes bursts out of the ground ahead of you, as far as the wall, throwing everyone standing on it into the air |
+| **Eat** | EAT (F) | Your tongue lashes out at the nearest box ragdoll, drags it in, and you bite and swallow it whole; it counts as a kill, and you get some health back |
+
+SURGE and EAT darken while they come back (five and six seconds). Turning back
+gives you your own shape, sword, shield and armour again. Anyone not logged in as
+Chibble sees none of this.
 
 ### Accounts and cloud saves
 
@@ -231,11 +286,13 @@ barrage/
       anim.js         poses and clips: walking, jabs, the kick, guards, the shield, aiming, get-ups
       fighter.js      a person: states, strikes, damage, stamina, gear
       outfit.js       wood armour and accessories: their boxes, what they stop, the marks on them
+      morph.js        Venom: the goo, the growing, Claw, Venom Surge and Eat
+      fx.js           beams of light where swords drop
       player.js       you
       brain.js        the box ragdolls' fighting, the gunners, the shopkeeper
       waves.js        who comes out when, coins
       arena.js        the sand, the wall and gates, the stands and crowd, the plaza, the Stall
-      gear.js         what the Stall sells and which slot it goes in, and things held in a hand
+      gear.js         what the Stall sells, which slot it goes in, rarities and drops, and things held in a hand
       guns.js         bullets, the aiming line, tracers
       blood.js        drops, wounds, and which mark each blow leaves
       paint.js        canvases on boxes; bruises, cuts, slashes, bullet holes
@@ -243,7 +300,7 @@ barrage/
       camera.js       over your shoulder
       textures.js     sand, sandstone, cobbles, planks, the awning, banners, signs
     data/             the save file, the profile (coins, bag, slots), accounts and the cloud
-    ui/               HUD, inventory, the Stall, accounts, settings, icons
+    ui/               HUD, inventory, the Stall, the admin panel, accounts, settings, icons
   tools/
     build.mjs         folds the game into dist/barrage.html and its Claude page
     verify.mjs        drives the real game in Chromium and checks it
@@ -269,9 +326,11 @@ wave 1 starting and the portcullises opening; the joystick moves you and draggin
 turns the camera; PUNCH, KICK, JUMP, CROUCH, SPRINT and BLOCK each do what they
 say and cost what they should; blows land by contact, bruise, stumble and knock
 down, and the fallen get up; kills and clears pay coins and open the south doors;
-the Stall sells the swords and shield at 10, 50 and 10 and the wood armour and
+the Stall stands beside the path facing it, and sells the swords and shield at
+10, 50 and 10, a sword of every rarity from Common to Godly, dearer the rarer
+(the Secret one only as a shape under a cloth), and the wood armour and
 accessories at their prices, refuses what you cannot afford and buys back at
-half; the inventory has 60 slots and the eight equipment slots, puts the shield
+half; a champion always drops a sword, with a beam of its colour; the inventory has 60 slots and the eight equipment slots, puts the shield
 in the offhand but not the weapon or helmet slot, the helmet in the helmet slot
 but not an accessory slot, and the bracelet and charm in the accessory slots,
 and equips by drag and drop; the sword and shield appear in your hands and the
@@ -283,7 +342,10 @@ bullets hit whoever is in the way and leave bullet holes; a box ragdoll shut in 
 tunnel is let back out; you can fall and start again with your coins; saves
 survive a reload; and, against a stand-in for the Claude page's database, that
 sign up, cloud saving, log out, a wrong password and log in all work and only a
-salted hash is stored. With `--file` it opens the built file and fails if it
+salted hash is stored, that only Chibble gets the admin panel, that its switches
+and settings take effect and are saved with the account, and that Venom grows
+from the head down to 1.4 times the size with 5,000 HP, and its Claw, Venom
+Surge and Eat all do what they say. With `--file` it opens the built file and fails if it
 fetches anything at all; `--accounts` runs only the account checks.
 
 Fonts: Bungee and Barlow Condensed, SIL Open Font License (`fonts/OFL-*.txt`).

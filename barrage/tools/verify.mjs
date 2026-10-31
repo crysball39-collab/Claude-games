@@ -263,16 +263,25 @@ check('between waves the south doors open and START WAVE 2 is offered', rest.sta
 
 /* ---------------------------------- Stall -------------------------------- */
 
-await ev(() => { const p = window.__barrage.game.player; p.root.set(5.2, 0, 15.6); p.heading = 0; });
+// the Stall stands at the side of the path, its counter facing it
+const facing = await ev(() => { const a = window.__barrage.game.arena, s = a.stallSpot, k = a.keeperSpot; return { x: s.x, z: s.z, kx: k.x, onPath: Math.abs(s.x) < 2.6, faces: k.x > s.x }; });
+check('the Stall stands beside the path out of the south gate, its counter facing the path', facing.onPath && facing.faces, JSON.stringify(facing));
+await ev(() => { const g = window.__barrage.game, p = g.player, s = g.arena.stallSpot; p.root.set(s.x - 3.2, 0, s.z); p.heading = Math.PI / 2; });
 await simFor(0.3);
-await ev(() => { const p = window.__barrage.game.player; p.root.set(5.2, 0, 18.7); });
+await ev(() => { const g = window.__barrage.game, p = g.player, s = g.arena.stallSpot; p.root.set(s.x, 0, s.z); });
 await page.waitForFunction(() => window.__barrage.state === 'shop', null, { timeout: 60000, polling: 100 }).catch(() => {});
 check('walking up to the Stall outside the arena opens it', await ev(() => window.__barrage.state === 'shop' && !document.querySelector('#shop').classList.contains('hidden')));
 const wares = await ev(() => [...document.querySelectorAll('.ware')].map((w) => w.dataset.kind + ':' + w.querySelector('.price').textContent.trim()));
 check('the Stall sells a wooden sword for 10, a rusty steel sword for 50 and a wood shield for 10',
-  wares.slice(0, 3).join(',') === 'wooden_sword:10,rusty_sword:50,wood_shield:10', wares.join(', '));
+  ['wooden_sword:10', 'rusty_sword:50', 'wood_shield:10'].every((w) => wares.includes(w)), wares.join(', '));
 check('...wood armour - a helmet for 12, a chestplate for 20, leggings for 15, boots for 8 - and a bead bracelet and an oak charm for 15',
-  wares.slice(3).join(',') === 'wood_helmet:12,wood_chestplate:20,wood_leggings:15,wood_boots:8,bead_bracelet:15,oak_charm:15', wares.join(', '));
+  ['wood_helmet:12', 'wood_chestplate:20', 'wood_leggings:15', 'wood_boots:8', 'bead_bracelet:15', 'oak_charm:15'].every((w) => wares.includes(w)), wares.join(', '));
+const rarities = await ev(() => [...document.querySelectorAll('.ware')].filter((w) => w.querySelector('.pill.rarity')).map((w) => w.querySelector('.pill.rarity').textContent));
+check('...and a sword of every rarity, Common to Godly, dearer the rarer',
+  rarities.join(',') === 'Common,Uncommon,Rare,Epic,Super Epic,Legendary,Mythic,Transcendent,Secret,Godly' &&
+  wares.slice(0, 10).join(',') === 'wooden_sword:10,rusty_sword:50,iron_sword:120,bronze_gladius:250,crimson_falchion:500,golden_spatha:1,000,dragonbone_blade:2,500,starsteel_edge:5,000,shadow_fang:NOT FOR SALE,sunforged_greatsword:25,000',
+  rarities.join(', ') + ' / ' + wares.slice(0, 10).join(', '));
+check('...but the Secret one is only a shape under a cloth, not for sale', await ev(() => { const c = document.querySelector('.ware[data-kind="shadow_fang"]'); return c.classList.contains('mystery') && c.querySelector('h3').textContent === '???' && !c.querySelector('[data-buy]'); }));
 await ev(() => { const b = window.__barrage; b.profile.d.coins = 25; b.shop.render(); });
 await tap('[data-buy="rusty_sword"]');
 check('you cannot buy what you cannot afford', await ev(() => { const b = window.__barrage; return b.profile.coins === 25 && !b.profile.owns('rusty_sword'); }));
@@ -288,8 +297,9 @@ const bought2 = await ev(() => { const b = window.__barrage; return { coins: b.p
 check('armour and accessories are bought the same way', bought2.coins === 0 && ['wood_helmet', 'bead_bracelet', 'oak_charm'].every((k) => bought2.bag.includes(k)), JSON.stringify(bought2));
 await shot('stall');
 await tap('.tab[data-tab="sell"]');
-const sells = await ev(() => [...document.querySelectorAll('.sell-row .price')].map((e) => e.textContent.trim()).join(','));
-check('the SELL tab lists your gear at half price', sells === '5,5,6,7,7', sells);
+// (a box ragdoll may have dropped a sword in the bag already: only what was bought is checked)
+const sells = await ev(() => [...document.querySelectorAll('.sell-row')].map((r) => r.querySelector('.name').firstChild.textContent + ':' + r.querySelector('.price').textContent.trim()));
+check('the SELL tab lists your gear at half price', ['Wooden Sword:5', 'Wood Shield:5', 'Wooden Helmet:6', 'Bead Bracelet:7', 'Oak Charm:7'].every((x) => sells.includes(x)), sells.join(', '));
 await tap('#shop-close');
 
 /* -------------------------------- inventory ------------------------------ */
@@ -491,7 +501,30 @@ await ev(() => { const e = window.__trapped; e.controller.gate = null; e.root.se
 await simFor(1);
 const unwedged = await ev(() => Math.hypot(window.__trapped.root.x, window.__trapped.root.z));
 check('...and one squeezed into the wall beside a gate is put back on the sand', unwedged < 11.5, unwedged.toFixed(2));
-await ev(() => { const g = window.__barrage.game; g.player.invulnerable = false; g.removeFighter(window.__trapped); g.waves.enemies = []; });
+await ev(() => { const g = window.__barrage.game; g.removeFighter(window.__trapped); g.waves.enemies = []; });
+
+/* -------------------------------- drops --------------------------------- */
+
+const dropOdds = await ev(() => {
+  const { rollDrop } = window.__barrage.lib;
+  let champ = 0, any = 0;
+  for (let i = 0; i < 400; i++) { if (rollDrop(true, 5)) champ++; if (rollDrop(false, 1)) any++; }
+  return { champ, any };
+});
+check('a champion always drops a sword, anyone else now and then', dropOdds.champ === 400 && dropOdds.any > 0 && dropOdds.any < 80, JSON.stringify(dropOdds));
+const drop = await ev(() => {
+  const b = window.__barrage, g = b.game;
+  const before = b.profile.d.bag.filter(Boolean).length;
+  const c = g.spawn('champion', { team: 'enemy', x: 3, z: 0, heading: 0, health: 10, mask: 2 });
+  c.spec = { kind: 'champion', role: 'champion', boss: true };
+  g.waves.enemies.push(c);
+  c.takeHit({ part: 3, point: c.chest.x.clone(), dir: c.forward.clone().negate(), J: 30, speed: 9, damage: 999, attacker: g.player, kind: 'fist', striker: null, weapon: null });
+  const got = b.profile.d.bag.filter(Boolean);
+  const kind = got.length > before ? got[got.length - 1].kind : null;
+  return { before, after: got.length, kind, beam: g.fx.items.length, toast: document.querySelector('#toast').textContent };
+});
+check('putting a champion down drops a sword of some rarity into your bag, with a beam of its colour', drop.after === drop.before + 1 && !!drop.kind && drop.beam > 0 && /drop/.test(drop.toast), JSON.stringify(drop));
+await ev(() => { const g = window.__barrage.game; g.player.invulnerable = false; for (const e of [...g.waves.enemies]) g.removeFighter(e); g.waves.enemies = []; });
 
 /* ---------------------------------- falling ------------------------------ */
 
@@ -575,6 +608,75 @@ const browser2 = await chromium.launch({
     keys: Object.keys(localStorage).join(','),
   }));
   check('coming back later, you are still logged in', back.who.includes('Nova'), JSON.stringify(back));
+
+  // the admin panel is Chibble's alone
+  const sim2 = async (secs) => { const t0 = await ev2(() => window.__barrage.game.time); await P.waitForFunction((t) => window.__barrage.game.time >= t, t0 + secs, { timeout: 240000, polling: 100 }); };
+  await P.tap('#btn-play');
+  await P.waitForFunction(() => window.__barrage.state === 'playing', null, { timeout: 30000 }).catch(() => {});
+  check('logged in as anyone else, there is no admin panel', await ev2(() => document.querySelector('#btn-admin').classList.contains('hidden') && !window.__barrage.profile.admin));
+  await P.tap('#btn-pause');
+  await P.waitForFunction(() => window.__barrage.state === 'paused', null, { timeout: 30000 }).catch(() => {});
+  await P.tap('#btn-quit');
+  await P.waitForFunction(() => window.__barrage.state === 'title', null, { timeout: 30000 }).catch(() => {});
+  await P.tap('#btn-logout');
+  await P.waitForFunction(() => !document.querySelector('#who').classList.contains('in'), null, { timeout: 30000 }).catch(() => {});
+  await P.tap('#btn-signup');
+  await P.fill('#acct-name', 'Chibble');
+  await P.fill('#acct-pass', 'venom123');
+  await P.fill('#acct-pass2', 'venom123');
+  await P.tap('#acct-submit');
+  await P.waitForFunction(() => document.querySelector('#who').classList.contains('in'), null, { timeout: 30000 }).catch(() => {});
+  await P.waitForTimeout(900);
+  await P.tap('#btn-play');
+  await P.waitForFunction(() => window.__barrage.state === 'playing', null, { timeout: 30000 }).catch(() => {});
+  check('logged in as Chibble, a crown beside the bag opens the admin panel', await P.isVisible('#btn-admin'));
+  await P.tap('#btn-admin');
+  await P.waitForFunction(() => window.__barrage.state === 'admin', null, { timeout: 30000 }).catch(() => {});
+  check('...with God mode and Infinite coins switches, Max HP, Max stamina and Speed settings, and Morphs',
+    await ev2(() => ['god', 'infinite'].every((k) => document.querySelector(`#admin-switches .seg[data-admin="${k}"]`)) &&
+      ['maxHp', 'maxStamina', 'speed'].every((k) => document.querySelector(`#adm-${k}`)) && !!document.querySelector('button[data-morph="venom"]')));
+  await P.tap('#admin-switches .seg[data-admin="god"] button[data-value="true"]');
+  await P.tap('#admin-switches .seg[data-admin="infinite"] button[data-value="true"]');
+  await ev2(() => { const set = (id, v) => { const i = document.querySelector(id); i.value = String(v); i.dispatchEvent(new Event('input')); }; set('#adm-maxHp', 750); set('#adm-maxStamina', 400); set('#adm-speed', 2); });
+  const adm = await ev2(() => { const p = window.__barrage.game.player; return { god: p.invulnerable, coins: document.querySelector('#coins').textContent, max: p.maxHealth, hp: p.health, st: p.maxStamina, speed: p.speedMul }; });
+  check('God mode, infinite coins, Max HP, Max stamina and Speed take effect at once', adm.god && adm.coins === '∞' && adm.max === 750 && adm.hp === 750 && adm.st === 400 && adm.speed === 2, JSON.stringify(adm));
+  await P.tap('button[data-morph="venom"]');
+  await P.tap('#admin-close');
+  await P.waitForFunction(() => window.__barrage.state === 'playing', null, { timeout: 30000 }).catch(() => {});
+  await ev2(() => { window.__barrage.game.waves.reset(); window.__barrage.game.waves.rest(); });
+  await sim2(0.8);
+  const goo = await ev2(() => { const p = window.__barrage.game.player; return { growing: p.morph && p.morph.growing, scale: p.scale, head: p.morph && p.morph.parts[5], feet: p.morph && p.morph.parts[17] }; });
+  await sim2(2.6);
+  const venom = await ev2(() => { const p = window.__barrage.game.player; return { id: p.morph && p.morph.id, scale: +p.scale.toFixed(2), max: p.maxHealth, hp: Math.round(p.health), label: document.querySelector('#punch-label').textContent, surge: !document.querySelector('#btn-surge').classList.contains('hidden'), eat: !document.querySelector('#btn-eat').classList.contains('hidden') }; });
+  check('MORPH into Venom: the goo starts on the head and spreads down while you grow', goo.growing && goo.head >= 1 && goo.feet < 1 && goo.scale > 1, JSON.stringify(goo));
+  check('...into Venom, half as big again, with 5000 max HP, CLAW for PUNCH, and SURGE and EAT', venom.id === 'venom' && venom.scale === 1.4 && venom.max === 5000 && venom.hp === 5000 && venom.label === 'CLAW' && venom.surge && venom.eat, JSON.stringify(venom));
+  await ev2(() => {
+    const b = window.__barrage, g = b.game, p = g.player;
+    p.root.set(0, 0, 0); p.heading = 0;
+    g.waves.begin(2); g.waves.queue = [];
+    window.__foes = [1.3, 4.2].map((z) => { const e = g.spawn('brawler', { team: 'enemy', x: 0, z, heading: Math.PI, health: 300, mask: 2 }); e.spec = { kind: 'brawler', role: 'brawler' }; g.waves.enemies.push(e); return e; });
+  });
+  await sim2(3.6);
+  for (let i = 0; i < 3; i++) {
+    if (await ev2(() => (window.__foes[0].marks ? window.__foes[0].marks.slash : 0) >= 3)) break;
+    await ev2(() => { const b = window.__barrage, p = b.game.player, e = window.__foes[0]; p.heading = 0; p.stamina = p.maxStamina; if (e.state === 'active') e.root.set(0, 0, p.root.z + 1.2); b.input.press('punch'); b.input.release('punch'); });
+    await sim2(0.6);
+  }
+  const clawed = await ev2(() => { const e = window.__foes[0]; return { hp: Math.round(e.health), slashes: e.marks ? e.marks.slash : 0 }; });
+  check('CLAW rakes three slashes at once', clawed.hp < 300 && clawed.slashes >= 3, JSON.stringify(clawed));
+  await ev2(() => { const b = window.__barrage, p = b.game.player; p.heading = 0; b.input.press('surge'); b.input.release('surge'); });
+  await sim2(0.5);
+  const surge = await ev2(() => { const p = window.__barrage.game.player, e = window.__foes[1]; return { spikes: p.morph.spikes.length, cool: p.morph.cool.surge > 0, hp: Math.round(e.health), state: e.state }; });
+  check('VENOM SURGE sends a line of spikes out of the ground that throws whoever is on it', surge.spikes > 5 && surge.cool && surge.hp < 300 && surge.state !== 'active', JSON.stringify(surge));
+  await sim2(4);
+  const eaten0 = await ev2(() => window.__barrage.game.waves.killed);
+  await ev2(() => { const b = window.__barrage; b.input.press('eat'); b.input.release('eat'); });
+  await sim2(2.5);
+  const eaten = await ev2((k0) => { const g = window.__barrage.game; return { killed: g.waves.killed - k0, gone: window.__foes.filter((e) => e.removed).length, tongue: !!g.player.morph.lash }; }, eaten0);
+  check('EAT: the tongue grabs the nearest, and it is bitten, swallowed and gone', eaten.killed === 1 && eaten.gone >= 1 && !eaten.tongue, JSON.stringify(eaten));
+  await ev2(async () => { await new Promise((r) => setTimeout(r, 400)); await window.__barrage.lib.cloud.flush(); });
+  const saved = await ev2(() => { const s = window.__mockStore(); const d = s['data/users/u_tester/barrage-chibble']; return d && d.save && d.save.admin; });
+  check('the admin settings are saved with the account', saved && saved.god && saved.infinite && saved.maxHp === 750 && saved.morph === 'venom', JSON.stringify(saved));
   await ctx.close();
 }
 

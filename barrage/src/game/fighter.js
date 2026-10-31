@@ -41,6 +41,7 @@ import {
 import { packBoxes, buildBoxGeometry, PaintCanvas } from './paint.js';
 import { makeLook, paintBody, paintHead } from './appearance.js';
 import { Outfit } from './outfit.js';
+import { Morph } from './morph.js';
 import { ITEMS, ACCESSORIES } from './gear.js';
 import { clamp, rand, smooth, turnToward, wrapAngle, approach } from '../core/util.js';
 
@@ -68,7 +69,6 @@ const _pts = [0, 1, 2, 3].map(() => new ContactPoint());
 const _ZERO = new Vector3();
 const _bp = new Vector3(), _bq = new Quaternion();
 const _blendQ = PARTS.map(() => new Quaternion());
-const _scale = new Vector3(1, 1, 1);
 
 let _id = 0;
 
@@ -81,6 +81,7 @@ const PUSH_SPEED = 6;
 const BLOWS = {
   fist: { J: 2.6, base: 1.5, per: 1.15, cap: 11 },
   kick: { J: 4.1, base: 3, per: 1.5, cap: 12 },
+  claw: { J: 4.6, base: 9, per: 2.6, cap: 14 },
 };
 
 export class Fighter {
@@ -121,10 +122,13 @@ export class Fighter {
       game.world.add(b);
       return b;
     });
-    this.joints = JOINTS.map((j) => {
-      const a = jointAnchors(j.child);
+    this.jointRest = JOINTS.map((j) => jointAnchors(j.child));   // where the joints are at scale 1
+    this.joints = JOINTS.map((j, k) => {
+      const a = this.jointRest[k];
       return game.world.addJoint(new Joint(this.bodies[j.parent], this.bodies[j.child], a.a, a.b, j));
     });
+    this.scale = 1;                 // how big: 1 as built; a morph grows it
+    this.look3 = new Vector3(1, 1, 1);   // the scale the body is drawn at
     this.prevPos = PARTS.map(() => new Vector3());
     this.prevQuat = PARTS.map(() => new Quaternion());
 
@@ -188,6 +192,9 @@ export class Fighter {
     this.gun = null;                // a pistol in the right hand
     this.outfit = new Outfit(this); // armour and accessories
     this.fullSet = false;           // all four pieces of one set: harder to knock down
+    this.charmHealth = 0;           // health the charms add
+    this.speedMul = 1;              // how fast you move, against the usual (the admin panel)
+    this.morph = null;              // turned into something else (morph.js)
     this.invulnerable = false;
     this.controller = null;
     this.mask = opts.mask != null ? opts.mask : 2;   // which walls stop it (see arena MASK)
@@ -231,6 +238,7 @@ export class Fighter {
 
   update(dt) {
     if (this.removed) return;
+    if (this.morph) this.morph.update(dt);
     this.time += dt;
     this.sinceHit += dt;
     this.sinceSpend += dt;
@@ -329,13 +337,15 @@ export class Fighter {
       else { legYaw = clamp(wrapAngle(m - Math.PI), -70 * D, 70 * D); dir = -1; }
     }
     this.legYaw += (legYaw - this.legYaw) * approach(10, dt);
+    // a bigger body takes longer strides: walk it at the pace its size makes of the speed
+    const gait = speed / this.scale;
     if (!this.air) {
-      this.phase += dir * (speed / strideAt(speed)) * dt;
+      this.phase += dir * (gait / strideAt(gait)) * dt;
       this.phase -= Math.floor(this.phase);
     }
 
     const pose = this.pose;
-    locomotion(pose, this.air ? 0 : speed, this.phase, this.time);
+    locomotion(pose, this.air ? 0 : gait, this.phase, this.time);
     // stance when standing and squared up
     const still = clamp(1 - speed / 0.6, 0, 1);
     if (this.guard > 0.01) {
@@ -385,7 +395,8 @@ export class Fighter {
     poseQuats(this.pose, this.jq);
     _rootQ.setFromAxisAngle(UP, this.heading);
     forwardKinematics(this.root, _rootQ, this.pose.off, this.jq, this.tPos, this.tQuat);
-    const low = lowestPoint(this.tPos, this.tQuat, fit);
+    if (this.scale !== 1) for (let i = 0; i < NP; i++) this.tPos[i].sub(this.root).multiplyScalar(this.scale).add(this.root);
+    const low = lowestPoint(this.tPos, this.tQuat, fit, this.scale);
     const shift = this.root.y - low + 0.003;
     for (let i = 0; i < NP; i++) this.tPos[i].y += shift;
     if (this.state === 'active' || this.state === 'getup' || this.state === 'stumble') {
@@ -463,7 +474,17 @@ export class Fighter {
     const held = c.kind === 'swing' && this.weapon ? this.weapon : null;
     // a swing lands with the blade, or - too close for that - with the fist around it
     if (held && this.strikeWith(held.body, held)) return;
-    this.strikeWith(this.bodies[c.striker], null);
+    const s = this.bodies[c.striker];
+    if (this.morph && this.morph.claws && c.kind !== 'kick') {
+      // claws reach well past the fingers: the hand counts as that much longer while it rakes
+      s.half.y *= 3.2;
+      s.radius = s.half.length();
+      this.strikeWith(s, null);
+      s.half.copy(PARTS[c.striker].half).multiplyScalar(this.scale);
+      s.radius = s.half.length();
+      return;
+    }
+    this.strikeWith(s, null);
   }
 
   /** Tests one striking box against every enemy's shield and body; true if it landed. */
@@ -515,7 +536,7 @@ export class Fighter {
           J = Math.min(38, T.strikeMass * sp);
           damage = (T.damageBase + T.damage * sp) * VITAL[i];
         } else {
-          kind = a.clip.kind === 'kick' ? 'kick' : 'fist';
+          kind = a.clip.kind === 'kick' ? 'kick' : this.morph && this.morph.claws ? 'claw' : 'fist';
           const B = BLOWS[kind];
           sp = Math.min(sp, B.cap);
           J = B.J * sp;
@@ -567,6 +588,8 @@ export class Fighter {
 
   takeHit(h) {
     if (this.removed || this.invulnerable) return;
+    // nothing touches you while the goo is taking you over
+    if (this.morph && this.morph.growing) return;
     this.wake();
     this.sinceHit = 0;
     if (h.attacker) { this.lastAttacker = h.attacker; this.lastHitT = this.game.time; }
@@ -590,7 +613,7 @@ export class Fighter {
       h.armour = worn;
     }
     // braced low, harder to knock about
-    h.J *= this.toughness * (1 - 0.3 * this.crouch);
+    h.J *= (this.morph ? this.morph.kind.toughness : this.toughness) * (1 - 0.3 * this.crouch);
 
     this.health -= h.damage;
     this.game.blood.onHit(this, h);
@@ -836,7 +859,7 @@ export class Fighter {
     const upY = 1 - 2 * (ut.q.x * ut.q.x + ut.q.z * ut.q.z);    // world Y of the chest's up axis
     const tilt = Math.acos(clamp(upY, -1, 1));
     const height = p.y - this.root.y;
-    if (tilt > 55 * D || height < 0.55) { this.enterRagdoll(); return; }
+    if (tilt > 55 * D || height < 0.55 * this.scale) { this.enterRagdoll(); return; }
     if (st.t >= st.dur && tilt < 20 * D) this.recover();
   }
 
@@ -875,6 +898,27 @@ export class Fighter {
     _bp.lerpVectors(this.capPos[0], this.tPos[0], w);
     _bp.sub(_v1.copy(PARTS[0].restJoint).applyQuaternion(_bq));
     forwardKinematics(_bp, _bq, _ZERO, lq, this.tPos, this.tQuat);
+    if (this.scale !== 1) {
+      const hips = _v2.copy(this.tPos[0]);
+      for (let i = 0; i < NP; i++) this.tPos[i].sub(hips).multiplyScalar(this.scale).add(hips);
+    }
+  }
+
+  /** Grows or shrinks the whole body - its boxes, their weight, the joints - about the feet. 1 is as built. */
+  setScale(s) {
+    if (Math.abs(s - this.scale) < 1e-4) return;
+    this.scale = s;
+    this.look3.setScalar(s);
+    for (let i = 0; i < NP; i++) {
+      const b = this.bodies[i];
+      b.half.copy(PARTS[i].half).multiplyScalar(s);
+      b.radius = b.half.length();
+      b.setMass(PARTS[i].mass * s * s);
+    }
+    this.joints.forEach((j, k) => {
+      j.anchorA.copy(this.jointRest[k].a).multiplyScalar(s);
+      j.anchorB.copy(this.jointRest[k].b).multiplyScalar(s);
+    });
   }
 
   /* -------------------------------- ragdoll ------------------------------ */
@@ -927,7 +971,7 @@ export class Fighter {
     }
     const p = this.pelvis.x;
     const g = this.game.groundAt(p.x, p.z);
-    const grounded = p.y - g < 1.2;
+    const grounded = p.y - g < 1.2 * this.scale;
     const t = this.down ? this.down.t : 0;
     const k = grounded ? clamp((t - 0.8) / 1.0, 0, 1) : 0;
     for (const b of this.bodies) { b.linDamp = 0.08 + 1.8 * k; b.angDamp = 0.8 + 6 * k; }
@@ -964,7 +1008,8 @@ export class Fighter {
   }
 
   paintFace(expr) {
-    if (this.faceExpr === expr || this.faceExpr === 'dead') return;
+    // a morph wears its own face
+    if (this.morph || this.faceExpr === expr || this.faceExpr === 'dead') return;
     this.faceExpr = expr;
     paintHead(this.paint.ctx, this.layout.tiles[P.head], this.look, expr);
     this.paint.dirty = true;
@@ -1001,7 +1046,7 @@ export class Fighter {
       // hand the distance travelled over to the root, a little at a time:
       // in one go it could step clean through the end of a wall
       gu.clip.sample(gu.clip.duration, this.pose);
-      const o = _v1.set(this.pose.off.x, 0, this.pose.off.z).applyAxisAngle(UP, this.heading);
+      const o = _v1.set(this.pose.off.x, 0, this.pose.off.z).applyAxisAngle(UP, this.heading).multiplyScalar(this.scale);
       const n = Math.max(1, Math.ceil(o.length() / 0.2));
       for (let k = 0; k < n; k++) {
         this.root.addScaledVector(o, 1 / n);
@@ -1043,6 +1088,8 @@ export class Fighter {
    */
   wear(gear) {
     this.outfit.set(gear);
+    // under a morph's goo, the armour stays out of sight
+    if (this.morph && this.outfit.mesh) this.outfit.mesh.visible = false;
     let health = 0, wind = 1;
     for (const s of ACCESSORIES) {
       const T = ITEMS[gear[s]];
@@ -1050,13 +1097,27 @@ export class Fighter {
       health += T.health || 0;
       wind += T.wind || 0;
     }
-    this.maxHealth = this.baseHealth + health;
-    this.health = Math.min(this.health, this.maxHealth);
+    this.charmHealth = health;
+    this.refreshMax();
     this.wind = wind;
     // a whole set: harder to knock down
     const full = Object.values(this.outfit.sets()).some((n) => n >= 4);
     this.toughness = this.baseToughness * (full ? 0.85 : 1);
     this.fullSet = full;
+  }
+
+  /** The most health you can have: as built (or as the admin panel sets it) and the charms - or a morph's own. */
+  refreshMax() {
+    this.maxHealth = this.morph ? this.morph.kind.health : this.baseHealth + this.charmHealth;
+    this.health = Math.min(this.health, this.maxHealth);
+  }
+
+  /** Turns into a morph (an id from MORPHS), or (null) back into yourself. */
+  setMorph(id) {
+    if ((this.morph ? this.morph.id : null) === id) return;
+    if (this.morph) { this.morph.end(); this.morph = null; }
+    if (id) this.morph = new Morph(this, id);
+    this.refreshMax();
   }
 
   dropAll() {
@@ -1076,7 +1137,7 @@ export class Fighter {
       const b = this.bodies[i];
       _v1.lerpVectors(this.prevPos[i], b.x, alpha);
       _q1.slerpQuaternions(this.prevQuat[i], b.q, alpha);
-      this.bones[i].matrixWorld.compose(_v1, _q1, _scale);
+      this.bones[i].matrixWorld.compose(_v1, _q1, this.look3);
     }
   }
 
@@ -1100,6 +1161,7 @@ export class Fighter {
     }
     for (const j of this.joints) this.game.world.removeJoint(j);
     for (const b of this.bodies) this.game.world.remove(b);
+    if (this.morph) { this.morph.end(); this.morph = null; }
     this.outfit.clear();
     this.game.scene.remove(this.mesh);
     this.material.dispose();

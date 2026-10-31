@@ -285,6 +285,12 @@ button { font: inherit; color: inherit; }
 #btn-crouch { right: calc(186 * var(--u)); bottom: calc(10 * var(--u)); }
 #btn-sprint { right: calc(168 * var(--u)); bottom: calc(80 * var(--u)); }
 .act.on { border-color: var(--patina); box-shadow: 0 0 0 2px rgba(79, 191, 165, 0.35), 0 3px 0 rgba(0, 0, 0, 0.45); color: #c9fff1; }
+/* a morph's own moves, above the others; dark while they come back */
+#btn-surge { right: calc(100 * var(--u)); bottom: calc(154 * var(--u)); --d: calc(58 * var(--u)); }
+#btn-eat { right: calc(16 * var(--u)); bottom: calc(176 * var(--u)); --d: calc(58 * var(--u)); }
+.act.morph-act { border-color: rgba(170, 120, 255, 0.8); background: radial-gradient(circle at 50% 35%, rgba(46, 28, 70, 0.94), rgba(10, 6, 16, 0.94)); color: #e9e0ff; font-family: var(--display); font-weight: 400; font-size: calc(12 * var(--u)); }
+.act.morph-act::after { content: ''; position: absolute; inset: -2px; border-radius: 50%; pointer-events: none; background: conic-gradient(rgba(0, 0, 0, 0.66) calc(var(--cool, 0) * 360deg), transparent 0); }
+.hud-btn.admin-btn { color: #ffd76a; border-color: rgba(255, 215, 106, 0.6); }
 .act.tired { border-color: #8a7a6a; color: #8a7a6a; }
 
 .context {
@@ -429,12 +435,61 @@ button { font: inherit; color: inherit; }
 .ware .btn { width: auto; flex: 1; min-height: 40px; font-size: 17px; max-width: 170px; }
 .ware .btn.primary { font-size: 17px; }
 .ware.owned { border-color: rgba(79, 191, 165, 0.4); }
+/* the admin panel */
+.admin-sheet { width: min(860px, 100%); }
+.admin-body { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.admin-h { margin: 6px 0 2px; font-family: var(--display); font-weight: 400; font-size: 14px; letter-spacing: 0.06em; color: var(--gold); }
+.setting span small { display: block; color: var(--dim); font-size: 13px; }
+.range { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; width: min(260px, 58%); }
+.range input[type=range] { width: 100%; accent-color: var(--bronze); }
+.range output { min-width: 52px; text-align: right; font-variant-numeric: tabular-nums; color: var(--gold); font-weight: 700; }
+.range .quick { grid-column: 1 / -1; display: flex; gap: 4px; }
+.range .quick button { flex: 1; border: 1px solid var(--line); background: rgba(0, 0, 0, 0.3); color: var(--dim); border-radius: 6px; min-height: 28px; font-weight: 700; cursor: pointer; }
+.morph { display: grid; gap: 8px; padding: 10px; border-radius: 12px; background: radial-gradient(circle at 20% 0, rgba(70, 40, 110, 0.35), rgba(0, 0, 0, 0.3) 70%); border: 1px solid rgba(170, 120, 255, 0.45); }
+.morph.on { border-color: #b98cff; box-shadow: 0 0 16px rgba(150, 90, 255, 0.35) inset; }
+.morph-head { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+.morph h3 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 20px; color: #e9e0ff; }
+.morph p { margin: 0; color: var(--dim); font-size: 15px; }
+.morph ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; color: var(--dim); }
+.morph ul b { color: var(--sand); }
+.morph .btn { justify-self: start; min-height: 40px; }
+@media (orientation: portrait) { .admin-body { grid-template-columns: 1fr; } .range { width: 62%; } }
+
 .shelf { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; margin-top: 4px; }
 .shelf:first-child { margin-top: 0; }
 .shelf h4 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 14px; letter-spacing: 0.06em; color: var(--gold); }
 .shelf span { color: var(--dim); font-size: 13px; }
 .set-line { font-size: 14px; }
 .set-line.full { color: var(--patina); }
+
+/* rarities: a colour each, on the pill, the name, the card's edge and the bag slot */
+.r-common { --rc: #c9c2b2; }
+.r-uncommon { --rc: #6fd06f; }
+.r-rare { --rc: #4f9dff; }
+.r-epic { --rc: #b673ff; }
+.r-super_epic { --rc: #ff62d4; }
+.r-legendary { --rc: #ffb22e; }
+.r-mythic { --rc: #ff4d4d; }
+.r-transcendent { --rc: #7ff3ff; }
+.r-secret { --rc: #a98bff; }
+.r-godly { --rc: #fff07a; }
+.pill.rarity { color: var(--rc); border-color: var(--rc); background: color-mix(in srgb, var(--rc) 14%, transparent); }
+.pill.rarity.r-secret { color: #e9e2ff; background: #120e18; box-shadow: 0 0 8px rgba(138, 77, 255, 0.55); }
+.pill.rarity.r-godly, h3.name.r-godly, .ware.r-godly h3.name {
+  background-image: linear-gradient(90deg, #ff6b6b, #ffd36b, #7dff8a, #6bd9ff, #c48bff, #ff6b6b);
+  background-size: 200% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: godly 3s linear infinite;
+}
+.pill.rarity.r-godly { border-color: #ffe680; }
+@keyframes godly { to { background-position: 200% 0; } }
+.ware[class*=" r-"] { border-color: color-mix(in srgb, var(--rc) 55%, transparent); }
+.ware[class*=" r-"] h3.name, h3.name[class*=" r-"] { color: var(--rc); }
+.ware.r-transcendent, .ware.r-secret, .ware.r-godly, .ware.r-mythic, .ware.r-legendary { box-shadow: 0 0 14px color-mix(in srgb, var(--rc) 30%, transparent) inset; }
+.ware.mystery p { font-style: italic; }
+.slot[class*=" r-"] { border-color: color-mix(in srgb, var(--rc) 70%, transparent); background: radial-gradient(circle, color-mix(in srgb, var(--rc) 18%, transparent), rgba(0, 0, 0, 0.32) 70%); }
+.sell-row[class*=" r-"] .name { color: var(--rc); }
+.sell-row[class*=" r-"] .name small { color: var(--dim); }
 .shop-sell { display: grid; gap: 6px; }
 .sell-row { display: grid; grid-template-columns: 44px 1fr auto auto; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 10px; background: rgba(0, 0, 0, 0.28); border: 1px solid var(--line); }
 .sell-row img { width: 40px; height: 40px; object-fit: contain; }
@@ -457,6 +512,14 @@ button { font: inherit; color: inherit; }
   .inv-sheet { --slot: clamp(26px, 8.2vw, 44px); }
   .equip { width: auto; }
   .shop-buy { grid-template-columns: 1fr; }
+  /* the Stall's head: its name and the close button on top, BUY, SELL and your coins under */
+  .shop-sheet .sheet-head { flex-wrap: wrap; row-gap: 8px; }
+  .shop-sheet .sheet-head h2 { flex: 1 0 60%; }
+  .shop-sheet .sheet-head .x { order: 1; }
+  .shop-sheet .sheet-head .tabs { order: 2; }
+  .shop-sheet .sheet-head .coins { order: 3; margin-left: auto; }
+  /* upright there is no room in the top row for the crown: it hangs under the pause button */
+  .hud-btn.admin-btn { position: absolute; right: 0; top: calc(100% + 8px); }
   .rotate { display: block; position: fixed; left: 50%; top: calc(var(--in-t) + 110px); transform: translateX(-50%); z-index: 9; pointer-events: none; font-size: 14px; color: var(--dim); background: rgba(12, 8, 6, 0.7); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; white-space: nowrap; transition: opacity 0.5s; }
   .rotate.gone { opacity: 0; }
 }

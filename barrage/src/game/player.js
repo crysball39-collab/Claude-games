@@ -20,7 +20,7 @@ import { clamp, wrapAngle } from '../core/util.js';
 
 export const WALK = 2.7;
 export const SPRINT = 5.4;
-const COST = { punch: 5, kick: 10 };
+const COST = { punch: 5, kick: 10, claw: 6 };
 const _to = new Vector3();
 
 export class Player {
@@ -87,7 +87,8 @@ export class Player {
     if (sprint && !f.spend(14 * dt)) { sprint = false; this.sprintOn = false; g.emit('tired', f); }
     f.sprinting = sprint;
     if (dl > 0.01 && mag > 0.08) {
-      const speed = sprint ? SPRINT : WALK * clamp(mag * 1.15, 0.35, 1);
+      const fast = f.speedMul * (f.morph ? f.morph.kind.speed : 1);
+      const speed = (sprint ? SPRINT : WALK * clamp(mag * 1.15, 0.35, 1)) * fast;
       f.move.set(dx / dl * speed, 0, dz / dl * speed);
     }
 
@@ -100,6 +101,9 @@ export class Player {
       f.face = Math.atan2(foe.root.x - f.root.x, foe.root.z - f.root.z);
     }
 
+    // a morph's own moves (read either way, so a press made before does not go off later)
+    const surge = inp.pressed('surge'), eat = inp.pressed('eat');
+    if (f.morph && ((surge && f.morph.surge()) || (eat && f.morph.eat()))) this.lastAttack = g.time;
     if (inp.pressed('punch')) this.buffer = { type: 'punch', t: 0.35 };
     if (inp.pressed('kick')) this.buffer = { type: 'kick', t: 0.35 };
     // a button held down keeps attacking, as long as there is breath for it
@@ -121,7 +125,8 @@ export class Player {
   attack(type, foe) {
     const f = this.f, g = this.game;
     const weapon = f.weapon;
-    const cost = type === 'kick' ? COST.kick : weapon ? weapon.type.cost : COST.punch;
+    const claws = f.morph && f.morph.claws && type === 'punch';
+    const cost = type === 'kick' ? COST.kick : claws ? COST.claw : weapon ? weapon.type.cost : COST.punch;
     if (!f.spend(cost)) { g.emit('tired', f); return false; }
     this.lastAttack = g.time;
     f.wantCrouch = false;
@@ -142,6 +147,14 @@ export class Player {
     if (type === 'kick') {
       f.play(KICK);
       if (foe && d > 1.25) f.vel.addScaledVector(_to, 1.2);
+      return true;
+    }
+    if (claws) {
+      // claws rake across, the way a sword swings
+      const clip = this.side > 0 ? SWING_R : SWING_L;
+      this.side = -this.side;
+      f.play(clip, 0, 1.35);
+      if (foe && d > 0.7 * f.scale) f.vel.addScaledVector(_to, 2.4);
       return true;
     }
     if (weapon) {

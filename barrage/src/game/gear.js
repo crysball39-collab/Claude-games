@@ -7,6 +7,11 @@
    and the oak charm in either of the two ACCESSORY slots. What armour and
    accessories look like on you, and what they do, is in outfit.js.
 
+   Every sword has a rarity, from Common to Godly, one sword to each. The
+   Stall sells all but the Secret one, dearer the rarer; and any box ragdoll
+   you put down may drop one - a champion always does - rarer ones less often,
+   less rarely the further you get.
+
    A held thing is one rigid box welded to a hand: kinematic while it is
    held, so it shoves whatever it swings into, and an ordinary falling box
    once it is dropped. Each has its own paint canvas, so blood lands on the
@@ -17,7 +22,7 @@
    that pose the shield faces straight ahead and the barrel points at the
    target.
    ========================================================================== */
-import { Vector3, Quaternion, Mesh, MeshLambertMaterial, BoxGeometry, Group } from 'three';
+import { Vector3, Quaternion, Mesh, MeshLambertMaterial, BoxGeometry, Group, Color } from 'three';
 import { Body } from '../physics/world.js';
 import { packBoxes, buildBoxGeometry, PaintCanvas, FACE } from './paint.js';
 import { P, NP, PARTS, forwardKinematics } from './rig.js';
@@ -32,21 +37,102 @@ const D = Math.PI / 180;
 /*                                 catalogue                                  */
 /* -------------------------------------------------------------------------- */
 
+/** The rarities, commonest first, each with its colour. */
+export const RARITIES = [
+  { id: 'common', name: 'Common', color: '#c9c2b2' },
+  { id: 'uncommon', name: 'Uncommon', color: '#6fd06f' },
+  { id: 'rare', name: 'Rare', color: '#4f9dff' },
+  { id: 'epic', name: 'Epic', color: '#b673ff' },
+  { id: 'super_epic', name: 'Super Epic', color: '#ff62d4' },
+  { id: 'legendary', name: 'Legendary', color: '#ffb22e' },
+  { id: 'mythic', name: 'Mythic', color: '#ff4d4d' },
+  { id: 'transcendent', name: 'Transcendent', color: '#7ff3ff' },
+  { id: 'secret', name: 'Secret', color: '#a98bff' },
+  { id: 'godly', name: 'Godly', color: '#fff07a' },
+];
+export const RARITY = Object.fromEntries(RARITIES.map((r, i) => [r.id, { ...r, tier: i }]));
+
 export const ITEMS = {
+  // swords, one of each rarity. stats are out of 10
   wooden_sword: {
-    id: 'wooden_sword', name: 'Wooden Sword', slot: 'weapon', price: 10, sell: 5,
+    id: 'wooden_sword', name: 'Wooden Sword', slot: 'weapon', rarity: 'common', price: 10, sell: 5,
     blurb: 'Hard oak, shaped like a sword. It bruises, and splits the skin when it lands hard.',
     hit: 'wood', strikeMass: 2.4, damageBase: 6, damage: 1.6, rate: 1.15, cost: 8,
     size: [0.07, 0.034, 0.9], grip: 0.11,
-    stats: [['Damage', 2], ['Speed', 4], ['Reach', 3]], marks: 'Bruises, splits',
+    stats: [['Damage', 2], ['Speed', 7], ['Reach', 5]], marks: 'Bruises, splits',
   },
   rusty_sword: {
-    id: 'rusty_sword', name: 'Rusty Steel Sword', slot: 'weapon', price: 50, sell: 25,
+    id: 'rusty_sword', name: 'Rusty Steel Sword', slot: 'weapon', rarity: 'uncommon', price: 50, sell: 25,
     blurb: 'Pitted and notched, but it is steel. It cuts, and a full swing opens a slash.',
     hit: 'blade', strikeMass: 2.9, damageBase: 9, damage: 2.2, rate: 1.0, cost: 10,
     size: [0.062, 0.018, 1.0], grip: 0.12,
-    stats: [['Damage', 4], ['Speed', 3], ['Reach', 4]], marks: 'Cuts, slashes',
+    stats: [['Damage', 3], ['Speed', 6], ['Reach', 6]], marks: 'Cuts, slashes',
   },
+  iron_sword: {
+    id: 'iron_sword', name: 'Iron Sword', slot: 'weapon', rarity: 'rare', price: 120, sell: 60,
+    blurb: 'Plain, true iron, kept sharp. It cuts deeper than the rusty one and swings as quick.',
+    hit: 'blade', strikeMass: 3.0, damageBase: 11, damage: 2.5, rate: 1.05, cost: 9,
+    size: [0.064, 0.018, 1.0], grip: 0.12,
+    look: { flat: '#c3c8cc', edge: '#eef2f4', fuller: '#959ca1', guard: '#6f7478', pommel: '#858b90', grip: '#3a2a1c', wrap: '#6a5038' },
+    stats: [['Damage', 4], ['Speed', 6], ['Reach', 6]], marks: 'Cuts, slashes',
+  },
+  bronze_gladius: {
+    id: 'bronze_gladius', name: 'Bronze Gladius', slot: 'weapon', rarity: 'epic', price: 250, sell: 125,
+    blurb: 'A short, broad arena blade of bronze. Quick in the hand: it cuts and cuts again.',
+    hit: 'blade', strikeMass: 3.0, damageBase: 13, damage: 2.8, rate: 1.25, cost: 8,
+    size: [0.086, 0.02, 0.82], grip: 0.11,
+    look: { flat: '#c98a3c', edge: '#f2c67e', fuller: '#9c6526', guard: '#7a4e1e', pommel: '#b07a34', grip: '#2e1d10', wrap: '#5a3a1e' },
+    stats: [['Damage', 5], ['Speed', 8], ['Reach', 4]], marks: 'Cuts, slashes',
+  },
+  crimson_falchion: {
+    id: 'crimson_falchion', name: 'Crimson Falchion', slot: 'weapon', rarity: 'super_epic', price: 500, sell: 250,
+    blurb: 'A broad, heavy blade stained red to the hilt. It hits hard and opens long slashes.',
+    hit: 'blade', strikeMass: 3.3, damageBase: 15, damage: 3.1, rate: 1.05, cost: 10,
+    size: [0.1, 0.02, 1.0], grip: 0.12,
+    look: { flat: '#a3262a', edge: '#ec6464', fuller: '#6e1418', guard: '#2a2a2e', pommel: '#a3262a', grip: '#1e1416', wrap: '#4a1a1c' },
+    stats: [['Damage', 6], ['Speed', 6], ['Reach', 6]], marks: 'Cuts, slashes',
+  },
+  golden_spatha: {
+    id: 'golden_spatha', name: 'Golden Spatha', slot: 'weapon', rarity: 'legendary', price: 1000, sell: 500,
+    blurb: 'A long cavalry sword, gilded and balanced. It reaches far, cuts deep and gleams in the sun.',
+    hit: 'blade', strikeMass: 3.4, damageBase: 18, damage: 3.4, rate: 1.1, cost: 10,
+    size: [0.07, 0.02, 1.15], grip: 0.12,
+    look: { flat: '#e3b23c', edge: '#fff0a8', fuller: '#b8861e', guard: '#8a5a12', pommel: '#ffd76a', grip: '#3a2410', wrap: '#7a4a14', glow: '#ffb020', glowI: 0.22 },
+    stats: [['Damage', 7], ['Speed', 7], ['Reach', 8]], marks: 'Cuts, slashes',
+  },
+  dragonbone_blade: {
+    id: 'dragonbone_blade', name: 'Dragonbone Blade', slot: 'weapon', rarity: 'mythic', price: 2500, sell: 1250,
+    blurb: 'Carved from the jaw of something enormous: bone-white, veined with embers. It bites through anything.',
+    hit: 'blade', strikeMass: 3.7, damageBase: 21, damage: 3.8, rate: 1.1, cost: 11,
+    size: [0.11, 0.03, 1.15], grip: 0.13,
+    look: { flat: '#efe6d2', edge: '#fffaee', fuller: '#c9b89a', vein: '#ff5a1e', guard: '#5a1a10', pommel: '#efe6d2', grip: '#2a1410', wrap: '#6a2a18', glow: '#ff8a4a', glowI: 0.08 },
+    stats: [['Damage', 8], ['Speed', 7], ['Reach', 8]], marks: 'Cuts, slashes',
+  },
+  starsteel_edge: {
+    id: 'starsteel_edge', name: 'Starsteel Edge', slot: 'weapon', rarity: 'transcendent', price: 5000, sell: 2500,
+    blurb: 'Forged from a fallen star. It weighs nothing, swings like a thought and leaves a cold blue light behind it.',
+    hit: 'blade', strikeMass: 3.6, damageBase: 25, damage: 4.2, rate: 1.3, cost: 8,
+    size: [0.07, 0.02, 1.2], grip: 0.12,
+    look: { flat: '#a6ecff', edge: '#ffffff', fuller: '#4fb9e8', stars: true, guard: '#e0f8ff', pommel: '#7ff3ff', grip: '#1a2a3a', wrap: '#3a6a8a', glow: '#7ff3ff', glowI: 0.5 },
+    stats: [['Damage', 9], ['Speed', 9], ['Reach', 8]], marks: 'Cuts, slashes',
+  },
+  shadow_fang: {
+    id: 'shadow_fang', name: 'Shadow Fang', slot: 'weapon', rarity: 'secret', price: null, sell: 5000, secret: true,
+    blurb: 'Nobody sells this. A blade of black glass that drinks the light around it, carried by a champion now and then.',
+    hit: 'blade', strikeMass: 3.8, damageBase: 30, damage: 4.6, rate: 1.3, cost: 9,
+    size: [0.08, 0.022, 1.15], grip: 0.12,
+    look: { flat: '#141118', edge: '#7a4cc0', fuller: '#2a1a3a', guard: '#1a1a1a', pommel: '#7a4cc0', grip: '#0a0a0a', wrap: '#3a2050', glow: '#6a3acc', glowI: 0.12 },
+    stats: [['Damage', 10], ['Speed', 9], ['Reach', 8]], marks: 'Cuts, slashes',
+  },
+  sunforged_greatsword: {
+    id: 'sunforged_greatsword', name: 'Sunforged Greatsword', slot: 'weapon', rarity: 'godly', price: 25000, sell: 12500,
+    blurb: 'A greatsword hammered out of sunlight. Nothing it touches stays standing.',
+    hit: 'blade', strikeMass: 4.6, damageBase: 40, damage: 5.4, rate: 1.15, cost: 10,
+    size: [0.13, 0.03, 1.45], grip: 0.16,
+    look: { flat: '#fff3c0', edge: '#ffffff', fuller: '#ffd34a', rays: true, guard: '#ffb800', pommel: '#ffffff', grip: '#7a4a10', wrap: '#ffcf40', glow: '#ffe680', glowI: 0.75 },
+    stats: [['Damage', 10], ['Speed', 8], ['Reach', 10]], marks: 'Cuts, slashes',
+  },
+
   wood_shield: {
     id: 'wood_shield', name: 'Wood Shield', slot: 'offhand', price: 10, sell: 5,
     blurb: 'Oak planks, an iron rim and boss. Hold BLOCK to raise it: it stops fists, blades and bullets that come from the front.',
@@ -97,14 +183,47 @@ export const ITEMS = {
   },
 };
 
+/**
+ * A sword dropped by someone you put down, or null. A champion always drops
+ * one, anyone else now and then; the further you get, the better the odds
+ * of a rare one.
+ */
+const DROP_WEIGHTS = {
+  //            anyone, a champion
+  common: [46, 8],
+  uncommon: [26, 16],
+  rare: [14, 24],
+  epic: [7, 20],
+  super_epic: [3.6, 13],
+  legendary: [2, 9],
+  mythic: [0.9, 5],
+  transcendent: [0.35, 2.6],
+  secret: [0.1, 1.6],
+  godly: [0.05, 0.8],
+};
+export function rollDrop(champion, wave, random = Math.random) {
+  if (!champion && random() > 0.05 + wave * 0.0025) return null;
+  const luck = 1 + wave * 0.02;
+  const pool = SWORDS.map((id) => {
+    const r = RARITY[ITEMS[id].rarity];
+    return { id, w: DROP_WEIGHTS[r.id][champion ? 1 : 0] * Math.pow(luck, r.tier) };
+  });
+  let x = random() * pool.reduce((a, p) => a + p.w, 0);
+  for (const p of pool) { x -= p.w; if (x <= 0) return p.id; }
+  return pool[pool.length - 1].id;
+}
+
+/** Every sword, commonest first. */
+export const SWORDS = Object.values(ITEMS).filter((T) => T.slot === 'weapon').sort((a, b) => RARITY[a.rarity].tier - RARITY[b.rarity].tier).map((T) => T.id);
 /** The order the Stall shows them in, and how it groups them. */
 export const STOCK = [
-  'wooden_sword', 'rusty_sword', 'wood_shield',
+  ...SWORDS, 'wood_shield',
   'wood_helmet', 'wood_chestplate', 'wood_leggings', 'wood_boots',
   'bead_bracelet', 'oak_charm',
 ];
 export const SHELVES = [
-  { name: 'Swords and shields', kinds: ['wooden_sword', 'rusty_sword', 'wood_shield'] },
+  { name: 'Swords', kinds: SWORDS, note: 'Common to Godly. Box ragdolls drop them too, and a champion always does.' },
+  { name: 'Shields', kinds: ['wood_shield'] },
   { name: 'Wood armour', kinds: ['wood_helmet', 'wood_chestplate', 'wood_leggings', 'wood_boots'], note: 'Wear all four and you are harder to knock down.' },
   { name: 'Accessories', kinds: ['bead_bracelet', 'oak_charm'], note: 'Two accessory slots: wear one of each, or two of a kind.' },
 ];
@@ -252,6 +371,61 @@ function paintRustySword(ctx, tiles, size, grip) {
   }
 }
 
+/**
+ * Any other sword, from its look: the flat and the edge, a fuller down the
+ * middle, a wrapped grip, and whatever makes it what it is - embers in
+ * dragonbone, stars in starsteel, rays of light in the Godly one.
+ */
+function paintBlade(ctx, tiles, size, grip, L, seed) {
+  const r = rng(seed);
+  const hilt = (grip + 0.06) / size.z;
+  for (let fi = 0; fi < 6; fi++) {
+    const t = tiles[fi];
+    const flat = fi === FACE.py || fi === FACE.ny;
+    ctx.fillStyle = flat ? L.flat : L.edge;
+    ctx.fillRect(t.x - 1, t.y - 1, t.w + 2, t.h + 2);
+    if (flat) {
+      const len = t.h * (1 - hilt);
+      ctx.fillStyle = L.fuller;
+      ctx.fillRect(t.x + t.w * 0.42, t.y + len * 0.06, t.w * 0.16, len * 0.94);
+      ctx.fillStyle = L.edge;
+      const e = Math.max(1, t.w * 0.12);
+      ctx.fillRect(t.x, t.y, e, len);
+      ctx.fillRect(t.x + t.w - e, t.y, e, len);
+      if (L.vein) {
+        // embers in the bone: a crooked glowing seam either side of the fuller
+        ctx.strokeStyle = L.vein;
+        ctx.lineWidth = Math.max(1, t.w * 0.06);
+        for (const side of [0.26, 0.74]) {
+          ctx.beginPath();
+          ctx.moveTo(t.x + t.w * side, t.y + 2);
+          for (let y = 0; y < len; y += 6) ctx.lineTo(t.x + t.w * (side + (r() - 0.5) * 0.12), t.y + y);
+          ctx.stroke();
+        }
+      }
+      if (L.stars) {
+        for (let k = 0; k < 40; k++) {
+          ctx.fillStyle = r() < 0.3 ? '#ffffff' : 'rgba(255, 255, 255, 0.55)';
+          ctx.fillRect(t.x + r() * t.w, t.y + r() * len, 1, 1 + (r() < 0.2 ? 1 : 0));
+        }
+      }
+      if (L.rays) {
+        for (let k = 0; k < 14; k++) {
+          ctx.fillStyle = `rgba(255, 255, 255, ${0.25 + r() * 0.4})`;
+          ctx.fillRect(t.x + r() * t.w, t.y + r() * len * 0.9, 1, 4 + r() * 14);
+        }
+      }
+    }
+    bandAtGripEnd(ctx, t, fi, hilt, L.grip);
+    if (flat) {
+      for (let k = 0; k < 6; k++) {
+        ctx.fillStyle = L.wrap;
+        ctx.fillRect(t.x, t.y + t.h * (1 - hilt) + (k + 0.5) * (t.h * hilt / 6), t.w, 1);
+      }
+    }
+  }
+}
+
 /** The face is +Z, planks run up and down it. */
 function paintShield(ctx, tiles) {
   const r = rng(5);
@@ -326,12 +500,18 @@ export class Held {
     const tiles = this.layout.tiles[0];
     if (kind === 'wooden_sword') paintWoodenSword(this.paint.ctx, tiles, this.size, T.grip);
     else if (kind === 'rusty_sword') paintRustySword(this.paint.ctx, tiles, this.size, T.grip);
+    else if (T.look) paintBlade(this.paint.ctx, tiles, this.size, T.grip, T.look, kind.length * 7);
     else if (this.isShield) paintShield(this.paint.ctx, tiles);
     else paintPistol(this.paint.ctx, tiles);
     this.paint.dirty = true;
 
     const geo = buildBoxGeometry([{ size: this.size }], this.layout);
     this.material = new MeshLambertMaterial({ map: this.paint.texture });
+    // the rarest blades give off a light of their own
+    if (T.look && T.look.glow) {
+      this.material.emissive = new Color(T.look.glow);
+      this.material.emissiveIntensity = T.look.glowI;
+    }
     const box = new Mesh(geo, this.material);
     box.castShadow = true;
     box.receiveShadow = true;
@@ -370,15 +550,20 @@ export class Held {
 
   /** The bits that are not the main box: crossguard, pommel, boss, sights. */
   extras(T) {
+    const glow = T.look && T.look.glowI >= 0.4 ? T.look.glow : null;
     const add = (size, pos, color) => {
-      const m = new Mesh(new BoxGeometry(...size), new MeshLambertMaterial({ color }));
+      const m = new Mesh(new BoxGeometry(...size), new MeshLambertMaterial({ color, emissive: glow || '#000000', emissiveIntensity: glow ? 0.35 : 0 }));
       m.position.set(...pos);
       m.castShadow = true;
       this.mesh.add(m);
       return m;
     };
     const z0 = -this.size.z / 2;
-    if (this.kind === 'wooden_sword') {
+    if (T.look) {
+      const big = this.size.x > 0.1;
+      add([this.size.x * 2.4 + 0.05, this.size.y + 0.018, big ? 0.05 : 0.034], [0, 0, z0 + T.grip + 0.06], T.look.guard);
+      add([big ? 0.065 : 0.05, big ? 0.065 : 0.05, 0.045], [0, 0, z0 + 0.016], T.look.pommel);
+    } else if (this.kind === 'wooden_sword') {
       add([0.17, 0.05, 0.035], [0, 0, z0 + T.grip + 0.06], '#6b4220');
       add([0.05, 0.05, 0.04], [0, 0, z0 + 0.015], '#6b4220');
     } else if (this.kind === 'rusty_sword') {

@@ -324,9 +324,11 @@ export class Brain {
 /* -------------------------------------------------------------------------- */
 
 export class Keeper {
-  constructor(f, home) {
+  /** home: where he stands; face: the way the counter faces */
+  constructor(f, home, face = Math.PI) {
     this.f = f;
     this.home = home.clone();
+    this.face = face;
     this.near = false;
     this.cool = 0;
   }
@@ -336,11 +338,12 @@ export class Keeper {
     h.move.set(0, 0, 0);
     h.root.x = this.home.x; h.root.z = this.home.z;
     this.cool -= dt;
-    let face = Math.PI;
+    let face = this.face;
     if (p && p.alive) {
       const dx = p.root.x - h.root.x, dz = p.root.z - h.root.z;
       const d = Math.hypot(dx, dz);
-      if (d < 9) face = Math.PI + clamp(wrapAngle(Math.atan2(dx, dz) - Math.PI), -0.9, 0.9);
+      // he looks your way, as far as he can without turning his back on the counter
+      if (d < 9) face = this.face + clamp(wrapAngle(Math.atan2(dx, dz) - this.face), -0.9, 0.9);
       const near = d < 5.5;
       if (near && !this.near && this.cool <= 0 && h.canAct()) { h.play(WAVE); this.cool = 12; h.game.emit('greet', h); }
       this.near = near;

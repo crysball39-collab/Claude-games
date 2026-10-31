@@ -12,10 +12,17 @@ import { ITEMS, SLOT, SLOTS } from '../game/gear.js';
 
 export const BAG = 60;
 
+/** The admin panel's settings, as they start. */
+export function blankAdmin() {
+  return { god: false, infinite: false, maxHp: 100, maxStamina: 100, speed: 1, morph: null };
+}
+/** What the admin panel's sliders run between. */
+export const ADMIN_LIMITS = { maxHp: [50, 10000], maxStamina: [50, 10000], speed: [0.5, 4] };
+
 export function blankSave() {
   const eq = {};
   for (const s of SLOTS) eq[s.id] = null;
-  return { v: 1, coins: 0, bag: new Array(BAG).fill(null), eq, wave: 1, best: 0, kills: 0, earned: 0, runs: 0, seq: 1, savedAt: 0 };
+  return { v: 1, coins: 0, bag: new Array(BAG).fill(null), eq, wave: 1, best: 0, kills: 0, earned: 0, runs: 0, seq: 1, savedAt: 0, admin: blankAdmin() };
 }
 
 /** A save from anywhere - an old version, a corrupt one, another device - made safe to play. */
@@ -41,6 +48,16 @@ export function normalize(data) {
     }
   }
   s.seq = seq;
+  if (data.admin && typeof data.admin === 'object') {
+    const a = data.admin, b = s.admin;
+    const inRange = (v, [lo, hi], d) => (Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
+    b.god = !!a.god;
+    b.infinite = !!a.infinite;
+    b.maxHp = Math.round(inRange(a.maxHp, ADMIN_LIMITS.maxHp, 100));
+    b.maxStamina = Math.round(inRange(a.maxStamina, ADMIN_LIMITS.maxStamina, 100));
+    b.speed = inRange(a.speed, ADMIN_LIMITS.speed, 1);
+    b.morph = a.morph === 'venom' ? 'venom' : null;
+  }
   return s;
 }
 
@@ -48,9 +65,20 @@ export class Profile {
   constructor(data) {
     this.d = normalize(data);
     this.onChange = null;            // (why) after anything that should be saved
+    this.adminOn = false;            // logged in as the admin: the admin panel's settings apply
   }
 
   get coins() { return this.d.coins; }
+  /** The admin panel's settings, while they apply; null otherwise. */
+  get admin() { return this.adminOn ? this.d.admin : null; }
+  /** Buying costs nothing. */
+  get infinite() { return !!(this.admin && this.admin.infinite); }
+
+  /** Changes an admin setting. */
+  setAdmin(key, value) {
+    this.d.admin[key] = value;
+    this.changed('admin');
+  }
 
   changed(why) {
     this.d.savedAt = Date.now();
@@ -102,15 +130,26 @@ export class Profile {
 
   buy(kind) {
     const T = ITEMS[kind];
-    if (!T) return { error: 'The Stall does not sell that.' };
-    if (this.d.coins < T.price) return { error: `Not enough coins. ${T.name} costs ${T.price}.` };
+    if (!T || T.price == null) return { error: 'The Stall does not sell that.' };
+    if (!this.infinite && this.d.coins < T.price) return { error: `Not enough coins. ${T.name} costs ${T.price.toLocaleString('en-US')}.` };
     const i = this.freeBag();
     if (i < 0) return { error: 'Your bag is full. Sell something first.' };
-    this.d.coins -= T.price;
+    if (!this.infinite) this.d.coins -= T.price;
     const item = { uid: this.d.seq++, kind };
     // it goes in the bag: you put it on from the inventory
     this.d.bag[i] = item;
     this.changed('buy');
+    return { ok: true, item, loc: 'b' + i };
+  }
+
+  /** Something for nothing - a sword a box ragdoll dropped - into the bag. */
+  give(kind) {
+    if (!ITEMS[kind]) return { error: 'There is no such thing.' };
+    const i = this.freeBag();
+    if (i < 0) return { error: 'Your bag is full.' };
+    const item = { uid: this.d.seq++, kind };
+    this.d.bag[i] = item;
+    this.changed('drop');
     return { ok: true, item, loc: 'b' + i };
   }
 

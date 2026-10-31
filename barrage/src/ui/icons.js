@@ -4,6 +4,7 @@
    what goes in each empty slot.
    ========================================================================== */
 import { rng } from '../core/util.js';
+import { ITEMS, RARITY } from '../game/gear.js';
 
 const cache = new Map();
 
@@ -18,13 +19,24 @@ function draw(key, size, fn) {
   return url;
 }
 
+/** A soft glow of a rarity's colour behind an item: stronger the rarer it is. */
+function glow(ctx, s, R) {
+  const n = parseInt(R.color.slice(1), 16);
+  const rgb = `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`;
+  const g = ctx.createRadialGradient(s / 2, s / 2, s * 0.04, s / 2, s / 2, s * 0.5);
+  g.addColorStop(0, `rgba(${rgb}, ${0.18 + R.tier * 0.045})`);
+  g.addColorStop(1, `rgba(${rgb}, 0)`);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, s, s);
+}
+
 /** A sword lying corner to corner, point up and to the right. */
-function sword(ctx, s, { blade, edge, guard, grip, pommel, rust = false, wood = false }) {
+function sword(ctx, s, { blade, edge, guard, grip, pommel, rust = false, wood = false, width = 0.085, long = 0.62 }) {
   const r = rng(wood ? 4 : 9);
   ctx.save();
   ctx.translate(s / 2, s / 2);
   ctx.rotate(-Math.PI / 4);
-  const L = s * 0.62, w = s * (wood ? 0.1 : 0.085);
+  const L = s * long, w = s * (wood ? 0.1 : width);
   // blade
   ctx.fillStyle = blade;
   ctx.beginPath();
@@ -182,9 +194,26 @@ function charm(ctx, s) {
   ctx.beginPath(); ctx.moveTo(s * 0.36, s * 0.64); ctx.lineTo(s * 0.64, s * 0.64); ctx.moveTo(s * 0.5, s * 0.49); ctx.lineTo(s * 0.5, s * 0.79); ctx.stroke();
 }
 
+/** A sword nobody has shown you: just its shape. */
+export function mysteryIcon() {
+  return draw('mystery', 96, (ctx, s) => {
+    sword(ctx, s, { blade: '#1d1922', edge: '#2a2430', guard: '#1d1922', grip: '#1d1922', pommel: '#1d1922' });
+    ctx.fillStyle = '#a98bff';
+    ctx.font = `${Math.round(s * 0.42)}px Bungee, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('?', s * 0.5, s * 0.52);
+  });
+}
+
 export function itemIcon(kind) {
   return draw(kind, 96, (ctx, s) => {
-    if (kind === 'wooden_sword') sword(ctx, s, { blade: '#c08a52', edge: '#d9a86e', guard: '#6b4220', grip: '#4a2c14', pommel: '#6b4220', wood: true });
+    const T = ITEMS[kind];
+    if (T && T.rarity) glow(ctx, s, RARITY[T.rarity]);
+    if (T && T.look) {
+      const L = T.look;
+      sword(ctx, s, { blade: L.flat, edge: L.edge, guard: L.guard, grip: L.grip, pommel: L.pommel, width: Math.min(0.13, 0.05 + T.size[0] * 0.55), long: Math.min(0.68, 0.46 + T.size[2] * 0.15) });
+    } else if (kind === 'wooden_sword') sword(ctx, s, { blade: '#c08a52', edge: '#d9a86e', guard: '#6b4220', grip: '#4a2c14', pommel: '#6b4220', wood: true });
     else if (kind === 'rusty_sword') sword(ctx, s, { blade: '#9fa3a3', edge: '#c9cccb', guard: '#5e4a32', grip: '#3b2a1c', pommel: '#6d5a3c', rust: true });
     else if (kind === 'wood_shield') shield(ctx, s);
     else if (kind === 'wood_helmet') helmet(ctx, s);

@@ -239,7 +239,7 @@ export class Outfit {
   /** The armour a blow at a world point on `part` lands on, or null. */
   covering(part, point) {
     if (!this.byPart[part].length) return null;
-    return this.over(part, this.f.bodies[part].toLocal(point, _l));
+    return this.over(part, this.f.bodies[part].toLocal(point, _l).divideScalar(this.f.scale));
   }
 
   /** Paints on box b; local is in its part's frame. */

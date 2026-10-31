@@ -26,6 +26,7 @@ export class FollowCamera {
     this.shakeT = 0;
     this.shakeK = 0;
     this.mode = 'follow';       // follow | orbit | watch
+    this.size = 1;              // how big whoever we follow is: a bigger body, a longer view
     this.orbitA = 0;
   }
 
@@ -59,6 +60,7 @@ export class FollowCamera {
     // follow the chest of whoever we are watching
     const c = subject.chest.x;
     const k = approach(this.mode === 'watch' ? 3 : 12, dt);
+    this.size += ((subject.scale || 1) - this.size) * approach(3, dt);
     this.target.x += (c.x - this.target.x) * k;
     this.target.y += (Math.max(0.6, c.y + 0.25) - this.target.y) * k;
     this.target.z += (c.z - this.target.z) * k;
@@ -68,7 +70,7 @@ export class FollowCamera {
 
   place(dt) {
     this.forward(_f);
-    let dist = this.dist;
+    let dist = this.dist * this.size;
     // a wall between us and the subject pulls the camera in
     _d.copy(_f).negate();
     const hit = this.game.arena.rayWalls(this.target, _d, dist + 0.3);

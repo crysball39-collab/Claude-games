@@ -54,10 +54,24 @@ export const GATES = [
 /** Who a segment stops. */
 export const MASK = { player: 1, others: 2, all: 3 };
 
-/** The Stall: where it is and which way its counter faces (-Z, toward the arena). */
-export const STALL = { x: 5.2, z: 21.2, w: 3.6, d: 2.8, counterZ: 19.8 };
+/** The path: flagstones from the south gate across the plaza, this wide either side of the middle. */
+export const PATH_HALF = 1.5;
+/**
+ * The Stall: where its middle is, how long its counter is (w) and how deep
+ * it is (d), and which way the counter faces as a heading - west, onto the
+ * path, so you walk out of the gate and it is looking at you from the side
+ * of the road.
+ */
+export const STALL = { x: 4.6, z: 19.4, w: 3.6, d: 2.8, face: -Math.PI / 2 };
+/** The Stall's turn from one whose counter faces -Z. */
+const STALL_YAW = STALL.face - Math.PI;
+/** A point in the Stall's own frame - x along the counter, z from the front (-) to the back wall (+) - in the world. */
+export function stallPoint(lx, lz, out = new Vector3()) {
+  const c = Math.cos(STALL_YAW), s = Math.sin(STALL_YAW);
+  return out.set(STALL.x + lx * c + lz * s, 0, STALL.z - lx * s + lz * c);
+}
 /** Where you stand to be served. */
-export const STALL_SPOT = new Vector3(STALL.x, 0, STALL.counterZ - 1.0);
+export const STALL_SPOT = stallPoint(0, -STALL.d / 2 - 1.0);
 
 const polar = (a, r) => [Math.sin(a) * r, Math.cos(a) * r];
 
@@ -290,6 +304,12 @@ export class Arena {
     layer(new Mesh(new CircleGeometry(OUTER + 3, 64), new MeshLambertMaterial({ map: dirt })), -0.02, 1);
     const cob = layer(new Mesh(new PlaneGeometry(PLAZA_X * 2, PLAZA_Z - 6), new MeshLambertMaterial({ map: cobbleTexture() })), -0.004, 2);
     cob.position.z = (PLAZA_Z + 6) / 2;
+    // the path: flagstones straight out of the south gate to the far wall
+    const flags = stoneTexture(41, '#b3a184', 4);
+    const pathLen = PLAZA_Z - R;
+    flags.repeat.set(1, pathLen / (PATH_HALF * 2));
+    const path = layer(new Mesh(new PlaneGeometry(PATH_HALF * 2, pathLen), new MeshLambertMaterial({ map: flags })), -0.001, 3);
+    path.position.z = (PLAZA_Z + R) / 2;
     // the sand
     layer(new Mesh(new CircleGeometry(R + 0.2, 72), new MeshLambertMaterial({ map: sandTexture() })), 0.002, 3);
   }
@@ -677,70 +697,79 @@ export class Arena {
   /* -------------------------------- stall --------------------------------- */
 
   stall() {
-    const { x, z, w, d, counterZ } = STALL;
+    const { w, d } = STALL;
     const wood = new MeshLambertMaterial({ map: woodTexture('#8a5a32', 13, 4) });
     const dark = new MeshLambertMaterial({ map: woodTexture('#5e3c20', 19, 6) });
+    // built in its own frame - the counter along x at the front (-z), the back
+    // wall at +z - and turned to face the path
     const g = new Group();
+    g.position.set(STALL.x, 0, STALL.z);
+    g.rotation.y = STALL_YAW;
     const add = (geo, mat, px, py, pz) => { const m = new Mesh(geo, mat); m.position.set(px, py, pz); m.castShadow = true; m.receiveShadow = true; g.add(m); return m; };
-    const back = z + d / 2;
+    const front = -d / 2, back = d / 2;
     const light = new BoxBatch(1.2), darkB = new BoxBatch(1.2);
     // counter
-    light.add([w, 1.0, 0.7], [x, 0.5, counterZ + 0.35]);
-    darkB.add([w + 0.2, 0.08, 0.86], [x, 1.04, counterZ + 0.35]);
+    light.add([w, 1.0, 0.7], [0, 0.5, front + 0.35]);
+    darkB.add([w + 0.2, 0.08, 0.86], [0, 1.04, front + 0.35]);
     // posts
     for (const sx of [-1, 1]) {
-      darkB.add([0.16, 2.7, 0.16], [x + sx * (w / 2 - 0.08), 1.35, counterZ + 0.1]);
-      darkB.add([0.16, 3.1, 0.16], [x + sx * (w / 2 - 0.08), 1.55, back - 0.1]);
+      darkB.add([0.16, 2.7, 0.16], [sx * (w / 2 - 0.08), 1.35, front + 0.1]);
+      darkB.add([0.16, 3.1, 0.16], [sx * (w / 2 - 0.08), 1.55, back - 0.1]);
     }
     // back wall and sides
-    darkB.add([w, 3.0, 0.12], [x, 1.5, back]);
-    for (const sx of [-1, 1]) light.add([0.1, 1.6, d - 0.8], [x + sx * (w / 2 - 0.05), 0.8, (counterZ + back) / 2 + 0.3]);
+    darkB.add([w, 3.0, 0.12], [0, 1.5, back]);
+    for (const sx of [-1, 1]) light.add([0.1, 1.6, d - 0.8], [sx * (w / 2 - 0.05), 0.8, 0.3]);
     g.add(light.mesh(wood), darkB.mesh(dark));
     // the awning: sloping from the back wall out past the counter
     const awn = new Mesh(new BoxGeometry(w + 0.5, 0.05, d + 0.9), new MeshLambertMaterial({ map: awningTexture() }));
-    awn.position.set(x, 2.95, (counterZ + back) / 2 - 0.3);
+    awn.position.set(0, 2.95, -0.3);
     awn.rotation.x = -0.16;
     awn.castShadow = true;
     g.add(awn);
     // solid, so the camera stays out from under it (and a flying body bounces off it)
-    this.solid([w + 0.5, 0.3, d + 0.9], [x, 2.95, (counterZ + back) / 2 - 0.3], awn.quaternion.clone());
+    const turn = yawQ(STALL_YAW);
+    const at = (lx, y, lz) => { const p = stallPoint(lx, lz); return [p.x, y, p.z]; };
+    this.solid([w + 0.5, 0.3, d + 0.9], at(0, 2.95, -0.3), turn.clone().multiply(awn.quaternion));
     // a valance hanging off the front
     const val = new Mesh(new BoxGeometry(w + 0.5, 0.32, 0.03), new MeshLambertMaterial({ map: awningTexture() }));
-    val.position.set(x, 2.55, counterZ - 0.75);
+    val.position.set(0, 2.55, front - 0.75);
     g.add(val);
     // the sign
     const sign = new Mesh(new BoxGeometry(2.4, 0.55, 0.08), new MeshLambertMaterial({ map: signTexture('THE STALL', { size: 60 }) }));
-    sign.position.set(x, 3.35, counterZ - 0.45);
+    sign.position.set(0, 3.35, front - 0.45);
     sign.rotation.x = -0.12;
     g.add(sign);
     this.stallSign = sign;
     // crates and a barrel by it
     const crate = new MeshLambertMaterial({ map: woodTexture('#9a6a3a', 33, 3) });
-    add(new BoxGeometry(0.7, 0.7, 0.7), crate, x + w / 2 + 0.6, 0.35, counterZ + 0.6);
-    add(new BoxGeometry(0.55, 0.55, 0.55), crate, x + w / 2 + 0.55, 0.98, counterZ + 0.62).rotation.y = 0.4;
-    add(new BoxGeometry(0.6, 0.9, 0.6), dark, x - w / 2 - 0.55, 0.45, counterZ + 0.9);
+    add(new BoxGeometry(0.7, 0.7, 0.7), crate, w / 2 + 0.6, 0.35, front + 0.6);
+    add(new BoxGeometry(0.55, 0.55, 0.55), crate, w / 2 + 0.55, 0.98, front + 0.62).rotation.y = 0.4;
+    add(new BoxGeometry(0.6, 0.9, 0.6), dark, -w / 2 - 0.55, 0.45, front + 0.9);
     this.scene.add(g);
     this.stallGroup = g;
 
     // what is for sale, hanging on the back wall
     this.display = new Group();
-    this.display.position.set(x, 0, back - 0.1);
-    this.scene.add(this.display);
+    this.display.position.set(0, 0, back - 0.1);
+    g.add(this.display);
 
     // nobody walks through it
-    this.rectSegs(x, (counterZ + back) / 2, w / 2 + 0.05, (back - counterZ) / 2 + 0.05);
-    this.rectSegs(x + w / 2 + 0.6, counterZ + 0.6, 0.4, 0.4);
-    this.rectSegs(x - w / 2 - 0.55, counterZ + 0.9, 0.35, 0.35);
-    this.solid([w, 1.05, 0.7], [x, 0.52, counterZ + 0.35]);
-    this.solid([w, 3.0, 0.12], [x, 1.5, back]);
-    this.solid([0.7, 0.7, 0.7], [x + w / 2 + 0.6, 0.35, counterZ + 0.6]);
-    this.keeperSpot = new Vector3(x, 0, (counterZ + back) / 2 + 0.25);
+    const seg = (lx, lz, hx, hz) => { const p = stallPoint(lx, lz); this.rectSegs(p.x, p.z, hx, hz, STALL_YAW); };
+    seg(0, 0, w / 2 + 0.05, d / 2 + 0.05);
+    seg(w / 2 + 0.6, front + 0.6, 0.4, 0.4);
+    seg(-w / 2 - 0.55, front + 0.9, 0.35, 0.35);
+    this.solid([w, 1.05, 0.7], at(0, 0.52, front + 0.35), turn);
+    this.solid([w, 3.0, 0.12], at(0, 1.5, back), turn);
+    this.solid([0.7, 0.7, 0.7], at(w / 2 + 0.6, 0.35, front + 0.6), turn);
+    this.keeperSpot = stallPoint(0, 0.25);
+    this.keeperFace = STALL.face;
+    this.stallSpot = STALL_SPOT;
   }
 
   /** Hangs a model of each thing for sale on the back wall of the Stall. */
   dressStall(models) {
     const spots = [[-1.1, 1.75, 0.5], [0, 1.75, 0.5], [1.15, 1.5, 0]];
-    models.forEach((m, i) => {
+    models.slice(0, spots.length).forEach((m, i) => {
       const s = spots[i];
       m.position.set(s[0], s[1], -0.06);
       m.rotation.set(0, Math.PI, s[2]);
@@ -760,7 +789,7 @@ export class Arena {
       return m;
     };
     this.stallMarker = make();
-    this.stallMarker.position.set(STALL.x, 4.1, STALL.counterZ - 0.4);
+    this.stallMarker.position.copy(stallPoint(0, -STALL.d / 2 - 0.4)).setY(4.1);
     this.gateMarker = make();
     this.gateMarker.position.set(0, GATE_H + 0.6, R + 0.2);
   }

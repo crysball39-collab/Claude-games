@@ -12,6 +12,7 @@ import { Fighter } from './fighter.js';
 import { Held } from './gear.js';
 import { Blood } from './blood.js';
 import { Guns } from './guns.js';
+import { Fx } from './fx.js';
 import { Arena, MASK, STALL_SPOT, R, GATES } from './arena.js';
 import { wrapAngle } from '../core/util.js';
 import { FollowCamera } from './camera.js';
@@ -50,6 +51,7 @@ export class Game {
     this.arena = new Arena(this);
     this.blood = new Blood(this);
     this.guns = new Guns(this);
+    this.fx = new Fx(this);
     this.cam = new FollowCamera(this.camera, this);
     this.waves = new Waves(this);
     this.focus = new Vector3();
@@ -124,10 +126,10 @@ export class Game {
 
   spawnKeeper() {
     if (this.keeper) return this.keeper;
-    const at = this.arena.keeperSpot;
-    const f = this.spawn('keeper', { team: 'neutral', x: at.x, z: at.z, heading: Math.PI, health: 100, mask: 0 });
+    const at = this.arena.keeperSpot, face = this.arena.keeperFace;
+    const f = this.spawn('keeper', { team: 'neutral', x: at.x, z: at.z, heading: face, health: 100, mask: 0 });
     f.invulnerable = true;
-    f.controller = new Keeper(f, at);
+    f.controller = new Keeper(f, at, face);
     this.keeper = f;
     return f;
   }
@@ -157,6 +159,7 @@ export class Game {
     this.keeper = null;
     this.blood.clear();
     this.arena.clearBlood();
+    this.fx.clear();
     this.demoing = false;
   }
 
@@ -216,6 +219,7 @@ export class Game {
     for (const f of [...this.fighters]) f.afterStep(dt);
     this.blood.update(dt);
     this.guns.update(dt);
+    this.fx.update(dt);
     this.waves.update(dt);
     // between rounds you get your breath back
     if (this.player && (this.waves.state === 'rest' || this.waves.state === 'cleared')) this.player.heal(dt * 12);
@@ -260,7 +264,7 @@ export class Game {
         if (b.state === 'active' && j < i) continue;
         const dx = a.root.x - b.root.x, dz = a.root.z - b.root.z;
         const d2 = dx * dx + dz * dz;
-        const r = 0.5;
+        const r = 0.25 * (a.scale + b.scale);
         if (d2 >= r * r || d2 < 1e-8) continue;
         // a little at a time: a big shove in one step could put someone through the end of a wall
         const d = Math.sqrt(d2), push = Math.min(r - d, 0.25);

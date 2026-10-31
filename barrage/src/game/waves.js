@@ -250,6 +250,14 @@ export class Waves {
     this.wave++;
   }
 
+  /** Gone from the sand at once - eaten, say - after it has been counted. */
+  discard(f) {
+    const i = this.enemies.indexOf(f);
+    if (i >= 0) this.enemies.splice(i, 1);
+    this.game.guns.dropLaser(f);
+    this.game.removeFighter(f);
+  }
+
   /** You fell. */
   defeat() {
     if (this.state === 'defeat') return;

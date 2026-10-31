@@ -13,6 +13,7 @@ import { $, $$ } from '../core/util.js';
 import { ITEMS, SLOTS, SLOT, SLOT_KIND, ARMOUR } from '../game/gear.js';
 import { BAG } from '../data/profile.js';
 import { itemIcon, slotIcon } from './icons.js';
+import { rarityPill, coinsText } from './shop.js';
 
 const LEFT = ['helmet', 'chest', 'legs', 'boots'];
 const RIGHT = ['weapon', 'offhand', 'acc1', 'acc2'];
@@ -72,7 +73,7 @@ export class InventoryUI {
 
   render() {
     const p = this.cb.profile();
-    $('#inv-coins').textContent = p.coins;
+    $('#inv-coins').textContent = p.infinite ? '∞' : coinsText(p.coins);
     $('#inv-count').textContent = `${p.countBag()} / ${BAG}`;
     for (const b of $$('.slot', this.el)) {
       const loc = b.dataset.loc;
@@ -84,6 +85,12 @@ export class InventoryUI {
       else if (eq) html = `<img class="ghost" src="${slotIcon(id.startsWith('acc') ? 'acc' : id)}" alt="">`;
       if (eq) html += `<span class="tag">${SLOT[id].name}</span>`;
       if (b._html !== html) { b.innerHTML = html; b._html = html; }
+      const rarity = it && ITEMS[it.kind].rarity;
+      if (b._rarity !== rarity) {
+        if (b._rarity) b.classList.remove('r-' + b._rarity);
+        if (rarity) b.classList.add('r-' + rarity);
+        b._rarity = rarity;
+      }
       b.classList.toggle('sel', loc === this.sel);
       b.title = it ? ITEMS[it.kind].name : eq ? SLOT[id].name : '';
     }
@@ -109,12 +116,12 @@ export class InventoryUI {
     const worn = loc[0] === 'e';
     const stall = this.cb.atStall();
     d.innerHTML = `
-      <h3>${T.name.toUpperCase()}</h3>
-      <div><span class="pill">${SLOT_KIND[T.slot]}</span> <span class="pill">${T.marks}</span>${worn ? ' <span class="pill">Equipped</span>' : ''}</div>
+      <h3 class="name${T.rarity ? ' r-' + T.rarity : ''}">${T.name.toUpperCase()}</h3>
+      <div>${rarityPill(T)} <span class="pill">${SLOT_KIND[T.slot]}</span> <span class="pill">${T.marks}</span>${worn ? ' <span class="pill">Equipped</span>' : ''}</div>
       <p>${T.blurb}</p>${T.set ? this.setLine(p) : ''}
       <div class="acts">
         ${worn ? '<button class="btn" data-do="unequip" type="button">TAKE OFF</button>' : '<button class="btn primary" data-do="equip" type="button">EQUIP</button>'}
-        ${stall ? `<button class="btn" data-do="sell" type="button">SELL +${T.sell}</button>` : ''}
+        ${stall ? `<button class="btn" data-do="sell" type="button">SELL +${coinsText(T.sell)}</button>` : ''}
       </div>
       ${stall ? '' : '<p>Sell it at the Stall, outside the arena.</p>'}`;
     for (const b of $$('[data-do]', d)) b.addEventListener('click', () => this.act(b.dataset.do));

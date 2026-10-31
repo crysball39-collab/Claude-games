@@ -4,8 +4,14 @@
    what he sold it for.
    ========================================================================== */
 import { $, $$, pick } from '../core/util.js';
-import { ITEMS, SHELVES, SLOT_KIND } from '../game/gear.js';
-import { itemIcon } from './icons.js';
+import { ITEMS, SHELVES, SLOT_KIND, RARITY } from '../game/gear.js';
+import { itemIcon, mysteryIcon } from './icons.js';
+
+/** 25000 as 25,000. */
+export const coinsText = (n) => n.toLocaleString('en-US');
+
+/** A rarity's pill, coloured. */
+export const rarityPill = (T) => (T.rarity ? `<span class="pill rarity r-${T.rarity}">${RARITY[T.rarity].name}</span>` : '');
 
 const LINES = [
   'Wood for the brave. Steel for the rich.',
@@ -45,7 +51,7 @@ export class ShopUI {
 
   render() {
     const p = this.cb.profile();
-    $('#shop-coins').textContent = p.coins;
+    $('#shop-coins').textContent = p.infinite ? '∞' : coinsText(p.coins);
     for (const t of $$('.tab', this.el)) t.classList.toggle('on', t.dataset.tab === this.tab);
     $('#shop-buy').classList.toggle('hidden', this.tab !== 'buy');
     $('#shop-sell').classList.toggle('hidden', this.tab !== 'sell');
@@ -69,20 +75,34 @@ export class ShopUI {
     const T = ITEMS[kind];
     const owned = p.owns(kind);
     const card = document.createElement('article');
-    card.className = 'ware' + (owned ? ' owned' : '');
+    card.className = 'ware' + (owned ? ' owned' : '') + (T.rarity ? ` r-${T.rarity}` : '');
     card.dataset.kind = kind;
-    const stats = T.stats.map(([n, v]) => `<div class="stat"><span>${n}</span><span class="pips">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= v ? 'on' : ''}"></i>`).join('')}</span></div>`).join('');
+    // the Secret one is not on the counter: until you have one, it is only a shape under a cloth
+    if (T.secret && !owned) {
+      card.classList.add('mystery');
+      card.innerHTML = `
+        <div class="pic"><img src="${mysteryIcon()}" alt=""></div>
+        <div class="head"><h3>???</h3><div>${rarityPill(T)}</div></div>
+        <p>Something long under a cloth. "Not for sale. Not to you, not to anyone. A champion might be carrying one, if you are lucky."</p>
+        <div class="buy"><div class="price">NOT FOR SALE</div></div>`;
+      box.appendChild(card);
+      return;
+    }
+    const pips = T.slot === 'weapon' ? 10 : 5;
+    const stats = T.stats.map(([n, v]) => `<div class="stat"><span>${n}</span><span class="pips">${Array.from({ length: pips }, (_, i) => `<i class="${i < v ? 'on' : ''}"></i>`).join('')}</span></div>`).join('');
+    const free = p.infinite;
+    const can = T.price != null && (free || p.coins >= T.price);
     card.innerHTML = `
       <div class="pic"><img src="${itemIcon(kind)}" alt=""></div>
       <div class="head">
-        <h3>${T.name.toUpperCase()}</h3>
-        <div><span class="pill">${SLOT_KIND[T.slot]} slot</span>${owned ? ' <span class="pill">Owned</span>' : ''}</div>
+        <h3 class="name">${T.name.toUpperCase()}</h3>
+        <div>${rarityPill(T)} <span class="pill">${SLOT_KIND[T.slot]} slot</span>${owned ? ' <span class="pill">Owned</span>' : ''}</div>
       </div>
       <p>${T.blurb}</p>
       <div class="stats">${stats}</div>
       <div class="buy">
-        <div class="price"><span class="coin-icon"></span>${T.price}</div>
-        <button class="btn ${p.coins >= T.price ? 'primary' : ''}" type="button" data-buy="${kind}">${p.coins >= T.price ? 'BUY' : `NEED ${T.price - p.coins} MORE`}</button>
+        ${T.price == null ? '<div class="price">NOT FOR SALE</div>' : `<div class="price"><span class="coin-icon"></span>${coinsText(T.price)}</div>
+        <button class="btn ${can ? 'primary' : ''}" type="button" data-buy="${kind}">${can ? 'BUY' : `NEED ${coinsText(T.price - p.coins)} MORE`}</button>`}
       </div>`;
     box.appendChild(card);
   }
@@ -98,11 +118,11 @@ export class ShopUI {
     for (const { loc, item } of all) {
       const T = ITEMS[item.kind];
       const row = document.createElement('div');
-      row.className = 'sell-row';
+      row.className = 'sell-row' + (T.rarity ? ` r-${T.rarity}` : '');
       row.innerHTML = `
         <img src="${itemIcon(item.kind)}" alt="">
-        <div class="name">${T.name}<small>${loc[0] === 'e' ? 'Equipped' : 'In your bag'}</small></div>
-        <div class="price"><span class="coin-icon"></span>${T.sell}</div>
+        <div class="name">${T.name}<small>${T.rarity ? RARITY[T.rarity].name + ' · ' : ''}${loc[0] === 'e' ? 'Equipped' : 'In your bag'}</small></div>
+        <div class="price"><span class="coin-icon"></span>${coinsText(T.sell)}</div>
         <button class="btn" type="button" data-sell="${loc}">SELL</button>`;
       box.appendChild(row);
     }

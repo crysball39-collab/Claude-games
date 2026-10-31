@@ -204,7 +204,7 @@ export function forwardKinematics(rootPos, rootQuat, off, q, outPos, outQuat, ou
 }
 
 /** Lowest point of any box, given box centres and orientations. */
-export function lowestPoint(pos, quat, only = null) {
+export function lowestPoint(pos, quat, only = null, scale = 1) {
   let min = Infinity;
   const idx = only || PARTS;
   for (const it of idx) {
@@ -215,7 +215,7 @@ export function lowestPoint(pos, quat, only = null) {
     const r0 = Math.abs(2 * (x * y + w * z));        // X axis . Y
     const r1 = Math.abs(1 - 2 * (x * x + z * z));    // Y axis . Y
     const r2 = Math.abs(2 * (y * z - w * x));        // Z axis . Y
-    const low = pos[i].y - (h.x * r0 + h.y * r1 + h.z * r2);
+    const low = pos[i].y - (h.x * r0 + h.y * r1 + h.z * r2) * scale;
     if (low < min) min = low;
   }
   return min;

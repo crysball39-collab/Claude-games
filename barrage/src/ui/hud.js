@@ -5,6 +5,7 @@
    rising off the ones you have put down.
    ========================================================================== */
 import { Vector3 } from 'three';
+import { COOLDOWN } from '../game/morph.js';
 import { $, clamp } from '../core/util.js';
 
 const _v = new Vector3();
@@ -34,6 +35,7 @@ export class Hud {
     this.punchLabel = $('#punch-label');
     this.btn = {
       crouch: $('#btn-crouch'), sprint: $('#btn-sprint'), punch: $('#btn-punch'), kick: $('#btn-kick'), jump: $('#btn-jump'), block: $('#btn-block'),
+      surge: $('#btn-surge'), eat: $('#btn-eat'),
     };
     this.bars = new Map();
     this.pops = [];
@@ -128,7 +130,15 @@ export class Hud {
       this.btn.sprint.classList.toggle('on', !!(c && c.sprintOn));
       this.btn.crouch.classList.toggle('on', p.wantCrouch);
       for (const k of ['punch', 'kick', 'jump']) this.btn[k].classList.toggle('tired', p.winded);
-      this.punchLabel.textContent = p.weapon ? 'SLASH' : 'PUNCH';
+      const m = p.morph;
+      const label = m && m.claws ? 'CLAW' : p.weapon ? 'SLASH' : 'PUNCH';
+      if (this.punchLabel.textContent !== label) this.punchLabel.textContent = label;
+      // a morph's own moves: shown while you are it, dark while they come back
+      for (const k of ['surge', 'eat']) {
+        const b = this.btn[k];
+        b.classList.toggle('hidden', !m);
+        if (m) b.style.setProperty('--cool', m.growing ? 1 : (m.cool[k] / COOLDOWN[k]).toFixed(3));
+      }
     }
 
     // the round

@@ -111,12 +111,17 @@ export class Sound {
 
   /* --------------------------------- combat -------------------------------- */
 
-  /** A blow landing. kind: fist | kick | wood | blade | bullet | impact. */
+  /** A blow landing. kind: fist | kick | wood | blade | claw | bullet | impact. */
   hit(kind, speed, p, blocked = false) {
     const v = this.level(p);
     if (!v) return;
     const k = Math.min(1.3, 0.45 + speed / 12) * v * (blocked ? 0.6 : 1);
-    if (kind === 'blade') {
+    if (kind === 'claw') {
+      // a wet tearing rip
+      this.burst({ dur: 0.22, gain: 0.4 * k, type: 'bandpass', freq: 1600, q: 0.8, sweep: 0.4 });
+      this.burst({ dur: 0.1, gain: 0.5 * k, type: 'lowpass', freq: 700, q: 1 });
+      this.tone({ dur: 0.12, gain: 0.35 * k, from: 140, to: 60 });
+    } else if (kind === 'blade') {
       this.burst({ dur: 0.18, gain: 0.32 * k, type: 'highpass', freq: 2600, q: 0.7 });
       this.burst({ dur: 0.08, gain: 0.55 * k, type: 'bandpass', freq: 900, q: 1.2 });
       this.tone({ dur: 0.1, gain: 0.32 * k, from: 170, to: 70 });
@@ -368,6 +373,58 @@ export class Sound {
     if (!this.ctx || !this.enabled.sfx) return;
     this.burst({ dur: 0.08, gain: 0.25, type: 'bandpass', freq: 1500, q: 1.5 });
     this.tone({ at: 0.02, dur: 0.15, gain: 0.08, from: 900, to: 700, type: 'triangle' });
+  }
+
+  /* ---------------------------------- venom --------------------------------- */
+
+  /** The goo taking you over: wet, squelching, a growl underneath. */
+  goo() {
+    if (!this.ctx || !this.enabled.sfx) return;
+    for (let i = 0; i < 6; i++) this.burst({ at: i * 0.32 + Math.random() * 0.1, dur: 0.28, gain: 0.3, type: 'lowpass', freq: 380 + Math.random() * 300, q: 6, sweep: 0.5 });
+    this.tone({ at: 0.4, dur: 2.2, gain: 0.18, from: 55, to: 38, type: 'sawtooth' });
+  }
+
+  /** Changed: a roar. */
+  roar() {
+    if (!this.ctx || !this.enabled.sfx) return;
+    this.tone({ dur: 1.1, gain: 0.22, from: 120, to: 62, type: 'sawtooth' });
+    this.tone({ dur: 1.0, gain: 0.16, from: 92, to: 48, type: 'square' });
+    this.burst({ dur: 1.0, gain: 0.35, type: 'lowpass', freq: 600, q: 1.5, sweep: 0.5 });
+  }
+
+  /** One spike punching up out of the sand. */
+  spike(p) {
+    const v = this.level(p, 10);
+    if (!v) return;
+    this.burst({ dur: 0.08, gain: 0.45 * v, type: 'bandpass', freq: 500 + Math.random() * 300, q: 2 });
+    this.tone({ dur: 0.08, gain: 0.3 * v, from: 260, to: 90, type: 'triangle' });
+  }
+
+  /** The tongue going out. */
+  lash() {
+    if (!this.ctx || !this.enabled.sfx) return;
+    this.burst({ dur: 0.18, gain: 0.35, type: 'bandpass', freq: 900, q: 1.5, sweep: 3 });
+  }
+
+  /** Jaws closing on someone. */
+  chomp() {
+    if (!this.ctx || !this.enabled.sfx) return;
+    this.burst({ dur: 0.12, gain: 0.7, type: 'lowpass', freq: 1200, q: 1 });
+    this.tone({ dur: 0.16, gain: 0.5, from: 110, to: 45 });
+    this.burst({ at: 0.18, dur: 0.3, gain: 0.35, type: 'lowpass', freq: 500, q: 4, sweep: 0.5 });
+    this.tone({ at: 0.45, dur: 0.35, gain: 0.2, from: 70, to: 40 });
+  }
+
+  /** A sword dropped: a run of notes up, longer and higher the rarer it is. */
+  loot(tier = 0) {
+    if (!this.ctx || !this.enabled.sfx) return;
+    const notes = [523, 659, 784, 1046, 1318, 1568, 2093, 2637, 3136, 4186];
+    const n = 3 + Math.min(7, tier);
+    for (let i = 0; i < n; i++) {
+      const f = notes[Math.min(notes.length - 1, i + Math.floor(tier / 2))];
+      this.tone({ at: i * 0.07, dur: 0.3 + (i === n - 1 ? 0.5 : 0), gain: 0.11, from: f, to: f, type: 'triangle' });
+    }
+    if (tier >= 5) this.burst({ at: (n - 1) * 0.07, dur: 0.6, gain: 0.18, type: 'highpass', freq: 5000, q: 0.5 });
   }
 
   victory() {
