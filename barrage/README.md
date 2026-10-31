@@ -70,19 +70,25 @@ behind them. Each wave has more of them, and new kinds join as the waves go on:
 | 1 | **Brawlers** | Bare chests and taped fists: jabs, combinations, kicks |
 | 3 | **Swordsmen** | Wooden swords; rusty steel ones from wave 6 |
 | 4 | **Shield bearers** | Walk in behind a wood shield and block a lot |
-| 5 | **Gunners** | Keep their distance and fire a pistol. A red line runs from the barrel to where they are aiming before every burst |
-| every 5th | **A champion** | Big health, hard to knock down, hits like a cart |
+| 6 | **Gunners** | Keep their distance and fire a pistol. A red line runs from the barrel to where they are aiming before every burst |
+| every 5th | **A champion** | Big health, hard to knock down, hits like a cart. Two fewer of the others come out that wave |
 
-Only a few close in and attack at once; the rest circle at a distance, waiting
-their turn and taunting you if you go down. Only so many are out at a time, and
-more come through the gates as others fall.
+Only a few close in and attack at once - one at a time for the first four waves,
+two from wave 5, three from wave 8, four from wave 11 - and the rest circle at a
+distance, waiting their turn and taunting you if you go down. Only so many are out
+at a time, and more come through the gates as others fall. One knocked back into
+a tunnel as its portcullis comes down is let out again, so a wave can always be
+finished.
 
 Bullets hit whatever is in the way. A gunner who misses you can hit the brawler
 standing between you, which is where the bullet holes on box ragdolls come from.
 A raised shield stops a bullet from the front.
 
-Fall and the run is over: you keep your coins and your gear, and start again
-from wave 1. Between waves you get your breath back and your health with it.
+Knocked down, you get up quicker than they do, and once you are back on your feet
+you have a moment and a half before anything can put you down again. Run out of
+health and you fall: the run is over, you keep your coins and your gear, and start
+again from wave 1. Between waves you get your breath back and your health with it,
+and during a wave you slowly regain health once nobody has hit you for five seconds.
 
 ### Coins and the Stall
 
@@ -95,11 +101,23 @@ from wave 1. Between waves you get your breath back and your health with it.
 Between waves the south doors stay open. Walk out onto the plaza and up to the
 Stall's counter and it opens:
 
-| Item | Price | Sells back for | Goes in |
-| ---- | ----- | -------------- | ------- |
-| **Wooden Sword** | 10 | 5 | Weapon slot |
-| **Rusty Steel Sword** | 50 | 25 | Weapon slot |
-| **Wood Shield** | 10 | 5 | Offhand slot |
+| Item | Price | Sells back for | Goes in | What it does |
+| ---- | ----- | -------------- | ------- | ------------ |
+| **Wooden Sword** | 10 | 5 | Weapon slot | Bruises, and splits the skin when it lands hard |
+| **Rusty Steel Sword** | 50 | 25 | Weapon slot | Cuts, and a full swing opens a slash |
+| **Wood Shield** | 10 | 5 | Offhand slot | Hold BLOCK to raise it: stops fists, blades and bullets from the front |
+| **Wooden Helmet** | 12 | 6 | Helmet slot | An oak cap, a guard down the back and one over the nose |
+| **Wooden Chestplate** | 20 | 10 | Chestplate slot | Oak slats over the chest and belly, pads on the shoulders |
+| **Wooden Leggings** | 15 | 7 | Leggings slot | A girdle over the hips, plates on the thighs, caps on the knees |
+| **Wooden Boots** | 8 | 4 | Boots slot | Oak clogs and shin guards |
+| **Bead Bracelet** | 15 | 7 | Accessory slot | Stamina comes back a third faster |
+| **Oak Charm** | 15 | 7 | Accessory slot | 20 more health |
+
+A blow that lands on wood armour does a third less (a bullet, a sixth less) and
+dents the wood instead of bruising you; where the wood stops - your face under
+the helmet's brim - blows land as they always did. Wear all four pieces and you
+are harder to knock down. Either accessory goes in either accessory slot, and two
+of a kind add up: two charms are 40 more health.
 
 What you buy goes into your bag. **SELL** buys anything back for half what it
 cost, equipped or not.
@@ -109,9 +127,10 @@ cost, equipped or not.
 Sixty slots of bag, and eight on the figure: **Helmet**, **Chestplate**,
 **Leggings** and **Boots** down the left, **Weapon**, **Offhand** and two
 **Accessory** slots down the right. Tap an item to see it and **EQUIP** it, or
-tap it and then tap a slot, or drag it there. Swords go in the weapon slot and
-the shield in the offhand. The armour and accessory slots are there, but nothing
-goes in them yet. Opening the bag pauses the fight.
+tap it and then tap a slot, or drag it there. Swords go in the weapon slot, the
+shield in the offhand, each piece of armour in its own slot, and the bracelet and
+the charm in either accessory slot; **EQUIP** picks an empty one. What you put
+on, you wear at once. Opening the bag pauses the fight.
 
 ### Accounts and cloud saves
 
@@ -177,6 +196,18 @@ Blood is simulated drop by drop and paints whatever it lands on: the sand, the
 cobbles, other fighters, shields, the blade that drew it. Open wounds drip and
 run down the body; the dead pool.
 
+### Wood armour
+
+Each piece is boxes of oak a little bigger than the body parts under them, moved
+by the same bones as the body, so the helmet goes where your head goes, all the
+way to the sand when you are knocked flat. Whether a blow lands on the wood is
+decided at the exact point it lands: on the cap, the back guard or the strip
+over your nose it does a third less and leaves its mark on the oak - a crushed,
+splintered dent from a fist or a foot, a dark gouge along the stroke of a blade,
+a pit from a bullet - and very little blood gets out from under it. Blood that
+lands on the wood stains it. The bracelet hangs on your left wrist (your right,
+in the second slot) and the charm on your chest.
+
 ### Sound
 
 Synthesised on the spot with WebAudio, so there are no sound files: blows by
@@ -199,11 +230,12 @@ barrage/
       rig.js          the eighteen parts and their joints
       anim.js         poses and clips: walking, jabs, the kick, guards, the shield, aiming, get-ups
       fighter.js      a person: states, strikes, damage, stamina, gear
+      outfit.js       wood armour and accessories: their boxes, what they stop, the marks on them
       player.js       you
       brain.js        the box ragdolls' fighting, the gunners, the shopkeeper
       waves.js        who comes out when, coins
       arena.js        the sand, the wall and gates, the stands and crowd, the plaza, the Stall
-      gear.js         what the Stall sells, and things held in a hand
+      gear.js         what the Stall sells and which slot it goes in, and things held in a hand
       guns.js         bullets, the aiming line, tracers
       blood.js        drops, wounds, and which mark each blow leaves
       paint.js        canvases on boxes; bruises, cuts, slashes, bullet holes
@@ -237,16 +269,21 @@ wave 1 starting and the portcullises opening; the joystick moves you and draggin
 turns the camera; PUNCH, KICK, JUMP, CROUCH, SPRINT and BLOCK each do what they
 say and cost what they should; blows land by contact, bruise, stumble and knock
 down, and the fallen get up; kills and clears pay coins and open the south doors;
-the Stall sells the three items at 10, 50 and 10, refuses what you cannot afford
-and buys back at half; the inventory has 60 slots and the eight equipment slots,
-puts the shield in the offhand but not the weapon slot, takes nothing in the
-armour slots, and equips by drag and drop; the sword and shield appear in your
-hands; the rusty sword cuts and slashes; a raised shield stops blows; a gunner's
-bullets hit whoever is in the way and leave bullet holes; you can fall and start
-again with your coins; saves survive a reload; and, against a stand-in for the
-Claude page's database, that sign up, cloud saving, log out, a wrong password and
-log in all work and only a salted hash is stored. With `--file` it opens the
-built file and fails if it fetches anything at all; `--accounts` runs only the
-account checks.
+the Stall sells the swords and shield at 10, 50 and 10 and the wood armour and
+accessories at their prices, refuses what you cannot afford and buys back at
+half; the inventory has 60 slots and the eight equipment slots, puts the shield
+in the offhand but not the weapon or helmet slot, the helmet in the helmet slot
+but not an accessory slot, and the bracelet and charm in the accessory slots,
+and equips by drag and drop; the sword and shield appear in your hands and the
+helmet on your head, the charm adds health and the bracelet stamina; a blow on
+the helmet does less than one on the bare face and dents the wood; the full set
+makes you harder to knock down; the rusty sword cuts and slashes; a raised
+shield stops blows; a gunner's
+bullets hit whoever is in the way and leave bullet holes; a box ragdoll shut in a
+tunnel is let back out; you can fall and start again with your coins; saves
+survive a reload; and, against a stand-in for the Claude page's database, that
+sign up, cloud saving, log out, a wrong password and log in all work and only a
+salted hash is stored. With `--file` it opens the built file and fails if it
+fetches anything at all; `--accounts` runs only the account checks.
 
 Fonts: Bungee and Barlow Condensed, SIL Open Font License (`fonts/OFL-*.txt`).

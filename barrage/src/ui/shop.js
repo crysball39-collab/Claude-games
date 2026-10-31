@@ -1,9 +1,10 @@
 /* =============================================================================
-   The Stall: three things on the counter, and a man who will buy back what
-   you have outgrown for half what he sold it for.
+   The Stall: swords and a shield, a set of wood armour and two trinkets on
+   the counter, and a man who will buy back what you have outgrown for half
+   what he sold it for.
    ========================================================================== */
 import { $, $$, pick } from '../core/util.js';
-import { ITEMS, STOCK } from '../game/gear.js';
+import { ITEMS, SHELVES, SLOT_KIND } from '../game/gear.js';
 import { itemIcon } from './icons.js';
 
 const LINES = [
@@ -13,6 +14,8 @@ const LINES = [
   'Half price for anything you\'ve outgrown. Fair\'s fair.',
   'They come out of those tunnels faster every round, you know.',
   'Ten coins for a sword. Fifty if you want it sharp.',
+  'Oak armour. Turns a good punch into a sore set of knuckles.',
+  'Two charms? Twice the luck. That\'s how luck works.',
 ];
 
 export class ShopUI {
@@ -52,28 +55,36 @@ export class ShopUI {
   renderBuy(p) {
     const box = $('#shop-buy');
     box.innerHTML = '';
-    for (const kind of STOCK) {
-      const T = ITEMS[kind];
-      const owned = p.owns(kind);
-      const card = document.createElement('article');
-      card.className = 'ware' + (owned ? ' owned' : '');
-      card.dataset.kind = kind;
-      const stats = T.stats.map(([n, v]) => `<div class="stat"><span>${n}</span><span class="pips">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= v ? 'on' : ''}"></i>`).join('')}</span></div>`).join('');
-      card.innerHTML = `
-        <div class="pic"><img src="${itemIcon(kind)}" alt=""></div>
-        <div class="head">
-          <h3>${T.name.toUpperCase()}</h3>
-          <div><span class="pill">${T.slot === 'weapon' ? 'Weapon slot' : 'Offhand slot'}</span>${owned ? ' <span class="pill">Owned</span>' : ''}</div>
-        </div>
-        <p>${T.blurb}</p>
-        <div class="stats">${stats}</div>
-        <div class="buy">
-          <div class="price"><span class="coin-icon"></span>${T.price}</div>
-          <button class="btn ${p.coins >= T.price ? 'primary' : ''}" type="button" data-buy="${kind}">${p.coins >= T.price ? 'BUY' : `NEED ${T.price - p.coins} MORE`}</button>
-        </div>`;
-      box.appendChild(card);
+    for (const shelf of SHELVES) {
+      const head = document.createElement('div');
+      head.className = 'shelf';
+      head.innerHTML = `<h4>${shelf.name.toUpperCase()}</h4>${shelf.note ? `<span>${shelf.note}</span>` : ''}`;
+      box.appendChild(head);
+      for (const kind of shelf.kinds) this.renderWare(box, p, kind);
     }
     for (const b of $$('[data-buy]', box)) b.addEventListener('click', () => this.buy(b.dataset.buy));
+  }
+
+  renderWare(box, p, kind) {
+    const T = ITEMS[kind];
+    const owned = p.owns(kind);
+    const card = document.createElement('article');
+    card.className = 'ware' + (owned ? ' owned' : '');
+    card.dataset.kind = kind;
+    const stats = T.stats.map(([n, v]) => `<div class="stat"><span>${n}</span><span class="pips">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= v ? 'on' : ''}"></i>`).join('')}</span></div>`).join('');
+    card.innerHTML = `
+      <div class="pic"><img src="${itemIcon(kind)}" alt=""></div>
+      <div class="head">
+        <h3>${T.name.toUpperCase()}</h3>
+        <div><span class="pill">${SLOT_KIND[T.slot]} slot</span>${owned ? ' <span class="pill">Owned</span>' : ''}</div>
+      </div>
+      <p>${T.blurb}</p>
+      <div class="stats">${stats}</div>
+      <div class="buy">
+        <div class="price"><span class="coin-icon"></span>${T.price}</div>
+        <button class="btn ${p.coins >= T.price ? 'primary' : ''}" type="button" data-buy="${kind}">${p.coins >= T.price ? 'BUY' : `NEED ${T.price - p.coins} MORE`}</button>
+      </div>`;
+    box.appendChild(card);
   }
 
   renderSell(p) {
@@ -104,7 +115,8 @@ export class ShopUI {
     if (res.error) { this.sound?.deny(); this.cb.toast?.(res.error); this.render(); return; }
     this.sound?.buy();
     const T = ITEMS[kind];
-    this.cb.toast?.(`${T.name} is in your bag. Open the bag to put it in your ${T.slot} slot.`, 3.6);
+    const where = T.slot === 'accessory' ? 'an accessory slot' : `your ${SLOT_KIND[T.slot].toLowerCase()} slot`;
+    this.cb.toast?.(`${T.name} is in your bag. Open the bag to put it in ${where}.`, 3.6);
     this.render();
     this.cb.onChange?.('buy', kind);
   }

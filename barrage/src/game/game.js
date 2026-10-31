@@ -104,15 +104,18 @@ export class Game {
     if (i >= 0) this.dropped.splice(i, 1);
   }
 
-  /** You, in the middle of the sand, facing north, carrying what is in your slots. */
+  /** You, in the middle of the sand, facing north, carrying and wearing what is in your slots. */
   spawnPlayer(input, gear) {
     if (this.player) this.removeFighter(this.player);
     const f = this.spawn('player', {
-      team: 'player', x: 0, z: 0.5, heading: Math.PI, health: 100, power: 1, toughness: 0.7, stumbleAt: 21, mask: MASK.player,
+      team: 'player', x: 0, z: 0.5, heading: Math.PI, health: 100, power: 1.15, toughness: 0.6, stumbleAt: 28,
+      balanceDrain: 1.5, regen: 3, footing: 0.12, upGrace: 1.5, mask: MASK.player,
     });
     f.controller = new Player(f, input);
     if (gear.weapon) f.equip('weapon', gear.weapon);
     if (gear.offhand) f.equip('offhand', gear.offhand);
+    f.wear(gear);
+    f.health = f.maxHealth;
     this.player = f;
     this.cam.mode = 'follow';
     this.cam.snapBehind(f);
@@ -259,7 +262,8 @@ export class Game {
         const d2 = dx * dx + dz * dz;
         const r = 0.5;
         if (d2 >= r * r || d2 < 1e-8) continue;
-        const d = Math.sqrt(d2), push = (r - d);
+        // a little at a time: a big shove in one step could put someone through the end of a wall
+        const d = Math.sqrt(d2), push = Math.min(r - d, 0.25);
         const nx = dx / d, nz = dz / d;
         if (b.state === 'active') {
           a.root.x += nx * push * 0.5; a.root.z += nz * push * 0.5;

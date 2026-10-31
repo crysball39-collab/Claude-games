@@ -270,7 +270,9 @@ await page.waitForFunction(() => window.__barrage.state === 'shop', null, { time
 check('walking up to the Stall outside the arena opens it', await ev(() => window.__barrage.state === 'shop' && !document.querySelector('#shop').classList.contains('hidden')));
 const wares = await ev(() => [...document.querySelectorAll('.ware')].map((w) => w.dataset.kind + ':' + w.querySelector('.price').textContent.trim()));
 check('the Stall sells a wooden sword for 10, a rusty steel sword for 50 and a wood shield for 10',
-  wares.join(',') === 'wooden_sword:10,rusty_sword:50,wood_shield:10', wares.join(', '));
+  wares.slice(0, 3).join(',') === 'wooden_sword:10,rusty_sword:50,wood_shield:10', wares.join(', '));
+check('...wood armour - a helmet for 12, a chestplate for 20, leggings for 15, boots for 8 - and a bead bracelet and an oak charm for 15',
+  wares.slice(3).join(',') === 'wood_helmet:12,wood_chestplate:20,wood_leggings:15,wood_boots:8,bead_bracelet:15,oak_charm:15', wares.join(', '));
 await ev(() => { const b = window.__barrage; b.profile.d.coins = 25; b.shop.render(); });
 await tap('[data-buy="rusty_sword"]');
 check('you cannot buy what you cannot afford', await ev(() => { const b = window.__barrage; return b.profile.coins === 25 && !b.profile.owns('rusty_sword'); }));
@@ -278,9 +280,16 @@ await tap('[data-buy="wooden_sword"]');
 await tap('[data-buy="wood_shield"]');
 const bought = await ev(() => { const b = window.__barrage; return { coins: b.profile.coins, bag: b.profile.d.bag.filter(Boolean).map((i) => i.kind) }; });
 check('buying takes the coins and puts the item in your bag', bought.coins === 5 && bought.bag.includes('wooden_sword') && bought.bag.includes('wood_shield'), JSON.stringify(bought));
+await ev(() => { const b = window.__barrage; b.profile.d.coins = 42; b.shop.render(); });
+await tap('[data-buy="wood_helmet"]');
+await tap('[data-buy="bead_bracelet"]');
+await tap('[data-buy="oak_charm"]');
+const bought2 = await ev(() => { const b = window.__barrage; return { coins: b.profile.coins, bag: b.profile.d.bag.filter(Boolean).map((i) => i.kind) }; });
+check('armour and accessories are bought the same way', bought2.coins === 0 && ['wood_helmet', 'bead_bracelet', 'oak_charm'].every((k) => bought2.bag.includes(k)), JSON.stringify(bought2));
 await shot('stall');
 await tap('.tab[data-tab="sell"]');
-check('the SELL tab lists your gear at half price', await ev(() => [...document.querySelectorAll('.sell-row')].length === 2 && document.querySelector('.sell-row .price').textContent.trim() === '5'));
+const sells = await ev(() => [...document.querySelectorAll('.sell-row .price')].map((e) => e.textContent.trim()).join(','));
+check('the SELL tab lists your gear at half price', sells === '5,5,6,7,7', sells);
 await tap('#shop-close');
 
 /* -------------------------------- inventory ------------------------------ */
@@ -302,7 +311,7 @@ await tap(`[data-loc="${shieldLoc}"]`);
 await tap('[data-loc="e:weapon"]');
 check('the shield will not go in the weapon slot', await ev(() => !window.__barrage.profile.d.eq.weapon));
 await tap('[data-loc="e:helmet"]');
-check('nothing goes in the armour slots yet', await ev(() => !window.__barrage.profile.d.eq.helmet));
+check('...nor in the helmet slot', await ev(() => !window.__barrage.profile.d.eq.helmet));
 // the shield is still picked up after a slot refused it: straight to the offhand
 await tap('[data-loc="e:offhand"]');
 check('the wood shield goes in the offhand slot', await ev(() => window.__barrage.profile.d.eq.offhand && window.__barrage.profile.d.eq.offhand.kind === 'wood_shield'));
@@ -315,11 +324,27 @@ await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
 await page.mouse.up();
 await page.waitForTimeout(150);
 check('dragging the sword onto the weapon slot equips it', await ev(() => window.__barrage.profile.d.eq.weapon && window.__barrage.profile.d.eq.weapon.kind === 'wooden_sword'));
+// the helmet: not in the weapon slot, but in its own; the bracelet and the charm with EQUIP
+const bagLoc = (kind) => ev((k) => 'b' + window.__barrage.profile.d.bag.findIndex((i) => i && i.kind === k), kind);
+await tap(`[data-loc="${await bagLoc('wood_helmet')}"]`);
+await tap('[data-loc="e:acc1"]');
+check('the wooden helmet will not go in an accessory slot', await ev(() => !window.__barrage.profile.d.eq.acc1));
+await tap('[data-loc="e:helmet"]');
+check('...but goes in the helmet slot', await ev(() => window.__barrage.profile.d.eq.helmet && window.__barrage.profile.d.eq.helmet.kind === 'wood_helmet'));
+for (const k of ['bead_bracelet', 'oak_charm']) {
+  await tap(`[data-loc="${await bagLoc(k)}"]`);
+  await tap('#inv-detail [data-do="equip"]');
+}
+const accs = await ev(() => { const e = window.__barrage.profile.d.eq; return [e.acc1 && e.acc1.kind, e.acc2 && e.acc2.kind].join(','); });
+check('EQUIP puts a bracelet and a charm in the two accessory slots', accs === 'bead_bracelet,oak_charm', accs);
 await shot('inventory');
 await tap('#inv-close');
 const held = await ev(() => { const p = window.__barrage.game.player; return { w: p.weapon && p.weapon.kind, s: p.shield && p.shield.kind, label: document.querySelector('#punch-label').textContent }; });
 check('you hold what you equipped: sword in hand, shield on the arm, PUNCH becomes SLASH',
   held.w === 'wooden_sword' && held.s === 'wood_shield' && held.label === 'SLASH', JSON.stringify(held));
+const dressed = await ev(() => { const p = window.__barrage.game.player; return { helmet: p.outfit.worn.helmet, boxes: p.outfit.boxes.length, shown: !!(p.outfit.mesh && p.outfit.mesh.parent), max: p.maxHealth, wind: p.wind }; });
+check('you wear what you put on: the helmet on your head, the charm adds 20 health, the bracelet brings stamina back faster',
+  dressed.helmet === 'wood_helmet' && dressed.boxes >= 3 && dressed.shown && dressed.max === 120 && dressed.wind > 1.3, JSON.stringify(dressed));
 
 /* ----------------------------- gear in a fight ---------------------------- */
 
@@ -363,6 +388,31 @@ for (let i = 0; i < 5; i++) {
 }
 check('a raised shield stops blows from the front', await ev(() => window.__shieldCount() > 0), `${await ev(() => window.__shieldCount())} stopped`);
 await ev(() => { const b = window.__barrage, g = b.game; b.input.release('block'); g.removeFighter(window.__jabber); });
+
+// on the wood a blow does a third less and dents the wood; under the brim the face is still bare
+const onWood = await ev(() => {
+  const p = window.__barrage.game.player, V = p.root.constructor;
+  const blow = (local) => {
+    const before = p.health;
+    p.health = 1000;
+    p.takeHit({ part: 5, point: p.head.toWorld(local, local.clone()), dir: p.forward.clone().negate(), J: 2, speed: 6, damage: 10, attacker: null, kind: 'fist', striker: null, weapon: null });
+    const d = 1000 - p.health;
+    p.health = before;
+    return +d.toFixed(2);
+  };
+  const cap = blow(new V(0, 0.11, 0.02)), face = blow(new V(0.05, -0.04, 0.11));
+  return { cap, face, dents: p.marks.armour || 0 };
+});
+check('a blow on the wooden helmet does a third less and dents the wood; one on the bare face does not',
+  onWood.cap < onWood.face * 0.75 && onWood.dents > 0, JSON.stringify(onWood));
+const fullSet = await ev(() => {
+  const b = window.__barrage, p = b.game.player, before = p.toughness;
+  p.wear({ ...b.profile.gear(), chest: 'wood_chestplate', legs: 'wood_leggings', boots: 'wood_boots' });
+  const out = { before, after: p.toughness, full: p.fullSet, boxes: p.outfit.boxes.length };
+  p.wear(b.profile.gear());
+  return out;
+});
+check('all four pieces of the wood set make you harder to knock down', fullSet.full && fullSet.after < fullSet.before && fullSet.boxes >= 17, JSON.stringify(fullSet));
 
 /* -------------------------------- bullets ------------------------------- */
 
@@ -408,11 +458,40 @@ await ev(() => { const b = window.__barrage, g = b.game; b.input.release('block'
 const rosters = await ev(() => {
   const { roster } = window.__barrage.lib;
   const kinds = (n) => { const all = new Set(); for (let i = 0; i < 30; i++) for (const r of roster(n)) all.add(r.kind); return [...all].sort().join(','); };
-  return { w1: kinds(1), w3: kinds(3), w5: kinds(5), w8: kinds(8) };
+  return { w1: kinds(1), w3: kinds(3), w5: kinds(5), w6: kinds(6), w8: kinds(8) };
 });
-check('wave 1 is brawlers; swordsmen join on 3, shields on 4, gunners and a champion on 5',
-  rosters.w1 === 'brawler' && rosters.w3.includes('swordsman') && rosters.w5.includes('gunner') && rosters.w5.includes('champion'), JSON.stringify(rosters));
+check('wave 1 is brawlers; swordsmen join on 3, shields on 4, a champion on 5, gunners on 6',
+  rosters.w1 === 'brawler' && rosters.w3.includes('swordsman') && rosters.w5.includes('champion') && !rosters.w5.includes('gunner') &&
+  rosters.w6.includes('gunner'), JSON.stringify(rosters));
 check('nothing in the physics has gone to NaN', await finite());
+
+/* --------------------------- shut in a tunnel ---------------------------- */
+
+// one knocked back through a gate as the portcullis comes down must not leave the wave unfinishable
+await ev(() => { const g = window.__barrage.game; g.player.root.set(0, 0, 0); g.player.invulnerable = true; g.waves.begin(2); });
+await simFor(3.8);
+await ev(() => {
+  const g = window.__barrage.game, w = g.waves;
+  for (const e of w.enemies.slice(1)) g.removeFighter(e);
+  w.enemies = w.enemies.slice(0, 1);
+  w.queue = [];
+  const e = w.enemies[0];
+  e.controller.gate = null;
+  e.root.set(0.3, 0, -13.6);
+  g.arena.setGate('north', false, true);
+  window.__trapped = e;
+});
+await simFor(1);
+const letOut = await ev(() => ({ gate: window.__barrage.game.arena.gates.north.target, walking: !!window.__trapped.controller.gate }));
+await simFor(6);
+letOut.r = await ev(() => Math.hypot(window.__trapped.root.x, window.__trapped.root.z));
+check('a box ragdoll shut in a tunnel is let back out, so the wave can still end', letOut.gate === 1 && letOut.walking && letOut.r < 11.5, JSON.stringify(letOut));
+// ...and one squeezed into the stonework beside a gateway is put back on the sand
+await ev(() => { const e = window.__trapped; e.controller.gate = null; e.root.set(-1.7, 0, -12.17); });
+await simFor(1);
+const unwedged = await ev(() => Math.hypot(window.__trapped.root.x, window.__trapped.root.z));
+check('...and one squeezed into the wall beside a gate is put back on the sand', unwedged < 11.5, unwedged.toFixed(2));
+await ev(() => { const g = window.__barrage.game; g.player.invulnerable = false; g.removeFighter(window.__trapped); g.waves.enemies = []; });
 
 /* ---------------------------------- falling ------------------------------ */
 

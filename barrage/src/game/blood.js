@@ -108,6 +108,20 @@ export class Blood {
     const kind = hit.kind;
     const marks = victim.marks || (victim.marks = { bruise: 0, cut: 0, slash: 0, bullet: 0 });
 
+    // on armour the wood takes the mark, and little blood gets out from under it
+    if (hit.armour) {
+      const out = victim.outfit;
+      const dirL = _d.copy(hit.swing || hit.dir).applyQuaternion(inv);
+      if (kind === 'bullet') out.paintOn(hit.armour, local, 0.009, { kind: 'pit' });
+      else if (kind === 'blade') out.paintOn(hit.armour, local, 0.02, { kind: 'gouge', length: 0.05 + Math.min(0.1, hit.speed * 0.008), dir: dirL });
+      else out.paintOn(hit.armour, local, 0.028 + hit.speed * 0.004, { kind: 'dent', strength: clamp(hit.damage / 10, 0.35, 1) });
+      marks.armour = (marks.armour || 0) + 1;
+      if (kind === 'bullet' || (kind === 'blade' && hit.speed > 6 && chance(0.4))) {
+        this.spray(hit.point, hit.dir, 5, 1.2, 0.6, 0.01, victim, body.v);
+      }
+      return;
+    }
+
     if (kind === 'bullet') {
       victim.paint.splat(local, def.size, tiles, 0.0085, { kind: 'bullet', cloth, skin, down });
       marks.bullet++;
@@ -285,11 +299,14 @@ export class Blood {
           if (dx * dx + dy * dy + dz * dz > 1.3 * 1.3) continue;
           for (let pi = 0; pi < NP; pi++) {
             const b = h.bodies[pi];
-            if (!pointInBox(x, y, z, b.x, b.axes, b.half, 0.004)) continue;
+            if (!pointInBox(x, y, z, b.x, b.axes, b.half, h.outfit.pad[pi])) continue;
             _v.set(x, y, z);
             const local = b.toLocal(_v, _l);
             const dir = _d.set(v[j], v[j + 1], v[j + 2]).applyQuaternion(_qInv.copy(b.q).invert()).multiplyScalar(0.15);
-            h.paint.splat(local, PARTS[pi].size, h.layout.tiles[pi], this.size[i] * 1.1, { dir, sats: 1 });
+            // on whatever they are wearing there, or on them
+            if (!h.outfit.splat(pi, local, this.size[i] * 1.1, { dir, sats: 1 })) {
+              h.paint.splat(local, PARTS[pi].size, h.layout.tiles[pi], this.size[i] * 1.1, { dir, sats: 1 });
+            }
             this.stats.onBodies++;
             hit = true;
             break;

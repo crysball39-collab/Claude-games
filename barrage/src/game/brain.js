@@ -46,11 +46,11 @@ const _to = new Vector3(), _s = new Vector3(), _aim = new Vector3(), _at = new V
 /* -------------------------------------------------------------------------- */
 
 const ROLES = {
-  brawler: { kick: 0.28, block: 0.22, combo: 0.45, aggr: 1 },
+  brawler: { kick: 0.2, block: 0.22, combo: 0.35, aggr: 1 },
   swordsman: { kick: 0.12, block: 0.18, combo: 0.25, aggr: 0.95 },
   shield: { kick: 0.2, block: 0.7, combo: 0.2, aggr: 0.8 },
   gunner: { kick: 0.35, block: 0.1, combo: 0.2, aggr: 0.8 },
-  champion: { kick: 0.35, block: 0.35, combo: 0.6, aggr: 1.25 },
+  champion: { kick: 0.3, block: 0.35, combo: 0.45, aggr: 1.15 },
   red: { kick: 0.25, block: 0.2, combo: 0.45, aggr: 1 },
   blue: { kick: 0.25, block: 0.2, combo: 0.45, aggr: 1 },
 };
@@ -66,7 +66,7 @@ export class Brain {
     this.gunner = role === 'gunner';
     this.target = null;
     this.thinkT = rand(0, 0.3);
-    this.cool = rand(0.6, 1.4);
+    this.cool = rand(1.0, 1.8);
     this.aggr = this.R.aggr * rand(0.85, 1.1) * (0.85 + skill * 0.4);
     this.nerve = rand(0.3, 1);
     this.side = chance(0.5) ? 1 : -1;
@@ -212,11 +212,13 @@ export class Brain {
     /* ------------------------------ attack ------------------------------ */
     if (!may || !h.canAct() || this.cool > 0 || this.retreatT > 0 || this.blockT > 0.15) return;
     if (Math.abs(wrapAngle(h.face - h.heading)) > 0.4) return;
+    // two or three closing in still take turns to swing: just after one starts, the others hold
+    if (t.swungBy && t.swungBy !== h && g.time - t.swungAt < 0.95 - this.skill * 0.4) return;
     // a kick reaches further than a jab
     if (!weapon && d > FIST_RANGE + 0.15 && d < KICK_RANGE + 0.15 && chance(this.R.kick)) {
       h.wantBlock = false;
-      h.play(KICK);
-      this.cool = rand(0.7, 1.3) / this.aggr;
+      this.strike(t, KICK);
+      this.cool = rand(0.95, 1.6) / this.aggr;
       return;
     }
     if (d > range + 0.3) return;
@@ -224,14 +226,14 @@ export class Brain {
     if (weapon) {
       const clip = this.side > 0 ? SWING_L : SWING_R;
       this.side = -this.side;
-      h.play(clip, 0, weapon.type.rate);
+      this.strike(t, clip, 0, weapon.type.rate);
       h.vel.addScaledVector(to, 0.9);
-      this.cool = rand(0.6, 1.2) / this.aggr;
+      this.cool = rand(0.85, 1.5) / this.aggr;
       return;
     }
     if (d < FIST_RANGE && chance(this.R.kick * 0.4)) {
-      h.play(KICK);
-      this.cool = rand(0.7, 1.3) / this.aggr;
+      this.strike(t, KICK);
+      this.cool = rand(0.95, 1.6) / this.aggr;
       return;
     }
     // jabs: left and right, sometimes in quick pairs
@@ -243,13 +245,21 @@ export class Brain {
     // a gunner keeps the pistol hand back and jabs with the left
     const clip = this.gunner || this.side > 0 ? JAB_L : JAB_R;
     this.side = -this.side;
-    h.play(clip, aim);
+    this.strike(t, clip, aim);
     h.vel.addScaledVector(to, 1.3);
-    if (this.combo > 0) { this.combo--; this.cool = rand(0.12, 0.22); }
+    if (this.combo > 0) { this.combo--; this.cool = rand(0.14, 0.24); }
     else {
-      this.combo = chance(this.R.combo * this.aggr) ? 1 + (chance(0.3) ? 1 : 0) : 0;
-      this.cool = this.combo > 0 ? rand(0.12, 0.22) : rand(0.7, 1.4) / this.aggr;
+      // combinations come more often as the waves go on
+      this.combo = chance(this.R.combo * this.aggr * (0.5 + this.skill * 0.5)) ? 1 + (chance(0.25) ? 1 : 0) : 0;
+      this.cool = this.combo > 0 ? rand(0.14, 0.24) : rand(0.95, 1.7) / this.aggr;
     }
+  }
+
+  /** Starts a blow at t, and lets anyone else after t know whose turn it is. */
+  strike(t, clip, aim = 0, rate = 1) {
+    this.f.play(clip, aim, rate);
+    t.swungBy = this.f;
+    t.swungAt = this.game.time;
   }
 
   /** The gunner's cycle: keep the range, line it up, fire, cool off. */
@@ -267,7 +277,7 @@ export class Brain {
       }
       if (s.t <= 0 && h.canAct() && t.upright) {
         s.state = 'aim';
-        s.t = 0.95 - this.skill * 0.35;
+        s.t = 1.15 - this.skill * 0.35;
         s.shots = 1 + (chance(0.3 + this.skill * 0.4) ? 1 : 0) + (chance(this.skill * 0.4) ? 1 : 0);
       }
       return;
@@ -284,7 +294,7 @@ export class Brain {
     if (s.t <= 0) {
       // at the chest, a little off, less so as the waves go on
       _at.copy(t.chest.x);
-      g.guns.fire(h, g.guns.aim(h, _at, 0.06 - this.skill * 0.03, _aim), 12 * h.power);
+      g.guns.fire(h, g.guns.aim(h, _at, 0.06 - this.skill * 0.03, _aim), 9 * h.power);
       s.shots--;
       s.t = 0.32;
       if (s.shots <= 0) { s.state = 'cool'; s.t = rand(1.6, 2.8) - this.skill * 0.6; g.guns.laser(h, false); }

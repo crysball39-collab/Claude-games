@@ -4,9 +4,9 @@
 
    A place an item can be is written as a string: 'b0' to 'b59' for the bag,
    'e:weapon', 'e:offhand', 'e:helmet' and so on for the equipment slots.
-   Only the weapon and offhand slots take anything yet - swords in the one,
-   the shield in the other. The helmet, chestplate, leggings, boots and the
-   two accessory slots are there, waiting for the gear that goes in them.
+   Each slot takes its own kind of thing - swords in the weapon slot, the
+   shield in the offhand, each piece of armour in its own slot - and either
+   accessory slot takes a bracelet or a charm.
    ========================================================================== */
 import { ITEMS, SLOT, SLOTS } from '../game/gear.js';
 
@@ -131,10 +131,7 @@ export class Profile {
     if (from === to) return { ok: true };
     const a = this.get(from), b = this.get(to);
     if (!a) return { error: 'Nothing to move.' };
-    if (!this.fits(a, to)) {
-      const slot = SLOT[to.slice(2)];
-      return { error: slot && !slot.accepts ? `Nothing goes in the ${slot.name.toLowerCase()} slot yet.` : `${ITEMS[a.kind].name} does not go in that slot.` };
-    }
+    if (!this.fits(a, to)) return { error: `${ITEMS[a.kind].name} does not go in that slot.` };
     if (b && !this.fits(b, from)) {
       // the bag will take it somewhere else
       const i = this.freeBag();
@@ -150,11 +147,12 @@ export class Profile {
     return { ok: true };
   }
 
-  /** Puts a bag item on, in the slot it belongs in. */
+  /** Puts a bag item on, in the slot it belongs in: an empty one, if there is a choice. */
   equip(loc) {
     const item = this.get(loc);
     if (!item) return { error: 'Nothing there.' };
-    const slot = SLOTS.find((s) => s.accepts === ITEMS[item.kind].slot);
+    const fits = SLOTS.filter((s) => s.accepts === ITEMS[item.kind].slot);
+    const slot = fits.find((s) => !this.d.eq[s.id]) || fits[0];
     if (!slot) return { error: 'That cannot be equipped.' };
     return this.move(loc, 'e:' + slot.id);
   }
@@ -167,9 +165,11 @@ export class Profile {
     return this.move('e:' + slotId, 'b' + i);
   }
 
-  /** What you are carrying into the arena. */
+  /** What you are carrying and wearing into the arena: { weapon, offhand, helmet, ... } item ids or null. */
   gear() {
-    return { weapon: this.d.eq.weapon ? this.d.eq.weapon.kind : null, offhand: this.d.eq.offhand ? this.d.eq.offhand.kind : null };
+    const out = {};
+    for (const s of SLOTS) out[s.id] = this.d.eq[s.id] ? this.d.eq[s.id].kind : null;
+    return out;
   }
 
   /* ---------------------------------- runs ---------------------------------- */

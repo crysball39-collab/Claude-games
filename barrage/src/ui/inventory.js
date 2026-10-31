@@ -5,12 +5,12 @@
 
    Tap an item to see what it is and to EQUIP it, take it off, or - standing
    at the Stall - SELL it. Or move things about directly: tap an item, then
-   tap where it should go, or drag it there. A sword goes in the weapon slot
-   and the shield in the offhand; the armour and accessory slots take nothing
-   yet.
+   tap where it should go, or drag it there. A sword goes in the weapon slot,
+   the shield in the offhand, each piece of armour in its own slot, and a
+   bracelet or a charm in either accessory slot.
    ========================================================================== */
 import { $, $$ } from '../core/util.js';
-import { ITEMS, SLOTS, SLOT } from '../game/gear.js';
+import { ITEMS, SLOTS, SLOT, SLOT_KIND, ARMOUR } from '../game/gear.js';
 import { BAG } from '../data/profile.js';
 import { itemIcon, slotIcon } from './icons.js';
 
@@ -94,15 +94,13 @@ export class InventoryUI {
     const p = this.cb.profile();
     const d = this.detail;
     if (!this.sel) {
-      d.innerHTML = '<p>Tap an item to see it, then tap a slot to move it there, or drag it.</p><p>Swords go in the <b>Weapon</b> slot, the shield in the <b>Offhand</b>.</p>';
+      d.innerHTML = '<p>Tap an item to see it, then tap a slot to move it there, or drag it.</p><p>Swords go in the <b>Weapon</b> slot, the shield in the <b>Offhand</b>, armour in its own slot, and a bracelet or a charm in either <b>Accessory</b> slot.</p>' + this.setLine(p);
       return;
     }
     const loc = this.sel;
     if (loc[0] === 'e' && !p.get(loc)) {
       const s = SLOT[loc.slice(2)];
-      d.innerHTML = s.accepts
-        ? `<h3>${s.name.toUpperCase()}</h3><p>Empty. ${s.accepts === 'weapon' ? 'A sword goes here.' : 'A shield goes here.'} Buy one at the Stall.</p>`
-        : `<h3>${s.name.toUpperCase()}</h3><p>Nothing goes in this slot yet.</p>`;
+      d.innerHTML = `<h3>${s.name.toUpperCase()}</h3><p>Empty. ${s.holds} Buy one at the Stall.</p>`;
       return;
     }
     const it = p.get(loc);
@@ -112,14 +110,21 @@ export class InventoryUI {
     const stall = this.cb.atStall();
     d.innerHTML = `
       <h3>${T.name.toUpperCase()}</h3>
-      <div><span class="pill">${T.slot === 'weapon' ? 'Weapon' : 'Offhand'}</span> <span class="pill">${T.marks}</span>${worn ? ' <span class="pill">Equipped</span>' : ''}</div>
-      <p>${T.blurb}</p>
+      <div><span class="pill">${SLOT_KIND[T.slot]}</span> <span class="pill">${T.marks}</span>${worn ? ' <span class="pill">Equipped</span>' : ''}</div>
+      <p>${T.blurb}</p>${T.set ? this.setLine(p) : ''}
       <div class="acts">
         ${worn ? '<button class="btn" data-do="unequip" type="button">TAKE OFF</button>' : '<button class="btn primary" data-do="equip" type="button">EQUIP</button>'}
         ${stall ? `<button class="btn" data-do="sell" type="button">SELL +${T.sell}</button>` : ''}
       </div>
       ${stall ? '' : '<p>Sell it at the Stall, outside the arena.</p>'}`;
     for (const b of $$('[data-do]', d)) b.addEventListener('click', () => this.act(b.dataset.do));
+  }
+
+  /** How much of the wood set you have on, and what all four do. */
+  setLine(p) {
+    const on = ARMOUR.filter((s) => p.d.eq[s] && ITEMS[p.d.eq[s].kind].set === 'wood').length;
+    if (!on) return '';
+    return `<p class="set-line${on === 4 ? ' full' : ''}">Wood set: ${on} of 4 on. ${on === 4 ? 'You are harder to knock down.' : 'Wear all four to be harder to knock down.'}</p>`;
   }
 
   act(what) {

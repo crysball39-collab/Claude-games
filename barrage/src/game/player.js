@@ -20,7 +20,7 @@ import { clamp, wrapAngle } from '../core/util.js';
 
 export const WALK = 2.7;
 export const SPRINT = 5.4;
-const COST = { punch: 6, kick: 12 };
+const COST = { punch: 5, kick: 10 };
 const _to = new Vector3();
 
 export class Player {
@@ -84,7 +84,7 @@ export class Player {
     if (this.sprintOn && mag > 0.3) this.sprintMoved = true;
     if (this.sprintMoved && this.stillT > 0.6) this.sprintOn = false;
     let sprint = (this.sprintOn || inp.sprintKey) && mag > 0.3 && f.crouch < 0.5 && !f.wantBlock && !f.air;
-    if (sprint && !f.spend(17 * dt)) { sprint = false; this.sprintOn = false; g.emit('tired', f); }
+    if (sprint && !f.spend(14 * dt)) { sprint = false; this.sprintOn = false; g.emit('tired', f); }
     f.sprinting = sprint;
     if (dl > 0.01 && mag > 0.08) {
       const speed = sprint ? SPRINT : WALK * clamp(mag * 1.15, 0.35, 1);

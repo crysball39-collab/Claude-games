@@ -1,9 +1,11 @@
 /* =============================================================================
    Gear: what the Stall sells, and the things people hold.
 
-   ITEMS is the catalogue. Every item has a slot it goes in - the WEAPON slot
-   or the OFFHAND slot for now. The helmet, chestplate, leggings, boots and
-   the two accessory slots exist in the inventory but nothing fits them yet.
+   ITEMS is the catalogue. Every item has a slot it goes in: swords in the
+   WEAPON slot, the shield in the OFFHAND, the four pieces of wood armour in
+   the HELMET, CHESTPLATE, LEGGINGS and BOOTS slots, and the bead bracelet
+   and the oak charm in either of the two ACCESSORY slots. What armour and
+   accessories look like on you, and what they do, is in outfit.js.
 
    A held thing is one rigid box welded to a hand: kinematic while it is
    held, so it shoves whatever it swings into, and an ordinary falling box
@@ -51,23 +53,79 @@ export const ITEMS = {
     block: 0.92, size: [0.5, 0.58, 0.045],
     stats: [['Block', 4], ['Weight', 2]], marks: 'Stops bullets',
   },
+
+  // wood armour: each piece takes `guard` off a blow that lands on the wood
+  // (half that off a bullet), and all four together make you harder to knock down.
+  // `covers` names the parts it is strapped to; outfit.js has the shapes
+  wood_helmet: {
+    id: 'wood_helmet', name: 'Wooden Helmet', slot: 'helmet', price: 12, sell: 6, set: 'wood',
+    blurb: 'An oak cap with a guard down the back and one over the nose. Blows that land on the wood do a third less; your face below the brim is still bare.',
+    guard: 0.34, covers: ['head'],
+    stats: [['Guard', 2], ['Covers', 1]], marks: 'Head',
+  },
+  wood_chestplate: {
+    id: 'wood_chestplate', name: 'Wooden Chestplate', slot: 'chest', price: 20, sell: 10, set: 'wood',
+    blurb: 'Oak slats strapped over the chest and belly, with pads on the shoulders. Blows that land on the wood do a third less.',
+    guard: 0.34, covers: ['upperTorso', 'middleTorso', 'lowerTorso', 'upperArmL', 'upperArmR'],
+    stats: [['Guard', 2], ['Covers', 4]], marks: 'Body, shoulders',
+  },
+  wood_leggings: {
+    id: 'wood_leggings', name: 'Wooden Leggings', slot: 'legs', price: 15, sell: 7, set: 'wood',
+    blurb: 'A girdle of oak over the hips, plates down the thighs and caps on the knees. Blows that land on the wood do a third less.',
+    guard: 0.34, covers: ['pelvis', 'upperLegL', 'upperLegR'],
+    stats: [['Guard', 2], ['Covers', 3]], marks: 'Hips, thighs',
+  },
+  wood_boots: {
+    id: 'wood_boots', name: 'Wooden Boots', slot: 'boots', price: 8, sell: 4, set: 'wood',
+    blurb: 'Oak clogs and shin guards. Blows that land on the wood do a third less.',
+    guard: 0.34, covers: ['lowerLegL', 'lowerLegR', 'footL', 'footR'],
+    stats: [['Guard', 2], ['Covers', 2]], marks: 'Shins, feet',
+  },
+
+  // accessories: either goes in either accessory slot, and two of a kind add up
+  bead_bracelet: {
+    id: 'bead_bracelet', name: 'Bead Bracelet', slot: 'accessory', price: 15, sell: 7,
+    blurb: 'Carved oak beads on a cord, worn at the wrist. Your stamina comes back a third faster.',
+    wind: 0.35,
+    stats: [['Stamina', 3]], marks: 'Faster stamina',
+  },
+  oak_charm: {
+    id: 'oak_charm', name: 'Oak Charm', slot: 'accessory', price: 15, sell: 7,
+    blurb: 'A lucky knot of oak on a cord round your neck. You can take 20 more health of punishment before you fall.',
+    health: 20,
+    stats: [['Health', 3]], marks: '+20 health',
+  },
 };
 
-/** The order the Stall shows them in. */
-export const STOCK = ['wooden_sword', 'rusty_sword', 'wood_shield'];
+/** The order the Stall shows them in, and how it groups them. */
+export const STOCK = [
+  'wooden_sword', 'rusty_sword', 'wood_shield',
+  'wood_helmet', 'wood_chestplate', 'wood_leggings', 'wood_boots',
+  'bead_bracelet', 'oak_charm',
+];
+export const SHELVES = [
+  { name: 'Swords and shields', kinds: ['wooden_sword', 'rusty_sword', 'wood_shield'] },
+  { name: 'Wood armour', kinds: ['wood_helmet', 'wood_chestplate', 'wood_leggings', 'wood_boots'], note: 'Wear all four and you are harder to knock down.' },
+  { name: 'Accessories', kinds: ['bead_bracelet', 'oak_charm'], note: 'Two accessory slots: wear one of each, or two of a kind.' },
+];
 
 /** Equipment slots, in the order the inventory lays them out. */
 export const SLOTS = [
-  { id: 'helmet', name: 'Helmet', accepts: null },
-  { id: 'chest', name: 'Chestplate', accepts: null },
-  { id: 'legs', name: 'Leggings', accepts: null },
-  { id: 'boots', name: 'Boots', accepts: null },
-  { id: 'weapon', name: 'Weapon', accepts: 'weapon' },
-  { id: 'offhand', name: 'Offhand', accepts: 'offhand' },
-  { id: 'acc1', name: 'Accessory', accepts: null },
-  { id: 'acc2', name: 'Accessory', accepts: null },
+  { id: 'helmet', name: 'Helmet', accepts: 'helmet', holds: 'A helmet goes here.' },
+  { id: 'chest', name: 'Chestplate', accepts: 'chest', holds: 'A chestplate goes here.' },
+  { id: 'legs', name: 'Leggings', accepts: 'legs', holds: 'Leggings go here.' },
+  { id: 'boots', name: 'Boots', accepts: 'boots', holds: 'Boots go here.' },
+  { id: 'weapon', name: 'Weapon', accepts: 'weapon', holds: 'A sword goes here.' },
+  { id: 'offhand', name: 'Offhand', accepts: 'offhand', holds: 'A shield goes here.' },
+  { id: 'acc1', name: 'Accessory', accepts: 'accessory', holds: 'A bracelet or a charm goes here.' },
+  { id: 'acc2', name: 'Accessory', accepts: 'accessory', holds: 'A bracelet or a charm goes here.' },
 ];
 export const SLOT = Object.fromEntries(SLOTS.map((s) => [s.id, s]));
+/** What each kind of item is called by the slot it goes in. */
+export const SLOT_KIND = { weapon: 'Weapon', offhand: 'Offhand', helmet: 'Helmet', chest: 'Chestplate', legs: 'Leggings', boots: 'Boots', accessory: 'Accessory' };
+/** The slots that are worn rather than held. */
+export const ARMOUR = ['helmet', 'chest', 'legs', 'boots'];
+export const ACCESSORIES = ['acc1', 'acc2'];
 
 /** Not sold anywhere: what the gunners carry. */
 const PISTOL = { id: 'pistol', name: 'Pistol', size: [0.034, 0.05, 0.2] };

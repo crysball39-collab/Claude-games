@@ -40,6 +40,8 @@ import {
 } from './anim.js';
 import { packBoxes, buildBoxGeometry, PaintCanvas } from './paint.js';
 import { makeLook, paintBody, paintHead } from './appearance.js';
+import { Outfit } from './outfit.js';
+import { ITEMS, ACCESSORIES } from './gear.js';
 import { clamp, rand, smooth, turnToward, wrapAngle, approach } from '../core/util.js';
 
 const UP = new Vector3(0, 1, 0);
@@ -47,6 +49,8 @@ const D = Math.PI / 180;
 const FEET = [P.footL, P.footR];
 /** A shield block moves the chest and the left arm; the sword arm keeps doing its own thing. */
 const SHIELD_BLOCK_PARTS = ['lowerTorso', 'middleTorso', 'upperTorso', 'neck', 'head', 'upperArmL', 'lowerArmL', 'handL'].map((n) => P[n]);
+/** Arms and legs: what a fighter hits people with. */
+const LIMB = PARTS.map((p) => /Arm|Leg|hand|foot/.test(p.name));
 
 let LAYOUT = null, GEOMETRY = null;
 function shared() {
@@ -127,15 +131,22 @@ export class Fighter {
     /* ------------------------------- state ------------------------------- */
     this.state = 'active';
     this.alive = true;
-    this.maxHealth = opts.health || 100;
+    this.baseHealth = opts.health || 100;
+    this.maxHealth = this.baseHealth;
     this.health = this.maxHealth;
     this.maxStamina = opts.stamina || 100;
     this.stamina = this.maxStamina;
     this.sinceSpend = 10;
     this.winded = false;            // ran dry: no attacks or sprinting until it recovers a little
     this.power = opts.power || 1;
-    this.toughness = opts.toughness || 1;
+    this.baseToughness = opts.toughness || 1;
+    this.toughness = this.baseToughness;
+    this.wind = 1;                  // how fast stamina comes back (bead bracelets)
     this.stumbleAt = opts.stumbleAt || 15;      // how big a knock it takes to stagger
+    this.balanceDrain = opts.balanceDrain || 2.3; // how much each knock costs in balance (out of 100)
+    this.regen = opts.regen || 0;                 // health a second regained once clear of the fight
+    this.footing = opts.footing || 0;             // added to the muscles' strength while staggering
+    this.upGrace = opts.upGrace || 0;             // seconds after getting up before you can be put down again
     this.balance = 100;
     this.sinceHit = 10;
     this.upTime = 10;               // seconds since last getting to your feet
@@ -159,6 +170,10 @@ export class Fighter {
     this.bleed = 0;
     this.lastAttacker = null;
     this.lastHitT = -99;
+    this.struck = null;             // the last person this one landed a blow on, and when
+    this.struckT = -99;
+    this.swungBy = null;            // who last started a blow at this one, and when: the others wait their turn
+    this.swungAt = -99;
     this.fade = 1;                  // 1 solid; a corpse being cleared fades to 0
 
     // stances
@@ -171,6 +186,8 @@ export class Fighter {
     this.weapon = null;             // a sword in the right hand
     this.shield = null;             // a shield on the left
     this.gun = null;                // a pistol in the right hand
+    this.outfit = new Outfit(this); // armour and accessories
+    this.fullSet = false;           // all four pieces of one set: harder to knock down
     this.invulnerable = false;
     this.controller = null;
     this.mask = opts.mask != null ? opts.mask : 2;   // which walls stop it (see arena MASK)
@@ -219,10 +236,12 @@ export class Fighter {
     this.sinceSpend += dt;
     this.upTime += dt;
     if (this.sinceHit > 0.6) this.balance = Math.min(100, this.balance + 32 * dt);
-    if (this.alive && this.sinceSpend > 0.65) {
-      this.stamina = Math.min(this.maxStamina, this.stamina + (this.block > 0.5 ? 9 : 24) * dt);
+    if (this.alive && this.sinceSpend > 0.5) {
+      this.stamina = Math.min(this.maxStamina, this.stamina + (this.block > 0.5 ? 10 : 30) * this.wind * dt);
     }
-    if (this.winded && this.stamina >= 22) this.winded = false;
+    if (this.winded && this.stamina >= 15) this.winded = false;
+    // a few seconds clear of the fight, wounds start to close
+    if (this.regen && this.alive && this.sinceHit > 5 && this.health < this.maxHealth) this.heal(this.regen * dt);
     this.updateFlinch(dt);
 
     switch (this.state) {
@@ -506,6 +525,8 @@ export class Fighter {
         a.hits.add(v);
         a.done = true;
         a.back = true;
+        this.struck = v;
+        this.struckT = this.game.time;
         v.takeHit({
           part: i, point, dir: push.clone(), J, speed: sp, damage, attacker: this,
           kind, striker: s, weapon, swing: s.v.clone(),
@@ -554,11 +575,19 @@ export class Fighter {
     if (h.kind !== 'impact' && this.blocking && this.facing(h.dir)) {
       h.blocked = true;
       const bullet = h.kind === 'bullet';
-      h.damage *= bullet ? 0.6 : 0.3;
-      h.J *= bullet ? 0.6 : 0.35;
-      this.stamina = Math.max(0, this.stamina - (5 + h.damage * 0.6));
+      h.damage *= bullet ? 0.55 : 0.2;
+      h.J *= bullet ? 0.55 : 0.25;
+      this.stamina = Math.max(0, this.stamina - (4 + h.damage * 0.4));
       this.sinceSpend = 0;
       this.game.emit('blocked', this, h);
+    }
+    // landing on armour: the wood takes a share (less of a bullet), and the mark
+    const worn = h.kind !== 'impact' && this.outfit.covering(h.part, h.point);
+    if (worn) {
+      const k = worn.guard * (h.kind === 'bullet' ? 0.5 : 1);
+      h.damage *= 1 - k;
+      h.J *= 1 - k * 0.4;
+      h.armour = worn;
     }
     // braced low, harder to knock about
     h.J *= this.toughness * (1 - 0.3 * this.crouch);
@@ -571,7 +600,9 @@ export class Fighter {
     else if (this.health < this.maxHealth * 0.35) this.paintFace('hurt');
 
     const knock = h.J * BALANCE_HIT[h.part];
-    this.balance -= knock * 2.3;
+    // just back on your feet: a moment to find them before you can be knocked about again
+    const steady = this.state === 'active' && this.upTime < this.upGrace;
+    if (!steady) this.balance -= knock * this.balanceDrain;
     if (h.blocked && this.stamina <= 0 && this.alive) { this.guardBreak(h.dir); return; }
 
     const st = this.state;
@@ -580,14 +611,14 @@ export class Fighter {
       return;
     }
     if (st === 'getup') return;
-    if (this.balance <= 0 || knock > 60) {
+    if (!steady && (this.balance <= 0 || knock > 60)) {
       this.enterRagdoll();
       this.push(h.part, h.point, h.dir, h.J * 1.4);
     } else if (st === 'stumble') {
       if (knock > 16 || this.balance < 35) this.enterRagdoll();
       else this.stumble.t = Math.min(this.stumble.t, this.stumble.dur * 0.3);
       this.push(h.part, h.point, h.dir, h.J);
-    } else if (knock > this.stumbleAt && !this.air) {
+    } else if (!steady && knock > this.stumbleAt && !this.air) {
       this.enterStumble(h.dir, knock);
       this.push(h.part, h.point, h.dir, h.J);
     } else {
@@ -662,9 +693,11 @@ export class Fighter {
       if (sp < 7.5) continue;
       const other = b.impactOther;
       if (other && other.owner === this) continue;
-      // being trodden on by someone walking past is not a fall (blows are hits, not this)
-      if (other && other.kinematic) continue;
-      const dmg = (sp - 7.5) * 2.5 * VITAL[i];
+      // being trodden on by someone walking past is not a fall (blows are hits, not this),
+      // and a sword or shield lying loose, kicked about, does no real harm
+      if (other && (other.kinematic || (other.owner && !other.owner.bodies))) continue;
+      // past a hard fall, a speed is the physics prising things apart, not a harder landing
+      const dmg = (Math.min(sp, 14) - 7.5) * 2.5 * VITAL[i];
       if (this.alive && !this.invulnerable) {
         this.health -= dmg;
         if (this.health <= 0) this.die('impact');
@@ -675,13 +708,20 @@ export class Fighter {
     }
   }
 
-  /** Standing, and something heavy came flying in: a body, a shield. */
+  /** Standing, and someone came flying in. */
   bumped() {
     let best = 0, part = -1;
+    // your own blow driving into someone is not them flying at you: not the
+    // arms and legs you are swinging, and not the body you just hit
+    const swinging = this.action && this.action.clip.striker >= 0;
+    const struck = this.game.time - this.struckT < 0.6 ? this.struck : null;
     for (let i = 0; i < NP; i++) {
       const b = this.bodies[i];
       const o = b.impactOther;
       if (b.impact <= best || !o || o.owner === this || o.kinematic || o.isStatic) continue;
+      // only people knock people over: not a sword or shield lying loose and kicked about
+      if (!o.owner || !o.owner.bodies) continue;
+      if ((swinging && LIMB[i]) || (struck && o.owner === struck)) continue;
       best = b.impact; part = i;
     }
     if (best < 3.2) return;
@@ -693,7 +733,8 @@ export class Fighter {
         (o.x.y - this.root.y < 0.35 || !oh.down || oh.down.t > 0.8)) return;
     const dir = new Vector3().subVectors(b.x, o.x);
     if (dir.lengthSq() < 1e-6) return;
-    const sp = best;
+    // nobody is thrown faster than this: anything more is the physics prising things apart
+    const sp = Math.min(best, 9);
     const J = Math.min(45, Math.min(o.mass, 15) * sp * 0.6);
     if (J < 10) return;
     dir.setY(0);
@@ -759,7 +800,7 @@ export class Fighter {
       t: 0,
       dur: clamp(0.55 + knock * 0.02, 0.6, 1.4),
       vel: new Vector3(dir.x, 0, dir.z).normalize().multiplyScalar(sp),
-      strength: clamp(STUMBLE_STRENGTH - knock * 0.003, 0.24, 0.42),
+      strength: clamp(STUMBLE_STRENGTH - knock * 0.003, 0.24, 0.42) + this.footing,
     };
     this.blendIn = null;
     this.setMuscle(this.stumble.strength);
@@ -862,7 +903,8 @@ export class Fighter {
     d.t += dt;
     const max = this.settle(dt);
     this.quiet = max < 0.16 ? (this.quiet || 0) + dt : 0;
-    if (this.alive && d.t > d.wait && this.quiet > 0.25) this.startGetup();
+    // a body that will not lie still (wedged against something) gets up anyway
+    if (this.alive && d.t > d.wait && (this.quiet > 0.25 || d.t > d.wait + 4)) this.startGetup();
   }
 
   updateDead(dt) {
@@ -956,11 +998,15 @@ export class Fighter {
     gu.t += dt * (this.team === 'player' ? 1.35 : 1);
     this.root.y += (this.game.groundAt(this.root.x, this.root.z) - this.root.y) * approach(10, dt);
     if (gu.t >= gu.clip.duration) {
-      // hand the distance travelled over to the root
+      // hand the distance travelled over to the root, a little at a time:
+      // in one go it could step clean through the end of a wall
       gu.clip.sample(gu.clip.duration, this.pose);
       const o = _v1.set(this.pose.off.x, 0, this.pose.off.z).applyAxisAngle(UP, this.heading);
-      this.root.add(o);
-      this.game.arena.confine(this.root, 0.3, this.mask);
+      const n = Math.max(1, Math.ceil(o.length() / 0.2));
+      for (let k = 0; k < n; k++) {
+        this.root.addScaledVector(o, 1 / n);
+        this.game.arena.confine(this.root, 0.3, this.mask);
+      }
       this.state = 'active';
       this.getup = null;
       this.blendIn = null;
@@ -988,6 +1034,29 @@ export class Fighter {
 
   giveGun() {
     this.gun = this.game.addHeld('pistol').attach(this);
+  }
+
+  /**
+   * Puts on armour and accessories: { helmet, chest, legs, boots, acc1, acc2 },
+   * item ids or null. What they do takes effect at once; health is never
+   * topped up by putting a charm on, only its most is raised.
+   */
+  wear(gear) {
+    this.outfit.set(gear);
+    let health = 0, wind = 1;
+    for (const s of ACCESSORIES) {
+      const T = ITEMS[gear[s]];
+      if (!T) continue;
+      health += T.health || 0;
+      wind += T.wind || 0;
+    }
+    this.maxHealth = this.baseHealth + health;
+    this.health = Math.min(this.health, this.maxHealth);
+    this.wind = wind;
+    // a whole set: harder to knock down
+    const full = Object.values(this.outfit.sets()).some((n) => n >= 4);
+    this.toughness = this.baseToughness * (full ? 0.85 : 1);
+    this.fullSet = full;
   }
 
   dropAll() {
@@ -1018,6 +1087,7 @@ export class Fighter {
     m.transparent = f < 1;
     m.opacity = f;
     m.depthWrite = f > 0.5;
+    this.outfit.setFade(f);
   }
 
   remove() {
@@ -1030,6 +1100,7 @@ export class Fighter {
     }
     for (const j of this.joints) this.game.world.removeJoint(j);
     for (const b of this.bodies) this.game.world.remove(b);
+    this.outfit.clear();
     this.game.scene.remove(this.mesh);
     this.material.dispose();
     this.paint.dispose();

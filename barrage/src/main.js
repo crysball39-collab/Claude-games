@@ -317,13 +317,14 @@ function again() {
   app.input.releaseAll();
 }
 
-/** The sword and shield in your hands match the slots. */
+/** The sword and shield in your hands, and what you wear, match the slots. */
 function equipFromProfile() {
   const p = app.game.player;
   if (!p || !p.alive) return;
   const gear = app.profile.gear();
   p.equip('weapon', gear.weapon);
   p.equip('offhand', gear.offhand);
+  p.wear(gear);
 }
 
 function fullscreen() {
@@ -479,7 +480,8 @@ function adapt(dt) {
 
 /** What is for sale hangs on the back wall of the Stall. */
 function dressStall() {
-  const models = STOCK.map((kind) => {
+  // what is held hangs on the wall; the armour and the trinkets are on the counter's card
+  const models = STOCK.filter((kind) => ITEMS[kind].slot === 'weapon' || ITEMS[kind].slot === 'offhand').map((kind) => {
     const h = new Held(app.game, kind, true);
     const m = h.mesh;
     if (ITEMS[kind].slot === 'weapon') {

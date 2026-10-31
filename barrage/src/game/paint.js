@@ -75,7 +75,8 @@ function nextPow2(n) { let p = 16; while (p < n) p *= 2; return p; }
 
 /**
  * Geometry for a set of boxes sharing one atlas. Each box gets its own
- * skin index when `skinned`, so a SkinnedMesh can move every box on its own.
+ * skin index when `skinned`, so a SkinnedMesh can move every box on its own;
+ * a box with a `bone` rides that bone instead, so several boxes can share one.
  */
 export function buildBoxGeometry(boxes, layout, skinned = false) {
   const pos = [], nor = [], uv = [], idx = [], si = [], sw = [];
@@ -96,7 +97,7 @@ export function buildBoxGeometry(boxes, layout, skinned = false) {
         const px = t.x + (su + 1) / 2 * t.w;
         const py = t.y + (1 - (sv + 1) / 2) * t.h;
         uv.push(px / layout.width, 1 - py / layout.height);
-        if (skinned) { si.push(bi, 0, 0, 0); sw.push(1, 0, 0, 0); }
+        if (skinned) { si.push(b.bone != null ? b.bone : bi, 0, 0, 0); sw.push(1, 0, 0, 0); }
       }
       idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
       base += 4;
@@ -395,6 +396,36 @@ export function drawPit(ctx, x, y, r) {
   circle(ctx, x, y, r);
 }
 
+/** What a blunt blow leaves on wood: a crushed, darker patch with the grain lifted round it. */
+export function drawDent(ctx, x, y, r, strength = 0.5) {
+  const s = Math.max(0.3, Math.min(1, strength));
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, `rgba(48, 26, 10, ${0.5 * s})`);
+  g.addColorStop(0.6, `rgba(70, 40, 16, ${0.26 * s})`);
+  g.addColorStop(1, 'rgba(70, 40, 16, 0)');
+  ctx.fillStyle = g;
+  circle(ctx, x, y, r);
+  // splinters standing up, pale where the fibres broke
+  for (let i = 0; i < 3 + s * 4; i++) {
+    const a = Math.random() * TAU, d = r * (0.35 + Math.random() * 0.5);
+    ctx.fillStyle = `rgba(236, 200, 150, ${0.35 + Math.random() * 0.3})`;
+    ctx.fillRect(x + Math.cos(a) * d, y + Math.sin(a) * d, 1 + Math.random() * r * 0.25, 1);
+  }
+}
+
+/** A blade's mark on wood: a dark groove along the stroke, its lips splintered pale. */
+export function drawGouge(ctx, x, y, len, ang) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(ang);
+  const w = Math.max(1.5, len * 0.1);
+  ctx.fillStyle = 'rgba(238, 206, 160, 0.6)';
+  lens(ctx, len * 1.06, w * 2.2);
+  ctx.fillStyle = 'rgba(38, 20, 8, 0.85)';
+  lens(ctx, len, w, 0, 0, w * 0.2);
+  ctx.restore();
+}
+
 function shadeHex(hex, k) {
   if (hex[0] !== '#') return hex;
   const n = parseInt(hex.slice(1), 16);
@@ -465,6 +496,8 @@ export class PaintCanvas {
       case 'bullet': drawBulletHole(ctx, L.x, L.y, r, o); break;
       case 'exit': drawExitWound(ctx, L.x, L.y, r, o); break;
       case 'pit': drawPit(ctx, L.x, L.y, r); break;
+      case 'dent': drawDent(ctx, L.x, L.y, r, opts.strength); break;
+      case 'gouge': drawGouge(ctx, L.x, L.y, Math.max(4, (opts.length || 0.06) * L.ppm), ang); break;
       case 'drip': drawDrip(ctx, L.x, L.y, r * 3, Math.max(1, r * 0.4), gx || dx, gy || dy || 1); break;
       default: drawSplat(ctx, L.x, L.y, r, { dx, dy, alpha: opts.alpha, sats: opts.sats });
     }

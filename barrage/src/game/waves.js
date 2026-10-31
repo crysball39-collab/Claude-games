@@ -9,8 +9,9 @@
      round 1+   brawlers - fists and feet
      round 3+   swordsmen - wooden swords, and from round 6 rusty steel ones
      round 4+   shield bearers
-     round 5+   gunners
-     every 5th  a champion: big, hard to knock down, hits like a cart
+     round 6+   gunners
+     every 5th  a champion: big, hard to knock down, hits like a cart -
+                and two fewer of the others that round
 
    Only so many are out at once; the rest wait in the tunnels and come out as
    others fall. Clear the round and the south doors open: go out to the
@@ -21,8 +22,8 @@
    ========================================================================== */
 import { Vector3 } from 'three';
 import { Brain } from './brain.js';
-import { GATES, MASK, R } from './arena.js';
-import { rand, chance, pick } from '../core/util.js';
+import { GATES, GATE_W, MASK, R } from './arena.js';
+import { rand, chance, pick, wrapAngle } from '../core/util.js';
 
 /** Coins for each kill, and for clearing a round. */
 export function killReward(kind, wave) {
@@ -34,12 +35,13 @@ export function clearReward(wave) { return 5 + wave * 2; }
 /** Who comes out in round n. */
 export function roster(n) {
   const list = [];
-  const count = Math.min(2 + n, 15);
+  // a champion's round brings fewer of the others: the champion is the fight
+  const count = Math.min(2 + n, 15) - (n % 5 === 0 ? 2 : 0);
   let gunners = 0;
-  const maxGunners = n >= 5 ? 1 + Math.floor((n - 5) / 3) : 0;
+  const maxGunners = n >= 6 ? 1 + Math.floor((n - 6) / 3) : 0;
   for (let i = 0; i < count; i++) {
     const r = Math.random();
-    if (n >= 5 && gunners < maxGunners && r < 0.2) { list.push({ kind: 'gunner', role: 'gunner', gun: true }); gunners++; continue; }
+    if (n >= 6 && gunners < maxGunners && r < 0.2) { list.push({ kind: 'gunner', role: 'gunner', gun: true }); gunners++; continue; }
     if (n >= 4 && r < 0.38) { list.push({ kind: 'shield', role: 'shield', shield: true, weapon: n >= 7 && chance(0.5) ? 'wooden_sword' : null }); continue; }
     if (n >= 3 && r < 0.62) { list.push({ kind: 'swordsman', role: 'swordsman', weapon: n >= 6 && chance(0.55) ? 'rusty_sword' : 'wooden_sword' }); continue; }
     list.push({ kind: 'brawler', role: 'brawler' });
@@ -52,9 +54,11 @@ export function roster(n) {
 
 /** Health, punch and weight for a kind of enemy in round n. */
 function stats(spec, n) {
-  if (spec.boss) return { health: 230 + n * 18, power: 1.1 + n * 0.04, toughness: 0.45 };
-  const base = { brawler: 58, swordsman: 62, shield: 70, gunner: 50 }[spec.kind] || 60;
-  return { health: base + n * 6, power: 0.5 + n * 0.05, toughness: spec.kind === 'shield' ? 0.85 : 1 };
+  if (spec.boss) return { health: 180 + n * 14, power: 0.75 + n * 0.03, toughness: 0.5 };
+  const base = { brawler: 50, swordsman: 55, shield: 62, gunner: 45 }[spec.kind] || 52;
+  // a sword in a box ragdoll's hand hits for less than one in yours
+  const power = (0.38 + n * 0.04) * (spec.weapon ? 0.6 : 1);
+  return { health: base + n * 5, power, toughness: spec.kind === 'shield' ? 0.85 : 1 };
 }
 
 export class Waves {
@@ -76,8 +80,10 @@ export class Waves {
 
   get fighting() { return this.state === 'intro' || this.state === 'fight'; }
   get left() { return this.total - this.killed; }
-  maxAlive() { return Math.min(7, 3 + Math.floor(this.wave / 2)); }
-  maxTurns() { return Math.min(4, 1 + Math.floor(this.wave / 3)); }
+  /** How many may be out of the tunnels at once: 3 at first, 6 at most. */
+  maxAlive() { return Math.min(6, 2 + Math.ceil(this.wave / 2)); }
+  /** How many may close in and attack at once: one for waves 1-4, two for 5-7, three for 8-10, then four. */
+  maxTurns() { return Math.min(4, 1 + Math.floor(Math.max(0, this.wave - 2) / 3)); }
 
   /** Starts round n: shut the south doors, sound the horn, count down. */
   begin(n) {
@@ -127,7 +133,7 @@ export class Waves {
         this.t = rand(0.5, 1.1);
       }
       this.tokenT -= dt;
-      if (this.tokenT <= 0) { this.tokenT = 0.4; this.handOutTurns(); }
+      if (this.tokenT <= 0) { this.tokenT = 0.4; this.handOutTurns(); this.letOut(); }
       if (!this.queue.length && alive === 0) this.clear();
     }
     if (this.state === 'cleared' && this.t <= 0) this.rest();
@@ -171,6 +177,36 @@ export class Waves {
     this.gateClose[gate.id] = 4;
     g.emit('enemySpawn', f);
     return f;
+  }
+
+  /**
+   * Nobody may be left where you cannot get at them, or the round could never
+   * end. One knocked back into a tunnel as the portcullis comes down: the gate
+   * goes up again and they walk back out. One squeezed into the stonework
+   * beside a gate: back onto the sand.
+   */
+  letOut() {
+    const g = this.game;
+    for (const e of this.enemies) {
+      const c = e.controller;
+      if (!e.alive || !c || c.gate || e.state !== 'active') continue;
+      const p = e.root;
+      const r = Math.hypot(p.x, p.z);
+      if (r < R - 0.05) continue;
+      const a = Math.atan2(p.x, p.z);
+      const near = GATES.find((x) => Math.abs(wrapAngle(a - x.angle)) < 0.5);
+      // how far off the middle of the gateway
+      const off = near ? Math.abs(Math.sin(wrapAngle(a - near.angle)) * r) : Infinity;
+      if (off > GATE_W / 2 - 0.25) {
+        p.x = Math.sin(a) * (R - 0.9);
+        p.z = Math.cos(a) * (R - 0.9);
+        continue;
+      }
+      if (r < R + 0.1 || near.player) continue;
+      c.gate = g.arena.gates[near.id];
+      if (c.gate.target === 0) g.arena.setGate(near.id, true);
+      this.gateClose[near.id] = 4;
+    }
   }
 
   /** Only a few may close in and swing at once: the nearest, mostly. */
