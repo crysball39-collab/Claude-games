@@ -490,6 +490,30 @@ const real = await ev(() => {
 });
 check('archers come out of the gates with bows, keep their distance and loose arrows at you', real.loosed > 0 && real.bow === 'wooden_bow' && real.d > 3, JSON.stringify(real));
 await ev(() => { const g = window.__barrage.game; g.player.invulnerable = false; g.waves.reset(); g.waves.rest(); g.archery.clear(); });
+// and right up close one fights with its fists and feet - the bow is no sword - and nothing breaks
+await ev(() => {
+  const g = window.__barrage.game, p = g.player, { Brain } = window.__barrage.lib;
+  p.root.set(0, 0, 0); p.heading = 0; p.health = 100;
+  const a = g.spawn('archer', { team: 'enemy', x: 0, z: 0.9, heading: Math.PI, health: 300, mask: 2, power: 0.6 });
+  a.equip('weapon', 'wooden_bow');
+  a.spec = { kind: 'archer', role: 'archer' };
+  a.controller = new Brain(a, 'archer', 0.5);
+  a.controller.turn = true;
+  window.__closeArcher = a;
+  window.__archerBlows = 0;
+  g.on('swing', (f) => { if (f === window.__closeArcher) window.__archerBlows++; });
+});
+for (let i = 0; i < 8; i++) {
+  await ev(() => {
+    const p = window.__barrage.game.player, a = window.__closeArcher;
+    if (a.state === 'active') { p.root.set(a.root.x, 0, a.root.z - 0.9); p.heading = 0; }
+    p.health = Math.max(p.health, 30);
+  });
+  await simFor(0.8);
+}
+const close = await ev(() => { const g = window.__barrage.game, p = g.player; return { blows: window.__archerBlows, hp: Math.round(p.health), finite: Number.isFinite(p.health) && Number.isFinite(g.camera.position.x) }; });
+check('right up close to an archer, it punches and kicks and nothing breaks', close.finite && await finite() && close.blows > 0, JSON.stringify(close));
+await ev(() => { const g = window.__barrage.game; g.removeFighter(window.__closeArcher); g.archery.clear(); });
 
 /* ----------------------------- your bow --------------------------------- */
 
@@ -570,6 +594,8 @@ const dropOdds = await ev(() => {
 check('a champion always drops a sword, anyone else now and then', dropOdds.champ === 400 && dropOdds.any > 0 && dropOdds.any < 80, JSON.stringify(dropOdds));
 const drop = await ev(() => {
   const b = window.__barrage, g = b.game;
+  // a wave that is on, and stays on (one more to come, not yet): a kill in it counts
+  g.waves.state = 'fight'; g.waves.queue = [{ kind: 'brawler', role: 'brawler' }]; g.waves.t = 99;
   const before = b.profile.d.bag.filter(Boolean).length;
   const c = g.spawn('champion', { team: 'enemy', x: 3, z: 0, heading: 0, health: 10, mask: 2 });
   c.spec = { kind: 'champion', role: 'champion', boss: true };

@@ -14,6 +14,7 @@ import { Sound } from './core/audio.js';
 import { Game } from './game/game.js';
 import * as anim from './game/anim.js';
 import { roster } from './game/waves.js';
+import { Brain } from './game/brain.js';
 import { R } from './game/arena.js';
 import { Held, ITEMS, RARITY, rollDrop } from './game/gear.js';
 import { Hud } from './ui/hud.js';
@@ -440,7 +441,7 @@ function wireGame() {
     if (f === g.player) g.cam.shake(0.02);
   });
   g.on('guardbreak', (f) => { if (f === g.player) app.hud.toast('Guard broken: out of stamina'); });
-  g.on('swing', (f, at, kind) => s.whoosh(at, f.weapon || f.morph ? 'swing' : kind === 'kick' ? 'kick' : 'jab'));
+  g.on('swing', (f, at, kind) => s.whoosh(at, (f.weapon && f.weapon.isSword) || f.morph ? 'swing' : kind === 'kick' ? 'kick' : 'jab'));
   // a morph
   g.on('morph', (f, id) => { if (f === g.player) { s.goo(); app.hud.banner(MORPHS[id].name.toUpperCase(), 'The goo takes you over', 2.6); } });
   g.on('morphed', (f) => { if (f === g.player) { s.roar(); g.cam.shake(0.25); g.arena.cheer(1); } });
@@ -599,20 +600,26 @@ function dressStall() {
 let last = performance.now();
 
 function loop(now) {
+  // the next frame is asked for first: a mistake in this one must not stop the game for good
+  requestAnimationFrame(loop);
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   const g = app.game;
   const st = app.state;
-  g.paused = !(st === 'title' || st === 'playing' || st === 'fallen');
-  if (st === 'playing') playTick(dt);
-  g.frame(dt, st === 'playing' || st === 'fallen' ? app.input : null);
-  if (st !== 'title') app.hud.update(dt);
-  if (st === 'playing') adapt(dt);
-  const c = g.camera.position;
-  app.sound.listener.x = c.x; app.sound.listener.y = c.y; app.sound.listener.z = c.z;
-  app.renderer.render(g.scene, g.camera);
+  try {
+    g.paused = !(st === 'title' || st === 'playing' || st === 'fallen');
+    if (st === 'playing') playTick(dt);
+    g.frame(dt, st === 'playing' || st === 'fallen' ? app.input : null);
+    if (st !== 'title') app.hud.update(dt);
+    if (st === 'playing') adapt(dt);
+    const c = g.camera.position;
+    app.sound.listener.x = c.x; app.sound.listener.y = c.y; app.sound.listener.z = c.z;
+    app.renderer.render(g.scene, g.camera);
+  } catch (e) {
+    // said once, not every frame
+    if (!loop.said) { loop.said = true; console.error(e); }
+  }
   if (st !== 'playing') app.input.endFrame();
-  requestAnimationFrame(loop);
 }
 
 function playTick(dt) {
@@ -674,5 +681,5 @@ if (hot?.ready) hot.ready((data) => boot(data || {}));
 else boot(hot?.data ?? {});
 
 // for tests and the curious
-app.lib = { anim, roster, cloud, rollDrop };
+app.lib = { anim, roster, cloud, rollDrop, Brain };
 window.__barrage = app;

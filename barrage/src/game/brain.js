@@ -161,7 +161,8 @@ export class Brain {
       return;
     }
 
-    const weapon = h.weapon;
+    // up close a sword swings; a bow is no use, so an archer jabs and kicks like anyone
+    const weapon = h.weapon && h.weapon.isSword ? h.weapon : null;
     const range = weapon ? weapon.range : FIST_RANGE;
     const may = this.turn;
 

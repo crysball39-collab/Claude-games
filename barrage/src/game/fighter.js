@@ -443,7 +443,7 @@ export class Fighter {
     if (clip.active) {
       // what strikes passes through people: the hit is judged by contact, not shoved
       ghosts.push(this.bodies[clip.striker]);
-      if (clip.kind === 'swing' && this.weapon) ghosts.push(this.weapon.body);
+      if (clip.kind === 'swing' && this.weapon && this.weapon.isSword) ghosts.push(this.weapon.body);
       for (const g of ghosts) g.ghost = true;
     }
     this.action = { clip, t: 0, rate, aim: aim * D, weight: 0, hits: new Set(), done: false, back: false, ghosts };
@@ -476,7 +476,7 @@ export class Fighter {
     if (!a || a.done || a.back) return;
     const c = a.clip;
     if (!c.active || a.t < c.active[0] || a.t > c.active[1]) return;
-    const held = c.kind === 'swing' && this.weapon ? this.weapon : null;
+    const held = c.kind === 'swing' && this.weapon && this.weapon.isSword ? this.weapon : null;
     // a swing lands with the blade, or - too close for that - with the fist around it
     if (held && this.strikeWith(held.body, held)) return;
     const s = this.bodies[c.striker];
@@ -595,6 +595,10 @@ export class Fighter {
     if (this.removed || this.invulnerable) return;
     // nothing touches you while the goo is taking you over
     if (this.morph && this.morph.growing) return;
+    // a blow worked out from something that is not a number would spread through
+    // the physics and wreck everything it touches: it does nothing instead
+    if (!Number.isFinite(h.J) || !Number.isFinite(h.damage) || !Number.isFinite(h.speed) ||
+        !h.point || !Number.isFinite(h.point.x + h.point.y + h.point.z)) return;
     this.wake();
     this.sinceHit = 0;
     if (h.attacker) { this.lastAttacker = h.attacker; this.lastHitT = this.game.time; }
