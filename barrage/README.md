@@ -106,6 +106,7 @@ path. Walk up to the counter and it opens:
 | ---- | ----- | -------------- | ------- | ------------ |
 | **Wooden Sword** (Common) | 10 | 5 | Weapon slot | Bruises, and splits the skin when it lands hard |
 | **Rusty Steel Sword** (Uncommon) | 50 | 25 | Weapon slot | Cuts, and a full swing opens a slash |
+| **Bronze Sword** (Uncommon) | 80 | 40 | Weapon slot | Old bronze, green with age: quicker than the rusty one, not as good as iron |
 | **Iron Sword** (Rare) | 120 | 60 | Weapon slot | Cuts deeper, swings as quick |
 | **Bronze Gladius** (Epic) | 250 | 125 | Weapon slot | Short and fast |
 | **Crimson Falchion** (Super Epic) | 500 | 250 | Weapon slot | Heavy; long slashes |
@@ -133,7 +134,8 @@ cost, equipped or not.
 
 ### Weapon rarities
 
-Every sword has a rarity, one sword to each, from the commonest to the rarest:
+Every sword has a rarity - the Rusty Steel Sword and the Bronze Sword share
+Uncommon, the rest have one each - from the commonest to the rarest:
 **Common**, **Uncommon**, **Rare**, **Epic**, **Super Epic**, **Legendary**,
 **Mythic**, **Transcendent**, **Secret** and **Godly**. Each has its own colour on
 the sword's picture, its name, its card at the Stall and its slot in the bag;
@@ -346,6 +348,7 @@ salted hash is stored, that only Chibble gets the admin panel, that its switches
 and settings take effect and are saved with the account, and that Venom grows
 from the head down to 1.4 times the size with 5,000 HP, and its Claw, Venom
 Surge and Eat all do what they say. With `--file` it opens the built file and fails if it
-fetches anything at all; `--accounts` runs only the account checks.
+fetches anything at all (the account checks load the same file over http, as the Claude page
+is served); `--accounts` runs only the account checks.
 
 Fonts: Bungee and Barlow Condensed, SIL Open Font License (`fonts/OFL-*.txt`).

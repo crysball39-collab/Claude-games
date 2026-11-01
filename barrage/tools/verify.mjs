@@ -33,23 +33,27 @@ function check(name, ok, detail = '') {
 
 /* ------------------------------- boot it -------------------------------- */
 
-let server = null;
+const server = http.createServer((req, res) => {
+  const rel = decodeURIComponent(req.url.split('?')[0]);
+  const file = path.join(ROOT, rel);
+  if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
+  res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
+  fs.createReadStream(file).pipe(res);
+});
+await new Promise((r) => server.listen(0, r));
+const base = `http://127.0.0.1:${server.address().port}`;
 let url;
 if (FILE_MODE) {
   const file = path.join(ROOT, 'dist/barrage.html');
   if (!fs.existsSync(file)) { console.error('no dist/barrage.html - run npm run build:barrage'); process.exit(1); }
   url = pathToFileURL(file).href;
 } else {
-  server = http.createServer((req, res) => {
-    const rel = decodeURIComponent(req.url.split('?')[0]);
-    const file = path.join(ROOT, rel);
-    if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
-    fs.createReadStream(file).pipe(res);
-  });
-  await new Promise((r) => server.listen(0, r));
-  url = `http://127.0.0.1:${server.address().port}/barrage/index.html`;
+  url = `${base}/barrage/index.html`;
 }
+// the accounts are tried with the page served over http, the way the game's Claude page is
+// served (over https): opened from a file, the test browser does not reliably keep a page's
+// storage from one load to the next. With --file it is the same built file.
+const accountsUrl = FILE_MODE ? `${base}/dist/barrage.html` : url;
 
 fs.mkdirSync(SHOTS, { recursive: true });
 const browser = await chromium.launch({
@@ -59,14 +63,15 @@ const browser = await chromium.launch({
 const errors = [];
 const network = [];
 
-async function open(init = null, on = browser) {
+async function open(init = null, on = browser, at = url) {
   const ctx = await on.newContext({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
   if (init) await ctx.addInitScript(init);
   const page = await ctx.newPage();
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push(e.message));
-  page.on('request', (r) => { if (!/^(file|data|blob):/.test(r.url()) && !r.url().startsWith(url.split('/barrage/')[0])) network.push(r.url()); });
-  await page.goto(url, { waitUntil: 'load' });
+  // anything but the page itself (and, from source, its own files) is the network
+  page.on('request', (r) => { if (!/^(file|data|blob):/.test(r.url()) && r.url() !== at && !(!FILE_MODE && r.url().startsWith(base))) network.push(r.url()); });
+  await page.goto(at, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__barrage && window.__barrage.state === 'title', null, { timeout: 90000 });
   return { ctx, page };
 }
@@ -277,10 +282,10 @@ check('the Stall sells a wooden sword for 10, a rusty steel sword for 50 and a w
 check('...wood armour - a helmet for 12, a chestplate for 20, leggings for 15, boots for 8 - and a bead bracelet and an oak charm for 15',
   ['wood_helmet:12', 'wood_chestplate:20', 'wood_leggings:15', 'wood_boots:8', 'bead_bracelet:15', 'oak_charm:15'].every((w) => wares.includes(w)), wares.join(', '));
 const rarities = await ev(() => [...document.querySelectorAll('.ware')].filter((w) => w.querySelector('.pill.rarity')).map((w) => w.querySelector('.pill.rarity').textContent));
-check('...and a sword of every rarity, Common to Godly, dearer the rarer',
-  rarities.join(',') === 'Common,Uncommon,Rare,Epic,Super Epic,Legendary,Mythic,Transcendent,Secret,Godly' &&
-  wares.slice(0, 10).join(',') === 'wooden_sword:10,rusty_sword:50,iron_sword:120,bronze_gladius:250,crimson_falchion:500,golden_spatha:1,000,dragonbone_blade:2,500,starsteel_edge:5,000,shadow_fang:NOT FOR SALE,sunforged_greatsword:25,000',
-  rarities.join(', ') + ' / ' + wares.slice(0, 10).join(', '));
+check('...and a sword of every rarity, Common to Godly, dearer the rarer - a bronze one beside the rusty one in Uncommon, below iron',
+  rarities.join(',') === 'Common,Uncommon,Uncommon,Rare,Epic,Super Epic,Legendary,Mythic,Transcendent,Secret,Godly' &&
+  wares.slice(0, 11).join(',') === 'wooden_sword:10,rusty_sword:50,bronze_sword:80,iron_sword:120,bronze_gladius:250,crimson_falchion:500,golden_spatha:1,000,dragonbone_blade:2,500,starsteel_edge:5,000,shadow_fang:NOT FOR SALE,sunforged_greatsword:25,000',
+  rarities.join(', ') + ' / ' + wares.slice(0, 11).join(', '));
 check('...but the Secret one is only a shape under a cloth, not for sale', await ev(() => { const c = document.querySelector('.ware[data-kind="shadow_fang"]'); return c.classList.contains('mystery') && c.querySelector('h3').textContent === '???' && !c.querySelector('[data-buy]'); }));
 await ev(() => { const b = window.__barrage; b.profile.d.coins = 25; b.shop.render(); });
 await tap('[data-buy="rusty_sword"]');
@@ -560,7 +565,7 @@ const browser2 = await chromium.launch({
   args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage'],
 });
 {
-  ({ ctx, page } = await open(mockScript(null, 'u_tester'), browser2));
+  ({ ctx, page } = await open(mockScript(null, 'u_tester'), browser2, accountsUrl));
   let P = page;
   let ev2 = (fn, arg) => P.evaluate(fn, arg);
   await P.waitForFunction(() => window.__barrage && window.__barrage.state === 'title', null, { timeout: 90000 });
@@ -600,7 +605,7 @@ const browser2 = await chromium.launch({
   P = await ctx.newPage();
   ev2 = (fn, arg) => P.evaluate(fn, arg);
   P.on('pageerror', (e) => errors.push(e.message));
-  await P.goto(url, { waitUntil: 'load' });
+  await P.goto(accountsUrl, { waitUntil: 'load' });
   await P.waitForFunction(() => window.__barrage && window.__barrage.state === 'title' && document.querySelector('#who').classList.contains('in'), null, { timeout: 60000 }).catch(() => {});
   const back = await ev2(() => ({
     who: document.querySelector('#who-text').textContent, state: window.__barrage.lib.cloud.state,
@@ -685,7 +690,7 @@ check('no errors anywhere', errors.length === 0, errors.slice(0, 3).join(' | '))
 
 await browser.close();
 await browser2.close();
-if (server) server.close();
+server.close();
 const failed = results.filter((r) => !r.ok);
 console.log(`\n${results.length - failed.length}/${results.length} passed`);
 process.exit(failed.length ? 1 : 0);

@@ -7,8 +7,9 @@
    and the oak charm in either of the two ACCESSORY slots. What armour and
    accessories look like on you, and what they do, is in outfit.js.
 
-   Every sword has a rarity, from Common to Godly, one sword to each. The
-   Stall sells all but the Secret one, dearer the rarer; and any box ragdoll
+   Every sword has a rarity, from Common to Godly - the bronze sword and the
+   rusty one share Uncommon, the rest have one each. The Stall sells all but
+   the Secret one, dearer the rarer; and any box ragdoll
    you put down may drop one - a champion always does - rarer ones less often,
    less rarely the further you get.
 
@@ -67,6 +68,14 @@ export const ITEMS = {
     hit: 'blade', strikeMass: 2.9, damageBase: 9, damage: 2.2, rate: 1.0, cost: 10,
     size: [0.062, 0.018, 1.0], grip: 0.12,
     stats: [['Damage', 3], ['Speed', 6], ['Reach', 6]], marks: 'Cuts, slashes',
+  },
+  bronze_sword: {
+    id: 'bronze_sword', name: 'Bronze Sword', slot: 'weapon', rarity: 'uncommon', price: 80, sell: 40,
+    blurb: 'An old leaf-bladed sword of bronze, green at the edges with age. Quicker in the hand than the rusty one, and not as good as iron.',
+    hit: 'blade', strikeMass: 2.95, damageBase: 10, damage: 2.35, rate: 1.08, cost: 9,
+    size: [0.07, 0.02, 0.92], grip: 0.11,
+    look: { flat: '#b07a3a', edge: '#d8a45e', fuller: '#8a5a26', patina: true, guard: '#6a4520', pommel: '#8a5a26', grip: '#2e1d10', wrap: '#4a3018' },
+    stats: [['Damage', 3], ['Speed', 7], ['Reach', 5]], marks: 'Cuts, slashes',
   },
   iron_sword: {
     id: 'iron_sword', name: 'Iron Sword', slot: 'weapon', rarity: 'rare', price: 120, sell: 60,
@@ -204,9 +213,12 @@ const DROP_WEIGHTS = {
 export function rollDrop(champion, wave, random = Math.random) {
   if (!champion && random() > 0.05 + wave * 0.0025) return null;
   const luck = 1 + wave * 0.02;
+  // swords that share a rarity share its odds
+  const share = {};
+  for (const id of SWORDS) share[ITEMS[id].rarity] = (share[ITEMS[id].rarity] || 0) + 1;
   const pool = SWORDS.map((id) => {
     const r = RARITY[ITEMS[id].rarity];
-    return { id, w: DROP_WEIGHTS[r.id][champion ? 1 : 0] * Math.pow(luck, r.tier) };
+    return { id, w: DROP_WEIGHTS[r.id][champion ? 1 : 0] * Math.pow(luck, r.tier) / share[r.id] };
   });
   let x = random() * pool.reduce((a, p) => a + p.w, 0);
   for (const p of pool) { x -= p.w; if (x <= 0) return p.id; }
@@ -407,6 +419,15 @@ function paintBlade(ctx, tiles, size, grip, L, seed) {
         for (let k = 0; k < 40; k++) {
           ctx.fillStyle = r() < 0.3 ? '#ffffff' : 'rgba(255, 255, 255, 0.55)';
           ctx.fillRect(t.x + r() * t.w, t.y + r() * len, 1, 1 + (r() < 0.2 ? 1 : 0));
+        }
+      }
+      if (L.patina) {
+        // verdigris: green specks of age, thickest along the edges
+        for (let k = 0; k < 40; k++) {
+          ctx.fillStyle = r() < 0.5 ? 'rgba(74, 150, 120, 0.6)' : 'rgba(52, 116, 92, 0.5)';
+          const x = r() < 0.6 ? (r() < 0.5 ? r() * t.w * 0.2 : t.w - r() * t.w * 0.2) : r() * t.w;
+          const sz = 1 + r() * 2.5;
+          ctx.fillRect(t.x + x, t.y + r() * len, sz, sz);
         }
       }
       if (L.rays) {
