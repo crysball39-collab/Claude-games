@@ -8,7 +8,7 @@
    shield in the offhand, each piece of armour in its own slot - and either
    accessory slot takes a bracelet or a charm.
    ========================================================================== */
-import { ITEMS, SLOT, SLOTS } from '../game/gear.js';
+import { ITEMS, SLOT, SLOTS, ARROWS } from '../game/gear.js';
 
 export const BAG = 60;
 
@@ -22,7 +22,7 @@ export const ADMIN_LIMITS = { maxHp: [50, 10000], maxStamina: [50, 10000], speed
 export function blankSave() {
   const eq = {};
   for (const s of SLOTS) eq[s.id] = null;
-  return { v: 1, coins: 0, bag: new Array(BAG).fill(null), eq, wave: 1, best: 0, kills: 0, earned: 0, runs: 0, seq: 1, savedAt: 0, admin: blankAdmin() };
+  return { v: 1, coins: 0, arrows: 0, bag: new Array(BAG).fill(null), eq, wave: 1, best: 0, kills: 0, earned: 0, runs: 0, seq: 1, savedAt: 0, admin: blankAdmin() };
 }
 
 /** A save from anywhere - an old version, a corrupt one, another device - made safe to play. */
@@ -31,6 +31,7 @@ export function normalize(data) {
   if (!data || typeof data !== 'object') return s;
   const num = (v, d = 0) => (Number.isFinite(v) && v >= 0 ? Math.floor(v) : d);
   s.coins = num(data.coins);
+  s.arrows = num(data.arrows);
   s.wave = Math.max(1, num(data.wave, 1));
   s.best = num(data.best);
   s.kills = num(data.kills);
@@ -129,6 +130,7 @@ export class Profile {
   /* ------------------------------ buying, selling --------------------------- */
 
   buy(kind) {
+    if (kind === 'arrows') return this.buyArrows();
     const T = ITEMS[kind];
     if (!T || T.price == null) return { error: 'The Stall does not sell that.' };
     if (!this.infinite && this.d.coins < T.price) return { error: `Not enough coins. ${T.name} costs ${T.price.toLocaleString('en-US')}.` };
@@ -140,6 +142,23 @@ export class Profile {
     this.d.bag[i] = item;
     this.changed('buy');
     return { ok: true, item, loc: 'b' + i };
+  }
+
+  /** A bundle of arrows: not a thing in the bag, but a count, like your coins. */
+  buyArrows() {
+    if (!this.infinite && this.d.coins < ARROWS.price) return { error: `Not enough coins. ${ARROWS.bundle} arrows cost ${ARROWS.price}.` };
+    if (!this.infinite) this.d.coins -= ARROWS.price;
+    this.d.arrows += ARROWS.bundle;
+    this.changed('buy');
+    return { ok: true, arrows: this.d.arrows };
+  }
+
+  /** One arrow off the string. */
+  useArrow() {
+    if (this.d.arrows <= 0) return false;
+    this.d.arrows--;
+    this.changed('arrow');
+    return true;
   }
 
   /** Something for nothing - a sword a box ragdoll dropped - into the bag. */

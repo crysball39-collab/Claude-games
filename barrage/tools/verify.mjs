@@ -281,7 +281,11 @@ check('the Stall sells a wooden sword for 10, a rusty steel sword for 50 and a w
   ['wooden_sword:10', 'rusty_sword:50', 'wood_shield:10'].every((w) => wares.includes(w)), wares.join(', '));
 check('...wood armour - a helmet for 12, a chestplate for 20, leggings for 15, boots for 8 - and a bead bracelet and an oak charm for 15',
   ['wood_helmet:12', 'wood_chestplate:20', 'wood_leggings:15', 'wood_boots:8', 'bead_bracelet:15', 'oak_charm:15'].every((w) => wares.includes(w)), wares.join(', '));
-const rarities = await ev(() => [...document.querySelectorAll('.ware')].filter((w) => w.querySelector('.pill.rarity')).map((w) => w.querySelector('.pill.rarity').textContent));
+check('...a Common wooden bow for 10, arrows at 5 coins for ten, and an Uncommon bronze ring and bronze watch for 40',
+  ['wooden_bow:10', 'arrows:5', 'bronze_ring:40', 'bronze_watch:40'].every((w) => wares.includes(w)) &&
+  await ev(() => ['wooden_bow:Common', 'bronze_ring:Uncommon', 'bronze_watch:Uncommon'].every((x) => { const [k, r] = x.split(':'); const c = document.querySelector(`.ware[data-kind="${k}"] .pill.rarity`); return c && c.textContent === r; })),
+  wares.join(', '));
+const rarities = await ev(() => [...document.querySelectorAll('.ware')].slice(0, 11).map((w) => (w.querySelector('.pill.rarity') || { textContent: '-' }).textContent));
 check('...and a sword of every rarity, Common to Godly, dearer the rarer - a bronze one beside the rusty one in Uncommon, below iron',
   rarities.join(',') === 'Common,Uncommon,Uncommon,Rare,Epic,Super Epic,Legendary,Mythic,Transcendent,Secret,Godly' &&
   wares.slice(0, 11).join(',') === 'wooden_sword:10,rusty_sword:50,bronze_sword:80,iron_sword:120,bronze_gladius:250,crimson_falchion:500,golden_spatha:1,000,dragonbone_blade:2,500,starsteel_edge:5,000,shadow_fang:NOT FOR SALE,sunforged_greatsword:25,000',
@@ -300,6 +304,11 @@ await tap('[data-buy="bead_bracelet"]');
 await tap('[data-buy="oak_charm"]');
 const bought2 = await ev(() => { const b = window.__barrage; return { coins: b.profile.coins, bag: b.profile.d.bag.filter(Boolean).map((i) => i.kind) }; });
 check('armour and accessories are bought the same way', bought2.coins === 0 && ['wood_helmet', 'bead_bracelet', 'oak_charm'].every((k) => bought2.bag.includes(k)), JSON.stringify(bought2));
+await ev(() => { const b = window.__barrage; b.profile.d.coins = 15; b.shop.render(); });
+await tap('[data-buy="wooden_bow"]');
+await tap('[data-buy="arrows"]');
+const archery = await ev(() => { const b = window.__barrage; return { coins: b.profile.coins, arrows: b.profile.d.arrows, bow: b.profile.owns('wooden_bow'), have: document.querySelector('#arrow-have') && document.querySelector('#arrow-have').textContent }; });
+check('the bow goes in your bag, and ten arrows go in your quiver for 5 coins', archery.coins === 0 && archery.arrows === 10 && archery.bow && /10/.test(archery.have || ''), JSON.stringify(archery));
 await shot('stall');
 await tap('.tab[data-tab="sell"]');
 // (a box ragdoll may have dropped a sword in the bag already: only what was bought is checked)
@@ -429,44 +438,86 @@ const fullSet = await ev(() => {
 });
 check('all four pieces of the wood set make you harder to knock down', fullSet.full && fullSet.after < fullSet.before && fullSet.boxes >= 17, JSON.stringify(fullSet));
 
-/* -------------------------------- bullets ------------------------------- */
+/* -------------------------------- arrows -------------------------------- */
 
 await ev(() => {
   const g = window.__barrage.game, p = g.player;
   p.root.set(0, 0, 2); p.heading = Math.PI; p.health = 100; p.maxHealth = 100000; p.health = 100000;
-  const gunner = g.spawn('gunner', { team: 'enemy', x: 0, z: -7, heading: 0, health: 300, mask: 2 });
-  gunner.giveGun();
-  gunner.wantAim = true;
+  const archer = g.spawn('archer', { team: 'enemy', x: 0, z: -7, heading: 0, health: 300, mask: 2 });
+  archer.equip('weapon', 'wooden_bow');
+  archer.wantAim = true;
   const wall = g.spawn('brawler', { team: 'enemy', x: 0.05, z: -1.2, heading: Math.PI, health: 9999, mask: 2 });
-  window.__gun = gunner; window.__wall = wall;
+  window.__archer = archer; window.__wall = wall;
 });
 await simFor(1);
 for (let i = 0; i < 6; i++) {
   await ev(() => {
-    const g = window.__barrage.game, gun = window.__gun, w = window.__wall;
+    const w = window.__wall;
     if (w.state === 'active') w.root.set(0.05, 0, -1.2);
-    const at = w.chest.x.clone();
-    g.guns.fire(gun, g.guns.aim(gun, at, 0.01, at.clone()), 12);
+    window.__archer.shoot(w.chest.x, 0.01);
   });
-  await simFor(0.3);
+  await simFor(0.4);
 }
-const shots = await ev(() => ({ stats: window.__barrage.game.guns.stats, marks: window.__wall.marks }));
-check('gunners\' bullets hit whoever is in the way and leave bullet holes', (shots.marks.bullet || 0) > 0 && shots.stats.friendly > 0, JSON.stringify(shots));
+const shots = await ev(() => { const g = window.__barrage.game; return { stats: g.archery.stats, stuck: g.archery.stuck.filter((s) => s.owner === window.__wall).length, marks: window.__wall.marks }; });
+check('archers\' arrows fly, hit whoever is in the way, stick in, and leave puncture wounds', (shots.marks.arrow || 0) > 0 && shots.stats.friendly > 0 && shots.stuck > 0, JSON.stringify(shots));
 // and a raised shield stops one
 await ev(() => { const b = window.__barrage, g = b.game; g.removeFighter(window.__wall); const p = g.player; p.root.set(0, 0, 2); p.heading = Math.PI; b.input.press('block'); });
 await simFor(0.6);
-const shieldShots0 = await ev(() => window.__barrage.game.guns.stats.hitShields);
+const shieldShots0 = await ev(() => window.__barrage.game.archery.stats.hitShields);
 for (let i = 0; i < 4; i++) {
   await ev(() => {
-    const g = window.__barrage.game, gun = window.__gun, p = g.player;
+    const p = window.__barrage.game.player;
     p.root.set(0, 0, 2); p.heading = Math.PI;
-    const at = p.chest.x.clone();
-    g.guns.fire(gun, g.guns.aim(gun, at, 0.005, at.clone()), 12);
+    window.__archer.shoot(p.chest.x, 0.005);
   });
-  await simFor(0.3);
+  await simFor(0.45);
 }
-check('a raised shield stops bullets', await ev((n) => window.__barrage.game.guns.stats.hitShields > n, shieldShots0), JSON.stringify(await ev(() => window.__barrage.game.guns.stats)));
-await ev(() => { const b = window.__barrage, g = b.game; b.input.release('block'); g.removeFighter(window.__gun); g.player.maxHealth = 100; g.player.health = 100; });
+check('a raised shield stops arrows', await ev((n) => window.__barrage.game.archery.stats.hitShields > n, shieldShots0), JSON.stringify(await ev(() => window.__barrage.game.archery.stats)));
+await ev(() => { const b = window.__barrage, g = b.game; b.input.release('block'); g.removeFighter(window.__archer); g.player.maxHealth = 100; g.player.health = 100; });
+// a real one, out of a gate: keeps its distance and looses at you
+await ev(() => {
+  const g = window.__barrage.game, w = g.waves;
+  g.player.root.set(0, 0, 0); g.player.invulnerable = true;
+  w.begin(6);
+  w.queue = [{ kind: 'archer', role: 'archer', weapon: 'wooden_bow' }];
+  w.total = 1;
+  window.__loosed0 = g.archery.stats.loosed;
+});
+await simFor(14);
+const real = await ev(() => {
+  const g = window.__barrage.game, a = g.waves.enemies.find((e) => e.spec && e.spec.kind === 'archer');
+  return { loosed: g.archery.stats.loosed - window.__loosed0, bow: a && a.weapon && a.weapon.kind, d: a ? +Math.hypot(a.root.x - g.player.root.x, a.root.z - g.player.root.z).toFixed(1) : null };
+});
+check('archers come out of the gates with bows, keep their distance and loose arrows at you', real.loosed > 0 && real.bow === 'wooden_bow' && real.d > 3, JSON.stringify(real));
+await ev(() => { const g = window.__barrage.game; g.player.invulnerable = false; g.waves.reset(); g.waves.rest(); g.archery.clear(); });
+
+/* ----------------------------- your bow --------------------------------- */
+
+await ev(() => {
+  const b = window.__barrage, g = b.game, p = g.player;
+  p.root.set(0, 0, 0); p.heading = Math.PI; p.stamina = 100;
+  p.equip('weapon', 'wooden_bow');
+  window.__target = g.spawn('brawler', { team: 'enemy', x: 0, z: -6, heading: 0, health: 500, mask: 2 });
+  window.__arrows0 = b.profile.d.arrows;
+});
+await simFor(0.3);
+const shootLabel = await ev(() => document.querySelector('#punch-label').textContent + ' ' + document.querySelector('#punch-count').textContent);
+await act('punch');
+await simFor(1.2);
+const myShot = await ev(() => ({ arrows: window.__barrage.profile.d.arrows, was: window.__arrows0, hp: Math.round(window.__target.health), marks: window.__target.marks }));
+check('with the bow, PUNCH becomes SHOOT: an arrow at whoever is in front, one fewer in your quiver',
+  /^SHOOT \d+$/.test(shootLabel) && myShot.arrows === myShot.was - 1 && myShot.hp < 500 && (myShot.marks && myShot.marks.arrow) > 0, shootLabel + ' ' + JSON.stringify(myShot));
+await ev(() => { const b = window.__barrage, g = b.game; g.removeFighter(window.__target); g.player.equip('weapon', b.profile.gear().weapon); });
+// the bronze ring and watch
+const bronze = await ev(() => {
+  const b = window.__barrage, p = b.game.player, was = { power: p.ringPower, quick: p.quick };
+  p.wear({ ...b.profile.gear(), acc1: 'bronze_ring', acc2: 'bronze_watch' });
+  const out = { was, power: p.ringPower, quick: p.quick, boxes: p.outfit.boxes.filter((x) => x.kind === 'bronze_ring' || x.kind === 'bronze_watch').length };
+  p.wear(b.profile.gear());
+  return out;
+});
+check('a bronze ring makes every blow hit harder and a bronze watch every blow come quicker; both are worn where you can see them',
+  bronze.power > bronze.was.power && bronze.quick > bronze.was.quick && bronze.boxes >= 3, JSON.stringify(bronze));
 
 /* --------------------------------- rounds -------------------------------- */
 
@@ -475,9 +526,9 @@ const rosters = await ev(() => {
   const kinds = (n) => { const all = new Set(); for (let i = 0; i < 30; i++) for (const r of roster(n)) all.add(r.kind); return [...all].sort().join(','); };
   return { w1: kinds(1), w3: kinds(3), w5: kinds(5), w6: kinds(6), w8: kinds(8) };
 });
-check('wave 1 is brawlers; swordsmen join on 3, shields on 4, a champion on 5, gunners on 6',
-  rosters.w1 === 'brawler' && rosters.w3.includes('swordsman') && rosters.w5.includes('champion') && !rosters.w5.includes('gunner') &&
-  rosters.w6.includes('gunner'), JSON.stringify(rosters));
+check('wave 1 is brawlers; swordsmen join on 3, shields on 4, a champion on 5, archers on 6',
+  rosters.w1 === 'brawler' && rosters.w3.includes('swordsman') && rosters.w5.includes('champion') && !rosters.w5.includes('archer') &&
+  rosters.w6.includes('archer'), JSON.stringify(rosters));
 check('nothing in the physics has gone to NaN', await finite());
 
 /* --------------------------- shut in a tunnel ---------------------------- */
@@ -669,7 +720,8 @@ const browser2 = await chromium.launch({
   }
   const clawed = await ev2(() => { const e = window.__foes[0]; return { hp: Math.round(e.health), slashes: e.marks ? e.marks.slash : 0 }; });
   check('CLAW rakes three slashes at once', clawed.hp < 300 && clawed.slashes >= 3, JSON.stringify(clawed));
-  await ev2(() => { const b = window.__barrage, p = b.game.player; p.heading = 0; b.input.press('surge'); b.input.release('surge'); });
+  // back where it started (the claws lunge), facing the one still standing
+  await ev2(() => { const b = window.__barrage, p = b.game.player; p.root.set(0, 0, 0); p.vel.set(0, 0, 0); p.heading = 0; b.input.press('surge'); b.input.release('surge'); });
   await sim2(0.5);
   const surge = await ev2(() => { const p = window.__barrage.game.player, e = window.__foes[1]; return { spikes: p.morph.spikes.length, cool: p.morph.cool.surge > 0, hp: Math.round(e.health), state: e.state }; });
   check('VENOM SURGE sends a line of spikes out of the ground that throws whoever is on it', surge.spikes > 5 && surge.cool && surge.hp < 300 && surge.state !== 'active', JSON.stringify(surge));
@@ -679,6 +731,22 @@ const browser2 = await chromium.launch({
   await sim2(2.5);
   const eaten = await ev2((k0) => { const g = window.__barrage.game; return { killed: g.waves.killed - k0, gone: window.__foes.filter((e) => e.removed).length, tongue: !!g.player.morph.lash }; }, eaten0);
   check('EAT: the tongue grabs the nearest, and it is bitten, swallowed and gone', eaten.killed === 1 && eaten.gone >= 1 && !eaten.tongue, JSON.stringify(eaten));
+  await ev2(() => {
+    const g = window.__barrage.game, p = g.player;
+    for (const e of [...g.waves.enemies]) g.removeFighter(e);
+    g.waves.enemies = [];
+    p.root.set(0, 0, 0); p.heading = 0;
+    window.__imp = [[-3, 5], [0, 6], [3, 5]].map(([x, z]) => { const e = g.spawn('brawler', { team: 'enemy', x, z, heading: Math.PI, health: 300, mask: 2 }); e.spec = { kind: 'brawler', role: 'brawler' }; g.waves.enemies.push(e); return e; });
+  });
+  await sim2(0.4);
+  await ev2(() => { const b = window.__barrage; b.input.press('impale'); b.input.release('impale'); });
+  await sim2(1.4);
+  const imp1 = await ev2(() => window.__imp.map((e) => ({ hp: Math.round(e.health), venom: !!e.venom })));
+  await sim2(2);
+  const imp2 = await ev2(() => window.__imp.map((e) => ({ hp: Math.round(e.health), venom: !!e.venom, spread: e.venom ? e.venom.parts.length : 0 })));
+  check('VENOM IMPALE: three venom spikes at three different box ragdolls, each one poisoned',
+    imp1.every((x) => x.venom && x.hp < 300), JSON.stringify(imp1));
+  check('...and the venom eats at them, slows them, and spreads black over them', imp2.every((x, i) => x.hp < imp1[i].hp && x.spread > 1), JSON.stringify(imp2));
   await ev2(async () => { await new Promise((r) => setTimeout(r, 400)); await window.__barrage.lib.cloud.flush(); });
   const saved = await ev2(() => { const s = window.__mockStore(); const d = s['data/users/u_tester/barrage-chibble']; return d && d.save && d.save.admin; });
   check('the admin settings are saved with the account', saved && saved.god && saved.infinite && saved.maxHp === 750 && saved.morph === 'venom', JSON.stringify(saved));

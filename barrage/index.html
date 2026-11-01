@@ -129,7 +129,7 @@
   <div id="stick-zone"><div id="stick-base"><div id="stick-knob"></div></div></div>
 
   <div class="actions" id="actions">
-    <button class="act big" data-act="punch" id="btn-punch" type="button"><span id="punch-label">PUNCH</span></button>
+    <button class="act big" data-act="punch" id="btn-punch" type="button"><span id="punch-label">PUNCH</span><small id="punch-count"></small></button>
     <button class="act" data-act="kick" id="btn-kick" type="button"><span>KICK</span></button>
     <button class="act" data-act="block" id="btn-block" type="button"><span>BLOCK</span></button>
     <button class="act" data-act="jump" id="btn-jump" type="button"><span>JUMP</span></button>
@@ -137,6 +137,7 @@
     <button class="act small" data-act="sprint" id="btn-sprint" type="button"><span>SPRINT</span></button>
     <button class="act morph-act hidden" data-act="surge" id="btn-surge" type="button"><span>SURGE</span></button>
     <button class="act morph-act hidden" data-act="eat" id="btn-eat" type="button"><span>EAT</span></button>
+    <button class="act morph-act hidden" data-act="impale" id="btn-impale" type="button"><span>IMPALE</span></button>
   </div>
 
   <button id="btn-context" class="context hidden" data-act="use" type="button"></button>
@@ -163,7 +164,7 @@
         <div class="detail" id="inv-detail"></div>
       </section>
       <section class="bag">
-        <div class="bag-head"><span>BAG</span><span id="inv-count">0 / 60</span></div>
+        <div class="bag-head"><span>BAG</span><span id="inv-arrows" class="hidden"></span><span id="inv-count">0 / 60</span></div>
         <div class="grid" id="inv-grid"></div>
       </section>
     </div>

@@ -33,9 +33,10 @@ export class Hud {
     this.hurtEl = $('#hurt');
     this.floaters = $('#floaters');
     this.punchLabel = $('#punch-label');
+    this.punchCount = $('#punch-count');
     this.btn = {
       crouch: $('#btn-crouch'), sprint: $('#btn-sprint'), punch: $('#btn-punch'), kick: $('#btn-kick'), jump: $('#btn-jump'), block: $('#btn-block'),
-      surge: $('#btn-surge'), eat: $('#btn-eat'),
+      surge: $('#btn-surge'), eat: $('#btn-eat'), impale: $('#btn-impale'),
     };
     this.bars = new Map();
     this.pops = [];
@@ -131,10 +132,14 @@ export class Hud {
       this.btn.crouch.classList.toggle('on', p.wantCrouch);
       for (const k of ['punch', 'kick', 'jump']) this.btn[k].classList.toggle('tired', p.winded);
       const m = p.morph;
-      const label = m && m.claws ? 'CLAW' : p.weapon ? 'SLASH' : 'PUNCH';
+      const bow = !m && p.weapon && p.weapon.isBow;
+      const label = m && m.claws ? 'CLAW' : bow && p.hasArrow() ? 'SHOOT' : p.weapon && p.weapon.isSword ? 'SLASH' : 'PUNCH';
       if (this.punchLabel.textContent !== label) this.punchLabel.textContent = label;
+      // with a bow, how many arrows are left
+      const count = bow && p.ammo ? String(p.ammo.count()) : '';
+      if (this.punchCount.textContent !== count) this.punchCount.textContent = count;
       // a morph's own moves: shown while you are it, dark while they come back
-      for (const k of ['surge', 'eat']) {
+      for (const k of ['surge', 'eat', 'impale']) {
         const b = this.btn[k];
         b.classList.toggle('hidden', !m);
         if (m) b.style.setProperty('--cool', m.growing ? 1 : (m.cool[k] / COOLDOWN[k]).toFixed(3));

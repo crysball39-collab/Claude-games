@@ -288,6 +288,11 @@ button { font: inherit; color: inherit; }
 /* a morph's own moves, above the others; dark while they come back */
 #btn-surge { right: calc(100 * var(--u)); bottom: calc(154 * var(--u)); --d: calc(58 * var(--u)); }
 #btn-eat { right: calc(16 * var(--u)); bottom: calc(176 * var(--u)); --d: calc(58 * var(--u)); }
+#btn-impale { right: calc(178 * var(--u)); bottom: calc(142 * var(--u)); --d: calc(58 * var(--u)); font-size: calc(10.5 * var(--u)); }
+/* arrows left, under SHOOT */
+#btn-punch { grid-template-rows: auto auto; align-content: center; gap: 0; }
+#punch-count { font-family: var(--body); font-weight: 700; font-size: calc(12 * var(--u)); color: #ffe2b0; line-height: 1; pointer-events: none; }
+#punch-count:empty { display: none; }
 .act.morph-act { border-color: rgba(170, 120, 255, 0.8); background: radial-gradient(circle at 50% 35%, rgba(46, 28, 70, 0.94), rgba(10, 6, 16, 0.94)); color: #e9e0ff; font-family: var(--display); font-weight: 400; font-size: calc(12 * var(--u)); }
 .act.morph-act::after { content: ''; position: absolute; inset: -2px; border-radius: 50%; pointer-events: none; background: conic-gradient(rgba(0, 0, 0, 0.66) calc(var(--cool, 0) * 360deg), transparent 0); }
 .hud-btn.admin-btn { color: #ffd76a; border-color: rgba(255, 215, 106, 0.6); }

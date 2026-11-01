@@ -5,9 +5,9 @@
 
    Tap an item to see what it is and to EQUIP it, take it off, or - standing
    at the Stall - SELL it. Or move things about directly: tap an item, then
-   tap where it should go, or drag it there. A sword goes in the weapon slot,
-   the shield in the offhand, each piece of armour in its own slot, and a
-   bracelet or a charm in either accessory slot.
+   tap where it should go, or drag it there. A sword or the bow goes in the
+   weapon slot, the shield in the offhand, each piece of armour in its own
+   slot, and a bracelet, a charm, a ring or a watch in either accessory slot.
    ========================================================================== */
 import { $, $$ } from '../core/util.js';
 import { ITEMS, SLOTS, SLOT, SLOT_KIND, ARMOUR } from '../game/gear.js';
@@ -75,6 +75,11 @@ export class InventoryUI {
     const p = this.cb.profile();
     $('#inv-coins').textContent = p.infinite ? '∞' : coinsText(p.coins);
     $('#inv-count').textContent = `${p.countBag()} / ${BAG}`;
+    // arrows are a count, not a thing in the bag
+    const arrows = $('#inv-arrows');
+    const showArrows = p.d.arrows > 0 || p.owns('wooden_bow');
+    arrows.classList.toggle('hidden', !showArrows);
+    if (showArrows) arrows.textContent = `ARROWS ${p.d.arrows}`;
     for (const b of $$('.slot', this.el)) {
       const loc = b.dataset.loc;
       const it = p.get(loc);
@@ -101,7 +106,7 @@ export class InventoryUI {
     const p = this.cb.profile();
     const d = this.detail;
     if (!this.sel) {
-      d.innerHTML = '<p>Tap an item to see it, then tap a slot to move it there, or drag it.</p><p>Swords go in the <b>Weapon</b> slot, the shield in the <b>Offhand</b>, armour in its own slot, and a bracelet or a charm in either <b>Accessory</b> slot.</p>' + this.setLine(p);
+      d.innerHTML = '<p>Tap an item to see it, then tap a slot to move it there, or drag it.</p><p>Swords and the bow go in the <b>Weapon</b> slot, the shield in the <b>Offhand</b>, armour in its own slot, and a bracelet, a charm, a ring or a watch in either <b>Accessory</b> slot.</p>' + this.setLine(p);
       return;
     }
     const loc = this.sel;

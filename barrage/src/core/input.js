@@ -16,7 +16,7 @@
 const KEYS = {
   KeyJ: 'punch', KeyK: 'kick', KeyL: 'block', KeyQ: 'block', Space: 'jump', KeyC: 'crouch',
   KeyE: 'use', KeyI: 'inventory', Tab: 'inventory', Escape: 'pause', KeyP: 'pause',
-  KeyR: 'surge', KeyF: 'eat',
+  KeyR: 'surge', KeyF: 'eat', KeyG: 'impale',
 };
 
 export class Input {

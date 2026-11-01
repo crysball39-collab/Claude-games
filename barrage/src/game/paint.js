@@ -4,8 +4,8 @@
    Every body, every weapon and shield owns a canvas laid out as the six
    faces of each of its boxes. Damage is drawn at the exact spot on the exact
    face it landed: a bruise on a cheek, a cut along a forearm, a slash across
-   a chest in the direction the blade travelled, a bullet hole where the round
-   went in and a bigger one where it came out, blood on a fist or a blade.
+   a chest in the direction the blade travelled, a puncture where an arrow
+   went in, blood on a fist or a blade.
    Cloth tears and shows the skin under it. The arena floor is too big for
    one canvas, so it is covered by transparent tiles that are only created
    where something actually lands.
@@ -328,8 +328,8 @@ export function drawSlash(ctx, x, y, len, ang, o = {}) {
   runs(ctx, x, y, 3 + ((Math.random() * 3) | 0), len * 0.9, w * 0.8, o.gx || 0, o.gy || 0);
 }
 
-/** Where a bullet went in: a small dark hole, a red-brown abrasion ring, a little soot. */
-export function drawBulletHole(ctx, x, y, r, o = {}) {
+/** Where an arrow (or a spike) went in: a small dark hole, a red-brown ring round it, torn cloth. */
+export function drawPuncture(ctx, x, y, r, o = {}) {
   if (o.cloth) {
     ctx.fillStyle = shadeHex(o.cloth, 0.45);
     ragged(ctx, x, y, r * 2.6, 9, 0.6);
@@ -348,22 +348,6 @@ export function drawBulletHole(ctx, x, y, r, o = {}) {
   ctx.fillStyle = '#5c0808';
   circle(ctx, x + r * 0.2, y + r * 0.2, r * 0.45);
   runs(ctx, x, y, 1, r * 3, r * 0.7, o.gx || 0, o.gy || 0);
-}
-
-/** Where it came out: bigger, torn outward, bright, with spatter. */
-export function drawExitWound(ctx, x, y, r, o = {}) {
-  if (o.cloth) {
-    ctx.fillStyle = shadeHex(o.cloth, 1.3);
-    ragged(ctx, x, y, r * 2.4, 12, 0.7);
-  }
-  ctx.fillStyle = '#7d0606';
-  ragged(ctx, x, y, r * 1.9, 12, 0.7);
-  ctx.fillStyle = '#b0182a';
-  ragged(ctx, x, y, r * 1.2, 10, 0.6);
-  ctx.fillStyle = '#2a0202';
-  ragged(ctx, x, y, r * 0.6, 8, 0.5);
-  drawSplat(ctx, x, y, r * 1.2, { sats: 6, alpha: 0.7 });
-  runs(ctx, x, y, 2, r * 3.5, r * 0.8, o.gx || 0, o.gy || 0);
 }
 
 /** A pool: a soft, slowly widening patch. */
@@ -388,7 +372,7 @@ export function drawDrip(ctx, x, y, len, w, gx = 0, gy = 1) {
   runs(ctx, x, y, 1, len, w, gx, gy);
 }
 
-/** A bullet's mark in sand or wood: a dark pit with a pale rim. */
+/** Where something sharp went into sand or wood: a dark pit with a pale rim. */
 export function drawPit(ctx, x, y, r) {
   ctx.fillStyle = 'rgba(255, 240, 210, 0.25)';
   circle(ctx, x, y, r * 1.8);
@@ -493,8 +477,7 @@ export class PaintCanvas {
       case 'scuff': drawScuff(ctx, L.x, L.y, r, opts.strength); break;
       case 'cut': drawCut(ctx, L.x, L.y, Math.max(3, (opts.length || 0.04) * L.ppm), ang, o); break;
       case 'slash': drawSlash(ctx, L.x, L.y, Math.max(5, (opts.length || 0.16) * L.ppm), ang, o); break;
-      case 'bullet': drawBulletHole(ctx, L.x, L.y, r, o); break;
-      case 'exit': drawExitWound(ctx, L.x, L.y, r, o); break;
+      case 'puncture': drawPuncture(ctx, L.x, L.y, r, o); break;
       case 'pit': drawPit(ctx, L.x, L.y, r); break;
       case 'dent': drawDent(ctx, L.x, L.y, r, opts.strength); break;
       case 'gouge': drawGouge(ctx, L.x, L.y, Math.max(4, (opts.length || 0.06) * L.ppm), ang); break;
@@ -590,7 +573,7 @@ export class FloorPaint {
     return this.draw(x, z, radius * 1.2, (ctx, px, py, ppm) => drawPool(ctx, px, py, radius * ppm, alpha));
   }
 
-  /** Where a stray bullet went into the ground. */
+  /** Where a stray arrow went into the ground. */
   pit(x, z, radius) {
     return this.draw(x, z, radius * 2, (ctx, px, py, ppm) => drawPit(ctx, px, py, Math.max(1, radius * ppm)));
   }

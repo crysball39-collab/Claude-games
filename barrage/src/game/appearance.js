@@ -4,7 +4,7 @@
    Each kind of fighter has its own outfit, painted straight onto the boxes
    of its body: the player's blue tunic and red headband; the brawlers'
    bare chests and taped fists (so the bruises show); the swordsmen's
-   tunics, the shield bearers' olive, the gunners' black vests, the
+   tunics, the shield bearers' olive, the archers' green hoods, the
    champion's red sash, and the shopkeeper's apron. Skin, hair and eyes vary
    from person to person, and the face is painted onto the front of the head.
 
@@ -41,9 +41,10 @@ export const KINDS = {
     shirt: '#4b5d3a', sleeves: true, pants: '#2f3326', shoe: '#2a2018',
     wraps: '#8a7a5a', band: chance(0.5) ? '#2b2b2b' : null, sash: '#3a2a18', face: 'angry',
   }),
-  gunner: () => ({
-    shirt: '#6f747a', sleeves: true, vest: '#1f2226', pants: '#25282d', shoe: '#141414',
-    wraps: null, band: null, mask: '#2a2d33', sash: '#141414', face: 'angry',
+  // a green hood (drawn the way long hair is) over a leather jerkin
+  archer: () => ({
+    shirt: '#3d5a2c', sleeves: true, vest: '#5a3d22', pants: '#4a3a26', shoe: '#2a1d12',
+    wraps: null, band: null, sash: '#2a1d12', face: 'angry', style: 'long', hair: '#33502a',
   }),
   champion: () => ({
     skin: pick(['#b07650', '#8a5636', '#d29a72']), hair: '#151515', style: 'bald', beard: true,
@@ -352,10 +353,4 @@ export function paintHead(ctx, tiles, look, expression) {
   ctx.fillStyle = expression === 'normal' ? mix(look.skin, '#5a1a1a', 0.6) : '#2a0b0b';
   const mw = f.w * (expression === 'normal' ? 0.3 : 0.24);
   ctx.fillRect(cx - mw / 2, f.y + f.h * 0.74, mw, Math.max(2, f.h * 0.045));
-  // a gunner's mask over the lower face
-  if (look.mask && fresh) {
-    ctx.fillStyle = look.mask;
-    ctx.fillRect(f.x - 1, f.y + f.h * 0.58, f.w + 2, f.h * 0.42 + 1);
-    for (const s of sides) ctx.fillRect(s.x + s.w * 0.55, s.y + s.h * 0.58, s.w * 0.45 + 1, s.h * 0.2);
-  }
 }

@@ -5,16 +5,19 @@
    A black goo wells up on your head and runs down over you, part by part,
    and you grow with it - every box and joint of you, so what is standing
    there at the end is really that big, not just drawn so: black and glossy,
-   white eyes, a mouthful of teeth, claws. It has 5000 health and three
+   white eyes, a mouthful of teeth, claws. It has 5000 health and four
    things it does:
 
-     CLAW         in place of PUNCH: a raking swipe that opens three slashes
-     VENOM SURGE  a line of black spikes bursts out of the ground ahead and
-                  throws whoever is standing on it into the air
-     EAT          the tongue lashes out at the nearest box ragdoll, drags it
-                  in, and it is bitten and swallowed whole
+     CLAW          in place of PUNCH: a raking swipe that opens three slashes
+     VENOM SURGE   a line of black spikes bursts out of the ground ahead and
+                   throws whoever is standing on it into the air
+     EAT           the tongue lashes out at the nearest box ragdoll, drags it
+                   in, and it is bitten and swallowed whole
+     VENOM IMPALE  three spikes of venom thrown at three different box
+                   ragdolls; each one that sticks poisons them (fighter.js,
+                   poison): it eats at them, slows them, and spreads black
    ========================================================================== */
-import { Mesh, MeshLambertMaterial, ConeGeometry, BoxGeometry, Vector3, Quaternion } from 'three';
+import { Mesh, MeshLambertMaterial, ConeGeometry, BoxGeometry, Group, Vector3, Quaternion } from 'three';
 import { P, NP, PARTS } from './rig.js';
 import { FACE } from './paint.js';
 import { paintBody } from './appearance.js';
@@ -29,13 +32,14 @@ export const MORPHS = {
       { id: 'claw', name: 'Claw', key: 'PUNCH', text: 'Raking swipes that tear three slashes at a time.' },
       { id: 'surge', name: 'Venom Surge', key: 'SURGE', text: 'A line of black spikes bursts out of the ground ahead of you.' },
       { id: 'eat', name: 'Eat', key: 'EAT', text: 'Your tongue grabs the nearest box ragdoll; you bite, and swallow it.' },
+      { id: 'impale', name: 'Venom Impale', key: 'IMPALE', text: 'Three venom spikes thrown at three different box ragdolls; the venom eats at them, slows them and spreads over them.' },
     ],
   },
 };
 
 /** Seconds the change takes, and how long before each ability can be used again. */
 const CHANGE = 2.6;
-export const COOLDOWN = { surge: 5, eat: 6 };
+export const COOLDOWN = { surge: 5, eat: 6, impale: 6 };
 
 /** How far down the body the goo has to travel to reach each part: the head first, the feet last. */
 const SPREAD = PARTS.map((p) => {
@@ -80,6 +84,13 @@ function goo(ctx, t, blots, full) {
     ctx.arc(t.x + Math.random() * t.w, t.y + Math.random() * t.h, r, 0, Math.PI * 2);
     ctx.fill();
   }
+}
+
+/** A few blots of goo on one part of someone: venom spreading through them. */
+export function stainGoo(f, part, blots) {
+  const ctx = f.paint.ctx;
+  for (const t of f.layout.tiles[part]) goo(ctx, t, blots, false);
+  f.paint.dirty = true;
 }
 
 /** Venom's face: great white eyes slanting up and out, and a mouth full of teeth. */
@@ -148,6 +159,7 @@ export class Morph {
     this.cool = { surge: 0, eat: 0 };
     this.parts = new Float32Array(NP);       // how far the goo has covered each part, 0..1
     this.spikes = [];
+    this.thrown = [];                        // venom spikes in flight
     this.lash = null;
     this.spikeGeo = new ConeGeometry(1, 1, 4);
     this.spikeGeo.translate(0, 0.5, 0);        // standing on its base
@@ -165,6 +177,7 @@ export class Morph {
     for (const k in this.cool) this.cool[k] = Math.max(0, this.cool[k] - dt);
     if (this.growing) this.grow(dt);
     if (this.spikes.length) this.updateSpikes(dt);
+    if (this.thrown.length) this.updateThrown(dt);
     if (this.lash) this.updateLash(dt);
   }
 
@@ -206,7 +219,8 @@ export class Morph {
     const from = f.root.clone().setY(0.6);
     const reach = Math.min(9.5, g.arena.rayWalls(from, fwd, 9.5) - 0.3);
     const hit = new Set();
-    for (let i = 0, d = 1.1 * f.scale; d < reach; i++, d += 0.42) {
+    // from just in front of you, so one standing right there goes up too
+    for (let i = 0, d = 0.75 * f.scale; d < reach; i++, d += 0.42) {
       const at = f.root.clone().addScaledVector(fwd, d).addScaledVector(side, rand(-0.15, 0.15)).setY(0);
       const big = 1 - i * 0.012;
       this.spikes.push({ at, delay: i * 0.028, t: 0, h: rand(1.0, 1.55) * big, r: rand(0.1, 0.15), lean: rand(-0.25, 0.25), mesh: null, hit, fwd, main: true });
@@ -238,7 +252,7 @@ export class Morph {
         s.mesh = m;
         if (s.main) {
           g.emit('spike', s.at);
-          this.impale(s);
+          this.skewer(s);
         }
       }
       // up out of the sand fast, a moment there, then back down
@@ -252,7 +266,7 @@ export class Morph {
   }
 
   /** Whoever is standing where a spike comes up goes up with it. */
-  impale(s) {
+  skewer(s) {
     const f = this.f, g = this.game;
     for (const e of g.fighters) {
       if (e === f || e.removed || !e.alive || s.hit.has(e) || !g.foes(f, e)) continue;
@@ -265,6 +279,101 @@ export class Morph {
         kind: 'blade', striker: null, weapon: null, swing: dir.clone(),
       });
     }
+  }
+
+  /* --------------------------------- impale -------------------------------- */
+
+  /** Three spikes of venom, one each at the three nearest box ragdolls in reach. */
+  impale() {
+    const f = this.f, g = this.game;
+    if (this.growing || this.cool.impale > 0 || !f.canAct()) return false;
+    const foes = g.fighters
+      .filter((e) => e !== f && !e.removed && e.alive && g.foes(f, e))
+      .map((e) => ({ e, d: Math.hypot(e.root.x - f.root.x, e.root.z - f.root.z) }))
+      .filter((x) => x.d < 16)
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 3);
+    if (!foes.length) return false;
+    this.cool.impale = COOLDOWN.impale;
+    f.face = Math.atan2(foes[0].e.root.x - f.root.x, foes[0].e.root.z - f.root.z);
+    f.play(SWING_R, 10, 1.4);
+    foes.forEach(({ e }, i) => {
+      const m = new Mesh(this.spikeGeo, this.spikeMat);
+      m.castShadow = true;
+      m.scale.set(0.07 * f.scale, 0.75 * f.scale, 0.07 * f.scale);
+      m.visible = false;
+      g.scene.add(m);
+      this.thrown.push({ target: e, mesh: m, delay: i * 0.1, t: 0, pos: null, vel: null, side: i % 2 ? -1 : 1 });
+    });
+    g.emit('impale', f);
+    return true;
+  }
+
+  updateThrown(dt) {
+    const f = this.f, g = this.game;
+    for (let i = this.thrown.length - 1; i >= 0; i--) {
+      const s = this.thrown[i];
+      s.t += dt;
+      if (s.t < s.delay) continue;
+      if (!s.pos) {
+        // off the shoulder, one side then the other
+        s.pos = f.chest.toWorld(_v.set(0.22 * s.side, 0.18, 0.1).multiplyScalar(f.scale), new Vector3());
+        s.vel = new Vector3().subVectors(s.target.chest.x, s.pos).normalize().multiplyScalar(24);
+        s.mesh.visible = true;
+        g.emit('spikeThrow', s.pos);
+      }
+      // it flies at its one, turning after them as they move
+      const e = s.target;
+      if (!e.removed && e.alive) {
+        _w.subVectors(e.chest.x, s.pos).normalize().multiplyScalar(24);
+        s.vel.lerp(_w, Math.min(1, dt * 8));
+      }
+      const step = s.vel.length() * dt;
+      _v.copy(s.vel).normalize();
+      const hit = g.archery.cast(s.pos, _v, step + 0.1, f);
+      if (hit.t <= step + 0.1 && (hit.fighter || hit.shield || hit.wall || hit.ground)) {
+        const at = s.pos.clone().addScaledVector(_v, hit.t);
+        this.spikeLands(s, hit, at, _v.clone());
+        this.thrown.splice(i, 1);
+        continue;
+      }
+      s.pos.addScaledVector(_v, step);
+      s.mesh.position.copy(s.pos);
+      // the cone's point leads
+      s.mesh.quaternion.setFromUnitVectors(_w.set(0, 1, 0), _v);
+      if (s.t > 2.5) { g.scene.remove(s.mesh); this.thrown.splice(i, 1); }
+    }
+  }
+
+  /** In: it hurts, it stays, and whoever it went into is poisoned. */
+  spikeLands(s, hit, at, dir) {
+    const f = this.f, g = this.game;
+    g.scene.remove(s.mesh);
+    if (hit.fighter && !hit.shield) {
+      const e = hit.fighter;
+      e.takeHit({
+        part: hit.part, point: at, dir, J: 30, speed: 12, damage: 40 * f.power, attacker: f,
+        kind: 'blade', striker: null, weapon: null, swing: dir.clone(),
+      });
+      if (g.foes(f, e)) e.poison(f, hit.part);
+      g.archery.stickModel(this.spikeModel(), at, dir, e.bodies[hit.part], e, 0.18 * f.scale);
+    } else if (hit.shield) {
+      hit.fighter.blockedHit({ attacker: f, point: at, dir, shield: true, kind: 'arrow', weapon: null });
+    }
+    g.emit('spikeHit', at);
+  }
+
+  /** A venom spike, to leave stuck in someone: point first down +Z, its point at z = 0. */
+  spikeModel() {
+    const L = 0.75 * this.f.scale;
+    const m = new Mesh(this.spikeGeo, this.spikeMat);
+    m.scale.set(0.07 * this.f.scale, L, 0.07 * this.f.scale);
+    m.rotation.x = Math.PI / 2;     // the cone's point, +Y, down +Z
+    m.position.z = -L;              // and the point at the origin
+    m.castShadow = true;
+    const g = new Group();
+    g.add(m);
+    return g;
   }
 
   /* ---------------------------------- eat ---------------------------------- */
@@ -403,6 +512,8 @@ export class Morph {
     this.endLash();
     for (const s of this.spikes) if (s.mesh) g.scene.remove(s.mesh);
     this.spikes.length = 0;
+    for (const s of this.thrown) g.scene.remove(s.mesh);
+    this.thrown.length = 0;
     f.setScale(1);
     // your own skin and face again (the marks the goo covered are gone with it)
     paintBody(f.paint.ctx, f.layout, f.look);

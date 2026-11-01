@@ -9,7 +9,7 @@
      round 1+   brawlers - fists and feet
      round 3+   swordsmen - wooden swords, and from round 6 rusty steel ones
      round 4+   shield bearers
-     round 6+   gunners
+     round 6+   archers - they keep their distance and loose arrows
      every 5th  a champion: big, hard to knock down, hits like a cart -
                 and two fewer of the others that round
 
@@ -28,7 +28,7 @@ import { rand, chance, pick, wrapAngle } from '../core/util.js';
 /** Coins for each kill, and for clearing a round. */
 export function killReward(kind, wave) {
   if (kind === 'champion') return 10 + wave;
-  return 2 + Math.floor(wave / 3) + (kind === 'gunner' ? 1 : 0);
+  return 2 + Math.floor(wave / 3) + (kind === 'archer' ? 1 : 0);
 }
 export function clearReward(wave) { return 5 + wave * 2; }
 
@@ -37,11 +37,11 @@ export function roster(n) {
   const list = [];
   // a champion's round brings fewer of the others: the champion is the fight
   const count = Math.min(2 + n, 15) - (n % 5 === 0 ? 2 : 0);
-  let gunners = 0;
-  const maxGunners = n >= 6 ? 1 + Math.floor((n - 6) / 3) : 0;
+  let archers = 0;
+  const maxArchers = n >= 6 ? 1 + Math.floor((n - 6) / 3) : 0;
   for (let i = 0; i < count; i++) {
     const r = Math.random();
-    if (n >= 6 && gunners < maxGunners && r < 0.2) { list.push({ kind: 'gunner', role: 'gunner', gun: true }); gunners++; continue; }
+    if (n >= 6 && archers < maxArchers && r < 0.2) { list.push({ kind: 'archer', role: 'archer', weapon: 'wooden_bow' }); archers++; continue; }
     if (n >= 4 && r < 0.38) { list.push({ kind: 'shield', role: 'shield', shield: true, weapon: n >= 7 && chance(0.5) ? 'wooden_sword' : null }); continue; }
     if (n >= 3 && r < 0.62) { list.push({ kind: 'swordsman', role: 'swordsman', weapon: n >= 6 && chance(0.55) ? 'rusty_sword' : 'wooden_sword' }); continue; }
     list.push({ kind: 'brawler', role: 'brawler' });
@@ -55,8 +55,8 @@ export function roster(n) {
 /** Health, punch and weight for a kind of enemy in round n. */
 function stats(spec, n) {
   if (spec.boss) return { health: 180 + n * 14, power: 0.75 + n * 0.03, toughness: 0.5 };
-  const base = { brawler: 50, swordsman: 55, shield: 62, gunner: 45 }[spec.kind] || 52;
-  // a sword in a box ragdoll's hand hits for less than one in yours
+  const base = { brawler: 50, swordsman: 55, shield: 62, archer: 45 }[spec.kind] || 52;
+  // a sword (or a bow) in a box ragdoll's hand hits for less than one in yours
   const power = (0.38 + n * 0.04) * (spec.weapon ? 0.6 : 1);
   return { health: base + n * 5, power, toughness: spec.kind === 'shield' ? 0.85 : 1 };
 }
@@ -171,7 +171,6 @@ export class Waves {
     f.spec = spec;
     if (spec.weapon) f.equip('weapon', spec.weapon);
     if (spec.shield) f.equip('offhand', 'wood_shield');
-    if (spec.gun) f.giveGun();
     this.enemies.push(f);
     if (!g.arena.gateOpen(gate.id) && gate.target === 0) g.arena.setGate(gate.id, true);
     this.gateClose[gate.id] = 4;
@@ -212,7 +211,7 @@ export class Waves {
   /** Only a few may close in and swing at once: the nearest, mostly. */
   handOutTurns() {
     const p = this.game.player;
-    const melee = this.enemies.filter((e) => e.alive && e.controller && e.controller.role !== 'gunner');
+    const melee = this.enemies.filter((e) => e.alive && e.controller && e.controller.role !== 'archer');
     if (!p) { for (const e of melee) e.controller.turn = true; return; }
     melee.sort((a, b) => {
       const da = Math.hypot(a.root.x - p.root.x, a.root.z - p.root.z) - (a.controller.turn ? 0.8 : 0);
@@ -221,7 +220,7 @@ export class Waves {
     });
     const n = this.maxTurns();
     melee.forEach((e, i) => { e.controller.turn = i < n; });
-    for (const e of this.enemies) if (e.controller && e.controller.role === 'gunner') e.controller.turn = true;
+    for (const e of this.enemies) if (e.controller && e.controller.role === 'archer') e.controller.turn = true;
   }
 
   /** An enemy fell. */
@@ -230,7 +229,6 @@ export class Waves {
     f.counted = true;
     f.diedAt = this.game.time;
     this.killed++;
-    this.game.guns.dropLaser(f);
     if (!this.fighting) return 0;
     const coins = killReward(f.spec ? f.spec.kind : 'brawler', this.wave);
     this.runKills++;
@@ -254,7 +252,6 @@ export class Waves {
   discard(f) {
     const i = this.enemies.indexOf(f);
     if (i >= 0) this.enemies.splice(i, 1);
-    this.game.guns.dropLaser(f);
     this.game.removeFighter(f);
   }
 
@@ -269,7 +266,7 @@ export class Waves {
   /** Clears the sand of every enemy, living or dead, and forgets the run. */
   reset() {
     const g = this.game;
-    for (const f of this.enemies) { g.guns.dropLaser(f); g.removeFighter(f); }
+    for (const f of this.enemies) g.removeFighter(f);
     this.enemies = [];
     this.queue = [];
     for (const h of [...g.dropped]) g.removeHeld(h);

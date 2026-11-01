@@ -189,6 +189,8 @@ function applyAdmin(changed = null) {
 /** You, in the middle of the sand: as you are kitted out, as the admin panel says, fresh. */
 function spawnYou() {
   const p = app.game.spawnPlayer(app.input, app.profile.gear());
+  // your arrows are the ones in your save
+  p.ammo = { count: () => app.profile.d.arrows, use: () => app.profile.useArrow() };
   applyAdmin();
   p.health = p.maxHealth;
   p.stamina = p.maxStamina;
@@ -445,10 +447,16 @@ function wireGame() {
   g.on('surge', () => g.cam.shake(0.15));
   g.on('spike', (at) => s.spike(at));
   g.on('lash', () => s.lash());
+  g.on('spikeThrow', () => s.lash());
+  g.on('noArrows', (f) => {
+    if (f !== g.player) return;
+    const now = performance.now();
+    if (now - (app.noArrowsAt || 0) > 2500) { app.noArrowsAt = now; app.hud.toast('Out of arrows: you punch. The Stall sells them ten for 5 coins.', 2.6); }
+  });
   g.on('chomp', () => { s.chomp(); g.cam.shake(0.22); });
   g.on('thud', (p, sp) => s.thud(sp, p));
-  g.on('shot', (f, at) => s.shot(at));
-  g.on('ricochet', (at, kind) => s.ricochet(at, kind));
+  g.on('loose', (f, at) => s.twang(at));
+  g.on('thunk', (at, kind) => s.thunk(at, kind));
   g.on('gate', (gate) => {
     const a = gate.angle;
     s.gate(!!gate.player, new Vector3(Math.sin(a) * R, 1.5, Math.cos(a) * R));

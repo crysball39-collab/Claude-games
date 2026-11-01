@@ -1,10 +1,10 @@
 /* =============================================================================
-   The Stall: swords and a shield, a set of wood armour and two trinkets on
-   the counter, and a man who will buy back what you have outgrown for half
-   what he sold it for.
+   The Stall: swords, a bow and arrows for it, a shield, a set of wood armour
+   and trinkets on the counter, and a man who will buy back what you have
+   outgrown for half what he sold it for (not arrows: those you keep).
    ========================================================================== */
 import { $, $$, pick } from '../core/util.js';
-import { ITEMS, SHELVES, SLOT_KIND, RARITY } from '../game/gear.js';
+import { ITEMS, SHELVES, SLOT_KIND, RARITY, ARROWS } from '../game/gear.js';
 import { itemIcon, mysteryIcon } from './icons.js';
 
 /** 25000 as 25,000. */
@@ -16,7 +16,7 @@ export const rarityPill = (T) => (T.rarity ? `<span class="pill rarity r-${T.rar
 const LINES = [
   'Wood for the brave. Steel for the rich.',
   'Bring it back bloody, I don\'t mind. I\'ll still buy it.',
-  'The shield stops bullets. Mostly.',
+  'The shield stops arrows. Mostly.',
   'Half price for anything you\'ve outgrown. Fair\'s fair.',
   'They come out of those tunnels faster every round, you know.',
   'Ten coins for a sword. Fifty if you want it sharp.',
@@ -72,6 +72,7 @@ export class ShopUI {
   }
 
   renderWare(box, p, kind) {
+    if (kind === 'arrows') { this.renderArrows(box, p); return; }
     const T = ITEMS[kind];
     const owned = p.owns(kind);
     const card = document.createElement('article');
@@ -107,6 +108,26 @@ export class ShopUI {
     box.appendChild(card);
   }
 
+  /** Arrows: a bundle at a time, and how many you have. */
+  renderArrows(box, p) {
+    const can = p.infinite || p.coins >= ARROWS.price;
+    const card = document.createElement('article');
+    card.className = 'ware';
+    card.dataset.kind = 'arrows';
+    card.innerHTML = `
+      <div class="pic"><img src="${itemIcon('arrows')}" alt=""></div>
+      <div class="head">
+        <h3 class="name">ARROWS ×${ARROWS.bundle}</h3>
+        <div><span class="pill">For the bow</span> <span class="pill" id="arrow-have">You have ${p.d.arrows}</span></div>
+      </div>
+      <p>Ash shafts, iron heads, goose-feather flights. Each one you loose is gone for good.</p>
+      <div class="buy">
+        <div class="price"><span class="coin-icon"></span>${ARROWS.price}</div>
+        <button class="btn ${can ? 'primary' : ''}" type="button" data-buy="arrows">${can ? `BUY ${ARROWS.bundle}` : `NEED ${ARROWS.price - p.coins} MORE`}</button>
+      </div>`;
+    box.appendChild(card);
+  }
+
   renderSell(p) {
     const box = $('#shop-sell');
     box.innerHTML = '';
@@ -134,9 +155,13 @@ export class ShopUI {
     const res = p.buy(kind);
     if (res.error) { this.sound?.deny(); this.cb.toast?.(res.error); this.render(); return; }
     this.sound?.buy();
-    const T = ITEMS[kind];
-    const where = T.slot === 'accessory' ? 'an accessory slot' : `your ${SLOT_KIND[T.slot].toLowerCase()} slot`;
-    this.cb.toast?.(`${T.name} is in your bag. Open the bag to put it in ${where}.`, 3.6);
+    if (kind === 'arrows') {
+      this.cb.toast?.(`${ARROWS.bundle} more arrows: you have ${res.arrows}.`, 2.6);
+    } else {
+      const T = ITEMS[kind];
+      const where = T.slot === 'accessory' ? 'an accessory slot' : `your ${SLOT_KIND[T.slot].toLowerCase()} slot`;
+      this.cb.toast?.(`${T.name} is in your bag. Open the bag to put it in ${where}.`, 3.6);
+    }
     this.render();
     this.cb.onChange?.('buy', kind);
   }

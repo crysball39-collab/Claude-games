@@ -17,13 +17,15 @@
    held, so it shoves whatever it swings into, and an ordinary falling box
    once it is dropped. Each has its own paint canvas, so blood lands on the
    blade exactly where it touched. A sword sits in the right fist the way
-   OVERGROWTH's did. A shield and a pistol are fitted to the hand by working
+   OVERGROWTH's did. A shield and a bow are fitted to the hand by working
    out, once, where the hand is in the pose that matters - the shield raised
-   to block, the pistol held out to aim - and fixing them there so that in
-   that pose the shield faces straight ahead and the barrel points at the
-   target.
+   to block, the bow held out and drawn - and fixing them there so that in
+   that pose the shield faces straight ahead and the bow stands upright with
+   the arrow pointing at the target. A bow's string comes back with the
+   drawing hand, and an arrow sits on it while it is drawn.
    ========================================================================== */
 import { Vector3, Quaternion, Mesh, MeshLambertMaterial, BoxGeometry, Group, Color } from 'three';
+import { arrowModel } from './arrows.js';
 import { Body } from '../physics/world.js';
 import { packBoxes, buildBoxGeometry, PaintCanvas, FACE } from './paint.js';
 import { P, NP, PARTS, forwardKinematics } from './rig.js';
@@ -142,15 +144,23 @@ export const ITEMS = {
     stats: [['Damage', 10], ['Speed', 8], ['Reach', 10]], marks: 'Cuts, slashes',
   },
 
+  // a bow: PUNCH becomes SHOOT, as long as there are arrows. stats are out of 10
+  wooden_bow: {
+    id: 'wooden_bow', name: 'Wooden Bow', slot: 'weapon', rarity: 'common', price: 10, sell: 5, ranged: true,
+    blurb: 'A bent stave of yew and a gut string. PUNCH becomes SHOOT: an arrow at whoever is nearest in front of you. Arrows are sold ten at a time.',
+    size: [0.036, 0.26, 0.05], arrow: { speed: 30, damage: 16, draw: 0.4 },
+    stats: [['Damage', 3], ['Speed', 5], ['Reach', 10]], marks: 'Arrows',
+  },
+
   wood_shield: {
     id: 'wood_shield', name: 'Wood Shield', slot: 'offhand', price: 10, sell: 5,
-    blurb: 'Oak planks, an iron rim and boss. Hold BLOCK to raise it: it stops fists, blades and bullets that come from the front.',
+    blurb: 'Oak planks, an iron rim and boss. Hold BLOCK to raise it: it stops fists, blades and arrows that come from the front.',
     block: 0.92, size: [0.5, 0.58, 0.045],
-    stats: [['Block', 4], ['Weight', 2]], marks: 'Stops bullets',
+    stats: [['Block', 4], ['Weight', 2]], marks: 'Stops arrows',
   },
 
   // wood armour: each piece takes `guard` off a blow that lands on the wood
-  // (half that off a bullet), and all four together make you harder to knock down.
+  // (half that off an arrow), and all four together make you harder to knock down.
   // `covers` names the parts it is strapped to; outfit.js has the shapes
   wood_helmet: {
     id: 'wood_helmet', name: 'Wooden Helmet', slot: 'helmet', price: 12, sell: 6, set: 'wood',
@@ -177,20 +187,35 @@ export const ITEMS = {
     stats: [['Guard', 2], ['Covers', 2]], marks: 'Shins, feet',
   },
 
-  // accessories: either goes in either accessory slot, and two of a kind add up
+  // accessories: any goes in either accessory slot, and two of a kind add up
   bead_bracelet: {
-    id: 'bead_bracelet', name: 'Bead Bracelet', slot: 'accessory', price: 15, sell: 7,
+    id: 'bead_bracelet', name: 'Bead Bracelet', slot: 'accessory', rarity: 'common', price: 15, sell: 7,
     blurb: 'Carved oak beads on a cord, worn at the wrist. Your stamina comes back a third faster.',
     wind: 0.35,
     stats: [['Stamina', 3]], marks: 'Faster stamina',
   },
   oak_charm: {
-    id: 'oak_charm', name: 'Oak Charm', slot: 'accessory', price: 15, sell: 7,
+    id: 'oak_charm', name: 'Oak Charm', slot: 'accessory', rarity: 'common', price: 15, sell: 7,
     blurb: 'A lucky knot of oak on a cord round your neck. You can take 20 more health of punishment before you fall.',
     health: 20,
     stats: [['Health', 3]], marks: '+20 health',
   },
+  bronze_ring: {
+    id: 'bronze_ring', name: 'Bronze Ring', slot: 'accessory', rarity: 'uncommon', price: 40, sell: 20,
+    blurb: 'A heavy bronze band on your fingers. Everything you land hits harder by a sixth: fists, feet, blades and arrows.',
+    power: 0.15,
+    stats: [['Damage', 3]], marks: '+15% damage',
+  },
+  bronze_watch: {
+    id: 'bronze_watch', name: 'Bronze Watch', slot: 'accessory', rarity: 'uncommon', price: 40, sell: 20,
+    blurb: 'A ticking bronze watch on a leather strap. Your timing sharpens: every punch, kick, swing and draw of the bow comes a sixth quicker.',
+    quick: 0.15,
+    stats: [['Speed', 3]], marks: '15% quicker blows',
+  },
 };
+
+/** Arrows: sold in bundles, and how many you have is kept with your coins. */
+export const ARROWS = { bundle: 10, price: 5 };
 
 /**
  * A sword dropped by someone you put down, or null. A champion always drops
@@ -226,18 +251,20 @@ export function rollDrop(champion, wave, random = Math.random) {
 }
 
 /** Every sword, commonest first. */
-export const SWORDS = Object.values(ITEMS).filter((T) => T.slot === 'weapon').sort((a, b) => RARITY[a.rarity].tier - RARITY[b.rarity].tier).map((T) => T.id);
-/** The order the Stall shows them in, and how it groups them. */
+export const SWORDS = Object.values(ITEMS).filter((T) => T.slot === 'weapon' && !T.ranged).sort((a, b) => RARITY[a.rarity].tier - RARITY[b.rarity].tier).map((T) => T.id);
+const ACCESSORY_KINDS = ['bead_bracelet', 'oak_charm', 'bronze_ring', 'bronze_watch'];
+/** The order the Stall shows them in ('arrows' is a bundle of them), and how it groups them. */
 export const STOCK = [
-  ...SWORDS, 'wood_shield',
+  ...SWORDS, 'wooden_bow', 'arrows', 'wood_shield',
   'wood_helmet', 'wood_chestplate', 'wood_leggings', 'wood_boots',
-  'bead_bracelet', 'oak_charm',
+  ...ACCESSORY_KINDS,
 ];
 export const SHELVES = [
   { name: 'Swords', kinds: SWORDS, note: 'Common to Godly. Box ragdolls drop them too, and a champion always does.' },
+  { name: 'Bows', kinds: ['wooden_bow', 'arrows'], note: `Arrows come ${ARROWS.bundle} to a bundle, ${ARROWS.price} coins a bundle.` },
   { name: 'Shields', kinds: ['wood_shield'] },
   { name: 'Wood armour', kinds: ['wood_helmet', 'wood_chestplate', 'wood_leggings', 'wood_boots'], note: 'Wear all four and you are harder to knock down.' },
-  { name: 'Accessories', kinds: ['bead_bracelet', 'oak_charm'], note: 'Two accessory slots: wear one of each, or two of a kind.' },
+  { name: 'Accessories', kinds: ACCESSORY_KINDS, note: 'Two accessory slots: wear any two, or two of a kind.' },
 ];
 
 /** Equipment slots, in the order the inventory lays them out. */
@@ -246,10 +273,10 @@ export const SLOTS = [
   { id: 'chest', name: 'Chestplate', accepts: 'chest', holds: 'A chestplate goes here.' },
   { id: 'legs', name: 'Leggings', accepts: 'legs', holds: 'Leggings go here.' },
   { id: 'boots', name: 'Boots', accepts: 'boots', holds: 'Boots go here.' },
-  { id: 'weapon', name: 'Weapon', accepts: 'weapon', holds: 'A sword goes here.' },
+  { id: 'weapon', name: 'Weapon', accepts: 'weapon', holds: 'A sword or a bow goes here.' },
   { id: 'offhand', name: 'Offhand', accepts: 'offhand', holds: 'A shield goes here.' },
-  { id: 'acc1', name: 'Accessory', accepts: 'accessory', holds: 'A bracelet or a charm goes here.' },
-  { id: 'acc2', name: 'Accessory', accepts: 'accessory', holds: 'A bracelet or a charm goes here.' },
+  { id: 'acc1', name: 'Accessory', accepts: 'accessory', holds: 'A bracelet, a charm, a ring or a watch goes here.' },
+  { id: 'acc2', name: 'Accessory', accepts: 'accessory', holds: 'A bracelet, a charm, a ring or a watch goes here.' },
 ];
 export const SLOT = Object.fromEntries(SLOTS.map((s) => [s.id, s]));
 /** What each kind of item is called by the slot it goes in. */
@@ -258,8 +285,6 @@ export const SLOT_KIND = { weapon: 'Weapon', offhand: 'Offhand', helmet: 'Helmet
 export const ARMOUR = ['helmet', 'chest', 'legs', 'boots'];
 export const ACCESSORIES = ['acc1', 'acc2'];
 
-/** Not sold anywhere: what the gunners carry. */
-const PISTOL = { id: 'pistol', name: 'Pistol', size: [0.034, 0.05, 0.2] };
 
 /* -------------------------------------------------------------------------- */
 /*                                  fitting                                   */
@@ -297,13 +322,13 @@ function fits() {
   const block = poseWith(SHIELD_BLOCK, UPPER);
   const hand = partIn(block, P.handL);
   const shieldAt = hand.pos.clone().add(new Vector3(-0.07, 0.02, 0.07));
-  // the pistol, held out: barrel straight ahead, sitting on top of the fist
+  // the bow, held out and drawn: upright in the fist, the arrow straight ahead
   const aim = poseWith(AIM, AIM_PARTS);
-  const gunHand = partIn(aim, P.handR);
-  const gunAt = gunHand.pos.clone().add(new Vector3(0, 0.045, 0.02));
+  const bowHand = partIn(aim, P.handR);
+  const bowAt = bowHand.pos.clone().add(new Vector3(0, 0, 0.02));
   FITS = {
     shield: fitTo(block, P.handL, shieldAt, new Quaternion()),
-    pistol: fitTo(aim, P.handR, gunAt, new Quaternion()),
+    bow: fitTo(aim, P.handR, bowAt, new Quaternion()),
   };
   return FITS;
 }
@@ -486,12 +511,16 @@ function paintShield(ctx, tiles) {
   }
 }
 
-function paintPistol(ctx, tiles) {
+/** The bow's grip: dark wood, wrapped in leather where the hand goes. */
+function paintBowGrip(ctx, tiles) {
   for (let fi = 0; fi < 6; fi++) {
     const t = tiles[fi];
-    ctx.fillStyle = fi === FACE.py ? '#3a3d42' : '#26282c';
+    ctx.fillStyle = '#6b4424';
     ctx.fillRect(t.x - 1, t.y - 1, t.w + 2, t.h + 2);
-    if (fi === FACE.pz) { ctx.fillStyle = '#050505'; ctx.fillRect(t.x + t.w * 0.3, t.y + t.h * 0.3, t.w * 0.4, t.h * 0.4); }
+    ctx.fillStyle = '#3a2412';
+    ctx.fillRect(t.x, t.y + t.h * 0.3, t.w, t.h * 0.4);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    for (let k = 0; k < 5; k++) ctx.fillRect(t.x, t.y + t.h * (0.32 + k * 0.08), t.w, 1);
   }
 }
 
@@ -500,11 +529,12 @@ function paintPistol(ctx, tiles) {
 /* -------------------------------------------------------------------------- */
 
 const _v = new Vector3(), _q = new Quaternion();
+const _a = new Vector3(), _b = new Vector3(), _c = new Vector3(), _d = new Vector3(), _y = new Vector3(0, 1, 0);
 
 export class Held {
-  /** kind: an ITEMS id, or 'pistol'. display: just the model, for hanging on a wall. */
+  /** kind: an ITEMS id. display: just the model, for hanging on a wall. */
   constructor(game, kind, display = false) {
-    const T = ITEMS[kind] || PISTOL;
+    const T = ITEMS[kind];
     this.game = game;
     this.kind = kind;
     this.type = T;
@@ -512,8 +542,8 @@ export class Held {
     this.removed = false;
     this.holder = null;
     this.isShield = kind === 'wood_shield';
-    this.isGun = kind === 'pistol';
-    this.isSword = !this.isShield && !this.isGun;
+    this.isBow = !!T.ranged;
+    this.isSword = !this.isShield && !this.isBow;
     this.hand = this.isShield ? P.handL : P.handR;
 
     this.layout = packBoxes([{ size: this.size, density: this.isShield ? 140 : 240 }], 256);
@@ -523,7 +553,7 @@ export class Held {
     else if (kind === 'rusty_sword') paintRustySword(this.paint.ctx, tiles, this.size, T.grip);
     else if (T.look) paintBlade(this.paint.ctx, tiles, this.size, T.grip, T.look, kind.length * 7);
     else if (this.isShield) paintShield(this.paint.ctx, tiles);
-    else paintPistol(this.paint.ctx, tiles);
+    else paintBowGrip(this.paint.ctx, tiles);
     this.paint.dirty = true;
 
     const geo = buildBoxGeometry([{ size: this.size }], this.layout);
@@ -544,12 +574,12 @@ export class Held {
 
     this.body = new Body({
       half: new Vector3(this.size.x / 2, this.size.y / 2, this.size.z / 2),
-      mass: this.isShield ? 3 : this.isGun ? 1 : 1.2, friction: 0.5, restitution: 0.1,
+      mass: this.isShield ? 3 : this.isBow ? 0.8 : 1.2, friction: 0.5, restitution: 0.1,
     });
     this.body.owner = this;
     this.body.angDamp = 0.3;
-    // a pistol is too small to be worth colliding with anything
-    if (this.isGun) this.body.ghost = true;
+    // a bow in the hand goes through people rather than shoving them about
+    if (this.isBow) this.body.ghost = true;
     game.world.add(this.body);
     this.prevX = new Vector3();
     this.prevQ = new Quaternion();
@@ -561,7 +591,7 @@ export class Held {
       this.gripQ = SWORD_Q;
       this.range = swordRange(this);
     } else {
-      const f = fits()[this.isShield ? 'shield' : 'pistol'];
+      const f = fits()[this.isShield ? 'shield' : 'bow'];
       this.gripPos = f.pos;
       this.gripQ = f.quat;
     }
@@ -594,11 +624,35 @@ export class Held {
       add([0.13, 0.13, 0.04], [0, 0, this.size.z / 2 + 0.018], '#6d7175');
       add([0.06, 0.06, 0.02], [0, 0, this.size.z / 2 + 0.045], '#8d9194');
     } else {
-      // grip below the slide, and the front sight
-      const grip = add([0.03, 0.1, 0.045], [0, -0.06, -0.06], '#1b1c1f');
-      grip.rotation.x = -14 * D;
-      add([0.008, 0.012, 0.01], [0, 0.031, this.size.z / 2 - 0.015], '#0c0c0c');
+      // the limbs, bending back toward the archer, and their tips
+      for (const s of [1, -1]) {
+        const limb = add([0.026, 0.42, 0.03], [0, s * 0.33, -0.035], '#a0703a');
+        limb.rotation.x = s * 0.22;
+        add([0.03, 0.05, 0.034], [0, s * 0.535, -0.085], '#5a3a1c');
+      }
+      // the string, from tip to tip by way of the nock, and an arrow on it while drawn
+      const cord = new MeshLambertMaterial({ color: '#e8dfc8' });
+      const unit = new BoxGeometry(1, 1, 1);
+      this.strings = [new Mesh(unit, cord), new Mesh(unit, cord)];
+      this.mesh.add(...this.strings);
+      this.nocked = arrowModel(this.game.archery.mats);
+      this.nocked.visible = false;
+      this.mesh.add(this.nocked);
+      this.drawString(0);
     }
+  }
+
+  /** The string pulled back `k` of the way (0 resting, 1 at full draw), and the arrow on it. */
+  drawString(k, arrow = false) {
+    const top = _a.set(0, 0.555, -0.09), bot = _b.set(0, -0.555, -0.09), nock = _c.set(0, 0, -0.09 - 0.42 * k);
+    for (const [m, a] of [[this.strings[0], top], [this.strings[1], bot]]) {
+      m.position.addVectors(a, nock).multiplyScalar(0.5);
+      const d = _d.subVectors(nock, a);
+      m.scale.set(0.005, d.length(), 0.005);
+      m.quaternion.setFromUnitVectors(_y, d.normalize());
+    }
+    this.nocked.visible = arrow;
+    this.nocked.position.set(0, 0.01, nock.z + 0.72);
   }
 
   beginStep() {
@@ -633,7 +687,7 @@ export class Held {
   drop() {
     if (!this.holder) return;
     this.holder = null;
-    this.body.ghost = this.isGun;
+    this.body.ghost = false;
     this.body.setKinematic(false);
     // let go of, not thrown
     const b = this.body;
@@ -642,10 +696,10 @@ export class Held {
     if (w > 10) b.w.multiplyScalar(10 / w);
   }
 
-  /** The muzzle of a pistol, and the way it points. */
+  /** Where an arrow leaves the bow, and the way the bow points. */
   muzzle(outPos, outDir) {
     outDir.set(0, 0, 1).applyQuaternion(this.body.q);
-    outPos.set(0, 0.012, this.size.z / 2 + 0.01).applyQuaternion(this.body.q).add(this.body.x);
+    outPos.set(0, 0.02, 0.05).applyQuaternion(this.body.q).add(this.body.x);
   }
 
   /** Paints blood at a world point on this. */
@@ -657,6 +711,12 @@ export class Held {
   sync(alpha) {
     this.mesh.position.lerpVectors(this.prevX, this.body.x, alpha);
     this.mesh.quaternion.slerpQuaternions(this.prevQ, this.body.q, alpha);
+    if (this.isBow) {
+      // drawn as far as the arm is up to aim; an arrow on it if there is one to loose
+      const h = this.holder;
+      const k = h ? h.aimW : 0;
+      this.drawString(k, !!h && k > 0.3 && h.hasArrow());
+    }
   }
 
   remove() {

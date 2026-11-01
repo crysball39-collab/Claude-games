@@ -39,7 +39,7 @@ function reach(clip, t, part) {
 export const FIST_RANGE = reach(JAB_L, 0.17, P.handL) + 0.1;
 export const KICK_RANGE = reach(KICK, 0.23, P.footR) + 0.05;
 
-const _to = new Vector3(), _s = new Vector3(), _aim = new Vector3(), _at = new Vector3();
+const _to = new Vector3(), _s = new Vector3();
 
 /* -------------------------------------------------------------------------- */
 /*                                   enemies                                  */
@@ -49,7 +49,7 @@ const ROLES = {
   brawler: { kick: 0.2, block: 0.22, combo: 0.35, aggr: 1 },
   swordsman: { kick: 0.12, block: 0.18, combo: 0.25, aggr: 0.95 },
   shield: { kick: 0.2, block: 0.7, combo: 0.2, aggr: 0.8 },
-  gunner: { kick: 0.35, block: 0.1, combo: 0.2, aggr: 0.8 },
+  archer: { kick: 0.35, block: 0.1, combo: 0.2, aggr: 0.8 },
   champion: { kick: 0.3, block: 0.35, combo: 0.45, aggr: 1.15 },
   red: { kick: 0.25, block: 0.2, combo: 0.45, aggr: 1 },
   blue: { kick: 0.25, block: 0.2, combo: 0.45, aggr: 1 },
@@ -63,7 +63,7 @@ export class Brain {
     this.role = role;
     this.R = ROLES[role] || ROLES.brawler;
     this.skill = skill;
-    this.gunner = role === 'gunner';
+    this.archer = role === 'archer';
     this.target = null;
     this.thinkT = rand(0, 0.3);
     this.cool = rand(1.0, 1.8);
@@ -81,15 +81,15 @@ export class Brain {
     this.tauntT = rand(2, 5);
     this.headAim = rand(0.35, 0.75);
     this.turn = false;                     // may it close in and attack (the director says)
-    // gunners: a cycle of moving, lining up, firing and cooling off
-    this.gun = { state: 'move', t: rand(1.2, 2.6), shots: 0 };
+    // archers: a cycle of keeping their distance, drawing, loosing and cooling off
+    this.bow = { state: 'move', t: rand(1.2, 2.6), shots: 0 };
   }
 
   onHit(attacker) {
     if (attacker && this.game.foes(this.f, attacker)) this.target = attacker;
     if (this.f.health < this.f.maxHealth * 0.3 && this.nerve < 0.45 && chance(0.35)) this.retreatT = rand(1, 2);
-    // hit while lining up a shot: start again
-    if (this.gunner && this.gun.state === 'aim') { this.gun.state = 'cool'; this.gun.t = rand(0.5, 1); }
+    // hit while drawing: the shot is spoiled, start again
+    if (this.archer && this.bow.state === 'aim') { this.bow.state = 'cool'; this.bow.t = rand(0.5, 1); }
   }
 
   recovered() {
@@ -144,7 +144,8 @@ export class Brain {
     h.face = Math.atan2(to.x, to.z);
     h.combat = d < 6;
 
-    if (this.gunner && d > 2.6) { this.shoot(dt, t, to, d); this.avoid(); return; }
+    if (this.archer && d > 2.6) { this.shoot(dt, t, to, d); this.avoid(); return; }
+    if (this.archer) { h.wantAim = false; this.bow.state = 'move'; }
 
     // the target is down: wait, and maybe show off
     if (!t.upright || t.upTime < 0.45) {
@@ -179,7 +180,7 @@ export class Brain {
     } else if (!may) {
       // wait your turn on the ring around the target
       this.slot += this.slotDrift * dt;
-      const ring = 2.9 + (this.role === 'gunner' ? 1.5 : 0);
+      const ring = 2.9 + (this.role === 'archer' ? 1.5 : 0);
       const sx = t.root.x + Math.sin(this.slot) * ring, sz = t.root.z + Math.cos(this.slot) * ring;
       _s.set(sx - h.root.x, 0, sz - h.root.z);
       const sd = _s.length();
@@ -242,8 +243,8 @@ export class Brain {
     const shoulder = h.chest.x.y + 0.06;
     let aim = Math.atan2(aimAt - shoulder, Math.max(0.3, d)) * 180 / Math.PI + 4;
     aim = clamp(aim, -30, 34);
-    // a gunner keeps the pistol hand back and jabs with the left
-    const clip = this.gunner || this.side > 0 ? JAB_L : JAB_R;
+    // an archer keeps the bow hand back and jabs with the left
+    const clip = this.archer || this.side > 0 ? JAB_L : JAB_R;
     this.side = -this.side;
     this.strike(t, clip, aim);
     h.vel.addScaledVector(to, 1.3);
@@ -262,13 +263,13 @@ export class Brain {
     t.swungAt = this.game.time;
   }
 
-  /** The gunner's cycle: keep the range, line it up, fire, cool off. */
+  /** The archer's cycle: keep the range, draw, loose, cool off. */
   shoot(dt, t, to, d) {
-    const h = this.f, g = this.game, s = this.gun;
+    const h = this.f, s = this.bow;
     h.wantBlock = false;
     s.t -= dt;
     if (s.state === 'move' || s.state === 'cool') {
-      g.guns.laser(h, false);
+      h.wantAim = false;
       if (d < 5.5) h.move.copy(to).multiplyScalar(-2.2);
       else if (d > 9.5) h.move.copy(to).multiplyScalar(2.4);
       else {
@@ -278,30 +279,24 @@ export class Brain {
       if (s.t <= 0 && h.canAct() && t.upright) {
         s.state = 'aim';
         s.t = 1.15 - this.skill * 0.35;
-        s.shots = 1 + (chance(0.3 + this.skill * 0.4) ? 1 : 0) + (chance(this.skill * 0.4) ? 1 : 0);
+        s.shots = 1 + (chance(this.skill * 0.5) ? 1 : 0);
       }
       return;
     }
-    // aiming and firing: stand still, gun out
+    // drawing and loosing: stand still, bow up
     h.wantAim = true;
     h.combat = true;
-    if (!t.upright) { s.state = 'cool'; s.t = rand(0.6, 1.2); g.guns.laser(h, false); return; }
-    g.guns.laser(h, s.state === 'aim' && h.aimW > 0.6);
-    if (s.state === 'aim') {
-      if (s.t <= 0 && h.aimW > 0.85) { s.state = 'fire'; s.t = 0; }
-      return;
-    }
-    if (s.t <= 0) {
-      // at the chest, a little off, less so as the waves go on
-      _at.copy(t.chest.x);
-      g.guns.fire(h, g.guns.aim(h, _at, 0.06 - this.skill * 0.03, _aim), 9 * h.power);
-      s.shots--;
-      s.t = 0.32;
-      if (s.shots <= 0) { s.state = 'cool'; s.t = rand(1.6, 2.8) - this.skill * 0.6; g.guns.laser(h, false); }
-    }
+    if (!t.upright) { s.state = 'cool'; s.t = rand(0.6, 1.2); return; }
+    if (s.t > 0 || h.aimW < 0.85) return;
+    // at the chest, a little off, less so as the waves go on
+    h.shoot(t.chest.x, 0.05 - this.skill * 0.025);
+    s.shots--;
+    if (s.shots > 0) { s.t = 0.55; return; }
+    s.state = 'cool';
+    s.t = rand(1.6, 2.8) - this.skill * 0.6;
+    h.wantAim = false;
   }
 
-  /** Don't walk into your friends. */
   avoid() {
     const h = this.f, g = this.game;
     for (const o of g.fighters) {

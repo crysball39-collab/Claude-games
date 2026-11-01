@@ -91,7 +91,7 @@ export class Blood {
    *   fist, kick, impact  a bruise on skin, a scuff on cloth; blood from the face, or once someone is worn down
    *   wood                the same, harder, and now and then a split in the skin
    *   blade               a cut, or a slash along the way the blade was travelling, torn cloth, a lot of blood
-   *   bullet              a hole where it went in and, through a limb or the body, a bigger one where it came out
+   *   arrow               a puncture where it went in, the arrow left standing in it, and a wound that keeps bleeding
    *   claw                three slashes side by side, along the rake
    */
   onHit(victim, hit) {
@@ -108,37 +108,29 @@ export class Blood {
     const inv = _qInv.copy(body.q).invert();
     const down = _down.set(0, -1, 0).applyQuaternion(inv).clone();
     const kind = hit.kind;
-    const marks = victim.marks || (victim.marks = { bruise: 0, cut: 0, slash: 0, bullet: 0 });
+    const marks = victim.marks || (victim.marks = { bruise: 0, cut: 0, slash: 0, arrow: 0 });
 
     // on armour the wood takes the mark, and little blood gets out from under it
     if (hit.armour) {
       const out = victim.outfit;
       const dirL = _d.copy(hit.swing || hit.dir).applyQuaternion(inv);
-      if (kind === 'bullet') out.paintOn(hit.armour, local, 0.009, { kind: 'pit' });
+      if (kind === 'arrow') out.paintOn(hit.armour, local, 0.009, { kind: 'pit' });
       else if (kind === 'blade') out.paintOn(hit.armour, local, 0.02, { kind: 'gouge', length: 0.05 + Math.min(0.1, hit.speed * 0.008), dir: dirL });
       else out.paintOn(hit.armour, local, 0.028 + hit.speed * 0.004, { kind: 'dent', strength: clamp(hit.damage / 10, 0.35, 1) });
       marks.armour = (marks.armour || 0) + 1;
-      if (kind === 'bullet' || (kind === 'blade' && hit.speed > 6 && chance(0.4))) {
+      if (kind === 'arrow' || (kind === 'blade' && hit.speed > 6 && chance(0.4))) {
         this.spray(hit.point, hit.dir, 5, 1.2, 0.6, 0.01, victim, body.v);
       }
       return;
     }
 
-    if (kind === 'bullet') {
-      victim.paint.splat(local, def.size, tiles, 0.0085, { kind: 'bullet', cloth, skin, down });
-      marks.bullet++;
-      // through and through, unless it was the thick of the head or the chest
-      const thin = !(part === P.head || part === P.upperTorso || part === P.middleTorso);
-      if (thin || chance(0.35)) {
-        const dirL = _d.copy(hit.dir).applyQuaternion(inv);
-        const exit = exitPoint(local, dirL, def.half);
-        if (exit) victim.paint.splat(exit, def.size, tiles, 0.014, { kind: 'exit', cloth, skin, down });
-        const worldExit = exit ? body.toWorld(_v.copy(exit).multiplyScalar(victim.scale), _v).clone() : hit.point;
-        this.spray(worldExit, hit.dir, 14, 3.2, 0.35, 0.012, victim, body.v);
-      }
+    if (kind === 'arrow') {
+      // the arrow stays in (arrows.js): a puncture round it, and it bleeds
+      victim.paint.splat(local, def.size, tiles, 0.007, { kind: 'puncture', cloth, skin, down });
+      marks.arrow++;
       const worldN = _w.copy(n).applyQuaternion(body.q);
-      this.spray(hit.point, worldN, 6, 1.4, 0.5, 0.01, victim, body.v);
-      this.addWound(victim, part, local, n, 6, 22);
+      this.spray(hit.point, worldN, 10, 1.6, 0.5, 0.011, victim, body.v);
+      this.addWound(victim, part, local, n, 5, 18);
       return;
     }
 
@@ -391,18 +383,6 @@ const _qInv = new Quaternion();
 const _down = new Vector3();
 
 /** Where a straight line from a point on a box, going along dir (both in the box's frame), leaves it. */
-function exitPoint(p, dir, half) {
-  let t = Infinity;
-  for (const k of ['x', 'y', 'z']) {
-    const d = dir[k];
-    if (Math.abs(d) < 1e-6) continue;
-    const tt = ((d > 0 ? half[k] : -half[k]) - p[k]) / d;
-    if (tt > 1e-4 && tt < t) t = tt;
-  }
-  if (!isFinite(t)) return null;
-  return new Vector3(p.x + dir.x * t, p.y + dir.y * t, p.z + dir.z * t);
-}
-
 /** The face of a box a local point is closest to, as a unit normal. */
 function outward(local, half) {
   const ax = Math.abs(local.x) / half.x, ay = Math.abs(local.y) / half.y, az = Math.abs(local.z) / half.z;

@@ -20,8 +20,8 @@
 
    Damage only happens through contact: a fist, a foot or a blade has to
    actually overlap a body part (or the face of a raised shield, which stops
-   it), and a body part has to actually hit something hard. Bullets are rays,
-   tested against the same boxes.
+   it), and a body part has to actually hit something hard. Arrows fly, and
+   are tested against the same boxes all the way.
 
    The rig, the physics of a person and the stumble / ragdoll / get-up
    machinery come from OVERGROWTH; Barrage adds health and stamina, kicks,
@@ -41,7 +41,7 @@ import {
 import { packBoxes, buildBoxGeometry, PaintCanvas } from './paint.js';
 import { makeLook, paintBody, paintHead } from './appearance.js';
 import { Outfit } from './outfit.js';
-import { Morph } from './morph.js';
+import { Morph, stainGoo } from './morph.js';
 import { ITEMS, ACCESSORIES } from './gear.js';
 import { clamp, rand, smooth, turnToward, wrapAngle, approach } from '../core/util.js';
 
@@ -189,10 +189,13 @@ export class Fighter {
 
     this.weapon = null;             // a sword in the right hand
     this.shield = null;             // a shield on the left
-    this.gun = null;                // a pistol in the right hand
     this.outfit = new Outfit(this); // armour and accessories
     this.fullSet = false;           // all four pieces of one set: harder to knock down
     this.charmHealth = 0;           // health the charms add
+    this.ringPower = 1;             // what bronze rings add to every blow
+    this.quick = 1;                 // how much quicker bronze watches make your blows
+    this.venom = null;              // Venom's poison in you: { t, dur, dps, by, parts }
+    this.ammo = null;               // arrows for a bow: { count(), use() }, or null for as many as wanted
     this.speedMul = 1;              // how fast you move, against the usual (the admin panel)
     this.morph = null;              // turned into something else (morph.js)
     this.invulnerable = false;
@@ -239,6 +242,7 @@ export class Fighter {
   update(dt) {
     if (this.removed) return;
     if (this.morph) this.morph.update(dt);
+    if (this.venom) this.poisoned(dt);
     this.time += dt;
     this.sinceHit += dt;
     this.sinceSpend += dt;
@@ -261,7 +265,6 @@ export class Fighter {
     }
     if (this.weapon) this.weapon.follow(dt);
     if (this.shield) this.shield.follow(dt);
-    if (this.gun) this.gun.follow(dt);
   }
 
   /** After physics: things that read where the bodies ended up. */
@@ -294,8 +297,8 @@ export class Fighter {
     this.crouch += ((this.wantCrouch && !this.air ? 1 : 0) - this.crouch) * approach(10, dt);
     this.aimW += ((this.wantAim && !acting ? 1 : 0) - this.aimW) * approach(10, dt);
 
-    // locomotion: slower crouched or behind a guard, and no steering in the air
-    const slow = Math.max(0.35, 1 - 0.5 * this.crouch - 0.45 * this.block);
+    // locomotion: slower crouched or behind a guard (or poisoned), and no steering in the air
+    const slow = Math.max(0.35, 1 - 0.5 * this.crouch - 0.45 * this.block) * (this.venom ? 0.5 : 1);
     const k = approach(this.air ? 1.2 : 9, dt);
     this.vel.x += (this.move.x * slow - this.vel.x) * k;
     this.vel.z += (this.move.z * slow - this.vel.z) * k;
@@ -350,9 +353,9 @@ export class Fighter {
     const still = clamp(1 - speed / 0.6, 0, 1);
     if (this.guard > 0.01) {
       blendParts(pose, STANCE, this.guard * still * (1 - this.crouch), LEGS);
-      blendParts(pose, this.weapon ? HOLD : GUARD, this.guard, UPPER);
+      blendParts(pose, this.weapon && this.weapon.isSword ? HOLD : GUARD, this.guard, UPPER);
       pose.e[P.pelvis * 3 + 1] += STANCE.e[P.pelvis * 3 + 1] * this.guard * still;
-    } else if (this.weapon) {
+    } else if (this.weapon && this.weapon.isSword) {
       blendParts(pose, HOLD, 0.6, ARMS);
     }
     if (this.shield) blendParts(pose, SHIELD_READY, 0.85, SHIELD_PARTS);
@@ -434,6 +437,8 @@ export class Fighter {
 
   /** Starts a clip. aim: extra degrees to raise the striking arm. rate: playback speed. */
   play(clip, aim = 0, rate = 1) {
+    // a bronze watch: every blow a little quicker
+    if (clip.active) rate *= this.quick;
     const ghosts = [];
     if (clip.active) {
       // what strikes passes through people: the hit is judged by contact, not shoved
@@ -542,7 +547,7 @@ export class Fighter {
           J = B.J * sp;
           damage = (B.base + B.per * sp) * VITAL[i];
         }
-        damage *= this.power * rand(0.85, 1.15);
+        damage *= this.power * this.ringPower * rand(0.85, 1.15);
         a.hits.add(v);
         a.done = true;
         a.back = true;
@@ -566,7 +571,7 @@ export class Fighter {
   /** A blow stopped by a raised shield: no harm, a shove, and some stamina. */
   blockedHit(h) {
     this.sinceHit = 0;
-    const cost = h.kind === 'bullet' ? 6 : h.kind === 'kick' ? 12 : h.weapon ? 10 : 6;
+    const cost = h.kind === 'arrow' ? 6 : h.kind === 'kick' ? 12 : h.weapon ? 10 : 6;
     this.stamina = Math.max(0, this.stamina - cost);
     this.sinceSpend = 0;
     const local = _v1.copy(h.dir).applyAxisAngle(UP, -this.heading);
@@ -597,17 +602,17 @@ export class Fighter {
     // a guard up, facing the blow: the arms take it
     if (h.kind !== 'impact' && this.blocking && this.facing(h.dir)) {
       h.blocked = true;
-      const bullet = h.kind === 'bullet';
-      h.damage *= bullet ? 0.55 : 0.2;
-      h.J *= bullet ? 0.55 : 0.25;
+      const arrow = h.kind === 'arrow';
+      h.damage *= arrow ? 0.55 : 0.2;
+      h.J *= arrow ? 0.55 : 0.25;
       this.stamina = Math.max(0, this.stamina - (4 + h.damage * 0.4));
       this.sinceSpend = 0;
       this.game.emit('blocked', this, h);
     }
-    // landing on armour: the wood takes a share (less of a bullet), and the mark
+    // landing on armour: the wood takes a share (less of an arrow), and the mark
     const worn = h.kind !== 'impact' && this.outfit.covering(h.part, h.point);
     if (worn) {
-      const k = worn.guard * (h.kind === 'bullet' ? 0.5 : 1);
+      const k = worn.guard * (h.kind === 'arrow' ? 0.5 : 1);
       h.damage *= 1 - k;
       h.J *= 1 - k * 0.4;
       h.armour = worn;
@@ -619,7 +624,7 @@ export class Fighter {
     this.game.blood.onHit(this, h);
     this.game.onHit(this, h);
     if (this.controller && this.controller.onHit) this.controller.onHit(h.attacker, h);
-    if (this.health <= 0 && this.alive) this.die(h.kind === 'bullet' ? 'shot' : 'hit');
+    if (this.health <= 0 && this.alive) this.die(h.kind === 'arrow' ? 'shot' : 'hit');
     else if (this.health < this.maxHealth * 0.35) this.paintFace('hurt');
 
     const knock = h.J * BALANCE_HIT[h.part];
@@ -1077,10 +1082,6 @@ export class Fighter {
     this[field] = kind ? this.game.addHeld(kind).attach(this) : null;
   }
 
-  giveGun() {
-    this.gun = this.game.addHeld('pistol').attach(this);
-  }
-
   /**
    * Puts on armour and accessories: { helmet, chest, legs, boots, acc1, acc2 },
    * item ids or null. What they do takes effect at once; health is never
@@ -1090,20 +1091,71 @@ export class Fighter {
     this.outfit.set(gear);
     // under a morph's goo, the armour stays out of sight
     if (this.morph && this.outfit.mesh) this.outfit.mesh.visible = false;
-    let health = 0, wind = 1;
+    let health = 0, wind = 1, power = 1, quick = 1;
     for (const s of ACCESSORIES) {
       const T = ITEMS[gear[s]];
       if (!T) continue;
       health += T.health || 0;
       wind += T.wind || 0;
+      power += T.power || 0;
+      quick += T.quick || 0;
     }
     this.charmHealth = health;
     this.refreshMax();
     this.wind = wind;
+    this.ringPower = power;
+    this.quick = quick;
     // a whole set: harder to knock down
     const full = Object.values(this.outfit.sets()).some((n) => n >= 4);
     this.toughness = this.baseToughness * (full ? 0.85 : 1);
     this.fullSet = full;
+  }
+
+  /**
+   * Venom in the blood (from Venom Impale): it eats at you for a while, slows
+   * you down, and the black spreads over you from where the spike went in.
+   */
+  poison(by, part, dur = 6, dps = 9) {
+    if (!this.alive || this.invulnerable) return;
+    if (this.venom) { this.venom.t = 0; this.venom.by = by; return; }
+    this.venom = { t: 0, dur, dps, by, parts: [part], spread: 0 };
+    stainGoo(this, part, 6);
+    this.game.emit('poisoned', this);
+  }
+
+  poisoned(dt) {
+    const v = this.venom;
+    v.t += dt;
+    if (!this.alive || v.t >= v.dur) { this.venom = null; return; }
+    // the black creeps outward, a part at a time
+    v.spread += dt;
+    if (v.spread > 0.35) {
+      v.spread = 0;
+      const from = v.parts[(Math.random() * v.parts.length) | 0];
+      const next = PARTS.filter((p) => (p.parent === from || PARTS[from].parent === p.index) && !v.parts.includes(p.index));
+      if (next.length) v.parts.push(next[(Math.random() * next.length) | 0].index);
+      stainGoo(this, v.parts[v.parts.length - 1], 3);
+    }
+    if (this.invulnerable) return;
+    this.health -= v.dps * dt;
+    if (v.by) this.lastAttacker = v.by;
+    if (this.health <= 0) this.die('venom');
+  }
+
+  /** An arrow to put on the string? */
+  hasArrow() { return !this.ammo || this.ammo.count() > 0; }
+
+  /** Looses an arrow from the bow in hand at `at` (a point), `spread` off true. */
+  shoot(at, spread = 0) {
+    const bow = this.weapon;
+    if (!bow || !bow.isBow || !this.hasArrow()) return false;
+    const A = bow.type.arrow;
+    const from = new Vector3(), dir = new Vector3();
+    bow.muzzle(from, dir);
+    if (at) this.game.archery.aim(from, at, A.speed, spread, dir);
+    if (this.ammo) this.ammo.use();
+    this.game.archery.loose(this, from, dir, A.speed, A.damage * this.power * this.ringPower);
+    return true;
   }
 
   /** The most health you can have: as built (or as the admin panel sets it) and the charms - or a morph's own. */
@@ -1121,7 +1173,7 @@ export class Fighter {
   }
 
   dropAll() {
-    for (const f of ['weapon', 'shield', 'gun']) {
+    for (const f of ['weapon', 'shield']) {
       const h = this[f];
       if (!h) continue;
       h.drop();
@@ -1154,9 +1206,8 @@ export class Fighter {
   remove() {
     if (this.removed) return;
     this.removed = true;
-    this.game.guns.dropLaser(this);
     if (this.action) this.endAction();
-    for (const f of ['weapon', 'shield', 'gun']) {
+    for (const f of ['weapon', 'shield']) {
       if (this[f]) { this.game.removeHeld(this[f]); this[f] = null; }
     }
     for (const j of this.joints) this.game.world.removeJoint(j);

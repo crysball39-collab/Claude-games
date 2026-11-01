@@ -111,7 +111,7 @@ export class Sound {
 
   /* --------------------------------- combat -------------------------------- */
 
-  /** A blow landing. kind: fist | kick | wood | blade | claw | bullet | impact. */
+  /** A blow landing. kind: fist | kick | wood | blade | claw | arrow | impact. */
   hit(kind, speed, p, blocked = false) {
     const v = this.level(p);
     if (!v) return;
@@ -130,7 +130,7 @@ export class Sound {
       this.burst({ dur: 0.07, gain: 0.6 * k, type: 'bandpass', freq: 1100, q: 2 });
       this.tone({ dur: 0.12, gain: 0.55 * k, from: 210, to: 90, type: 'triangle' });
       this.tone({ dur: 0.14, gain: 0.45 * k, from: 120, to: 50 });
-    } else if (kind === 'bullet') {
+    } else if (kind === 'arrow') {
       this.burst({ dur: 0.09, gain: 0.6 * k, type: 'lowpass', freq: 900, q: 1 });
       this.tone({ dur: 0.09, gain: 0.5 * k, from: 160, to: 60 });
     } else if (kind === 'kick') {
@@ -189,21 +189,23 @@ export class Sound {
     this.burst({ dur: 0.14, gain: 0.35 * k, type: 'lowpass', freq: 500, q: 0.7 });
   }
 
-  /** A pistol: the crack, the boom, the slap off the walls. */
-  shot(p) {
+  /** A bow loosed: the string's twang, and the arrow away. */
+  twang(p) {
     const v = this.level(p, 10);
     if (!v) return;
-    this.burst({ dur: 0.05, gain: 0.9 * v, type: 'highpass', freq: 1800, q: 0.6 });
-    this.burst({ dur: 0.22, gain: 0.7 * v, type: 'lowpass', freq: 1400, q: 0.7, sweep: 0.3 });
-    this.tone({ dur: 0.18, gain: 0.8 * v, from: 140, to: 40 });
-    this.burst({ at: 0.09, dur: 0.3, gain: 0.18 * v, type: 'bandpass', freq: 800, q: 0.8 });
+    this.tone({ dur: 0.16, gain: 0.35 * v, from: 196, to: 180, type: 'triangle' });
+    this.tone({ dur: 0.1, gain: 0.18 * v, from: 392, to: 360, type: 'triangle' });
+    this.burst({ at: 0.02, dur: 0.22, gain: 0.25 * v, type: 'bandpass', freq: 1400, q: 1.5, sweep: 2 });
   }
 
-  ricochet(p, kind) {
+  /** An arrow going into stone, wood or sand. */
+  thunk(p, kind) {
     const v = this.level(p);
     if (!v) return;
-    if (kind === 'stone') this.tone({ dur: 0.22, gain: 0.18 * v, from: 3200, to: 1400, type: 'triangle' });
-    else if (kind === 'wood') this.block(true, p);
+    if (kind === 'stone') {
+      this.burst({ dur: 0.05, gain: 0.35 * v, type: 'bandpass', freq: 2500, q: 2 });
+      this.tone({ dur: 0.08, gain: 0.12 * v, from: 900, to: 600, type: 'triangle' });
+    } else if (kind === 'wood') this.block(true, p);
     else this.burst({ dur: 0.12, gain: 0.3 * v, type: 'lowpass', freq: 700, q: 0.6 });
   }
 

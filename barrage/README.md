@@ -3,7 +3,7 @@
 A 3D arena brawler for phones that runs in a browser. You start in the middle of
 the sand, the gates open, and box ragdolls come out to fight you. Every body is
 made of boxes held together by real joints: they stumble, go down as ragdolls,
-get back up, and carry every bruise, cut, slash and bullet hole you give them.
+get back up, and carry every bruise, cut, slash and arrow wound you give them.
 Clear a wave and the south doors open onto the plaza, where the Stall sells
 gear for the coins you earned.
 
@@ -36,7 +36,7 @@ npm run build:barrage  # -> dist/barrage.html and dist/barrage-page.html
 | ------- | ------------ |
 | **Joystick** (left thumb, anywhere in the lower left) | Walk, relative to the camera |
 | **Drag** anywhere else on the right | Swing the camera round you; pinch to zoom |
-| **PUNCH** | Left and right jabs in turn. With a sword in your weapon slot it becomes **SLASH**: forehand and backhand |
+| **PUNCH** | Left and right jabs in turn. With a sword in your weapon slot it becomes **SLASH**: forehand and backhand. With a bow, and arrows for it, it becomes **SHOOT**, with how many arrows you have left under it |
 | **KICK** | A front kick: slower, longer reach, knocks people about |
 | **BLOCK** (hold) | Forearms up in front of your face, or your shield raised if one is in your offhand |
 | **SPRINT** | On and off. Turns off when you stop or run out of stamina |
@@ -46,7 +46,8 @@ npm run build:barrage  # -> dist/barrage.html and dist/barrage-page.html
 | **START WAVE** / **OPEN THE STALL** | Appears in the middle at the bottom when it applies |
 
 Punches and kicks turn you onto the nearest box ragdoll in front of you, so you
-do not have to aim on a phone. A press made while you are still finishing a move
+do not have to aim on a phone; SHOOT draws the bow on the nearest one in front
+of you, near or far, and allows for the drop. Out of arrows, you punch. A press made while you are still finishing a move
 is remembered for a moment, so quick double taps come out as combinations.
 
 **HP** is the red bar. **Stamina** is the green one: punching, kicking, swinging,
@@ -70,7 +71,7 @@ behind them. Each wave has more of them, and new kinds join as the waves go on:
 | 1 | **Brawlers** | Bare chests and taped fists: jabs, combinations, kicks |
 | 3 | **Swordsmen** | Wooden swords; rusty steel ones from wave 6 |
 | 4 | **Shield bearers** | Walk in behind a wood shield and block a lot |
-| 6 | **Gunners** | Keep their distance and fire a pistol. A red line runs from the barrel to where they are aiming before every burst |
+| 6 | **Archers** | Green hoods and wooden bows. They keep their distance, draw - you can see the bow come up and the arrow on the string - and loose |
 | every 5th | **A champion** | Big health, hard to knock down, hits like a cart. Two fewer of the others come out that wave |
 
 Only a few close in and attack at once - one at a time for the first four waves,
@@ -80,9 +81,12 @@ at a time, and more come through the gates as others fall. One knocked back into
 a tunnel as its portcullis comes down is let out again, so a wave can always be
 finished.
 
-Bullets hit whatever is in the way. A gunner who misses you can hit the brawler
-standing between you, which is where the bullet holes on box ragdolls come from.
-A raised shield stops a bullet from the front.
+Arrows are real things in flight: they drop as they go, and hit whatever is in
+the way, so an archer who misses you can hit the brawler standing between you.
+A raised shield stops an arrow from the front. Where an arrow hits, it stays -
+stuck in the body part it went into (riding along with it, all the way down to
+the sand and back up), in the shield, in the wall, or standing up out of the
+sand.
 
 Knocked down, you get up quicker than they do, and once you are back on your feet
 you have a moment and a half before anything can put you down again. Run out of
@@ -94,7 +98,7 @@ and during a wave you slowly regain health once nobody has hit you for five seco
 
 | | Coins |
 | - | ----- |
-| Each kill | 2, plus 1 for every 3 waves, plus 1 for a gunner |
+| Each kill | 2, plus 1 for every 3 waves, plus 1 for an archer |
 | A champion | 10 + the wave number |
 | Clearing a wave | 5 + twice the wave number |
 
@@ -115,19 +119,25 @@ path. Walk up to the counter and it opens:
 | **Starsteel Edge** (Transcendent) | 5,000 | 2,500 | Weapon slot | Light as a thought, with a cold blue glow |
 | **Shadow Fang** (Secret) | not for sale | 5,000 | Weapon slot | Black glass; only ever dropped |
 | **Sunforged Greatsword** (Godly) | 25,000 | 12,500 | Weapon slot | The best there is |
-| **Wood Shield** | 10 | 5 | Offhand slot | Hold BLOCK to raise it: stops fists, blades and bullets from the front |
+| **Wooden Bow** (Common) | 10 | 5 | Weapon slot | PUNCH becomes SHOOT: an arrow at the nearest box ragdoll in front of you |
+| **Arrows ×10** | 5 | - | Your quiver | Ten arrows for the bow. A count, kept with your coins; each one loosed is gone |
+| **Wood Shield** | 10 | 5 | Offhand slot | Hold BLOCK to raise it: stops fists, blades and arrows from the front |
 | **Wooden Helmet** | 12 | 6 | Helmet slot | An oak cap, a guard down the back and one over the nose |
 | **Wooden Chestplate** | 20 | 10 | Chestplate slot | Oak slats over the chest and belly, pads on the shoulders |
 | **Wooden Leggings** | 15 | 7 | Leggings slot | A girdle over the hips, plates on the thighs, caps on the knees |
 | **Wooden Boots** | 8 | 4 | Boots slot | Oak clogs and shin guards |
-| **Bead Bracelet** | 15 | 7 | Accessory slot | Stamina comes back a third faster |
-| **Oak Charm** | 15 | 7 | Accessory slot | 20 more health |
+| **Bead Bracelet** (Common) | 15 | 7 | Accessory slot | Stamina comes back a third faster |
+| **Oak Charm** (Common) | 15 | 7 | Accessory slot | 20 more health |
+| **Bronze Ring** (Uncommon) | 40 | 20 | Accessory slot | Everything you land hits 15% harder: fists, feet, blades, arrows |
+| **Bronze Watch** (Uncommon) | 40 | 20 | Accessory slot | Every punch, kick, swing and draw of the bow comes 15% quicker |
 
-A blow that lands on wood armour does a third less (a bullet, a sixth less) and
+A blow that lands on wood armour does a third less (an arrow, a sixth less) and
 dents the wood instead of bruising you; where the wood stops - your face under
 the helmet's brim - blows land as they always did. Wear all four pieces and you
-are harder to knock down. Either accessory goes in either accessory slot, and two
-of a kind add up: two charms are 40 more health.
+are harder to knock down. Any accessory goes in either accessory slot, and two
+of a kind add up: two charms are 40 more health. The bracelet and the watch go
+on a wrist, the ring on the fingers - the left for the first slot, the right for
+the second - and the charm on your chest.
 
 What you buy goes into your bag. **SELL** buys anything back for half what it
 cost, equipped or not.
@@ -184,8 +194,9 @@ and 5,000 max HP. Its moves:
 | **Claw** | CLAW, in place of PUNCH (J, click) | A raking swipe that tears three slashes at a time and knocks people flying |
 | **Venom Surge** | SURGE (R) | A line of black spikes bursts out of the ground ahead of you, as far as the wall, throwing everyone standing on it into the air |
 | **Eat** | EAT (F) | Your tongue lashes out at the nearest box ragdoll, drags it in, and you bite and swallow it whole; it counts as a kill, and you get some health back |
+| **Venom Impale** | IMPALE (G) | Three venom spikes thrown at three different box ragdolls - the three nearest - each one turning after its target in the air. Each one that goes in stays in, and poisons them: the venom eats at them for six seconds, slows them to half pace, and spreads black over them part by part |
 
-SURGE and EAT darken while they come back (five and six seconds). Turning back
+SURGE, EAT and IMPALE darken while they come back (five, six and six seconds). Turning back
 gives you your own shape, sword, shield and armour again. Anyone not logged in as
 Chibble sees none of this.
 
@@ -236,7 +247,7 @@ state decides which wins:
 A punch only lands if the fist box actually overlaps a body part, a kick the
 foot, a swing the blade. A raised shield in the way stops it. How hard it lands
 comes from the real closing speed at the moment of contact, so spacing matters.
-Bullets are rays tested against the same boxes.
+Arrows are tested against the same boxes all along their flight.
 
 What it leaves is painted onto that body part's own canvas, at the exact spot:
 
@@ -246,8 +257,8 @@ What it leaves is painted onto that body part's own canvas, at the exact spot:
   lands hard; the rusty sword cuts on a slow stroke.
 - **Slashes**: a full swing of steel opens a long gash along the way the blade
   was travelling, tears the cloth over it, and runs with blood.
-- **Bullet holes**: a small dark hole with a red-brown ring where the round went
-  in and, through a limb or the body, a bigger torn one where it came out.
+- **Arrow wounds**: a small dark puncture with a red-brown ring, torn cloth round
+  it, the arrow still standing in it, and a wound that keeps bleeding.
 
 Blood is simulated drop by drop and paints whatever it lands on: the sand, the
 cobbles, other fighters, shields, the blade that drew it. Open wounds drip and
@@ -261,7 +272,7 @@ way to the sand when you are knocked flat. Whether a blow lands on the wood is
 decided at the exact point it lands: on the cap, the back guard or the strip
 over your nose it does a third less and leaves its mark on the oak - a crushed,
 splintered dent from a fist or a foot, a dark gouge along the stroke of a blade,
-a pit from a bullet - and very little blood gets out from under it. Blood that
+a pit from an arrow - and very little blood gets out from under it. Blood that
 lands on the wood stains it. The bracelet hangs on your left wrist (your right,
 in the second slot) and the charm on your chest.
 
@@ -288,16 +299,16 @@ barrage/
       anim.js         poses and clips: walking, jabs, the kick, guards, the shield, aiming, get-ups
       fighter.js      a person: states, strikes, damage, stamina, gear
       outfit.js       wood armour and accessories: their boxes, what they stop, the marks on them
-      morph.js        Venom: the goo, the growing, Claw, Venom Surge and Eat
+      morph.js        Venom: the goo, the growing, Claw, Venom Surge, Eat and Venom Impale
       fx.js           beams of light where swords drop
       player.js       you
-      brain.js        the box ragdolls' fighting, the gunners, the shopkeeper
+      brain.js        the box ragdolls' fighting, the archers, the shopkeeper
       waves.js        who comes out when, coins
       arena.js        the sand, the wall and gates, the stands and crowd, the plaza, the Stall
       gear.js         what the Stall sells, which slot it goes in, rarities and drops, and things held in a hand
-      guns.js         bullets, the aiming line, tracers
+      arrows.js       arrows in flight, what they hit, and where they stay
       blood.js        drops, wounds, and which mark each blow leaves
-      paint.js        canvases on boxes; bruises, cuts, slashes, bullet holes
+      paint.js        canvases on boxes; bruises, cuts, slashes, punctures
       appearance.js   what everyone wears
       camera.js       over your shoulder
       textures.js     sand, sandstone, cobbles, planks, the awning, banners, signs
@@ -339,15 +350,17 @@ and equips by drag and drop; the sword and shield appear in your hands and the
 helmet on your head, the charm adds health and the bracelet stamina; a blow on
 the helmet does less than one on the bare face and dents the wood; the full set
 makes you harder to knock down; the rusty sword cuts and slashes; a raised
-shield stops blows; a gunner's
-bullets hit whoever is in the way and leave bullet holes; a box ragdoll shut in a
+shield stops blows; archers' arrows hit whoever is in the way, stick in and leave
+puncture wounds, and a raised shield stops them; archers come out of the gates
+with bows, keep their distance and shoot; with the bow, SHOOT looses an arrow
+and uses one up; the bronze ring and watch do what they say; a box ragdoll shut in a
 tunnel is let back out; you can fall and start again with your coins; saves
 survive a reload; and, against a stand-in for the Claude page's database, that
 sign up, cloud saving, log out, a wrong password and log in all work and only a
 salted hash is stored, that only Chibble gets the admin panel, that its switches
 and settings take effect and are saved with the account, and that Venom grows
 from the head down to 1.4 times the size with 5,000 HP, and its Claw, Venom
-Surge and Eat all do what they say. With `--file` it opens the built file and fails if it
+Surge, Eat and Venom Impale (with its poison) all do what they say. With `--file` it opens the built file and fails if it
 fetches anything at all (the account checks load the same file over http, as the Claude page
 is served); `--accounts` runs only the account checks.
 

@@ -194,6 +194,78 @@ function charm(ctx, s) {
   ctx.beginPath(); ctx.moveTo(s * 0.36, s * 0.64); ctx.lineTo(s * 0.64, s * 0.64); ctx.moveTo(s * 0.5, s * 0.49); ctx.lineTo(s * 0.5, s * 0.79); ctx.stroke();
 }
 
+/** A bow, string to the left, with an arrow on it. */
+function bow(ctx, s) {
+  ctx.save();
+  ctx.translate(s / 2, s / 2);
+  ctx.rotate(-Math.PI / 4);
+  // the stave
+  ctx.strokeStyle = '#a0703a';
+  ctx.lineWidth = s * 0.06;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-s * 0.1, -s * 0.4);
+  ctx.quadraticCurveTo(s * 0.22, 0, -s * 0.1, s * 0.4);
+  ctx.stroke();
+  ctx.strokeStyle = '#3a2412';
+  ctx.lineWidth = s * 0.075;
+  ctx.beginPath(); ctx.moveTo(s * 0.06, -s * 0.06); ctx.lineTo(s * 0.06, s * 0.06); ctx.stroke();
+  // the string
+  ctx.strokeStyle = '#efe6cf';
+  ctx.lineWidth = Math.max(1, s * 0.015);
+  ctx.beginPath(); ctx.moveTo(-s * 0.1, -s * 0.4); ctx.lineTo(-s * 0.1, s * 0.4); ctx.stroke();
+  ctx.restore();
+  arrowShape(ctx, s, 0.5, 0.5, -Math.PI / 4, 0.72);
+}
+
+/** One arrow across the icon at (u, v), turned `a`, `len` of the icon long. */
+function arrowShape(ctx, s, u, v, a, len) {
+  ctx.save();
+  ctx.translate(s * u, s * v);
+  ctx.rotate(a);
+  const L = s * len;
+  ctx.fillStyle = '#c9a06a';
+  ctx.fillRect(-L / 2, -s * 0.012, L, s * 0.024);
+  ctx.fillStyle = '#7d8388';
+  ctx.beginPath(); ctx.moveTo(L / 2 + s * 0.07, 0); ctx.lineTo(L / 2 - s * 0.01, -s * 0.04); ctx.lineTo(L / 2 - s * 0.01, s * 0.04); ctx.fill();
+  ctx.fillStyle = '#efe6cf';
+  for (const d of [-1, 1]) {
+    ctx.beginPath(); ctx.moveTo(-L / 2, 0); ctx.lineTo(-L / 2 + s * 0.12, 0); ctx.lineTo(-L / 2 + s * 0.06, d * s * 0.05); ctx.lineTo(-L / 2 - s * 0.02, d * s * 0.05); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** A ring of bronze, a little green in places, with a polished face. */
+function ring(ctx, s) {
+  ctx.strokeStyle = '#a8732e';
+  ctx.lineWidth = s * 0.11;
+  ctx.beginPath(); ctx.ellipse(s / 2, s * 0.58, s * 0.25, s * 0.2, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255, 220, 160, 0.55)';
+  ctx.lineWidth = s * 0.03;
+  ctx.beginPath(); ctx.ellipse(s / 2, s * 0.58, s * 0.25, s * 0.2, 0, Math.PI * 1.1, Math.PI * 1.6); ctx.stroke();
+  ctx.fillStyle = '#c98e3e';
+  ctx.fillRect(s * 0.38, s * 0.24, s * 0.24, s * 0.16);
+  ctx.fillStyle = '#e8b866';
+  ctx.fillRect(s * 0.42, s * 0.27, s * 0.16, s * 0.1);
+  ctx.fillStyle = 'rgba(74, 150, 120, 0.6)';
+  ctx.fillRect(s * 0.27, s * 0.68, s * 0.05, s * 0.04);
+}
+
+/** A bronze watch on a leather strap. */
+function watch(ctx, s) {
+  ctx.fillStyle = '#5a3a1c';
+  ctx.fillRect(s * 0.4, s * 0.08, s * 0.2, s * 0.84);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+  for (let k = 0; k < 6; k++) ctx.fillRect(s * 0.4, s * (0.12 + k * 0.13), s * 0.2, s * 0.015);
+  ctx.fillStyle = '#b07a3a';
+  ctx.beginPath(); ctx.arc(s / 2, s / 2, s * 0.22, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#f4ecd8';
+  ctx.beginPath(); ctx.arc(s / 2, s / 2, s * 0.16, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#2a1a0c';
+  ctx.lineWidth = Math.max(1.5, s * 0.025);
+  ctx.beginPath(); ctx.moveTo(s / 2, s / 2); ctx.lineTo(s / 2, s * 0.38); ctx.moveTo(s / 2, s / 2); ctx.lineTo(s * 0.6, s * 0.54); ctx.stroke();
+}
+
 /** A sword nobody has shown you: just its shape. */
 export function mysteryIcon() {
   return draw('mystery', 96, (ctx, s) => {
@@ -222,6 +294,12 @@ export function itemIcon(kind) {
     else if (kind === 'wood_boots') boots(ctx, s);
     else if (kind === 'bead_bracelet') bracelet(ctx, s);
     else if (kind === 'oak_charm') charm(ctx, s);
+    else if (kind === 'wooden_bow') bow(ctx, s);
+    else if (kind === 'bronze_ring') ring(ctx, s);
+    else if (kind === 'bronze_watch') watch(ctx, s);
+    else if (kind === 'arrows') {
+      for (let i = 0; i < 3; i++) arrowShape(ctx, s, 0.5 + (i - 1) * 0.1, 0.5 - (i - 1) * 0.06, -Math.PI / 4, 0.7);
+    }
   });
 }
 

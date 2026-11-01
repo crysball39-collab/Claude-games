@@ -11,7 +11,7 @@ import { selfCollide, P } from './rig.js';
 import { Fighter } from './fighter.js';
 import { Held } from './gear.js';
 import { Blood } from './blood.js';
-import { Guns } from './guns.js';
+import { Archery } from './arrows.js';
 import { Fx } from './fx.js';
 import { Arena, MASK, STALL_SPOT, R, GATES } from './arena.js';
 import { wrapAngle } from '../core/util.js';
@@ -50,7 +50,7 @@ export class Game {
 
     this.arena = new Arena(this);
     this.blood = new Blood(this);
-    this.guns = new Guns(this);
+    this.archery = new Archery(this);
     this.fx = new Fx(this);
     this.cam = new FollowCamera(this.camera, this);
     this.waves = new Waves(this);
@@ -160,6 +160,7 @@ export class Game {
     this.blood.clear();
     this.arena.clearBlood();
     this.fx.clear();
+    this.archery.clear();
     this.demoing = false;
   }
 
@@ -218,7 +219,7 @@ export class Game {
     this.world.step(dt);
     for (const f of [...this.fighters]) f.afterStep(dt);
     this.blood.update(dt);
-    this.guns.update(dt);
+    this.archery.update(dt);
     this.fx.update(dt);
     this.waves.update(dt);
     // between rounds you get your breath back

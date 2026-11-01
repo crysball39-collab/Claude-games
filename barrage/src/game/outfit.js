@@ -6,12 +6,13 @@
    goes, all the way down when you are knocked flat. A blow that lands on
    the wood does a share less, and leaves its mark on the wood instead of on
    you: a dent from a fist or a foot, a gouge from a blade, a splintered pit
-   from a bullet. Where the wood stops - your face under the helmet's brim -
+   from an arrow. Where the wood stops - your face under the helmet's brim -
    blows land as they always did. Blood that lands on the wood stains it.
 
    All four pieces of one set together make you harder to knock down. The
    bead bracelet brings your stamina back faster; the oak charm adds to your
-   health. Two of the same accessory add up.
+   health; the bronze ring makes every blow hit harder and the bronze watch
+   every blow come quicker. Two of the same accessory add up.
    ========================================================================== */
 import { SkinnedMesh, MeshLambertMaterial, Matrix4, Vector3 } from 'three';
 import { packBoxes, buildBoxGeometry, PaintCanvas } from './paint.js';
@@ -58,6 +59,16 @@ function pieces(kind, slot, gear) {
       box('footR', [0.124, 0.096, 0.284], [0, 0.008, 0], 'dark'),
     ];
     case 'bead_bracelet': return [box('lowerArm' + side, [0.105, 0.036, 0.105], [0, -0.095, 0], 'beads')];
+    // a band round the fingers
+    case 'bronze_ring': return [box('hand' + side, [0.1, 0.024, 0.108], [0, -0.024, 0], 'bronze')];
+    // a leather strap, and the dial on the outside of the wrist
+    case 'bronze_watch': {
+      const out = side === 'L' ? 1 : -1;
+      return [
+        box('lowerArm' + side, [0.1, 0.03, 0.1], [0, -0.1, 0], 'strap'),
+        box('lowerArm' + side, [0.016, 0.052, 0.052], [out * 0.054, -0.1, 0], 'dial'),
+      ];
+    }
     case 'oak_charm': {
       // on the chest, in front of the chestplate if there is one; two charms hang side by side
       const z = (gear.chest ? 0.121 : 0.105) + 0.009;
@@ -134,9 +145,35 @@ function paintCharm(ctx, t, r) {
   ctx.beginPath(); ctx.moveTo(cx - rr * 1.3, cy); ctx.lineTo(cx + rr * 1.3, cy); ctx.moveTo(cx, cy - rr * 1.3); ctx.lineTo(cx, cy + rr * 1.3); ctx.stroke();
 }
 
+/** Bronze: warm, a polished stripe, a fleck or two of green. */
+function paintBronze(ctx, t, r) {
+  ctx.fillStyle = '#a8732e';
+  ctx.fillRect(t.x - 2, t.y - 2, t.w + 4, t.h + 4);
+  ctx.fillStyle = 'rgba(255, 222, 160, 0.5)';
+  ctx.fillRect(t.x, t.y + t.h * 0.3, t.w, Math.max(1, t.h * 0.18));
+  if (r() < 0.6) {
+    ctx.fillStyle = 'rgba(74, 150, 120, 0.7)';
+    ctx.fillRect(t.x + r() * t.w, t.y + r() * t.h, 1.5, 1.5);
+  }
+}
+
+/** A watch's dial: a bronze rim, a pale face, two hands. */
+function paintDial(ctx, t) {
+  paintBronze(ctx, t, () => 1);
+  const cx = t.x + t.w / 2, cy = t.y + t.h / 2, rr = Math.min(t.w, t.h) * 0.36;
+  ctx.fillStyle = '#f4ecd8';
+  ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#2a1a0c';
+  ctx.lineWidth = Math.max(1, rr * 0.18);
+  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx, cy - rr * 0.75); ctx.moveTo(cx, cy); ctx.lineTo(cx + rr * 0.55, cy + rr * 0.2); ctx.stroke();
+}
+
 function paintBox(ctx, tiles, tex, r) {
   for (const t of tiles) {
     if (tex === 'beads') paintBeads(ctx, t, r);
+    else if (tex === 'bronze') paintBronze(ctx, t, r);
+    else if (tex === 'dial') paintDial(ctx, t);
+    else if (tex === 'strap') { ctx.fillStyle = '#4a2e16'; ctx.fillRect(t.x - 2, t.y - 2, t.w + 4, t.h + 4); }
     else if (tex === 'cord') { ctx.fillStyle = CORD; ctx.fillRect(t.x - 2, t.y - 2, t.w + 4, t.h + 4); }
     else if (tex === 'charm') paintCharm(ctx, t, r);
     else paintWood(ctx, t, r, tex === 'dark' ? DARK : tex === 'cap' ? CAP : OAK);
@@ -185,7 +222,8 @@ export class Outfit {
       }
       this.pad[i] = pad;
     }
-    this.layout = packBoxes(boxes.map((b) => ({ size: b.size, density: b.tex === 'beads' || b.tex === 'charm' || b.tex === 'cord' ? 600 : 260 })), 512);
+    const small = ['beads', 'charm', 'cord', 'bronze', 'dial', 'strap'];
+    this.layout = packBoxes(boxes.map((b) => ({ size: b.size, density: small.includes(b.tex) ? 600 : 260 })), 512);
     const geometry = buildBoxGeometry(boxes.map((b) => ({ size: b.size, offset: b.at, bone: b.part })), this.layout, true);
     this.paint = new PaintCanvas(this.layout.width, this.layout.height);
     const r = rng(7);
