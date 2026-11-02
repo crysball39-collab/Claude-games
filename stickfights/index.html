@@ -100,6 +100,7 @@
     <button class="wire-kind" data-wire="metalRod" role="radio" aria-checked="false"><i class="wk wk-metal-rod"></i><span>FIXED METAL ROPE</span></button>
     <button class="wire-kind" data-wire="woodPin" role="radio" aria-checked="false"><i class="wk wk-wood-pin"></i><span>WOOD PIN</span></button>
     <button class="wire-kind" data-wire="metalPin" role="radio" aria-checked="false"><i class="wk wk-metal-pin"></i><span>METAL PIN</span></button>
+    <button class="wire-kind" data-wire="powerCord" role="radio" aria-checked="false"><i class="wk wk-power"></i><span>POWER CORD</span></button>
   </div>
 
   <!-- how big a bang, while the explode tool is picked -->
@@ -144,7 +145,7 @@
       <div class="ins-section">BODY <span class="ins-hint mind">type a temperature to set it</span></div>
       <div id="ins-vitals" class="mind"></div>
       <div class="ins-body">
-        <canvas id="ins-figure" class="mind" width="104" height="136"></canvas>
+        <canvas id="ins-figure" class="mind" width="256" height="336"></canvas>
         <div class="ins-conds" id="ins-conds"></div>
       </div>
       <div class="ins-section mind">PEOPLE <span class="ins-hint">change what they think of anyone, or send them to fight</span></div>
@@ -233,6 +234,27 @@
       <canvas class="card-icon" width="72" height="72"></canvas>
       <span class="card-text"><b>Taser</b><small>Two probes on wires: five seconds of locked muscles and down they go. A vest stops it. Empty, press it against them.</small></span>
     </button>
+    <button class="card" data-spawn="gasRifle">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Gas Rifle</b><small>Fires canisters of poison gas: a green cloud that chokes whoever breathes it, and eats at their lungs.</small></span>
+    </button>
+    <div class="cat">EXPLOSIVES</div>
+    <button class="card" data-spawn="grenade">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Grenade</b><small>Tap it to pull the pin: four seconds, then it goes off, its casing flying. Throw it with the hand.</small></span>
+    </button>
+    <button class="card" data-spawn="c4">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>C4</b><small>Sticks to whatever it lands on - a wall, a crate, somebody. Tap it: three seconds of beeping, and a big bang.</small></span>
+    </button>
+    <button class="card" data-spawn="tnt">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>TNT</b><small>Tap it to light the fuse. Somebody on fire coming near lights it too.</small></span>
+    </button>
+    <button class="card" data-spawn="missile">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Missile</b><small>Tap it to fire: it flies straight the way it points until its nose hits something. Turn it with the hand to aim.</small></span>
+    </button>
     <div class="cat">OBJECTS</div>
     <button class="card" data-spawn="crate">
       <canvas class="card-icon" width="72" height="72"></canvas>
@@ -272,9 +294,34 @@
       <canvas class="card-icon" width="72" height="72"></canvas>
       <span class="card-text"><b>Glass Wall</b><small>A pane they can see through. Crack it enough and it all comes down in shards - which cut.</small></span>
     </button>
+    <button class="card" data-spawn="beamSmall">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Small Metal Beam</b><small>A two-metre steel I-beam. Build with it, pin it, prop things up on it. Live, it carries electricity.</small></span>
+    </button>
+    <button class="card" data-spawn="beamLarge">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Large Metal Beam</b><small>A four-metre steel I-beam, a lot heavier. Hard to dent, harder to move.</small></span>
+    </button>
     <button class="card" data-spawn="gallows">
       <canvas class="card-icon" width="72" height="72"></canvas>
       <span class="card-text"><b>Gallows</b><small>A post, a beam and a noose over a trapdoor. Bring someone's neck to the noose and set them on the trapdoor; tap it to pull the lever.</small></span>
+    </button>
+    <div class="cat">ELECTRICITY</div>
+    <button class="card" data-spawn="generator">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Generator</b><small>Tap it to start it: 230 volts down any power cord (in the WIRE tool) tied to it - and into anyone tied to one.</small></span>
+    </button>
+    <button class="card" data-spawn="lightbulb">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Lightbulb</b><small>Lights up on a power cord from a running generator. Drop it, shoot it or blast it, and it shatters.</small></span>
+    </button>
+    <button class="card" data-spawn="floodlight">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Floodlight</b><small>A beam of hard white light the way it points - turn it with the hand. Its glass shatters too.</small></span>
+    </button>
+    <button class="card" data-spawn="voltmeter">
+      <canvas class="card-icon" width="72" height="72"></canvas>
+      <span class="card-text"><b>Volt Meter</b><small>Tie a power cord from it to anything: it shows the voltage there.</small></span>
     </button>
     <div class="cat">NATURE</div>
     <button class="card" data-spawn="tree">

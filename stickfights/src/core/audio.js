@@ -678,4 +678,127 @@ export class Sound {
     const v = this.near(x) * 0.18;
     this.tone('triangle', 330 * pitch, 90 * pitch, 0.9, v);
   }
+
+  /* ---------------------------- explosives, gas, current ---------------------------- */
+
+  /** A grenade's pin pulled, and the lever springing off: a metal ping, and a flick. */
+  pin(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.tone('triangle', 2900, 2700, 0.05, 0.12 * v);
+    this.hiss(0.03, 5000, 3, 0.18 * v);
+    this.tone('sine', 1800, 1500, 0.09, 0.08 * v, 0.08);
+    this.hiss(0.025, 3800, 3, 0.15 * v, 'bandpass', 0.08);
+  }
+
+  /** A detonator's beep: higher the nearer it is to going (k 0..1). */
+  beep(x, k = 0) {
+    if (!this.ready) return;
+    const f = 2300 + k * 900;
+    this.tone('square', f, f, 0.06, 0.07 * this.near(x));
+  }
+
+  /** Something soft and heavy sticking on: a dull slap. */
+  slap(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.tone('sine', 170, 80, 0.06, 0.35 * v);
+    this.hiss(0.05, 900, 1, 0.3 * v, 'lowpass');
+  }
+
+  /** A fuse catching: a scratch, and a flare. */
+  fuseLit(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.hiss(0.06, 3000, 1, 0.3 * v);
+    this.sweep('highpass', 2500, 5200, 0.35, 0.22 * v);
+  }
+
+  /** A fuse burning down: a crackling sizzle. */
+  fuseFizz(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.hiss(0.32, 6000, 0.8, 0.06 * v, 'highpass');
+    for (let i = 0; i < 4; i++) this.hiss(0.015, 4200 + rand(-800, 1500), 4, 0.16 * v, 'bandpass', rand(0, 0.3));
+  }
+
+  /** A missile's motor lighting, and roaring away for as long as it burns. */
+  rocket(x, dur = 2) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.hiss(0.08, 1800, 0.8, 0.7 * v);
+    this.sweep('lowpass', 300, 2000, 0.3, 0.6 * v, 0.8);
+    this.hiss(dur, 700, 0.5, 0.5 * v, 'lowpass', 0.05);
+    this.hiss(dur * 0.8, 3200, 0.7, 0.12 * v, 'bandpass', 0.05);
+  }
+
+  /** A generator: the pull cord, and the engine catching. */
+  engineStart(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.sweep('bandpass', 600, 1400, 0.3, 0.16 * v, 2);
+    for (let i = 0; i < 10; i++) this.tone('square', 58, 48, 0.05, 0.22 * v * Math.min(1, (i + 2) / 8), 0.4 + i * (0.12 - i * 0.004));
+  }
+
+  /** Cutting out: the putter slowing to nothing. */
+  engineStop(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    let d = 0;
+    for (let i = 0; i < 6; i++) { this.tone('square', 52 - i * 3, 40, 0.06, 0.2 * v * (1 - i / 7), d); d += 0.1 + i * 0.04; }
+  }
+
+  /** Running: a low putter (called every half second or so). */
+  engineRun(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    for (let i = 0; i < 4; i++) this.tone('square', 54, 47, 0.045, 0.11 * v, i * 0.11);
+    this.hiss(0.42, 220, 0.7, 0.06 * v, 'lowpass');
+  }
+
+  /** A bulb or a floodlight's glass going: a pop, and the pieces tinkling. */
+  glassBreak(x, big = false) {
+    if (!this.ready) return;
+    const v = this.near(x) * (big ? 0.9 : 0.6);
+    this.hiss(0.12, 3400, 0.8, 0.5 * v, 'highpass');
+    this.tone('sine', 900, 300, 0.05, 0.2 * v);
+    for (let i = 0; i < (big ? 9 : 6); i++) this.tone('sine', 2600 + rand(0, 3500), 2400, 0.07, rand(0.03, 0.07) * v, 0.04 + i * rand(0.02, 0.05));
+  }
+
+  /** Mains current through somebody: a hard, ugly buzz. */
+  buzz(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.tone('sawtooth', 100, 100, 0.22, 0.1 * v);
+    this.tone('square', 50, 50, 0.22, 0.07 * v);
+    this.hiss(0.2, 4200, 1.5, 0.08 * v);
+  }
+
+  /** The gas rifle: a hollow thump. */
+  thump(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.tone('sine', 150, 55, 0.15, 0.6 * v);
+    this.hiss(0.1, 700, 1, 0.35 * v, 'lowpass');
+    this.hiss(0.05, 2500, 1.5, 0.15 * v);
+  }
+
+  /** A gas canister bursting: a pop, and a long hiss of it pouring out. */
+  gasBurst(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.tone('sine', 320, 120, 0.06, 0.3 * v);
+    this.hiss(0.05, 2000, 1, 0.4 * v);
+    this.sweep('highpass', 5200, 2400, 1.7, 0.2 * v, 0.6);
+  }
+
+  /** A cough: two harsh bursts. */
+  cough(pitch, x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    for (const d of [0, rand(0.2, 0.3)]) {
+      this.hiss(0.09, 650 * pitch, 1.2, 0.3 * v, 'bandpass', d);
+      this.tone('triangle', 190 * pitch, 120 * pitch, 0.08, 0.08 * v, d);
+    }
+  }
 }

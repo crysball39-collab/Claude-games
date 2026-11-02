@@ -105,6 +105,9 @@ export function airway(man) {
   if (man.state === 'held' && man.held && man.held.part === 'head') return 'choke';
   // a rope round the neck, holding them up (wires.js)
   if (man.necked && man.sandbox.time - man.necked < 0.25) return 'choke';
+  // nothing left to breathe with
+  const o = h.organs;
+  if (o && o.lungA <= 0 && o.lungB <= 0) return 'lungs';
   return null;
 }
 
@@ -193,6 +196,9 @@ function updateAir(man, h, v, dt) {
   let target = 0.985;
   target -= (1 - clamp01(man.stamina / 0.5)) * 0.05;
   if (h.lung) target -= 0.12;
+  // (and a lung that is damaged takes in less: one gone, a good deal less)
+  const o = h.organs;
+  if (o) target -= (1 - o.lungA) * 0.16 + (1 - o.lungB) * 0.16;
   if (h.bones.ribs.broken) target -= 0.03;
   const f = man.flames;
   if (f) target -= 0.2 * f.power * (0.6 + 0.4 * (f.parts.head || 0));
@@ -249,7 +255,9 @@ function effects(man, h, v, dt, undead) {
     if (h.heat >= 1) cause = 'heatstroke';
     else if (h.chill >= 1) cause = h.frozen ? 'frozen solid' : 'hypothermia';
     else if (h.hypoxia >= 1) {
-      cause = v.air === 'choke' ? 'suffocation' : man.flames ? 'smoke inhalation' : 'lack of oxygen';
+      cause = v.air === 'choke' ? 'suffocation' : man.flames ? 'smoke inhalation'
+        : (man.gassed && man.sandbox.time - man.gassed < 4) || v.air === 'lungs' ? 'poison gas' : 'lack of oxygen';
+      if (cause === 'poison gas' && man.gassedBy && !man.gassedBy.removed && man.gassedBy !== man) killer = man.gassedBy;
       if (v.air === 'choke' && man.heldBy && !man.heldBy.removed) killer = man.heldBy;
     }
     if (cause) {
@@ -613,6 +621,8 @@ export function shatter(man, o = {}) {
   if (!h.frozen || man.removed) return;
   const dir = o.dir || (chance(0.5) ? 1 : -1), power = Math.max(1.5, o.power || 2);
   for (const bone of ['humerusA', 'humerusB', 'femurA', 'femurB']) man.sever(bone, dir * rand(0.2, 1.3) + rand(-0.8, 0.8), power * rand(0.6, 1.2), { quiet: true });
+  // (and, more often than not, the head)
+  if (chance(0.6)) man.decapitate(dir * rand(0.3, 1.2), power * rand(0.6, 1.1), { by: o.by || null });
   const c = man.wj.chest;
   sb.fx.shards(c.x, c.y, 40, dir * 2, 2.2);
   if (man.ice) man.ice.cracks = 8;
@@ -688,6 +698,10 @@ export function vitalConditions(man) {
   if (man.health.frozen) out.push(man.ice && man.ice.melt > 0.05 ? 'Frozen solid (thawing)' : 'Frozen solid');
   else if (man.smoulder > 0) out.push('Smouldering');
   if (!man.dead && man.vit && man.vit.air === 'choke') out.push('Choking');
+  if (!man.dead && man.vit && man.vit.air === 'lungs') out.push('Suffocating (lungs gone)');
+  const now = man.sandbox.time;
+  if (!man.dead && man.gassed && now - man.gassed < 0.5) out.push('Breathing poison gas');
+  if (man.volts > 0 && now - (man.voltsT || 0) < 0.3) out.push(man.dead ? 'Live: 230 V through the body' : 'Being electrocuted (230 V)');
   if ((man.char || 0) > 0.35) out.push(man.dead ? 'Charred' : 'Badly burned');
   return out;
 }
@@ -938,6 +952,7 @@ function drawIce(ctx, man) {
   ctx.restore();
 }
 function goneAtJoint(cut, k) {
+  if (k === 'head') return !!cut.head;
   const side = k.slice(-1);
   if (k.startsWith('elbow')) return !!cut['arm' + side] && cut['arm' + side] === 'midHum' + side;
   if (k.startsWith('hand')) return !!cut['arm' + side];

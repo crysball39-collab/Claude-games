@@ -22,6 +22,7 @@ import {
   KNIFE_W, KNIFE_H, KNIFE_GRIP, MACHETE_W, MACHETE_H, MACHETE_GRIP, CROWBAR_W, CROWBAR_H, CROWBAR_GRIP,
   GLOCK_W, GLOCK_H, GLOCK_GRIP, GLOCK_MUZZLE, GLOCK_PORT, M1911_W, M1911_H, M1911_GRIP, M1911_MUZZLE, M1911_PORT,
   AK_W, AK_H, AK_GRIP, AK_MUZZLE, AK_PORT, MOSS_W, MOSS_H, MOSS_GRIP, MOSS_MUZZLE, MOSS_PORT,
+  GAS_W, GAS_H, GAS_GRIP, GAS_MUZZLE, GAS_PORT,
 } from './draw.js';
 
 let nextId = 1;
@@ -139,9 +140,9 @@ export const BLADES = {
 export const isBlade = (kind) => kind === 'knife' || kind === 'machete';
 
 /** The kinds of thing that are guns: aimed, fired, carried by a stickman like the Glock. Mods add theirs. */
-export const GUN_KINDS = new Set(['glock', 'm1911', 'taser', 'ak47', 'mossberg']);
+export const GUN_KINDS = new Set(['glock', 'm1911', 'taser', 'ak47', 'mossberg', 'gasRifle']);
 /** The guns too long for a holster: they go across the back, on a sling. */
-export const isLongGun = (kind) => kind === 'ak47' || kind === 'mossberg';
+export const isLongGun = (kind) => kind === 'ak47' || kind === 'mossberg' || kind === 'gasRifle';
 export const isGun = (kind) => GUN_KINDS.has(kind);
 /** A gun that kills: anything aimed and fired except the taser. */
 export const isFirearm = (kind) => GUN_KINDS.has(kind) && kind !== 'taser';
@@ -340,6 +341,11 @@ export const GUN_MODELS = {
   mossberg: {
     name: 'Mossberg 500', a: 'a', mag: 6, spare: 12, energy: 0.5, pellets: 8, spread: 3.4, cadence: 0.85, kick: 2.4, round: '12 gauge', pump: true, long: true,
     w: MOSS_W, h: MOSS_H, mass: 3.3, grip: MOSS_GRIP, muzzle: MOSS_MUZZLE, port: MOSS_PORT,
+  },
+  // the gas rifle: five canisters of poison gas, each bursting into a cloud where it lands (gas.js)
+  gasRifle: {
+    name: 'Gas Rifle', a: 'a', mag: 5, spare: 10, energy: 0, gas: true, cadence: 1.1, kick: 1.5, round: 'gas canister', long: true,
+    w: GAS_W, h: GAS_H, mass: 4.2, grip: GAS_GRIP, muzzle: GAS_MUZZLE, port: GAS_PORT,
   },
 };
 
@@ -578,7 +584,10 @@ const PIECES = {
   humerus: { name: 'Severed arm', mass: 2.4 },
   tibia: { name: 'Severed foot', mass: 2.2 },
   femur: { name: 'Severed leg', mass: 6.5 },
+  neck: { name: 'Severed head', mass: 4.5 },
 };
+// (how big a head is, against a scale-1 stickman's: skeleton.js DIM.headR)
+const HEAD_R = 0.155;
 
 /**
  * A piece of someone that a machete took off: rigid, as it was when it came
@@ -604,9 +613,11 @@ export class Limb {
       const u = (p.x - a.x) * c + (p.y - a.y) * s, v = -(p.x - a.x) * s + (p.y - a.y) * c;
       lo = Math.min(lo, u); hi = Math.max(hi, u); lo2 = Math.min(lo2, v); hi2 = Math.max(hi2, v);
     }
-    const len = Math.max(0.1, hi - lo), dep = Math.max(0.06, hi2 - lo2 + 0.05);
+    let len = Math.max(0.1, hi - lo), dep = Math.max(0.06, hi2 - lo2 + 0.05);
     const mu = (lo + hi) / 2, mv = (lo2 + hi2) / 2;
-    const cx = a.x + c * mu - s * mv, cy = a.y + s * mu + c * mv;
+    let cx = a.x + c * mu - s * mv, cy = a.y + s * mu + c * mv;
+    // a head (pts: where the neck was cut, and the middle of the head): a ball, not a stick
+    if (kind === 'neck') { len = dep = HEAD_R * scale * 1.9; cx = z.x; cy = z.y; }
     this.body = new Body(len, dep, PIECES[kind].mass * scale, {
       x: cx, y: Math.max(cy, dep / 2), rot: ang, owner: this, friction: 0.8, restitution: 0.06, angularDamping: 0.8,
     });

@@ -266,6 +266,7 @@ button {
 .wk-wood-pin, .wk-metal-pin { width: 13px; height: 13px; border-radius: 50%; }
 .wk-wood-pin { background: radial-gradient(circle, #6b4622 0 22%, #b98a50 24% 62%, #6b4622 64%); }
 .wk-metal-pin { background: radial-gradient(circle, #4f565c 0 22%, #c3c9ce 24% 62%, #4f565c 64%); }
+.wk-power { background: #2c2c2c; height: 5px; box-shadow: 4px 0 0 -1px #c9a03a, -4px 0 0 -1px #c9a03a; }
 #wirebar:not(.hidden) ~ #hint, #blastbar:not(.hidden) ~ #hint { bottom: calc(118px + var(--safe-b)); }
 @media (max-width: 560px) {
   .wire-kind, .blast-kind { padding: 0 7px; font-size: 9px; height: 30px; gap: 4px; }
@@ -505,7 +506,7 @@ button {
 .ppl-none { font-size: 10.5px; color: rgba(255, 255, 255, 0.3); padding: 1px 0 2px 13px; }
 
 .ins-body { display: flex; gap: 10px; align-items: flex-start; }
-#ins-figure { width: 84px; height: 110px; flex: none; background: #0d1a22; border-radius: 6px; }
+#ins-figure { width: 128px; height: 168px; flex: none; background: #0d1a22; border-radius: 6px; }
 .ins-conds { font-size: 11px; line-height: 1.45; color: #ddd; }
 .ins-conds .bad { color: #ff8a80; font-weight: 700; }
 .ins-conds .ok { color: var(--good); font-weight: 700; }

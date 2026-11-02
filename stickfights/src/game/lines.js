@@ -139,6 +139,10 @@ export const LINES = {
 
   /* ------------------------------- wounds, gore ------------------------------- */
   severedSelf: ['MY {part}! MY {part}!', "WHERE'S MY {part}?!", "It's gone! My {part}'s gone!", 'AAAAAH! My {part}!', "I can't feel my... where's my {part}?!", "That's MY {part} on the floor!"],
+  sawBeheaded: [
+    'Their HEAD! Their head came OFF!', 'Oh god - {victim} - oh god...', "{victim}'s head is on the FLOOR!", 'I am going to be sick. I am going to be SO sick.',
+    "Don't look at it. Don't look at it.", 'That is not real. That is NOT real.',
+  ],
   sawSevered: ["{victim}'s arm! Oh god!", 'That came OFF!', 'Oh god, oh god, oh god...', "{victim}! You're missing a bit!", "That's... not supposed to come off.", 'I think I am going to be sick.'],
   limbSee: ["Is that... a hand?", "Whose is that?", "That's {victim}'s!", 'Is that a LEG?!', "Somebody's lost something.", 'I am not touching that.'],
   retch: ['Hurk...', "I'm gonna be sick...", 'Bleurgh.', 'Oh no. Oh no no.', '*gag*'],
@@ -374,6 +378,18 @@ export const LINES = {
   ],
   sawNoosed: ['Somebody get {victim} down from there!', '{victim}! No!', 'This is wrong. This is so wrong.', 'Who put {victim} up there?!', "Hold on, {victim}! Don't move!", 'Take that rope off {victim}!'],
   sawHanged: ['{victim}!!', 'Cut the rope! Cut it!', 'Get {victim} down! Get them down!', 'Oh no. Oh no, no, no.', "I can't watch this.", 'Somebody do something!'],
+
+  /* ------------------------------- gas, bombs and current ------------------------------- */
+  inGas: ['*cough* *cough*', "Gas! I can't breathe!", '*hack* My eyes!', 'Get out of the green stuff!', 'It burns to breathe! *cough*', "Don't breathe it in!", '*wheeze*', 'Out! Out! Which way is out?!'],
+  sawGas: ['GAS! Cover your face!', 'Get away from that green cloud!', 'Is that poison?!', 'Hold your breath, everybody!', 'Upwind! Get upwind!', 'Do NOT walk into that.'],
+  sawGasDeath: ['The gas got {victim}...', '{victim} stopped coughing. That is worse.', 'Nobody go near that cloud. Nobody.', 'That stuff killed {victim}!'],
+  sawLiveGrenade: ['GRENADE!', 'Get down! Grenade!', 'The pin is OUT! RUN!', 'Somebody throw that thing away!', 'Is that a live grenade?!', 'Move, move, MOVE!'],
+  sawFuse: ['The fuse is lit!', 'That is dynamite! RUN!', 'Put it out! Put it OUT!', 'It is fizzing! Why is it fizzing?!', 'Everybody back! It is lit!'],
+  sawC4: ['Is that... beeping?', 'BOMB! That is a bomb!', 'Get away from the beeping thing!', "It's beeping faster! Why is it beeping faster?!", 'That is plastic explosive!'],
+  sawMissile: ['MISSILE!', 'INCOMING!', 'Is that a ROCKET?!', 'DUCK!', 'Who launched that?!'],
+  bombRun: ['RUN!', 'It is going to blow!', 'Get clear! Get clear!', 'Too close, too close!', 'Faster!'],
+  sawElectrocuted: ['{victim} is being electrocuted!', 'Cut the power! CUT THE POWER!', "Don't touch {victim}! You'll get it too!", 'Somebody turn that generator off!', '{victim} is smoking!', 'Is {victim} touching the live wire?!'],
+  sawShockDeath: ['The current killed {victim}...', '{victim} is not moving. Is the power still on?!', 'Nobody touch {victim}! It could still be live!', 'Electrocuted. Oh no.'],
 };
 
 /*

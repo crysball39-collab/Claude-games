@@ -115,6 +115,8 @@ export function bleedSources(man) {
       const d = Math.hypot(e.x - a.x, e.y - a.y) || 1;
       add(e.x, e.y, (e.x - a.x) / d, (e.y - a.y) / d, st, 'stump' + part, clamp(st / 0.009, 0.3, 1));
     }
+    // (no head: nothing more out of where it was)
+    if (part === 'head' && man.cut.head) continue;
     const bones = PART_BONES[part];
     const open = man.wounds.filter((w) => !w.stain && !w.burn && bones.includes(w.bone) && !goneAt(man.cut, w.bone, w.t));
     const knives = man.stuck.filter((e) => bones.includes(e.bone));
@@ -155,7 +157,7 @@ export function bleedSources(man) {
     }
   }
   // a punctured lung: they cough it up
-  if (h.lung && h.internal > 0) {
+  if (h.lung && h.internal > 0 && !man.cut.head) {
     const q = headPoint(man, 0.62, -0.5), dir = headDir(man, 0.9, -0.2);
     add(q.x, q.y, dir.x, dir.y, h.internal * 0.12, 'mouth', 0);
   }

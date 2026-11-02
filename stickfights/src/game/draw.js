@@ -6,7 +6,7 @@
    up so y points up (see render.js). Text is never drawn here, because text
    in a y-up canvas comes out upside down.
    ========================================================================== */
-import { DIM, pointOnBone } from './skeleton.js';
+import { DIM, pointOnBone, HEAD_BONE } from './skeleton.js';
 
 export const INK = '#111111';      // the near arm and leg, the body, the head
 export const INK_FAR = '#2f2f2f';  // the far arm and leg, a touch lighter for depth
@@ -75,9 +75,10 @@ export function drawStickman(ctx, j, o) {
 
   ctx.strokeStyle = topInk;
   ctx.lineWidth = lw;
-  // the spine, then the neck up to the bottom of the head
+  // the spine, then the neck up to the bottom of the head (or, the head gone, to where the neck was cut)
   const nx = j.head.x - Math.sin(ha) * f * r, ny = j.head.y - Math.cos(ha) * r;
-  polyline(ctx, [j.hip, j.chest, j.neck, { x: nx, y: ny }]);
+  const neckTop = cut.head ? neckCut(j, f, s) : { x: nx, y: ny };
+  polyline(ctx, [j.hip, j.chest, j.neck, neckTop]);
   ctx.strokeStyle = legInk;
   limb(ctx, j, LEG_A, cut.legA);
   if (o.vest) drawWornVest(ctx, j, f, s, o.vest);
@@ -87,7 +88,8 @@ export function drawStickman(ctx, j, o) {
     if (o.kit.pocket) drawStowed(ctx, j, f, s, 'pocket', o.kit.pocket);
   }
 
-  if (skin && skin.head) skin.head(ctx, j, o, r, lw);
+  if (cut.head) drawStump(ctx, neckTop, lw, tint);
+  else if (skin && skin.head) skin.head(ctx, j, o, r, lw);
   else drawHead(ctx, j, o, r, lw);
 
   ctx.strokeStyle = topInk;
@@ -106,7 +108,7 @@ export function drawStickman(ctx, j, o) {
     else if (o.weapon === 'knife') drawHeldKnife(ctx, j.midForeA, j.handA, s, o.weaponBlood || 0);
     else if (o.weapon === 'machete') drawHeldMachete(ctx, j.midForeA, j.handA, s, f, o.weaponBlood || 0);
     else if (o.weapon === 'crowbar') drawHeldCrowbar(ctx, j.midForeA, j.handA, s, f, o.weaponBlood || 0);
-    else if (o.weapon === 'glock' || o.weapon === 'm1911' || o.weapon === 'ak47' || o.weapon === 'mossberg') drawHeldGun(ctx, j, s, f, o.weaponBlood || 0, o.gunSlide || 0, o.weapon);
+    else if (o.weapon === 'glock' || o.weapon === 'm1911' || o.weapon === 'ak47' || o.weapon === 'mossberg' || o.weapon === 'gasRifle') drawHeldGun(ctx, j, s, f, o.weaponBlood || 0, o.gunSlide || 0, o.weapon);
   }
   if (o.stuck) {
     for (const k of o.stuck) {
@@ -168,6 +170,35 @@ function drawStump(ctx, p, lw, tint = null) {
  * A piece of someone that came off: the bones as they were when it did, in
  * its own frame, the cut end (the first point) raw.
  */
+/** Where a neck that has been cut through ends: most of the way up to where the head was. */
+export function neckCut(j, f, s) {
+  const r = DIM.headR * s, ha = j.headAngle;
+  const nx = j.head.x - Math.sin(ha) * f * r, ny = j.head.y - Math.cos(ha) * r;
+  return { x: j.neck.x + (nx - j.neck.x) * 0.6, y: j.neck.y + (ny - j.neck.y) * 0.6 };
+}
+
+/**
+ * A head that has been cut off, drawn in its own frame: the stump of the neck
+ * under it, at `neck`, and the head over that, centred at `at` - the face as
+ * it was left (o: how the head was drawn on them - scale, facing, hair, face,
+ * hurt, headMarks, hat, ink, headFill, tint).
+ */
+export function drawSeveredHead(ctx, at, neck, o) {
+  const s = o.scale || 1, r = DIM.headR * s, lw = DIM.line * s, f = o.facing || 1;
+  // (the top of the head is the way out of the neck)
+  const ux = at.x - neck.x, uy = at.y - neck.y, d = Math.hypot(ux, uy) || 1;
+  const ha = Math.atan2((ux / d) * f, uy / d);
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = o.ink || INK;
+  ctx.lineWidth = lw;
+  ctx.beginPath();
+  ctx.moveTo(neck.x, neck.y);
+  ctx.lineTo(at.x - (ux / d) * r, at.y - (uy / d) * r);
+  ctx.stroke();
+  drawStump(ctx, neck, lw, o.tint || null);
+  drawHead(ctx, { head: at, headAngle: ha }, o, r, lw);
+}
+
 export function drawSeveredLimb(ctx, pts, lw, ink = INK, tint = null) {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
@@ -224,8 +255,9 @@ const CUT_HIDES = { humerusA: 'armA', forearmA: 'armA', humerusB: 'armB', forear
 const BONE_LIMB = { 3: ['armA', 0], 4: ['armA', 2], 5: ['armB', 0], 6: ['armB', 2], 7: ['legA', 0], 8: ['legA', 2], 9: ['legA', 4], 10: ['legB', 0], 11: ['legB', 2], 12: ['legB', 4] };
 const CHAIN_OF = { armA: ARM_A, armB: ARM_B, legA: LEG_A, legB: LEG_B };
 
-/** Whether the point t along bone b is on a part of a limb that is no longer there. */
+/** Whether the point t along bone b is on a part of a limb that is no longer there (or of a head). */
 export function goneAt(cut, b, t) {
+  if (b === HEAD_BONE) return !!(cut && cut.head) && t > 0.3;
   const bl = BONE_LIMB[b];
   if (!bl || !cut || !cut[bl[0]]) return false;
   const end = CHAIN_OF[bl[0]].indexOf(cut[bl[0]]);
@@ -994,11 +1026,66 @@ function drawHeldGun(ctx, j, s, f, blood, slide, kind = 'glock') {
 
 /** Any of the guns, by kind, in its own frame. (`slide` is the slide, the bolt or the pump, however far back it is.) */
 export function drawGunShape(ctx, kind, k = 1, blood = 0, slide = 0) {
-  if (kind === 'm1911') drawM1911Shape(ctx, k, blood, slide);
+  if (kind === 'gasRifle') drawGasRifleShape(ctx, k, blood);
+  else if (kind === 'm1911') drawM1911Shape(ctx, k, blood, slide);
   else if (kind === 'ak47') drawAKShape(ctx, k, blood, slide);
   else if (kind === 'mossberg') drawMossbergShape(ctx, k, blood, slide);
   else if (kind === 'taser') drawTaserShape(ctx, k, true);
   else drawGlockShape(ctx, k, blood, slide);
+}
+
+/* --------------------------------- gas rifle --------------------------------- */
+
+// a fat-barrelled launcher in olive drab, a canister of the gas slung under it, hazard stripes on the muzzle
+export const GAS_W = 0.9;
+export const GAS_H = 0.24;
+export const GAS_GRIP = { x: -0.1, y: -0.06 };
+export const GAS_MUZZLE = { x: 0.45, y: 0.035 };
+export const GAS_PORT = { x: 0.0, y: 0.06 };
+
+export function drawGasRifleShape(ctx, k = 1, blood = 0) {
+  const OD = '#4f5a2c', ODD = '#2f3619', ODL = '#6e7a42', ST = '#2b2d30';
+  ctx.save();
+  ctx.scale(k, k);
+  ctx.lineJoin = 'round';
+  // the stock
+  ctx.fillStyle = ST;
+  ctx.beginPath();
+  ctx.moveTo(-0.2, 0.055); ctx.lineTo(-0.45, 0.025); ctx.lineTo(-0.45, -0.07); ctx.lineTo(-0.38, -0.07); ctx.lineTo(-0.2, -0.01);
+  ctx.closePath();
+  ctx.fill();
+  // the receiver and the grip
+  ctx.fillStyle = OD;
+  ctx.fillRect(-0.2, -0.012, 0.3, 0.08);
+  ctx.fillStyle = ST;
+  ctx.beginPath(); ctx.moveTo(-0.13, -0.012); ctx.lineTo(-0.09, -0.012); ctx.lineTo(-0.11, -0.11); ctx.lineTo(-0.15, -0.105); ctx.closePath(); ctx.fill();
+  // the barrel: fat, and the flared muzzle with its stripes
+  ctx.fillStyle = ODD;
+  ctx.fillRect(0.08, 0.0, 0.33, 0.07);
+  ctx.fillStyle = ODL;
+  ctx.fillRect(0.08, 0.05, 0.33, 0.012);
+  ctx.fillStyle = '#e2c13a';
+  ctx.beginPath(); ctx.moveTo(0.4, -0.012); ctx.lineTo(0.45, -0.024); ctx.lineTo(0.45, 0.094); ctx.lineTo(0.4, 0.082); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = '#151515';
+  ctx.lineWidth = 0.01;
+  ctx.beginPath(); ctx.moveTo(0.41, -0.012); ctx.lineTo(0.43, 0.09); ctx.moveTo(0.43, -0.018); ctx.lineTo(0.45, 0.06); ctx.stroke();
+  // the canister of gas under the barrel, green, with its valve
+  ctx.fillStyle = '#6aa83a';
+  ctx.beginPath();
+  ctx.moveTo(0.06, -0.012); ctx.lineTo(0.3, -0.012); ctx.quadraticCurveTo(0.33, -0.05, 0.3, -0.09); ctx.lineTo(0.06, -0.09); ctx.quadraticCurveTo(0.03, -0.05, 0.06, -0.012);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+  ctx.fillRect(0.07, -0.032, 0.22, 0.01);
+  ctx.fillStyle = '#e2c13a';
+  ctx.beginPath(); ctx.arc(0.18, -0.051, 0.018, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = ST;
+  ctx.beginPath(); ctx.arc(0.18, -0.051, 0.007, 0, Math.PI * 2); ctx.fill();
+  if (blood > 0) {
+    ctx.fillStyle = `rgba(110, 7, 16, ${Math.min(0.8, blood)})`;
+    ctx.beginPath(); ctx.arc(0.25, 0.04, 0.03, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
 }
 
 /* ----------------------------------- AK-47 ----------------------------------- */

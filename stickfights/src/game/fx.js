@@ -14,8 +14,12 @@
 
    A stream is blood coming out hard - an artery, a stump - and is drops
    one after another, each joined to the last, so it is drawn as one
-   unbroken arc of it until it breaks up or lands. Wounds keep theirs going
-   (feedStream, from blood.js); a bad blow lets out a squirt (gush).
+   unbroken arc of it until it breaks up or lands. And it does break up, as
+   a stream of anything does: a little way out of the wound - sooner when
+   it comes weakly, sooner still stretched thin as it falls - the arc comes
+   apart into drops again, and now and then a drop splits in two. Wounds
+   keep theirs going (feedStream, from blood.js); a bad blow lets out a
+   squirt (gush).
 
    And what fire and ice give off (vitals.js): smoke and steam going up and
    spreading, embers rising and winking out, shards of ice that bounce and
@@ -233,6 +237,16 @@ export class FX {
     return s;
   }
 
+  /** A drop coming apart in two: a smaller one off it, going a little its own way. */
+  splitDrop(d) {
+    if (this.drops.length >= MAX_DROPS) return;
+    d.r *= 0.82;
+    this.drops.push({
+      x: d.x, y: d.y, vx: d.vx + rand(-0.35, 0.35), vy: d.vy + rand(-0.3, 0.3), r: d.r * 0.7, age: d.age,
+      from: d.from, sticky: Math.random() < STICK, tint: d.tint, link: null, stream: false,
+    });
+  }
+
   /** The streams pour: drops one after another, each joined to the one before while it comes hard. */
   updateStreams(dt) {
     const on = this.sb.settings.blood;
@@ -259,6 +273,8 @@ export class FX {
           vx: s.nx * sp + s.vx + rand(-j, j), vy: s.ny * sp + s.vy + rand(-j, j),
           r: 0.007 + 0.014 * Math.min(1, s.flow), age: 0, from: s.from, sticky: Math.random() < STICK, tint: s.tint,
           link: joined ? s.last : null, stream: true,
+          // (how long it stays joined to the drop before it: the harder it comes, the further out it holds together)
+          breakAt: rand(0.1, 0.3) * (0.5 + 0.7 * Math.min(1, s.flow)),
         };
         this.drops.push(d);
         s.last = joined ? d : null;
@@ -410,6 +426,15 @@ export class FX {
       d.vy -= G * dt;
       d.x += d.vx * dt;
       d.y += d.vy * dt;
+      // a stream holds together only so far: long enough in the air, or stretched thin, it comes apart into drops
+      if (d.link) {
+        const l = d.link, dx = d.x - l.x, dy = d.y - l.y;
+        if (l.gone || d.age > d.breakAt || dx * dx + dy * dy > 0.012) {
+          d.link = null;
+          d.broke = true;
+          if (!l.gone && chance(0.4)) this.splitDrop(d);
+        }
+      }
       let gone = false;
       if (d.y <= 0) {
         if (!d.water) this.splat(d.x, d.r, d.tint);

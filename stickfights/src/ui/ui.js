@@ -40,7 +40,7 @@ import { Gestures } from '../core/input.js';
 import {
   drawStickman, drawCrateShape, drawKnuckleShape, drawKnifeShape, drawMacheteShape, drawGlockShape,
   drawM1911Shape, drawTaserShape, drawVestShape, drawAmmoBoxShape, drawGunShape, drawCrowbarShape,
-  KNIFE_W, KNIFE_H, MACHETE_W, MACHETE_H, CROWBAR_W, CROWBAR_H, AK_W, MOSS_W, INK,
+  KNIFE_W, KNIFE_H, MACHETE_W, MACHETE_H, CROWBAR_W, CROWBAR_H, AK_W, MOSS_W, GAS_W, INK,
 } from '../game/draw.js';
 import { drawWallShape, WALLS } from '../game/structures.js';
 import { drawPlantShape } from '../game/trees.js';
@@ -57,12 +57,17 @@ import { relCategory } from '../game/brain.js';
 import { STYLE } from '../game/animator.js';
 import { LIMITS } from '../game/sandbox.js';
 import { isGun, AMMO_BOXES, VEST_W, VEST_H } from '../game/props.js';
+import { ORGANS, ORGAN_LIST } from '../game/health.js';
 import { clamp } from '../core/util.js';
 import { parseTemperature, setTemperature, fmtTemp, toF, vitalConditions, hasVitals, breathes } from '../game/vitals.js';
 import { installedMods, findSpawnable, modSpawnables, modOption } from '../mods/index.js';
+import { findGear } from '../game/gear.js';
 import { ModsScreen } from './mods-screen.js';
 import { MapsScreen } from './maps-screen.js';
 import { loadMap, getMap } from '../game/maps.js';
+
+/** Something to spawn that is not one of KINDS: a mod's, or one of the core gear (gear.js) described the same way. */
+const findAny = (k) => findSpawnable(k) || findGear(k);
 
 const KINDS = {
   stickman: { name: 'Stickman', short: 'STICKMAN', plural: 'stickmen', limit: 'people' },
@@ -78,6 +83,7 @@ const KINDS = {
   crowbar: { name: 'Crowbar', short: 'CROWBAR', plural: 'crowbars', limit: 'crowbars' },
   ak47: { name: 'AK-47', short: 'AK-47', plural: 'guns', limit: 'guns', an: true },
   mossberg: { name: 'Mossberg 500', short: 'MOSSBERG', plural: 'guns', limit: 'guns' },
+  gasRifle: { name: 'Gas Rifle', short: 'GAS RIFLE', plural: 'guns', limit: 'guns' },
   ammo9: { name: '9 mm Ammo Box', short: '9 MM AMMO', plural: 'ammo boxes', limit: 'ammo' },
   ammo45: { name: '.45 ACP Ammo Box', short: '.45 AMMO', plural: 'ammo boxes', limit: 'ammo' },
   ammo762: { name: '7.62 mm Ammo Can', short: '7.62 AMMO', plural: 'ammo boxes', limit: 'ammo' },
@@ -85,6 +91,8 @@ const KINDS = {
   woodWall: { name: 'Wood Wall', short: 'WOOD WALL', plural: 'walls', limit: 'walls' },
   metalWall: { name: 'Metal Wall', short: 'METAL WALL', plural: 'walls', limit: 'walls' },
   glassWall: { name: 'Glass Wall', short: 'GLASS WALL', plural: 'walls', limit: 'walls' },
+  beamSmall: { name: 'Small Metal Beam', short: 'SMALL BEAM', plural: 'walls and beams', limit: 'walls' },
+  beamLarge: { name: 'Large Metal Beam', short: 'LARGE BEAM', plural: 'walls and beams', limit: 'walls' },
   gallows: { name: 'Gallows', short: 'GALLOWS', plural: 'gallows', limit: 'gallows' },
   tree: { name: 'Tree', short: 'TREE', plural: 'trees and bushes', limit: 'plants' },
   bush: { name: 'Bush', short: 'BUSH', plural: 'trees and bushes', limit: 'plants' },
@@ -95,7 +103,7 @@ const SLOT_SAID = { holster: 'In the holster', pocket: 'In a pocket', duty: 'On 
 const KEYS = ['stickman', 'knuckles', 'crate', 'knife', 'machete', 'glock'];
 const ARM_NAMES = {
   knife: 'Grab the knife', machete: 'Grab the machete', glock: 'Grab the gun', m1911: 'Grab the M1911', taser: 'Grab the taser', knuckles: 'Grab the brass knuckles',
-  crowbar: 'Grab the crowbar', ak47: 'Grab the AK-47', mossberg: 'Grab the shotgun',
+  crowbar: 'Grab the crowbar', ak47: 'Grab the AK-47', mossberg: 'Grab the shotgun', gasRifle: 'Grab the gas rifle',
 };
 // a padlock: the shackle drops into the body when it is locked (CSS moves it)
 const LOCK_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path class="shackle" d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/><rect x="5" y="11" width="14" height="10" rx="2.5" fill="currentColor"/></svg>';
@@ -231,7 +239,7 @@ export class UI {
 
   /** What the HUD needs to know about a kind of thing: the game's own, or one a mod adds. */
   kindInfo(k) {
-    return KINDS[k] || findSpawnable(k) || KINDS.stickman;
+    return KINDS[k] || findAny(k) || KINDS.stickman;
   }
 
   /* -------------------------------------------------------------------------- */
@@ -433,7 +441,7 @@ export class UI {
 
   spawnAt(x, y) {
     const k = this.spawnKind, sb = this.sb;
-    const mod = KINDS[k] ? null : findSpawnable(k);
+    const mod = KINDS[k] ? null : findAny(k);
     let made = null;
     if (mod) made = mod.spawn(sb, x, y);
     else if (k === 'stickman') made = sb.spawnStickman(x);
@@ -447,7 +455,7 @@ export class UI {
     else if (k === 'officer') made = spawnOfficer(sb, x);
     else if (k === 'vest') made = sb.spawnVest(x, Math.max(y, 0.1));
     else if (k === 'crowbar') made = sb.spawnCrowbar(x, Math.max(y, 0.1), Math.random() * 0.3 - 0.15);
-    else if (k === 'ak47' || k === 'mossberg') made = sb.spawnGun(x, Math.max(y, 0.14), Math.random() * 0.2 - 0.1, k);
+    else if (k === 'ak47' || k === 'mossberg' || k === 'gasRifle') made = sb.spawnGun(x, Math.max(y, 0.14), Math.random() * 0.2 - 0.1, k);
     else if (AMMO_KEYS[k]) made = sb.spawnAmmo(x, Math.max(y, 0.2), AMMO_KEYS[k]);
     else if (WALLS[k]) made = sb.spawnWall(k, x, y);
     else if (k === 'tree' || k === 'bush') made = sb.spawnPlant(k, x, y);
@@ -519,7 +527,7 @@ export class UI {
   /** A mod has gone in or come out: the spawn menu, the spawn tool and the inspector catch up. */
   modsChanged(m, on) {
     this.renderDrawerMods();
-    if (!on && !KINDS[this.spawnKind] && !findSpawnable(this.spawnKind)) {
+    if (!on && !KINDS[this.spawnKind] && !findAny(this.spawnKind)) {
       this.setSpawnKind('stickman');
       if (this.tool === 'spawn') this.setTool('hand');
     }
@@ -615,7 +623,7 @@ export class UI {
   }
 
   setSpawnKind(k) {
-    if (!KINDS[k] && !findSpawnable(k)) k = 'stickman';
+    if (!KINDS[k] && !findAny(k)) k = 'stickman';
     this.spawnKind = k;
     for (const c of document.querySelectorAll('.card')) c.classList.toggle('selected', c.dataset.spawn === k);
     this.$('tool-spawn-name').textContent = this.kindInfo(k).short;
@@ -706,7 +714,7 @@ export class UI {
       ctx.fillStyle = '#000';
       ctx.fillRect(0, h * 0.84, w, h * 0.16);
     }
-    const mod = KINDS[kind] ? null : findSpawnable(kind);
+    const mod = KINDS[kind] ? null : findAny(kind);
     if (mod) {
       if (mod.icon) mod.icon(ctx, w, h, card);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -774,13 +782,21 @@ export class UI {
       const a = card ? 0.62 : 0.78;
       ctx.setTransform(s * Math.cos(a), -s * Math.sin(a), -s * Math.sin(a), -s * Math.cos(a), w / 2, card ? h * 0.5 : h / 2);
       drawCrowbarShape(ctx, CROWBAR_W, CROWBAR_H, 0);
-    } else if (kind === 'ak47' || kind === 'mossberg') {
+    } else if (kind === 'ak47' || kind === 'mossberg' || kind === 'gasRifle') {
       // a long gun, at a slant to fit
-      const len = kind === 'ak47' ? AK_W : MOSS_W;
+      const len = kind === 'ak47' ? AK_W : kind === 'gasRifle' ? GAS_W : MOSS_W;
       const s = (w * (card ? 0.98 : 1.1)) / len;
       const a = card ? 0.42 : 0.55;
       ctx.setTransform(s * Math.cos(a), -s * Math.sin(a), -s * Math.sin(a), -s * Math.cos(a), w / 2, h * 0.5);
       drawGunShape(ctx, kind, 1, 0, 0);
+    } else if (WALLS[kind] && WALLS[kind].beam) {
+      // a beam: all of it, lying across the card, tilted a little
+      const sp = WALLS[kind], k = (w * 0.86) / sp.w;
+      ctx.save();
+      ctx.translate(w / 2, card ? h * 0.5 : h / 2);
+      ctx.rotate(-0.35);
+      drawWallShape(ctx, kind, 0, sp.h * k * 0.5 * (kind === 'beamSmall' ? 1.8 : 1.5), sp.h * k * (kind === 'beamSmall' ? 1.8 : 1.5));
+      ctx.restore();
     } else if (WALLS[kind]) {
       // a length of the wall, near enough life size on the card
       const sp = WALLS[kind];
@@ -1665,7 +1681,9 @@ export class UI {
    * and red as the part around it takes damage, and broken bones drawn
    * snapped, in red. Whatever has been cut off is not there, joints out of
    * their sockets are ringed in purple, and the bullets still in them show
-   * up as little gold dots.
+   * up as little gold dots. Behind the bones, the organs: each in its own
+   * colour while it is sound, darkening and ringed in red as it is damaged,
+   * and black, crossed out, once it is gone.
    */
   drawFigure(p) {
     const cv = this.$('ins-figure');
@@ -1682,10 +1700,12 @@ export class UI {
       const f = part(partKey).hp / part(partKey).max;
       return f > 0.66 ? '#e8f1f4' : f > 0.33 ? '#f3c95a' : '#f08a3c';
     };
-    const j = solve(P({ t: 0, aA: [22, 8], aB: [-22, 8], lA: [10, 0], lB: [-10, 0] }), 1, makeJoints());
-    const s = 70;
-    ctx.setTransform(s, 0, 0, -s, cv.width / 2, cv.height - 5);
+    // (the arms held out from the body, so they are not in front of what is inside it)
+    const j = solve(P({ t: 0, aA: [40, 6], aB: [-40, 6], lA: [10, 0], lB: [-10, 0] }), 1, makeJoints());
+    const s = cv.height * 0.515;
+    ctx.setTransform(s, 0, 0, -s, cv.width / 2, cv.height - cv.height * 0.037);
     ctx.lineCap = 'round';
+    this.drawOrgans(ctx, j, h, !!p.cut.head, p.dead);
     const bone = (a, b, c, w = 0.065, broken = false) => {
       ctx.strokeStyle = c;
       ctx.lineWidth = w;
@@ -1737,9 +1757,10 @@ export class UI {
       ctx.fillRect(x - 0.035, y - 0.02, 0.07, 0.034);
     }
     if (B('spine')) { ctx.strokeStyle = '#ff4a3d'; ctx.lineWidth = 0.035; ctx.beginPath(); ctx.moveTo(j.hip.x - 0.08, j.chest.y - 0.08); ctx.lineTo(j.hip.x + 0.08, j.chest.y - 0.02); ctx.stroke(); }
-    // the ribcage: four pairs of ribs curving round from the spine
+    // the ribcage: four pairs of ribs curving round from the spine (thin, and half see-through: the heart and lungs show through)
     ctx.strokeStyle = col('ribs', 'torso');
-    ctx.lineWidth = 0.03;
+    ctx.globalAlpha = 0.6;
+    ctx.lineWidth = 0.022;
     for (let i = 0; i < 4; i++) {
       const y = j.chest.y + 0.18 - i * 0.055;
       const w = 0.1 + i * 0.012;
@@ -1751,6 +1772,7 @@ export class UI {
         ctx.stroke();
       }
     }
+    ctx.globalAlpha = 1;
     // the pelvis
     ctx.strokeStyle = col('pelvis', 'torso');
     ctx.lineWidth = 0.04;
@@ -1759,35 +1781,17 @@ export class UI {
     ctx.quadraticCurveTo(j.hip.x, j.hip.y - 0.1, j.hip.x + 0.13, j.hip.y + 0.08);
     if (B('pelvis')) ctx.moveTo(j.hip.x + 0.02, j.hip.y + 0.04), ctx.lineTo(j.hip.x - 0.03, j.hip.y - 0.06);
     ctx.stroke();
-    // the neck and the skull
-    ctx.strokeStyle = col('neck', 'head');
-    ctx.lineWidth = 0.05;
-    ctx.beginPath();
-    ctx.moveTo(j.neck.x, j.neck.y);
-    ctx.lineTo(j.head.x, j.head.y - DIM.headR * 0.9);
-    ctx.stroke();
-    if (B('neck')) {
-      ctx.strokeStyle = '#ff4a3d';
-      ctx.lineWidth = 0.03;
-      ctx.beginPath(); ctx.moveTo(j.neck.x - 0.06, j.neck.y + 0.04); ctx.lineTo(j.neck.x + 0.06, j.neck.y + 0.08); ctx.stroke();
-    }
-    ctx.strokeStyle = col('skull', 'head');
-    ctx.lineWidth = 0.04;
-    ctx.beginPath();
-    ctx.arc(j.head.x, j.head.y, DIM.headR, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fillStyle = col('skull', 'head');
-    ctx.beginPath();
-    ctx.arc(j.head.x - 0.05, j.head.y + 0.01, 0.03, 0, Math.PI * 2);
-    ctx.arc(j.head.x + 0.05, j.head.y + 0.01, 0.03, 0, Math.PI * 2);
-    ctx.fill();
-    if (B('skull')) {
-      ctx.strokeStyle = '#ff4a3d';
-      ctx.lineWidth = 0.025;
+    // the neck and the skull - or, the head cut off, the neck ending in a red stump
+    if (p.cut.head) {
+      ctx.strokeStyle = col('neck', 'head');
+      ctx.lineWidth = 0.05;
       ctx.beginPath();
-      ctx.moveTo(j.head.x - 0.08, j.head.y + 0.12); ctx.lineTo(j.head.x - 0.02, j.head.y + 0.06); ctx.lineTo(j.head.x + 0.04, j.head.y + 0.13);
+      ctx.moveTo(j.neck.x, j.neck.y);
+      ctx.lineTo(j.neck.x, j.neck.y + 0.05);
       ctx.stroke();
-    }
+      ctx.fillStyle = '#ff4a3d';
+      ctx.beginPath(); ctx.arc(j.neck.x, j.neck.y + 0.05, 0.04, 0, Math.PI * 2); ctx.fill();
+    } else this.drawSkull(ctx, j, col, B);
     // knives in them, where they are
     if (p.stuck.length) {
       ctx.fillStyle = '#ff4a3d';
@@ -1818,6 +1822,91 @@ export class UI {
       const x = j[ends[0]].x + (j[ends[1]].x - j[ends[0]].x) * t + (ends[0] === ends[1] ? (i - 1) * 0.04 : 0);
       const y = j[ends[0]].y + (j[ends[1]].y - j[ends[0]].y) * t;
       ctx.beginPath(); ctx.arc(x, y, 0.028, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  /**
+   * The organs, in the X-ray (in metres, the figure's own frame): where each
+   * is in the body (health.js ORGANS) and how sound it is.
+   */
+  drawOrgans(ctx, j, h, headless, dead) {
+    const up = (t) => ({ x: j.hip.x + (j.neck.x - j.hip.x) * t, y: j.hip.y + (j.neck.y - j.hip.y) * t });
+    const SHAPE = {
+      brain: { at: () => ({ x: j.head.x, y: j.head.y + 0.025 }), rx: 0.105, ry: 0.078, c: [242, 170, 180] },
+      lungA: { rx: 0.05, ry: 0.105, c: [236, 140, 150] }, lungB: { rx: 0.05, ry: 0.105, c: [236, 140, 150] },
+      heart: { rx: 0.042, ry: 0.048, c: [214, 52, 60] },
+      liver: { rx: 0.075, ry: 0.042, c: [150, 52, 46] }, stomach: { rx: 0.05, ry: 0.036, c: [236, 170, 140] },
+      kidneys: { rx: 0.022, ry: 0.032, c: [176, 70, 70], pair: true },
+      intestines: { rx: 0.085, ry: 0.07, c: [228, 150, 130], coil: true },
+    };
+    for (const k of ORGAN_LIST) {
+      if (k === 'brain' && headless) continue;
+      const O = ORGANS[k], S = SHAPE[k], v = h.organs[k];
+      const c = S.at ? S.at() : (() => { const q = up((O.lo + O.hi) / 2); return { x: q.x + O.side * 0.085, y: q.y }; })();
+      // sound: its own colour; damaged, darker; gone, near black (and grey, the whole of them dead)
+      const k2 = Math.max(0, Math.min(1, v));
+      const mix = (a, b, t) => Math.round(a + (b - a) * t);
+      const [r, g, b] = dead ? [96, 100, 104] : S.c;
+      const dark = 1 - k2;
+      ctx.fillStyle = `rgba(${mix(r, 52, dark * 0.85)}, ${mix(g, 14, dark * 0.85)}, ${mix(b, 18, dark * 0.85)}, ${0.8 + dark * 0.15})`;
+      const blob = (x, y) => { ctx.beginPath(); ctx.ellipse(x, y, S.rx, S.ry, 0, 0, Math.PI * 2); ctx.fill(); if (v < 0.85) ctx.stroke(); };
+      ctx.strokeStyle = v <= 0 ? '#ff2a2a' : `rgba(255, 70, 60, ${0.4 + dark * 0.6})`;
+      ctx.lineWidth = 0.012;
+      if (S.pair) { blob(c.x - 0.05, c.y); blob(c.x + 0.05, c.y); }
+      else if (S.coil) {
+        // the gut: a tube folded back and forth on itself
+        ctx.lineWidth = 0.026;
+        ctx.strokeStyle = ctx.fillStyle;
+        ctx.beginPath();
+        for (let i = 0; i <= 24; i++) {
+          const t = i / 24, row = Math.floor(t * 4), u = t * 4 - row;
+          const x = c.x + (row % 2 ? 1 - u : u) * S.rx * 2 - S.rx, y = c.y + S.ry - row * (S.ry * 2 / 3.2) + Math.sin(u * Math.PI * 3) * 0.008;
+          if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        }
+        ctx.stroke();
+        if (v < 0.85) { ctx.strokeStyle = `rgba(255, 70, 60, ${0.4 + dark * 0.6})`; ctx.lineWidth = 0.012; ctx.strokeRect(c.x - S.rx, c.y - S.ry, S.rx * 2, S.ry * 2); }
+      } else blob(c.x, c.y);
+      // gone: crossed out
+      if (v <= 0) {
+        ctx.strokeStyle = '#ff2a2a';
+        ctx.lineWidth = 0.016;
+        ctx.beginPath();
+        ctx.moveTo(c.x - S.rx * 0.6, c.y - S.ry * 0.6); ctx.lineTo(c.x + S.rx * 0.6, c.y + S.ry * 0.6);
+        ctx.moveTo(c.x - S.rx * 0.6, c.y + S.ry * 0.6); ctx.lineTo(c.x + S.rx * 0.6, c.y - S.ry * 0.6);
+        ctx.stroke();
+      }
+    }
+  }
+
+  /** The X-ray's neck and skull: a crack across either that is broken. */
+  drawSkull(ctx, j, col, B) {
+    ctx.strokeStyle = col('neck', 'head');
+    ctx.lineWidth = 0.05;
+    ctx.beginPath();
+    ctx.moveTo(j.neck.x, j.neck.y);
+    ctx.lineTo(j.head.x, j.head.y - DIM.headR * 0.9);
+    ctx.stroke();
+    if (B('neck')) {
+      ctx.strokeStyle = '#ff4a3d';
+      ctx.lineWidth = 0.03;
+      ctx.beginPath(); ctx.moveTo(j.neck.x - 0.06, j.neck.y + 0.04); ctx.lineTo(j.neck.x + 0.06, j.neck.y + 0.08); ctx.stroke();
+    }
+    ctx.strokeStyle = col('skull', 'head');
+    ctx.lineWidth = 0.04;
+    ctx.beginPath();
+    ctx.arc(j.head.x, j.head.y, DIM.headR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = col('skull', 'head');
+    ctx.beginPath();
+    ctx.arc(j.head.x - 0.05, j.head.y + 0.01, 0.03, 0, Math.PI * 2);
+    ctx.arc(j.head.x + 0.05, j.head.y + 0.01, 0.03, 0, Math.PI * 2);
+    ctx.fill();
+    if (B('skull')) {
+      ctx.strokeStyle = '#ff4a3d';
+      ctx.lineWidth = 0.025;
+      ctx.beginPath();
+      ctx.moveTo(j.head.x - 0.08, j.head.y + 0.12); ctx.lineTo(j.head.x - 0.02, j.head.y + 0.06); ctx.lineTo(j.head.x + 0.04, j.head.y + 0.13);
+      ctx.stroke();
     }
   }
 
@@ -1917,11 +2006,11 @@ export class UI {
     if (this.tool === 'spawn' && this.hover && !this.hand.active) {
       const w = this.world(this.hover.x, this.hover.y);
       const k = this.spawnKind;
-      const mod = KINDS[k] ? null : findSpawnable(k);
+      const mod = KINDS[k] ? null : findAny(k);
       const box = AMMO_KEYS[k] ? AMMO_BOXES[AMMO_KEYS[k]] : null;
       const stands = k === 'stickman' || k === 'officer' || (mod && mod.living) || WALLS[k] || k === 'tree' || k === 'bush' || k === 'gallows';
       const y = stands ? this.sb.surfaceBelow(w.x, 0.15, WALLS[k] || k === 'tree' || k === 'bush' || k === 'gallows' ? w.y + 0.02 : 100).y
-        : Math.max(w.y, k === 'crate' ? 0.39 : k === 'knife' ? 0.03 : k === 'machete' || k === 'crowbar' ? 0.05 : k === 'glock' || k === 'm1911' || k === 'taser' ? 0.08 : k === 'ak47' || k === 'mossberg' ? 0.14 : box ? box.h / 2 : 0.04);
+        : Math.max(w.y, k === 'crate' ? 0.39 : k === 'knife' ? 0.03 : k === 'machete' || k === 'crowbar' ? 0.05 : k === 'glock' || k === 'm1911' || k === 'taser' ? 0.08 : k === 'ak47' || k === 'mossberg' || k === 'gasRifle' ? 0.14 : box ? box.h / 2 : 0.04);
       ghost = { kind: box ? 'ammo' : this.spawnKind, size: box ? AMMO_KEYS[k] : null, x: k === 'gallows' ? w.x - 1 : w.x, y, draw: mod && mod.ghost ? mod.ghost : null };
     }
     // a wire being put in: from its first end to the pointer (or, a pin, where it would go)

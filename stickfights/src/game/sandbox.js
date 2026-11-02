@@ -29,6 +29,7 @@ import { solveWires, bulletThrough } from './wires.js';
 import { Plant } from './trees.js';
 import { Gallows } from './gallows.js';
 import { makePerson } from './people.js';
+import { launchGas } from './gas.js';
 import { clamp, rand, chance } from '../core/util.js';
 
 export const STEP = 1 / 120;
@@ -967,6 +968,12 @@ export class Sandbox {
         const h = q.rayHit(px, py, dx, dy, range);
         if (h && (!best || h.t < best.t)) best = { t: h.t, what: 'person', who: q, hit: h };
       }
+      // glass (a lightbulb, a floodlight's lens) and explosives in the way (power.js, explosives.js)
+      for (const t of this.items) {
+        if (t.removed || hit.has(t) || !t.body || !((t.shatter && !t.broken) || t.chain)) continue;
+        const h = rayBox(t.body, px, py, dx, dy, range);
+        if (h && (!best || h.t < best.t)) best = { t: h.t, what: 'item', item: t };
+      }
       if (!best) {
         path.push([px, py, px + dx * range, py + dy * range]);
         px += dx * range; py += dy * range;
@@ -1045,6 +1052,20 @@ export class Sandbox {
         path.push([hx, hy, ox, oy]);
         px = ox + dx * 0.01; py = oy + dy * 0.01;
         range -= r.out;
+      } else if (best.what === 'item') {
+        // glass shatters and the shot goes on through; an explosive goes off, and that is the end of the shot
+        const t = best.item;
+        hit.add(t);
+        this.emit('bulletHit', { what: t, x: hx, y: hy, energy });
+        if (t.shatter && !t.broken) {
+          t.shatter(this);
+          px = hx + dx * 0.02; py = hy + dy * 0.02;
+          energy -= 0.1;
+          continue;
+        }
+        this.fx.sparks(hx, hy, 4);
+        t.chain();
+        energy = 0;
       } else if (best.what === 'floor') {
         // in shallow, it skips off; any steeper and it buries itself
         if (dy > -0.22 && ricochets < 2 && chance(0.65)) {
@@ -1110,6 +1131,14 @@ export class Sandbox {
     const spec = g.spec || {}, kick = spec.kick || 1;
     g.mag--;
     g.lastShot = this.time;
+    // a gas rifle: the canister out of it with a thump, and it kicks
+    if (spec.gas) {
+      this.emit('shot', { who: null, gun: g, x: m.x, y: m.y, loud: true, heavy: false, kind: g.kind });
+      launchGas(this, null, m.x, m.y, m.a + rand(-0.01, 0.01));
+      g.body.applyImpulse(-Math.cos(m.a) * 2 * kick, -Math.sin(m.a) * 2 * kick + 0.8, m.x, m.y);
+      g.body.angVel += rand(2, 5) * (Math.cos(m.a) >= 0 ? 1 : -1);
+      return true;
+    }
     this.fx.flash(m.x, m.y, m.a, kick > 1.2 ? 1.3 : 1);
     const port = spec.port ? g.body.toWorld(spec.port.x, spec.port.y) : g.body.toWorld(0.01, 0.09);
     if (!spec.pump) this.fx.casing(port.x, port.y, -Math.cos(m.a) * 1.5 + rand(-0.5, 0.5), 2.5 + rand(0, 1.5), { long: !!spec.long });

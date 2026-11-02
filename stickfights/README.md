@@ -3,13 +3,16 @@
 A 2D sandbox of stickmen with minds of their own, on a grey background and a
 black floor. You spawn **stickmen** and **police officers**, **brass
 knuckles**, **combat knives**, **machetes**, **crowbars**, **Glock-19** and
-**M1911** pistols, an **AK-47**, a **Mossberg 500** pump shotgun, **tasers**,
-**light vests**, a box of **ammo** for each kind of gun, **crates**, **wood**,
-**metal** and **glass walls**, a **gallows**, **trees** and **bushes**, and the stickmen get
-on with it: they look around, talk, make friends and enemies,
+**M1911** pistols, an **AK-47**, a **Mossberg 500** pump shotgun, a **gas
+rifle**, **tasers**, **light vests**, a box of **ammo** for each kind of gun,
+**grenades**, **C4**, **TNT** and **missiles**, **crates**, **wood**,
+**metal** and **glass walls**, small and large **metal beams**, a
+**gallows**, **trees** and **bushes**, and a **generator** with
+**lightbulbs**, **floodlights** and a **volt meter** to run off it - and the
+stickmen get on with it: they look around, talk, make friends and enemies,
 shake hands and hug, pick things up and put them in their pockets, climb on
 things, fight until they are out of breath, run, hide, help each other up, get
-hurt, stumble, break bones, lose limbs, and die - and the ones still standing
+hurt, stumble, break bones, lose limbs and heads, and die - and the ones still standing
 feel it, and remember it. Whoever does something to somebody else has the
 police to answer to.
 
@@ -52,6 +55,21 @@ of **C4** or a **bomb** - and everybody near it is hurt by how near they
 were, thrown, burned and torn apart; walls, buildings and trees are blown out
 cell by cell.
 
+**Explosives** come as things to put down, too, and set off when you like: a
+**grenade** goes four seconds after its pin is pulled, **C4** sticks to
+whatever it lands on and beeps faster and faster for three, the fuse on a
+bundle of **TNT** fizzes down - and somebody on fire walking past lights it -
+and a **missile** flies the way it points until it hits something. Any of
+them caught in a blast goes off with it, and anyone who sees one about to go
+runs for it. A **generator** puts 230 volts down the wire tool's **power
+cords**: a **lightbulb** or a **floodlight** on the end lights up, a **volt
+meter** reads what is on it, and a metal wall or beam tied to it is live -
+whoever touches it is electrocuted, locked stiff and burned, and their heart
+takes it. Bulbs and floodlights shatter when they are dropped, shot or blown
+up. The **gas rifle** lobs canisters that burst into a green cloud of poison
+gas: whoever breathes it chokes and coughs, and it eats at their lungs - and
+they get out of it if they can.
+
 The sandbox starts out **Flat** - the grey sky and the black ground - or,
 from **MAPS**, as the **City**: a street of buildings - two office towers, an
 apartment block, old brick and a couple of shops - with lamps over it, trees
@@ -80,6 +98,13 @@ which draws in to a purple beam that cuts clean through buildings - and who,
 hurt badly, fires from every plate on his back and the end of his tail. With
 nobody left, they tear the city apart; put both down and they go for each
 other (see [Mods](#mods)).
+
+Inside every stickman are **organs** - a brain, a heart, two lungs, a liver,
+a stomach, kidneys and a gut - and a bullet, a blade, a blast, poison gas or
+current hurts the ones it reaches, with what that does (a heart stopping, the
+lungs giving out); the inspector's X-ray shows them. A head can come off as
+well as a limb, and the blood that pours out of a stump or a neck comes in a
+stream that breaks back up into drops as it falls.
 
 While a stickman is in charge of their own body, every move they make is a
 hand-keyed animation, played frame by frame. The moment they are not -
@@ -133,7 +158,7 @@ street - people walk along in front of them, and nothing in the street lands
 on them - but they come apart like walls do (see [Buildings](#buildings-and-the-city)),
 and the hand from above can pull a lump off one.
 
-The spawn menu (☰ **SPAWN**, top left) has twenty-three things in it, in six
+The spawn menu (☰ **SPAWN**, top left) has thirty-four things in it, in eight
 sections:
 
 | Section | Thing | What it is |
@@ -149,13 +174,24 @@ sections:
 | Weapons | **AK-47** | An automatic rifle: 30 rounds of 7.62 and two spare magazines, fired in bursts as fast as the trigger is held. Goes through a person, a wood wall, glass. Carried slung across the back. |
 | Weapons | **Mossberg 500** | A pump shotgun: six shells of 12 gauge, each one eight pellets that spread as they go - devastating close up, much less so across the room. The pump is worked after every shot, and the red shell flies out. |
 | Weapons | **Taser** | Two barbed probes on wires: both in, and five seconds of current lock every muscle - down they go, stiff as a board. A vest stops it. Out of cartridges, it still hurts pressed against somebody. |
+| Weapons | **Gas Rifle** | Five canisters of poison gas and ten spare, lobbed in an arc to come down on whoever it is aimed at; each bursts into a green cloud that hangs there a quarter of a minute. Whoever breathes it chokes, coughs and passes out, and it eats at their lungs. Carried slung across the back. |
+| Explosives | **Grenade** | Tap it: the pin is out, and four seconds later it goes off, its casing flying. Throw it with the hand in the meantime. |
+| Explosives | **C4** | A block of plastic explosive with a detonator on it. Sticks to whatever it lands on - a wall, a crate, a person - and goes where that goes. Tap it: three seconds of beeping, faster and faster, then a big bang. |
+| Explosives | **TNT** | Three sticks taped together with a fuse. Tap it to light the fuse, which fizzes down for a few seconds - and somebody on fire coming near it lights it too. |
+| Explosives | **Missile** | Tap it: the motor lights and it flies straight the way it points, trailing fire and smoke, until its nose meets somebody, a wall or the ground. Turn it with the hand to aim it. |
 | Objects | **Crate** | 22 kg of wood. Stack it, climb it, throw it - or let a stickman throw it. |
 | Objects | **Light Vest** | Soft armour for the body. Stops most pistol rounds to the chest - they still land like a hammer - and takes the worst out of a blade. Wears down with every round. |
 | Ammo | **9 mm**, **.45 ACP**, **7.62 mm** and **12 gauge** | 50 rounds for the Glock (a cardboard box with a blue band), 50 for the M1911 (a green plastic case), 120 for the AK (a steel can) and 25 shells for the Mossberg (a red box). Rounds only go in the gun they are made for: anyone running low comes for the box that fits, and leaves the others. |
 | Building | **Wood Wall** | Planks on battens, 2.4 m tall. Bullets punch straight through; blows, bodies and crates break it up a few centimetres at a time; a knife thrown point first sticks in it. |
 | Building | **Metal Wall** | A riveted steel plate. Stops pistol rounds dead (and sometimes sends them back off it), and takes a great deal to dent, let alone break. |
 | Building | **Glass Wall** | A pane they can see through. Every knock cracks it further, and cracked enough it all comes down in shards - which cut whoever they land on. |
+| Building | **Small Metal Beam** | A two-metre steel I-beam, lying flat: flanges, web, bolt holes and a little rust. Build with it, pin it, prop things on it, pick it up and drop it on something. Tied to a power cord, it is live. |
+| Building | **Large Metal Beam** | The same, four metres long and deeper: a lot heavier, and harder to dent. |
 | Building | **Gallows** | A post and a braced beam over a platform with a trapdoor in it, and a noose hanging from the end of the beam. Bring someone's neck to the noose with the hand and set them on the trapdoor; tap the gallows to pull the lever. Each timber is held up by what it rests on, and comes down when that is cut through. |
+| Electricity | **Generator** | Tap it: it coughs, catches and runs, smoking and rattling - 230 volts down any power cord tied to it, until it is tapped again. |
+| Electricity | **Lightbulb** | Lights up, warm, on a power cord from a running generator. Dropped, hit, shot or blown up, it shatters; live, its bare filament sparks. |
+| Electricity | **Floodlight** | A hard white beam of light the way it points (turn it with the hand). Its glass shatters too. |
+| Electricity | **Volt Meter** | Reads, in red digits, the voltage on whatever it is tied to with a power cord: 000, or 230 off a running generator. |
 | Nature | **Tree** | A trunk, branches, smaller branches, twigs and leaves, every one of them springy: it sways, bends under whatever pushes or hangs off it, sheds leaves when it is shot, and comes down when the trunk is cut through. |
 | Nature | **Bush** | Low, leafy stems. People walk through it - it gives way round them and closes behind - and it is drawn in front of them. |
 
@@ -167,7 +203,7 @@ The six tools along the bottom:
 
 | Tool | What it does |
 | ---- | ------------ |
-| ✋ **HAND** | Drag anything to move it. Let go while moving to throw it. Tap a stickman to open their mind. Drag empty space to pan. Drag a blade stuck in someone to pull it out. Tap a gun or a taser lying on the floor to fire it (empty, a tap puts a fresh magazine or cartridge in). Tap an ammo box, a vest, a wall or a tree to see what is left of it. A wall is slid along where it is dragged, and stands on whatever is under it when let go; a tree is dragged by its trunk, and a branch or a twig grabbed is bent - too far, and it snaps off. **With the world paused** (or the thing frozen), nothing swings and nothing is thrown: it is picked up and put down just as it was. |
+| ✋ **HAND** | Drag anything to move it. Let go while moving to throw it. Tap a stickman to open their mind. Drag empty space to pan. Drag a blade stuck in someone to pull it out. Tap a gun or a taser lying on the floor to fire it (empty, a tap puts a fresh magazine or cartridge in). Tap an ammo box, a vest, a wall or a tree to see what is left of it. Tap a grenade, C4, TNT or a missile to set it off, and a generator to start it or stop it. A wall is slid along where it is dragged, and stands on whatever is under it when let go; a tree is dragged by its trunk, and a branch or a twig grabbed is bent - too far, and it snaps off. **With the world paused** (or the thing frozen), nothing swings and nothing is thrown: it is picked up and put down just as it was. |
 | **SPAWN** (shows what is picked) | Tap the world to place it. |
 | 🔒 **FREEZE** | Tap something to freeze it in place - a crate in mid-air, a falling knife, a wall, a tree, a person mid-stride - and tap it again to let it go. Nothing moves it: not gravity, not a blow, not something landing on it. A frozen person can still see, think and talk; they just cannot move a muscle. It has a pale dashed line round it. |
 | ⌇ **WIRE** | Pick a wire from the bar above the tools, then drag from one thing to another - or tap one, then the other. Either end can be the background, where it stays. A pin goes in with one tap: through the two things there, or through one into the background. Tied by somebody's neck, a wrist or an ankle, they go limp and hang there until they are free. |
@@ -194,7 +230,7 @@ up and the ground is scorched - and the view shakes, the nearer the more.
 Everyone hears it from anywhere: they jump, most duck, the near ones are
 shaken by it, and they say so; whoever is caught in it says that too.
 
-The six wires:
+The seven wires:
 
 | Wire | What it does |
 | ---- | ------------ |
@@ -204,6 +240,7 @@ The six wires:
 | **Fixed Metal Rope** | A steel rod: does not bend, and takes far more. |
 | **Wood Pin** | A dowel through two things (or one thing and the background): they stay together at that point, and turn about it. |
 | **Metal Pin** | A bolt: the same, stronger. |
+| **Power Cord** | A black cable that hangs like a rope - and carries the current from a running generator to whatever is on the other end of it, and on through any metal wall or beam it is tied to into whatever touches that. |
 
 Every wire shows how hard it is being pulled: one near breaking goes red.
 Snapping, it says so, and so do the people who see it.
@@ -214,7 +251,8 @@ slow motion, pause, settings, and clear everything (tap twice).
 **Tap a stickman** to open the inspector: their name and mood, what they are
 doing, their personality, five emotions, how conscious they are, their
 adrenaline, oxygen and temperature, pain, blood and stamina, an X-ray
-of their body coloured by injury - every broken bone snapped and named,
+of their body coloured by injury - their organs in it, darker the more each is
+damaged and crossed out when it is gone, every broken bone snapped and named,
 whatever has been cut off missing, joints out of their sockets ringed in
 purple, bullets still in them in gold - what they are wearing and carrying
 (a vest and how much is left of it, what is in the holster, a pocket and on
@@ -889,11 +927,25 @@ bones inside them (see `src/game/health.js`). On top of that:
   people want nothing more to do with whoever did it.
 - **Dizziness** - stars go round the head, and the head will not keep still.
 - **Severed limbs** - a machete coming down hard enough cuts clean through
-  the middle of a forearm, an upper arm, a shin or a thigh. Everything past
+  the middle of a forearm, an upper arm, a shin or a thigh; so, now and then,
+  does a rifle round through a forearm or a shin, a shotgun blast close up,
+  a big enough explosion, or a blow to somebody frozen solid. Everything past
   the cut comes away as a piece of its own - a hand, an arm, a foot, a leg -
   that falls, bleeds onto the floor and can be picked up and thrown. The
   stump spurts and clots only slowly; a lost leg puts them on the floor, a
   lost hand drops whatever was in it. The ragdoll loses the piece too.
+- **Decapitation** - a machete to the neck, a close shotgun blast there, a
+  blast, or the shattering of a frozen body can take the head off: it comes
+  away whole, a severed head that rolls and can be picked up, and the neck
+  pours blood. Nobody lives through it, and nobody who sees it forgets it.
+- **Organs** - a brain, a heart, two lungs, a liver, a stomach, kidneys and
+  a gut, each in its place in the head or the body. A bullet, a blade, a
+  crushing blow or a blast hurts the ones it reaches and bleeds inside by how
+  much each one bleeds (the liver worst); poison gas eats at the lungs, and
+  current goes for the heart. A heart that stops puts them out in seconds and
+  kills them in a few more; a lung that is damaged takes in less air, and
+  both gone, they suffocate; the brain gone is the end of them at once. The
+  inspector lists what is damaged, and its X-ray shows each one.
 - **Tourniquets** - a stump or a cut artery needs tying off, and a friend
   kneels down and does it (a tie, a hard pull); it all but stops the bleeding.
 - **Dislocations** - a kick to the knee, a bad landing, or being swung about
@@ -1467,8 +1519,10 @@ with every beat - harder the faster the heart goes (fear, blood lost) and
 weaker as the blood runs out. Once the heart stops it only pours. A limb
 pours out of its cut end as it comes off, a bad blow from a blade or a
 bullet going right through lets out a squirt, and so does the Shallow
-tearing somebody in half. A stream is drawn as one unbroken arc of blood
-until it breaks up or lands.
+tearing somebody in half. A stream is drawn as an unbroken line of blood
+while it holds together - but only so long: stretched thin, or long enough
+in the air, it comes apart into separate drops again, and now and then a
+drop splits in two, before it lands.
 
 **Where it hits.** A body slammed into the floor, a wall or a crate bleeds
 from where it hit: a head driven into the floor splashes from the head, out
@@ -1487,6 +1541,45 @@ with it - and people, as blood on them (it does not make them bleed).
 spray when it is cut, shot or a limb comes off. Turn blood off in the
 settings and none of it is drawn.
 
+### Explosives, electricity and poison gas
+
+The **explosives** (`explosives.js`) are things like any other - the hand
+picks them up and throws them, a wire ties them, the freeze tool holds them -
+that wait to be set off: the grenade by its pin, C4 by its detonator (it
+sticks, by its underside, to the first thing it settles on: a body's frame,
+or a person's nearest joint, and follows it), TNT by its fuse (or a burning
+person close enough to it), the missile by its motor (thrust along the way
+it points, nothing pulling it down while it burns, until the point of its
+nose is inside something). Each goes off as its own size of bang
+(`explode.js`): the grenade's, with its casing; TNT, between dynamite and C4,
+and dirtier than either; C4's; and a missile's, the biggest of them short of
+a bomb, which throws bits of its casing too. Caught in a blast, or shot, any of them
+goes off a moment later. Whoever sees one about to go - a pin out, a fuse
+lit, C4 starting to beep - shouts and runs, until they are far enough off or
+it has gone.
+
+**Electricity** (`power.js`) is worked out every step as a network: every
+thing joined to every other by power cords, any metal wall or beam with a
+cord on it joined to whatever is touching it, and anything in a piece of the
+network with a running generator in it is live, at 230 volts. A lightbulb or
+a floodlight on it lights up (drawn over the world, glowing, the floodlight's
+beam going the way it points), and a volt meter reads it. Anybody live - tied
+to a cord, or touching live metal - is electrocuted: every muscle locks as a
+taser's does, they are burned where it goes in, and the heart takes damage
+every moment of it until it stops. The glass of a
+bulb or a floodlight shatters when it takes a hard enough knock - a fall, a
+blow, a bullet, a blast - and a broken one that is still live sparks.
+
+**Poison gas** (`gas.js`): the gas rifle's canister flies in an arc - its
+holder aims it high enough to come down on whoever it is aimed at - and
+bursts on whatever it meets, or as it passes close by somebody, into a cloud
+of green puffs that roll out and hang there, thinning, for a quarter of a
+minute. Whoever has their head in it breathes it: the air in them falls (as
+it does in smoke), they cough, it hurts, and it eats at their lungs a little
+with every breath - a good while in it and the lungs give out. Whoever is in
+it tries to get out of it, the shortest way; whoever fires it keeps well
+back from where it lands, and does not fire again at somebody still choking.
+
 ### Sound
 
 Punches, the ring of brass knuckles, a blade going in and being drawn across,
@@ -1498,8 +1591,11 @@ crackle of the current, a holster's leather, the velcro of a vest, the
 ratchet of handcuffs, a radio's squelch, feet scuffing as somebody stumbles,
 rounds rattling out of a box, knuckles cracking, a limb coming off, a joint
 popping, steel into wood, crates, bodies hitting the floor, bones breaking,
-claps, screams and every stickman's babbling voice are synthesised with
-WebAudio on the spot. There are no sound files.
+claps, screams, a grenade's pin coming out, a detonator beeping, a fuse
+fizzing, a missile's roar, a generator pulled over and running, glass
+breaking, the buzz of mains current through somebody, the thump of the gas
+rifle, a canister hissing open, coughing, and every stickman's babbling
+voice are synthesised with WebAudio on the spot. There are no sound files.
 
 ---
 
@@ -1550,6 +1646,11 @@ stickfights/
       freeze.js       the freeze tool
       explode.js      the explode tool's bangs: what they do to people and things,
                       and the look of them (fire, smoke, the ring of air, a bomb's cloud)
+      explosives.js   the grenade, C4, TNT and the missile: things that wait to go off
+      power.js        electricity: the network, the generator, bulbs, floodlights,
+                      the volt meter, the light they give, and electrocution
+      gas.js          the gas rifle's canister and the cloud of poison gas
+      gear.js         the explosives and the electrics, as the spawn menu sees them
       hand.js         dragging and throwing (and, paused, just moving)
       fx.js           blood (drops, streams, splats, the walls, landing on things),
                       dust, hit bursts, muzzle flashes, tracers, splinters, casings,
@@ -1597,10 +1698,12 @@ screen and checks:
 
 - stickmen are already moving about behind the title, which has MAPS and
   MODS, and PLAY opens an empty sandbox with the spawn menu
-- the spawn menu has exactly twenty-three things in it: a Stickman, an Officer,
+- the spawn menu has exactly thirty-four things in it: a Stickman, an Officer,
   Brass Knuckles, a Combat Knife, a Machete, a Crowbar, a Glock-19, an M1911,
-  an AK-47, a Mossberg 500, a Taser, a Crate, a Light Vest, four kinds of
-  ammo, three walls, a Gallows, a Tree and a Bush
+  an AK-47, a Mossberg 500, a Taser, a Gas Rifle, a Crate, a Light Vest, four
+  kinds of ammo, three walls, two metal beams, a Gallows, a Tree, a Bush, a
+  Grenade, C4, TNT, a Missile, a Generator, a Lightbulb, a Floodlight and a
+  Volt Meter
 - the background is grey and the ground is black (read off the canvas)
 - tapping the world places a stickman, a crate and a set of knuckles where it
   was tapped, and the crate falls and settles
@@ -1742,7 +1845,7 @@ screen and checks:
   mid-stride, who knows it
 - with the world paused, dragging a crate or a person just puts them
   somewhere else as they were, and they fall when it runs again
-- the wire tool has its six wires; a wood rope hangs a crate from the
+- the wire tool has its seven wires; a wood rope hangs a crate from the
   background; a fixed metal rope keeps two crates the same distance apart;
   a metal pin holds a crate to the background and it turns about the pin;
   somebody tied by a wrist goes limp and hangs there; the same jolt snaps a
@@ -1777,6 +1880,33 @@ screen and checks:
   people kills whoever is right by it, hurts them a few steps off and flings
   what is lying about; its casing hits somebody further off than the blast
   goes; and everyone who hears it is frightened, and says so
+- a head comes off: they die of it, and the head lies there as a thing of its
+  own; the neck pours a stream of joined drops that breaks back up into
+  separate drops as it falls; and whoever sees it is horrified
+- a rifle round through a forearm or a shotgun blast through a shin can take
+  it off
+- everybody has a brain, a heart, two lungs, a liver, a stomach, kidneys and
+  a gut; two shots and a stab hurt the ones they go through, the inspector
+  lists them, and its X-ray shows them; a heart that stops kills in seconds,
+  of cardiac arrest
+- the spawn menu has EXPLOSIVES; a grenade does nothing until it is tapped,
+  then goes off four seconds later, and whoever was beside it runs; C4
+  dropped on a crate sticks to it and goes where it goes, and tapped beeps
+  faster and faster and goes off three seconds later; somebody on fire
+  walking past TNT lights its fuse; a missile flies the way it points and
+  goes off against the wall it hits; and a grenade going off sets off the TNT
+  and the C4 beside it
+- the small and large metal beams are steel, two and four metres long
+- a generator, tapped, runs, and a lightbulb and a floodlight on power cords
+  from it light up; a volt meter reads 0, then 230; somebody stepping onto a
+  live metal beam is electrocuted - locked stiff, burned, the heart hurt; the
+  generator tapped again stops, and everything goes dark; a floodlight shot
+  and a bulb let fall both shatter
+- the gas rifle's canister comes down on whoever it is aimed at and bursts
+  into a cloud; whoever is in it chokes and passes out, and their lungs are
+  damaged; whoever fired it from well back breathes none of it; somebody with
+  a gas rifle and a grudge uses it, and whoever is caught in the gas tries to
+  get out of it
 - no mod is in the game until it is installed; the MODS screen lists
   Murder Drones with what it adds and the storage it needs, which is what
   its files really take up; INSTALL fills a bar and then puts Uzi, N and V in

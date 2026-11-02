@@ -145,12 +145,16 @@ export const BONES = [
 export const HEAD_BONE = 2;
 export const SPINE_BONES = [0, 1];
 
-/** The joints downstream of each break point: what moves when that bone bends. */
+/**
+ * The joints downstream of each break point: what moves when that bone bends
+ * (and what goes with it when it is cut through - for the neck, the head).
+ */
 export const BELOW_BREAK = {
   midHumA: ['elbowA', 'midForeA', 'handA'], midForeA: ['handA'],
   midHumB: ['elbowB', 'midForeB', 'handB'], midForeB: ['handB'],
   midFemA: ['kneeA', 'midTibA', 'footA', 'toeA'], midTibA: ['footA', 'toeA'],
   midFemB: ['kneeB', 'midTibB', 'footB', 'toeB'], midTibB: ['footB', 'toeB'],
+  neck: ['head'],
 };
 
 export function makeJoints() {

@@ -30,6 +30,9 @@ export const BLASTS = {
   dynamite: { name: 'Dynamite', r: 3.4, power: 1.7, frag: 0, fire: 0.3, smoke: 1.25, dirt: 1.5, sever: 0.6, life: 4.2, size: 0.45, shake: 0.65 },
   c4: { name: 'C4', r: 4.6, power: 2.5, frag: 0, fire: 0.45, smoke: 1.1, dirt: 1.1, sever: 1, life: 4.6, size: 0.7, shake: 0.85 },
   bomb: { name: 'Bomb', r: 7.5, power: 3.8, frag: 0, fire: 0.9, smoke: 2.2, dirt: 2.3, sever: 1.3, life: 9, size: 1, shake: 1, cloud: true },
+  // (the ones that are things first: explosives.js)
+  tnt: { name: 'TNT', r: 4, power: 2.1, frag: 0, fire: 0.35, smoke: 1.4, dirt: 1.6, sever: 0.75, life: 4.6, size: 0.55, shake: 0.75 },
+  missile: { name: 'Missile', r: 5.2, power: 2.9, frag: 20, fire: 0.6, smoke: 1.4, dirt: 1.6, sever: 1.1, life: 5.5, size: 0.75, shake: 0.9 },
   // (not on the tool: what a mod's beam leaves where it meets the ground)
   flare: { name: 'Blast', r: 2.4, power: 1.2, frag: 0, fire: 0.7, smoke: 0.5, dirt: 0.9, sever: 0.4, life: 2.6, size: 0.3, shake: 0.2 },
 };
@@ -70,6 +73,8 @@ export function explode(sb, x, y, kind = 'grenade', by = null) {
   y = Math.max(0.05, y);
   const fx = sb.fx;
   const fx0 = new Blast(x, y, spec);
+  // (the bang first: whoever hears it hears that before anything it does - a limb off, somebody down)
+  sb.emit('explode', { who: by, x, y, kind, r: R, power, size: spec.size, shake: spec.shake, loud: true });
 
   /* --------------------------------- people --------------------------------- */
   for (const p of [...sb.people]) {
@@ -120,6 +125,8 @@ export function explode(sb, x, y, kind = 'grenade', by = null) {
         if (p.removed) break;
         if (ks[pt] > 0.5 && chance((ks[pt] - 0.45) * spec.sever * w * 0.6)) p.sever(b, dir, power);
       }
+      // right on top of it, the head too
+      if (!p.removed && ks.head > 0.7 && chance((ks.head - 0.65) * spec.sever * 0.5)) p.decapitate(dir, power, { by });
     }
     if (p.removed) continue;
     // and thrown, away from it
@@ -153,6 +160,13 @@ export function explode(sb, x, y, kind = 'grenade', by = null) {
     // (a loose wall or a log turns over; something small spins)
     b.angVel += rand(-12, 12) * k / Math.max(1, b.mass / 4);
   }
+  // anything else that goes off, caught in it, goes off too (explosives.js); glass near it shatters (power.js)
+  for (const t of sb.items) {
+    if (t.removed) continue;
+    const d = Math.hypot(t.pos.x - x, t.pos.y - y);
+    if (t.chain && d < R * 1.1) t.chain();
+    if (t.shatter && d < R * 0.9) t.shatter(sb);
+  }
   // walls, buildings, trees, bushes: blown out, cell by cell, everything out from the middle of it
   for (const w of [...sb.slabs]) {
     if (w.removed) continue;
@@ -177,7 +191,6 @@ export function explode(sb, x, y, kind = 'grenade', by = null) {
     scorch(fx, x, R * 0.42);
   }
   sb.effects.push(fx0);
-  sb.emit('explode', { who: by, x, y, kind, r: R, power, size: spec.size, shake: spec.shake, loud: true });
   return fx0;
 }
 

@@ -85,6 +85,9 @@ export const WALLS = {
   woodWall: { name: 'Wood Wall', mat: 'wood', w: 0.24, h: 2.4 },
   metalWall: { name: 'Metal Wall', mat: 'metal', w: 0.2, h: 2.4 },
   glassWall: { name: 'Glass Wall', mat: 'glass', w: 0.16, h: 2.4 },
+  // steel I-beams, put down lying flat (a picture of their own: the flanges, the web, the bolt holes)
+  beamSmall: { name: 'Small Metal Beam', mat: 'metal', w: 2, h: 0.2, beam: true, paint: paintBeam },
+  beamLarge: { name: 'Large Metal Beam', mat: 'metal', w: 4, h: 0.32, beam: true, paint: paintBeam },
 };
 export const isWall = (kind) => !!WALLS[kind];
 
@@ -991,6 +994,44 @@ function rng(seed) {
   return () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
 }
 
+/**
+ * A steel I-beam from the side, along its length: a flange along each edge,
+ * the web between them with a bolt hole every so often, and a little rust.
+ */
+function paintBeam(s) {
+  const W = s.cols * PX, H = s.rows * PX;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const g = cv.getContext('2d');
+  const R = rng(s.seed);
+  const along = W >= H, L = along ? W : H, T = along ? H : W;
+  // (drawn along x, and turned if it stands the other way)
+  if (!along) { g.translate(W, 0); g.rotate(Math.PI / 2); }
+  const web = g.createLinearGradient(0, 0, 0, T);
+  web.addColorStop(0, '#6d767e'); web.addColorStop(0.5, '#8d969e'); web.addColorStop(1, '#6a7279');
+  g.fillStyle = web;
+  g.fillRect(0, 0, L, T);
+  const f = Math.max(2, T * 0.2);
+  for (const y of [0, T - f]) {
+    g.fillStyle = '#545c63';
+    g.fillRect(0, y, L, f);
+    g.fillStyle = 'rgba(255, 255, 255, 0.18)';
+    g.fillRect(0, y + 1, L, 1);
+  }
+  // the bolt holes down the web
+  g.fillStyle = '#2a2f33';
+  for (let a = PX * 3; a < L - PX * 2; a += PX * 7) { g.beginPath(); g.arc(a, T / 2, Math.max(1.2, T * 0.09), 0, Math.PI * 2); g.fill(); }
+  // rust, and a scratch or two
+  for (let k = 0; k < L / 40; k++) {
+    g.fillStyle = `rgba(${130 + R() * 40}, ${70 + R() * 20}, 40, ${0.12 + R() * 0.12})`;
+    g.beginPath(); g.ellipse(R() * L, R() * T, 3 + R() * 6, 1.5 + R() * 2, 0, 0, Math.PI * 2); g.fill();
+  }
+  g.strokeStyle = 'rgba(30, 34, 38, 0.9)';
+  g.lineWidth = 1.5;
+  g.strokeRect(0.75, 0.75, L - 1.5, T - 1.5);
+  return cv;
+}
+
 /** The slab's picture whole, before anything happened to it: planks, a steel plate, a pane. */
 function paint(s) {
   // (a slab of a kind of its own - a building - paints itself)
@@ -1113,7 +1154,7 @@ function paint(s) {
 export function drawWallShape(ctx, type, x, y, h) {
   if (typeof document === 'undefined') return;
   const spec = WALLS[type];
-  const fake = { cols: Math.round(spec.w / CELL), rows: Math.round(spec.h / CELL), seed: 7, mat: MATERIALS[spec.mat] };
+  const fake = { cols: Math.round(spec.w / CELL), rows: Math.round(spec.h / CELL), seed: 7, mat: MATERIALS[spec.mat], spec };
   const pic = wallPics[type] || (wallPics[type] = paint(fake));
   const w = h * (spec.w / spec.h);
   ctx.drawImage(pic, x - w / 2, y - h, w, h);

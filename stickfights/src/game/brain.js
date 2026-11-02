@@ -61,6 +61,7 @@ const HEAR = {
   stuck: 7, pullout: 6, clap: 7, collide: 8,
   // a gunshot carries the whole width of the world
   shot: 60, ricochet: 14, dryFire: 4, reload: 5, magOut: 3, magIn: 3, rack: 5, sever: 12, dislocate: 7, relocate: 7, faint: 8,
+  pinPulled: 6, fuseLit: 8, c4Beep: 8, missileLaunch: 30, gasBurst: 12, electrocute: 10,
   tased: 10, taserFire: 8, cuffed: 8, command: 16, vestStop: 9, stumble: 6, stumbleFall: 8, stumbleCaught: 5, driveStun: 6,
   // fire and ice
   ignite: 12, extinguish: 6, freeze: 7, thaw: 5, iceSnap: 9, shatter: 16, gasp: 6, dropRoll: 6,
@@ -140,21 +141,21 @@ export function relCategory(r) {
 const REPEAT = {
   beg: 4, surrender: 4, surrenderGun: 4, comfort: 4.5, crawl: 5, flee: 3.5, pinned: 3, paralysed: 4, shot: 1.5,
   gunFear: 6, knifeFear: 6, macheteFear: 6, weaponFear: 6, gunshots: 3, sawShooting: 3, nearMiss: 2.5, hurtSmall: 2,
-  heardBlast: 3, sawBlast: 3, blastHurt: 1.5, shrapnelHit: 1.5,
+  heardBlast: 3, sawBlast: 3, blastHurt: 1.5, shrapnelHit: 1.5, inGas: 2.5, bombRun: 2.5, sawLiveGrenade: 2, sawFuse: 2, sawC4: 3,
 };
 // ...and the ones that are really the same plea
 const SAID_AS = { surrender: 'beg', surrenderGun: 'beg' };
-const HELP_CALLS = new Set(['fear', 'flee', 'beg', 'pinned', 'crawl', 'panic', 'hurtBig', 'broken', 'onFire', 'choking']);
+const HELP_CALLS = new Set(['fear', 'flee', 'beg', 'pinned', 'crawl', 'panic', 'hurtBig', 'broken', 'onFire', 'choking', 'inGas']);
 // doing nothing much: free to turn round at a noise (the rest point themselves where they need to)
 const GLANCE_FREE = new Set(['idle', 'rest', 'inspect']);
 
 const standing = (o) => o && !o.removed && o.alive && o.conscious && (o.state === 'stand' || o.state === 'air');
-const WEAPON_KINDS = new Set(['knuckles', 'knife', 'machete', 'crowbar', 'glock', 'm1911', 'taser', 'ak47', 'mossberg']);
+const WEAPON_KINDS = new Set(['knuckles', 'knife', 'machete', 'crowbar', 'glock', 'm1911', 'taser', 'ak47', 'mossberg', 'gasRifle']);
 // what they call something they are carrying
-const ITEM_SAID = { knuckles: 'brass knuckles', knife: 'knife', machete: 'machete', crowbar: 'crowbar', glock: 'gun', m1911: 'gun', taser: 'taser', ak47: 'rifle', mossberg: 'shotgun' };
+const ITEM_SAID = { knuckles: 'brass knuckles', knife: 'knife', machete: 'machete', crowbar: 'crowbar', glock: 'gun', m1911: 'gun', taser: 'taser', ak47: 'rifle', mossberg: 'shotgun', gasRifle: 'gas rifle' };
 const capital = (t) => t.charAt(0).toUpperCase() + t.slice(1);
 // what a witness says about the way somebody died, when it was not just a death
-const DEATH_SAID = { burns: 'sawBurnDeath', 'smoke inhalation': 'sawBurnDeath', 'frozen solid': 'sawFreezeDeath', hypothermia: 'sawFreezeDeath', suffocation: 'sawChokeDeath', heatstroke: 'sawHeatDeath' };
+const DEATH_SAID = { burns: 'sawBurnDeath', 'smoke inhalation': 'sawBurnDeath', 'frozen solid': 'sawFreezeDeath', hypothermia: 'sawFreezeDeath', suffocation: 'sawChokeDeath', heatstroke: 'sawHeatDeath', 'poison gas': 'sawGasDeath', electrocution: 'sawShockDeath' };
 // busy with something that wants the hands as they are
 const KIT_BUSY = new Set(['respond', 'comply', 'surrender', 'cower', 'arm', 'vest', 'ammo', 'help', 'pullout', 'detained', 'catchBreath', 'burning', 'douse']);
 
@@ -735,6 +736,35 @@ export class Brain {
         break;
       case 'shot': this.heardShot(ev, seen, x, y); break;
       case 'explode': this.heardBlast(ev, seen, x, y, d); break;
+      // something about to go off: a grenade's pin out, a fuse lit, C4 starting to beep, a missile away
+      case 'pinPulled':
+      case 'fuseLit':
+      case 'c4Beep':
+      case 'missileLaunch':
+        if (ev.type === 'c4Beep' && ev.k > 0) break;
+        if (seen && d < 9 && ev.what) {
+          E.bump('surprise', 0.5);
+          E.bump('fear', (0.25 + (1 - d / 9) * 0.45) * (1.3 - T.bravery));
+          if (ev.type !== 'missileLaunch') this.bomb = { what: ev.what, t: now };
+          this.speak({ pinPulled: 'sawLiveGrenade', fuseLit: 'sawFuse', c4Beep: 'sawC4', missileLaunch: 'sawMissile' }[ev.type], {}, 0.85, null, true);
+          this.thinkT = 0;
+        }
+        break;
+      case 'gasBurst':
+        if (seen && d < 12) {
+          E.bump('surprise', 0.4);
+          E.bump('fear', (0.2 + (1 - d / 12) * 0.4) * (1.25 - T.bravery));
+          if (ev.who && ev.who !== me && !ev.who.removed) { const r = this.rel(ev.who); r.violent += 1; r.fear = clamp01(r.fear + 0.2 * (1.1 - T.bravery)); }
+          if (now - (this.gasSaidT || -9) > 5) { this.gasSaidT = now; this.speak('sawGas', {}, 0.7, null, true); }
+        }
+        break;
+      case 'electrocute':
+        if (seen && ev.who && ev.who !== me && d < 12) {
+          E.bump('surprise', 0.3);
+          E.bump('fear', 0.08 * (1.2 - T.bravery));
+          if (now - (this.zapSaidT || -9) > 5) { this.zapSaidT = now; this.speak('sawElectrocuted', { victim: ev.who.name }, 0.7, null, true); }
+        }
+        break;
       case 'ricochet':
         E.bump('surprise', 0.3);
         if (d < 3) E.bump('fear', 0.15 * (1.2 - T.bravery));
@@ -752,9 +782,10 @@ export class Brain {
             if (care > 0.3) ra.anger = clamp01(ra.anger + 0.3 * care * (0.4 + T.temper));
             this.remember('sawSever', ev.by, ev.who, ev.lost);
           }
-          this.speak('sawSevered', { victim: ev.who.name }, 0.85, null, true);
+          this.speak(ev.head ? 'sawBeheaded' : 'sawSevered', { victim: ev.who.name }, 0.85, null, true);
           this.note(`${ev.who.name}'s ${ev.lost} just came off!`);
-          this.shaken(0.7);
+          this.shaken(ev.head ? 0.95 : 0.7);
+          if (ev.head) E.bump('fear', 0.35 * (1.2 - T.bravery));
         } else {
           this.heard = { x, y, t: now };
           this.hearLoud(x);
@@ -1004,7 +1035,8 @@ export class Brain {
       this.startleT = now;
       me.perform(near > 0.3 || chance(0.6) ? 'duck' : 'flinch', { fadeIn: 0.03, fadeOut: 0.15 });
     }
-    if (now - (this.blastSaidT || -9) > 4) {
+    // (right on top of it, there is no time to say anything: what it does to them speaks for them)
+    if (now - (this.blastSaidT || -9) > 4 && d > (ev.r || 3) * 0.5) {
       this.blastSaidT = now;
       this.speak(seen ? 'sawBlast' : 'heardBlast', {}, 0.8, null, true);
     }
@@ -1320,6 +1352,7 @@ export class Brain {
           knife: 'Got the knife. Now they have to listen.', machete: 'Got the machete. Stay back, everyone.',
           glock: 'Got the gun. Nobody move.', m1911: 'Got the .45. Nobody move.', taser: 'Got a taser. Anybody tries anything, they get it.',
           crowbar: 'Got a crowbar. Heavy. Good.', ak47: 'An AK. Nobody is going to argue with this.', mossberg: 'A shotgun. Up close, nothing beats it.',
+          gasRifle: 'A gas rifle. Nobody is going to be breathing easy.',
         }[k] || 'Got the brass knuckles. Nobody messes with me now.');
         me.setEmote('sparkle', 1.2);
         break;
@@ -1773,6 +1806,15 @@ export class Brain {
       add('detained', null, 1, null);
       return out;
     }
+    // breathing gas, or something about to go off close by: away from it, before nearly anything else
+    const gas = me.gasAt;
+    if (gas && now - gas.t < 0.5 && me.conscious) add('getClear', null, 2.2, "Gas! I can't breathe in here!", { gas: true, x: gas.x }, true);
+    const bomb = this.bomb;
+    if (bomb) {
+      const w = bomb.what, d = w.removed ? 99 : Math.abs(w.pos.x - me.pos.x);
+      if (w.removed || !w.lit || now - bomb.t > 8) this.bomb = null;
+      else if (d < 6.5) add('getClear', null, (1.3 + E.fear * 0.8) * (1.25 - T.bravery * 0.4) * (1 - d / 8), `That ${w.name.toLowerCase()} is going to go off!`, { what: w, x: w.pos.x }, d < 4);
+    }
     const health = me.health.overall;
     // hands full of crate count as armed: the crate is the weapon
     const canFight = me.strikes().length > 0 || !!me.carrying;
@@ -2018,9 +2060,9 @@ export class Brain {
           const guarded = this.gunThreat && now - this.gunThreat.t < 20 ? 0.35 * T.bravery : 0;
           s = (s + guarded) * (0.45 + T.aggression * 0.8 + T.bravery * 0.25) * (1.25 - T.empathy * 0.8) * spare;
           // (a rifle or a shotgun counts for more than a pistol)
-          if (k.kind === 'ak47' || k.kind === 'mossberg') s *= 1.25;
-          const close = { m1911: 'A .45. Big gun. Mine.', ak47: 'An AK-47. Oh, this changes things.', mossberg: 'A shotgun. Nobody comes near me now.' }[k.kind] || "A gun. Let's see them try something now.";
-          add('arm', k, s, d < 4 ? close : k.kind === 'ak47' ? 'There is a rifle over there.' : k.kind === 'mossberg' ? 'There is a shotgun over there.' : 'There is a gun on the floor over there.');
+          if (k.kind === 'ak47' || k.kind === 'mossberg' || k.kind === 'gasRifle') s *= 1.25;
+          const close = { m1911: 'A .45. Big gun. Mine.', ak47: 'An AK-47. Oh, this changes things.', mossberg: 'A shotgun. Nobody comes near me now.', gasRifle: 'A gas rifle. One of those and the whole room is coughing.' }[k.kind] || "A gun. Let's see them try something now.";
+          add('arm', k, s, d < 4 ? close : k.kind === 'ak47' ? 'There is a rifle over there.' : k.kind === 'mossberg' ? 'There is a shotgun over there.' : k.kind === 'gasRifle' ? 'There is a gas rifle over there.' : 'There is a gun on the floor over there.');
         } else {
           s *= spare;
           add('arm', k, s, d < 4 ? 'Brass knuckles, right there. Mine.' : 'Those brass knuckles could come in handy.');

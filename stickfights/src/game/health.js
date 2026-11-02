@@ -64,9 +64,19 @@
                  the eye, a swollen cheek, knocked-out teeth - from blows to
                  the head, mending slowly
 
+   And inside them, the organs (ORGANS), each sound at 1 and gone at 0: the
+   brain in the head, and in the body the heart and the two lungs up in the
+   ribcage, the liver and the stomach under them, the kidneys, and the
+   intestines low down. What gets inside - a bullet, a blade that goes in, a
+   machete, a blast, a crushing blow - damages whichever is where it went in;
+   poison and smoke get at the lungs, and electricity at the heart. A
+   damaged organ does what a damaged organ does: a liver or a kidney bleeds
+   inside, a lung lets in less air, a heart pumps worse - and a heart, a
+   brain or both lungs gone is the end of them.
+
    Death comes from the head (a skull can only take so much, and a bullet
-   less), the torso (internal injuries), a broken neck, or running out of
-   blood.
+   less), the torso (internal injuries), a broken neck, an organ they cannot
+   live without, or running out of blood.
    ========================================================================== */
 import { clamp } from '../core/util.js';
 
@@ -101,6 +111,25 @@ export const JOINT_PART = { shoulderA: 'armA', elbowA: 'armA', shoulderB: 'armB'
 export const JOINT_NAMES = {
   shoulderA: 'right shoulder', elbowA: 'right elbow', shoulderB: 'left shoulder', elbowB: 'left elbow', kneeA: 'right knee', kneeB: 'left knee',
 };
+/**
+ * The organs: which part each is in, and where in it - for the body, lo..hi
+ * of the way up it from the hips to the base of the neck, and which side
+ * (-1 their left, 1 their right, 0 the middle) - and what it is called.
+ */
+export const ORGANS = {
+  brain: { part: 'head', lo: 0, hi: 1, side: 0, name: 'brain' },
+  heart: { part: 'torso', lo: 0.6, hi: 0.84, side: -0.3, name: 'heart' },
+  lungA: { part: 'torso', lo: 0.56, hi: 0.96, side: 1, name: 'right lung' },
+  lungB: { part: 'torso', lo: 0.56, hi: 0.96, side: -1, name: 'left lung' },
+  liver: { part: 'torso', lo: 0.4, hi: 0.6, side: 0.8, name: 'liver' },
+  stomach: { part: 'torso', lo: 0.38, hi: 0.58, side: -0.7, name: 'stomach' },
+  kidneys: { part: 'torso', lo: 0.28, hi: 0.44, side: 0, name: 'kidneys' },
+  intestines: { part: 'torso', lo: 0.02, hi: 0.38, side: 0, name: 'intestines' },
+};
+export const ORGAN_LIST = Object.keys(ORGANS);
+/** Every organ, sound. */
+const freshOrgans = () => Object.fromEntries(ORGAN_LIST.map((k) => [k, 1]));
+
 /** How fast the artery in each stump bleeds, and what was lost: by the bone it was cut through. */
 const STUMP = {
   forearm: { bleed: 0.0055, lost: 'hand' }, humerus: { bleed: 0.0095, lost: 'arm' },
@@ -172,6 +201,7 @@ export class Health {
     this.frozen = false;
     this.burning = false;
     this.lung = false;        // a punctured lung
+    this.organs = freshOrgans();
   }
 
   /** How much of the pain they feel, with the adrenaline up. */
@@ -188,7 +218,7 @@ export class Health {
    *   bone         which bone it landed on, if that is known (skeleton.js)
    *   breakChance  extra chance of a break on top of what the force gives
    */
-  hit(part, amount, { sharp = 0, deep = false, bone = null, breakChance = 0, chop = false, shot = false, strike = null, burn = false, cutBy = null, cause = null, instakill = true } = {}) {
+  hit(part, amount, { sharp = 0, deep = false, bone = null, breakChance = 0, chop = false, shot = false, strike = null, burn = false, cutBy = null, cause = null, instakill = true, at = null } = {}) {
     const p = this.parts[part];
     if (!p) return { damage: 0 };
     let dmg = Math.max(0, amount);
@@ -240,11 +270,11 @@ export class Health {
       this.shock = Math.min(1, this.shock + 0.3);
       // what a bullet finds on its way through
       if (part === 'head') {
-        if (instakill && dmg > 16 && Math.random() < 0.8) killedBy = cause ? `${cause} to the head` : cutBy ? `a ${cutBy.toLowerCase()} shot to the head` : 'a gunshot to the head';
+        if (instakill && dmg > 16 && Math.random() < 0.8) { killedBy = cause ? `${cause} to the head` : cutBy ? `a ${cutBy.toLowerCase()} shot to the head` : 'a gunshot to the head'; this.organs.brain = 0; }
         else this.conscious -= 0.5;
       } else if (part === 'torso') {
         this.internal += 0.0026 + Math.random() * 0.002;
-        if (Math.random() < 0.08) { this.internal += 0.03; killedBy = null; this.heartShot = true; }
+        if (Math.random() < 0.08) { this.internal += 0.03; killedBy = null; this.heartShot = true; this.organs.heart = 0; }
         if (b === 'spine' && Math.random() < 0.3 && this.paralysed === 'none') this.paralysed = 'legs';
         if (b === 'ribs' && Math.random() < 0.4) this.internal += 0.0018;
         if (b === 'neck') p.bleed += 0.012;
@@ -256,6 +286,8 @@ export class Health {
     } else if (part === 'head' && !blade && dmg > 3) {
       this.faceHit(dmg, sharp, strike);
     }
+    // inside: what it went in through, or crushed
+    if (part === 'head' || part === 'torso') this.organsHit(part, dmg, { shot, deep: deep && blade, chop, blast: strike === 'blast', at });
 
     // Bones: the blow has to be hard, and a bone that has had a few already goes easier
     let broke = null;
@@ -332,6 +364,19 @@ export class Health {
     for (const [j, jp] of Object.entries(JOINT_PART)) if (jp === part) this.dislocated[j] = false;
     this.pain = Math.min(130, this.pain + 65);
     this.shock = Math.min(1, this.shock + 0.65);
+    return true;
+  }
+
+  /**
+   * The head off at the neck. Nothing lives through that: the species does
+   * the dying (Stickman.decapitate); this is the neck, pouring.
+   */
+  decapitate() {
+    if (this.headless) return false;
+    this.headless = true;
+    this.severed.neck = true;
+    this.parts.head.hp = 0;
+    this.stumps.head = this.dry ? 0 : 0.03;
     return true;
   }
 
@@ -429,6 +474,69 @@ export class Health {
     return b;
   }
 
+  /**
+   * Whatever got inside, at `at` of the way up the part (a guess, where that
+   * is not known), damaging the organ there - or two: a bullet goes through,
+   * a blade goes in, a machete opens it up; a blast, or a blow hard enough to
+   * crush, bruises what is under it.
+   */
+  organsHit(part, dmg, { shot = false, deep = false, chop = false, blast = false, at = null } = {}) {
+    const into = shot ? 0.35 + Math.random() * 0.4 : deep ? 0.2 + dmg * 0.012 : chop ? 0.12 + dmg * 0.01 : blast ? dmg * 0.006 : dmg > 15 ? (dmg - 15) * 0.008 : 0;
+    if (into <= 0) return;
+    if (part === 'head') { this.organHurt('brain', shot ? into : into * 0.6, true); return; }
+    const h = at ?? Math.random();
+    // (what is there, the nearest first; a blast or a crushing blow bruises everything near)
+    const near = ORGAN_LIST.filter((k) => ORGANS[k].part === 'torso')
+      .map((k) => ({ k, d: Math.max(0, ORGANS[k].lo - h, h - ORGANS[k].hi) + Math.random() * 0.06 }))
+      .filter((o) => o.d < (blast || !(shot || deep || chop) ? 0.25 : 0.1)).sort((a, b) => a.d - b.d);
+    const n = blast || !(shot || deep || chop) ? near.length : shot && Math.random() < 0.4 ? 2 : 1;
+    for (const { k } of near.slice(0, n)) this.organHurt(k, into * (blast ? 0.6 : 1), true);
+  }
+
+  /** One organ hurt, by `k` of it: what that does to them, at once and from now on (see update). */
+  organHurt(organ, k, wound = false) {
+    const o = this.organs;
+    if (!(organ in o) || o[organ] <= 0) return;
+    const was = o[organ];
+    o[organ] = Math.max(0, was - k);
+    const lost = was - o[organ];
+    // (only a wound bleeds inside, or lets the air out of a lung: gas or current just ruins them)
+    if (!wound) { this.pain = Math.min(130, this.pain + lost * 40); return; }
+    switch (organ) {
+      case 'heart': if (o.heart <= 0) { this.heartShot = true; this.internal += 0.03; } else this.internal += lost * 0.004; break;
+      case 'lungA': case 'lungB': if (o[organ] < 0.7) this.lung = true; this.internal += lost * 0.003; break;
+      case 'liver': this.internal += lost * 0.009; break;
+      case 'kidneys': this.internal += lost * 0.006; break;
+      case 'stomach': case 'intestines': this.internal += lost * 0.003; break;
+      default: break;
+    }
+    this.pain = Math.min(130, this.pain + lost * 40);
+  }
+
+  /**
+   * What the organs, as they are, do each step: a brain gone is the end of
+   * them at once; a heart that has stopped puts them out in seconds and
+   * kills them in a few more. (The lungs are the air in them: vitals.js.)
+   * True if it just killed them.
+   */
+  organEffects(dt) {
+    const o = this.organs;
+    if (o.brain <= 0) return !!this.kill('a destroyed brain');
+    if (o.heart <= 0) {
+      this.arrest = (this.arrest || 0) + dt;
+      if (this.arrest > 14) return !!this.kill(this.arrestCause || 'cardiac arrest');
+    } else this.arrest = 0;
+    return false;
+  }
+
+  /** How awake the organs let them be: a damaged brain dulls them, a failing heart starves it. */
+  organCap() {
+    const o = this.organs;
+    const brain = 0.2 + 0.8 * clamp(o.brain / 0.6, 0, 1);
+    const heart = o.heart <= 0 ? Math.max(0, 1 - (this.arrest || 0) / 6) : 0.55 + 0.45 * clamp(o.heart / 0.5, 0, 1);
+    return Math.min(brain, heart);
+  }
+
   checkDeath() {
     if (this.dead) return true;
     if (this.parts.head.hp <= 0) return this.kill('a blow to the head');
@@ -513,10 +621,11 @@ export class Health {
     // by the next good hit, rather than killed by it
     const head = this.parts.head;
     const cap = Math.min(this.blood < 0.56 ? clamp((this.blood - BLOOD_EMPTY) / 0.18, 0, 1) : 1,
-      0.25 + 0.75 * clamp(head.hp / 70, 0, 1) - (this.bones.skull.broken ? 0.15 : 0), this.vitalCap()) - this.shock * 0.12;
+      0.25 + 0.75 * clamp(head.hp / 70, 0, 1) - (this.bones.skull.broken ? 0.15 : 0), this.vitalCap(), this.organCap()) - this.shock * 0.12;
     const clearing = this.time - this.headT > 2.5 ? (0.03 + this.toughness * 0.02) * (1 + this.adrenaline * 0.8) : 0;
     this.conscious = Math.min(cap, this.conscious + dt * clearing);
     this.dizzy = Math.max(0, this.dizzy - dt);
+    if (this.organEffects(dt)) return true;
     return this.checkDeath();
   }
 
@@ -626,6 +735,7 @@ export class Health {
     this.internal = 0;
     this.paralysed = 'none';
     this.severed = {};
+    this.headless = false;
     this.stumps = {};
     this.tourniquet = {};
     this.dislocated = {};
@@ -638,6 +748,9 @@ export class Health {
     this.face = { blackEye: [0, 0], nose: 0, noseBroken: false, lip: 0, swell: 0, brow: 0, teeth: 0 };
     this.shock = 0;
     this.heartShot = false;
+    this.organs = freshOrgans();
+    this.arrest = 0;
+    this.arrestCause = null;
     this.blood = 1; this.pain = 0; this.conscious = 1; this.dizzy = 0;
     this.adrenaline = 0; this.oxygen = 0.985; this.temp = 37; this.tempLock = null;
     this.heat = 0; this.chill = 0; this.hypoxia = 0; this.frozen = false; this.lung = false;
@@ -689,6 +802,10 @@ export class Health {
       if (b && b.by !== 'Fire' && b.by !== 'Frostbite') out.push(`${b.by} burns on the ${PART_NAMES[part]}`);
     }
     if (this.lung) out.push('Punctured lung');
+    for (const k of ORGAN_LIST) {
+      const v = this.organs[k];
+      if (v < 0.85 && !(this.lung && (k === 'lungA' || k === 'lungB') && v > 0.3)) out.push(`${v <= 0 ? 'Destroyed' : v < 0.35 ? 'Badly damaged' : 'Damaged'} ${ORGANS[k].name}`);
+    }
     for (const j of Object.keys(JOINT_PART)) if (this.dislocated[j]) out.push('Dislocated ' + JOINT_NAMES[j]);
     for (const part of ['armA', 'armB', 'legA', 'legB']) if (this.parts[part].artery && !this.tourniquet[part]) out.push(`Bleeding from an artery (${PART_NAMES[part]})`);
     if (this.shock > 0.45) out.push('In shock');

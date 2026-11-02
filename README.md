@@ -7,15 +7,22 @@ texture in the game is drawn procedurally onto a canvas at load time.
 > This repository also holds **STICKFIGHTS**, a 2D sandbox on a grey background
 > and a black floor where you spawn stickmen and police officers, brass
 > knuckles, combat knives, machetes, crowbars, Glock-19 and M1911 pistols, an
-> AK-47, a Mossberg 500 pump shotgun, tasers, light vests, a box of ammo for
-> each kind of gun, crates, wood, metal and glass walls that break cell by
-> cell (and that the hand lifts, swings round and sets back on their ends), a
+> AK-47, a Mossberg 500 pump shotgun, a gas rifle that lobs canisters of poison
+> gas, tasers, light vests, a box of ammo for each kind of gun, grenades, C4,
+> TNT and missiles that wait to be set off (and set each other off), crates,
+> wood, metal and glass walls that break cell by cell (and that the hand lifts,
+> swings round and sets back on their ends), small and large steel beams, a
+> generator that puts 230 volts down power cords into lightbulbs, floodlights,
+> a volt meter and any metal it is tied to - electrocuting whoever touches
+> it - a
 > gallows with a noose and a trapdoor that drops when the lever is pulled, and
 > trees and bushes whose branches, twigs and leaves bend, snap and fall, and
 > that come up whole, roots and all, and take root again where they are put -
 > and the stickmen think, feel, remember, talk,
-> fight until they run out of breath, stumble, break bones, lose limbs and die
-> on their own - animated frame by frame while they are in charge of their
+> fight until they run out of breath, stumble, break bones, lose limbs and
+> heads, and die on their own - with organs inside them (brain, heart, lungs,
+> liver, stomach, kidneys, gut) that wounds, gas and current damage, shown in
+> the inspector's X-ray - animated frame by frame while they are in charge of their
 > bodies, balancing on their feet when a blow knocks them back, and ragdolls
 > with real joints when they go over - holster and pocket what they are not
 > using, and answer to the officers, who go after whoever commits a crime with
@@ -24,11 +31,11 @@ texture in the game is drawn procedurally onto a canvas at load time.
 > becomes theirs: hot enough they catch fire, run screaming and stop, drop and
 > roll; cold enough they freeze solid, an ice statue that thaws - or shatters.
 > They bleed from the wound that is bleeding - in spurting streams from a stump
-> or an artery, from the head that hit the floor - until their blood runs out,
+> or an artery, which break up into drops as they fall, from the head that hit the floor - until their blood runs out,
 > and it lands on anything: the floor, the walls, crates, weapons, people.
 > A freeze tool stops anything dead where it is; with the world paused, the
 > hand just moves things; and a wire tool ties anything to anything (or to the
-> background) with wood or metal rope, fixed rods or pins, which take the strain
+> background) with wood or metal rope, fixed rods, pins or power cords, which take the strain
 > until they snap. You can change their feelings (or lock them where they are), their
 > personality and who they count as friends and enemies, and send them to
 > fight. It starts out flat, or, from MAPS, as a **City**: a street of office

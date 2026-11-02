@@ -607,9 +607,10 @@ export class Fight extends Behaviour {
       return true;
     }
     const spec = g.spec || {};
-    const want = spec.pellets ? 2.2 + T.skill : spec.auto ? 5 + T.skill * 3 : 3.5 + T.skill * 2.5;
+    // (gas: from well back, out of the cloud it makes)
+    const want = spec.gas ? 6 + T.skill * 2 : spec.pellets ? 2.2 + T.skill : spec.auto ? 5 + T.skill * 3 : 3.5 + T.skill * 2.5;
     const seen = b.sees(o);
-    if (d < 1.6) me.goTo(me.pos.x - dir * 2, 'walk', { backpedal: true, face: o.pos.x });
+    if (d < (spec.gas ? 4.8 : 1.6)) me.goTo(me.pos.x - dir * (spec.gas ? 4 : 2), 'walk', { backpedal: true, face: o.pos.x });
     else if (d > 10 || !seen) me.goTo(o.pos.x - dir * want, 'walk', { face: o.pos.x });
     else { me.stop(); me.faceTo(o.pos.x); }
     if (!seen) { me.lowerGun(); return true; }
@@ -635,11 +636,13 @@ export class Fight extends Behaviour {
       this.warn = 0;
     }
     if (!me.acting) this.cool -= dt;
-    if (this.cool <= 0 && me.steady > 0.4 + (1 - T.skill) * 0.35) {
+    // (no gassing them again while they are still choking on the last one, nor from close enough to breathe it too)
+    const held = spec.gas && (d < 4.5 || (o.gassed && this.now - o.gassed < 2) || (me.gasAt && this.now - me.gasAt.t < 1));
+    if (this.cool <= 0 && !held && me.steady > 0.4 + (1 - T.skill) * 0.35) {
       if (me.fire()) {
         this.shots = (this.shots || 0) + 1;
         const burst = spec.auto ? 3 + Math.round(T.aggression * 4 + b.emo.anger * 3) : 1 + Math.round(T.aggression * 2 + b.emo.anger);
-        this.cool = spec.pump ? rand(0.95, 1.35) : this.shots % burst ? (spec.auto ? spec.cadence : rand(0.16, 0.35)) : rand(0.6, 1.3);
+        this.cool = spec.gas ? rand(2.5, 4) : spec.pump ? rand(0.95, 1.35) : this.shots % burst ? (spec.auto ? spec.cadence : rand(0.16, 0.35)) : rand(0.6, 1.3);
       }
     }
     return true;
@@ -972,8 +975,8 @@ export class Mourn extends Behaviour {
 
 /* ---------------------------------- things ---------------------------------- */
 
-const ARM_SAID = { knife: 'knife', machete: 'machete', crowbar: 'crowbar', glock: 'gun', m1911: 'gun', taser: 'taser', ak47: 'rifle', mossberg: 'shotgun' };
-const ARM_ICON = { knife: 'knife', machete: 'machete', crowbar: 'crowbar', glock: 'glock', m1911: 'm1911', taser: 'taser', ak47: 'ak47', mossberg: 'mossberg' };
+const ARM_SAID = { knife: 'knife', machete: 'machete', crowbar: 'crowbar', glock: 'gun', m1911: 'gun', taser: 'taser', ak47: 'rifle', mossberg: 'shotgun', gasRifle: 'gas rifle' };
+const ARM_ICON = { knife: 'knife', machete: 'machete', crowbar: 'crowbar', glock: 'glock', m1911: 'm1911', taser: 'taser', ak47: 'ak47', mossberg: 'mossberg', gasRifle: 'gasRifle' };
 
 export class Arm extends Behaviour {
   get kind() { return 'arm'; }
@@ -1332,12 +1335,47 @@ export class Douse extends Behaviour {
   end() { if (this.me.posture === 'kneelHands') this.me.setPosture(null); }
 }
 
+/**
+ * Getting clear of somewhere that is no place to be: a cloud of gas they are
+ * breathing, or something about to go off near them (a grenade with its pin
+ * out, a lit fuse, a block of C4 beeping). Away from it at a run, until they
+ * are out of the gas, or far enough off - or it has gone off.
+ */
+export class GetClear extends Behaviour {
+  get kind() { return 'getClear'; }
+  get label() { return this.o.gas ? 'Getting out of the gas' : `Getting away from the ${this.o.what ? this.o.what.name : 'bomb'}`; }
+  get icon() { return 'run'; }
+  start() {
+    const me = this.me, sb = this.sb;
+    me.setPosture(null);
+    me.setEmote('sweat', 2);
+    // which way is out: away from it, unless that is straight into the edge of the world
+    this.dir = sign(me.pos.x - this.from()) || (chance(0.5) ? 1 : -1);
+    if ((this.dir > 0 ? sb.right - me.pos.x : me.pos.x - sb.left) < 1.5) this.dir = -this.dir;
+    this.clear = 0;
+    this.yell = rand(1.5, 2.5);
+  }
+  /** Where the trouble is. */
+  from() { const w = this.o.what; return w && !w.removed ? w.pos.x : this.o.x; }
+  update(dt) {
+    this.t += dt;
+    const me = this.me, o = this.o, sb = this.sb, b = this.brain;
+    const safe = o.gas ? !me.gasAt || this.now - me.gasAt.t > 0.4
+      : !o.what || o.what.removed || !o.what.lit || Math.abs(me.pos.x - this.from()) > 7.5;
+    if ((this.dir > 0 ? sb.right - me.pos.x : me.pos.x - sb.left) < 0.8) this.dir = -this.dir;
+    me.goTo(me.pos.x + this.dir * 4, 'flee');
+    if (!o.gas && (this.yell -= dt) <= 0) { this.yell = rand(2, 3); b.speak('bombRun', {}, 0.6, null, true); }
+    this.clear = safe ? this.clear + dt : 0;
+    return this.clear < (o.gas ? 0.8 : 0.3) && this.t < 20;
+  }
+}
+
 export const KINDS = {
   idle: Idle, wander: Wander, rest: Rest, celebrate: Celebrate, panic: Panic, chat: Chat,
   fight: Fight, flee: Flee, hide: Hide, cower: Cower, confront: Confront, watch: Watch,
   help: Help, mourn: Mourn, arm: Arm, inspect: Inspect, play: Play, throw: ThrowCrate,
   investigate: Investigate, pullout: PullOut, throwKnife: ThrowKnife, exercise: Exercise,
   surrender: Surrender, vest: GearUp, ammo: Resupply, catchBreath: CatchBreath,
-  burning: Burning, douse: Douse,
+  burning: Burning, douse: Douse, getClear: GetClear,
 };
 

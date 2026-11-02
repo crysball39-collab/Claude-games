@@ -51,13 +51,14 @@ import { CLIPS, MASKS } from './clips.js';
 import { solve, makeJoints, bounds, JOINTS, BONES, DIM, HEAD_BONE, BELOW_BREAK, boneSegments, pointOnBone, angleOf } from './skeleton.js';
 import { Health, KO_LEVEL, SEVERABLE } from './health.js';
 import { makeRagdoll, aimMuscles, toJoints, refNear, lyingSide } from './limp.js';
-import { heldGunFrame, gunPoint, goneAt } from './draw.js';
+import { heldGunFrame, gunPoint, goneAt, neckCut } from './draw.js';
 import { isBlade, isGun, armOf, Gun, GUN_MODELS } from './props.js';
 import { startStumble, updateStumble, stumblePose } from './stumble.js';
 import { updateTased } from './taser.js';
 import { updateVitals, healVitals, iceBlow, ignite } from './vitals.js';
 import { bleedSources, pickSource, feedStreams, splatter, contactOf, woundId, bloodK } from './blood.js';
 import { tiedUp, noosed } from './wires.js';
+import { launchGas, lob, GAS_SPEED, GAS_G } from './gas.js';
 import { clamp, clamp01, lerp, lerpAngle, rand, chance, moveToward, segDist, sign, smooth, wrapAngle, wobble, DEG } from '../core/util.js';
 
 export const G = 18;
@@ -66,6 +67,12 @@ const HALF_W = 0.17;
 const STEP_UP = 0.24;
 export const SPEEDS = { walk: 1.45, run: 4.0, flee: 4.5, sneak: 0.8, shuffle: 1.0 };
 const CRAWL_SPEED = 0.35;
+
+/** How far up the body - from the hips (0) to the base of the neck (1) - a point on it is. */
+function torsoAt(j, x, y) {
+  const dx = j.neck.x - j.hip.x, dy = j.neck.y - j.hip.y, l2 = dx * dx + dy * dy || 1;
+  return clamp(((x - j.hip.x) * dx + (y - j.hip.y) * dy) / l2, 0, 1);
+}
 
 /** The speed at which a cycle's planted foot does not slide, for playback rate. */
 function strideSpeed(name) {
@@ -97,6 +104,8 @@ const LIMB_OF = { humerusA: 'armA', forearmA: 'armA', humerusB: 'armB', forearmB
 const BEFORE_CUT = { midHumA: 'shoulder', midForeA: 'elbowA', midHumB: 'shoulder', midForeB: 'elbowB', midFemA: 'hip', midTibA: 'kneeA', midFemB: 'hip', midTibB: 'kneeB' };
 // how hard a machete has to come down on each bone to have a chance of going right through
 const SEVER_FORCE = { forearm: 9, humerus: 13, tibia: 12, femur: 17 };
+// ...and on the neck, to take the head off
+const BEHEAD_FORCE = 14;
 // how far out along its limb each break point is, so a cut further in wins
 const CHAIN_AT = { midHumA: 1, midForeA: 3, midHumB: 1, midForeB: 3, midFemA: 1, midTibA: 3, midFemB: 1, midTibB: 3 };
 
@@ -105,7 +114,7 @@ const STRIKE_COST = { jab: 0.04, cross: 0.062, uppercut: 0.08, kick: 0.1, stomp:
 // where each thing they carry can go when it is not in their hand: a holster
 // (or the waistband) for a pistol, a pocket for anything small, and on an
 // officer's duty belt, a holster of its own for the taser
-const SLOTS = { holster: new Set(['glock', 'm1911', 'taser']), duty: new Set(['taser']), pocket: new Set(['knife', 'knuckles', 'taser']), back: new Set(['ak47', 'mossberg']) };
+const SLOTS = { holster: new Set(['glock', 'm1911', 'taser']), duty: new Set(['taser']), pocket: new Set(['knife', 'knuckles', 'taser']), back: new Set(['ak47', 'mossberg', 'gasRifle']) };
 
 const HELD_MIX = { arms: 1, legs: 0.35, core: 0.15 };
 const HELD_BY_LEG = { arms: 1, legs: 0.04, core: 0.04 };
@@ -635,17 +644,27 @@ export class Stickman {
     }
     const tp = this.aimPoint();
     let a = frame.a;
-    if (tp && this.steady > 0.3) a = Math.atan2(tp.y - m.y, tp.x - m.x);
+    if (tp && this.steady > 0.3) {
+      // (a gas canister drops on its way: lobbed so it comes down on them)
+      if (spec.gas) { const dx = tp.x - m.x, up = lob(Math.max(0.3, Math.abs(dx)), tp.y - m.y, GAS_SPEED, GAS_G); a = dx >= 0 ? up : Math.PI - up; }
+      else a = Math.atan2(tp.y - m.y, tp.x - m.x);
+    }
     a += gauss() * this.spread();
     g.mag--;
     g.lastShot = now;
     this.recoil = spec.kick;
+    const target = this.aimTarget && this.aimTarget.kind === 'stickman' ? this.aimTarget : null;
+    // a gas rifle: no flash and no case, just the canister out with a thump
+    if (spec.gas) {
+      sb.emit('shot', { who: this, gun: g, x: m.x, y: m.y, target, loud: true, heavy: false, kind: g.kind });
+      launchGas(sb, this, m.x, m.y, a);
+      return true;
+    }
     sb.fx.flash(m.x, m.y, a, spec.kick > 1.2 ? 1.3 : 1);
     const port = gunPoint(frame, spec.port.x, spec.port.y);
     // (a shotgun's shell comes out when it is pumped: a moment later)
     if (spec.pump) sb.later(0.32, () => sb.fx.casing(port.x, port.y, -this.facing * rand(1, 2), rand(2, 3.2), { shell: true }));
     else sb.fx.casing(port.x, port.y, -this.facing * rand(1.2, 2.4), rand(2.4, 4), spec.long ? { long: true } : undefined);
-    const target = this.aimTarget && this.aimTarget.kind === 'stickman' ? this.aimTarget : null;
     sb.emit('shot', { who: this, gun: g, x: m.x, y: m.y, target, loud: true, heavy: spec.energy > 1.1 || !!spec.pellets, kind: g.kind });
     // a shotgun: a handful of pellets, spreading
     if (spec.pellets) for (let i = 0; i < spec.pellets; i++) sb.shoot(this, m.x, m.y, a + gauss() * spec.spread * DEG, { target, energy: spec.energy, pellet: true });
@@ -726,7 +745,8 @@ export class Stickman {
     // a body of some other shape (a mod's) goes by its own pieces
     if (this.species && this.species.shape) { const n = shapeNearest(this.species.shape(this), x, y); return n && n.d <= r ? n : null; }
     let best = null;
-    const dh = Math.hypot(x - j.head.x, y - j.head.y) - DIM.headR * s - half;
+    // (the head, unless it has come off)
+    const dh = this.cut.head ? Infinity : Math.hypot(x - j.head.x, y - j.head.y) - DIM.headR * s - half;
     if (dh <= r) best = { part: 'head', d: dh, x: j.head.x + (x - j.head.x) * 0.7, y: j.head.y + (y - j.head.y) * 0.7, bone: HEAD_BONE, t: 1 };
     for (let b = 0; b < BONES.length; b++) {
       for (const g of boneSegments(j, b)) {
@@ -753,7 +773,7 @@ export class Stickman {
     const hr = DIM.headR * s + R * 0.6;
     const ox = px - j.head.x, oy = py - j.head.y;
     const pb = ox * dx + oy * dy, c = ox * ox + oy * oy - hr * hr;
-    const disc = pb * pb - c;
+    const disc = this.cut.head ? -1 : pb * pb - c;
     if (disc >= 0) {
       const t = -pb - Math.sqrt(disc);
       if (t > 1e-4 && t < max) best = { t, part: 'head', bone: HEAD_BONE, tb: 1 };
@@ -817,6 +837,8 @@ export class Stickman {
       ? (blade ? this.vest.bladeThrough(h.kind) : 0.85) : 1;
     const dmg = 9 * h.power * MUL[part] * (blocked ? 0.3 : parried ? 0.85 : 1) * rand(0.85, 1.15) * armor * vestK;
     const res = this.health.hit(part, dmg, {
+      // (how far up the body it went in: what is inside, there)
+      at: part === 'torso' && h.x !== undefined ? torsoAt(this.wj, h.x, h.y) : null,
       sharp: (blocked ? sharp * 0.5 : sharp) * vestK, deep: !!h.deep && !blocked && vestK > 0.7, chop: chops && !blocked && vestK > 0.7, shot: bullet || !!(spec && spec.shot),
       bone: blocked ? null : h.bone || null, breakChance: h.kind === 'stomp' ? 0.06 : spec && spec.breaks ? spec.breaks : 0, strike: h.kind,
       burn, cutBy: spec ? spec.wound || null : null, cause: spec ? spec.cause || null : null,
@@ -1094,9 +1116,17 @@ export class Stickman {
     this.wounds.push(w);
   }
 
-  /** A machete coming down on an arm or a leg, hard enough, goes right through it. */
+  /**
+   * A machete coming down on an arm or a leg, hard enough, goes right through
+   * it - and across the neck (or the bottom of the head, where it meets the
+   * neck), the head comes off.
+   */
   trySever(h, dmg, k = 1) {
     const bone = h.bone;
+    if (bone === 'neck' || (bone === 'skull' && h.y !== undefined && h.y < this.wj.head.y - DIM.headR * this.scale * 0.35)) {
+      if (dmg < BEHEAD_FORCE || this.steadfast || !chance(((h.kind === 'chop' ? 0.07 : 0.025) + (dmg - BEHEAD_FORCE) * 0.02) * k)) return false;
+      return this.decapitate(h.dir, h.power);
+    }
     if (!bone || !SEVERABLE.includes(bone) || this.steadfast) return false;
     const thr = SEVER_FORCE[bone.replace(/[AB]$/, '')];
     if (dmg < thr) return false;
@@ -1146,6 +1176,53 @@ export class Stickman {
     // (o.quiet: something else says what happened - a frozen body coming apart)
     if (!o.quiet) sb.emit('sever', { who: this, bone, lost: h.lostAt(bone), x: m.x, y: m.y, by: this.lastHit ? this.lastHit.by : null });
     this.notify('severed', { bone, lost: h.lostAt(bone) });
+    return true;
+  }
+
+  /**
+   * The head off at the neck: it comes away as a piece of its own - a
+   * severed head, the face as it was left on it, eyes gone to crosses - and
+   * that is the end of them; what is left of the neck pours. Not for a body
+   * that draws its own head (a mod's), or that nothing can cut.
+   */
+  decapitate(dir = 0, power = 1, o = {}) {
+    const h = this.health, sb = this.sandbox, sp = this.species;
+    if (this.cut.head || this.steadfast || this.removed || (sp && sp.skin && (sp.skin.head || sp.skin.full))) return false;
+    const w = this.wj, pw = this.prevWj, f = this.rag ? this.rag.facing : this.facing;
+    const at = neckCut(w, f, this.scale);
+    const vx = clamp((w.head.x - pw.head.x) * 120, -12, 12), vy = clamp((w.head.y - pw.head.y) * 120, -12, 12);
+    const killer = o.by || (this.lastHit ? this.lastHit.by : null);
+    const piece = sb.addLimb([at, { x: w.head.x, y: w.head.y }], 'neck', this.name, vx + dir * (1.2 + power), vy + 1.5 + power * 0.4, rand(-9, 9), this.scale);
+    const frozen = h.frozen;
+    if (piece) {
+      piece.tint = this.tint;
+      piece.from = this;
+      piece.bleed = frozen ? 0 : bloodK(this);
+      piece.iced = frozen;
+      piece.head = {
+        scale: this.scale, facing: f, hair: this.hair, hat: this.officer ? 'police' : null, tint: this.tint,
+        face: { ...this.face, eyes: 'x', open: 0.35, mouth: -0.15, teeth: false, tears: 0 },
+        hurt: { ...h.face }, headMarks: this.headMarks.map((m) => ({ ...m })), pale: 0.7, ink: '#1b1b1b', broken: { skull: !!h.bones.skull.broken },
+      };
+    }
+    h.decapitate();
+    this.cut.head = 'neck';
+    this.headMarks.length = 0;
+    // whatever was in their mouth or on the head goes with it; a blade stuck in the neck falls out
+    for (const e of [...this.stuck]) if (goneAt(this.cut, e.bone, e.t)) this.pullKnife(e, null);
+    this.wounds = this.wounds.filter((x) => !goneAt(this.cut, x.bone, x.t));
+    if (frozen) sb.fx.shards(at.x, at.y, 16, dir * 2, 1.6);
+    else {
+      sb.fx.blood(at.x, at.y, dir * 2, 2.5, 40, 1.5, this);
+      this.markAt(at.x, at.y, 1);
+      // out of the neck, the moment it goes - and for a good while after, the heart still going a few beats
+      const a = w.chest, d = Math.hypot(at.x - a.x, at.y - a.y) || 1, k = bloodK(this);
+      sb.fx.gush(at.x, at.y, (at.x - a.x) / d * 3.2 + dir, (at.y - a.y) / d * 3.2 + 0.6, k, 1.6, this, null,
+        (st) => { const q = neckCut(this.wj, this.rag ? this.rag.facing : this.facing, this.scale); st.x = q.x; st.y = q.y; });
+    }
+    if (this.rag) this.rebuildRag();
+    sb.emit('sever', { who: this, bone: 'neck', lost: 'head', head: true, x: at.x, y: at.y, by: killer });
+    this.die('decapitated', killer, dir, power);
     return true;
   }
 
@@ -1220,7 +1297,25 @@ export class Stickman {
     this.takeHit({ by, part, x: hit.x, y: hit.y, dir: sign(dx) || 1, power: 2.7 * energy, kind: 'shot', weapon: 'bullet', bone, through });
     if (!through && !this.removed) this.health.lodge(bone);
     sb.emit('bulletHit', { what: this, x: hit.x, y: hit.y, energy });
+    if (!this.removed && !this.steadfast && !this.health.frozen) this.shotOff(bone, energy, sign(dx) || 1);
     return through ? left : 0;
+  }
+
+  /**
+   * A shot that takes a piece off. A heavy rifle round through a forearm or a
+   * shin may take the hand or the foot with it; and shot at close range,
+   * enough of one load of pellets in the same arm, leg or neck takes that off.
+   */
+  shotOff(bone, energy, dir) {
+    const now = this.sandbox.time;
+    if (energy > 1.4 && (bone.startsWith('forearm') || bone.startsWith('tibia')) && chance((energy - 1.3) * 0.18)) { this.sever(bone, dir, energy); return; }
+    // (the pellets of one shot all arrive at once: what each bone has taken of them)
+    const q = this.pellets && now - this.pellets.t < 0.05 ? this.pellets : (this.pellets = { t: now, n: {} });
+    q.n[bone] = (q.n[bone] || 0) + energy;
+    if (q.n[bone] < 2 || !chance(0.45)) return;
+    q.n[bone] = -99;
+    if (bone === 'neck') this.decapitate(dir, 2);
+    else if (SEVERABLE.includes(bone)) this.sever(bone, dir, 2);
   }
 
   die(cause, killer = null, dir = 0, power = 1, at = null) {
@@ -3033,8 +3128,10 @@ export class Stickman {
     if (ov && ov.clip.name === 'aimPistol' && ov.w > 0) {
       const tp = this.aimPoint();
       if (tp) {
-        const sh = this.wj.shoulder;
-        const want = clamp(Math.atan2(tp.y - sh.y - 0.07 * this.scale, Math.max(0.3, Math.abs(tp.x - sh.x))), -75 * DEG, 70 * DEG);
+        const sh = this.wj.shoulder, dx = Math.max(0.3, Math.abs(tp.x - sh.x)), dy = tp.y - sh.y - 0.07 * this.scale;
+        // (a gas rifle held up higher, to lob it)
+        const gas = this.weapon && this.weapon.spec && this.weapon.spec.gas;
+        const want = clamp(gas ? lob(dx, dy, GAS_SPEED, GAS_G) : Math.atan2(dy, dx), -75 * DEG, 70 * DEG);
         const skill = brain ? brain.traits.skill : 0.5;
         this.gunAim = lerp(this.gunAim, want, 1 - Math.exp(-dt * (5 + skill * 9)));
       }

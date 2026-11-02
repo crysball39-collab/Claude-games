@@ -41,7 +41,9 @@ export const WIRES = {
   metalRod: { name: 'Fixed metal rope', rod: true, strength: 16000, colour: '#a6aeb5', dark: '#5a6167', width: 0.036, cut: 0 },
   woodPin: { name: 'Wood pin', pin: true, strength: 2400, wood: true, colour: '#b98a50', dark: '#6b4622', width: 0.05, cut: 0 },
   metalPin: { name: 'Metal pin', pin: true, strength: 10000, colour: '#c3c9ce', dark: '#4f565c', width: 0.045, cut: 0 },
-  // (not one of the six: the rope of a gallows, with a noose on the end - gallows.js)
+  // a cable that carries electricity, from a generator to whatever it runs (power.js)
+  powerCord: { name: 'Power cord', rope: true, power: true, strength: 5200, colour: '#2c2c2c', dark: '#0c0c0c', width: 0.026, cut: 0.35 },
+  // (not one of the seven: the rope of a gallows, with a noose on the end - gallows.js)
   noose: { name: 'Noose', rope: true, noose: true, strength: 1e7, wood: true, colour: '#b08850', dark: '#6b4a24', width: 0.032, cut: 0.5 },
 };
 export const isPin = (kind) => !!(WIRES[kind] && WIRES[kind].pin);

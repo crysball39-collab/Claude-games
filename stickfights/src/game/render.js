@@ -23,7 +23,7 @@
    air, and black with burning.
    ========================================================================== */
 import {
-  drawStickman, drawCrateShape, drawKnuckleShape, drawKnifeShape, drawMacheteShape, drawSeveredLimb,
+  drawStickman, drawCrateShape, drawKnuckleShape, drawKnifeShape, drawMacheteShape, drawSeveredLimb, drawSeveredHead,
   drawTaserShape, drawVestShape, drawAmmoBoxShape, drawGunShape, drawCrowbarShape,
   KNIFE_W, KNIFE_H, MACHETE_W, MACHETE_H, CROWBAR_W, CROWBAR_H, INK, BLOOD, BLOOD_DARK, BRASS, BRASS_DARK,
 } from './draw.js';
@@ -359,7 +359,9 @@ export class Renderer {
     ctx.save();
     ctx.translate(b.pos.x, b.pos.y);
     ctx.rotate(b.rot);
-    drawSeveredLimb(ctx, l.local, 0.07 * l.scale, l.iced ? '#1c2c3c' : '#1b1b1b', l.tint || null);
+    // (a head: the face as it was left on it)
+    if (l.head) drawSeveredHead(ctx, l.local[1], l.local[0], l.head);
+    else drawSeveredLimb(ctx, l.local, 0.07 * l.scale, l.iced ? '#1c2c3c' : '#1b1b1b', l.tint || null);
     if (l.iced) drawIcedLimb(ctx, l.local, 0.07 * l.scale);
     ctx.restore();
     drawStains(ctx, l);
@@ -505,7 +507,7 @@ export class Renderer {
     // smoke and steam, spreading as they rise
     for (const p of fx.smokes) {
       const k = p.age / p.life, a = Math.min(1, p.age * 6) * (1 - k);
-      ctx.fillStyle = p.steam ? `rgba(240, 244, 248, ${0.4 * a})` : `rgba(40, 38, 36, ${0.34 * a * p.k})`;
+      ctx.fillStyle = p.steam ? `rgba(240, 244, 248, ${0.4 * a})` : p.gas ? `rgba(126, 184, 62, ${0.4 * a * p.k})` : `rgba(40, 38, 36, ${0.34 * a * p.k})`;
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.r * (1 + k * 2.6), 0, TAU);
       ctx.fill();
@@ -982,7 +984,8 @@ export function drawIcon(ctx, kind, x, y, s) {
     case 'glock':
     case 'm1911':
     case 'ak47':
-    case 'mossberg': {
+    case 'mossberg':
+    case 'gasRifle': {
       // the gun they are going for (a long one tipped up, to fit in the cloud)
       const gun = GUN_MODELS[kind] ? kind : 'glock', k = s * Math.min(1.7 / 0.3, 2.6 / GUN_MODELS[gun].w);
       ctx.save();

@@ -132,9 +132,10 @@ check('PLAY opens the game, the HUD and the spawn menu', await ev(() =>
   !document.querySelector('#hud').classList.contains('hidden') && document.querySelector('#drawer').classList.contains('open')));
 check('the sandbox starts empty', await ev(() => window.__sf.sb.people.length === 0 && window.__sf.sb.crates.length === 0));
 const cards = await ev(() => [...document.querySelectorAll('.card')].map((c) => c.dataset.spawn));
-const BASE = ['stickman', 'officer', 'knuckles', 'knife', 'machete', 'crowbar', 'glock', 'm1911', 'ak47', 'mossberg', 'taser', 'crate', 'vest',
-  'ammo9', 'ammo45', 'ammo762', 'ammo12', 'woodWall', 'metalWall', 'glassWall', 'gallows', 'tree', 'bush'];
-check('there are twenty-three things to spawn: a Stickman, an Officer, Brass Knuckles, a Combat Knife, a Machete, a Crowbar, a Glock-19, an M1911, an AK-47, a Mossberg 500, a Taser, a Crate, a Light Vest, four kinds of ammo, three walls, a Gallows, a Tree and a Bush',
+const BASE = ['stickman', 'officer', 'knuckles', 'knife', 'machete', 'crowbar', 'glock', 'm1911', 'ak47', 'mossberg', 'taser', 'gasRifle', 'crate', 'vest',
+  'ammo9', 'ammo45', 'ammo762', 'ammo12', 'woodWall', 'metalWall', 'glassWall', 'beamSmall', 'beamLarge', 'gallows', 'tree', 'bush',
+  'grenade', 'c4', 'tnt', 'missile', 'generator', 'lightbulb', 'floodlight', 'voltmeter'];
+check('there are thirty-four things to spawn: a Stickman, an Officer, Brass Knuckles, a Combat Knife, a Machete, a Crowbar, a Glock-19, an M1911, an AK-47, a Mossberg 500, a Taser, a Gas Rifle, a Crate, a Light Vest, four kinds of ammo, three walls, two metal beams, a Gallows, a Tree, a Bush, a Grenade, C4, TNT, a Missile, a Generator, a Lightbulb, a Floodlight and a Volt Meter',
   cards.length === BASE.length && BASE.every((k) => cards.includes(k)), cards.join(', '));
 check('the cards are named for what they spawn', await ev(() =>
   ['Stickman', 'Brass Knuckles', 'Combat Knife', 'Machete', 'Glock-19', 'Crate'].every((n) => [...document.querySelectorAll('.card b')].some((b) => b.textContent === n))));
@@ -2485,8 +2486,8 @@ const wirebar = await ev(() => {
   window.__sf.ui.setTool('hand');
   return { kinds, shown, hidden: bar.classList.contains('hidden') };
 });
-check('the wire tool has six wires: wood rope, metal rope, fixed wood rope, fixed metal rope, wood pin and metal pin',
-  wirebar.shown && wirebar.hidden && wirebar.kinds.join('|') === 'woodRope:WOOD ROPE|metalRope:METAL ROPE|woodRod:FIXED WOOD ROPE|metalRod:FIXED METAL ROPE|woodPin:WOOD PIN|metalPin:METAL PIN',
+check('the wire tool has seven wires: wood rope, metal rope, fixed wood rope, fixed metal rope, wood pin, metal pin and power cord',
+  wirebar.shown && wirebar.hidden && wirebar.kinds.join('|') === 'woodRope:WOOD ROPE|metalRope:METAL ROPE|woodRod:FIXED WOOD ROPE|metalRod:FIXED METAL ROPE|woodPin:WOOD PIN|metalPin:METAL PIN|powerCord:POWER CORD',
   JSON.stringify(wirebar));
 await ev(() => window.__sf.ui.setTool('wire'));
 await shot('wirebar');
@@ -2922,6 +2923,326 @@ check('a GRENADE goes off where it is tapped: whoever is right by it is killed b
 check('...its casing flies further than the blast does, into whoever is in the way', grenade.hits.includes('Far:shrapnel') && grenade.far.hurt, JSON.stringify(grenade.hits));
 check('...and everyone who hears it is frightened, and says so', grenade.said.length > 0, JSON.stringify(grenade.said));
 await ev(() => { window.__sf.sb.paused = true; });
+
+/* ----------------------- blood streams, heads and organs ----------------------- */
+
+await fresh();
+const behead = await ev(() => {
+  const sb = window.__sf.sb, fx = sb.fx;
+  const p = sb.spawnStickman(0, null, { name: 'Rill' });
+  p.brain = null;
+  const w = sb.spawnStickman(2.6, null, { name: 'Wit', traits: { empathy: 0.8, bravery: 0.3 } });
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  w.faceTo(-5);
+  for (let i = 0; i < 12; i++) sb.step(1 / 120);
+  const fear0 = w.brain.emo.fear;
+  const said = [];
+  sb.on('speech', (e) => { if (e.who === w) said.push(e.kind); });
+  const ok = p.decapitate(1, 1.5, {});
+  let linked = 0, broke = 0;
+  for (let i = 0; i < 120 * 1.5; i++) {
+    sb.step(1 / 120);
+    linked = Math.max(linked, fx.drops.filter((d) => d.link).length);
+    broke = Math.max(broke, fx.drops.filter((d) => d.broke).length);
+  }
+  const head = sb.limbs.find((l) => l.head);
+  return {
+    ok, dead: p.dead, cause: p.health.cause, cut: p.cut.head, head: head ? head.name : null, linked, broke,
+    said, fear: +(w.brain.emo.fear - fear0).toFixed(2), conds: p.health.conditions().slice(0, 3),
+  };
+});
+check('a head can come off: whoever it was dies of it, and the head is a thing of its own, lying there', behead.ok && behead.dead && /decapitat/i.test(behead.cause) && behead.cut === 'neck' && behead.head === 'Severed head',
+  JSON.stringify(behead));
+check('...the blood pours out of the neck in a stream - drops joined into a line - that breaks back up into separate drops as it falls', behead.linked > 4 && behead.broke > 4,
+  `${behead.linked} joined, ${behead.broke} broken off`);
+check('...and whoever sees it is horrified', behead.fear > 0.15 || behead.said.includes('sawBeheaded'), JSON.stringify({ fear: behead.fear, said: behead.said }));
+await ev(() => { const sf = window.__sf; sf.cam.follow = null; sf.cam.ppm = 150; sf.cam.x = 0.6; sf.cam.y = 1; sf.cam.clamp(); });
+await page.waitForTimeout(150);
+await shot('beheaded');
+
+// a heavy round through the forearm, a close blast of shot through the shin: either can take it off
+await fresh();
+const shotOff = await ev(() => {
+  const sb = window.__sf.sb;
+  const out = { rifle: 0, shotgun: 0 };
+  for (let n = 0; n < 10; n++) {
+    const p = sb.spawnStickman(0, null, { name: 'T' + n });
+    p.brain = null;
+    for (let i = 0; i < 20; i++) sb.step(1 / 120);
+    const e = p.wj.elbowA, h = p.wj.handA;
+    sb.shoot(null, -3, (e.y + h.y) / 2, Math.atan2(0, 1), { energy: 1.85 });
+    const k = p.wj.kneeA, f = p.wj.footA;
+    for (let i = 0; i < 8; i++) sb.shoot(null, -1.2, (k.y + f.y) / 2, (Math.random() - 0.5) * 0.04, { energy: 0.5, pellet: true });
+    for (let i = 0; i < 10; i++) sb.step(1 / 120);
+    if (p.cut.armA || p.cut.armB) out.rifle++;
+    if (p.cut.legA || p.cut.legB) out.shotgun++;
+    sb.remove(p);
+  }
+  return out;
+});
+check('a rifle round through a forearm, or a shotgun blast through a shin, can take it clean off', shotOff.rifle + shotOff.shotgun > 0, JSON.stringify(shotOff));
+
+await fresh();
+const organs = await ev(() => {
+  const sf = window.__sf, sb = sf.sb;
+  const p = sb.spawnStickman(0, null, { name: 'Ora' });
+  const q = sb.spawnStickman(-6, null, { name: 'Gun' });
+  q.brain = null;
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  const h = p.health, names = Object.keys(h.organs);
+  // shot twice through the chest, and stabbed low in the gut
+  for (const at of [0.74, 0.62]) h.hit('torso', 12, { shot: true, at, bone: 'ribs' });
+  const j = p.wj;
+  p.takeHit({ by: q, part: 'torso', x: j.hip.x + 0.02, y: j.hip.y + 0.12, dir: 1, power: 3, kind: 'stab', weapon: 'knife', deep: true, bone: 'spine' });
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  const hurt = names.filter((k) => h.organs[k] < 1);
+  const conds = h.conditions().filter((c) => /lung|heart|liver|stomach|kidney|intestine|brain/i.test(c));
+  window.__ora = p;
+  return { names, hurt, conds };
+});
+await ev(() => window.__sf.ui.select(window.__ora));
+await page.waitForTimeout(400);
+const xray = await ev(() => {
+  const cv = document.getElementById('ins-figure');
+  const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+  let organ = 0;
+  for (let i = 0; i < d.length; i += 4) if (d[i] > 140 && d[i] - d[i + 2] > 40 && d[i] - d[i + 1] > 40) organ++;
+  return { w: cv.width, h: cv.height, organ, shown: cv.getBoundingClientRect().width > 0 };
+});
+check('everybody has organs - brain, heart, two lungs, liver, stomach, kidneys and gut - and a shot or a blade into the body hurts the ones it goes through',
+  ['brain', 'heart', 'lungA', 'lungB', 'liver', 'stomach', 'kidneys', 'intestines'].every((k) => organs.names.includes(k)) && organs.hurt.length >= 1 && organs.conds.length >= 1,
+  JSON.stringify(organs));
+check('...and the inspector\'s X-ray shows them, in the body, damaged or not', xray.shown && xray.organ > 300, JSON.stringify(xray));
+await ev(() => document.getElementById('ins-figure').scrollIntoView({ block: 'center' }));
+await page.waitForTimeout(200);
+await shot('xray-organs');
+await ev(() => window.__sf.ui.select(null));
+const heart = await ev(() => {
+  const sb = window.__sf.sb;
+  const p = sb.spawnStickman(4, null, { name: 'Hal' });
+  p.brain = null;
+  for (let i = 0; i < 20; i++) sb.step(1 / 120);
+  p.health.organHurt('heart', 1);
+  let t = 0;
+  for (; t < 20 && !p.dead; t += 1 / 120) sb.step(1 / 120);
+  return { dead: p.dead, cause: p.health.cause, t: +t.toFixed(1) };
+});
+check('...a heart that stops puts them down, and kills them in seconds', heart.dead && heart.cause === 'cardiac arrest' && heart.t > 8 && heart.t < 18, JSON.stringify(heart));
+
+/* --------------------------- grenades, C4, TNT, missiles --------------------------- */
+
+await fresh();
+const gren = await ev(() => {
+  const sf = window.__sf, sb = sf.sb, ui = sf.ui;
+  const cats = [...document.querySelectorAll('#drawer .cat')].map((c) => c.textContent.trim());
+  const made = {};
+  for (const [k, x] of [['grenade', 1.2], ['c4', 12], ['tnt', -12], ['missile', -16]]) { ui.setSpawnKind(k); const m = ui.spawnAt(x, 0.3); made[k] = m ? m.kind : null; }
+  ui.setSpawnKind('stickman');
+  const g = sb.items.find((i) => i.kind === 'grenade');
+  const nia = sb.spawnStickman(0.2, null, { name: 'Nia', traits: { bravery: 0.2 } });
+  for (let i = 0; i < 40; i++) sb.step(1 / 120);
+  nia.faceTo(5);
+  for (let i = 0; i < 40; i++) sb.step(1 / 120);
+  const t0 = sb.time, booms = [];
+  sb.on('explode', (e) => booms.push(`${e.kind}@${(sb.time - t0).toFixed(1)}`));
+  for (let i = 0; i < 120; i++) sb.step(1 / 120);
+  const before = booms.length;
+  const said = g.tap(sb);
+  const t1 = sb.time;
+  let ran = false;
+  for (let i = 0; i < 120 * 4.5; i++) { sb.step(1 / 120); if (nia.brain.behaviour && nia.brain.behaviour.kind === 'getClear') ran = true; }
+  return { cats, made, before, said, booms, after: +(sb.time - t1).toFixed(1), ran, nia: +nia.pos.x.toFixed(1), alive: nia.alive };
+});
+check('EXPLOSIVES in the spawn menu: a Grenade, C4, TNT and a Missile, each put down where it is tapped', gren.cats.includes('EXPLOSIVES') &&
+  gren.made.grenade === 'grenade' && gren.made.c4 === 'c4' && gren.made.tnt === 'tnt' && gren.made.missile === 'missile', JSON.stringify(gren));
+check('a grenade does nothing until it is tapped: then the pin is out, and four seconds later it goes off', gren.before === 0 && /Pin out/i.test(gren.said) &&
+  gren.booms.length === 1 && /^grenade@(5\.0|5\.1)$/.test(gren.booms[0]), JSON.stringify(gren.booms));
+check('...and whoever is near it when the pin comes out runs from it', gren.ran && gren.nia < -2.5, JSON.stringify({ ran: gren.ran, x: gren.nia }));
+
+await fresh();
+const c4 = await ev(() => {
+  const sf = window.__sf, sb = sf.sb, ui = sf.ui;
+  const crate = sb.spawnCrate(2, 0.4);
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  ui.setSpawnKind('c4');
+  const c = ui.spawnAt(2, 1.3);
+  ui.setSpawnKind('stickman');
+  for (let i = 0; i < 120; i++) sb.step(1 / 120);
+  const stuck = !!(c.on && c.on.t === crate);
+  const at0 = crate.body.toLocal(c.pos.x, c.pos.y), cx = crate.body.pos.x;
+  crate.body.applyImpulse(40, 25, crate.body.pos.x, crate.body.pos.y);
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  const at1 = crate.body.toLocal(c.pos.x, c.pos.y), moved = +(crate.body.pos.x - cx).toFixed(2);
+  const off = Math.hypot(at1.x - at0.x, at1.y - at0.y);
+  let beeps = 0;
+  sb.on('c4Beep', () => beeps++);
+  const t0 = sb.time, booms = [];
+  sb.on('explode', (e) => booms.push(`${e.kind}@${(sb.time - t0).toFixed(1)}`));
+  const said = c.tap(sb);
+  for (let i = 0; i < 120 * 3.5; i++) sb.step(1 / 120);
+  return { stuck, moved, off: +off.toFixed(2), said, beeps, booms, crate: crate.removed };
+});
+check('C4 sticks to whatever it lands on, and goes where that goes', c4.stuck && c4.moved > 0.2 && c4.off < 0.06, JSON.stringify(c4));
+check('...tapped, it beeps, faster and faster, and three seconds later it goes off', c4.beeps >= 6 && c4.booms.length === 1 && /^c4@3\.\d$/.test(c4.booms[0]), JSON.stringify(c4));
+
+await fresh();
+const tnt = await ev(() => {
+  const sf = window.__sf, sb = sf.sb, ui = sf.ui;
+  ui.setSpawnKind('tnt');
+  const t = ui.spawnAt(1, 0.3);
+  ui.setSpawnKind('stickman');
+  const p = sb.spawnStickman(-2, null, { name: 'Ash' });
+  p.brain = null;
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  sf.vitals.ignite(p, { power: 0.8 });
+  p.goTo(3, 'walk');
+  let lit = 0;
+  const booms = [];
+  sb.on('explode', (e) => booms.push(e.kind));
+  for (let i = 0; i < 120 * 8 && !booms.length; i++) { sb.step(1 / 120); if (t.lit && !lit) lit = sb.time; }
+  return { lit: !!lit, booms, fuse: lit ? +(sb.time - lit).toFixed(1) : null };
+});
+check('TNT: somebody on fire walking past it lights the fuse, and it goes off a few seconds later', tnt.lit && tnt.booms[0] === 'tnt' && tnt.fuse > 3 && tnt.fuse < 4.2, JSON.stringify(tnt));
+
+await fresh();
+const missile = await ev(() => {
+  const sf = window.__sf, sb = sf.sb, ui = sf.ui;
+  const wall = sb.spawnWall('woodWall', 8, 0);
+  ui.setSpawnKind('missile');
+  const m = ui.spawnAt(-4, 0.3);
+  ui.setSpawnKind('stickman');
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  const said = m.tap(sb);
+  for (let i = 0; i < 36; i++) sb.step(1 / 120);
+  const flown = +(m.pos.x + 4).toFixed(1);
+  const booms = [];
+  sb.on('explode', (e) => booms.push({ kind: e.kind, x: +e.x.toFixed(1) }));
+  for (let i = 0; i < 120 * 3 && !booms.length; i++) sb.step(1 / 120);
+  return { said, flown, booms, wall: wall.removed ? 'gone' : 'hit' };
+});
+check('a Missile, tapped, flies the way it points until it hits something - and goes off there', /fire/i.test(missile.said) && missile.flown > 3 && missile.booms.length === 1 &&
+  missile.booms[0].kind === 'missile' && missile.booms[0].x > 6.5 && missile.booms[0].x < 8.5, JSON.stringify(missile));
+
+await fresh();
+const chain = await ev(() => {
+  const sf = window.__sf, sb = sf.sb, ui = sf.ui;
+  const put = (k, x) => { ui.setSpawnKind(k); return ui.spawnAt(x, 0.3); };
+  const g = put('grenade', 0), t = put('tnt', 1.6), c = put('c4', -1.6);
+  ui.setSpawnKind('stickman');
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  const booms = [];
+  sb.on('explode', (e) => booms.push(e.kind));
+  g.detonate();
+  for (let i = 0; i < 120; i++) sb.step(1 / 120);
+  return { booms, left: sb.items.length };
+});
+check('...and any of them caught in a blast goes off with it', chain.booms.length === 3 && ['grenade', 'tnt', 'c4'].every((k) => chain.booms.includes(k)) && !chain.left, JSON.stringify(chain));
+
+/* --------------------------------- metal beams --------------------------------- */
+
+await fresh();
+const beams = await ev(() => {
+  const sf = window.__sf, sb = sf.sb, ui = sf.ui;
+  const put = (k, x) => { ui.setSpawnKind(k); return ui.spawnAt(x, 0.5); };
+  const a = put('beamSmall', -3), b = put('beamLarge', 3);
+  ui.setSpawnKind('stickman');
+  return [a, b].map((s) => s && { name: s.spec.name, mat: s.mat.name, w: s.spec.w, h: s.spec.h, beam: !!s.spec.beam });
+});
+check('a Small and a Large Metal Beam in BUILDING: steel I-beams, two metres and four', beams[0] && beams[1] && beams[0].mat === 'metal' && beams[1].mat === 'metal' &&
+  beams[0].w === 2 && beams[1].w === 4 && beams[1].h > beams[0].h && beams[0].beam && beams[1].beam, JSON.stringify(beams));
+
+/* ---------------------------------- electricity ---------------------------------- */
+
+await fresh();
+const power = await ev(() => {
+  const sf = window.__sf, sb = sf.sb, ui = sf.ui, W = sf.wires;
+  const put = (k, x, y = 0.3) => { ui.setSpawnKind(k); return ui.spawnAt(x, y); };
+  const gen = put('generator', 0), bulb = put('lightbulb', 2.2, 2.4);
+  const rope = W.tie(sb, 'woodRope', bulb, bulb.pos.x, bulb.pos.y + 0.06, null, 2.2, 3.6);
+  const flood = put('floodlight', -2.5), meter = put('voltmeter', 1.2), beam = put('beamLarge', 7, 0.2);
+  ui.setSpawnKind('stickman');
+  const cord = (t, x, y) => W.tie(sb, 'powerCord', gen, gen.pos.x, gen.pos.y + 0.1, t, x, y);
+  const cords = [cord(bulb, bulb.pos.x, bulb.pos.y - 0.05), cord(flood, flood.pos.x, flood.pos.y), cord(meter, meter.pos.x, meter.pos.y), cord(beam, beam.body.pos.x - 1.8, beam.body.pos.y)];
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  const off = { bulb: bulb.lit, flood: flood.lit, meter: Math.round(meter.reading) };
+  const said = gen.tap(sb);
+  for (let i = 0; i < 180; i++) sb.step(1 / 120);
+  const on = { running: gen.running, bulb: +bulb.lit.toFixed(2), flood: +flood.lit.toFixed(2), meter: Math.round(meter.reading) };
+  // somebody steps onto the live beam
+  const p = sb.spawnStickman(7, null, { name: 'Volt' });
+  p.brain = null;
+  let zaps = 0, tased = false;
+  sb.on('electrocute', (e) => { if (e.who === p) zaps++; });
+  for (let i = 0; i < 120; i++) { sb.step(1 / 120); if (p.tased) tased = true; }
+  const shock = { zaps, tased, heart: +p.health.organs.heart.toFixed(2), burns: p.health.conditions().filter((c) => /Electric/i.test(c)).length };
+  // the generator off again
+  gen.tap(sb);
+  for (let i = 0; i < 120; i++) sb.step(1 / 120);
+  const after = { running: gen.running, bulb: +bulb.lit.toFixed(2), meter: Math.round(meter.reading) };
+  // glass: the floodlight shot, the bulb let fall
+  sb.shoot(null, flood.pos.x - 3, flood.pos.y + 0.15, 0, { energy: 1 });
+  sb.removeWire(rope);
+  for (let i = 0; i < 120 * 1.5; i++) sb.step(1 / 120);
+  return { cords: cords.map((c) => c.error || 'ok'), off, said, on, shock, after, flood: flood.broken, bulb: bulb.broken, rope: rope.removed };
+});
+check('ELECTRICITY in the spawn menu, and a POWER CORD on the wire tool: a Generator, tapped, runs - and a Lightbulb and a Floodlight on cords from it light up', power.cords.every((c) => c === 'ok') &&
+  !power.off.bulb && !power.off.flood && power.on.running && power.on.bulb > 0.9 && power.on.flood > 0.9, JSON.stringify(power));
+check('...a Volt Meter on a cord reads what is on it: nothing, then 230 volts with the generator running', power.off.meter === 0 && power.on.meter >= 225 && power.on.meter <= 232, JSON.stringify({ off: power.off.meter, on: power.on.meter }));
+check('...a metal beam on a cord is live: whoever touches it is electrocuted - locked stiff, burned where it goes in, and their heart takes it', power.shock.zaps > 0 && power.shock.tased && power.shock.heart < 1 && power.shock.burns > 0, JSON.stringify(power.shock));
+check('...tapped again, the generator stops, and everything on it goes dark and dead', !power.after.running && power.after.bulb < 0.1 && power.after.meter < 5, JSON.stringify(power.after));
+check('...and a bulb or a floodlight shatters: shot, or dropped', power.flood && power.bulb, JSON.stringify({ flood: power.flood, bulb: power.bulb, rope: power.rope }));
+
+/* ---------------------------------- the gas rifle ---------------------------------- */
+
+await fresh();
+const gas = await ev(() => {
+  const sf = window.__sf, sb = sf.sb, ui = sf.ui;
+  ui.setSpawnKind('gasRifle');
+  const g = ui.spawnAt(-4, 0.3);
+  ui.setSpawnKind('stickman');
+  const a = sb.spawnStickman(-4, null, { name: 'Gus' }), b = sb.spawnStickman(3, null, { name: 'Tam' });
+  a.brain = null; b.brain = null;
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  g.wear(a); a.weapon = g; a.faceTo(5); a.aimAt(b);
+  for (let i = 0; i < 140; i++) sb.step(1 / 120);
+  const evs = [];
+  for (const t of ['gasFired', 'gasBurst']) sb.on(t, (e) => evs.push({ t, x: +e.x.toFixed(1), y: +e.y.toFixed(1) }));
+  // (a few goes, if need be: a lobbed canister is aimed by eye)
+  let fired = false, mag = g.mag;
+  for (let n = 0; n < 3 && !evs.some((e) => e.t === 'gasBurst' && Math.abs(e.x - b.pos.x) < 1.5); n++) {
+    fired = a.fire() || fired;
+    mag = g.mag;
+    for (let i = 0; i < 120 * 1.2; i++) sb.step(1 / 120);
+  }
+  let worst = 1;
+  for (let i = 0; i < 120 * 8; i++) { sb.step(1 / 120); worst = Math.min(worst, b.health.oxygen); }
+  const h = b.health;
+  return { name: g.name, fired, mag, evs, worst: +worst.toFixed(2), lungs: +((h.organs.lungA + h.organs.lungB) / 2).toFixed(2), conds: h.conditions().slice(0, 6), gus: +a.health.oxygen.toFixed(2) };
+});
+check('a Gas Rifle, in WEAPONS: what it fires is a canister, lobbed to come down on whoever it is aimed at, that bursts into a cloud of gas', gas.fired && gas.mag >= 2 && gas.mag <= 4 &&
+  gas.evs.some((e) => e.t === 'gasBurst' && Math.abs(e.x - 3) < 1.5), JSON.stringify(gas));
+check('...whoever is in the cloud chokes on it - the air in them falls, they go down - and it eats at their lungs', gas.worst < 0.6 && gas.lungs < 0.95 && gas.conds.some((c) => /lung/i.test(c)),
+  JSON.stringify({ worst: gas.worst, lungs: gas.lungs, conds: gas.conds }));
+check('...and whoever fired it from well back breathes none of it', gas.gus > 0.9, JSON.stringify({ gus: gas.gus }));
+await ev(() => { const sf = window.__sf; sf.cam.follow = null; sf.cam.ppm = 70; sf.cam.x = 0; sf.cam.y = 1.5; sf.cam.clamp(); });
+await page.waitForTimeout(150);
+await shot('gas');
+
+await fresh();
+const gasAI = await ev(() => {
+  const sb = window.__sf.sb;
+  const g = sb.spawnGun(-6, 0.14, 0, 'gasRifle');
+  const a = sb.spawnStickman(-7, null, { name: 'Ike', traits: { aggression: 0.95, temper: 0.9, bravery: 0.9, skill: 0.8 } });
+  const b = sb.spawnStickman(1, null, { name: 'Lee', traits: { aggression: 0.1, bravery: 0.3 } });
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  g.wear(a); a.weapon = g; a.faceTo(5); b.faceTo(-9);
+  a.brain.rel(b).anger = 1; a.brain.rel(b).like = -1;
+  let fired = 0, cleared = false;
+  sb.on('gasFired', (e) => { if (e.who === a) fired++; });
+  for (let i = 0; i < 120 * 14; i++) { sb.step(1 / 120); if (b.brain.behaviour && b.brain.behaviour.kind === 'getClear') cleared = true; }
+  return { fired, cleared, gassed: !!b.gassed };
+});
+check('somebody with a gas rifle and a grudge uses it; and whoever is caught in the gas tries to get out of it', gasAI.fired > 0 && gasAI.gassed && gasAI.cleared, JSON.stringify(gasAI));
 
 /* ---------------------------------- mods --------------------------------- */
 

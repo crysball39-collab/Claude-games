@@ -84,6 +84,7 @@ sb.on('shot', (e) => {
   const kind = e.kind || (e.gun && e.gun.kind);
   if (kind === 'ak47') sound.rifleShot(e.x);
   else if (kind === 'mossberg') sound.shotgun(e.x, !!e.who);
+  else if (kind === 'gasRifle') { sound.thump(e.x); return; }
   else sound.gunshot(e.x, heavy);
   // the closer it is to the middle of the view, the more the view jumps
   cam.shake((0.08 + 0.18 / (1 + Math.abs(e.x - cam.x) / 4)) * (heavy ? 1.3 : 1));
@@ -198,6 +199,21 @@ sb.on('iceThud', (e) => sound.iceCrack(e.x, e.speed > 8));
 sb.on('shatter', (e) => { sound.shatter(e.x); cam.shake(0.4); });
 sb.on('glassShatter', (e) => { sound.shatter(e.x); cam.shake(0.2); });
 sb.on('gasp', (e) => sound.gasp(e.who.voice, e.x));
+// explosives, gas and the electricity
+sb.on('pinPulled', (e) => sound.pin(e.x));
+sb.on('c4Beep', (e) => sound.beep(e.x, e.k));
+sb.on('c4Stick', (e) => sound.slap(e.x));
+sb.on('fuseLit', (e) => sound.fuseLit(e.x));
+sb.on('fuseFizz', (e) => sound.fuseFizz(e.x));
+sb.on('missileLaunch', (e) => { sound.rocket(e.x, e.dur); cam.shake(0.15); });
+sb.on('genStart', (e) => sound.engineStart(e.x));
+sb.on('genStop', (e) => sound.engineStop(e.x));
+sb.on('genRun', (e) => sound.engineRun(e.x));
+sb.on('glassBreak', (e) => sound.glassBreak(e.x, e.what && e.what.kind === 'floodlight'));
+sb.on('fizz', (e) => sound.crackle(e.x));
+sb.on('electrocute', (e) => { sound.buzz(e.x); sound.crackle(e.x, true); });
+sb.on('gasBurst', (e) => sound.gasBurst(e.x));
+sb.on('cough', (e) => sound.cough(e.who.voice || 1, e.x));
 sb.on('dropRoll', (e) => sound.thud(4, e.who.pos.x));
 sb.on('rollOver', (e) => sound.thud(2.2, e.x));
 sb.on('speech', (e) => {
