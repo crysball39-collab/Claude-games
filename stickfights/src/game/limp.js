@@ -125,6 +125,8 @@ export function makeRagdoll(man, dt = 1 / 120) {
     }
     const i = rag.joint(name, p0, p1, ref(cf), cm || ref(ct), lo, hi);
     rag.joints[i].rest = rest * Math.PI / 180;
+    // (the head is a weight on a short stalk: the neck's tissues take more of the swing out of it than any other joint's)
+    if (name === 'neck') rag.joints[i].fric = 2.5;
     muscles.push({ i, k, name, arm: ARM_JOINTS.has(name), leg: LEG_JOINTS.has(name), gone: gone.has(ct) || gone.has(cf) || !!out[name] });
   }
   for (const m of snapped) {

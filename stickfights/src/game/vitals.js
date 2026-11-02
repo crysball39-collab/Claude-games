@@ -50,7 +50,7 @@
 import { BONES, DIM, HEAD_BONE, pointOnBone } from './skeleton.js';
 import { PARTS } from './health.js';
 import { goneAt } from './draw.js';
-import { clamp, clamp01, lerp, rand, chance, sign } from '../core/util.js';
+import { clamp, clamp01, lerp, rand, chance, sign, wrapAngle } from '../core/util.js';
 
 export const NORMAL_TEMP = 37;
 /** The air in the sandbox: what the dead and the frozen go to, slowly. */
@@ -142,6 +142,7 @@ export function updateVitals(man, dt) {
   if (!h.frozen && h.temp <= FREEZE_AT && canFreeze(man)) freezeSolid(man);
   else if (h.frozen) updateIce(man, dt);
   updateAir(man, h, v, dt);
+  updateNausea(man, h, v, dt);
   updateAdrenaline(man, h, v, dt);
   if (!h.dead) effects(man, h, v, dt, undead);
 }
@@ -214,6 +215,100 @@ function updateAir(man, h, v, dt) {
     man.sandbox.emit('gasp', { who: man, x: man.wj.head.x, y: man.wj.head.y });
     man.notify('gasp', {});
   }
+}
+
+/* --------------------------------- nausea --------------------------------- */
+
+/**
+ * Something that turns the stomach - k of the way to being sick: what they
+ * have just seen (brain.js), a breath of gas (gas.js).
+ */
+export function sicken(man, k) {
+  if (!hasVitals(man) || man.removed || man.dead || man.health.frozen || !breathes(man)) return;
+  man.health.nausea = clamp01((man.health.nausea || 0) + k);
+}
+
+/**
+ * Feeling sick, 0..1. Spun round and round, swung about by the hand or held
+ * upside down; dizzy, or hit hard on the head; short of blood or of air;
+ * smoke, gas, the current, the heat - each brings it up while it lasts, and
+ * in time it settles (quicker keeping still). Past half-way they go green
+ * and slow, and every so often they retch; right at the top they are sick,
+ * and feel a good deal better for it.
+ */
+function updateNausea(man, h, v, dt) {
+  let n = h.nausea || 0;
+  if (h.dead || h.frozen || !breathes(man)) { h.nausea = Math.max(0, n - dt * 0.05); return; }
+  // turning over: how fast the body is going round, smoothed
+  const w = man.wj, a = Math.atan2(w.neck.x - w.hip.x, w.neck.y - w.hip.y);
+  if (v.spinA !== undefined) {
+    const spin = Math.abs(wrapAngle(a - v.spinA)) / dt, e = Math.exp(-dt * 3);
+    v.spin = (v.spin || 0) * e + spin * (1 - e);
+  }
+  v.spinA = a;
+  let up = Math.max(0, (v.spin || 0) - 2.5) * 0.02;
+  // swung about by the hand, or hanging upside down
+  const hd = man.held;
+  if (hd) {
+    const sp = Math.hypot(hd.vx || 0, hd.vy || 0);
+    if (sp > 2) up += (sp - 2) * 0.012;
+    if (hd.inverted || Math.abs(wrapAngle(a)) > 2.2) up += 0.02;
+  }
+  // the head: dizzy, or knocked about
+  up += Math.min(3, h.dizzy || 0) * 0.02;
+  const head = h.parts.head;
+  up += Math.max(0, 0.5 - head.hp / head.max) * 0.03;
+  // short of blood or of air, smoke in them, too hot, the current through them
+  up += Math.max(0, 0.6 - h.bloodLeft) * 0.06 + Math.max(0, 0.75 - h.oxygen) * 0.05 + (v.smog || 0) * 0.02;
+  if (h.temp > 39.5) up += (h.temp - 39.5) * 0.008;
+  if (man.volts > 0 && man.sandbox.time - (man.voltsT || 0) < 0.3) up += 0.04;
+  // and settling
+  const still = man.state === 'down' || man.state === 'ko' || (man.state === 'stand' && Math.abs(man.vel.x) < 0.3);
+  n = clamp01(n + (up - 0.012 - (still ? 0.012 : 0)) * dt);
+  h.nausea = n;
+  // (the moment it turns: they say so, once, until it has settled again)
+  if (n > 0.5 && !v.queasy) { v.queasy = true; if (man.brain && man.alive && man.conscious) man.brain.speak('nauseous', {}, 0.9); }
+  else if (n < 0.3) v.queasy = false;
+  // the stomach doing what it does
+  if (!man.alive || !man.conscious || man.cut.head || man.tased) return;
+  v.sickT = (v.sickT ?? 0) - dt;
+  if (v.sickT > 0) return;
+  if (n >= 0.9) { beSick(man, h, v); return; }
+  if (n > 0.55 && chance(dt * (n - 0.5) * 0.6)) {
+    v.sickT = 2.5;
+    h.nausea = Math.max(0, n - 0.04);
+    if (man.ready) man.perform('retch');
+    if (man.brain) man.brain.speak('retch', {}, 0.8);
+    man.sandbox.emit('retch', { who: man, x: w.head.x, y: w.head.y });
+  }
+}
+
+/** Where their mouth is, more or less: the front of the face. */
+function mouthOf(man) {
+  const w = man.wj, f = man.rag ? man.rag.facing : man.facing, s = man.scale || 1;
+  const c = Math.cos(w.headAngle || 0), sn = Math.sin(w.headAngle || 0);
+  const lx = 0.09 * s, ly = -0.05 * s;
+  return { x: w.head.x + f * (lx * c + ly * sn), y: w.head.y + (ly * c - lx * sn), f };
+}
+
+/** Sick: doubled over, and up it comes - and then a lot better than they were. */
+function beSick(man, h, v) {
+  const sb = man.sandbox;
+  v.sickT = 7;
+  h.nausea = 0.3;
+  if (man.ready) man.perform('retch');
+  if (man.brain) man.brain.speak('vomit', {}, 1, null, true);
+  const q = mouthOf(man);
+  sb.emit('vomit', { who: man, x: q.x, y: q.y });
+  // (as the heave comes: out of the mouth, wherever the mouth has got to by then)
+  for (const [t, n] of [[0.3, 26], [0.62, 16]]) {
+    sb.later(t, () => {
+      if (man.removed || man.cut.head) return;
+      const m = mouthOf(man);
+      sb.fx.spew(m.x, m.y, m.f * 1.1, -0.6, n);
+    });
+  }
+  sb.later(2.4, () => { if (!man.removed && man.alive && man.brain) man.brain.speak('afterVomit', {}, 0.7); });
 }
 
 function updateAdrenaline(man, h, v, dt) {
@@ -622,7 +717,7 @@ export function shatter(man, o = {}) {
   const dir = o.dir || (chance(0.5) ? 1 : -1), power = Math.max(1.5, o.power || 2);
   for (const bone of ['humerusA', 'humerusB', 'femurA', 'femurB']) man.sever(bone, dir * rand(0.2, 1.3) + rand(-0.8, 0.8), power * rand(0.6, 1.2), { quiet: true });
   // (and, more often than not, the head)
-  if (chance(0.6)) man.decapitate(dir * rand(0.3, 1.2), power * rand(0.6, 1.1), { by: o.by || null });
+  if (chance(0.6)) man.decapitate(dir * rand(0.3, 1.2), power * rand(0.6, 1.1), { by: o.by || null, cause: 'shattered' });
   const c = man.wj.chest;
   sb.fx.shards(c.x, c.y, 40, dir * 2, 2.2);
   if (man.ice) man.ice.cracks = 8;
@@ -701,6 +796,8 @@ export function vitalConditions(man) {
   if (!man.dead && man.vit && man.vit.air === 'lungs') out.push('Suffocating (lungs gone)');
   const now = man.sandbox.time;
   if (!man.dead && man.gassed && now - man.gassed < 0.5) out.push('Breathing poison gas');
+  const nz = man.health.nausea || 0;
+  if (!man.dead && nz > 0.8) out.push('About to be sick'); else if (!man.dead && nz > 0.4) out.push('Nauseous');
   if (man.volts > 0 && now - (man.voltsT || 0) < 0.3) out.push(man.dead ? 'Live: 230 V through the body' : 'Being electrocuted (230 V)');
   if ((man.char || 0) > 0.35) out.push(man.dead ? 'Charred' : 'Badly burned');
   return out;
@@ -719,11 +816,13 @@ export function headFill(man) {
   const cold = clamp01((35.5 - T) / 12) * 0.85;
   const blue = breathes(man) && !h.dead ? clamp01((0.84 - h.oxygen) / 0.34) * 0.7 : 0;
   const char = (man.charHead || 0) * 0.92 + (man.char || 0) * 0.15;
-  if (hot <= 0 && cold <= 0 && blue <= 0 && char <= 0.02) return null;
+  const sick = h.dead ? 0 : clamp01(((h.nausea || 0) - 0.35) / 0.5) * 0.6;
+  if (hot <= 0 && cold <= 0 && blue <= 0 && char <= 0.02 && sick <= 0) return null;
   const c = HEAD.slice();
   mixInto(c, [246, 178, 160], hot);
   mixInto(c, [190, 214, 240], cold);
   mixInto(c, [170, 182, 228], blue);
+  mixInto(c, [182, 214, 150], sick);
   mixInto(c, [52, 40, 33], char);
   return `rgb(${c[0] | 0}, ${c[1] | 0}, ${c[2] | 0})`;
 }

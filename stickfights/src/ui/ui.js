@@ -21,7 +21,7 @@
    Pinching zooms and pans with any tool. Keyboard: 1 to 6 pick a thing to
    spawn (a stickman, knuckles, a crate, a knife, a machete, a Glock-19), 7
    to 9 the first three things the installed mods add, H hand, Z freeze, W
-   wire, E explode, X erase, Space pause, S slow motion, F follow, Tab spawn menu, + and
+   wire, E explode, X erase, Space pause, S slow motion, D double speed, F follow, Tab spawn menu, + and
    - zoom, 0 reset the camera, M sound, Delete removes whoever is selected,
    Esc closes things. Tapping a gun lying on the floor fires it.
 
@@ -196,6 +196,7 @@ export class UI {
     this.insT = 0;
     this.clearArmed = 0;
     this.slow = false;
+    this.fast = false;
     this.started = false;
     this.$ = (id) => document.getElementById(id);
 
@@ -483,6 +484,7 @@ export class UI {
     for (const b of document.querySelectorAll('.tool')) b.addEventListener('click', () => this.setTool(b.dataset.tool));
     $('btn-pause').addEventListener('click', () => this.togglePause());
     $('btn-slow').addEventListener('click', () => this.toggleSlow());
+    $('btn-fast').addEventListener('click', () => this.toggleFast());
     $('btn-sound').addEventListener('click', () => this.toggleSound());
     $('btn-settings').addEventListener('click', () => this.toggleSettings(true));
     $('btn-clear').addEventListener('click', () => this.clearPressed());
@@ -562,10 +564,23 @@ export class UI {
   }
 
   toggleSlow() {
-    this.slow = !this.slow;
-    this.sb.timeScale = this.slow ? 0.25 : 1;
-    this.$('btn-slow').classList.toggle('on', this.slow);
+    this.setSpeed(this.slow ? 'normal' : 'slow');
     this.toast(this.slow ? 'Slow motion' : 'Normal speed');
+  }
+
+  /** Everything going at twice the speed (or back to normal): the other way from slow motion. */
+  toggleFast() {
+    this.setSpeed(this.fast ? 'normal' : 'fast');
+    this.toast(this.fast ? 'Double speed' : 'Normal speed');
+  }
+
+  /** How fast the world goes: 'slow' (a quarter), 'normal' or 'fast' (twice) - one at a time. */
+  setSpeed(s) {
+    this.slow = s === 'slow';
+    this.fast = s === 'fast';
+    this.sb.timeScale = this.slow ? 0.25 : this.fast ? 2 : 1;
+    this.$('btn-slow').classList.toggle('on', this.slow);
+    this.$('btn-fast').classList.toggle('on', this.fast);
   }
 
   toggleSound() {
@@ -871,7 +886,7 @@ export class UI {
     this.vals = {};
     this.locks = {};
     const rows = [...EMOTION_ROWS.map((r) => [...r, 'ins-emotions']),
-      ['conscious', 'Conscious', '#e6dfc8', 'ins-vitals'], ['adrenaline', 'Adrenaline', '#ffb13b', 'ins-vitals'], ['oxygen', 'Oxygen', '#5cc8ff', 'ins-vitals'],
+      ['conscious', 'Conscious', '#e6dfc8', 'ins-vitals'], ['adrenaline', 'Adrenaline', '#ffb13b', 'ins-vitals'], ['oxygen', 'Oxygen', '#5cc8ff', 'ins-vitals'], ['nausea', 'Nausea', '#a8c83c', 'ins-vitals'],
       ['temp', 'Temp', null, 'ins-vitals'],
       ['pain', 'Pain', '#ff6b6b', 'ins-vitals'], ['blood', 'Blood', '#c0182a', 'ins-vitals'], ['stamina', 'Stamina', '#4fbf78', 'ins-vitals']];
     for (const [key, label, color, where] of rows) {
@@ -1027,7 +1042,7 @@ export class UI {
     this.insT = 0;
   }
 
-  /** The body's bars: how awake, how much adrenaline and air, the temperature, the pain, the blood, the breath. */
+  /** The body's bars: how awake, how much adrenaline and air, how sick, the temperature, the pain, the blood, the breath. */
   showVitals(p) {
     const h = p.health, m = this.meters, v = this.vals;
     const pct = (x) => Math.round(clamp(x, 0, 1) * 100) + '%';
@@ -1038,6 +1053,10 @@ export class UI {
     const air = breathes(p);
     bar('oxygen', air ? h.oxygen : 1, air ? pct(h.oxygen) : '—');
     m.oxygen.parentNode.parentNode.classList.toggle('off', !air);
+    // (how sick they feel: nothing for anybody who does not breathe, or is dead)
+    const sick = air && hasVitals(p) && !p.dead ? h.nausea || 0 : 0;
+    bar('nausea', sick, air && hasVitals(p) ? pct(sick) : '—');
+    m.nausea.parentNode.parentNode.classList.toggle('off', !(air && hasVitals(p)));
     bar('pain', p.dead ? 0 : h.pain / 100, String(p.dead ? 0 : Math.round(h.pain)));
     // (what they can still lose: empty is bled dry, and nothing more comes out of them)
     bar('blood', h.bloodLeft, pct(h.bloodLeft));
@@ -1966,6 +1985,7 @@ export class UI {
       else if (k === 'x' || k === 'X') this.setTool('erase');
       else if (k === ' ') { e.preventDefault(); this.togglePause(); }
       else if (k === 's' || k === 'S') this.toggleSlow();
+      else if (k === 'd' || k === 'D') this.toggleFast();
       else if (k === 'm' || k === 'M') this.toggleSound();
       else if (k === 'f' || k === 'F') { if (this.selected) this.$('ins-follow').click(); }
       else if (k === 'Tab') { e.preventDefault(); this.toggleDrawer(); }

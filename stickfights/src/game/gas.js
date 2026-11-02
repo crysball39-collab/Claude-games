@@ -12,7 +12,7 @@
 
    Both are effects in sandbox.effects ({ update(dt) -> false when done, draw }).
    ========================================================================== */
-import { breatheSmoke } from './vitals.js';
+import { breatheSmoke, sicken } from './vitals.js';
 import { rand, chance, TAU } from '../core/util.js';
 
 const G = 18;
@@ -147,6 +147,7 @@ export class Cloud {
       const h = p.health;
       if (h.organs) { h.organHurt(chance(0.5) ? 'lungA' : 'lungB', dt * 0.06 * k); }
       h.pain = Math.min(130, h.pain + dt * 12 * k);
+      sicken(p, dt * 0.12 * k);
       p.gassed = sb.time;
       p.gasAt = { x: cx, t: sb.time };
       p.gassedBy = this.by && !this.by.removed ? this.by : null;

@@ -198,6 +198,7 @@ export class Health {
     this.heat = 0;            // 0..1: what too hot for too long has done (1 kills)
     this.chill = 0;           //       too cold for too long
     this.hypoxia = 0;         //       too little air for too long
+    this.nausea = 0;          // 0..1: how sick they feel (vitals.js)
     this.frozen = false;
     this.burning = false;
     this.lung = false;        // a punctured lung
@@ -753,7 +754,7 @@ export class Health {
     this.arrestCause = null;
     this.blood = 1; this.pain = 0; this.conscious = 1; this.dizzy = 0;
     this.adrenaline = 0; this.oxygen = 0.985; this.temp = 37; this.tempLock = null;
-    this.heat = 0; this.chill = 0; this.hypoxia = 0; this.frozen = false; this.lung = false;
+    this.heat = 0; this.chill = 0; this.hypoxia = 0; this.nausea = 0; this.frozen = false; this.lung = false;
   }
 
   /** The conditions worth listing, worst first. */

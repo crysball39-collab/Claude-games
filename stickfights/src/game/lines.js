@@ -389,6 +389,10 @@ export const LINES = {
   sawMissile: ['MISSILE!', 'INCOMING!', 'Is that a ROCKET?!', 'DUCK!', 'Who launched that?!'],
   bombRun: ['RUN!', 'It is going to blow!', 'Get clear! Get clear!', 'Too close, too close!', 'Faster!'],
   sawElectrocuted: ['{victim} is being electrocuted!', 'Cut the power! CUT THE POWER!', "Don't touch {victim}! You'll get it too!", 'Somebody turn that generator off!', '{victim} is smoking!', 'Is {victim} touching the live wire?!'],
+  nauseous: ["I don't feel so good...", 'My stomach...', 'Everything is spinning...', 'Ugh. Ugh. Ugh.', 'I need to sit down. Or lie down. Or both.', 'Nobody move too fast near me.'],
+  vomit: ['*BLEURGH*', '*HURRK*', 'Oh no- *BLARGH*', '*heave* *splat*', '*retches*'],
+  afterVomit: ['...better out than in.', 'Ugh. Sorry about that.', 'I feel a bit better, actually.', 'Nobody look at me.', 'Water. I need water.', 'That was not my finest moment.'],
+  sawVomit: ['Ew! Gross!', 'Oh, that is disgusting.', 'Are you okay, {victim}?', "Don't step in it!", 'I think I am going to be sick too...', 'Get it together, {victim}!'],
   sawShockDeath: ['The current killed {victim}...', '{victim} is not moving. Is the power still on?!', 'Nobody touch {victim}! It could still be live!', 'Electrocuted. Oh no.'],
 };
 

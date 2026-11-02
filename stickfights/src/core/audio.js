@@ -792,6 +792,23 @@ export class Sound {
     this.sweep('highpass', 5200, 2400, 1.7, 0.2 * v, 0.6);
   }
 
+  /** Being sick: a heave from deep down, and the splash of it. */
+  vomit(pitch, x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.tone('sawtooth', 210 * pitch, 95 * pitch, 0.35, 0.09 * v);
+    this.hiss(0.45, 500, 0.8, 0.35 * v, 'lowpass', 0.05);
+    this.hiss(0.3, 1400, 1, 0.18 * v, 'bandpass', 0.3);
+  }
+
+  /** A retch: a short gag, and nothing comes up. */
+  retch(pitch, x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.tone('square', 260 * pitch, 180 * pitch, 0.12, 0.05 * v);
+    this.hiss(0.12, 700, 1.2, 0.18 * v);
+  }
+
   /** A cough: two harsh bursts. */
   cough(pitch, x) {
     if (!this.ready) return;

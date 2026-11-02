@@ -40,6 +40,8 @@ const MAX_CASINGS = 80;
 const MAX_SMOKE = 260;
 const MAX_DEBRIS = 700;
 const WATER = ['#9fd0f2', '#6aa9d6'];
+// (what comes up when somebody is sick: drops like blood's, in its own colour)
+export const VOMIT = ['#b8b14a', '#7f7a2e'];
 
 export class FX {
   constructor(sandbox) {
@@ -188,6 +190,18 @@ export class FX {
   }
 
   /** One drop of it, going exactly along (vx, vy). */
+  /** Somebody being sick: a gush of it out of the mouth at (x, y), going (vx, vy), and down onto whatever is under it. */
+  spew(x, y, vx, vy, n = 30) {
+    if (!this.sb.settings.blood) return;
+    for (let i = 0; i < n && this.drops.length < MAX_DROPS; i++) {
+      const k = rand(0.5, 1.15);
+      this.drops.push({
+        x: x + rand(-0.015, 0.015), y: y + rand(-0.015, 0.015), vx: vx * k + rand(-0.35, 0.35), vy: vy * k + rand(-0.5, 0.4),
+        r: rand(0.012, 0.026), age: 0, from: null, sticky: Math.random() < STICK, tint: VOMIT,
+      });
+    }
+  }
+
   drop(x, y, vx, vy, r = 0.016, from = null, tint = null) {
     if (!this.sb.settings.blood || this.drops.length >= MAX_DROPS) return null;
     const d = { x, y, vx, vy, r, age: 0, from, sticky: Math.random() < STICK, tint: tint || (from && from.tint) || null };

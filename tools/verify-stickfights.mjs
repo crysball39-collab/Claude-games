@@ -1922,7 +1922,7 @@ const shattered = await ev(() => {
   for (let i = 0; i < 120 * 3; i++) sb.step(1 / 120);
   return { dead: p.dead, cause: p.health.cause, cut: Object.keys(p.cut).length, shattered: window.__vit.ice.includes('shatter|Mo') };
 });
-check('dropped from high up while frozen, the whole body shatters', shattered.dead && shattered.cause === 'shattered' && shattered.cut === 4 && shattered.shattered, JSON.stringify(shattered));
+check('dropped from high up while frozen, the whole body shatters - arms, legs, and more often than not the head', shattered.dead && shattered.cause === 'shattered' && shattered.cut >= 4 && shattered.shattered, JSON.stringify(shattered));
 const healedIce = await ev(() => {
   const sb = window.__sf.sb, V = window.__sf.vitals;
   const p = sb.spawnStickman(12, null, { name: 'Ola' });
@@ -3244,6 +3244,126 @@ const gasAI = await ev(() => {
 });
 check('somebody with a gas rifle and a grudge uses it; and whoever is caught in the gas tries to get out of it', gasAI.fired > 0 && gasAI.gassed && gasAI.cleared, JSON.stringify(gasAI));
 
+/* ------------------------- flailing, double speed, nausea, a limp body picked up ------------------------- */
+
+await fresh();
+const flailing = await ev(() => {
+  const C = window.__sf.CLIPS, out = {};
+  for (const n of ['flail', 'dangle', 'stagger', 'pinned']) {
+    const c = C[n];
+    let peak = 0;
+    for (let i = 0; i < c.frames.length; i++) {
+      const a = c.frames[i].p, b = c.frames[(i + 1) % c.frames.length].p;
+      for (const k of Object.keys(a)) if (typeof a[k] === 'number') peak = Math.max(peak, Math.abs(a[k] - b[k]) / c.frames[i].d);
+    }
+    out[n] = Math.round(peak * 180 / Math.PI);
+  }
+  return out;
+});
+check('thrown, held up or staggering, they flail at the speed a person does - no limb swinging faster than 400 degrees a second',
+  Object.values(flailing).every((v) => v <= 400), JSON.stringify(flailing));
+
+const speed = await ev(() => {
+  const sf = window.__sf, sb = sf.sb, ui = sf.ui, out = {};
+  document.getElementById('btn-fast').click();
+  sb.paused = false;
+  const t0 = sb.time;
+  sb.update(0.05);
+  out.fast = { scale: sb.timeScale, on: document.getElementById('btn-fast').classList.contains('on'), ran: +(sb.time - t0).toFixed(3) };
+  document.getElementById('btn-slow').click();
+  out.slow = { scale: sb.timeScale, fastOn: document.getElementById('btn-fast').classList.contains('on'), slowOn: document.getElementById('btn-slow').classList.contains('on') };
+  document.getElementById('btn-slow').click();
+  out.normal = { scale: sb.timeScale, fastOn: document.getElementById('btn-fast').classList.contains('on'), slowOn: document.getElementById('btn-slow').classList.contains('on') };
+  sb.paused = true;
+  return out;
+});
+check('a DOUBLE SPEED button beside slow motion runs the world twice as fast - and slow motion and double speed are one or the other',
+  speed.fast.scale === 2 && speed.fast.on && Math.abs(speed.fast.ran - 0.1) < 0.01 && speed.slow.scale === 0.25 && !speed.slow.fastOn && speed.slow.slowOn &&
+  speed.normal.scale === 1 && !speed.normal.fastOn && !speed.normal.slowOn, JSON.stringify(speed));
+
+await fresh();
+const sick = await ev(() => {
+  const sf = window.__sf, sb = sf.sb, hand = sf.hand;
+  const p = sb.spawnStickman(0, null, { name: 'Spin' });
+  const w = sb.spawnStickman(2.5, null, { name: 'Wit', traits: { toughness: 0.15 } });
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  const evs = [];
+  for (const t of ['retch', 'vomit']) sb.on(t, (e) => { if (e.who === p) evs.push(t); });
+  const said = new Set();
+  sb.on('speech', (e) => { if (e.who === p) said.add(e.kind); });
+  sb.paused = false; hand.grab(p, p.wj.chest.x, p.wj.chest.y); sb.paused = true;
+  let t = 0, peak = 0, rose = null;
+  for (let i = 0; i < 120 * 14 && !evs.includes('vomit'); i++) {
+    t += 1 / 120;
+    hand.move(Math.cos(t * 6) * 0.9, 2.2 + Math.sin(t * 6) * 0.9);
+    hand.step(1 / 120);
+    sb.step(1 / 120);
+    peak = Math.max(peak, p.health.nausea);
+    if (rose === null && i === 120 * 3) rose = +p.health.nausea.toFixed(2);
+  }
+  const after = +p.health.nausea.toFixed(2);
+  hand.release();
+  for (let i = 0; i < 120 * 1.2; i++) sb.step(1 / 120);
+  const sickDrops = sb.fx.drops.length + sb.fx.splats.length;
+  window.__spin = p;
+  return { rose, peak: +peak.toFixed(2), after, evs, said: [...said], tinted: sb.fx.splats.some((s) => s.tint && s.tint[0] === '#b8b14a') || sb.fx.drops.some((d) => d.tint && d.tint[0] === '#b8b14a'), sickDrops };
+});
+check('NAUSEA: swung round and round by the hand, they feel sicker and sicker - say so, retch, and at the top of it are sick, and feel better after',
+  sick.rose > 0.15 && sick.peak >= 0.9 && sick.evs.includes('retch') && sick.evs.includes('vomit') && sick.after < 0.5 && sick.said.includes('nauseous') && sick.tinted,
+  JSON.stringify(sick));
+await ev(() => window.__sf.ui.select(window.__spin));
+await page.waitForTimeout(300);
+const nauseaBar = await ev(() => {
+  const rows = [...document.querySelectorAll('#ins-vitals .meter')].map((r) => r.querySelector('span').textContent);
+  const i = rows.indexOf('Nausea');
+  const row = i >= 0 ? document.querySelectorAll('#ins-vitals .meter')[i] : null;
+  return { rows, value: row ? row.querySelector('b').textContent : null };
+});
+check('...and the inspector has a Nausea bar with the rest of the body\'s', nauseaBar.rows.includes('Nausea') && /^\d+%$/.test(nauseaBar.value || ''), JSON.stringify(nauseaBar));
+await ev(() => window.__sf.ui.select(null));
+
+await fresh();
+const gasSick = await ev(() => {
+  const sb = window.__sf.sb;
+  const p = sb.spawnStickman(0, null, { name: 'Gas' });
+  p.brain = null;
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  const n0 = p.health.nausea;
+  window.__sf.vitals.sicken(p, 0.2);
+  const n1 = p.health.nausea;
+  for (let i = 0; i < 120 * 10; i++) sb.step(1 / 120);
+  return { n0: +n0.toFixed(2), n1: +n1.toFixed(2), later: +p.health.nausea.toFixed(2) };
+});
+check('...and it settles again in time', gasSick.n0 === 0 && gasSick.n1 === 0.2 && gasSick.later < 0.12, JSON.stringify(gasSick));
+
+await fresh();
+const limpHold = await ev(() => {
+  const sf = window.__sf, sb = sf.sb, hand = sf.hand;
+  const p = sb.spawnStickman(0, null, { name: 'Ded' });
+  p.brain = null;
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  p.health.kill('test'); p.die('test', null, 1, 1);
+  for (let i = 0; i < 120 * 3; i++) sb.step(1 / 120);
+  const rag = p.rag, n = rag.byName, P = (k) => rag.p[n[k]];
+  const g = { x: p.wj.chest.x, y: p.wj.chest.y };
+  sb.paused = false; hand.grab(p, g.x, g.y); sb.paused = true;
+  const by = rag.grabRef === n.head ? 'head' : rag.grabRef === n.hip ? 'hip' : 'other';
+  let prev = null, spin = 0;
+  for (let i = 0; i < 120 * 2; i++) {
+    hand.move(g.x, g.y + Math.min(1.3, i * 0.011));
+    hand.step(1 / 120);
+    sb.step(1 / 120);
+    const a = Math.atan2(P('head').x - P('neck').x, P('head').y - P('neck').y);
+    if (prev !== null) { let d = a - prev; d = Math.atan2(Math.sin(d), Math.cos(d)); spin = Math.max(spin, Math.abs(d) * 120); }
+    prev = a;
+  }
+  const top = P('head').y > P('chest').y && P('chest').y > P('hip').y;
+  hand.release();
+  return { by, spin: +spin.toFixed(1), top, state: p.state };
+});
+check('a dead body picked up by the chest hangs from the hand by the head: nothing balanced on the hand to topple over, and no flick of the head',
+  limpHold.by === 'head' && limpHold.top && limpHold.spin < 12, JSON.stringify(limpHold));
+
 /* ---------------------------------- mods --------------------------------- */
 
 await fresh();
@@ -4211,7 +4331,7 @@ await ev(() => {
   window.__run = (secs, each) => { for (let i = 0; i < Math.round(secs * 120); i++) { sb.step(1 / 120); if (each) each(); } };
   window.__cells = () => sb.slabs.filter((s) => s.background).reduce((n, s) => n + s.cellCount, 0);
   window.__evs = new Map();
-  for (const t of ['gzCrush', 'gzTailHit', 'shinGills', 'shinChanging', 'shinEvolve', 'shinCharge', 'shinSmog', 'shinIgnite', 'shinBuild', 'shinBeam', 'shinDorsal', 'shinTailBeam', 'shinBeamHit']) {
+  for (const t of ['gzCrush', 'gzTailHit', 'gzBite', 'gzBiteWall', 'shinGills', 'shinChanging', 'shinEvolve', 'shinCharge', 'shinSmog', 'shinIgnite', 'shinBuild', 'shinBeam', 'shinDorsal', 'shinTailBeam', 'shinBeamHit']) {
     sb.on(t, () => { window.__evs.set(t, [...(window.__evs.get(t) || []), +sb.time.toFixed(2)]); });
   }
   window.__try = (id, dx, secs, each) => {
@@ -4292,7 +4412,12 @@ const shinMoves = await ev(() => {
   const sb = window.__sf.sb, g = window.__s;
   const out = {};
   out.stomp = window.__try('stomp', 3, 3);
+  // (the jaws: whoever is in them - and if they shut on a building instead, as they can where he has got to in the street, another go)
+  const bites = () => (window.__evs.get('gzBite') || []).length;
+  let b0 = bites();
   out.bite = window.__try('bite', 7.5, 3);
+  out.bite.caught = bites() - b0;
+  if (!out.bite.caught) { b0 = bites(); out.bite = window.__try('bite', 7.5, 3); out.bite.caught = bites() - b0; out.bite.again = true; }
   out.tail = window.__try('tail', -9, 3);
   // (and somebody standing in the street between him and whoever it is aimed at: where the smog comes down)
   const by = sb.spawnStickman(g.pos.x + g.facing * 9, null, { name: 'Bystander' });

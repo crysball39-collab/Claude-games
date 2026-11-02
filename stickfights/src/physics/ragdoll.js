@@ -249,7 +249,7 @@ export class Ragdoll {
     // joint friction, measured against where each joint was last step
     for (const j of this.joints) {
       const b = this.rawBend(j);
-      if (j.prev !== null && this.friction > 0) this.bendBy(j, wrap(j.prev - b), this.friction);
+      if (j.prev !== null && this.friction > 0) this.bendBy(j, wrap(j.prev - b), Math.min(0.9, this.friction * (j.fric || 1)));
       j.prev = b;
     }
 

@@ -50,7 +50,7 @@ import { isGun, isFirearm, armOf } from './props.js';
 import * as B from './behaviours.js';
 import { learn as copLearn, considerOfficer, considerSuspect, considerWitness, metOfficer, maybeReport, lethal } from './police.js';
 import { clamp, clamp01, rand, chance, pick, sign } from '../core/util.js';
-import { IGNITE_AT } from './vitals.js';
+import { IGNITE_AT, sicken } from './vitals.js';
 
 const SIGHT = 14;
 const BEHIND = 2.2;
@@ -61,7 +61,7 @@ const HEAR = {
   stuck: 7, pullout: 6, clap: 7, collide: 8,
   // a gunshot carries the whole width of the world
   shot: 60, ricochet: 14, dryFire: 4, reload: 5, magOut: 3, magIn: 3, rack: 5, sever: 12, dislocate: 7, relocate: 7, faint: 8,
-  pinPulled: 6, fuseLit: 8, c4Beep: 8, missileLaunch: 30, gasBurst: 12, electrocute: 10,
+  pinPulled: 6, fuseLit: 8, c4Beep: 8, missileLaunch: 30, gasBurst: 12, electrocute: 10, vomit: 8, retch: 5,
   tased: 10, taserFire: 8, cuffed: 8, command: 16, vestStop: 9, stumble: 6, stumbleFall: 8, stumbleCaught: 5, driveStun: 6,
   // fire and ice
   ignite: 12, extinguish: 6, freeze: 7, thaw: 5, iceSnap: 9, shatter: 16, gasp: 6, dropRoll: 6,
@@ -758,6 +758,14 @@ export class Brain {
           if (now - (this.gasSaidT || -9) > 5) { this.gasSaidT = now; this.speak('sawGas', {}, 0.7, null, true); }
         }
         break;
+      case 'vomit':
+        // somebody being sick: nobody wants to see it, and seeing it does nothing for their own stomach
+        if (seen && ev.who && ev.who !== me && d < 8) {
+          E.bump('surprise', 0.25);
+          if (now - (this.vomitSaidT || -9) > 6) { this.vomitSaidT = now; this.speak('sawVomit', { victim: ev.who.name }, 0.75, null, true); }
+          sicken(me, (0.05 + (1 - T.toughness) * 0.12) * (1 - d / 10));
+        }
+        break;
       case 'electrocute':
         if (seen && ev.who && ev.who !== me && d < 12) {
           E.bump('surprise', 0.3);
@@ -1058,6 +1066,8 @@ export class Brain {
     E.bump('sadness', amount * 0.2 * T.empathy);
     this.horror = Math.min(1.5, this.horror + amount);
     const weak = (1 - T.toughness) * (0.4 + T.empathy * 0.6) * (1.1 - T.bravery * 0.5);
+    // (and it turns the stomach)
+    sicken(me, amount * (0.15 + weak * 0.45));
     if (this.horror > 0.8 && me.state === 'stand' && chance(weak * 0.3)) {
       this.speak('faint', {}, 1);
       me.faint();

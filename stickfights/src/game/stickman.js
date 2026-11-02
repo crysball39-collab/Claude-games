@@ -1222,7 +1222,8 @@ export class Stickman {
     }
     if (this.rag) this.rebuildRag();
     sb.emit('sever', { who: this, bone: 'neck', lost: 'head', head: true, x: at.x, y: at.y, by: killer });
-    this.die('decapitated', killer, dir, power);
+    // (what it was that took it off, when that is what killed them: a frozen body shattering, say)
+    this.die(o.cause || 'decapitated', killer, dir, power);
     return true;
   }
 
@@ -1534,6 +1535,8 @@ export class Stickman {
         tone = awake ? 0.5 : 0;
         const h = this.held;
         if (h) {
+          // (the point held comes the rest of the way over to the hand)
+          if (h.off) { const e = Math.exp(-dt * 7); h.off.x *= e; h.off.y *= e; this.holdAt(h.target.x, h.target.y); }
           const k = 1 - Math.exp(-dt * 25);
           h.vx = lerp(h.vx, (h.target.x - h.prev.x) / dt, k);
           h.vy = lerp(h.vy, (h.target.y - h.prev.y) / dt, k);
@@ -1573,7 +1576,8 @@ export class Stickman {
     if (this.cuffed && (clip === 'brace' || clip === 'flail' || clip === 'pinned' || clip === 'lieFront')) clip = 'cuffedDown';
     this.anim.play(clip, { blend: 0.2 });
     this.limpToneNow = tone;
-    rag.friction = st === 'dead' || st === 'ko' || !awake ? 0.06 : 0.03;
+    // (limp: the joints give, and the swing goes out of them - held up limp, more so: nothing whips about on the hand)
+    rag.friction = st === 'held' && !awake ? 0.12 : st === 'dead' || st === 'ko' || !awake ? 0.06 : 0.03;
 
     // coming to rest
     const settled = this.onGround && rag.maxSpeed < 0.9;
@@ -1828,7 +1832,8 @@ export class Stickman {
         if (!best || sd.d < best.d) best = { part: BONES[b][2], d: sd.d, bone: b, t: g[4] + (g[5] - g[4]) * sd.t, x: sd.x, y: sd.y };
       }
     }
-    const dh = Math.hypot(x - this.wj.head.x, y - this.wj.head.y) - DIM.headR * this.scale;
+    // (the head, unless it has come off)
+    const dh = this.cut.head ? Infinity : Math.hypot(x - this.wj.head.x, y - this.wj.head.y) - DIM.headR * this.scale;
     if (dh < best.d) best = { part: 'head', d: Math.max(0, dh), bone: HEAD_BONE, t: 1, x: this.wj.head.x, y: this.wj.head.y };
     return best;
   }
@@ -1842,9 +1847,21 @@ export class Stickman {
     this.blocking = false;
     this.anim.stopAction(0.05);
     if (this.goLimp({ state: 'held', tone: 0.5 })) {
-      this.rag.grab(refNear(this.rag, this, x, y), x, y);
-      const part = this.nearestPart(x, y).part;
-      this.held = { target: { x, y }, rag: true, vx: 0, vy: 0, prev: { x, y }, part };
+      const rag = this.rag, near = this.nearestPart(x, y);
+      let ref = refNear(rag, this, x, y);
+      // limp - dead, or out cold - and taken by the trunk or the neck: held by whichever end of it is nearer,
+      // the head or the hips, so the rest hangs down from the hand. Held up by the middle of the back (or by the
+      // neck), a limp body has nothing to hang from: what is above the hand sits up on it, balanced, and topples
+      // from one side to the other - the head whipping over with it - at every move of the hand
+      if (!(this.alive && this.conscious)) {
+        const n = rag.byName, top = this.cut.head ? n.neck : n.head;
+        if (near.part === 'head') ref = top;
+        else if (near.part === 'torso') ref = (near.bone === 1 ? 0.5 + near.t * 0.5 : near.t * 0.5) >= 0.5 ? top : n.hip;
+      }
+      // (taken where it is: the point held comes over to the hand, rather than jumping to it)
+      const at = rag.pos(ref);
+      rag.grab(ref, at.x, at.y);
+      this.held = { target: { x, y }, rag: true, vx: 0, vy: 0, prev: { x, y }, part: near.part, off: { x: at.x - x, y: at.y - y } };
     } else {
       const near = this.nearestPart(x, y);
       const byLeg = near.part === 'legA' || near.part === 'legB';
@@ -1872,7 +1889,7 @@ export class Stickman {
     const h = this.held;
     if (!h) return;
     h.target.x = x; h.target.y = y;
-    if (this.rag) { this.rag.grabAt.x = x; this.rag.grabAt.y = y; }
+    if (this.rag) { const o = h.off; this.rag.grabAt.x = x + (o ? o.x : 0); this.rag.grabAt.y = y + (o ? o.y : 0); }
   }
 
   /** Let go by the hand: dropped, or thrown if the hand was moving. */
@@ -2187,6 +2204,8 @@ export class Stickman {
     s *= 1 + (h.adrenaline || 0) * (kind === 'run' || kind === 'flee' ? 0.12 : 0.04);
     if (t < 35) s *= clamp(1 - (35 - t) * 0.06, 0.45, 1);
     else if (t > 39) s *= clamp(1 - (t - 39) * 0.08, 0.55, 1);
+    // (feeling sick: slow, careful)
+    s *= 1 - Math.max(0, (h.nausea || 0) - 0.5) * 0.7;
     if (this.cuffed) s = Math.min(s, SPEEDS.walk * 0.9);
     if (this.carrying) s = Math.min(s, SPEEDS.walk * 0.8);
     if (this.posture === 'guard' && kind !== 'run' && kind !== 'flee') s = Math.min(s, SPEEDS.shuffle);

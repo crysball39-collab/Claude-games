@@ -214,6 +214,9 @@ sb.on('fizz', (e) => sound.crackle(e.x));
 sb.on('electrocute', (e) => { sound.buzz(e.x); sound.crackle(e.x, true); });
 sb.on('gasBurst', (e) => sound.gasBurst(e.x));
 sb.on('cough', (e) => sound.cough(e.who.voice || 1, e.x));
+// feeling sick, and being it
+sb.on('retch', (e) => sound.retch(e.who.voice || 1, e.x));
+sb.on('vomit', (e) => sound.vomit(e.who.voice || 1, e.x));
 sb.on('dropRoll', (e) => sound.thud(4, e.who.pos.x));
 sb.on('rollOver', (e) => sound.thud(2.2, e.x));
 sb.on('speech', (e) => {

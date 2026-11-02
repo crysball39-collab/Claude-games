@@ -138,10 +138,13 @@ clip('land', { frames: [
   [0.16, STAND],
 ] });
 
-// thrown, and awake enough to mind: windmilling
+// thrown, and awake enough to mind: windmilling, the legs pedalling - at the pace a person really flails,
+// a swing and back about once and a half a second, not a blur
 clip('flail', { loop: true, frames: [
-  [0.1, P({ t: -10, h: -12, aA: [150, 30], aB: [40, 60], lA: [40, -52], lB: [-20, -30] })],
-  [0.1, P({ t: -8, h: -10, aA: [60, 60], aB: [160, 20], lA: [-10, -20], lB: [50, -70] })],
+  [0.17, P({ t: -10, h: -12, aA: [150, 30], aB: [40, 60], lA: [40, -52], lB: [-20, -30] })],
+  [0.17, P({ t: -9, h: -11, aA: [106, 46], aB: [98, 42], lA: [14, -36], lB: [16, -50] })],
+  [0.17, P({ t: -8, h: -10, aA: [60, 60], aB: [160, 20], lA: [-10, -20], lB: [50, -70] })],
+  [0.17, P({ t: -9, h: -11, aA: [104, 40], aB: [102, 46], lA: [16, -50], lB: [14, -36] })],
 ] });
 
 // thrown and not awake: limp, while the body turns over
@@ -152,8 +155,8 @@ clip('tumble', { loop: true, frames: [
 
 // held up by the hand: kicking and flailing...
 clip('dangle', { loop: true, frames: [
-  [0.13, P({ t: 0, h: -8, aA: [124, 40], aB: [64, 30], lA: [32, -64], lB: [-18, -12] })],
-  [0.13, P({ t: 2, h: -6, aA: [72, 24], aB: [132, 50], lA: [-12, -22], lB: [40, -74] })],
+  [0.3, P({ t: 0, h: -8, aA: [124, 40], aB: [64, 30], lA: [32, -64], lB: [-18, -12] })],
+  [0.3, P({ t: 2, h: -6, aA: [72, 24], aB: [132, 50], lA: [-12, -22], lB: [40, -74] })],
 ] });
 
 // ...or just hanging there
@@ -248,8 +251,8 @@ const HIT_LOW = P({ t: 18, h: 10, aA: [30, 60], aB: [20, 70], lA: [30, -40], lB:
 clip('hitLow', { frames: [[0.06, HIT_LOW], [0.12, HIT_LOW]] });
 
 clip('stagger', { loop: true, frames: [
-  [0.13, P({ t: -16, h: -14, aA: [100, 30], aB: [140, 20], lA: [-12, -14], lB: [26, -32] })],
-  [0.13, P({ t: -10, h: -10, aA: [130, 40], aB: [92, 30], lA: [22, -32], lB: [-14, -12] })],
+  [0.19, P({ t: -16, h: -14, aA: [100, 30], aB: [140, 20], lA: [-12, -14], lB: [26, -32] })],
+  [0.19, P({ t: -10, h: -10, aA: [130, 40], aB: [92, 30], lA: [22, -32], lB: [-14, -12] })],
 ] });
 
 // a startle: something went past, or went bang
@@ -331,8 +334,8 @@ clip('koFront', { loop: true, frames: [
 
 // trapped under something heavy, pushing at it
 clip('pinned', { loop: true, frames: [
-  [0.2, P({ rot: -90, h: 30, aA: [100, 20], aB: [80, 30], lA: [30, -50], lB: [6, -10] })],
-  [0.2, P({ rot: -90, h: 34, aA: [110, 30], aB: [92, 20], lA: [10, -10], lB: [36, -60] })],
+  [0.3, P({ rot: -90, h: 30, aA: [100, 20], aB: [80, 30], lA: [30, -50], lB: [6, -10] })],
+  [0.3, P({ rot: -90, h: 34, aA: [110, 30], aB: [92, 20], lA: [10, -10], lB: [36, -60] })],
 ] });
 
 clip('getUpBack', { frames: [

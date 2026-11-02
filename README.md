@@ -27,13 +27,14 @@ texture in the game is drawn procedurally onto a canvas at load time.
 > with real joints when they go over - holster and pocket what they are not
 > using, and answer to the officers, who go after whoever commits a crime with
 > a warning, a taser and a pair of handcuffs. Each one has a consciousness,
-> adrenaline, oxygen and temperature meter, and a temperature typed into it
+> adrenaline, oxygen, nausea (spun round, swung about, gassed or sickened by what
+> they see, they retch and then throw up) and temperature meter, and a temperature typed into it
 > becomes theirs: hot enough they catch fire, run screaming and stop, drop and
 > roll; cold enough they freeze solid, an ice statue that thaws - or shatters.
 > They bleed from the wound that is bleeding - in spurting streams from a stump
 > or an artery, which break up into drops as they fall, from the head that hit the floor - until their blood runs out,
 > and it lands on anything: the floor, the walls, crates, weapons, people.
-> A freeze tool stops anything dead where it is; with the world paused, the
+> Slow motion and double speed change how fast it all goes. A freeze tool stops anything dead where it is; with the world paused, the
 > hand just moves things; and a wire tool ties anything to anything (or to the
 > background) with wood or metal rope, fixed rods, pins or power cords, which take the strain
 > until they snap. You can change their feelings (or lock them where they are), their

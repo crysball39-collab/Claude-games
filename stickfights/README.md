@@ -203,7 +203,7 @@ The six tools along the bottom:
 
 | Tool | What it does |
 | ---- | ------------ |
-| ✋ **HAND** | Drag anything to move it. Let go while moving to throw it. Tap a stickman to open their mind. Drag empty space to pan. Drag a blade stuck in someone to pull it out. Tap a gun or a taser lying on the floor to fire it (empty, a tap puts a fresh magazine or cartridge in). Tap an ammo box, a vest, a wall or a tree to see what is left of it. Tap a grenade, C4, TNT or a missile to set it off, and a generator to start it or stop it. A wall is slid along where it is dragged, and stands on whatever is under it when let go; a tree is dragged by its trunk, and a branch or a twig grabbed is bent - too far, and it snaps off. **With the world paused** (or the thing frozen), nothing swings and nothing is thrown: it is picked up and put down just as it was. |
+| ✋ **HAND** | Drag anything to move it. Let go while moving to throw it. Tap a stickman to open their mind. Drag empty space to pan. Drag a blade stuck in someone to pull it out. Tap a gun or a taser lying on the floor to fire it (empty, a tap puts a fresh magazine or cartridge in). Tap an ammo box, a vest, a wall or a tree to see what is left of it. Tap a grenade, C4, TNT or a missile to set it off, and a generator to start it or stop it. Somebody limp - dead or out cold - taken by the body is held by the head, or by the hips if it was taken low down, so the rest of them hangs from the hand (held by the middle of the back, the top half would sit up on the hand and topple over, the head whipping round with it); the point taken comes over to the hand, rather than jumping to it. A wall is slid along where it is dragged, and stands on whatever is under it when let go; a tree is dragged by its trunk, and a branch or a twig grabbed is bent - too far, and it snaps off. **With the world paused** (or the thing frozen), nothing swings and nothing is thrown: it is picked up and put down just as it was. |
 | **SPAWN** (shows what is picked) | Tap the world to place it. |
 | 🔒 **FREEZE** | Tap something to freeze it in place - a crate in mid-air, a falling knife, a wall, a tree, a person mid-stride - and tap it again to let it go. Nothing moves it: not gravity, not a blow, not something landing on it. A frozen person can still see, think and talk; they just cannot move a muscle. It has a pale dashed line round it. |
 | ⌇ **WIRE** | Pick a wire from the bar above the tools, then drag from one thing to another - or tap one, then the other. Either end can be the background, where it stays. A pin goes in with one tap: through the two things there, or through one into the background. Tied by somebody's neck, a wrist or an ankle, they go limp and hang there until they are free. |
@@ -246,11 +246,12 @@ Every wire shows how hard it is being pulled: one near breaking goes red.
 Snapping, it says so, and so do the people who see it.
 
 Pinch (or the mouse wheel) zooms, two fingers pan. Along the top right: sound,
-slow motion, pause, settings, and clear everything (tap twice).
+slow motion, **double speed** (everything twice as fast; it and slow motion
+are one or the other), pause, settings, and clear everything (tap twice).
 
 **Tap a stickman** to open the inspector: their name and mood, what they are
 doing, their personality, five emotions, how conscious they are, their
-adrenaline, oxygen and temperature, pain, blood and stamina, an X-ray
+adrenaline, oxygen, nausea and temperature, pain, blood and stamina, an X-ray
 of their body coloured by injury - their organs in it, darker the more each is
 damaged and crossed out when it is gone, every broken bone snapped and named,
 whatever has been cut off missing, joints out of their sockets ringed in
@@ -296,7 +297,7 @@ for the old animated falls.
 Keyboard: `1` to `6` pick a stickman, knuckles, a crate, a knife, a machete
 or a Glock-19 to spawn, `7` to `9` the first three things the installed mods
 add, `H` hand, `Z` freeze, `W` wire, `E` explode, `X` erase, `Space` pause, `S` slow
-motion, `F` follow, `Tab` spawn menu, `+` `-` zoom, `0` reset the camera, `M`
+motion, `D` double speed, `F` follow, `Tab` spawn menu, `+` `-` zoom, `0` reset the camera, `M`
 sound, `Delete` removes whoever is selected, `Esc` closes things (and lets go
 of a wire's first end).
 
@@ -1351,9 +1352,9 @@ hard, too tired, dizzy, hurt in the legs or backing into a crate, the steps
 cannot keep up, and over they go - into the ragdoll, moving exactly the way
 they were. Hit again while they are still stumbling, they usually go down.
 
-### Adrenaline, air and temperature; fire and ice
+### Adrenaline, air, nausea and temperature; fire and ice
 
-Four more numbers keep everybody going (`src/game/vitals.js`), each with a
+Five more numbers keep everybody going (`src/game/vitals.js`), each with a
 bar in the inspector:
 
 - **Consciousness** - how awake they are (the knockouts above), and now also
@@ -1369,6 +1370,15 @@ bar in the inspector:
   and it comes back. Smoke, a punctured lung, lost blood and being out of
   breath keep it down a little. Low, they are dizzy; lower, out cold.
   Machines and the undead (a mod's) do not breathe at all.
+- **Nausea** - how sick they feel. Spun round and round, thrown head over
+  heels, swung about by the hand or held upside down; dizzy, or hit hard on
+  the head; short of blood or of air; smoke, poison gas, the current, the
+  heat; something horrible seen, or somebody else being sick - each brings
+  it up while it lasts, and in time it settles (quicker keeping still).
+  Past half-way they say so, go green in the face and slow down, and every
+  so often they retch; at the top of it they are sick - doubled over, and up
+  it comes, onto the floor and whatever is there - and feel a good deal
+  better for it. Whoever sees it is disgusted, and a little queasy too.
 - **Temperature** - 37 °C is right, and a living body steers back to it:
   sweating when it is hot, shivering when it is cold - fast from very hot,
   slowly from very cold, and not at all if it is locked.
@@ -1990,6 +2000,14 @@ screen and checks:
   that weapon in it
 - ten stickmen, six crates, knuckles, knives, machetes and a pistol for 45
   seconds: nothing turns into NaN, and they get up to many different things
+- no animation of somebody thrown, held up, staggering or pinned swings a
+  limb faster than 400 degrees a second; DOUBLE SPEED runs the world twice
+  as fast, and it and slow motion are one or the other
+- swung round and round by the hand, somebody feels sicker and sicker, says
+  so, retches, and is sick - and feels better after; the inspector has a
+  Nausea bar; and nausea settles again in time
+- a dead body picked up by the chest hangs from the hand by the head, its
+  head the top of it, with no flick of the head
 - the console stays clean, and the single file fetches nothing
 
 Every check starts from the same random numbers and the same clock, so what

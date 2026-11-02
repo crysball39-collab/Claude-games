@@ -530,13 +530,15 @@ export class Sandbox {
   update(frameDt) {
     if (this.paused) return 0;
     this.acc += Math.min(frameDt, 0.1) * this.timeScale;
+    // (at double speed, twice the steps a frame may take before the time is let go)
+    const cap = this.timeScale > 1 ? 24 : 12;
     let n = 0;
-    while (this.acc >= STEP && n < 12) {
+    while (this.acc >= STEP && n < cap) {
       this.step(STEP);
       this.acc -= STEP;
       n++;
     }
-    if (n >= 12) this.acc = 0;
+    if (n >= cap) this.acc = 0;
     return n;
   }
 
