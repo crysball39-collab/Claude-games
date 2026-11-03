@@ -14,6 +14,9 @@
    Any of them can be locked (from the inspector): then nothing moves it, up
    or down, until it is unlocked - only set() does, which is how dragging a
    locked bar changes where it is locked.
+
+   Courage (0..1, from a superpower: the brain sets it) takes that much off
+   every push of fear, rests fear lower and lets it go faster.
    ========================================================================== */
 import { clamp01, approach } from '../core/util.js';
 
@@ -23,6 +26,7 @@ export class Emotions {
   constructor(t) {
     this.v = {};
     this.locked = {};
+    this.courage = 0;
     this.retune(t);
     for (const e of EMOTIONS) this.v[e] = this.base[e];
   }
@@ -58,12 +62,17 @@ export class Emotions {
   }
 
   bump(e, amount) {
+    if (amount > 0 && e === 'fear') amount *= 1 - this.courage;
     if (amount > 0) this[e] = clamp01(this[e] + amount * (1 - this[e] * 0.45));
     else this[e] = clamp01(this[e] + amount);
   }
 
   update(dt) {
-    for (const e of EMOTIONS) this[e] += (this.base[e] - this[e]) * approach(this.rate[e], dt);
+    const c = this.courage;
+    for (const e of EMOTIONS) {
+      if (e === 'fear' && c) this[e] += (this.base[e] * (1 - c) - this[e]) * approach(this.rate[e] * (1 + c * 2), dt);
+      else this[e] += (this.base[e] - this[e]) * approach(this.rate[e], dt);
+    }
   }
 
   /** Good minus bad, roughly -1..1. */

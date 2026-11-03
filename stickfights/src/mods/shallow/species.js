@@ -180,11 +180,12 @@ function knowers(man, dt) {
   for (const p of sb.people) {
     if (p === man || !p.brain || !alive(p) || isShallow(p) || !p.brain.sees(man) || !knows(p.brain, man)) continue;
     const B = p.brain, T = B.traits, r = B.rel(man);
-    r.fear = Math.max(r.fear, 0.65 * (1.25 - T.bravery));
+    // (somebody with a superpower: a good deal less afraid of it, and keener to see it gone)
+    r.fear = Math.max(r.fear, 0.65 * (1.25 - T.bravery) * (1 - B.courage));
     r.violent = Math.max(r.violent, 2.5);
     r.like = Math.min(r.like, -0.7);
     // the brave ones want it gone
-    if (T.bravery > 0.62 && T.aggression > 0.45) r.anger = Math.max(r.anger, 0.55);
+    if (B.brave > 0.62 && T.aggression > 0.45) r.anger = Math.max(r.anger, 0.55);
     if (chance(0.3)) B.speak('knowsShallow', { other: man.name }, 1, man, true);
   }
 }

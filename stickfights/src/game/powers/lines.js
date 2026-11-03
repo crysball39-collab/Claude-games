@@ -79,6 +79,13 @@ Object.assign(LINES, {
   pwRescued: ["Thank you...", "Oh, thank God.", "Get me out of here.", "You came for me."],
   pwDodged: ["Missed.", "Too slow.", "Over here.", "Not even close."],
 
+  /* ------------------------- not scared (they have a power) ------------------------- */
+  pwUnafraidGun: ["A gun. That's cute.", "You think that's going to stop me?", "Go on. See what happens.", "Put that away before you embarrass yourself.", "Bullets. Really?", "That's not going to be enough.", "I'm not scared of that.", "Point that somewhere else, {other}."],
+  pwUnafraidArmed: ["Is that supposed to scare me?", "Put that down before you hurt yourself.", "You're going to need more than that.", "That's not going to help you, {other}.", "Really? That?", "Go on, then. See how far that gets you.", "I'm not scared of you, {other}."],
+  pwUnafraidAimed: ["Go on, then. Pull the trigger.", "You really want to try that with me?", "Do you know what I can do, {other}?", "Last chance to put that down.", "You'll want to think about that.", "Do it. I dare you.", "That's not going to work on me."],
+  pwUnafraidShot: ["Bad move, {other}.", "Was that meant for me?", "You'll have to do better than that.", "Is that all you've got, {other}?", "My turn.", "That just made me angry.", "Keep shooting. See where it gets you."],
+  pwUnafraidHeld: ["Bad idea.", "You really don't want to be holding me.", "Put me down. Now.", "You've picked the wrong person.", "You're going to regret this.", "Let go while you still can."],
+
   /* --------------------------------- watching it --------------------------------- */
   sawFlying: ["They're flying. They're actually flying.", "Are you seeing this?!", "How is {other} doing that?!", "{other} can fly?!", "That's not possible. People can't fly.", "Somebody tell me I'm dreaming.", "{other}, how are you up there?!", "No way. No way."],
   sawSkyToss: ["They threw {victim} out of the sky!", "Oh God, {victim}!", "{victim}! Did you see how high that was?!", "Nobody survives a fall like that."],

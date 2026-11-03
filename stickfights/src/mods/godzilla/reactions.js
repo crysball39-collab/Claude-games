@@ -69,7 +69,7 @@ export function setupReactions(sb) {
     B.heard = { x: e.x, y: e.y, t: sb.time };
     B.speak('gzRoarHeard', { other: e.who.name }, 0.7, null, true);
     // right under it, the faint-hearted go down
-    if (d < 7 && B.traits.bravery < 0.3 && chance(0.3)) p.faint();
+    if (d < 7 && B.brave < 0.3 && chance(0.3)) p.faint();
   }));
   const killed = (verb, say, k = 1.1) => (e) => witnesses(sb, e, (B) => {
     const it = e.by, v = e.who;
@@ -79,7 +79,7 @@ export function setupReactions(sb) {
     B.speak(say, { victim: v.name, other: it.name }, 0.9, null, true);
     B.remember('sawGzKill', it, v, verb);
     B.note(`It ${verb} ${v.name}.`);
-    if (rv && rv.like > 0.3 && B.traits.bravery > 0.6) {
+    if (rv && rv.like > 0.3 && B.brave > 0.6) {
       const r = B.rel(it);
       r.killed = v;
       r.anger = Math.max(r.anger, 0.5 + B.traits.aggression * 0.4);

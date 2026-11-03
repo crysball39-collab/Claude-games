@@ -51,7 +51,7 @@ import * as B from './behaviours.js';
 import { learn as copLearn, considerOfficer, considerSuspect, considerWitness, metOfficer, maybeReport, lethal } from './police.js';
 import { clamp, clamp01, rand, chance, pick, sign } from '../core/util.js';
 import { IGNITE_AT, sicken } from './vitals.js';
-import { powerReflexes, powerThreat } from './powers/index.js';
+import { powerReflexes, powerThreat, powerCourage } from './powers/index.js';
 
 const SIGHT = 14;
 const BEHIND = 2.2;
@@ -150,6 +150,8 @@ const REPEAT = {
   // (seeing the impossible: said once, not every time it happens again)
   sawFlying: 25, sawSpeedster: 16, sawTelekinesis: 12, sawShockwave: 9, sawBulletStop: 14, sawWallSmash: 14, sawGotPower: 20, sawSkyToss: 9,
   sawSuperBlow: 7, sawSlam: 7, sawSpeedBlow: 8, sawCrush: 10, pwCarriedUp: 3, pwLifted: 3, pwDodged: 6, flyJoy: 30,
+  // (not scared, with a superpower: said now and then, not every time)
+  pwUnafraidGun: 8, pwUnafraidArmed: 8, pwUnafraidAimed: 6, pwUnafraidShot: 5, pwUnafraidHeld: 4,
 };
 // ...and the ones that are really the same plea
 const SAID_AS = { surrender: 'beg', surrenderGun: 'beg' };
@@ -169,10 +171,11 @@ const KIT_BUSY = new Set(['respond', 'comply', 'surrender', 'cower', 'arm', 'ves
 
 /** How one person feels about another. */
 class Rel {
-  constructor(o) {
+  constructor(o, owner = null) {
     this.other = o;
+    this.owner = owner;     // whose feeling it is (their courage takes the edge off any new fear)
     this.like = rand(-0.06, 0.14);
-    this.fear = 0;
+    this._fear = 0;
     this.anger = 0;
     this.fam = 0;
     this.met = false;
@@ -191,6 +194,14 @@ class Rel {
     this.recalled = -99;
     this.aimedAtMe = -99;
   }
+
+  // fear of them: whatever adds to it (a gun, a monster, a memory) adds that
+  // much less to somebody with a superpower - their courage comes off it
+  get fear() { return this._fear; }
+  set fear(v) {
+    const c = this.owner ? this.owner.courage : 0;
+    this._fear = c && v > this._fear ? this._fear + (v - this._fear) * (1 - c) : v;
+  }
 }
 
 export class Brain {
@@ -199,6 +210,7 @@ export class Brain {
     this.sb = man.sandbox;
     this.traits = traits;
     this.emo = new Emotions(traits);
+    this.courage = 0;         // from their superpowers (powerCourage): how much less frightens them
     this.rels = new Map();
     this.things = new Map();
     this.inspected = new Set();
@@ -251,8 +263,14 @@ export class Brain {
 
   rel(o) {
     let r = this.rels.get(o);
-    if (!r) { r = new Rel(o); this.rels.set(o, r); }
+    if (!r) { r = new Rel(o, this); this.rels.set(o, r); }
     return r;
+  }
+
+  /** How brave they act: their bravery, and a superpower's courage on top of it. */
+  get brave() {
+    const b = this.traits.bravery;
+    return b + (1 - b) * this.courage;
   }
 
   get fighting() { return !!this.behaviour && this.behaviour.kind === 'fight'; }
@@ -331,6 +349,8 @@ export class Brain {
   update(dt) {
     const me = this.man;
     if (me.removed || me.dead) return;
+    // a superpower takes the edge off fear, of anything
+    this.courage = this.emo.courage = me.powers ? powerCourage(me) : 0;
     this.emo.update(dt);
     this.feelings(dt);
     if ((this.senseT -= dt) <= 0) {
@@ -453,7 +473,9 @@ export class Brain {
         const scary = (k === 'taser' ? 0.3 : isGun(k) ? 0.5 : k === 'machete' ? 0.42 : k === 'knife' ? 0.35 : spec ? spec.scary ?? 0.3 : 0) * (o.officer && !this.sb.law.wanted(me) ? 0.25 : 1);
         if (this.isHostile(o) || r.like < -0.2 || r.violent > 0.5 || (scary > 0.2 && r.like < 0.3)) {
           r.fear = clamp01(r.fear + (scary || 0.2) * (1.1 - this.traits.bravery));
-          const say = k === 'taser' ? 'taserFear' : isGun(k) ? 'gunFear' : k === 'machete' ? 'macheteFear' : k === 'knife' ? 'knifeFear' : spec && spec.fear ? spec.fear : 'weaponFear';
+          // (somebody with a superpower is more likely to tell them what they think of it)
+          const unafraid = this.courage && chance(this.courage);
+          const say = unafraid ? (isFirearm(k) ? 'pwUnafraidGun' : 'pwUnafraidArmed') : k === 'taser' ? 'taserFear' : isGun(k) ? 'gunFear' : k === 'machete' ? 'macheteFear' : k === 'knife' ? 'knifeFear' : spec && spec.fear ? spec.fear : 'weaponFear';
           this.speak(say, { other: o.name, what: spec ? spec.noun || (spec.name ? spec.name.toLowerCase() : 'that') : 'that' }, 0.75, o, !!scary);
         }
       } else if (!o.weapon && !o.innate) r.sawArmed = false;
@@ -466,6 +488,8 @@ export class Brain {
           this.remember('aimedAtMe', o);
           this.react = Math.max(this.react, 0.2);
           this.thinkT = 0;
+          // a superpower, and a gun is not what it was: they say so, to its face
+          if (this.courage && chance(this.courage)) this.speak('pwUnafraidAimed', { other: o.name }, 0.8, o, true);
         }
         this.aimedBy = o;
         this.aimedT = now;
@@ -542,7 +566,7 @@ export class Brain {
       if (r.anger < floor) r.anger = floor;
       if (r.enemy && r.like > -0.55) r.like = -0.55;
       if (m && VIOLENT.has(m.kind)) {
-        const ff = m.w * 0.35 * (1 - T.bravery);
+        const ff = m.w * 0.35 * (1 - T.bravery) * (1 - this.courage);
         if (r.fear < ff) r.fear = ff;
       }
     }
@@ -634,9 +658,11 @@ export class Brain {
     const foe = this.fightTarget;
     if (foe && this.rels.get(foe)) E.anger = Math.max(E.anger, this.rels.get(foe).anger * 0.8);
     const cool = 0.012 - T.temper * 0.006;
+    // (and with a superpower, being afraid of somebody wears off a good deal faster)
+    const calmDown = 0.012 * (1 + this.courage * 3);
     for (const r of this.rels.values()) {
       r.anger = Math.max(0, r.anger - dt * cool);
-      r.fear = Math.max(0, r.fear - dt * 0.012);
+      r.fear = Math.max(0, r.fear - dt * calmDown);
       r.violent = Math.max(0, r.violent - dt * 0.01);
     }
     if (me.state === 'held') {
@@ -1036,8 +1062,8 @@ export class Brain {
         if (rv.like > 0.3) r.anger = clamp01(r.anger + 0.25 * rv.like * (0.4 + T.temper));
       }
     }
-    // the startle: a flinch, a duck, hands over the head
-    if (me.ready && !this.fighting && now - (this.startleT || -9) > 1.2 && chance(0.75 - T.bravery * 0.4)) {
+    // the startle: a flinch, a duck, hands over the head (a superpower takes most of that out of them)
+    if (me.ready && !this.fighting && now - (this.startleT || -9) > 1.2 && chance((0.75 - T.bravery * 0.4) * (1 - this.courage))) {
       this.startleT = now;
       me.perform(chance(0.6) ? 'duck' : 'flinch', { fadeIn: 0.03, fadeOut: 0.15 });
     }
@@ -1046,7 +1072,10 @@ export class Brain {
       // (not every bang is a gun: a mod's may say what it sounded like)
       if (!seen) this.speak(ev.heardAs || (me.officer ? 'copShotsFired' : 'gunshots'), {}, 0.7, null, true);
       else if (by && ev.target && ev.target !== me) this.speak('sawShooting', { other: by.name, victim: ev.target.name }, 0.6, null, true);
-      else if (by) this.speak('takeCover', { other: by.name }, 0.6, null, true);
+      else if (by) {
+        const bold = this.courage && chance(this.courage);
+        this.speak(bold ? 'pwUnafraidShot' : 'takeCover', { other: by.name }, 0.6, bold ? by : null, true);
+      }
     }
     if (!seen) { this.heard = { x, y, t: now }; this.hearLoud(x); }
     this.react = Math.max(this.react, 0.15 + (1 - T.skill) * 0.15);
@@ -1071,7 +1100,7 @@ export class Brain {
       r.fear = clamp01(r.fear + 0.4 * (1.15 - T.bravery));
     }
     // the startle: a flinch, a duck, hands over the head
-    if (me.ready && !this.fighting && now - (this.startleT || -9) > 1.2 && chance(0.95 - T.bravery * 0.35)) {
+    if (me.ready && !this.fighting && now - (this.startleT || -9) > 1.2 && chance((0.95 - T.bravery * 0.35) * (1 - this.courage))) {
       this.startleT = now;
       // (close: down; a little further off, the hands go over the ears - or just a flinch)
       me.perform(near > 0.3 ? 'duck' : near > 0.12 && chance(0.55) ? 'coverEars' : chance(0.6) ? 'duck' : 'flinch', { fadeIn: 0.03, fadeOut: 0.15 });
@@ -1128,7 +1157,7 @@ export class Brain {
         else if (ev.power === 'flight' && who.state === 'air') this.speak('sawFlying', vars, 0.35, null, true);
         break;
     }
-    if (d < 9 && !this.fighting && me.ready && T.bravery < 0.5 && ev.type !== 'powerGiven' && chance(0.3)) me.perform('flinch');
+    if (d < 9 && !this.fighting && me.ready && this.brave < 0.5 && ev.type !== 'powerGiven' && chance(0.3)) me.perform('flinch');
   }
 
   /**
@@ -1141,7 +1170,8 @@ export class Brain {
     E.bump('surprise', amount * 0.7);
     E.bump('sadness', amount * 0.2 * T.empathy);
     this.horror = Math.min(1.5, this.horror + amount);
-    const weak = (1 - T.toughness) * (0.4 + T.empathy * 0.6) * (1.1 - T.bravery * 0.5);
+    // (a superpower steadies the stomach as well as the nerves - some)
+    const weak = (1 - T.toughness) * (0.4 + T.empathy * 0.6) * (1.1 - T.bravery * 0.5) * (1 - this.courage * 0.5);
     // (and it turns the stomach)
     sicken(me, amount * (0.15 + weak * 0.45));
     if (this.horror > 0.8 && me.state === 'stand' && chance(weak * 0.3)) {
@@ -1370,7 +1400,8 @@ export class Brain {
           const r = this.rel(d.by);
           r.fear = clamp01(r.fear + 0.5 * (1.2 - T.bravery));
           r.like = -1;
-          this.speak('seized', { other: d.by.name }, 1, d.by, true);
+          // (with a superpower: as likely a warning as a scream)
+          this.speak(this.courage && chance(this.courage) ? 'pwUnafraidHeld' : 'seized', { other: d.by.name }, 1, d.by, true);
           this.note(`${d.by.name} grabbed me!`);
           this.clearBehaviour();
           break;
@@ -1462,8 +1493,11 @@ export class Brain {
         E.bump('fear', 0.3 * (1.2 - T.bravery));
         E.bump('surprise', 0.5);
         if (d.by && d.by !== me) { const r = this.rel(d.by); r.fear = clamp01(r.fear + 0.2 * (1.1 - T.bravery)); this.remember('shotAtMe', d.by); }
-        if (me.ready && chance(0.6)) me.perform('duck', { fadeIn: 0.03, fadeOut: 0.15 });
-        this.speak('nearMiss', {}, 0.7, null, true);
+        // (somebody with a superpower barely ducks - and is as likely to have something to say about it)
+        if (me.ready && chance(0.6 * (1 - this.courage * 0.7))) me.perform('duck', { fadeIn: 0.03, fadeOut: 0.15 });
+        const shooter = d.by && d.by !== me && !d.by.removed ? d.by : null;
+        if (shooter && this.courage && chance(this.courage)) this.speak('pwUnafraidShot', { other: shooter.name }, 0.7, shooter, true);
+        else this.speak('nearMiss', {}, 0.7, null, true);
         this.note('A bullet went right past me!');
         break;
       }
@@ -1894,6 +1928,8 @@ export class Brain {
   /** Everything they could do right now, scored, best first. */
   consider() {
     const me = this.man, T = this.traits, E = this.emo, now = this.sb.time;
+    // a superpower: braver than they are, and far less given to running, hiding or giving up
+    const courage = this.courage, brave = this.brave;
     const out = [];
     const add = (kind, target, score, why, extra = null, urgent = false) => {
       if (score > 0.03) out.push({ kind, target, score, why, extra, urgent });
@@ -1955,7 +1991,7 @@ export class Brain {
 
       // fight them
       let f = r.anger * (0.32 + T.aggression * 0.8) * (0.45 + conf) * (1 - E.fear * 0.5);
-      if (hostile && o.conscious) f += 0.18 * T.bravery + 0.1 * T.aggression;
+      if (hostile && o.conscious) f += 0.18 * brave + 0.1 * T.aggression;
       if (r.killed) f += 0.25 * T.temper;
       if (!o.conscious || o.lying) f *= T.aggression > 0.72 && r.anger > 0.82 ? 0.75 : 0.12;
       if (o.brain && o.brain.begging) f *= 1 - T.empathy * 0.8;
@@ -1987,11 +2023,13 @@ export class Brain {
         if (hostile && health < 0.4) fl += 0.35 * (1.2 - T.bravery);
         if (hostile) fl += (1 - fit) * 0.4;
         if (hostile && !canFight) fl += 0.4;
-        // nobody sensible squares up to a knife bare-handed
+        // nobody sensible squares up to a knife bare-handed (nobody without a superpower, anyway)
         const blade = o.armedWith === 'knife' || !!(armOf(o.armedWith) && armOf(o.armedWith).blade);
-        if (blade && (hostile || r.violent > 0.5) && me.armedWith !== 'knife') fl += (0.25 + E.fear * 0.3) * (1.15 - T.bravery);
-        // an officer stands their ground, until it is hopeless
+        if (blade && (hostile || r.violent > 0.5) && me.armedWith !== 'knife') fl += (0.25 + E.fear * 0.3) * (1.15 - brave);
+        // an officer stands their ground, until it is hopeless; somebody with a superpower,
+        // nearly always (and even badly hurt, they would rather not run)
         if (me.officer && health > 0.3) fl *= 0.25;
+        if (courage) fl *= 1 - courage * (health > 0.3 ? 0.85 : 0.55);
         if (fl > threatScore) { threatScore = fl; threat = o; }
         add('flee', o, fl, `${o.name} scares me. I have to get away!`, null, hostile && d < 4);
       }
@@ -2006,8 +2044,8 @@ export class Brain {
         const beating = cares > 0.3 && r.attackOn === ft && now - r.attackT < 3;
         // and a fight is seen, and run to, from across the floor
         const far = 0.5 + near * 0.5;
-        if (rv.like > 0.3 && T.bravery > 0.35) {
-          add('confront', o, rv.like * (0.3 + T.bravery * 0.5) * (1 - E.fear * 0.7) * far, `${o.name} is hurting ${ft.name}!`, { victim: ft }, beating);
+        if (rv.like > 0.3 && brave > 0.35) {
+          add('confront', o, rv.like * (0.3 + brave * 0.5) * (1 - E.fear * 0.7) * far, `${o.name} is hurting ${ft.name}!`, { victim: ft }, beating);
         } else if ((T.curiosity > 0.3 || cares > 0.3) && E.fear < 0.55) {
           add('watch', o, (0.1 + T.curiosity * 0.22 + cares * 0.3) * (1 - E.fear) * far * calm, `A fight! ${o.name} and ${ft.name}.`, null, beating);
         }
@@ -2068,11 +2106,11 @@ export class Brain {
       const near = 1 / (1 + Math.max(0, d - 2) / 5);
       const monster = !!(o.species && o.species.monster) || !!(me.species && me.species.monster);
       if (!monster && !o.dead && r.like > -0.3 && !this.isHostile(o) && me.health.canUse('armA')) {
-        const s = (0.35 + T.empathy * 0.6 + Math.max(0, r.like) * 0.5) * (0.45 + T.bravery * 0.7) * (1 - E.fear * 0.45) * near;
+        const s = (0.35 + T.empathy * 0.6 + Math.max(0, r.like) * 0.5) * (0.45 + brave * 0.7) * (1 - E.fear * 0.45) * near;
         add('douse', o, s, `${o.name} is on fire! I have to put it out!`, null, d < 8);
       }
       if (o.conscious && !o.lying && d < 4) {
-        add('flee', o, (0.3 + E.fear * 0.6) * (1.2 - T.bravery) * (1 - d / 4) * 1.2, `${o.name} is on fire! Keep away from them!`, null, d < 2);
+        add('flee', o, (0.3 + E.fear * 0.6) * (1.2 - T.bravery) * (1 - d / 4) * 1.2 * (1 - courage * 0.7), `${o.name} is on fire! Keep away from them!`, null, d < 2);
       }
     }
 
@@ -2101,7 +2139,8 @@ export class Brain {
     const ab = this.aimedBy;
     if (ab && now - this.aimedT < 0.8 && ab.alive && !ab.removed && ab.gunReady && !(ab.officer && this.police && this.police.by === ab)) {
       const d = Math.abs(ab.pos.x - me.pos.x);
-      const nerve = T.bravery * (me.gunReady ? 1.7 : 1) + (this.ordered && this.ordered.target === ab ? 1 : 0);
+      // (a superpower: a gun is just not that frightening any more)
+      const nerve = T.bravery * (me.gunReady ? 1.7 : 1) + (this.ordered && this.ordered.target === ab ? 1 : 0) + courage * 1.2;
       add('surrender', ab, (0.55 + E.fear * 0.6) * Math.max(0, 1.25 - nerve) * (d < 10 ? 1 : 0.5), `${ab.name} is pointing a gun at me!`, null, true);
     }
 
@@ -2109,7 +2148,7 @@ export class Brain {
     const gt = this.gunThreat;
     if (gt && now - gt.t < 7 && gt.who && !gt.who.removed && gt.who.alive && gt.who !== me && !(this.ordered && this.ordered.target === gt.who)) {
       const sh = gt.who;
-      const scared = (0.45 + E.fear * 0.6) * (1.25 - T.bravery * (me.gunReady ? 1.6 : 1));
+      const scared = (0.45 + E.fear * 0.6) * (1.25 - T.bravery * (me.gunReady ? 1.6 : 1)) * (1 - courage * 0.85);
       const c = this.coverFrom(sh);
       if (c) add('hide', sh, scared * 1.15, 'Shots! Get behind that crate!', { crate: c }, true);
       const d = Math.abs(sh.pos.x - me.pos.x);
@@ -2237,12 +2276,12 @@ export class Brain {
     }
     if (me.health.pain > 30 && E.fear < 0.5) add('rest', null, (me.health.pain / 100) * 0.7 * (1 - E.fear) * calm, 'I need to sit down for a bit.');
     if (this.victory > 0.2) add('celebrate', null, this.victory * (0.35 + T.aggression * 0.4), 'Ha! I won!');
-    if (E.fear > 0.8 && E.surprise > 0.35 && T.bravery < 0.4 && !threat) add('panic', null, 0.55, "I don't know what's happening!");
+    if (E.fear > 0.8 && E.surprise > 0.35 && brave < 0.4 && !threat) add('panic', null, 0.55, "I don't know what's happening!");
     // whatever else a mod's species has in mind
     if (me.species && me.species.consider) me.species.consider(this, add, { threat, threatScore, calm, canFight, fit });
     // (only from someone actually coming for them: someone they are just scared of gets kept at a distance)
     if (threat && E.fear > 0.6 && (health < 0.35 || this.cornered(threat)) && this.isHostile(threat)) {
-      add('cower', threat, E.fear * (1.1 - T.bravery) * 0.9, "Please don't hurt me...", null, true);
+      add('cower', threat, E.fear * (1.1 - brave) * 0.9, "Please don't hurt me...", null, true);
     }
     if (this.heard && now - this.heard.t < 6 && E.fear < 0.45) {
       add('investigate', null, T.curiosity * 0.35 * (1 - E.fear) * calm, 'What was that noise?', { x: this.heard.x });
@@ -2487,7 +2526,7 @@ export class Brain {
     const T = this.traits;
     if (this.man.weapon || !this.man.health.canUse('armA')) return false;
     const angry = this.maxAnger();
-    return (T.aggression > 0.5 && angry > 0.35) || (T.bravery > 0.7 && !!this.mostDangerousNear(5)) || T.aggression > 0.8;
+    return (T.aggression > 0.5 && angry > 0.35) || (this.brave > 0.7 && !!this.mostDangerousNear(5)) || T.aggression > 0.8;
   }
 
   /** Frozen in place, or tied up: they cannot do anything, but they can still say what they think of it. */
@@ -2506,7 +2545,7 @@ export class Brain {
 
   /** On the floor, crawling, or held up: no behaviour, but still a mind. */
   whileDown(dt) {
-    const me = this.man, E = this.emo, T = this.traits, now = this.sb.time;
+    const me = this.man, E = this.emo, now = this.sb.time;
     if (this.behaviour) this.clearBehaviour();
     this.downTalk -= dt;
     if (me.state === 'held') {
@@ -2514,7 +2553,9 @@ export class Brain {
         this.downTalk = rand(2.5, 4.5);
         const choking = me.vit && me.vit.air === 'choke' && me.health.oxygen < 0.94;
         if (choking) this.downTalk = rand(1.4, 2.2);
-        this.speak(me.flames ? 'onFire' : choking ? 'choking' : chance(0.5) ? 'grabbed' : 'fear', {}, choking ? 0.95 : 0.8, null, true);
+        // (held up by somebody, with a superpower: a warning, more likely than a scream)
+        const bold = !me.flames && !choking && this.courage && chance(this.courage);
+        this.speak(me.flames ? 'onFire' : choking ? 'choking' : bold ? 'pwUnafraidHeld' : chance(0.5) ? 'grabbed' : 'fear', {}, choking ? 0.95 : 0.8, null, true);
       }
       return;
     }
@@ -2538,7 +2579,7 @@ export class Brain {
       return;
     }
     const threat = this.mostDangerousNear(3);
-    const scared = !!threat && E.fear > 0.45 && T.bravery < 0.65;
+    const scared = !!threat && E.fear > 0.45 && this.brave < 0.65;
     // playing dead only while they are still coming for them; left alone long enough, they chance it
     const tr = threat && this.rels.get(threat);
     this.stayDown = scared && me.state === 'down' && (this.isHostile(threat) || (tr && now - tr.hurtT < 12));

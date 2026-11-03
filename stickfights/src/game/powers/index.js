@@ -203,6 +203,13 @@ export function roundStopped(man, x, y, dx, dy) {
 /** How much more dangerous they look to somebody sizing them up. */
 export function powerThreat(man) { return man && man.powers ? 1 + man.powers.size * 0.7 : 1; }
 
+// how much of the fear anybody else would feel does not get to them: with one
+// power, two thirds of it; with all four, nine tenths (they are still people)
+const COURAGE = [0, 0.65, 0.78, 0.85, 0.9];
+
+/** How little frightens them, 0 (everybody) to 0.9: the brain takes that much off every fear. */
+export function powerCourage(man) { return man && man.powers ? COURAGE[Math.min(4, man.powers.size)] : 0; }
+
 /** Their power chips for the inspector. */
 export function powerChips(man) { return man.powers ? [...man.powers.keys()].map((id) => POWERS[id].chip) : []; }
 

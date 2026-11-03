@@ -5131,6 +5131,97 @@ const pwExtra = await ev(() => {
 check('the powers bring forty-one new animations and over three hundred new lines', !pwExtra.missing.length && pwExtra.clips === 41 && pwExtra.lines >= 300,
   `${pwExtra.clips} clips${pwExtra.missing.length ? ', missing ' + pwExtra.missing.join(' ') : ''}; ${pwExtra.lines} lines in ${pwExtra.kinds} situations`);
 
+// with a superpower, far less frightens them: the same people, the same scares, with a power and without
+await fresh();
+const nerve = await ev(() => {
+  const { sb, powers } = window.__sf;
+  const steps = (n, each) => { for (let i = 0; i < n; i++) { sb.step(1 / 120); if (each) each(); } };
+  let cur = null;
+  sb.on('speech', (e) => { if (cur && e.who === cur.who) cur.said.push(e.kind); });
+  const out = { plain: { handsUp: 0, ran: 0, peak: 0, fled: 0, fought: 0, said: [] }, power: { handsUp: 0, ran: 0, peak: 0, fled: 0, fought: 0, said: [] } };
+  for (let trial = 0; trial < 3; trial++) {
+    for (const who of ['plain', 'power']) {
+      const o = out[who];
+      // a gun pointed at them, and then a shot
+      sb.clear();
+      const g = sb.spawnStickman(-3, null, { name: 'Gil' });
+      const t = sb.spawnStickman(1, null, { name: 'Pat', traits: { bravery: 0.3 } });
+      const pistol = sb.spawnGun(-2.6, 0.1);
+      steps(60);
+      if (who === 'power') powers.givePower(t, 'strength');
+      cur = { who: t, said: o.said };
+      g.brain = null; g.facing = 1; g.pickUp(pistol);
+      steps(150);
+      t.brain.clearBehaviour(); t.stop(); t.pos.x = g.pos.x + 4; t.vel.x = 0; t.facing = -1;
+      g.aimAt(t); t.brain.sense();
+      let up = false, peak = 0;
+      steps(120 * 4, () => { const b = t.brain.behaviour; up = up || t.posture === 'handsUp' || (!!b && (b.kind === 'surrender' || b.kind === 'cower')); peak = Math.max(peak, t.brain.emo.fear); });
+      if (up) o.handsUp++;
+      g.aiming = false; g.aimTarget = null;
+      t.brain.clearBehaviour(); t.setPosture(null);
+      let ran = false;
+      g.fire();
+      steps(120 * 3, () => { const b = t.brain.behaviour; ran = ran || (!!b && /^(flee|hide|cower|surrender|panic)$/.test(b.kind)); peak = Math.max(peak, t.brain.emo.fear); });
+      if (ran) o.ran++;
+      o.peak = Math.max(o.peak, peak);
+      // somebody with a knife, coming for them
+      sb.clear();
+      const k = sb.spawnStickman(-3, null, { name: 'Kit', traits: { aggression: 0.9, temper: 0.9 } });
+      const v = sb.spawnStickman(2, null, { name: 'Pat', traits: { bravery: 0.3 } });
+      const knife = sb.spawnKnife(-2.6, 0.1);
+      steps(60);
+      k.pickUp(knife);
+      if (who === 'power') powers.givePower(v, 'strength');
+      cur = { who: v, said: o.said };
+      steps(30);
+      k.brain.order('fight', v);
+      steps(120 * 6, () => { const b = v.brain.behaviour; if (b && (b.kind === 'flee' || b.kind === 'cower' || b.kind === 'hide')) o.fled += 1 / 120; if (b && b.kind === 'fight') o.fought += 1 / 120; });
+    }
+  }
+  // picked up by the hand and held up there
+  for (const who of ['plain', 'power']) {
+    sb.clear();
+    const t = sb.spawnStickman(1, null, { name: 'Pat', traits: { bravery: 0.3 } });
+    steps(60);
+    if (who === 'power') powers.givePower(t, 'flight');
+    steps(150);
+    cur = { who: t, said: out[who].said };
+    t.grab(t.wj.chest.x, t.wj.chest.y);
+    for (let i = 0; i < 120 * 12; i++) { t.holdAt(1 + Math.sin(i / 100), 2.5); sb.step(1 / 120); }
+    t.release();
+  }
+  cur = null;
+  // the same fright for both, and how long it lasts; and somebody frightening, made more so
+  const calm = {};
+  for (const who of ['plain', 'power']) {
+    sb.clear();
+    const t = sb.spawnStickman(1, null, { name: 'Pat', traits: { bravery: 0.3 } });
+    const o = sb.spawnStickman(-5, null, { name: 'Oz' });
+    steps(60);
+    if (who === 'power') powers.givePower(t, 'speed');
+    steps(2);
+    t.brain.emo.fear = 0.1;
+    t.brain.emo.bump('fear', 0.5);
+    const jump = t.brain.emo.fear - 0.1;
+    t.brain.emo.fear = 0.8;
+    steps(120 * 8);
+    const r = t.brain.rel(o);
+    r.fear = Math.max(r.fear, 0.9);
+    calm[who] = { jump: +jump.toFixed(2), after8s: +t.brain.emo.fear.toFixed(2), ofOz: +r.fear.toFixed(2) };
+  }
+  for (const w of ['plain', 'power']) { const o = out[w]; o.peak = +o.peak.toFixed(2); o.fled = +o.fled.toFixed(1); o.fought = +o.fought.toFixed(1); o.said = [...new Set(o.said)]; }
+  return { ...out, calm };
+});
+check('WITH A SUPERPOWER, LESS FRIGHTENS THEM: a gun pointed at them gets no hands up, a shot does not send them running, and they feel a fraction of the fear',
+  nerve.plain.handsUp >= 2 && nerve.power.handsUp === 0 && nerve.plain.ran >= 2 && nerve.power.ran === 0 && nerve.power.peak < nerve.plain.peak * 0.5,
+  JSON.stringify({ plain: { handsUp: nerve.plain.handsUp, ran: nerve.plain.ran, peak: nerve.plain.peak }, power: { handsUp: nerve.power.handsUp, ran: nerve.power.ran, peak: nerve.power.peak } }));
+check('...somebody coming at them with a knife: without a power they run, with one they fight', nerve.plain.fled > 3 && nerve.power.fought > 3 && nerve.power.fled < nerve.plain.fled * 0.25,
+  JSON.stringify({ plain: { fled: nerve.plain.fled, fought: nerve.plain.fought }, power: { fled: nerve.power.fled, fought: nerve.power.fought } }));
+check('...a fright is about a third of the size, wears off faster, and so does being afraid of somebody', nerve.calm.power.jump < nerve.calm.plain.jump * 0.45 &&
+  nerve.calm.power.after8s < nerve.calm.plain.after8s - 0.15 && nerve.calm.power.ofOz < 0.4 && nerve.calm.plain.ofOz > 0.85, JSON.stringify(nerve.calm));
+check('...and they say so: a gun, a knife, a hand holding them up - they are not scared of it', nerve.power.said.some((k) => /^pwUnafraid/.test(k)) && !nerve.plain.said.some((k) => /^pwUnafraid/.test(k)),
+  JSON.stringify({ plain: nerve.plain.said, power: nerve.power.said }));
+
 check('the console stays clean', errors.length === 0, errors.slice(0, 3).join(' | '));
 if (FILE_MODE) check('the single file fetches nothing', network.length === 0, network.slice(0, 3).join(', '));
 

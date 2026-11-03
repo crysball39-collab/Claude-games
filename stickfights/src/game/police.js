@@ -203,9 +203,9 @@ export function considerSuspect(b, add) {
   const aimed = o.aiming && o.aimTarget === me;
   const shoot = aimed && isFirearm(o.armedWith);
   const health = me.health.overall;
-  const comply = 0.3 + p.mood + E.fear * 0.5 + (1 - T.bravery) * 0.35 + (1 - T.aggression) * 0.3 + (aimed ? 0.2 : 0) + (shoot ? 0.4 : 0) +
+  const comply = 0.3 + p.mood + E.fear * 0.5 + (1 - b.brave) * 0.35 + (1 - T.aggression) * 0.3 + (aimed ? 0.2 : 0) + (shoot ? 0.4 : 0) +
     (1 - health) * 0.35 + (p.count - 1) * 0.12 + b.guilt * 0.25 + (1 - me.stamina) * 0.15 - r.anger * 0.45 - (me.gunReady && isFirearm(me.armedWith) ? 0.2 : 0);
-  const run = (0.1 + T.bravery * 0.3 + (1 - T.empathy) * 0.15 + T.aggression * 0.12 - p.mood) * (health > 0.5 ? 1 : 0.4) *
+  const run = (0.1 + b.brave * 0.3 + (1 - T.empathy) * 0.15 + T.aggression * 0.12 - p.mood) * (health > 0.5 ? 1 : 0.4) *
     (me.stamina > 0.3 ? 1 : 0.35) * (d > 3 ? 1 : 0.55) * (shoot ? 0.4 : 1) * (me.health.mobility > 0.7 ? 1 : 0.3);
   const fight = (T.aggression * 0.55 + r.anger * 0.6 + E.anger * 0.3 - p.mood * 0.5) * (me.strikes().length ? 1 : 0.2) * (me.gunReady ? 1.35 : 1) * (shoot ? 0.5 : 1) - 0.32;
   // having given up, they stay given up - it takes a lot to start again

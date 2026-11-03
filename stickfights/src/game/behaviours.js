@@ -713,7 +713,7 @@ export class Flee extends Behaviour {
         return this.safe < 5;
       }
       // cornered: slip past them, or curl up
-      if (b.traits.bravery > 0.45 && !o.attacking && chance(0.5)) { me.goTo(o.pos.x - away * 5, 'flee'); return true; }
+      if (b.brave > 0.45 && !o.attacking && chance(0.5)) { me.goTo(o.pos.x - away * 5, 'flee'); return true; }
       b.force(new Cower(b, o));
       return true;
     }
@@ -1288,7 +1288,8 @@ export class Burning extends Behaviour {
   get icon() { return 'exclaim'; }
   start() {
     const T = this.brain.traits;
-    this.panic = rand(0.6, 2) * (1.4 - T.bravery * 0.5 - T.skill * 0.3);
+    // (the brave - and anybody with a superpower - get a grip of themselves sooner)
+    this.panic = rand(0.6, 2) * (1.4 - this.brain.brave * 0.5 - T.skill * 0.3);
     this.turn = 0;
     this.yell = rand(1, 1.6);
     this.me.setPosture(null);

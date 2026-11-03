@@ -1002,7 +1002,8 @@ their feet - limp, on their back if hit from the front.
 Every stickman has a brain (`src/game/brain.js`), and a personality to run it
 on - eight traits, each from 0 to 1: **bravery, aggression, temper, empathy,
 sociability, curiosity, toughness, skill**. Most people are middling; a few
-are extreme.
+are extreme. (A superpower makes anybody braver than they are: see
+[Superpowers](#superpowers).)
 
 **Sense.** About five times a second they look around. They see what is in
 front of them, within fourteen metres, and not hidden behind a crate - so
@@ -1116,7 +1117,7 @@ if someone dangerous is standing over them; trapped under a crate they shout
 for help, and friends come.
 
 They also talk - out loud, in speech bubbles, with a babbling voice pitched to
-each of them - from 1,946 lines for 341 situations in `src/game/lines.js` (and `powers/lines.js`),
+each of them - from 1,981 lines for 346 situations in `src/game/lines.js` (and `powers/lines.js`),
 all written to sound like people really talk: short, plain, interrupted, and
 scared when there is something to be scared of. From small talk ("Did you
 sleep alright? I was up half the night.", "Rent's gone up again. Can you
@@ -1718,6 +1719,20 @@ the rounds stopping in the air; a flier or a speedster gets a friend out of
 trouble. Thrown by a power, people hit what they hit as hard as they should:
 a body thrown down from six metres seldom gets up again.
 
+**Far less afraid.** Somebody with a power is a good deal less frightened of
+anything. Whatever would scare anybody else - a gun pointed at them, a knife
+coming at them, shots, a blast, a body, a monster, a memory - scares them about
+a third as much with one power (and a tenth as much with all four), and the
+fright wears off two to three times as fast; so does being afraid of somebody.
+They stand their ground: a gun on them gets no hands up, shots do not send
+them diving behind a crate, somebody coming at them with a knife gets fought
+rather than run from, and a bang barely makes them flinch. They do not beg on
+the floor or panic, they put out a burning friend and step in when somebody
+is hurting one, and they say what they think of it ("Go on, then. Pull the
+trigger." "Is that supposed to scare me?" "Put me down. Now."). They are still
+people: badly hurt, they may yet get out of there, and a lit grenade is still
+something to get away from.
+
 ### Sound
 
 Punches, the ring of brass knuckles, a blade going in and being drawn across,
@@ -2174,6 +2189,11 @@ screen and checks:
 - left to themselves in a fight, somebody with a power uses two or more of its
   moves, and people watching say what they have seen
 - the powers bring forty-one new animations and over three hundred new lines
+- with a superpower, far less frightens them: a gun pointed at them gets no
+  hands up and a shot does not send them running, somebody coming at them with
+  a knife is fought rather than run from, a fright is about a third the size
+  and wears off faster (and so does being afraid of somebody), and they say
+  they are not scared
 - the console stays clean, and the single file fetches nothing
 
 Every check starts from the same random numbers and the same clock, so what

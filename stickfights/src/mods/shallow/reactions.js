@@ -77,7 +77,7 @@ export function setupReactions(sb) {
     B.remember('sawShallowKill', it, v, verb);
     B.note(`It ${verb} ${v.name}.`);
     // somebody they cared about: the brave ones will not let that go
-    if (rv && rv.like > 0.3 && B.traits.bravery > 0.55) {
+    if (rv && rv.like > 0.3 && B.brave > 0.55) {
       const r = B.rel(it);
       r.killed = v;
       r.anger = Math.max(r.anger, 0.5 + B.traits.aggression * 0.4);
