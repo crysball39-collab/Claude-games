@@ -159,13 +159,17 @@ street - people walk along in front of them, and nothing in the street lands
 on them - but they come apart like walls do (see [Buildings](#buildings-and-the-city)),
 and the hand from above can pull a lump off one.
 
-The spawn menu (☰ **SPAWN**, top left) has thirty-eight things in it, in eight
+The spawn menu (☰ **SPAWN**, top left) has forty-two things in it, in nine
 sections:
 
 | Section | Thing | What it is |
 | ------- | ----- | ---------- |
 | People | **Stickman** | A normal human. Thinks, feels, remembers, fights back. |
 | People | **Officer** | A police officer: cap, uniform, a police vest, an M1911 in the holster and a taser on the duty belt. Goes after whoever commits a crime. |
+| Superpowers | **Flight** | Not placed in the world: tap a stickman with it to give it to them (tap them again to take it away). They fly - and grab people and carry them up and throw them down, pin them to walls, dive-bomb, tackle, juggle, airlift a friend out. See [Superpowers](#superpowers). |
+| Superpowers | **Super Strength** | Given the same way. Three times as strong: punches that send people across the room, ground pounds, thunder claps, walls charged straight through, anything near picked up and thrown. |
+| Superpowers | **Super Speed** | Given the same way. Three times as fast on their feet and twice as quick in a fight: afterimages, dodges, flurries of blows, a whirlwind round somebody, the gun gone from a hand. |
+| Superpowers | **Telekinesis** | Given the same way. People and things lifted, thrown, pulled and slammed without a touch; guns pulled out of hands; bullets stopped in the air. |
 | Weapons | **Brass Knuckles** | Worn on the hand. Punches with them land about twice as hard, and cut. |
 | Weapons | **Combat Knife** | Held in the hand. Stabs and slashes; deep cuts bleed fast. Thrown point first, it sticks in. |
 | Weapons | **Machete** | Chops and hacks. Leaves gaping wounds, and a hard enough blow takes off a hand, an arm, a foot or a leg. |
@@ -803,7 +807,7 @@ break.
 ### Animated while they are in charge
 
 Every pose they strike on their own comes from **hand-keyed clips** in
-`src/game/clips.js`: 184 of them, from idling and walking to a front kick, a
+`src/game/clips.js` (and `powers/clips.js`): 225 of them, from idling and walking to a front kick, a
 knife thrust, a machete chop, aiming and reloading a pistol, reloading a rifle,
 aiming down on one knee, putting on a helmet, tying off a tourniquet, press-ups, a hug, falling on your back, getting up off your front,
 sobbing into your hands and dying. Each clip is a list of frames, and
@@ -827,7 +831,10 @@ pushups  squats  jumpingJacks  clutchStomach  clutchArm  shiver
 macheteGuard  chop  hack  aimPistol  gunLow  reload  tourniquet  popJoint
 retch  checkWound  clutchStump  shock  coverHead
 helmetOn  reloadRifle  kneelAim  checkGun  coverEars  sickHunch  checkWatch
-rubNeck  shieldEyes  handsInPockets  ...and more
+rubNeck  shieldEyes  handsInPockets
+flyHover  flyForward  flyCarry  flyPin  flySlam  diveBomb  heroLand  megaPunch
+groundPound  thunderClap  quakeStomp  speedDash  blitzFlurry  kickStorm  tkLift
+tkChoke  tkSlam  tkFloat  ...and the rest of the powers' moves, and more
 ```
 
 Clips play in three layers - a base (standing, walking, lying), an upper-body
@@ -1109,7 +1116,7 @@ if someone dangerous is standing over them; trapped under a crate they shout
 for help, and friends come.
 
 They also talk - out loud, in speech bubbles, with a babbling voice pitched to
-each of them - from 1,630 lines for 269 situations in `src/game/lines.js`,
+each of them - from 1,946 lines for 341 situations in `src/game/lines.js` (and `powers/lines.js`),
 all written to sound like people really talk: short, plain, interrupted, and
 scared when there is something to be scared of. From small talk ("Did you
 sleep alright? I was up half the night.", "Rent's gone up again. Can you
@@ -1635,6 +1642,82 @@ with every breath - a good while in it and the lungs give out. Whoever is in
 it tries to get out of it, the shortest way; whoever fires it keeps well
 back from where it lands, and does not fire again at somebody still choking.
 
+### Superpowers
+
+Four powers, in the **SUPERPOWERS** section of the spawn menu (`src/game/powers/`).
+Pick one and tap a stickman: they have it now ("Ana can fly now") - a gold chip
+under their name in the inspector, and a row of buttons, one for each of its ten
+moves, done to whoever they are fighting (or whoever is nearest). Tap them again
+with it to take it away. Anybody their own size can have any of them, and all
+four at once. Getting one, they feel it ("I feel so light...") and whoever sees
+it happen asks what just happened to them; seeing one used, people cannot
+believe it, and say so.
+
+**Flight.** Up off the ground, hanging a metre and a half up, flying where
+their brain would have walked, fast and flat out with a fist in front; running
+from something, up out of its reach; now and then, just for the joy of it, a
+turn round the place. Fly and Land are buttons in the inspector too. The moves:
+
+- **Sky Toss** - take hold of them, fly straight up six metres, and throw them
+  down at the ground
+- **Wall Pin** - take hold of them, fly them into the nearest wall (or the
+  edge of the world), pin them there by the collar and punch them twice
+- **Kick & Slam** - a kick that sends them up into the air, then up after
+  them, and slammed back down with both fists
+- **Dive Bomb** - up high over them, then straight down feet first: a superhero
+  landing, cracks in the floor, and everybody near goes over
+- **Tackle** - in low and fast, shoulder first, carry them along and drive them
+  into the floor
+- **Air Juggle** - an uppercut that launches them, two more punches on the way
+  up, and a kick that sends them away
+- **Spin Throw** - by the ankle, round and round in the air, and let go
+- **Sky Drop** - take hold of them, up as high as it goes, and let go
+- **Fly-by** - past them at speed, a fist on the way through
+- **Airlift** - a friend down with somebody standing over them, picked up and
+  flown out of it, and set down gently
+
+**Super Strength.** Three times as strong: every blow lands three times as
+hard (a hard one sends them flying), a blow barely rocks them, and nothing is
+too heavy. The moves: **Mega Punch** (wound right back, and they cross the
+room), **Ground Pound** (both fists into the floor: a shockwave, everybody near
+off their feet), **Heave** (the heaviest thing near them - a crate, a piece of
+wall, a beam - overhead and thrown at them), **Overhead Toss**, **Bear Hug**
+(held and squeezed until the ribs go), **Launcher** (an uppercut that puts them
+high in the air), **Thunder Clap** (a clap that knocks over everybody in front
+and leaves their ears ringing, and puts in the glass), **Quake Stomp** (the floor
+shakes and everybody stumbles), **Wall Breaker** (a charge, shoulder first,
+through any wall in the way and into them) and **Lift & Slam** (up over the head
+and down into the floor).
+
+**Super Speed.** Three times as fast running, and twice as quick at everything
+in a fight; moving fast, afterimages behind them, and a blow they see coming
+they are often not there for - a blink to one side. The moves: **Blitz** (a
+storm of punches faster than the eye can follow), **Blink Strike** (gone, and
+behind them), **Whirlwind** (round and round them until the wind lifts them off
+the ground), **Afterimage** (a step aside so fast what is left behind is a
+picture of them), **Snatch** (the weapon out of their hand and into theirs),
+**Gust Punch** (a punch at the air so fast the air hits them), **Dropkick**,
+**Kick Storm**, **Rescue Dash** (a friend in trouble, out of there in a blink)
+and **Lightning Line** (straight through a line of them, hitting every one).
+
+**Telekinesis.** A hand held out, a purple glow round whatever they have hold
+of, and it goes where the hand says. The moves: **Lift** (up off their feet,
+held in the air, kicking), **Throw**, **Force Push** (everything in front shoved
+away at once), **Pull** (yanked across the floor into a fist), **Choke** (held up
+by the throat by nothing at all), **Barrage** (everything loose nearby up in the
+air and thrown at them, one by one), **Disarm** (the gun pulled out of their
+hand and into theirs), **Bullet Stop** (rounds fired at them stop in the air and
+hang there, until it ends and they drop), **Slam** (lifted and slammed into the
+floor, three times) and **Float** (up off the ground themselves).
+
+In a fight, now and then they use one of their moves instead of a fist - the
+one that suits: a wall near enough to pin somebody to, a crowd for a ground
+pound, something heavy lying about, a line of them for a speedster to go
+through. Somebody pointing a gun at a telekinetic has it pulled away, or finds
+the rounds stopping in the air; a flier or a speedster gets a friend out of
+trouble. Thrown by a power, people hit what they hit as hard as they should:
+a body thrown down from six metres seldom gets up again.
+
 ### Sound
 
 Punches, the ring of brass knuckles, a blade going in and being drawn across,
@@ -1706,6 +1789,12 @@ stickfights/
       power.js        electricity: the network, the generator, bulbs, floodlights,
                       the volt meter, the light they give, and electrocution
       gas.js          the gas rifle's canister and the cloud of poison gas
+      powers/         superpowers: index.js (giving them, the moves running,
+                      what the rest of the game asks), common.js (getting hold,
+                      letting go, blows, shockwaves, a grip from a distance),
+                      flight.js, strength.js, speed.js, telekinesis.js (each
+                      power and its ten moves), clips.js, lines.js, fx.js
+                      (afterimages, the telekinetic glow, rings, cracks, wind)
       gear.js         the explosives and the electrics, as the spawn menu sees them
       hand.js         dragging and throwing (and, paused, just moving)
       fx.js           blood (drops, streams, splats, the walls, landing on things),
@@ -1754,8 +1843,8 @@ screen and checks:
 
 - stickmen are already moving about behind the title, which has MAPS and
   MODS, and PLAY opens an empty sandbox with the spawn menu
-- the spawn menu has exactly thirty-eight things in it: a Stickman, an Officer,
-  Brass Knuckles, a Combat Knife, a Machete, a Crowbar, a Glock-19, an M1911,
+- the spawn menu has exactly forty-two things in it: a Stickman, an Officer,
+  four superpowers (Flight, Super Strength, Super Speed, Telekinesis), Brass Knuckles, a Combat Knife, a Machete, a Crowbar, a Glock-19, an M1911,
   an AK-47, an M4A1, an AR-15, a Mossberg 500, a Taser, a Gas Rifle, a Crate, a
   Light Vest, a Light Tactical Helmet, five kinds of ammo, three walls, two metal beams, a Gallows, a Tree, a Bush, a
   Grenade, C4, TNT, a Missile, a Generator, a Lightbulb, a Floodlight and a
@@ -2070,6 +2159,21 @@ screen and checks:
   body dragged along the floor leaves a long smear
 - there are over sixteen hundred lines, and every blank in them is one that
   gets filled in
+- the spawn menu has a SUPERPOWERS section; picking one and tapping a stickman
+  gives it to them (a toast, a chip, a row of moves in the inspector), and
+  tapping them again takes it away; each power has ten moves, and all forty run
+  from start to finish
+- a flier grabs somebody, flies up and throws them down (and they are badly
+  hurt), pins somebody to a wall and punches them twice, kicks somebody up and
+  slams them down, and flies and lands when told
+- super strength is three times as strong, a Ground Pound puts everybody near
+  on the floor and a Mega Punch sends them across the room; super speed runs
+  three times as fast, lands a storm of punches in a second with afterimages,
+  and dodges blows; telekinesis lifts somebody from metres away, pulls a gun out
+  of a hand into theirs and stops rounds in the air
+- left to themselves in a fight, somebody with a power uses two or more of its
+  moves, and people watching say what they have seen
+- the powers bring forty-one new animations and over three hundred new lines
 - the console stays clean, and the single file fetches nothing
 
 Every check starts from the same random numbers and the same clock, so what

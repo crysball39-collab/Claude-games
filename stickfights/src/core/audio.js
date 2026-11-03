@@ -793,6 +793,67 @@ export class Sound {
   }
 
   /** The gas rifle: a hollow thump. */
+  /* ------------------------------- superpowers ------------------------------- */
+
+  /** Air tearing past: somebody taking off, or going by fast. */
+  jetWhoosh(x, k = 1) {
+    if (!this.ready) return;
+    const v = this.near(x) * 0.3 * k;
+    this.sweep('bandpass', 380, 2600, 0.45, v, 1.1);
+    this.hiss(0.35, 900, 0.8, 0.35 * v, 'lowpass');
+  }
+
+  /** Something hitting the ground (or somebody) far harder than anything should: a deep thump, and grit. */
+  boom(x, k = 1) {
+    if (!this.ready) return;
+    const v = (0.3 + this.near(x) * 0.7) * clamp(k, 0.3, 1.6);
+    this.tone('sine', 95, 28, 0.5, 1.1 * v);
+    this.tone('triangle', 180, 50, 0.18, 0.4 * v);
+    this.hiss(0.09, 1600, 0.7, 0.7 * v);
+    this.hiss(0.45, 380, 0.5, 0.55 * v, 'lowpass');
+  }
+
+  /** Two hands together hard enough to make thunder. */
+  clapBoom(x) {
+    if (!this.ready) return;
+    const v = 0.4 + this.near(x) * 0.8;
+    this.hiss(0.03, 3800, 1.2, 1.1 * v, 'highpass');
+    this.tone('sine', 140, 30, 0.6, 1 * v);
+    for (const [d, k] of [[0.25, 0.35], [0.55, 0.2], [0.9, 0.1]]) this.hiss(0.4, 300, 0.5, k * v, 'lowpass', d);
+  }
+
+  /** A speedster going by: a zip, high and quick. */
+  zip(x) {
+    if (!this.ready) return;
+    const v = this.near(x) * 0.22;
+    this.sweep('bandpass', 2400, 600, 0.13, v, 2.2);
+    this.tone('sawtooth', 1600, 400, 0.08, 0.04 * v);
+  }
+
+  /** The hum of a telekinetic taking hold of something. */
+  tkHum(x, k = 1) {
+    if (!this.ready) return;
+    const v = this.near(x) * 0.12 * k;
+    this.tone('sine', 220, 330, 0.45, v);
+    this.tone('sine', 223, 333, 0.45, v * 0.8);
+    this.tone('triangle', 660, 990, 0.3, v * 0.25);
+  }
+
+  /** A round stopping dead in the air: a thud with nothing to hit, and a ring. */
+  bulletStop(x) {
+    if (!this.ready) return;
+    const v = this.near(x) * 0.3;
+    this.tone('sine', 900, 600, 0.25, 0.25 * v);
+    this.hiss(0.05, 1800, 1.5, 0.3 * v);
+  }
+
+  /** A power coming on: a rising shimmer. */
+  powerUp(x) {
+    if (!this.ready) return;
+    const v = this.near(x) * 0.18;
+    for (const [f, d] of [[440, 0], [660, 0.06], [880, 0.12]]) this.tone('sine', f, f * 1.5, 0.35, v, d);
+  }
+
   thump(x) {
     if (!this.ready) return;
     const v = this.near(x);

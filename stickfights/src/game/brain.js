@@ -51,6 +51,7 @@ import * as B from './behaviours.js';
 import { learn as copLearn, considerOfficer, considerSuspect, considerWitness, metOfficer, maybeReport, lethal } from './police.js';
 import { clamp, clamp01, rand, chance, pick, sign } from '../core/util.js';
 import { IGNITE_AT, sicken } from './vitals.js';
+import { powerReflexes, powerThreat } from './powers/index.js';
 
 const SIGHT = 14;
 const BEHIND = 2.2;
@@ -68,6 +69,10 @@ const HEAR = {
   glassShatter: 14, slabFree: 12, slabBreak: 7, noosed: 9, trapdoor: 12, limbFall: 14, snapBough: 7, wireSnap: 8, freezeInPlace: 8, unfreeze: 6, wire: 6,
   // and something blowing up, further still
   explode: 60,
+  // superpowers: somebody taking off, a move, a shockwave, a round stopped dead in the air
+  powerGiven: 8, powerMove: 11, pwTakeoff: 9, pwLand: 5, shockwave: 16, skyToss: 14, skyDrop: 14, slamDown: 11, wallPin: 10,
+  wallSmash: 14, bulletStopped: 10, diveImpact: 16, megaPunch: 11, thunderClap: 20, groundPound: 16, quakeStomp: 16, blitz: 9,
+  blink: 9, lightningLine: 11, whirlwind: 11, speedDodge: 7, tkThrow: 10, tkSlam: 11, tkPush: 10, heave: 10, launched: 10,
 };
 // what counts as violence done to them, for fear and grudges
 const VIOLENT = new Set(['koMe', 'cutMe', 'stabbedMe', 'choppedMe', 'severedMe', 'shotMe', 'shotAtMe', 'aimedAtMe', 'sawStab', 'sawShoot', 'sawSever', 'sawKill', 'sawThreat', 'tasedMe', 'burnedMe', 'sawBurn']);
@@ -142,6 +147,9 @@ const REPEAT = {
   beg: 4, surrender: 4, surrenderGun: 4, comfort: 4.5, crawl: 5, flee: 3.5, pinned: 3, paralysed: 4, shot: 1.5,
   gunFear: 6, knifeFear: 6, macheteFear: 6, weaponFear: 6, gunshots: 3, sawShooting: 3, nearMiss: 2.5, hurtSmall: 2,
   heardBlast: 3, sawBlast: 3, blastHurt: 1.5, shrapnelHit: 1.5, inGas: 2.5, bombRun: 2.5, sawLiveGrenade: 2, sawFuse: 2, sawC4: 3,
+  // (seeing the impossible: said once, not every time it happens again)
+  sawFlying: 25, sawSpeedster: 16, sawTelekinesis: 12, sawShockwave: 9, sawBulletStop: 14, sawWallSmash: 14, sawGotPower: 20, sawSkyToss: 9,
+  sawSuperBlow: 7, sawSlam: 7, sawSpeedBlow: 8, sawCrush: 10, pwCarriedUp: 3, pwLifted: 3, pwDodged: 6, flyJoy: 30,
 };
 // ...and the ones that are really the same plea
 const SAID_AS = { surrender: 'beg', surrenderGun: 'beg' };
@@ -338,8 +346,11 @@ export class Brain {
       if (this.behaviour) this.clearBehaviour();
       return;
     }
+    // in the middle of a superpower's move: the move has the body; they still feel, and look
+    if (me.pmove) { this.express(dt); return; }
     this.react = Math.max(0, this.react - dt);
     this.reflexes();
+    if (me.powers) powerReflexes(this, dt);
     const g = this.glance;
     if (g && this.sb.time >= g.at) {
       // the noise behind them: they turn round, and see what made it
@@ -829,6 +840,10 @@ export class Brain {
           if (!seen) this.hearLoud(x);
         }
         break;
+      case 'powerGiven': case 'pwTakeoff': case 'powerMove': case 'shockwave': case 'skyToss': case 'skyDrop': case 'wallSmash':
+      case 'bulletStopped': case 'blitz': case 'blink': case 'lightningLine': case 'whirlwind': case 'speedDodge': case 'diveImpact':
+        this.sawPower(ev, seen, x, y, d);
+        break;
       case 'vestStop':
         if (seen && ev.who && ev.who.alive) {
           E.bump('surprise', 0.3);
@@ -1071,6 +1086,49 @@ export class Brain {
     if (!seen) { this.heard = { x, y, t: now }; this.hearLoud(x); }
     this.react = Math.max(this.react, 0.15 + (1 - T.skill) * 0.15);
     this.thinkT = 0;
+  }
+
+  /**
+   * Something nobody can do, done in front of them: somebody flying, a round
+   * stopping in the air, a person thrown across the room by a wave of a hand.
+   * They cannot believe it - and whoever is doing it is the most frightening
+   * thing they have ever seen, if it is being done to somebody.
+   */
+  sawPower(ev, seen, x, y, d) {
+    const me = this.man, E = this.emo, T = this.traits, who = ev.who;
+    if (!seen) {
+      if (ev.loud) { this.heard = { x, y, t: this.sb.time }; this.hearLoud(x); }
+      if (ev.type === 'shockwave' && d < 14) this.speak('sawShockwave', {}, 0.4, null, true);
+      return;
+    }
+    if (!who || who.removed) return;
+    E.bump('surprise', ev.type === 'powerMove' ? 0.35 : 0.45);
+    const o = ev.target && !ev.target.removed ? ev.target : null;
+    const r = this.rel(who);
+    // done to somebody: whoever can do that is to be feared (the more, the more it was done to someone they like)
+    if (o && o !== me && ev.type === 'powerMove') {
+      r.fear = clamp01(r.fear + 0.12 * (1.2 - T.bravery));
+      if (this.rel(o).like > 0.3) r.like = clamp(r.like - 0.15, -1, 1);
+    }
+    if (o === me) { r.fear = clamp01(r.fear + 0.3 * (1.2 - T.bravery)); E.bump('fear', 0.3 * (1.2 - T.bravery)); }
+    const vars = { other: who.name, victim: o ? o.name : 'them' };
+    switch (ev.type) {
+      case 'powerGiven': this.speak('sawGotPower', vars, 0.6, null, false); break;
+      case 'pwTakeoff': this.speak('sawFlying', vars, 0.6, null, true); this.note(`${who.name} just... flew. Up off the ground.`); break;
+      case 'skyToss': case 'skyDrop': this.speak('sawSkyToss', vars, 0.8, null, true); this.shaken(0.5); break;
+      case 'shockwave': this.speak('sawShockwave', vars, 0.5, null, true); break;
+      case 'wallSmash': this.speak('sawWallSmash', vars, 0.7, null, true); break;
+      case 'bulletStopped': this.speak('sawBulletStop', vars, 0.7, null, true); this.note(`The bullets stopped in the air in front of ${who.name}.`); break;
+      case 'blitz': case 'blink': case 'lightningLine': case 'whirlwind': case 'speedDodge':
+        this.speak('sawSpeedster', vars, 0.5, null, true); break;
+      case 'diveImpact': this.speak('sawShockwave', vars, 0.5, null, true); break;
+      case 'powerMove':
+        if (ev.power === 'tk' && o) { this.speak('sawTelekinesis', vars, 0.5, null, true); this.note(`${who.name} is moving ${o.name} without touching them.`); }
+        else if (ev.power === 'speed') this.speak('sawSpeedster', vars, 0.35, null, true);
+        else if (ev.power === 'flight' && who.state === 'air') this.speak('sawFlying', vars, 0.35, null, true);
+        break;
+    }
+    if (d < 9 && !this.fighting && me.ready && T.bravery < 0.5 && ev.type !== 'powerGiven' && chance(0.3)) me.perform('flinch');
   }
 
   /**
@@ -2301,7 +2359,7 @@ export class Brain {
     if (armed < 2.2 && p.guns && p.guns.some((g) => g !== p.weapon && isFirearm(g.kind) && g.ammo > 0)) armed = 2.2;
     // some of what a mod makes is just stronger than a person (and some weaker)
     const kind = p.species && p.species.power ? p.species.power : 1;
-    return p.health.overall * armed * kind * p.strength * (0.7 + skill * 0.5) * (p.carrying ? 0.7 : 1) + 0.02;
+    return p.health.overall * armed * kind * p.strength * powerThreat(p) * (0.7 + skill * 0.5) * (p.carrying ? 0.7 : 1) + 0.02;
   }
 
   /** How it would go, as they see it: 0 hopeless, 0.5 even, 1 easy. */

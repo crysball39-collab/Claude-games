@@ -39,6 +39,10 @@ texture in the game is drawn procedurally onto a canvas at load time.
 > through the head opens it, and a blast up close throws pieces of them. Bodies
 > pile on bodies and grip. Everything they say is written the way people really
 > talk.
+> Four superpowers - flight, super strength, super speed and telekinesis - are
+> given to anybody by tapping them, each with ten moves (grab somebody, fly up and
+> throw them down; pin them to a wall and punch them twice; a mega punch; a
+> ground pound; a blitz of punches too fast to see; a bullet stopped in the air).
 > Slow motion and double speed change how fast it all goes. A freeze tool stops anything dead where it is; with the world paused, the
 > hand just moves things; and a wire tool ties anything to anything (or to the
 > background) with wood or metal rope, fixed rods, pins or power cords, which take the strain

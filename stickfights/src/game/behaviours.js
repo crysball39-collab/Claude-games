@@ -6,6 +6,7 @@
    Each behaviour only uses the body's verbs (goTo, attack, pickUp, say...),
    so whatever a behaviour wants, the body still decides what is possible.
    ========================================================================== */
+import { powerFight } from './powers/index.js';
 import { clamp, rand, randInt, pick, chance, sign } from '../core/util.js';
 import { ignite, smother, warm } from './vitals.js';
 
@@ -442,6 +443,8 @@ export class Fight extends Behaviour {
     me.lookAt = o.wj.head;
     const d = Math.abs(o.pos.x - me.pos.x), dir = side(me, o);
     const gun = me.gunReady && !!me.weapon && me.weapon.ammo > 0;
+    // a superpower's move running: it has the body (the fight goes on after it)
+    if (me.pmove) return true;
 
     // they are on the floor: stand over them, maybe finish it
     if (o.lying || !o.conscious || o.state === 'thrown' || o.state === 'held') {
@@ -459,6 +462,8 @@ export class Fight extends Behaviour {
       // only the truly furious keep going once someone is down, and every blow
       // that lands takes some of the fury out of them
       const merciless = T.aggression > 0.72 && r.anger > 0.82 && !(o.brain && o.brain.begging && T.empathy > 0.4);
+      // (with a power, the merciless have worse things to do to somebody already down)
+      if (merciless && me.powers && powerFight(this, dt, o, d, dir, r)) return true;
       if (merciless && o.lying && me.strikes().includes('stomp')) {
         const spot = o.wj.hip.x - dir * 0.48 * me.scale;
         if (arrive(me, spot, 'walk', 0.1, { jump: false })) {
@@ -488,6 +493,11 @@ export class Fight extends Behaviour {
     // says whether it took care of things this step (true or false), or leaves it (undefined)
     if (me.species && me.species.fight) {
       const own = me.species.fight(this, dt, o, d, dir, r);
+      if (own !== undefined) return own;
+    }
+    // ...and so does somebody with a superpower, now and then
+    if (me.powers) {
+      const own = powerFight(this, dt, o, d, dir, r);
       if (own !== undefined) return own;
     }
 

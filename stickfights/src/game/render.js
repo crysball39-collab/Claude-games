@@ -117,6 +117,8 @@ export class Renderer {
     this.drawCasings(ctx, v);
 
     const order = [...sb.people].sort((a, b) => this.layer(a, ui) - this.layer(b, ui));
+    // what goes behind the people: a speedster's afterimages
+    for (const e of sb.effects) if (e.drawUnder) e.drawUnder(ctx);
     for (const p of order) {
       if (p.box.maxX < v.minX || p.box.minX > v.maxX) continue;
       this.drawPerson(ctx, p);

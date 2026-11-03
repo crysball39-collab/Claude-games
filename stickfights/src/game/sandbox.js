@@ -30,6 +30,7 @@ import { Plant } from './trees.js';
 import { Gallows } from './gallows.js';
 import { makePerson } from './people.js';
 import { launchGas } from './gas.js';
+import { stopsRound, roundStopped, endMove } from './powers/index.js';
 import { clamp, rand, chance } from '../core/util.js';
 
 export const STEP = 1 / 120;
@@ -77,6 +78,8 @@ function pileOnBones(A, B) {
       if (W <= 0) continue;
       const nx = dx / d, ny = dy / d, C = (min - d) * 0.7 / W;
       pa.x += nx * C * ia; pa.y += ny * C * ia;
+      // (lying on top of another body is lying on something: it comes to rest there, and gets up off it)
+      if (ny > 0.5) pa.ground = true;
       q1.x -= nx * C * (1 - t) * i1; q1.y -= ny * C * (1 - t) * i1;
       q2.x -= nx * C * t * i2; q2.y -= ny * C * t * i2;
       // (and it grips: a body does not slide off another as if they were both ice)
@@ -91,6 +94,9 @@ function pileOnBones(A, B) {
   }
   return touched;
 }
+
+/** `q` just threw (or launched) `p`: for a moment `p` goes past them, not into them. */
+const justThrew = (sb, q, p) => p.thrownBy === q && sb.time - (p.thrownAt ?? -9) < 0.6;
 
 /**
  * Where a ray from (px, py) along the unit (dx, dy) goes into a box body,
@@ -467,6 +473,8 @@ export class Sandbox {
     // whatever was tied to it is let go
     for (const w of this.wiresOn(thing)) w.snap('removed');
     if (thing.kind === 'stickman') {
+      // (a superpower's move ends: whatever it had hold of, thing or person, is let go)
+      if (thing.pmove) endMove(thing, 'removed');
       thing.dropCarried();
       // whoever they had hold of (a mod's thing can hold people) is let go
       for (const p of this.people) if (p.heldBy === thing && p.state === 'held') p.release();
@@ -742,6 +750,7 @@ export class Sandbox {
             const k = (min - d) / (d * w) * 0.8;
             pa.x -= dx * k * ia; pa.y -= dy * k * ia;
             pb.x += dx * k * ib; pb.y += dy * k * ib;
+            if (dy > d * 0.5) pb.ground = true; else if (-dy > d * 0.5) pa.ground = true;
             // (the same grip, joint on joint)
             const tx = -dy / d, ty = dx / d;
             const F = (((pb.x - pb.px) - (pa.x - pa.px)) * tx + ((pb.y - pb.py) - (pa.y - pa.py)) * ty) * PILE_GRIP / w;
@@ -770,8 +779,8 @@ export class Sandbox {
       const cx = (c.x + h.x) / 2, cy = (c.y + h.y) / 2;
       for (const q of this.people) {
         if (q === p || q.removed || q.state === 'held' || q.lying || q.rag) continue;
-        // (whoever has hold of them is not hit by them: they are in their hand)
-        if (p.heldBy === q || q.heldBy === p) continue;
+        // (whoever has hold of them is not hit by them: they are in their hand - or only just out of it)
+        if (p.heldBy === q || q.heldBy === p || justThrew(this, q, p)) continue;
         if (cx < q.box.minX - 0.25 || cx > q.box.maxX + 0.25 || cy < q.box.minY - 0.2 || cy > q.box.maxY + 0.2) continue;
         if (!this.cooled(p, q)) continue;
         const hit = q.nearestPart(cx, cy);
@@ -795,7 +804,7 @@ export class Sandbox {
       const bb = rag.aabb(0.05);
       for (const q of this.people) {
         if (q === p || q.removed || q.rag || q.lying || q.state === 'held') continue;
-        if (p.heldBy === q || q.heldBy === p) continue;
+        if (p.heldBy === q || q.heldBy === p || justThrew(this, q, p)) continue;
         if (bb.maxX < q.box.minX || bb.minX > q.box.maxX || bb.maxY < q.box.minY || bb.minY > q.box.maxY) continue;
         let best = null;
         for (let i = 0; i < rag.p.length; i++) {
@@ -1037,6 +1046,11 @@ export class Sandbox {
         if (q.removed || hit.has(q) || passed.has(q) || (q === by && !ricochets)) continue;
         const h = q.rayHit(px, py, dx, dy, range);
         if (h && (!best || h.t < best.t)) best = { t: h.t, what: 'person', who: q, hit: h };
+        // a telekinetic with their shield up: the round stops short of them, in the air
+        if (q.powers && q !== by) {
+          const ts = stopsRound(q, px, py, dx, dy, best ? best.t : range);
+          if (ts !== null && (!best || ts < best.t)) best = { t: ts, what: 'stopped', who: q };
+        }
       }
       // glass (a lightbulb, a floodlight's lens) and explosives in the way (power.js, explosives.js)
       for (const t of this.items) {
@@ -1054,6 +1068,11 @@ export class Sandbox {
       range -= best.t;
       px = hx; py = hy;
 
+      if (best.what === 'stopped') {
+        roundStopped(best.who, hx, hy, dx, dy);
+        energy = 0;
+        break;
+      }
       if (best.what === 'person') {
         const q = best.who;
         // the world is a little deeper than the picture shows: anyone it was not

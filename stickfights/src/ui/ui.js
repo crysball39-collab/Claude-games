@@ -51,7 +51,8 @@ import { setFrozen, frozenSaid, freezable } from '../game/freeze.js';
 import { POLICE_UNIFORM } from '../game/render.js';
 import { spawnOfficer } from '../game/police.js';
 import { solve, makeJoints, P, DIM } from '../game/skeleton.js';
-import { STAND } from '../game/clips.js';
+import { STAND, CLIPS } from '../game/clips.js';
+import { isPower, POWERS, togglePower, canHavePowers, powerAbilities, powerChips, POWER_ROWS } from '../game/powers/index.js';
 import { describeTraits } from '../game/people.js';
 import { relCategory } from '../game/brain.js';
 import { STYLE } from '../game/animator.js';
@@ -71,6 +72,11 @@ const findAny = (k) => findSpawnable(k) || findGear(k);
 
 const KINDS = {
   stickman: { name: 'Stickman', short: 'STICKMAN', plural: 'stickmen', limit: 'people' },
+  // superpowers: not placed in the world, but given to whoever is tapped
+  flight: { name: 'Flight', short: 'FLIGHT', plural: 'powers', power: true, proper: true, given: 'can fly now', taken: "can't fly any more" },
+  strength: { name: 'Super Strength', short: 'STRENGTH', plural: 'powers', power: true, proper: true, given: 'has super strength now', taken: 'is only as strong as anybody again' },
+  speed: { name: 'Super Speed', short: 'SPEED', plural: 'powers', power: true, proper: true, given: 'has super speed now', taken: 'is back to normal speed' },
+  tk: { name: 'Telekinesis', short: 'TELEKINESIS', plural: 'powers', power: true, proper: true, given: 'is telekinetic now', taken: "can't move things with their mind any more" },
   knuckles: { name: 'Brass Knuckles', short: 'KNUCKLES', plural: 'brass knuckles', limit: 'knuckles' },
   knife: { name: 'Combat Knife', short: 'KNIFE', plural: 'knives', limit: 'knives' },
   machete: { name: 'Machete', short: 'MACHETE', plural: 'machetes', limit: 'machetes' },
@@ -112,7 +118,7 @@ const ARM_NAMES = {
 // a padlock: the shackle drops into the body when it is locked (CSS moves it)
 const LOCK_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path class="shackle" d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/><rect x="5" y="11" width="14" height="10" rx="2.5" fill="currentColor"/></svg>';
 // the rows of buttons a mod's people have in the inspector
-const ABILITY_ROWS = { hands: 'Hands', do: 'Do', mind: 'Mind' };
+const ABILITY_ROWS = { hands: 'Hands', do: 'Do', mind: 'Mind', ...POWER_ROWS };
 
 const OPTION_NAMES = {
   fight: (t) => 'Fight ' + t.name,
@@ -242,6 +248,28 @@ export class UI {
     if (this.cam.follow === from) this.cam.follow = to;
   }
 
+  /** A superpower card armed, and somebody tapped: they have it now (or, if they had it, not any more). */
+  powerTap(x, y, thing) {
+    const k = this.spawnKind, info = KINDS[k];
+    let p = thing && thing.kind === 'stickman' ? thing : null;
+    if (!p) {
+      // (near enough is good enough: a finger is not a pin)
+      let bd = this.tol * 2;
+      for (const q of this.sb.people) {
+        if (q.removed) continue;
+        const d = Math.hypot(q.wj.chest.x - x, q.wj.chest.y - y);
+        if (d < bd) { bd = d; p = q; }
+      }
+    }
+    if (!p) { this.toast(`Tap a stickman to give them ${info.name.toLowerCase()}`); return; }
+    if (!canHavePowers(p)) { this.toast(`${p.name} can't be given superpowers`); return; }
+    if (p.dead) { this.toast(`${p.name} is dead`); return; }
+    const on = togglePower(p, k);
+    this.toast(`${p.name} ${on ? info.given : info.taken}`);
+    if (this.selected === p) { this.showTraits(p); this.abil = null; }
+    else this.select(p);
+  }
+
   /** What the HUD needs to know about a kind of thing: the game's own, or one a mod adds. */
   kindInfo(k) {
     return KINDS[k] || findAny(k) || KINDS.stickman;
@@ -285,6 +313,7 @@ export class UI {
       return;
     }
     if (this.tool === 'spawn') {
+      if (isPower(this.spawnKind)) { this.powerTap(w.x, w.y, thing); return; }
       if (thing && thing.kind === 'stickman') { this.select(thing); return; }
       this.spawnAt(w.x, w.y);
       return;
@@ -551,7 +580,7 @@ export class UI {
     this.$('wirebar').classList.toggle('hidden', t !== 'wire');
     this.$('blastbar').classList.toggle('hidden', t !== 'explode');
     this.drawIcon(document.querySelector('#tool-spawn .tool-icon'), this.spawnKind);
-    if (t === 'spawn') this.hint(`Tap the world to place ${placeName(this.kindInfo(this.spawnKind))}`);
+    if (t === 'spawn') this.hint(spawnHint(this.spawnKind, this.kindInfo(this.spawnKind)));
     else if (t === 'erase') this.hint('Tap something to remove it');
     else if (t === 'freeze') this.hint('Tap something to freeze it in place - tap it again to let it go');
     else if (t === 'wire') this.wireHint();
@@ -650,7 +679,7 @@ export class UI {
     this.$('tool-spawn-name').textContent = this.kindInfo(k).short;
     const cv = document.querySelector('#tool-spawn .tool-icon');
     this.drawIcon(cv, k);
-    if (this.tool === 'spawn') this.hint(`Tap the world to place ${placeName(this.kindInfo(k))}`);
+    if (this.tool === 'spawn') this.hint(spawnHint(k, this.kindInfo(k)));
   }
 
   /** A section of the spawn menu for each installed mod, with a card for each thing it adds. */
@@ -741,6 +770,7 @@ export class UI {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       return;
     }
+    if (POWERS[kind]) { drawPowerIcon(ctx, kind, w, h, card, cv); return; }
     if (kind === 'stickman') {
       const j = solve(STAND, 1, makeJoints());
       // the whole body on a card; from the hips up on the little tool button,
@@ -1147,6 +1177,13 @@ export class UI {
       const c = document.createElement('span');
       c.className = 'chip species';
       c.textContent = p.species.label;
+      chips.appendChild(c);
+    }
+    // superpowers
+    for (const t of powerChips(p)) {
+      const c = document.createElement('span');
+      c.className = 'chip power';
+      c.textContent = t;
       chips.appendChild(c);
     }
     for (const t of describeTraits(p.brain ? p.brain.traits : p.traits || {})) {
@@ -1565,7 +1602,9 @@ export class UI {
    */
   updateAbilities(p) {
     const wrap = this.$('ins-abil-wrap');
-    const list = p.species && p.species.abilities ? p.species.abilities(p) : null;
+    const own = p.species && p.species.abilities ? p.species.abilities(p) : null;
+    const pw = p.powers ? powerAbilities(p) : [];
+    const list = pw.length ? [...(own || []), ...pw] : own;
     wrap.classList.toggle('hidden', !list || !list.length);
     if (!list || !list.length) { this.abil = null; return; }
     const ids = list.map((a) => a.id).join(',');
@@ -2039,7 +2078,7 @@ export class UI {
   /** What the renderer needs to know from the HUD this frame. */
   drawState() {
     let ghost = null;
-    if (this.tool === 'spawn' && this.hover && !this.hand.active) {
+    if (this.tool === 'spawn' && this.hover && !this.hand.active && !isPower(this.spawnKind)) {
       const w = this.world(this.hover.x, this.hover.y);
       const k = this.spawnKind;
       const mod = KINDS[k] ? null : findAny(k);
@@ -2073,6 +2112,51 @@ export class UI {
 }
 
 /** "a Crate" - or just "Uzi", for somebody with a name of their own. */
+/** What the spawn tool says it will do with a tap: place something, or (a power) give it to somebody. */
+function spawnHint(k, info) {
+  return isPower(k) ? `Tap a stickman to give them ${info.name.toLowerCase()} (tap them again to take it away)` : `Tap the world to place ${placeName(info)}`;
+}
+
+/** A power's card: a stickman doing it (flying, punching, running, lifting), and a touch of what it looks like. */
+function drawPowerIcon(ctx, kind, w, h, card, cv) {
+  const POSE = { flight: 'flyForward', strength: 'megaPunch', speed: 'speedDash', tk: 'tkLift' }[kind];
+  const pose = CLIPS[POSE].frames[0].p;
+  const j = solve(pose, 1, makeJoints());
+  // fitted to the card, whatever shape the pose is: lying flat out flying, or reaching up
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const k of Object.keys(j)) {
+    const p = j[k];
+    if (!p || typeof p.x !== 'number') continue;
+    const r = k === 'head' ? DIM.headR : 0.04;
+    x0 = Math.min(x0, p.x - r); x1 = Math.max(x1, p.x + r); y0 = Math.min(y0, p.y - r); y1 = Math.max(y1, p.y + r);
+  }
+  const room = card ? { w: w * 0.8, h: h * 0.7, cy: h * 0.46 } : { w: w * 0.9, h: h * 0.9, cy: h / 2 };
+  const s = Math.min(room.w / (x1 - x0), room.h / (y1 - y0));
+  ctx.setTransform(s, 0, 0, -s, w / 2 - ((x0 + x1) / 2) * s, room.cy + ((y0 + y1) / 2) * s);
+  const ink = card ? INK : getComputedStyle(cv).color || INK;
+  // what goes with it: speed lines, a glow, a ring of air
+  ctx.lineCap = 'round';
+  const hd = j.handA;
+  if (kind === 'speed' || kind === 'flight') {
+    ctx.strokeStyle = kind === 'speed' ? 'rgba(255, 200, 60, 0.95)' : 'rgba(255, 255, 255, 0.9)';
+    ctx.lineWidth = 0.05;
+    const yy = [y0 + (y1 - y0) * 0.3, y0 + (y1 - y0) * 0.55, y0 + (y1 - y0) * 0.8];
+    yy.forEach((y, i) => { ctx.beginPath(); ctx.moveTo(x0 + 0.05, y); ctx.lineTo(x0 - 0.35 - i * 0.12, y); ctx.stroke(); });
+  } else if (kind === 'tk') {
+    const g = ctx.createRadialGradient(hd.x, hd.y + 0.3, 0, hd.x, hd.y + 0.3, 0.4);
+    g.addColorStop(0, 'rgba(200, 140, 255, 0.95)');
+    g.addColorStop(1, 'rgba(140, 60, 255, 0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(hd.x, hd.y + 0.3, 0.4, 0, Math.PI * 2); ctx.fill();
+  } else if (kind === 'strength') {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.lineWidth = 0.04;
+    for (const r of [0.14, 0.26]) { ctx.beginPath(); ctx.arc(hd.x + 0.04, hd.y, r, -1, 1); ctx.stroke(); }
+  }
+  drawStickman(ctx, j, { scale: 1, facing: 1, hair: 'tuft', face: { eyes: 'normal', brow: kind === 'strength' ? -0.6 : 0, mouth: 0.3, open: 0 }, ink, far: ink });
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+
 function placeName(info) {
   return info.proper ? info.name : (info.an ? 'an ' : 'a ') + info.name;
 }

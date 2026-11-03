@@ -132,10 +132,10 @@ check('PLAY opens the game, the HUD and the spawn menu', await ev(() =>
   !document.querySelector('#hud').classList.contains('hidden') && document.querySelector('#drawer').classList.contains('open')));
 check('the sandbox starts empty', await ev(() => window.__sf.sb.people.length === 0 && window.__sf.sb.crates.length === 0));
 const cards = await ev(() => [...document.querySelectorAll('.card')].map((c) => c.dataset.spawn));
-const BASE = ['stickman', 'officer', 'knuckles', 'knife', 'machete', 'crowbar', 'glock', 'm1911', 'ak47', 'm4a1', 'ar15', 'mossberg', 'taser', 'gasRifle', 'crate', 'vest',
+const BASE = ['stickman', 'officer', 'flight', 'strength', 'speed', 'tk', 'knuckles', 'knife', 'machete', 'crowbar', 'glock', 'm1911', 'ak47', 'm4a1', 'ar15', 'mossberg', 'taser', 'gasRifle', 'crate', 'vest',
   'helmet', 'ammo9', 'ammo45', 'ammo762', 'ammo556', 'ammo12', 'woodWall', 'metalWall', 'glassWall', 'beamSmall', 'beamLarge', 'gallows', 'tree', 'bush',
   'grenade', 'c4', 'tnt', 'missile', 'generator', 'lightbulb', 'floodlight', 'voltmeter'];
-check('there are thirty-eight things to spawn: a Stickman, an Officer, Brass Knuckles, a Combat Knife, a Machete, a Crowbar, a Glock-19, an M1911, an AK-47, an M4A1, an AR-15, a Mossberg 500, a Taser, a Gas Rifle, a Crate, a Light Vest, a Light Tactical Helmet, five kinds of ammo, three walls, two metal beams, a Gallows, a Tree, a Bush, a Grenade, C4, TNT, a Missile, a Generator, a Lightbulb, a Floodlight and a Volt Meter',
+check('there are forty-two things to spawn: a Stickman, an Officer, four superpowers (Flight, Super Strength, Super Speed, Telekinesis), Brass Knuckles, a Combat Knife, a Machete, a Crowbar, a Glock-19, an M1911, an AK-47, an M4A1, an AR-15, a Mossberg 500, a Taser, a Gas Rifle, a Crate, a Light Vest, a Light Tactical Helmet, five kinds of ammo, three walls, two metal beams, a Gallows, a Tree, a Bush, a Grenade, C4, TNT, a Missile, a Generator, a Lightbulb, a Floodlight and a Volt Meter',
   cards.length === BASE.length && BASE.every((k) => cards.includes(k)), cards.join(', '));
 check('the cards are named for what they spawn', await ev(() =>
   ['Stickman', 'Brass Knuckles', 'Combat Knife', 'Machete', 'Glock-19', 'Crate'].every((n) => [...document.querySelectorAll('.card b')].some((b) => b.textContent === n))));
@@ -4823,6 +4823,313 @@ const words = await ev(() => {
 });
 check('all the lines rewritten to sound like people: over sixteen hundred, every blank in them one that gets filled in',
   words.n >= 1600 && words.kinds >= 260 && !words.bad.length, `${words.n} lines in ${words.kinds} situations${words.bad.length ? '; ' + words.bad.join(' | ') : ''}`);
+
+/* ------------------------------------ superpowers ------------------------------------ */
+
+await fresh();
+const pwCards = await ev(() => {
+  const cats = [...document.querySelectorAll('#drawer .cat')].map((c) => c.textContent.trim());
+  const i = cats.indexOf('SUPERPOWERS');
+  const after = [];
+  if (i >= 0) {
+    let el = document.querySelectorAll('#drawer .cat')[i].nextElementSibling;
+    while (el && !el.classList.contains('cat')) { if (el.dataset.spawn) after.push(el.dataset.spawn); el = el.nextElementSibling; }
+  }
+  return { section: i >= 0, cards: after, names: after.map((k) => document.querySelector(`[data-spawn="${k}"] b`).textContent) };
+});
+check('the spawn menu has a SUPERPOWERS section: Flight, Super Strength, Super Speed and Telekinesis',
+  pwCards.section && pwCards.cards.join() === 'flight,strength,speed,tk' && pwCards.names.join() === 'Flight,Super Strength,Super Speed,Telekinesis', JSON.stringify(pwCards));
+
+// a power card, then a tap on somebody: they have it (and tapped again, they do not)
+await ev(() => {
+  const sb = window.__sf.sb;
+  window.__ana = sb.spawnStickman(-1, null, { name: 'Ana' });
+  window.__ben = sb.spawnStickman(2, null, { name: 'Ben' });
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  const cam = window.__sf.cam;
+  cam.follow = null; cam.glide = null; cam.x = 0.5; cam.y = 1.4; cam.ppm = 110; cam.clamp();
+});
+await ev(() => { window.__sf.ui.toggleDrawer(true); document.querySelector('[data-spawn="flight"]').scrollIntoView({ block: 'center' }); });
+await page.waitForTimeout(450);
+await page.tap('[data-spawn="flight"]');
+await page.waitForTimeout(450);
+const anaAt = await ev(() => { const c = window.__ana.wj.chest; return window.__sf.cam.toScreen(c.x, c.y); });
+await page.touchscreen.tap(anaAt.x, anaAt.y);
+await page.waitForTimeout(350);
+const given = await ev(() => ({
+  has: window.__ana.powers ? [...window.__ana.powers.keys()] : [], toast: document.getElementById('toast').textContent,
+  chips: [...document.querySelectorAll('#ins-traits .chip')].map((c) => c.textContent),
+  rows: [...document.querySelectorAll('#ins-abilities .abil-row')].map((r) => [r.querySelector('.abil-title').textContent, r.querySelectorAll('.abil-btn').length]),
+}));
+check('picking a power and tapping a stickman gives it to them: "Ana can fly now", a Can fly chip, and a Flight row of moves in the inspector',
+  given.has.join() === 'flight' && given.toast === 'Ana can fly now' && given.chips.includes('Can fly') && given.rows.some(([t, n]) => t === 'Flight' && n === 11),
+  JSON.stringify(given));
+await shot('power-given');
+const taken = await ev(() => {
+  const ui = window.__sf.ui, c = window.__ana.wj.chest, q = window.__sf.cam.toScreen(c.x, c.y);
+  ui.tap(q.x, q.y);
+  return { has: window.__ana.powers ? [...window.__ana.powers.keys()] : [], toast: document.getElementById('toast').textContent };
+});
+check('...and tapping them again takes it away', !taken.has.length && taken.toast === "Ana can't fly any more", JSON.stringify(taken));
+await ev(() => { window.__sf.ui.select(null); window.__sf.ui.setTool('hand'); });
+
+const counts = await ev(() => {
+  const P = window.__sf.powers.POWERS;
+  return Object.fromEntries(Object.entries(P).map(([k, v]) => [k, Object.keys(v.moves).length]));
+});
+check('each of the four powers comes with ten moves of its own', Object.values(counts).length === 4 && Object.values(counts).every((n) => n === 10), JSON.stringify(counts));
+
+// every move, from start to finish, on somebody (a wall near, a crate and a gun about, a friend down for the rescues)
+await fresh();
+const everyMove = await ev(() => {
+  const { sb, ui, powers } = window.__sf;
+  const out = [];
+  for (const pid of powers.POWER_IDS) {
+    for (const mid of Object.keys(powers.POWERS[pid].moves)) {
+      sb.clear();
+      const A = sb.spawnStickman(-2, null, { name: 'Ace' }), B = sb.spawnStickman(1.2, null, { name: 'Bo' });
+      A.brain = null; B.brain = null;
+      ui.setSpawnKind('woodWall'); ui.spawnAt(4.5, 0); ui.setSpawnKind('crate'); ui.spawnAt(-3.2, 0.5);
+      ui.setSpawnKind('glock'); ui.spawnAt(-1.2, 0.3); ui.setSpawnKind('stickman');
+      for (let i = 0; i < 60; i++) sb.step(1 / 120);
+      if (mid === 'snatch' || mid === 'disarm') { const g = sb.guns[0]; g.wear(B); B.weapon = g; }
+      if (mid === 'airlift' || mid === 'rescueDash') { B.knockDown(1, 1); for (let i = 0; i < 60; i++) sb.step(1 / 120); }
+      powers.givePower(A, pid);
+      const ok = powers.startMove(A, pid, mid, B, { told: true });
+      let ended = false, bad = false;
+      for (let i = 0; i < 120 * 12 && !ended; i++) {
+        sb.step(1 / 120);
+        if (!A.pmove) ended = true;
+        for (const p of sb.people) if (!Number.isFinite(p.pos.x) || !Number.isFinite(p.pos.y)) bad = true;
+      }
+      out.push({ m: pid + ':' + mid, ok, ended, bad, held: B.state === 'held' && !B.removed });
+    }
+  }
+  return { n: out.length, failed: out.filter((x) => !x.ok || !x.ended || x.bad || x.held).map((x) => x.m) };
+});
+check('all forty moves start, run and finish - nobody left held, nothing turned into NaN', everyMove.n === 40 && !everyMove.failed.length, JSON.stringify(everyMove));
+
+// flight: grab them, go up, throw them down
+await fresh();
+const skyToss = await ev(() => {
+  const { sb, powers } = window.__sf;
+  const A = sb.spawnStickman(-2, null, { name: 'Ace' }), B = sb.spawnStickman(1.2, null, { name: 'Bo' });
+  A.brain = null; B.brain = null;
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  powers.givePower(A, 'flight');
+  powers.startMove(A, 'flight', 'skyToss', B, { told: true });
+  let top = 0, flewTo = 0, phases = new Set(), heldUp = 0;
+  for (let i = 0; i < 120 * 6; i++) {
+    sb.step(1 / 120);
+    if (A.pmove) phases.add(A.pmove.phase);
+    top = Math.max(top, B.wj.chest.y); flewTo = Math.max(flewTo, A.pos.y);
+    if (B.state === 'held' && B.heldBy === A && B.wj.chest.y > 3) heldUp++;
+  }
+  return { phases: [...phases].join('>'), top: +top.toFixed(1), flewTo: +flewTo.toFixed(1), heldUp: heldUp > 0, hp: +B.health.overall.toFixed(2), dead: B.dead, landed: A.state };
+});
+check('FLIGHT, Sky Toss: they take hold, fly straight up with them, and throw them down at the ground - which nobody walks away from easily',
+  skyToss.phases.includes('rise') && skyToss.heldUp && skyToss.top > 6 && skyToss.flewTo > 5 && (skyToss.dead || skyToss.hp < 0.6) && skyToss.landed === 'stand', JSON.stringify(skyToss));
+await fresh();
+const wallPin = await ev(() => {
+  const { sb, ui, powers } = window.__sf;
+  const A = sb.spawnStickman(-2, null, { name: 'Ace' }), B = sb.spawnStickman(1.2, null, { name: 'Bo' });
+  A.brain = null; B.brain = null;
+  ui.setSpawnKind('woodWall'); const w = ui.spawnAt(4.5, 0); ui.setSpawnKind('stickman');
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  powers.givePower(A, 'flight');
+  let punches = 0, pinned = false;
+  sb.on('hit', (e) => { if (e.who === B && e.by === A && e.weapon === 'superBlow') punches++; });
+  sb.on('wallPin', (e) => { if (e.who === A) pinned = true; });
+  powers.startMove(A, 'flight', 'wallPin', B, { told: true });
+  let atWall = 1e9;
+  for (let i = 0; i < 120 * 6; i++) { sb.step(1 / 120); if (B.state === 'held') atWall = Math.min(atWall, Math.abs(B.wj.chest.x - 4.5)); }
+  return { pinned, punches, atWall: +atWall.toFixed(2), hp: +B.health.overall.toFixed(2) };
+});
+check('...Wall Pin: flown into the nearest wall, pinned against it, and punched twice', wallPin.pinned && wallPin.punches >= 2 && wallPin.atWall < 0.6 && wallPin.hp < 1, JSON.stringify(wallPin));
+await fresh();
+const kickSlam = await ev(() => {
+  const { sb, powers } = window.__sf;
+  const A = sb.spawnStickman(-1, null, { name: 'Ace' }), B = sb.spawnStickman(1.2, null, { name: 'Bo' });
+  A.brain = null; B.brain = null;
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  powers.givePower(A, 'flight');
+  powers.startMove(A, 'flight', 'kickSlam', B, { told: true });
+  let top = 0, slam = false, phases = new Set();
+  sb.on('slamDown', (e) => { if (e.who === A) slam = true; });
+  for (let i = 0; i < 120 * 5; i++) { sb.step(1 / 120); top = Math.max(top, B.wj.chest.y); if (A.pmove) phases.add(A.pmove.phase); }
+  return { top: +top.toFixed(1), slam, phases: [...phases].join('>'), hp: +B.health.overall.toFixed(2) };
+});
+check('...Kick & Slam: a kick that sends them up, and the flier up after them to slam them back down', kickSlam.top > 2.5 && kickSlam.slam && kickSlam.phases.includes('chase'), JSON.stringify(kickSlam));
+await fresh();
+const flew = await ev(() => {
+  const { sb, powers } = window.__sf;
+  const A = sb.spawnStickman(0, null, { name: 'Ace' });
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  powers.givePower(A, 'flight');
+  const fly = powers.powerAbilities(A).find((a) => a.id === 'flight:fly');
+  fly.pick();
+  let top = 0;
+  for (let i = 0; i < 120 * 2; i++) { sb.step(1 / 120); top = Math.max(top, A.pos.y); }
+  const up = A.state === 'air';
+  powers.powerAbilities(A).find((a) => a.id === 'flight:fly').pick();
+  for (let i = 0; i < 120 * 3; i++) sb.step(1 / 120);
+  return { up, top: +top.toFixed(2), down: A.state, clip: A.anim.baseName };
+});
+check('...told to Fly, they rise and hang in the air; told to Land, they come down onto their feet', flew.up && flew.top > 1 && flew.down === 'stand', JSON.stringify(flew));
+
+// super strength
+await fresh();
+const strong = await ev(() => {
+  const { sb, ui, powers } = window.__sf;
+  const A = sb.spawnStickman(-2, null, { name: 'Ace' }), B = sb.spawnStickman(1.2, null, { name: 'Bo' });
+  const C = sb.spawnStickman(-0.5, null, { name: 'Cy' }), D = sb.spawnStickman(-3.4, null, { name: 'Di' });
+  for (const p of [A, B, C, D]) p.brain = null;
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  const base = A.strength;
+  powers.givePower(A, 'strength');
+  const k = A.strength / base;
+  powers.startMove(A, 'strength', 'groundPound', null, { told: true });
+  for (let i = 0; i < 120 * 0.8; i++) sb.step(1 / 120);
+  const over = [C, D].filter((p) => p.state !== 'stand').length;
+  for (let i = 0; i < 120 * 3; i++) sb.step(1 / 120);
+  for (const p of [B, C, D]) sb.remove(p);
+  const E = sb.spawnStickman(A.pos.x + 2.5, null, { name: 'Ed' });
+  E.brain = null;
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  const x0 = E.pos.x;
+  powers.startMove(A, 'strength', 'megaPunch', E, { told: true });
+  let far = 0;
+  for (let i = 0; i < 120 * 4; i++) { sb.step(1 / 120); far = Math.max(far, Math.abs(E.pos.x - x0)); }
+  return { k: +k.toFixed(1), over, far: +far.toFixed(1) };
+});
+check('SUPER STRENGTH: three times as strong; a Ground Pound puts everybody near on the floor; a Mega Punch sends them flying across the room',
+  strong.k > 3 && strong.over === 2 && strong.far > 6, JSON.stringify(strong));
+
+// super speed
+await fresh();
+const fast = await ev(() => {
+  const { sb, powers } = window.__sf;
+  const A = sb.spawnStickman(-2, null, { name: 'Ace' }), B = sb.spawnStickman(3, null, { name: 'Bo' });
+  A.brain = null; B.brain = null;
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  const run0 = A.maxSpeed('run');
+  powers.givePower(A, 'speed');
+  const run1 = A.maxSpeed('run');
+  let hits = 0;
+  sb.on('hit', (e) => { if (e.who === B && e.by === A) hits++; });
+  powers.startMove(A, 'speed', 'blitz', B, { told: true });
+  let t = 0, ghosts = 0;
+  for (let i = 0; i < 120 * 3 && (A.pmove || t === 0); i++) { sb.step(1 / 120); t += 1 / 120; ghosts = Math.max(ghosts, sb._pwGhosts ? sb._pwGhosts.list.length : 0); }
+  return { k: +(run1 / run0).toFixed(1), hits, t: +t.toFixed(2), ghosts };
+});
+check('SUPER SPEED: they run three times as fast, and a Blitz lands a storm of punches in about a second, afterimages behind them',
+  fast.k >= 3 && fast.hits >= 8 && fast.t < 2.2 && fast.ghosts > 0, JSON.stringify(fast));
+await fresh();
+const dodged = await ev(() => {
+  const { sb, powers } = window.__sf;
+  const A = sb.spawnStickman(0, null, { name: 'Ace' }), B = sb.spawnStickman(0.8, null, { name: 'Bo' });
+  A.brain = null;
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  powers.givePower(A, 'speed');
+  let dodges = 0, landed = 0;
+  sb.on('speedDodge', (e) => { if (e.who === A) dodges++; });
+  // a dozen blows that would land, straight at them
+  for (let k = 0; k < 12; k++) {
+    const r = A.takeHit({ by: B, part: 'head', x: A.wj.head.x, y: A.wj.head.y, dir: -1, power: 1, kind: 'punch' });
+    if (r) landed++;
+    for (let i = 0; i < 180; i++) sb.step(1 / 120);
+  }
+  return { dodges, landed };
+});
+check('...and a blow they see coming, they are often not there for: a blink to one side', dodged.dodges >= 3 && dodged.landed < 12, JSON.stringify(dodged));
+
+// telekinesis
+await fresh();
+const tk = await ev(() => {
+  const { sb, powers } = window.__sf;
+  const A = sb.spawnStickman(-2, null, { name: 'Ace' }), B = sb.spawnStickman(2.5, null, { name: 'Bo' }), G = sb.spawnStickman(7, null, { name: 'Gun' });
+  A.brain = null; B.brain = null; G.brain = null;
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  powers.givePower(A, 'tk');
+  const y0 = B.wj.chest.y;
+  powers.startMove(A, 'tk', 'lift', B, { told: true });
+  let top = 0, gap = 99;
+  for (let i = 0; i < 120 * 1.5; i++) { sb.step(1 / 120); top = Math.max(top, B.wj.chest.y); gap = Math.min(gap, Math.abs(B.wj.chest.x - A.wj.handA.x)); }
+  for (let i = 0; i < 120 * 3; i++) sb.step(1 / 120);
+  // a gun in somebody's hand, pulled across to theirs
+  sb.spawnGun(7, 0.3, 0);
+  const g = sb.guns[0]; g.wear(G); G.weapon = g;
+  powers.startMove(A, 'tk', 'disarm', G, { told: true });
+  for (let i = 0; i < 120 * 2; i++) sb.step(1 / 120);
+  const took = A.weapon === g;
+  // and with the shield up, rounds fired at them stop in the air
+  powers.startMove(A, 'tk', 'bulletStop', null, { told: true });
+  let stopped = 0, hit = 0;
+  sb.on('bulletStopped', (e) => { if (e.who === A) stopped++; });
+  sb.on('hit', (e) => { if (e.who === A && e.weapon === 'bullet') hit++; });
+  for (let k = 0; k < 3; k++) { sb.shoot(G, 7, A.wj.chest.y, Math.PI, { energy: 1 }); for (let i = 0; i < 30; i++) sb.step(1 / 120); }
+  return { lifted: +(top - y0).toFixed(1), gap: +gap.toFixed(1), took, stopped, hit };
+});
+check('TELEKINESIS: Lift raises somebody off the ground from metres away, Disarm pulls the gun out of a hand and into theirs, Bullet Stop stops rounds in the air',
+  tk.lifted > 1.4 && tk.gap > 2.5 && tk.took && tk.stopped === 3 && !tk.hit, JSON.stringify(tk));
+await sim(0.4);
+await shot('power-tk');
+
+// on their own: somebody with a power, in a fight, uses it
+await fresh();
+const aiFight = await ev(() => {
+  const { sb, powers } = window.__sf;
+  const out = {};
+  let cur = null;
+  sb.on('powerMove', (e) => { if (cur && e.who === cur.who) cur.moves.add(e.move); });
+  for (const pid of powers.POWER_IDS) {
+    sb.clear();
+    const A = sb.spawnStickman(0, null, { name: 'Max', traits: { aggression: 0.9, temper: 0.9, bravery: 0.9 } });
+    // (one of them, tough, who keeps getting up: a fight that goes on long enough to see how it is fought)
+    const B = sb.spawnStickman(3, null, { name: 'Bea', traits: { aggression: 0.7, bravery: 0.9, toughness: 1 } });
+    for (let i = 0; i < 60; i++) sb.step(1 / 120);
+    powers.givePower(A, pid);
+    for (const [x, y] of [[A, B], [B, A]]) { const rr = x.brain.rel(y); rr.like = -0.9; rr.anger = 0.95; rr.met = true; }
+    A.brain.order('fight', B);
+    cur = { who: A, moves: new Set() };
+    for (let i = 0; i < 120 * 30; i++) { sb.step(1 / 120); if (B.dead || B.removed) break; }
+    out[pid] = [...cur.moves];
+  }
+  cur = null;
+  return out;
+});
+check('left to themselves in a fight, somebody with a power uses its moves - two or more different ones, every power',
+  Object.values(aiFight).every((m) => m.length >= 2), JSON.stringify(aiFight));
+
+// and everybody watching reacts
+await fresh();
+const watched = await ev(() => {
+  const { sb, powers } = window.__sf;
+  const A = sb.spawnStickman(0, null, { name: 'Ace' }), W = sb.spawnStickman(3, null, { name: 'Wit' });
+  A.brain = null;
+  for (let i = 0; i < 40; i++) sb.step(1 / 120);
+  W.faceTo(-5);
+  W.brain.spokeT = sb.time;
+  for (let i = 0; i < 120 * 2.5; i++) sb.step(1 / 120);
+  const said = [];
+  sb.on('speech', (e) => { if (e.who === W) said.push(e.kind); });
+  powers.givePower(A, 'flight');
+  powers.powerAbilities(A).find((a) => a.id === 'flight:fly').pick();
+  for (let i = 0; i < 120 * 2; i++) sb.step(1 / 120);
+  return { said };
+});
+check('...and whoever sees it cannot believe it, and says so', watched.said.some((k) => k === 'sawFlying' || k === 'sawGotPower'), JSON.stringify(watched));
+
+const pwExtra = await ev(() => {
+  const { CLIPS, LINES } = window.__sf;
+  const need = ['flyHover', 'flyForward', 'flyRise', 'flyReach', 'flyCarry', 'flyPin', 'flyPunch', 'flyKick', 'flySlam', 'flyThrowDown', 'flyTackle', 'spinThrow', 'diveBomb', 'flyLand', 'heroLand',
+    'launchKick', 'launchUppercut', 'megaWind', 'megaPunch', 'groundPound', 'heaveLift', 'heaveThrow', 'liftOverhead', 'slamDown', 'bearHug', 'thunderClap', 'quakeStomp', 'shoulderCharge',
+    'speedDash', 'blitzFlurry', 'kickStorm', 'gustPunch', 'dropkick', 'tkLift', 'tkThrow', 'tkPush', 'tkPull', 'tkChoke', 'tkShield', 'tkSlam', 'tkFloat'];
+  const lines = Object.keys(LINES).filter((k) => /^(pw|got|lost|flyJoy)/.test(k) || ['sawFlying', 'sawSkyToss', 'sawSuperBlow', 'sawSlam', 'sawSpeedBlow', 'sawCrush', 'sawTelekinesis', 'sawShockwave', 'sawSpeedster', 'sawBulletStop', 'sawWallSmash', 'sawGotPower'].includes(k));
+  return { missing: need.filter((n) => !CLIPS[n]), clips: need.length, kinds: lines.length, lines: lines.reduce((n, k) => n + LINES[k].length, 0) };
+});
+check('the powers bring forty-one new animations and over three hundred new lines', !pwExtra.missing.length && pwExtra.clips === 41 && pwExtra.lines >= 300,
+  `${pwExtra.clips} clips${pwExtra.missing.length ? ', missing ' + pwExtra.missing.join(' ') : ''}; ${pwExtra.lines} lines in ${pwExtra.kinds} situations`);
 
 check('the console stays clean', errors.length === 0, errors.slice(0, 3).join(' | '));
 if (FILE_MODE) check('the single file fetches nothing', network.length === 0, network.slice(0, 3).join(', '));

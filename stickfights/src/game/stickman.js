@@ -59,6 +59,7 @@ import { updateVitals, healVitals, iceBlow, ignite } from './vitals.js';
 import { bleedSources, pickSource, feedStreams, splatter, contactOf, woundId, bloodK } from './blood.js';
 import { tiedUp, noosed } from './wires.js';
 import { launchGas, lob, GAS_SPEED, GAS_G } from './gas.js';
+import { updatePowers, powersAir, powersTouchDown, powerSpeed, powerTempo, powersBeforeHit, powerSteady, powersLanded, endMove } from './powers/index.js';
 import { clamp, clamp01, lerp, lerpAngle, rand, chance, moveToward, segDist, sign, smooth, wrapAngle, wobble, DEG } from '../core/util.js';
 
 export const G = 18;
@@ -166,6 +167,8 @@ export class Stickman {
     this.pinT = -99;
     this.held = null;
     this.heldBy = null;
+    this.powers = null;       // superpowers (powers/index.js): Map of power id to its state
+    this.pmove = null;        // a power's move, running: it has the body until it is done
     this.spin = 0;
     this.spinV = 0;
     this.climbing = null;
@@ -815,6 +818,8 @@ export class Stickman {
    */
   takeHit(h) {
     if (this.removed) return null;
+    // (super speed: not there by the time it lands)
+    if (this.powers && !this.dead && powersBeforeHit(this, h) === 'dodged') return null;
     const wasDead = this.dead;
     let part = h.part;
     let blocked = false;
@@ -920,7 +925,7 @@ export class Stickman {
     this.lastHit = { by: h.by, t: this.sandbox.time, part, power: h.power, kind: h.kind, blocked, object: h.object || null, weapon };
 
     // a blade cuts more than it shoves, and a bullet more still
-    const shove = h.power * (blocked ? 0.25 : 1) * (weapon === 'knife' ? 0.55 : weapon === 'machete' ? 0.8 : bullet ? 0.35 : spec && spec.shove !== undefined ? spec.shove : 1);
+    const shove = h.power * (blocked ? 0.25 : 1) * (weapon === 'knife' ? 0.55 : weapon === 'machete' ? 0.8 : bullet ? 0.35 : spec && spec.shove !== undefined ? spec.shove : 1) * (this.powers ? powerSteady(this) : 1);
     this.balance -= shove * (part === 'head' ? 0.36 : 0.27) * (1.2 - this.health.toughness * 0.35);
     // taking one knocks the wind out of them a little
     if (!blocked) this.tire(0.015 + dmg * 0.003);
@@ -1105,6 +1110,8 @@ export class Stickman {
     if (now - last < 0.35) return;
     this.impactCool.set(body, now);
     const thing = body.owner;
+    // (something they are holding up with a power, or have only just thrown, is not something hitting them)
+    if (thing && (thing.gripBy === this || (thing.thrownBy === this && now - (thing.thrownAt ?? -9) < 0.5))) return;
     const heavy = body.mass > 5;
     const min = heavy ? 2.6 : 4;
     if (speed < min) return;
@@ -1370,6 +1377,8 @@ export class Stickman {
 
   die(cause, killer = null, dir = 0, power = 1, at = null) {
     if (this.state === 'dead') return;
+    // (whatever move they were in the middle of ends with them: anybody they had hold of is let go)
+    if (this.pmove) endMove(this, 'died');
     if (!this.health.dead) this.health.kill(cause);
     // frozen solid, nothing moves: the statue just stops being alive (and keeps hold of whatever it had)
     if (this.health.frozen) {
@@ -2127,6 +2136,8 @@ export class Stickman {
     this.stateT += dt;
     // a mod's species has its own business every step, and so does whatever is eating at them
     if (this.species && this.species.update) this.species.update(this, dt);
+    // a superpower's business, and the move it is in the middle of
+    if (this.powers) updatePowers(this, dt);
     if (this.afflictions.length) this.afflictions = this.afflictions.filter((a) => a.update(this, dt) !== false);
     // adrenaline, air and heat; fire and ice
     updateVitals(this, dt);
@@ -2223,7 +2234,8 @@ export class Stickman {
     }
     if (this.state !== 'held' && this.state !== 'climb') this.physics(dt);
 
-    this.anim.update(dt);
+    // (super speed: whatever they do, they do it twice as fast)
+    this.anim.update(this.powers ? dt * powerTempo(this) : dt);
     for (const ev of this.anim.events) this.animEvent(ev);
     const an = this.anim.actionName;
     if (this.reloading && an !== 'reload' && an !== 'reloadTaser' && an !== 'reloadRifle') this.reloading = false;
@@ -2257,7 +2269,7 @@ export class Stickman {
 
   maxSpeed(kind) {
     let s = SPEEDS[kind] || SPEEDS.walk;
-    s *= this.health.mobility * (this.species && this.species.speed ? this.species.speed : 1);
+    s *= this.health.mobility * (this.species && this.species.speed ? this.species.speed : 1) * (this.powers ? powerSpeed(this, kind) : 1);
     // out of breath, a run is a jog, and then not much more than a walk
     if (kind === 'run' || kind === 'flee') s *= 0.58 + 0.42 * smooth(this.stamina / 0.45);
     // adrenaline puts a little more in the legs; too hot or too cold takes it out of them
@@ -2452,7 +2464,8 @@ export class Stickman {
   }
 
   updateAir(dt) {
-    // a flier flies (a mod's species)
+    // a flier flies (a superpower, or a mod's species)
+    if (this.powers && powersAir(this, dt)) return;
     if (this.species && this.species.air && this.species.air(this, dt)) return;
     this.anim.play(this.vel.y > 0.8 ? 'rise' : 'fall', { blend: 0.15 });
     this.anim.setOverlay(this.carrying ? 'carry' : null);
@@ -2721,6 +2734,7 @@ export class Stickman {
   /** Feet (or whatever) meeting the ground after being in the air. */
   touchDown(v) {
     const sb = this.sandbox;
+    if (this.powers && powersTouchDown(this, v)) return;
     if (this.species && this.species.touchDown && this.species.touchDown(this, v)) return;
     if (this.state === 'air') {
       if (v > 9.5) {
@@ -2935,6 +2949,7 @@ export class Stickman {
       low: d.low, bone: o.boneName(hit.bone, hit.t),
     });
     if (this.species && this.species.landed) this.species.landed(this, o, hit, power, s);
+    if (this.powers) powersLanded(this, o, hit, power, s);
     this.anim.freeze = o.anim.freeze = 0.04 + Math.min(0.05, power * 0.012);
     if (weapon && this.weapon) this.weapon.blood = Math.min(1, this.weapon.blood + (bladed ? 0.25 : 0.12) * power);
     this.notify('landed', { target: o, power, part: hit.part });

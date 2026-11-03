@@ -5,6 +5,7 @@
    lives (and one of them has a grudge). PLAY clears them away and hands you
    an empty sandbox and the spawn menu.
    ========================================================================== */
+import * as Powers from './game/powers/index.js';
 import { Sandbox } from './game/sandbox.js';
 import { Brain } from './game/brain.js';
 import { Camera } from './game/camera.js';
@@ -175,6 +176,22 @@ sb.on('trapdoor', (e) => { sound.trapdoor(e.x, e.open); if (e.open) cam.shake(0.
 sb.on('noosed', (e) => { sound.tieOn(false, false, e.x); sound.ropeCreak(e.x); });
 sb.on('freezeInPlace', (e) => sound.lockInPlace(true, e.x));
 sb.on('unfreeze', (e) => sound.lockInPlace(false, e.x));
+// superpowers: taking off and flying by, the impacts, the claps and pounds, a speedster's zip, the hum of telekinesis
+sb.on('powerGiven', (e) => sound.powerUp(e.x));
+sb.on('pwTakeoff', (e) => sound.jetWhoosh(e.x, 1));
+sb.on('pwLand', (e) => { if (e.speed > 3) sound.thud(e.speed, e.x); });
+for (const k of ['skyToss', 'skyDrop', 'flyBy', 'spinThrow']) sb.on(k, (e) => sound.jetWhoosh(e.x, 1.2));
+for (const k of ['slamDown', 'wallPin', 'tkSlam', 'heave']) sb.on(k, (e) => { sound.boom(e.x, 0.7); cam.shake(0.18); });
+sb.on('powerImpact', (e) => { sound.boom(e.x, Math.min(1.5, e.speed / 16)); cam.shake(Math.min(0.5, e.speed * 0.02)); });
+sb.on('diveImpact', (e) => { sound.boom(e.x, 1.4); cam.shake(0.55); });
+sb.on('shockwave', (e) => { sound.boom(e.x, Math.min(1.4, e.power / 2)); cam.shake(Math.min(0.6, e.power * 0.18)); });
+sb.on('thunderClap', (e) => { sound.clapBoom(e.x); cam.shake(0.5); });
+sb.on('megaPunch', (e) => { sound.boom(e.x, 0.9); cam.shake(0.3); });
+sb.on('wallSmash', (e) => { sound.boom(e.x, 1); sound.rubble(e.x, true); cam.shake(0.35); });
+for (const k of ['blitz', 'blink', 'lightningLine', 'whirlwind', 'speedDodge', 'snatch', 'dropkick', 'kickStorm']) sb.on(k, (e) => sound.zip(e.x));
+for (const k of ['tkThrow', 'tkPush', 'tkPull', 'tkDisarm', 'tkHurl']) sb.on(k, (e) => sound.tkHum(e.x, 1));
+sb.on('powerMove', (e) => { if (e.power === 'tk') sound.tkHum(e.x, 0.7); else if (e.power === 'speed') sound.zip(e.x); });
+sb.on('bulletStopped', (e) => sound.bulletStop(e.x));
 sb.on('thud', (e) => sound.thud(e.speed, e.x));
 sb.on('collide', (e) => { sound.thud(e.speed * 0.8, e.x); cam.shake(Math.min(0.4, e.speed * 0.025)); });
 sb.on('land', (e) => { if (e.speed > 5) sound.thud(e.speed * 0.5, e.who.pos.x); });
@@ -305,4 +322,4 @@ function start() {
 document.getElementById('btn-play').addEventListener('click', start);
 
 // for tests and the curious
-window.__sf = { sb, cam, ui, hand, sound, renderer, STYLE, start, demo, CLIPS, LINES, mods: Mods, vitals: Vitals, wires: Wires };
+window.__sf = { sb, cam, ui, hand, sound, renderer, STYLE, start, demo, CLIPS, LINES, mods: Mods, vitals: Vitals, wires: Wires, powers: Powers };
