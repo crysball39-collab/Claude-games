@@ -132,10 +132,10 @@ check('PLAY opens the game, the HUD and the spawn menu', await ev(() =>
   !document.querySelector('#hud').classList.contains('hidden') && document.querySelector('#drawer').classList.contains('open')));
 check('the sandbox starts empty', await ev(() => window.__sf.sb.people.length === 0 && window.__sf.sb.crates.length === 0));
 const cards = await ev(() => [...document.querySelectorAll('.card')].map((c) => c.dataset.spawn));
-const BASE = ['stickman', 'officer', 'knuckles', 'knife', 'machete', 'crowbar', 'glock', 'm1911', 'ak47', 'mossberg', 'taser', 'gasRifle', 'crate', 'vest',
-  'ammo9', 'ammo45', 'ammo762', 'ammo12', 'woodWall', 'metalWall', 'glassWall', 'beamSmall', 'beamLarge', 'gallows', 'tree', 'bush',
+const BASE = ['stickman', 'officer', 'knuckles', 'knife', 'machete', 'crowbar', 'glock', 'm1911', 'ak47', 'm4a1', 'ar15', 'mossberg', 'taser', 'gasRifle', 'crate', 'vest',
+  'helmet', 'ammo9', 'ammo45', 'ammo762', 'ammo556', 'ammo12', 'woodWall', 'metalWall', 'glassWall', 'beamSmall', 'beamLarge', 'gallows', 'tree', 'bush',
   'grenade', 'c4', 'tnt', 'missile', 'generator', 'lightbulb', 'floodlight', 'voltmeter'];
-check('there are thirty-four things to spawn: a Stickman, an Officer, Brass Knuckles, a Combat Knife, a Machete, a Crowbar, a Glock-19, an M1911, an AK-47, a Mossberg 500, a Taser, a Gas Rifle, a Crate, a Light Vest, four kinds of ammo, three walls, two metal beams, a Gallows, a Tree, a Bush, a Grenade, C4, TNT, a Missile, a Generator, a Lightbulb, a Floodlight and a Volt Meter',
+check('there are thirty-eight things to spawn: a Stickman, an Officer, Brass Knuckles, a Combat Knife, a Machete, a Crowbar, a Glock-19, an M1911, an AK-47, an M4A1, an AR-15, a Mossberg 500, a Taser, a Gas Rifle, a Crate, a Light Vest, a Light Tactical Helmet, five kinds of ammo, three walls, two metal beams, a Gallows, a Tree, a Bush, a Grenade, C4, TNT, a Missile, a Generator, a Lightbulb, a Floodlight and a Volt Meter',
   cards.length === BASE.length && BASE.every((k) => cards.includes(k)), cards.join(', '));
 check('the cards are named for what they spawn', await ev(() =>
   ['Stickman', 'Brass Knuckles', 'Combat Knife', 'Machete', 'Glock-19', 'Crate'].every((n) => [...document.querySelectorAll('.card b')].some((b) => b.textContent === n))));
@@ -1833,6 +1833,11 @@ const spread = await ev(() => {
   b.knockOut(0, 0.2);
   a.knockOut(0, 0.2);
   for (let i = 0; i < 120; i++) sb.step(1 / 120);
+  // (lying against each other, wherever they happened to fall)
+  const dx = a.wj.chest.x + 0.3 - b.wj.chest.x;
+  for (const q of b.rag.p) { q.x += dx; q.px += dx; }
+  b.rag.wake();
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
   a.health.tempLock = 120;
   V.setTemperature(a, 120);
   let caught = null;
@@ -2687,6 +2692,8 @@ const guns = await ev(() => {
   // somebody angry, with the rifle: bursts, as fast as it goes
   const a = sb.spawnStickman(-9, null, { name: 'Ari', traits: { aggression: 0.95, temper: 0.9, bravery: 0.9, skill: 0.7 } });
   const b = sb.spawnStickman(-2.5, null, { name: 'Bea', traits: { aggression: 0.1, bravery: 0.2 } });
+  // (the rounds do not touch them: one lucky first shot would leave no burst to time)
+  b.shot = () => 0;
   for (let i = 0; i < 30; i++) sb.step(1 / 120);
   ak.wear(a);
   a.weapon = ak;
@@ -4576,6 +4583,239 @@ check('...and they get up to many different things', mayhem.kinds.length >= 6, m
 await ev(() => { window.__sf.sb.paused = false; });
 await page.waitForTimeout(800);
 await shot('mayhem');
+
+/* ------------------ the M4A1 and AR-15, the helmet, new moves, physics, gore, lines ------------------ */
+
+await fresh();
+const rifles = await ev(() => {
+  const { sb, ui } = window.__sf;
+  const guns = {};
+  for (const [k, x] of [['m4a1', -8], ['ar15', 8], ['ak47', 0]]) { ui.setSpawnKind(k); guns[k] = ui.spawnAt(x, 0.3); }
+  ui.setSpawnKind('ammo556'); const box = ui.spawnAt(1, 0.3);
+  ui.setSpawnKind('stickman');
+  // (back to back, each at their own target: nobody in the other's line of fire)
+  const a = sb.spawnStickman(-8, null, { name: 'Mac' }), b = sb.spawnStickman(8, null, { name: 'Ari' });
+  const t1 = sb.spawnStickman(-16, null, { name: 'Tgt' }), t2 = sb.spawnStickman(16, null, { name: 'Tgu' });
+  for (const p of [a, b, t1, t2]) p.brain = null;
+  for (let i = 0; i < 40; i++) sb.step(1 / 120);
+  guns.m4a1.wear(a); a.weapon = guns.m4a1; guns.ar15.wear(b); b.weapon = guns.ar15;
+  a.aimAt(t1); b.aimAt(t2);
+  for (let i = 0; i < 120; i++) sb.step(1 / 120);
+  let A = 0, B = 0;
+  sb.on('shot', (e) => { if (e.who === a) A++; if (e.who === b) B++; });
+  // the trigger held down for a second each
+  for (let i = 0; i < 120; i++) { a.fire(); b.fire(); sb.step(1 / 120); }
+  return {
+    m4: A, ar: B, names: [guns.m4a1.spec.name, guns.ar15.spec.name], rounds: [guns.m4a1.spec.round, guns.ar15.spec.round],
+    auto: [!!guns.m4a1.spec.auto, !!guns.ar15.spec.auto], mags: [guns.m4a1.mag, guns.ar15.mag], box: box.name,
+    fits: [box.fits(guns.m4a1), box.fits(guns.ar15), box.fits(guns.ak47)],
+  };
+});
+check('the M4A1 is fully automatic (over ten rounds a second, trigger held); the AR-15 semi-automatic, about half that',
+  rifles.names.join() === 'M4A1,AR-15' && rifles.auto.join() === 'true,false' && rifles.m4 >= 10 && rifles.ar >= 3 && rifles.ar <= rifles.m4 * 0.7 &&
+  rifles.mags.join() === `${30 - rifles.m4},${30 - rifles.ar}`, JSON.stringify(rifles));
+check('...both 5.56, and a 5.56 mm ammo can fits both of them - and not the AK-47', rifles.rounds.join() === '5.56,5.56' && rifles.box === '5.56 mm Ammo Can' &&
+  rifles.fits.join() === 'true,true,false', JSON.stringify(rifles.fits));
+
+// a rifle, empty, reloaded: the rifle's own reload, mag out, mag in, charging handle
+const rifleReload = await ev(() => {
+  const { sb } = window.__sf, a = sb.people.find((p) => p.name === 'Mac');
+  a.weapon.mag = 0;
+  const evs = [];
+  for (const k of ['magOut', 'magIn', 'rack']) sb.on(k, (e) => { if (e.who === a) evs.push(k); });
+  const ok = a.reload();
+  const clip = a.anim.actionName;
+  for (let i = 0; i < 120 * 3; i++) sb.step(1 / 120);
+  return { ok, clip, evs: [...new Set(evs)], mag: a.weapon.mag };
+});
+check('a rifle is reloaded the rifle way: the old magazine out, the new one in, the charging handle pulled back',
+  rifleReload.ok && rifleReload.clip === 'reloadRifle' && rifleReload.evs.join() === 'magOut,magIn,rack' && rifleReload.mag === 30, JSON.stringify(rifleReload));
+
+// the helmet: somebody under fire goes and puts one on
+await fresh();
+const helmetOn = await ev(() => {
+  const { sb, ui } = window.__sf;
+  ui.setSpawnKind('helmet'); const hm = ui.spawnAt(1.2, 0.3); ui.setSpawnKind('stickman');
+  const p = sb.spawnStickman(0, null, { name: 'Hal', traits: { bravery: 0.2 } });
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  p.brain.gunThreat = { who: null, t: sb.time };
+  const seen = new Set(), said = [];
+  sb.on('speech', (e) => { if (e.who === p) said.push(e.kind); });
+  let clip = null;
+  for (let i = 0; i < 120 * 8 && !p.helmet; i++) {
+    sb.step(1 / 120);
+    if (p.brain.behaviour) seen.add(p.brain.behaviour.label);
+    if (p.anim.actionName === 'helmetOn') clip = 'helmetOn';
+  }
+  window.__hal = p; window.__hm = hm;
+  return { kind: hm.kind, name: hm.name, on: p.helmet === hm, seen: [...seen], clip, said };
+});
+check('a Light Tactical Helmet: somebody under fire goes for it and puts it on (and does up the strap)',
+  helmetOn.kind === 'helmet' && helmetOn.name === 'Light Tactical Helmet' && helmetOn.on && helmetOn.clip === 'helmetOn' && helmetOn.seen.includes('Putting on a helmet'),
+  JSON.stringify(helmetOn));
+const helmetHit = await ev(() => {
+  const { sb } = window.__sf, p = window.__hal, hm = window.__hm;
+  p.brain = null;
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  const hp0 = p.health.parts.head.hp, cond0 = hm.condition;
+  let stops = 0; sb.on('helmetStop', (e) => { if (e.who === p) stops++; });
+  sb.shoot(null, p.wj.head.x - 4, p.wj.head.y + 0.08, 0, { energy: 1 });
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  return { stops, alive: p.alive, lost: Math.round(hp0 - p.health.parts.head.hp), wear: +(cond0 - hm.condition).toFixed(2), dizzy: +p.health.dizzy.toFixed(1), face: +(p.face.blood || 0).toFixed(2), holes: p.health.shots.head || 0 };
+});
+check('...a pistol round to the top of it stops there: rung like a bell (dizzy, a bruise), the helmet worn by it, no hole and no blood on the face',
+  helmetHit.stops === 1 && helmetHit.alive && helmetHit.dizzy > 0.5 && helmetHit.lost > 0 && helmetHit.lost < 30 && helmetHit.wear > 0.05 && helmetHit.face < 0.05 && !helmetHit.holes,
+  JSON.stringify(helmetHit));
+const helmetRifle = await ev(() => {
+  const { sb, ui } = window.__sf;
+  ui.setSpawnKind('helmet'); const hm = ui.spawnAt(6, 0.3); ui.setSpawnKind('stickman');
+  const q = sb.spawnStickman(6, null, { name: 'Rif' }); q.brain = null;
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  hm.wear(q); q.helmet = hm;
+  let stops = 0; sb.on('helmetStop', (e) => { if (e.who === q) stops++; });
+  const hp0 = q.health.parts.head.hp;
+  sb.shoot(null, q.wj.head.x - 5, q.wj.head.y + 0.08, 0, { energy: 1.85 });
+  for (let i = 0; i < 20; i++) sb.step(1 / 120);
+  return { stops, lost: Math.round(hp0 - q.health.parts.head.hp), holes: q.health.shots.head || 0 };
+});
+check('...but a rifle round goes straight through it', !helmetRifle.stops && helmetRifle.holes === 1 && helmetRifle.lost > 40, JSON.stringify(helmetRifle));
+await shot('helmet');
+
+// the new moves
+const newMoves = await ev(() => {
+  const C = window.__sf.CLIPS;
+  const need = ['helmetOn', 'reloadRifle', 'kneelAim', 'checkGun', 'coverEars', 'sickHunch', 'checkWatch', 'rubNeck', 'shieldEyes', 'handsInPockets'];
+  return { n: Object.keys(C).length, missing: need.filter((k) => !C[k]) };
+});
+check('new moves: putting a helmet on, a rifle reload, aiming down on one knee, checking a gun, hands over the ears, hunched and sick, a look at a watch, a rubbed neck, eyes shaded, hands in pockets',
+  newMoves.n >= 160 && !newMoves.missing.length, `${newMoves.n} clips${newMoves.missing.length ? ', missing ' + newMoves.missing.join(' ') : ''}`);
+await fresh();
+const kneeling = await ev(() => {
+  const { sb, ui } = window.__sf;
+  ui.setSpawnKind('m4a1'); const g = ui.spawnAt(-4, 0.3); ui.setSpawnKind('stickman');
+  const a = sb.spawnStickman(-4, null, { name: 'Kay', traits: { skill: 0.9, aggression: 0.6, bravery: 0.9 } });
+  const t = sb.spawnStickman(4.2, null, { name: 'Far', traits: { bravery: 0.9 } });
+  // (the rounds do not touch them: so the fight goes on long enough to see how it is fought)
+  t.brain = null; t.shot = () => 0;
+  for (let i = 0; i < 30; i++) sb.step(1 / 120);
+  g.wear(a); a.weapon = g;
+  a.brain.order('fight', t);
+  let knelt = false, shots = 0;
+  sb.on('shot', (e) => { if (e.who === a && a.posture === 'kneelAim') shots++; });
+  for (let i = 0; i < 120 * 6 && !knelt; i++) { sb.step(1 / 120); if (a.posture === 'kneelAim') knelt = true; }
+  for (let i = 0; i < 120 * 3; i++) sb.step(1 / 120);
+  return { knelt, shots, d: +Math.abs(t.pos.x - a.pos.x).toFixed(1), doing: a.brain.behaviour && a.brain.behaviour.kind };
+});
+check('...and with a rifle, at range, they get down on one knee to aim', kneeling.knelt, JSON.stringify(kneeling));
+
+// physics: bodies pile up, bullets do not throw the dead about, loose things are in the way
+await fresh();
+const piled = await ev(() => {
+  const { sb } = window.__sf;
+  const killAt = (x, name, dir = 1) => { const p = sb.spawnStickman(x, null, { name }); p.brain = null; for (let i = 0; i < 20; i++) sb.step(1 / 120); p.health.kill('test'); p.die('test', null, dir, 0.5); return p; };
+  const P = (p, n) => p.rag.p[p.rag.byName[n]];
+  // one dies where they stand; then another, standing over them, falls on them
+  const lo = killAt(0, 'Low');
+  for (let i = 0; i < 120 * 3; i++) sb.step(1 / 120);
+  const hi = killAt((P(lo, 'hip').x + P(lo, 'chest').x) / 2, 'Top', -1);
+  for (let i = 0; i < 120 * 4; i++) sb.step(1 / 120);
+  const top = Math.max(P(hi, 'hip').y, P(hi, 'chest').y);
+  sb.clear();
+  const c = killAt(0, 'Shot');
+  for (let i = 0; i < 120 * 3; i++) sb.step(1 / 120);
+  const ch = P(c, 'chest');
+  sb.shoot(null, ch.x - 3, ch.y, 0, { energy: 1 });
+  sb.step(1 / 120);
+  const push = Math.hypot(ch.x - ch.px, ch.y - ch.py) * 120;
+  sb.clear();
+  const g = sb.spawnGun(0.1, 0.1, 0, 'glock');
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  const g0 = { x: g.body.pos.x, y: g.body.pos.y };
+  killAt(0, 'Fall');
+  for (let i = 0; i < 120 * 2; i++) sb.step(1 / 120);
+  return { top: +top.toFixed(2), push: +push.toFixed(2), gun: +Math.hypot(g.body.pos.x - g0.x, g.body.pos.y - g0.y).toFixed(2) };
+});
+check('physics: a body falling on another stays on top of it (bodies pile up, and grip), a 9 mm round barely moves a dead body, and a body falling on a gun shoves it aside',
+  piled.top > 0.18 && piled.push < 0.5 && piled.gun > 0.1, JSON.stringify(piled));
+
+// gore: a rifle round through the head, a witness to it; a blast up close; a bleeding body dragged
+await fresh();
+const burst = await ev(() => {
+  const { sb } = window.__sf;
+  const w = sb.spawnStickman(3.5, null, { name: 'Wit' });
+  const said = []; sb.on('speech', (e) => { if (e.who === w) said.push(e.kind); });
+  let p = null, n = 0, tries = 0;
+  sb.on('headBurst', (e) => { if (e.who === p) n++; });
+  // (one round in five to the head does not kill outright: then another person, the same shot)
+  for (; tries < 3 && !(p && p.dead); tries++) {
+    if (p) sb.remove(p);
+    p = sb.spawnStickman(0, null, { name: 'Head' }); p.brain = null;
+    for (let i = 0; i < 40; i++) sb.step(1 / 120);
+    w.faceTo(-5);
+    for (let i = 0; i < 10; i++) sb.step(1 / 120);
+    sb.shoot(null, -4, p.wj.head.y, 0, { energy: 1.85 });
+    for (let i = 0; i < 12; i++) sb.step(1 / 120);
+  }
+  return { tries, dead: p.dead, cause: p.health.cause, n, gibs: sb.fx.debris.filter((d) => d.gib).length, mist: sb.fx.drops.filter((d) => d.mist).length, said };
+});
+check('gore: a rifle round that kills through the head opens it - a fine mist and a spray out of the far side, bits of bone and brain - and the witness says so',
+  burst.dead && burst.n === 1 && burst.gibs >= 5 && burst.mist >= 20 && burst.said.includes('sawHeadBurst'), JSON.stringify(burst));
+await sim(1.2);
+await shot('head-burst');
+await fresh();
+const blasted = await ev(() => {
+  const { sb, ui } = window.__sf;
+  const p = sb.spawnStickman(0, null, { name: 'Blast' }); p.brain = null;
+  for (let i = 0; i < 40; i++) sb.step(1 / 120);
+  const g0 = sb.fx.debris.filter((d) => d.gib).length;
+  ui.blastKind = 'c4'; ui.setTool('explode');
+  const q = window.__sf.cam.toScreen(0.22, 0.9); ui.tap(q.x, q.y);
+  ui.setTool('hand');
+  for (let i = 0; i < 120 * 2.5; i++) sb.step(1 / 120);
+  const gibs = sb.fx.debris.filter((d) => d.gib);
+  return { gibs: gibs.length - g0, resting: gibs.filter((d) => d.rest).length, onFloor: gibs.filter((d) => d.rest && d.y >= d.s * 0.4).length, dead: p.dead };
+});
+check('...C4 going off right against somebody throws pieces of them, which land wet and lie on the floor',
+  blasted.dead && blasted.gibs >= 6 && blasted.resting === blasted.gibs && blasted.onFloor === blasted.resting, JSON.stringify(blasted));
+await fresh();
+const dragged = await ev(() => {
+  const { sb, hand } = window.__sf;
+  const p = sb.spawnStickman(0, null, { name: 'Drag' }); p.brain = null;
+  for (let i = 0; i < 40; i++) sb.step(1 / 120);
+  for (const y of [1.15, 1.0]) sb.shoot(null, -3, y, 0, { energy: 1 });
+  for (let i = 0; i < 120 * 6; i++) sb.step(1 / 120);
+  const soak = Math.max(...p.wounds.map((w) => w.soak || 0));
+  p.health.kill('test'); p.die('test', null, 1, 0.3);
+  for (let i = 0; i < 120 * 2; i++) sb.step(1 / 120);
+  const n0 = sb.fx.splats.filter((s) => s.smear).length;
+  const f = p.wj.footA, x0 = f.x;
+  sb.paused = false; hand.grab(p, f.x, f.y); sb.paused = true;
+  for (let i = 0; i < 120 * 2.5; i++) { hand.move(x0 - Math.min(3, i * 0.012), 0.5); hand.step(1 / 120); sb.step(1 / 120); }
+  hand.release();
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  const sm = sb.fx.splats.filter((s) => s.smear);
+  return { soak: +soak.toFixed(2), smears: sm.length - n0, longest: sm.length ? +Math.max(...sm.map((s) => s.w * 2)).toFixed(2) : 0 };
+});
+check('...blood soaks out around a wound as it bleeds, and a bleeding body dragged along the floor leaves a long smear',
+  dragged.soak > 0.05 && dragged.smears >= 1 && dragged.longest > 0.4, JSON.stringify(dragged));
+
+// the lines: every one filled in properly
+const words = await ev(() => {
+  const { LINES } = window.__sf;
+  let n = 0; const bad = [];
+  const vars = { me: 'Ana', other: 'Bo', victim: 'Cy', part: 'arm', n: '3', what: 'hit Bo', absent: 'Di' };
+  for (const [k, v] of Object.entries(LINES)) {
+    const all = Array.isArray(v) ? v : Object.values(v).flat();
+    n += all.length;
+    for (const s of all) {
+      let t = s; for (const [a, b] of Object.entries(vars)) t = t.split('{' + a + '}').join(b);
+      if (/[{}]/.test(t) || !t.trim()) bad.push(k + ': ' + s);
+    }
+  }
+  return { n, kinds: Object.keys(LINES).length, bad: bad.slice(0, 5) };
+});
+check('all the lines rewritten to sound like people: over sixteen hundred, every blank in them one that gets filled in',
+  words.n >= 1600 && words.kinds >= 260 && !words.bad.length, `${words.n} lines in ${words.kinds} situations${words.bad.length ? '; ' + words.bad.join(' | ') : ''}`);
 
 check('the console stays clean', errors.length === 0, errors.slice(0, 3).join(' | '));
 if (FILE_MODE) check('the single file fetches nothing', network.length === 0, network.slice(0, 3).join(', '));

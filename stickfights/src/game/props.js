@@ -23,6 +23,7 @@ import {
   GLOCK_W, GLOCK_H, GLOCK_GRIP, GLOCK_MUZZLE, GLOCK_PORT, M1911_W, M1911_H, M1911_GRIP, M1911_MUZZLE, M1911_PORT,
   AK_W, AK_H, AK_GRIP, AK_MUZZLE, AK_PORT, MOSS_W, MOSS_H, MOSS_GRIP, MOSS_MUZZLE, MOSS_PORT,
   GAS_W, GAS_H, GAS_GRIP, GAS_MUZZLE, GAS_PORT,
+  M4_W, M4_H, M4_GRIP, M4_MUZZLE, M4_PORT, AR_W, AR_H, AR_GRIP, AR_MUZZLE, AR_PORT,
 } from './draw.js';
 
 let nextId = 1;
@@ -140,9 +141,12 @@ export const BLADES = {
 export const isBlade = (kind) => kind === 'knife' || kind === 'machete';
 
 /** The kinds of thing that are guns: aimed, fired, carried by a stickman like the Glock. Mods add theirs. */
-export const GUN_KINDS = new Set(['glock', 'm1911', 'taser', 'ak47', 'mossberg', 'gasRifle']);
+export const GUN_KINDS = new Set(['glock', 'm1911', 'taser', 'ak47', 'mossberg', 'gasRifle', 'm4a1', 'ar15']);
 /** The guns too long for a holster: they go across the back, on a sling. */
-export const isLongGun = (kind) => kind === 'ak47' || kind === 'mossberg' || kind === 'gasRifle';
+export const LONG_GUNS = new Set(['ak47', 'mossberg', 'gasRifle', 'm4a1', 'ar15']);
+export const isLongGun = (kind) => LONG_GUNS.has(kind);
+/** The rifles that take a box magazine, changed the way a rifle's is. */
+export const isRifle = (kind) => kind === 'ak47' || kind === 'm4a1' || kind === 'ar15';
 export const isGun = (kind) => GUN_KINDS.has(kind);
 /** A gun that kills: anything aimed and fired except the taser. */
 export const isFirearm = (kind) => GUN_KINDS.has(kind) && kind !== 'taser';
@@ -342,6 +346,18 @@ export const GUN_MODELS = {
     name: 'Mossberg 500', a: 'a', mag: 6, spare: 12, energy: 0.5, pellets: 8, spread: 3.4, cadence: 0.85, kick: 2.4, round: '12 gauge', pump: true, long: true,
     w: MOSS_W, h: MOSS_H, mass: 3.3, grip: MOSS_GRIP, muzzle: MOSS_MUZZLE, port: MOSS_PORT,
   },
+  // the M4A1: the military carbine - thirty rounds of 5.56 a magazine, fully automatic and fast; lighter in the hand
+  // than the AK and kicking less, a little less through a wall or a person than the 7.62
+  m4a1: {
+    name: 'M4A1', a: 'an', mag: 30, spare: 60, energy: 1.6, cadence: 0.075, kick: 1.0, round: '5.56', auto: true, long: true,
+    w: M4_W, h: M4_H, mass: 3.1, grip: M4_GRIP, muzzle: M4_MUZZLE, port: M4_PORT,
+  },
+  // the AR-15: the civilian rifle it came from - the same 5.56, the same thirty, but one shot to each pull of the trigger
+  // (and a longer barrel: a little more behind each one)
+  ar15: {
+    name: 'AR-15', a: 'an', mag: 30, spare: 60, energy: 1.65, cadence: 0.16, kick: 0.95, round: '5.56', long: true,
+    w: AR_W, h: AR_H, mass: 3.2, grip: AR_GRIP, muzzle: AR_MUZZLE, port: AR_PORT,
+  },
   // the gas rifle: five canisters of poison gas, each bursting into a cloud where it lands (gas.js)
   gasRifle: {
     name: 'Gas Rifle', a: 'a', mag: 5, spare: 10, energy: 0, gas: true, cadence: 1.1, kick: 1.5, round: 'gas canister', long: true,
@@ -456,6 +472,7 @@ export const AMMO_BOXES = {
   ammo45: { name: '.45 ACP Ammo Box', short: '.45 AMMO', round: '.45', fits: ['m1911'], w: 0.3, h: 0.18, mass: 2, rounds: 50 },
   ammo762: { name: '7.62 mm Ammo Can', short: '7.62 AMMO', round: '7.62', fits: ['ak47'], w: 0.46, h: 0.27, mass: 7, rounds: 120 },
   ammo12: { name: '12 Gauge Shells', short: '12 GA SHELLS', round: '12 gauge', fits: ['mossberg'], w: 0.3, h: 0.17, mass: 1.8, rounds: 25 },
+  ammo556: { name: '5.56 mm Ammo Can', short: '5.56 AMMO', round: '5.56', fits: ['m4a1', 'ar15'], w: 0.42, h: 0.25, mass: 6, rounds: 120 },
 };
 // (the old sizes, from before the boxes were split by what is in them)
 const OLD_BOX = { small: 'ammo9', medium: 'ammo45', big: 'ammo762' };
@@ -575,6 +592,75 @@ export class Vest {
     if (kind === 'stab') return 1 - 0.45 * k;
     if (kind === 'chop' || kind === 'hack') return 1 - 0.35 * k;
     return 1 - 0.6 * k;
+  }
+}
+
+/**
+ * A light tactical helmet: a ballistic shell over the top and the back of
+ * the skull, down to the brow and the nape - the face and the jaw are left
+ * bare. While it lasts it stops pistol rounds and bits of casing (they still
+ * ring the bell inside it: a hard knock, dizzy, sometimes out cold), takes
+ * the worst out of a blow or a blade to the head, and a rifle round goes
+ * through it nearly every time. Like the vest, it wears down with what it
+ * takes, and it can be picked up, thrown, tied or frozen.
+ */
+export const HELMET_W = 0.27;
+export const HELMET_H = 0.15;
+
+export class Helmet {
+  constructor(sandbox, x, y) {
+    this.id = nextId++;
+    this.kind = 'helmet';
+    this.name = 'Light Tactical Helmet';
+    this.sandbox = sandbox;
+    this.hp = 100;
+    this.body = new Body(HELMET_W, HELMET_H, 1.3, { x, y, rot: 0, owner: this, friction: 0.7, restitution: 0.18, angularDamping: 0.7 });
+    sandbox.phys.add(this.body);
+    this.inWorld = true;
+    this.wornBy = null;
+    this.dents = [];          // where rounds hit it: { a (round the dome from the top, forward positive), hole }
+    this.blood = 0;
+    this.thrownBy = null;
+    this.thrownAt = -99;
+    this.lastSound = -99;
+    this.removed = false;
+  }
+  get pos() { return this.wornBy ? this.wornBy.wj.head : this.body.pos; }
+  get loose() { return !this.wornBy && !this.removed; }
+  /** 0..1: how much of it is left. */
+  get condition() { return Math.max(0, this.hp / 100); }
+
+  wear(by) {
+    this.wornBy = by;
+    if (this.inWorld) { this.sandbox.phys.remove(this.body); this.inWorld = false; }
+  }
+
+  drop(x, y, vx = 0, vy = 0) {
+    this.wornBy = null;
+    const b = this.body;
+    b.pos.x = x; b.pos.y = Math.max(y, HELMET_H / 2 + 0.01);
+    b.vel.x = vx; b.vel.y = vy;
+    b.rot = 0;
+    b.angVel = (Math.random() - 0.5) * 6;
+    if (!this.inWorld) { this.sandbox.phys.add(b); this.inWorld = true; }
+  }
+
+  /** A round into it with `energy` (1 is a 9 mm), at `a` round the dome: whether it stops it, and the wear. */
+  stopsRound(energy, a) {
+    const k = this.condition;
+    const p = energy > 1.5 ? 0.12 : energy > 1.15 ? 0.2 + k * 0.55 : 0.55 + k * 0.42;
+    const stop = k > 0.06 && Math.random() < p;
+    this.hp = Math.max(0, this.hp - (stop ? 10 + energy * 8 : 18));
+    if (this.dents.length > 10) this.dents.shift();
+    this.dents.push({ a, hole: !stop });
+    return stop;
+  }
+
+  /** How much of a blow to the head gets through it - a blade's or a club's. */
+  blowThrough(kind, blade) {
+    const k = this.condition;
+    this.hp = Math.max(0, this.hp - (blade ? 4 : 2));
+    return blade ? 1 - 0.55 * k : 1 - 0.45 * k;
   }
 }
 

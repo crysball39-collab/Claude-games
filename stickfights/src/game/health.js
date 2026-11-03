@@ -284,7 +284,8 @@ export class Health {
         p.bleed += 0.008;
         p.artery = true;
       }
-    } else if (part === 'head' && !blade && dmg > 3) {
+    } else if (part === 'head' && !blade && dmg > 3 && strike !== 'helmet') {
+      // (a round off a helmet rings the head inside it: the face does not take it)
       this.faceHit(dmg, sharp, strike);
     }
     // inside: what it went in through, or crushed

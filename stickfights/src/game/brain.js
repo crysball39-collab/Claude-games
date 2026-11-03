@@ -46,7 +46,7 @@ import { Emotions } from './emotions.js';
 import { line } from './lines.js';
 import { BONE_SAID } from './health.js';
 import { G } from './stickman.js';
-import { isGun, isFirearm, armOf } from './props.js';
+import { isGun, isFirearm, isLongGun, armOf } from './props.js';
 import * as B from './behaviours.js';
 import { learn as copLearn, considerOfficer, considerSuspect, considerWitness, metOfficer, maybeReport, lethal } from './police.js';
 import { clamp, clamp01, rand, chance, pick, sign } from '../core/util.js';
@@ -60,7 +60,7 @@ const HEAR = {
   spawn: 12, vanish: 12, grabbed: 14, thrown: 14, pickup: 6, throw: 8, land: 4, jump: 3, getup: 6, wake: 6,
   stuck: 7, pullout: 6, clap: 7, collide: 8,
   // a gunshot carries the whole width of the world
-  shot: 60, ricochet: 14, dryFire: 4, reload: 5, magOut: 3, magIn: 3, rack: 5, sever: 12, dislocate: 7, relocate: 7, faint: 8,
+  shot: 60, ricochet: 14, dryFire: 4, helmetStop: 9, helmetOn: 4, headBurst: 14, reload: 5, magOut: 3, magIn: 3, rack: 5, sever: 12, dislocate: 7, relocate: 7, faint: 8,
   pinPulled: 6, fuseLit: 8, c4Beep: 8, missileLaunch: 30, gasBurst: 12, electrocute: 10, vomit: 8, retch: 5,
   tased: 10, taserFire: 8, cuffed: 8, command: 16, vestStop: 9, stumble: 6, stumbleFall: 8, stumbleCaught: 5, driveStun: 6,
   // fire and ice
@@ -150,9 +150,9 @@ const HELP_CALLS = new Set(['fear', 'flee', 'beg', 'pinned', 'crawl', 'panic', '
 const GLANCE_FREE = new Set(['idle', 'rest', 'inspect']);
 
 const standing = (o) => o && !o.removed && o.alive && o.conscious && (o.state === 'stand' || o.state === 'air');
-const WEAPON_KINDS = new Set(['knuckles', 'knife', 'machete', 'crowbar', 'glock', 'm1911', 'taser', 'ak47', 'mossberg', 'gasRifle']);
+const WEAPON_KINDS = new Set(['knuckles', 'knife', 'machete', 'crowbar', 'glock', 'm1911', 'taser', 'ak47', 'mossberg', 'gasRifle', 'm4a1', 'ar15']);
 // what they call something they are carrying
-const ITEM_SAID = { knuckles: 'brass knuckles', knife: 'knife', machete: 'machete', crowbar: 'crowbar', glock: 'gun', m1911: 'gun', taser: 'taser', ak47: 'rifle', mossberg: 'shotgun', gasRifle: 'gas rifle' };
+const ITEM_SAID = { knuckles: 'brass knuckles', knife: 'knife', machete: 'machete', crowbar: 'crowbar', glock: 'gun', m1911: 'gun', taser: 'taser', ak47: 'rifle', mossberg: 'shotgun', gasRifle: 'gas rifle', m4a1: 'rifle', ar15: 'rifle' };
 const capital = (t) => t.charAt(0).toUpperCase() + t.slice(1);
 // what a witness says about the way somebody died, when it was not just a death
 const DEATH_SAID = { burns: 'sawBurnDeath', 'smoke inhalation': 'sawBurnDeath', 'frozen solid': 'sawFreezeDeath', hypothermia: 'sawFreezeDeath', suffocation: 'sawChokeDeath', heatstroke: 'sawHeatDeath', 'poison gas': 'sawGasDeath', electrocution: 'sawShockDeath' };
@@ -238,7 +238,7 @@ export class Brain {
     this.kitT = 0;            // when they may next put something away or get it out
     this.calmT = 0;           // when there was last anything to be armed for
     this.tiredT = -99;
-    this.note(man.officer ? 'On duty. Keep the peace.' : 'Where am I? Grey sky, black ground.');
+    this.note(man.officer ? 'On duty. Keep the peace.' : 'Where am I? How did I get here?');
   }
 
   rel(o) {
@@ -790,6 +790,7 @@ export class Brain {
             if (care > 0.3) ra.anger = clamp01(ra.anger + 0.3 * care * (0.4 + T.temper));
             this.remember('sawSever', ev.by, ev.who, ev.lost);
           }
+          if (ev.head) this.spokeT = -99;
           this.speak(ev.head ? 'sawBeheaded' : 'sawSevered', { victim: ev.who.name }, 0.85, null, true);
           this.note(`${ev.who.name}'s ${ev.lost} just came off!`);
           this.shaken(ev.head ? 0.95 : 0.7);
@@ -832,6 +833,22 @@ export class Brain {
         if (seen && ev.who && ev.who.alive) {
           E.bump('surprise', 0.3);
           this.speak('sawVestStop', { victim: ev.who.name }, 0.5, null, true);
+        }
+        break;
+      case 'headBurst':
+        // somebody's head opened by a rifle round, in front of them
+        if (seen && ev.who && ev.who !== me && d < 14) {
+          // (whatever they were in the middle of saying, they stop)
+          this.spokeT = -99;
+          this.speak('sawHeadBurst', { victim: ev.who.name }, 0.9, null, true);
+          this.shaken(1.1);
+          this.note(`${ev.who.name} was shot in the head. Right in front of me.`);
+        }
+        break;
+      case 'helmetStop':
+        if (seen && ev.who && ev.who.alive) {
+          E.bump('surprise', 0.4);
+          this.speak('sawHelmetStop', { victim: ev.who.name }, 0.55, null, true);
         }
         break;
       case 'stumbleFall':
@@ -1041,7 +1058,8 @@ export class Brain {
     // the startle: a flinch, a duck, hands over the head
     if (me.ready && !this.fighting && now - (this.startleT || -9) > 1.2 && chance(0.95 - T.bravery * 0.35)) {
       this.startleT = now;
-      me.perform(near > 0.3 || chance(0.6) ? 'duck' : 'flinch', { fadeIn: 0.03, fadeOut: 0.15 });
+      // (close: down; a little further off, the hands go over the ears - or just a flinch)
+      me.perform(near > 0.3 ? 'duck' : near > 0.12 && chance(0.55) ? 'coverEars' : chance(0.6) ? 'duck' : 'flinch', { fadeIn: 0.03, fadeOut: 0.15 });
     }
     // (right on top of it, there is no time to say anything: what it does to them speaks for them)
     if (now - (this.blastSaidT || -9) > 4 && d > (ev.r || 3) * 0.5) {
@@ -1262,7 +1280,7 @@ export class Brain {
           E.bump('surprise', 0.7);
           E.bump('fear', 0.2 * (1.2 - T.bravery));
           this.speak('thawWake', {}, 0.9);
-          this.note('I was frozen. Solid. And now I am not.');
+          this.note("I was frozen solid. Now I'm thawing out.");
           me.thawedT = null;
           break;
         }
@@ -1343,14 +1361,14 @@ export class Brain {
         E.bump('surprise', 0.7);
         E.bump('sadness', 0.25);
         this.speak('noosed', {}, 1, null, true);
-        this.note('There is a noose round my neck.');
+        this.note("There's a noose round my neck.");
         this.downTalk = rand(2, 3.5);
         break;
       case 'unroped':
         E.bump('joy', 0.2);
         this.thinkT = 0;
         this.speak('canMove', {}, 0.6);
-        this.note('I am not tied to anything any more.');
+        this.note("I'm not tied up any more.");
         break;
       case 'armed': {
         const k = d.item ? d.item.kind : 'knuckles';
@@ -1359,11 +1377,12 @@ export class Brain {
         this.calmT = this.sb.time;
         this.speak({ knife: 'knifeGet', machete: 'macheteGet', taser: 'taserGet' }[k] || (isGun(k) ? 'gunGet' : 'weaponGet'), {}, 0.8);
         this.note({
-          knife: 'Got the knife. Now they have to listen.', machete: 'Got the machete. Stay back, everyone.',
-          glock: 'Got the gun. Nobody move.', m1911: 'Got the .45. Nobody move.', taser: 'Got a taser. Anybody tries anything, they get it.',
-          crowbar: 'Got a crowbar. Heavy. Good.', ak47: 'An AK. Nobody is going to argue with this.', mossberg: 'A shotgun. Up close, nothing beats it.',
-          gasRifle: 'A gas rifle. Nobody is going to be breathing easy.',
-        }[k] || 'Got the brass knuckles. Nobody messes with me now.');
+          knife: "Got the knife. I hope I don't need it.", machete: 'Got the machete. Everyone had better stay back.',
+          glock: "Got the gun. Is it loaded? It's loaded.", m1911: 'Got the .45. Heavy thing.', taser: "Got a taser. Better than a gun, I suppose.",
+          crowbar: 'Got a crowbar. Heavy. Good.', ak47: "An AK. Nobody's going to argue with this.", mossberg: "A shotgun. Up close, nothing's going to stop it.",
+          gasRifle: "A gas rifle. I'd better not breathe any of it myself.",
+          m4a1: "Got the M4. Thirty rounds. That'll do.", ar15: 'Got the AR. One shot at a time.',
+        }[k] || "Got the brass knuckles. Hope I don't have to use them.");
         me.setEmote('sparkle', 1.2);
         break;
       }
@@ -1474,6 +1493,11 @@ export class Brain {
         if (!me.officer) this.speak('vestOn', {}, 0.7);
         this.note('Got a vest on. That should stop a bullet.');
         break;
+      case 'helmet':
+        E.bump('fear', -0.08);
+        this.speak('helmetOn', {}, 0.7);
+        this.note("Helmet's on. That should help.");
+        break;
       case 'drew': {
         const k = d.item.kind;
         this.calmT = this.sb.time;
@@ -1518,7 +1542,7 @@ export class Brain {
         E.bump('fear', -0.35);
         E.bump('joy', 0.15);
         this.speak(d.how === 'rolled' ? 'fireOutRolled' : 'fireOut', {}, 0.9, null, true);
-        this.note(d.how === 'rolled' ? 'I rolled it out. I actually rolled it out.' : d.how === 'smothered' ? 'Somebody beat the flames out.' : 'The fire is out.');
+        this.note(d.how === 'rolled' ? 'I rolled it out. I actually rolled it out.' : d.how === 'smothered' ? 'Somebody beat the flames out.' : "The fire's out.");
         break;
       case 'frozen':
         this.clearBehaviour();
@@ -1562,7 +1586,7 @@ export class Brain {
       E.bump('anger', anger * 0.8);
       const knife = d.weapon === 'knife', machete = d.weapon === 'machete', bullet = d.weapon === 'bullet';
       const spec = armOf(d.weapon);
-      const nasty = bullet || d.weapon === 'vestRound' ? 3 : machete ? 2.6 : knife ? 2.4 : spec ? spec.nasty || 2.4 : by.weapon ? 1.6 : 1;
+      const nasty = bullet || d.weapon === 'vestRound' || d.weapon === 'helmetRound' ? 3 : machete ? 2.6 : knife ? 2.4 : spec ? spec.nasty || 2.4 : by.weapon ? 1.6 : 1;
       r.fear = clamp01(r.fear + sev * 0.28 * (1.15 - T.bravery) * nasty);
       if (spec) {
         E.bump('fear', 0.25 * (1.2 - T.bravery));
@@ -1575,6 +1599,12 @@ export class Brain {
         this.remember('shotMe', by);
         this.speak('vestSaved', { other: by.name }, 1, by, true);
         this.note(`${by.name} shot me. The vest stopped it.`);
+      } else if (d.weapon === 'helmetRound') {
+        // shot in the head - and the helmet took it: the world ringing, and alive
+        E.bump('fear', 0.45 * (1.2 - T.bravery));
+        this.remember('shotMe', by);
+        this.speak('helmetSaved', { other: by.name }, 1, by, true);
+        this.note(`${by.name} shot me in the head. The helmet stopped it.`);
       } else if (bullet) {
         E.bump('fear', 0.35 * (1.2 - T.bravery));
         this.remember('shotMe', by);
@@ -1603,6 +1633,10 @@ export class Brain {
       E.bump('fear', 0.35 * (1.2 - T.bravery));
       this.speak('vestSaved', { other: 'someone' }, 1, null, true);
       this.note('Something hit me in the chest. The vest stopped it.');
+    } else if (d.weapon === 'helmetRound') {
+      E.bump('fear', 0.5 * (1.2 - T.bravery));
+      this.speak('helmetSaved', { other: 'someone' }, 1, null, true);
+      this.note('Something hit me in the head. The helmet stopped it.');
     } else if (d.weapon === 'bullet') {
       E.bump('fear', 0.4 * (1.2 - T.bravery));
       this.speak('shot', { other: 'someone' }, 1, null, true);
@@ -2070,9 +2104,9 @@ export class Brain {
           const guarded = this.gunThreat && now - this.gunThreat.t < 20 ? 0.35 * T.bravery : 0;
           s = (s + guarded) * (0.45 + T.aggression * 0.8 + T.bravery * 0.25) * (1.25 - T.empathy * 0.8) * spare;
           // (a rifle or a shotgun counts for more than a pistol)
-          if (k.kind === 'ak47' || k.kind === 'mossberg' || k.kind === 'gasRifle') s *= 1.25;
-          const close = { m1911: 'A .45. Big gun. Mine.', ak47: 'An AK-47. Oh, this changes things.', mossberg: 'A shotgun. Nobody comes near me now.', gasRifle: 'A gas rifle. One of those and the whole room is coughing.' }[k.kind] || "A gun. Let's see them try something now.";
-          add('arm', k, s, d < 4 ? close : k.kind === 'ak47' ? 'There is a rifle over there.' : k.kind === 'mossberg' ? 'There is a shotgun over there.' : k.kind === 'gasRifle' ? 'There is a gas rifle over there.' : 'There is a gun on the floor over there.');
+          if (isLongGun(k.kind)) s *= 1.25;
+          const close = { m1911: 'A .45. Big gun. Mine.', ak47: 'An AK-47. Oh, this changes things.', mossberg: 'A shotgun. Nobody comes near me now.', gasRifle: 'A gas rifle. One of those and the whole room is coughing.', m4a1: 'An M4. Right there.', ar15: 'An AR-15. I know how to use one of those.' }[k.kind] || "A gun. Let's see them try something now.";
+          add('arm', k, s, d < 4 ? close : k.kind === 'ak47' || k.kind === 'm4a1' || k.kind === 'ar15' ? 'There is a rifle over there.' : k.kind === 'mossberg' ? 'There is a shotgun over there.' : k.kind === 'gasRifle' ? 'There is a gas rifle over there.' : 'There is a gun on the floor over there.');
         } else {
           s *= spare;
           add('arm', k, s, d < 4 ? 'Brass knuckles, right there. Mine.' : 'Those brass knuckles could come in handy.');
@@ -2088,6 +2122,16 @@ export class Brain {
         const d = Math.abs(g.pos.x - me.pos.x);
         const s = (0.07 + E.fear * 0.25 + shots + (1 - T.bravery) * 0.06 + T.curiosity * 0.05 + this.maxAnger() * 0.12) * (1 - danger * 0.5) / (1 + d / 7);
         add('vest', g, s * (g.hp > 0 ? 1 : 0.2), shots ? 'Bullets flying. I need that vest.' : 'A vest. Better wear it, just in case.');
+      }
+    }
+    // a helmet lying about: the same, for the head
+    if (!me.helmet && !me.donning && me.human && !me.cut.head && me.health.canUse('armA') && me.health.canUse('armB')) {
+      const shots = this.gunThreat && now - this.gunThreat.t < 30 ? 0.4 : 0;
+      for (const [g] of this.things) {
+        if (g.kind !== 'helmet' || g.wornBy || g.removed || g.pos.y - me.pos.y > 0.6) continue;
+        const d = Math.abs(g.pos.x - me.pos.x);
+        const s = (0.06 + E.fear * 0.22 + shots + (1 - T.bravery) * 0.05 + T.curiosity * 0.04 + this.maxAnger() * 0.1) * (1 - danger * 0.5) / (1 + d / 7);
+        add('vest', g, s * (g.hp > 0 ? 1 : 0.2), shots ? 'They are shooting. I want that helmet on.' : 'A helmet. Might as well put it on.');
       }
     }
     // a gun running low, and a box of rounds in sight

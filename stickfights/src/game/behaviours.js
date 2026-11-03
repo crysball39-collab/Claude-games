@@ -71,15 +71,19 @@ export class Idle extends Behaviour {
     const h = me.health;
     const stump = Object.keys(me.cut).length > 0 && h.bleeding > 0.001;
     const sore = h.shock > 0.55 ? 'shock' : stump ? 'clutchStump' : !h.canUse('armA') || !h.canUse('armB') ? 'clutchArm'
-      : h.blood < 0.62 || h.temp < 35 ? 'shiver' : h.bones.ribs.broken || h.internal > 0.001 || h.parts.torso.hp < 70 ? 'clutchStomach' : null;
+      : h.blood < 0.62 || h.temp < 35 ? 'shiver' : (h.nausea || 0) > 0.6 ? 'sickHunch'
+        : h.dizzy > 1.2 || h.parts.head.hp < 45 ? 'clutch' : h.bones.ribs.broken || h.internal > 0.001 || h.parts.torso.hp < 70 ? 'clutchStomach' : null;
     if (sore && me.ready && !this.pose) {
       me.setPosture(sore); this.pose = sore; this.poseT = rand(3, 6);
-      this.what = sore === 'shiver' ? 'Shivering' : sore === 'shock' ? 'In shock' : sore === 'clutchStump' ? 'Holding the stump' : 'Holding where it hurts';
+      this.what = sore === 'shiver' ? 'Shivering' : sore === 'shock' ? 'In shock' : sore === 'clutchStump' ? 'Holding the stump'
+        : sore === 'sickHunch' ? 'Feeling sick' : sore === 'clutch' ? 'Holding their head' : 'Holding where it hurts';
     }
     if (me.posture === 'clutchStump' || me.posture === 'clutchArm' || me.posture === 'clutchStomach') h.selfPress = Math.max(h.selfPress, 0.3);
     if (this.next <= 0 && me.ready && !this.pose) {
       this.next = rand(2.5, 5);
-      const E = b.emo, T = b.traits, opts = ['lookAround', 'scratchHead', 'stretch', 'armsCrossed', 'handsOnHips'];
+      const E = b.emo, T = b.traits, opts = ['lookAround', 'scratchHead', 'stretch', 'armsCrossed', 'handsOnHips', 'checkWatch', 'rubNeck', 'handsInPockets', 'shieldEyes'];
+      // a gun in the hand: a look at it, now and then
+      if (me.weapon && me.weapon.spec) opts.push('checkGun', 'checkGun');
       if (E.sadness > 0.4) opts.push('sigh', 'sigh');
       if (E.joy > 0.55) opts.push('whistle', 'whistle', 'thumbsUp');
       if (E.joy > 0.78) opts.push('dance');
@@ -103,10 +107,13 @@ export class Idle extends Behaviour {
       else if (a === 'crackKnuckles') { me.perform('crackKnuckles'); this.what = 'Cracking their knuckles'; }
       else if (a === 'radio') { me.perform('radio'); b.speak('copIdle', {}, 0.6); this.what = 'Checking in on the radio'; }
       else if (a === 'patrol') { me.facing = -me.facing; me.setPosture('handsOnHips'); this.pose = 'handsOnHips'; this.poseT = rand(2, 4); this.what = 'Keeping an eye on things'; }
-      else if (a === 'armsCrossed' || a === 'handsOnHips' || a === 'shadowbox') {
+      else if (a === 'armsCrossed' || a === 'handsOnHips' || a === 'shadowbox' || a === 'handsInPockets') {
         me.setPosture(a); this.pose = a; this.poseT = rand(2.5, 5);
         this.what = a === 'shadowbox' ? 'Shadowboxing' : 'Standing around';
-      } else if (a === 'lookUp') { me.perform('lookUp'); b.speak('lookUp', {}, 0.5); this.what = 'Looking up at the sky'; }
+      } else if (a === 'checkWatch') { me.perform('checkWatch'); this.what = 'Checking the time'; }
+      else if (a === 'shieldEyes') { me.facing = chance(0.5) ? me.facing : -me.facing; me.perform('shieldEyes'); this.what = 'Looking into the distance'; }
+      else if (a === 'checkGun') { me.perform('checkGun'); this.what = 'Checking their gun'; }
+      else if (a === 'lookUp') { me.perform('lookUp'); b.speak('lookUp', {}, 0.5); this.what = 'Looking up at the sky'; }
       else me.perform(a);
     }
     if (this.pose && (this.poseT -= dt) <= 0) { if (this.me.posture === this.pose) me.setPosture(null); this.pose = null; }
@@ -608,11 +615,15 @@ export class Fight extends Behaviour {
     }
     const spec = g.spec || {};
     // (gas: from well back, out of the cloud it makes)
-    const want = spec.gas ? 6 + T.skill * 2 : spec.pellets ? 2.2 + T.skill : spec.auto ? 5 + T.skill * 3 : 3.5 + T.skill * 2.5;
+    // (a rifle, automatic or not, from further back than a pistol)
+    const want = spec.gas ? 6 + T.skill * 2 : spec.pellets ? 2.2 + T.skill : spec.auto || spec.long ? 5 + T.skill * 3 : 3.5 + T.skill * 2.5;
     const seen = b.sees(o);
+    // (with a rifle, and the range for it: down on one knee - and up again to move)
+    const kneel = spec.long && !spec.pellets && d > 6 && d <= 10 && seen && me.onGround && T.skill > 0.35;
+    if (me.posture === 'kneelAim' && !kneel) me.setPosture(null);
     if (d < (spec.gas ? 4.8 : 1.6)) me.goTo(me.pos.x - dir * (spec.gas ? 4 : 2), 'walk', { backpedal: true, face: o.pos.x });
     else if (d > 10 || !seen) me.goTo(o.pos.x - dir * want, 'walk', { face: o.pos.x });
-    else { me.stop(); me.faceTo(o.pos.x); }
+    else { me.stop(); me.faceTo(o.pos.x); if (kneel && me.posture !== 'kneelAim' && me.ready && this.t > 0.8) me.setPosture('kneelAim'); }
     if (!seen) { me.lowerGun(); return true; }
     me.aimAt(o);
     // the warning: not everyone shoots first
@@ -651,7 +662,7 @@ export class Fight extends Behaviour {
   end() {
     this.me.block(false);
     this.me.lowerGun();
-    if (this.me.posture === 'guard') this.me.setPosture(null);
+    if (this.me.posture === 'guard' || this.me.posture === 'kneelAim') this.me.setPosture(null);
     this.me.lookAt = null;
   }
 }
@@ -975,8 +986,8 @@ export class Mourn extends Behaviour {
 
 /* ---------------------------------- things ---------------------------------- */
 
-const ARM_SAID = { knife: 'knife', machete: 'machete', crowbar: 'crowbar', glock: 'gun', m1911: 'gun', taser: 'taser', ak47: 'rifle', mossberg: 'shotgun', gasRifle: 'gas rifle' };
-const ARM_ICON = { knife: 'knife', machete: 'machete', crowbar: 'crowbar', glock: 'glock', m1911: 'm1911', taser: 'taser', ak47: 'ak47', mossberg: 'mossberg', gasRifle: 'gasRifle' };
+const ARM_SAID = { knife: 'knife', machete: 'machete', crowbar: 'crowbar', glock: 'gun', m1911: 'gun', taser: 'taser', ak47: 'rifle', mossberg: 'shotgun', gasRifle: 'gas rifle', m4a1: 'rifle', ar15: 'rifle' };
+const ARM_ICON = { knife: 'knife', machete: 'machete', crowbar: 'crowbar', glock: 'glock', m1911: 'm1911', taser: 'taser', ak47: 'ak47', mossberg: 'mossberg', gasRifle: 'gasRifle', m4a1: 'm4a1', ar15: 'ar15' };
 
 export class Arm extends Behaviour {
   get kind() { return 'arm'; }
@@ -1010,13 +1021,13 @@ export class Arm extends Behaviour {
 /** A vest on the floor: over to it, picked up, and on over the head. */
 export class GearUp extends Behaviour {
   get kind() { return 'vest'; }
-  get label() { return this.me.donning ? 'Putting on a vest' : 'Going for the vest'; }
-  get icon() { return 'vest'; }
+  get label() { const w = this.target && this.target.kind === 'helmet' ? 'helmet' : 'vest'; return this.me.donning ? `Putting on a ${w}` : `Going for the ${w}`; }
+  get icon() { return this.target && this.target.kind === 'helmet' ? 'helmet' : 'vest'; }
   start() { this.tries = 0; }
   update(dt) {
     this.t += dt;
     const v = this.target, me = this.me;
-    if (me.vest || v.removed) return false;
+    if ((v.kind === 'helmet' ? me.helmet : me.vest) || v.removed) return false;
     // picked up: going on (or somebody else got there first)
     if (v.wornBy) return v.wornBy === me && me.donning === v;
     if (me.acting) return true;

@@ -192,13 +192,14 @@ export class Sound {
   }
 
   /** An AK-47 round: a harder, sharper crack than a pistol, and a long roll back off the walls. */
-  rifleShot(x) {
+  rifleShot(x, sharp = false) {
     if (!this.ready) return;
     const v = 0.4 + this.near(x) * 0.8;
-    this.hiss(0.08, 3200, 0.6, 1.3 * v);
-    this.hiss(0.04, 7000, 0.7, 0.75 * v, 'highpass');
-    this.tone('sine', 170, 35, 0.2, 1.15 * v);
-    this.tone('square', 1100, 160, 0.035, 0.18 * v);
+    // (a 5.56 cracks higher and sharper than the 7.62's thump)
+    this.hiss(0.08, sharp ? 3900 : 3200, 0.6, 1.3 * v);
+    this.hiss(0.04, sharp ? 8200 : 7000, 0.7, (sharp ? 0.95 : 0.75) * v, 'highpass');
+    this.tone('sine', sharp ? 200 : 170, 35, sharp ? 0.16 : 0.2, (sharp ? 0.95 : 1.15) * v);
+    this.tone('square', sharp ? 1400 : 1100, 160, 0.035, 0.18 * v);
     for (const [d, k] of [[0.1, 0.4], [0.22, 0.26], [0.38, 0.14], [0.58, 0.07]]) this.hiss(0.18, 1100, 0.5, k * v, 'lowpass', d);
   }
 
@@ -370,6 +371,23 @@ export class Sound {
       this.sweep('bandpass', 5200, 1500, 0.16, 0.16 * v, 4);
       this.tone('sine', 1760, 1700, 0.18, 0.05 * v, 0.06);
     }
+  }
+
+  /** A round off a helmet: a hard crack on the shell, a ring, and the whine of it going off. */
+  helmetStop(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    this.hiss(0.04, 3800, 1.2, 0.7 * v);
+    this.tone('triangle', 1450, 1300, 0.22, 0.12 * v, 0.005);
+    this.tone('sine', 2600, 2500, 0.16, 0.05 * v, 0.01);
+    this.tone('sine', 3200 + rand(-300, 300), 900, 0.28, 0.06 * v, 0.03);
+  }
+
+  /** A helmet's chin strap done up: two clicks of the buckle. */
+  buckle(x) {
+    if (!this.ready) return;
+    const v = this.near(x);
+    for (const d of [0, 0.09]) { this.tone('square', 2100, 1700, 0.012, 0.08 * v, d); this.hiss(0.015, 4200, 3, 0.12 * v, 'bandpass', d); }
   }
 
   /** A taser cartridge going off: a sharp pop of gas, and the hiss of the wires paying out. */

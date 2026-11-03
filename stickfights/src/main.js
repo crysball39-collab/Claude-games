@@ -50,7 +50,7 @@ const SCREAMS = new Set(['panic', 'hurtBig', 'flee', 'grabbed', 'grabbedAgain', 
 sb.on('hit', (e) => {
   // a body frozen solid: whatever hit it, ice cracks
   if (e.who && e.who.health && e.who.health.frozen) sound.iceCrack(e.x);
-  if (e.weapon === 'bullet' || e.weapon === 'vestRound') return;   // its own sound, from bulletHit (or vestStop)
+  if (e.weapon === 'bullet' || e.weapon === 'vestRound' || e.weapon === 'helmetRound') return;   // its own sound, from bulletHit (or vestStop, helmetStop)
   if (armOf(e.weapon)) {
     // a mod's weapon makes its own noise (the mod listens for it); the view still jumps
     if (!e.blocked && (e.power > 1.7 || e.fatal)) cam.shake(Math.min(0.6, 0.15 + e.power * 0.08));
@@ -83,6 +83,7 @@ sb.on('shot', (e) => {
   const heavy = e.heavy || !!(e.gun && e.gun.spec && e.gun.spec.energy > 1.1);
   const kind = e.kind || (e.gun && e.gun.kind);
   if (kind === 'ak47') sound.rifleShot(e.x);
+  else if (kind === 'm4a1' || kind === 'ar15') sound.rifleShot(e.x, true);
   else if (kind === 'mossberg') sound.shotgun(e.x, !!e.who);
   else if (kind === 'gasRifle') { sound.thump(e.x); return; }
   else sound.gunshot(e.x, heavy);
@@ -99,6 +100,8 @@ sb.on('probeBlocked', (e) => sound.clink(2, e.x));
 sb.on('cartOut', (e) => sound.gunClick(e.x, 'magOut'));
 sb.on('cartIn', (e) => sound.gunClick(e.x, 'magIn'));
 sb.on('vestStop', (e) => { sound.vestStop(e.x); cam.shake(0.1); });
+sb.on('helmetStop', (e) => { sound.helmetStop(e.x); cam.shake(0.12); });
+sb.on('helmetOn', (e) => sound.buckle(e.x));
 sb.on('vestOn', (e) => sound.velcro(e.x));
 sb.on('stow', (e) => sound.holster(e.x));
 sb.on('drawWeapon', (e) => sound.holster(e.x, true));

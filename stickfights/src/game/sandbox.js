@@ -20,7 +20,7 @@
    ========================================================================== */
 import { World, Body } from '../physics/rigid.js';
 import { Stickman, G } from './stickman.js';
-import { Crate, Knuckles, Knife, Machete, Crowbar, Gun, Limb, AmmoBox, Vest, CRATE_SIZE, AMMO_BOXES, VEST_H, isLongGun } from './props.js';
+import { Crate, Knuckles, Knife, Machete, Crowbar, Gun, Limb, AmmoBox, Vest, Helmet, CRATE_SIZE, AMMO_BOXES, VEST_H, HELMET_H, isLongGun } from './props.js';
 import { Taser } from './taser.js';
 import { Law } from './law.js';
 import { FX } from './fx.js';
@@ -43,6 +43,54 @@ const STRAY_HIT = 0.4;
 
 // bodies piling on bodies: how big each heavy point is to another ragdoll
 const PILE_R = { head: 0.17, neck: 0.08, chest: 0.09, hip: 0.09, kneeA: 0.06, kneeB: 0.06 };
+// how thick each of a body's bones is, to another body lying on it: the trunk, and the rest
+const TRUNK = new Set(['hip', 'chest', 'neck']);
+// how much of the sliding of one body over another each contact takes out, each step: skin and cloth grip
+const PILE_GRIP = 0.35;
+
+/**
+ * The joints of ragdoll A pushed off the bones of ragdoll B (and B's bones
+ * back off them), wherever one has gone into the other - shared out between
+ * the joint and the two ends of the bone by how heavy each is and how near
+ * the middle it went in. True if anything touched.
+ */
+function pileOnBones(A, B) {
+  let touched = false;
+  const bb = B.aabb(0.12);
+  for (const l of B.links) {
+    if (typeof l.a !== 'number' || typeof l.b !== 'number') continue;
+    const q1 = B.p[l.a], q2 = B.p[l.b];
+    if (q1.r < 0.006 || q2.r < 0.006) continue;
+    const rs = TRUNK.has(q1.name) && TRUNK.has(q2.name) ? 0.085 : 0.042;
+    const ex = q2.x - q1.x, ey = q2.y - q1.y, L2 = ex * ex + ey * ey;
+    if (L2 < 1e-6) continue;
+    for (const pa of A.p) {
+      if (pa.r < 0.006 || pa.x < bb.minX || pa.x > bb.maxX || pa.y < bb.minY || pa.y > bb.maxY) continue;
+      const t = ((pa.x - q1.x) * ex + (pa.y - q1.y) * ey) / L2;
+      // (the ends of the bone are joints, and joint on joint is the other check's)
+      if (t <= 0.05 || t >= 0.95) continue;
+      const cx = q1.x + ex * t, cy = q1.y + ey * t;
+      const dx = pa.x - cx, dy = pa.y - cy, d = Math.hypot(dx, dy), min = (PILE_R[pa.name] || pa.r) * 0.9 + rs;
+      if (d >= min || d < 1e-6) continue;
+      const ia = A.pinned ? 0 : pa.im, i1 = B.pinned ? 0 : q1.im, i2 = B.pinned ? 0 : q2.im;
+      const W = ia + (1 - t) * (1 - t) * i1 + t * t * i2;
+      if (W <= 0) continue;
+      const nx = dx / d, ny = dy / d, C = (min - d) * 0.7 / W;
+      pa.x += nx * C * ia; pa.y += ny * C * ia;
+      q1.x -= nx * C * (1 - t) * i1; q1.y -= ny * C * (1 - t) * i1;
+      q2.x -= nx * C * t * i2; q2.y -= ny * C * t * i2;
+      // (and it grips: a body does not slide off another as if they were both ice)
+      const tx = -ny, ty = nx;
+      const vqx = (1 - t) * (q1.x - q1.px) + t * (q2.x - q2.px), vqy = (1 - t) * (q1.y - q1.py) + t * (q2.y - q2.py);
+      const F = (((pa.x - pa.px) - vqx) * tx + ((pa.y - pa.py) - vqy) * ty) * PILE_GRIP / W;
+      pa.px += tx * F * ia; pa.py += ty * F * ia;
+      q1.px -= tx * F * (1 - t) * i1; q1.py -= ty * F * (1 - t) * i1;
+      q2.px -= tx * F * t * i2; q2.py -= ty * F * t * i2;
+      touched = true;
+    }
+  }
+  return touched;
+}
 
 /**
  * Where a ray from (px, py) along the unit (dx, dy) goes into a box body,
@@ -286,6 +334,16 @@ export class Sandbox {
     return t;
   }
 
+  /** A light tactical helmet: kept with the vests (armour, all of it), and counted with them. */
+  spawnHelmet(x, y) {
+    if (this.vests.length >= LIMITS.vests) return null;
+    x = clamp(x, this.left + 0.3, this.right - 0.3);
+    const h = new Helmet(this, x, Math.max(y, HELMET_H / 2 + 0.01));
+    this.vests.push(h);
+    this.emit('spawn', { what: h, x, y });
+    return h;
+  }
+
   spawnVest(x, y, o = {}) {
     if (this.vests.length >= LIMITS.vests) return null;
     x = clamp(x, this.left + 0.3, this.right - 0.3);
@@ -416,6 +474,7 @@ export class Sandbox {
       thing.dropStowed(0);
       if (thing.donning) thing.finishVest();
       if (thing.vest) { const v = thing.vest; thing.vest = null; v.drop(thing.wj.chest.x, Math.max(0.2, thing.wj.chest.y), 0, 0); }
+      if (thing.helmet) { const hm = thing.helmet; thing.helmet = null; hm.drop(thing.wj.head.x, Math.max(0.2, thing.wj.head.y), 0, 0); }
       for (const e of [...thing.stuck]) thing.pullKnife(e, null);
       thing.removed = true;
       this.phys.remove(thing.proxy);
@@ -460,12 +519,12 @@ export class Sandbox {
       if (i >= 0) this.logs.splice(i, 1);
       for (const k of this.blades) if (k.stuckIn && k.stuckIn.wood === thing) k.drop(k.body.pos.x, k.body.pos.y, 0, 0);
       this.emit('vanish', { what: thing, x: thing.pos.x, y: thing.pos.y });
-    } else if (thing.kind === 'vest' || thing.kind === 'ammo') {
+    } else if (thing.kind === 'vest' || thing.kind === 'helmet' || thing.kind === 'ammo') {
       const at = { x: thing.pos.x, y: thing.pos.y };
       thing.removed = true;
-      if (thing.kind === 'vest') {
+      if (thing.kind === 'vest' || thing.kind === 'helmet') {
         const w = thing.wornBy;
-        if (w) { if (w.vest === thing) w.vest = null; if (w.donning === thing) w.donning = null; }
+        if (w) { if (w.vest === thing) w.vest = null; if (w.helmet === thing) w.helmet = null; if (w.donning === thing) w.donning = null; }
         if (thing.inWorld) { this.phys.remove(thing.body); thing.inWorld = false; }
         this.vests.splice(this.vests.indexOf(thing), 1);
       } else {
@@ -635,7 +694,9 @@ export class Sandbox {
     const rags = [];
     for (const p of this.people) if (p.rag) rags.push(p);
     if (!rags.length) return;
+    // (what is lying about is in the way too: a body comes down on a gun, a crate, a severed leg, and moves it)
     const boxes = this.solidBoxes();
+    for (const t of this.loose()) if (t.body && !t.removed && !t.frozenInPlace && t.body.mass < 120 && !boxes.includes(t.body)) boxes.push(t.body);
     const world = { floor: 0, left: this.left, right: this.right, boxes, friction: 0.55 };
     // something moving near a body at rest wakes it up
     for (const p of rags) {
@@ -663,6 +724,8 @@ export class Sandbox {
         const bb = B.aabb(0.1);
         if (ba.maxX < bb.minX || bb.maxX < ba.minX || ba.maxY < bb.minY || bb.maxY < ba.minY) continue;
         let touched = false;
+        // (every joint of each off every bone of the other: a leg across a body lies on it, not through it)
+        if (pileOnBones(A, B) | pileOnBones(B, A)) touched = true;
         for (const pa of A.p) {
           const ra = PILE_R[pa.name];
           if (!ra) continue;
@@ -679,6 +742,11 @@ export class Sandbox {
             const k = (min - d) / (d * w) * 0.8;
             pa.x -= dx * k * ia; pa.y -= dy * k * ia;
             pb.x += dx * k * ib; pb.y += dy * k * ib;
+            // (the same grip, joint on joint)
+            const tx = -dy / d, ty = dx / d;
+            const F = (((pb.x - pb.px) - (pa.x - pa.px)) * tx + ((pb.y - pb.py) - (pa.y - pa.py)) * ty) * PILE_GRIP / w;
+            pb.px += tx * F * ib; pb.py += ty * F * ib;
+            pa.px -= tx * F * ia; pa.py -= ty * F * ia;
             touched = true;
           }
         }

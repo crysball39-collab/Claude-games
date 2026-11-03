@@ -8,6 +8,9 @@
    ========================================================================== */
 import { DIM, pointOnBone, HEAD_BONE } from './skeleton.js';
 
+// the guns drawn in the hand, in its own frame
+const HELD_GUNS = new Set(['glock', 'm1911', 'ak47', 'mossberg', 'gasRifle', 'm4a1', 'ar15']);
+
 export const INK = '#111111';      // the near arm and leg, the body, the head
 export const INK_FAR = '#2f2f2f';  // the far arm and leg, a touch lighter for depth
 export const HEAD_FILL = '#e4e4e4';
@@ -108,7 +111,7 @@ export function drawStickman(ctx, j, o) {
     else if (o.weapon === 'knife') drawHeldKnife(ctx, j.midForeA, j.handA, s, o.weaponBlood || 0);
     else if (o.weapon === 'machete') drawHeldMachete(ctx, j.midForeA, j.handA, s, f, o.weaponBlood || 0);
     else if (o.weapon === 'crowbar') drawHeldCrowbar(ctx, j.midForeA, j.handA, s, f, o.weaponBlood || 0);
-    else if (o.weapon === 'glock' || o.weapon === 'm1911' || o.weapon === 'ak47' || o.weapon === 'mossberg' || o.weapon === 'gasRifle') drawHeldGun(ctx, j, s, f, o.weaponBlood || 0, o.gunSlide || 0, o.weapon);
+    else if (HELD_GUNS.has(o.weapon)) drawHeldGun(ctx, j, s, f, o.weaponBlood || 0, o.gunSlide || 0, o.weapon);
   }
   if (o.stuck) {
     for (const k of o.stuck) {
@@ -273,6 +276,17 @@ export function goneAt(cut, b, t) {
 function drawWounds(ctx, j, wounds, lw, cut, tint = null) {
   const p = { x: 0, y: 0 }, q = { x: 0, y: 0 };
   const B = tint ? tint[0] : BLOOD, BD = tint ? tint[1] : BLOOD_DARK;
+  // first what has soaked out round the open wounds, under everything else
+  for (const w of wounds) {
+    if (!w.soak || w.soak < 0.03 || goneAt(cut, w.bone, w.t)) continue;
+    pointOnBone(j, w.bone, w.t, p);
+    ctx.fillStyle = tint ? tint[1] : BLOOD_DARK;
+    ctx.globalAlpha = 0.35 + w.soak * 0.35;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, lw * (0.55 + w.soak * 1.3), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
   for (const w of wounds) {
     if (goneAt(cut, w.bone, w.t)) continue;
     pointOnBone(j, w.bone, w.t, p);
@@ -395,7 +409,86 @@ export function drawHead(ctx, j, o, r, lw) {
 
   drawHair(ctx, o.hair, r, lw);
   if (o.face) drawFace(ctx, o.face, r, lw, o.hurt);
-  if (o.hat) drawHat(ctx, o.hat, r, lw);
+  // (a helmet goes on over any cap)
+  if (o.helmet) drawHelmetOn(ctx, o.helmet, r, lw);
+  else if (o.hat) drawHat(ctx, o.hat, r, lw);
+  ctx.restore();
+}
+
+/* ---------------------------------- the helmet ---------------------------------- */
+
+const HELMET_C = { shell: '#5b6342', dark: '#363c26', light: '#7c8659', rail: '#2a2e1f', patch: '#8f9a68' };
+
+/**
+ * A light tactical helmet on a head of radius r, in the head's own frame (+x
+ * the way the face looks, +y the top of the head): a shell standing a little
+ * off the skull from the nape to the brow, cut high over the ear, a rail
+ * along the side, the mount for a night sight on the front, a patch of loop
+ * on top, the chin strap - and the marks of whatever it has stopped.
+ */
+function drawHelmetOn(ctx, hm, r, lw) {
+  const C = HELMET_C, R = r * 1.13;
+  const at = (a, k = R) => ({ x: Math.cos(a) * k, y: Math.sin(a) * k });
+  ctx.save();
+  ctx.lineJoin = 'round';
+  // the chin strap, under it all
+  ctx.strokeStyle = C.rail;
+  ctx.lineWidth = lw * 0.28;
+  ctx.beginPath(); ctx.moveTo(-r * 0.05, -r * 0.02); ctx.quadraticCurveTo(r * 0.12, -r * 0.62, r * 0.5, -r * 0.86); ctx.stroke();
+  // the shell: over the top from the brow to the nape, and back along its lower edge, high over the ear
+  const brow = at(0.3), nape = at(Math.PI + 0.5);
+  ctx.fillStyle = C.shell;
+  ctx.strokeStyle = C.dark;
+  ctx.lineWidth = lw * 0.5;
+  ctx.beginPath();
+  ctx.arc(0, 0, R, 0.3, Math.PI + 0.5, false);
+  ctx.lineTo(nape.x + r * 0.22, nape.y + r * 0.05);
+  ctx.quadraticCurveTo(-r * 0.42, -r * 0.12, -r * 0.3, r * 0.1);
+  ctx.quadraticCurveTo(-r * 0.05, r * 0.3, r * 0.28, r * 0.2);
+  ctx.lineTo(brow.x, brow.y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // a little light along the crown
+  ctx.strokeStyle = C.light;
+  ctx.lineWidth = lw * 0.22;
+  ctx.beginPath(); ctx.arc(0, 0, R * 0.86, 1.05, 2.15, false); ctx.stroke();
+  // the rail along the side
+  ctx.fillStyle = C.rail;
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.78, r * 0.3); ctx.lineTo(r * 0.5, r * 0.4); ctx.lineTo(r * 0.5, r * 0.5); ctx.lineTo(-r * 0.76, r * 0.42);
+  ctx.closePath(); ctx.fill();
+  // the mount on the front, for a night sight
+  const m = at(0.62, R * 0.98);
+  ctx.save();
+  ctx.translate(m.x, m.y);
+  ctx.rotate(0.62 - Math.PI / 2);
+  ctx.fillRect(-r * 0.2, -r * 0.02, r * 0.4, r * 0.16);
+  ctx.restore();
+  // a patch of loop on the top
+  const pt = at(1.75, R * 0.9);
+  ctx.save();
+  ctx.translate(pt.x, pt.y);
+  ctx.rotate(1.75 - Math.PI / 2);
+  ctx.fillStyle = C.patch;
+  ctx.fillRect(-r * 0.22, -r * 0.08, r * 0.44, r * 0.14);
+  ctx.restore();
+  // where rounds hit it: a scuff of bare shell where it held, a hole where it did not
+  for (const d of hm.dents || []) {
+    const q = { x: Math.sin(d.a) * R * 0.96, y: Math.cos(d.a) * R * 0.96 };
+    ctx.fillStyle = d.hole ? '#1a0204' : '#c9c2a2';
+    ctx.beginPath(); ctx.arc(q.x, q.y, r * (d.hole ? 0.09 : 0.11), 0, Math.PI * 2); ctx.fill();
+    if (!d.hole) { ctx.fillStyle = '#2e2a1c'; ctx.beginPath(); ctx.arc(q.x, q.y, r * 0.045, 0, Math.PI * 2); ctx.fill(); }
+  }
+  ctx.restore();
+}
+
+/** A helmet on its own (lying about, on a card): the same, on no head, about `w` across. */
+export function drawHelmetShape(ctx, w = 0.27, hm = null) {
+  const r = w / 2.3;
+  ctx.save();
+  ctx.translate(0, -r * 0.3);
+  drawHelmetOn(ctx, hm || { dents: [] }, r, r * 0.22);
   ctx.restore();
 }
 
@@ -1013,8 +1106,11 @@ export function gunPoint(g, lx, ly) {
   return { x: g.x + c * x - n * y, y: g.y + n * x + c * y };
 }
 
+// where each gun is held, in its own frame (for the drawing; props.js has the same for the firing)
+const GRIPS = () => ({ m1911: M1911_GRIP, ak47: AK_GRIP, mossberg: MOSS_GRIP, gasRifle: GAS_GRIP, m4a1: M4_GRIP, ar15: AR_GRIP });
+
 function drawHeldGun(ctx, j, s, f, blood, slide, kind = 'glock') {
-  const grip = { m1911: M1911_GRIP, ak47: AK_GRIP, mossberg: MOSS_GRIP }[kind] || GLOCK_GRIP;
+  const grip = GRIPS()[kind] || GLOCK_GRIP;
   const g = heldGunFrame(j, s, f, grip);
   ctx.save();
   ctx.translate(g.x, g.y);
@@ -1029,6 +1125,7 @@ export function drawGunShape(ctx, kind, k = 1, blood = 0, slide = 0) {
   if (kind === 'gasRifle') drawGasRifleShape(ctx, k, blood);
   else if (kind === 'm1911') drawM1911Shape(ctx, k, blood, slide);
   else if (kind === 'ak47') drawAKShape(ctx, k, blood, slide);
+  else if (kind === 'm4a1' || kind === 'ar15') drawARShape(ctx, kind, k, blood, slide);
   else if (kind === 'mossberg') drawMossbergShape(ctx, k, blood, slide);
   else if (kind === 'taser') drawTaserShape(ctx, k, true);
   else drawGlockShape(ctx, k, blood, slide);
@@ -1182,6 +1279,166 @@ export function drawAKShape(ctx, k = 1, blood = 0, bolt = 0) {
   if (blood > 0) {
     ctx.fillStyle = `rgba(150, 12, 24, ${Math.min(0.8, blood)})`;
     ctx.beginPath(); ctx.ellipse(-0.12, -0.05, 0.03, 0.04, 0.2, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* --------------------------------- the AR family --------------------------------- */
+
+// The M4A1: a black carbine - the collapsible stock on its buffer tube, the flat-top upper with
+// a red dot on its rail, the round ribbed handguard, the front sight post, a flash hider
+export const M4_W = 0.9;
+export const M4_H = 0.27;
+export const M4_GRIP = { x: -0.11, y: -0.07 };
+export const M4_MUZZLE = { x: 0.47, y: 0.027 };
+export const M4_PORT = { x: -0.03, y: 0.055 };
+// The AR-15: the same rifle made for the civilian market - a longer barrel, a free-float handguard
+// with its slots, tan furniture and a polymer magazine, and a scope on the rail
+export const AR_W = 0.95;
+export const AR_H = 0.27;
+export const AR_GRIP = { x: -0.11, y: -0.07 };
+export const AR_MUZZLE = { x: 0.5, y: 0.027 };
+export const AR_PORT = { x: -0.03, y: 0.055 };
+
+/** One of the AR family, centred on its receiver: kind 'm4a1' or 'ar15'; `bolt` is how far back the bolt carrier is. */
+export function drawARShape(ctx, kind = 'm4a1', k = 1, blood = 0, bolt = 0) {
+  const civ = kind === 'ar15';
+  const BK = '#1c1d1f', BKD = '#0e0f10', BKL = '#3b3e42';
+  const FUR = civ ? '#b49b6c' : BK, FURD = civ ? '#8d7650' : BKD, FURL = civ ? '#cdb689' : BKL;
+  ctx.save();
+  ctx.scale(k, k);
+  ctx.lineJoin = 'round';
+  // the stock on its buffer tube
+  ctx.fillStyle = BKD;
+  ctx.fillRect(-0.36, 0.018, 0.17, 0.028);
+  ctx.fillStyle = FUR;
+  ctx.beginPath();
+  ctx.moveTo(-0.3, 0.054); ctx.lineTo(-0.43, 0.05); ctx.quadraticCurveTo(-0.445, 0.04, -0.445, 0.02);
+  ctx.lineTo(-0.445, -0.07); ctx.lineTo(-0.405, -0.072); ctx.lineTo(-0.3, -0.006);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = FURD;
+  ctx.fillRect(-0.452, -0.072, 0.016, 0.124);
+  ctx.fillStyle = FURL;
+  ctx.fillRect(-0.4, 0.034, 0.08, 0.008);
+  // the pistol grip, raked back
+  ctx.fillStyle = FUR;
+  ctx.beginPath();
+  ctx.moveTo(-0.14, 0.0); ctx.lineTo(-0.093, 0.0); ctx.lineTo(-0.112, -0.1); ctx.quadraticCurveTo(-0.13, -0.114, -0.152, -0.103);
+  ctx.closePath();
+  ctx.fill();
+  // the magazine: thirty rounds of 5.56, nearly straight (a polymer one on the AR-15, ribbed)
+  ctx.fillStyle = civ ? FURD : '#26282b';
+  ctx.beginPath();
+  ctx.moveTo(-0.004, 0.0); ctx.lineTo(0.056, 0.0); ctx.lineTo(0.066, -0.15); ctx.quadraticCurveTo(0.04, -0.162, 0.012, -0.152);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = civ ? '#6f5c3c' : '#111214';
+  ctx.lineWidth = 0.004;
+  ctx.beginPath();
+  for (const y of civ ? [-0.04, -0.07, -0.1, -0.13] : [-0.06, -0.12]) { ctx.moveTo(0.004, y); ctx.lineTo(0.06, y); }
+  ctx.stroke();
+  // the lower receiver, the trigger guard and the trigger
+  ctx.fillStyle = BK;
+  ctx.beginPath();
+  ctx.moveTo(-0.2, 0.004); ctx.lineTo(0.075, 0.004); ctx.lineTo(0.075, 0.042); ctx.lineTo(-0.19, 0.046);
+  ctx.quadraticCurveTo(-0.205, 0.04, -0.2, 0.004);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = BKD;
+  ctx.lineWidth = 0.007;
+  ctx.beginPath(); ctx.moveTo(-0.093, 0.0); ctx.lineTo(-0.093, -0.03); ctx.lineTo(-0.02, -0.03); ctx.lineTo(-0.012, 0.0); ctx.stroke();
+  ctx.lineWidth = 0.006;
+  ctx.beginPath(); ctx.moveTo(-0.06, 0.0); ctx.lineTo(-0.066, -0.02); ctx.stroke();
+  // the upper receiver: the charging handle at the back, the forward assist, the port and its cover, the bolt in it
+  ctx.fillStyle = BK;
+  ctx.fillRect(-0.19, 0.042, 0.29, 0.034);
+  ctx.fillStyle = BKD;
+  ctx.fillRect(-0.215 - bolt * 0.4, 0.062, 0.028, 0.012);
+  ctx.beginPath(); ctx.arc(-0.12, 0.056, 0.012, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#4a4d52';
+  ctx.fillRect(-0.06, 0.047, 0.07, 0.016);
+  ctx.fillStyle = '#8b8f94';
+  ctx.fillRect(-0.05 - bolt, 0.05, 0.03, 0.01);
+  // the rail along the top
+  ctx.fillStyle = BKD;
+  ctx.fillRect(-0.18, 0.076, civ ? 0.27 : 0.28, 0.012);
+  ctx.fillStyle = BKL;
+  for (let x = -0.175; x < (civ ? 0.08 : 0.09); x += 0.02) ctx.fillRect(x, 0.084, 0.01, 0.004);
+  if (civ) {
+    // the scope: a long tube in its rings, a bell at either end
+    ctx.fillStyle = BKD;
+    ctx.fillRect(-0.09, 0.086, 0.016, 0.016);
+    ctx.fillRect(0.03, 0.086, 0.016, 0.016);
+    ctx.fillStyle = BK;
+    ctx.beginPath();
+    ctx.moveTo(-0.15, 0.094); ctx.lineTo(-0.11, 0.1); ctx.lineTo(0.06, 0.1); ctx.lineTo(0.11, 0.092);
+    ctx.lineTo(0.11, 0.134); ctx.lineTo(0.06, 0.126); ctx.lineTo(-0.11, 0.126); ctx.lineTo(-0.15, 0.132);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = BKL;
+    ctx.fillRect(-0.06, 0.122, 0.1, 0.004);
+    ctx.fillStyle = 'rgba(120, 190, 255, 0.55)';
+    ctx.fillRect(0.104, 0.096, 0.006, 0.034);
+    ctx.fillStyle = BKD;
+    ctx.fillRect(-0.02, 0.126, 0.016, 0.012);
+  } else {
+    // the red dot: a short tube on its mount, the lens catching the light
+    ctx.fillStyle = BKD;
+    ctx.fillRect(-0.05, 0.086, 0.05, 0.014);
+    ctx.fillStyle = BK;
+    ctx.fillRect(-0.06, 0.098, 0.07, 0.032);
+    ctx.fillStyle = BKL;
+    ctx.fillRect(-0.055, 0.124, 0.06, 0.004);
+    ctx.fillStyle = '#d43a3a';
+    ctx.fillRect(0.004, 0.104, 0.004, 0.02);
+  }
+  // the handguard
+  if (civ) {
+    // free-floated: a long tube of it with its slots, to well past the gas block
+    ctx.fillStyle = BK;
+    ctx.fillRect(0.1, 0.006, 0.27, 0.07);
+    ctx.fillStyle = BKD;
+    for (let x = 0.12; x < 0.35; x += 0.045) ctx.fillRect(x, 0.03, 0.028, 0.012);
+    ctx.fillStyle = BKL;
+    ctx.fillRect(0.1, 0.072, 0.27, 0.004);
+  } else {
+    // the round, ribbed carbine handguard, and the front sight post rising out of it
+    ctx.fillStyle = '#26282b';
+    ctx.beginPath();
+    ctx.moveTo(0.1, 0.004); ctx.lineTo(0.27, 0.008); ctx.lineTo(0.27, 0.066); ctx.lineTo(0.1, 0.07);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = BKD;
+    ctx.lineWidth = 0.004;
+    ctx.beginPath(); for (let x = 0.115; x < 0.27; x += 0.022) { ctx.moveTo(x, 0.012); ctx.lineTo(x, 0.062); } ctx.stroke();
+    ctx.fillStyle = BK;
+    ctx.beginPath();
+    ctx.moveTo(0.27, 0.02); ctx.lineTo(0.31, 0.02); ctx.lineTo(0.3, 0.06); ctx.lineTo(0.293, 0.112); ctx.lineTo(0.284, 0.112); ctx.lineTo(0.28, 0.06);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#e8e8e8';
+    ctx.fillRect(0.286, 0.108, 0.004, 0.004);
+  }
+  // the barrel and what is on the end of it
+  ctx.fillStyle = BK;
+  const end = civ ? 0.46 : 0.43, from = civ ? 0.37 : 0.27;
+  ctx.fillRect(from, 0.018, end - from, 0.018);
+  if (civ) {
+    // a muzzle brake, ported
+    ctx.fillRect(end, 0.012, 0.04, 0.03);
+    ctx.fillStyle = BKD;
+    for (const x of [end + 0.008, end + 0.022]) ctx.fillRect(x, 0.016, 0.006, 0.022);
+  } else {
+    // the birdcage flash hider, slotted
+    ctx.fillRect(end, 0.014, 0.04, 0.026);
+    ctx.fillStyle = BKD;
+    for (const x of [end + 0.008, end + 0.02, end + 0.032]) ctx.fillRect(x, 0.018, 0.005, 0.018);
+  }
+  if (blood > 0) {
+    ctx.fillStyle = `rgba(150, 12, 24, ${Math.min(0.8, blood)})`;
+    ctx.beginPath(); ctx.ellipse(-0.12, -0.05, 0.03, 0.04, 0.2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0.18, 0.03, 0.028, 0.018, 0, 0, Math.PI * 2); ctx.fill();
   }
   ctx.restore();
 }
@@ -1665,6 +1922,8 @@ function drawVestBundle(ctx, j, s, v) {
   const a = Math.atan2(j.handB.y - j.handA.y, j.handB.x - j.handA.x);
   ctx.save();
   ctx.translate(x, y);
+  // (a helmet, in both hands on its way up onto the head)
+  if (v.kind === 'helmet') { ctx.scale(Math.sign(j.handA.x - j.neck.x) || 1, 1); drawHelmetShape(ctx, 0.26 * s, v); ctx.restore(); return; }
   ctx.rotate(a);
   drawVestShape(ctx, 0.26 * s, 0.13 * s, v.police, v.condition ?? 1);
   ctx.restore();
@@ -1860,30 +2119,32 @@ export function drawAmmoBoxShape(ctx, size, w, h, full = 1) {
     ctx.strokeStyle = '#6e5330';
     ctx.lineWidth = w * 0.03;
     ctx.strokeRect(-hw, -hh, w, h);
-  } else if (size === 'big') {
-    ctx.fillStyle = '#5b5e2d';
+  } else if (size === 'big' || size === 'ammo556') {
+    // a steel ammo can: olive for the 7.62, desert tan with a black band for the 5.56
+    const P = size === 'big' ? { body: '#5b5e2d', low: '#474922', rib: '#33351a', band: '#d6c35a', edge: '#2e3017' } : { body: '#a8925f', low: '#8c7849', rib: '#6b5a33', band: '#26241c', edge: '#4f4226' };
+    ctx.fillStyle = P.body;
     ctx.fillRect(-hw, -hh, w, h);
-    ctx.fillStyle = '#474922';
+    ctx.fillStyle = P.low;
     ctx.fillRect(-hw, hh - h * 0.26, w, h * 0.26);
-    ctx.strokeStyle = '#33351a';
+    ctx.strokeStyle = P.rib;
     ctx.lineWidth = w * 0.012;
     ctx.beginPath();
     for (let i = 1; i < 4; i++) { const x = -hw + (w * i) / 4; ctx.moveTo(x, -hh + h * 0.08); ctx.lineTo(x, hh - h * 0.3); }
     ctx.stroke();
     // the stencilled band, and the folding handle on the lid
-    ctx.fillStyle = '#d6c35a';
+    ctx.fillStyle = P.band;
     ctx.fillRect(-hw + w * 0.08, -h * 0.12, w * 0.5, h * 0.09);
     ctx.fillRect(-hw + w * 0.08, -h * 0.32, w * 0.34, h * 0.07);
     ctx.save();
     ctx.translate(hw - w * 0.2, -h * 0.12);
-    drawRifleRound(ctx, h * 0.5);
+    drawRifleRound(ctx, h * (size === 'big' ? 0.5 : 0.42));
     ctx.restore();
-    ctx.strokeStyle = '#2e3017';
+    ctx.strokeStyle = P.edge;
     ctx.lineWidth = h * 0.06;
     ctx.beginPath();
     ctx.moveTo(-w * 0.16, hh); ctx.lineTo(-w * 0.12, hh + h * 0.12); ctx.lineTo(w * 0.12, hh + h * 0.12); ctx.lineTo(w * 0.16, hh);
     ctx.stroke();
-    ctx.strokeStyle = '#2e3017';
+    ctx.strokeStyle = P.edge;
     ctx.lineWidth = w * 0.022;
     ctx.strokeRect(-hw, -hh, w, h);
   } else {

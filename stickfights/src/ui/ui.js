@@ -39,8 +39,8 @@
 import { Gestures } from '../core/input.js';
 import {
   drawStickman, drawCrateShape, drawKnuckleShape, drawKnifeShape, drawMacheteShape, drawGlockShape,
-  drawM1911Shape, drawTaserShape, drawVestShape, drawAmmoBoxShape, drawGunShape, drawCrowbarShape,
-  KNIFE_W, KNIFE_H, MACHETE_W, MACHETE_H, CROWBAR_W, CROWBAR_H, AK_W, MOSS_W, GAS_W, INK,
+  drawM1911Shape, drawTaserShape, drawVestShape, drawAmmoBoxShape, drawGunShape, drawCrowbarShape, drawHelmetShape,
+  KNIFE_W, KNIFE_H, MACHETE_W, MACHETE_H, CROWBAR_W, CROWBAR_H, AK_W, MOSS_W, GAS_W, M4_W, AR_W, INK,
 } from '../game/draw.js';
 import { drawWallShape, WALLS } from '../game/structures.js';
 import { drawPlantShape } from '../game/trees.js';
@@ -56,7 +56,7 @@ import { describeTraits } from '../game/people.js';
 import { relCategory } from '../game/brain.js';
 import { STYLE } from '../game/animator.js';
 import { LIMITS } from '../game/sandbox.js';
-import { isGun, AMMO_BOXES, VEST_W, VEST_H } from '../game/props.js';
+import { isGun, isLongGun, AMMO_BOXES, VEST_W, VEST_H } from '../game/props.js';
 import { ORGANS, ORGAN_LIST } from '../game/health.js';
 import { clamp } from '../core/util.js';
 import { parseTemperature, setTemperature, fmtTemp, toF, vitalConditions, hasVitals, breathes } from '../game/vitals.js';
@@ -80,14 +80,18 @@ const KINDS = {
   crate: { name: 'Crate', short: 'CRATE', plural: 'crates', limit: 'crates' },
   officer: { name: 'Officer', short: 'OFFICER', plural: 'people', limit: 'people' },
   vest: { name: 'Light Vest', short: 'VEST', plural: 'vests', limit: 'vests' },
+  helmet: { name: 'Light Tactical Helmet', short: 'HELMET', plural: 'vests and helmets', limit: 'vests' },
   crowbar: { name: 'Crowbar', short: 'CROWBAR', plural: 'crowbars', limit: 'crowbars' },
   ak47: { name: 'AK-47', short: 'AK-47', plural: 'guns', limit: 'guns', an: true },
   mossberg: { name: 'Mossberg 500', short: 'MOSSBERG', plural: 'guns', limit: 'guns' },
+  m4a1: { name: 'M4A1', short: 'M4A1', plural: 'guns', limit: 'guns', an: true },
+  ar15: { name: 'AR-15', short: 'AR-15', plural: 'guns', limit: 'guns', an: true },
   gasRifle: { name: 'Gas Rifle', short: 'GAS RIFLE', plural: 'guns', limit: 'guns' },
   ammo9: { name: '9 mm Ammo Box', short: '9 MM AMMO', plural: 'ammo boxes', limit: 'ammo' },
   ammo45: { name: '.45 ACP Ammo Box', short: '.45 AMMO', plural: 'ammo boxes', limit: 'ammo' },
   ammo762: { name: '7.62 mm Ammo Can', short: '7.62 AMMO', plural: 'ammo boxes', limit: 'ammo' },
   ammo12: { name: 'Box of 12 Gauge Shells', short: '12 GA SHELLS', plural: 'ammo boxes', limit: 'ammo' },
+  ammo556: { name: '5.56 mm Ammo Can', short: '5.56 AMMO', plural: 'ammo boxes', limit: 'ammo' },
   woodWall: { name: 'Wood Wall', short: 'WOOD WALL', plural: 'walls', limit: 'walls' },
   metalWall: { name: 'Metal Wall', short: 'METAL WALL', plural: 'walls', limit: 'walls' },
   glassWall: { name: 'Glass Wall', short: 'GLASS WALL', plural: 'walls', limit: 'walls' },
@@ -98,12 +102,12 @@ const KINDS = {
   bush: { name: 'Bush', short: 'BUSH', plural: 'trees and bushes', limit: 'plants' },
 };
 // the ammo boxes in the spawn menu: one for each kind of round
-const AMMO_KEYS = { ammo9: 'ammo9', ammo45: 'ammo45', ammo762: 'ammo762', ammo12: 'ammo12' };
+const AMMO_KEYS = { ammo9: 'ammo9', ammo45: 'ammo45', ammo762: 'ammo762', ammo12: 'ammo12', ammo556: 'ammo556' };
 const SLOT_SAID = { holster: 'In the holster', pocket: 'In a pocket', duty: 'On the duty belt' };
 const KEYS = ['stickman', 'knuckles', 'crate', 'knife', 'machete', 'glock'];
 const ARM_NAMES = {
   knife: 'Grab the knife', machete: 'Grab the machete', glock: 'Grab the gun', m1911: 'Grab the M1911', taser: 'Grab the taser', knuckles: 'Grab the brass knuckles',
-  crowbar: 'Grab the crowbar', ak47: 'Grab the AK-47', mossberg: 'Grab the shotgun', gasRifle: 'Grab the gas rifle',
+  crowbar: 'Grab the crowbar', ak47: 'Grab the AK-47', mossberg: 'Grab the shotgun', gasRifle: 'Grab the gas rifle', m4a1: 'Grab the M4A1', ar15: 'Grab the AR-15',
 };
 // a padlock: the shackle drops into the body when it is locked (CSS moves it)
 const LOCK_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path class="shackle" d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" fill="none"/><rect x="5" y="11" width="14" height="10" rx="2.5" fill="currentColor"/></svg>';
@@ -293,6 +297,7 @@ export class UI {
     else if (thing && thing.group && thing.group.pull && !thing.group.removed) this.toast(thing.group.pull());
     else if (thing && thing.tap) { const said = thing.tap(this.sb); if (said) this.toast(said); }
     else if (thing && thing.kind === 'ammo') this.toast(thing.describe());
+    else if (thing && thing.kind === 'helmet') this.toast(`${thing.name}: ${Math.round(thing.condition * 100)}% left in it` + (thing.dents.length ? `, ${thing.dents.length} round${thing.dents.length === 1 ? '' : 's'} off it` : ''));
     else if (thing && thing.kind === 'vest') this.toast(`${thing.name}: ${Math.round(thing.condition * 100)}% left in it` + (thing.dents.length ? `, ${thing.dents.length} round${thing.dents.length === 1 ? '' : 's'} in it` : ''));
     else if (thing) this.toast(thing.wornBy ? `${thing.name}, in ${thing.wornBy.name}'s hand` + (thing.spec && thing.mag !== undefined ? ` (${thing.mag}/${thing.spec.mag})` : '')
       : thing.carriedBy ? `${thing.name === 'Crate' ? 'A crate' : thing.name}, held up by ${thing.carriedBy.name}`
@@ -455,8 +460,9 @@ export class UI {
     else if (k === 'taser') made = sb.spawnTaser(x, Math.max(y, 0.12), Math.random() * 0.3 - 0.15);
     else if (k === 'officer') made = spawnOfficer(sb, x);
     else if (k === 'vest') made = sb.spawnVest(x, Math.max(y, 0.1));
+    else if (k === 'helmet') made = sb.spawnHelmet(x, Math.max(y, 0.1));
     else if (k === 'crowbar') made = sb.spawnCrowbar(x, Math.max(y, 0.1), Math.random() * 0.3 - 0.15);
-    else if (k === 'ak47' || k === 'mossberg' || k === 'gasRifle') made = sb.spawnGun(x, Math.max(y, 0.14), Math.random() * 0.2 - 0.1, k);
+    else if (isLongGun(k)) made = sb.spawnGun(x, Math.max(y, 0.14), Math.random() * 0.2 - 0.1, k);
     else if (AMMO_KEYS[k]) made = sb.spawnAmmo(x, Math.max(y, 0.2), AMMO_KEYS[k]);
     else if (WALLS[k]) made = sb.spawnWall(k, x, y);
     else if (k === 'tree' || k === 'bush') made = sb.spawnPlant(k, x, y);
@@ -786,6 +792,10 @@ export class UI {
       const s = (w * (card ? 0.78 : 0.95)) / VEST_W;
       ctx.setTransform(s, 0, 0, -s, w / 2, card ? h * 0.84 - (VEST_H / 2) * s : h / 2);
       drawVestShape(ctx, VEST_W, VEST_H, false, 1);
+    } else if (kind === 'helmet') {
+      const s = (w * (card ? 0.7 : 0.9)) / 0.27;
+      ctx.setTransform(s, 0, 0, -s, w / 2, card ? h * 0.84 - 0.06 * s : h / 2 + 0.02 * s);
+      drawHelmetShape(ctx, 0.27);
     } else if (AMMO_KEYS[kind]) {
       // all of them in scale: the can fills the card, the boxes sit in it
       const size = AMMO_KEYS[kind], sp = AMMO_BOXES[size];
@@ -797,9 +807,9 @@ export class UI {
       const a = card ? 0.62 : 0.78;
       ctx.setTransform(s * Math.cos(a), -s * Math.sin(a), -s * Math.sin(a), -s * Math.cos(a), w / 2, card ? h * 0.5 : h / 2);
       drawCrowbarShape(ctx, CROWBAR_W, CROWBAR_H, 0);
-    } else if (kind === 'ak47' || kind === 'mossberg' || kind === 'gasRifle') {
+    } else if (isLongGun(kind)) {
       // a long gun, at a slant to fit
-      const len = kind === 'ak47' ? AK_W : kind === 'gasRifle' ? GAS_W : MOSS_W;
+      const len = { ak47: AK_W, gasRifle: GAS_W, m4a1: M4_W, ar15: AR_W }[kind] || MOSS_W;
       const s = (w * (card ? 0.98 : 1.1)) / len;
       const a = card ? 0.42 : 0.55;
       ctx.setTransform(s * Math.cos(a), -s * Math.sin(a), -s * Math.sin(a), -s * Math.cos(a), w / 2, h * 0.5);
@@ -1259,6 +1269,12 @@ export class UI {
         s.textContent = said;
         cb.appendChild(s);
       }
+    }
+    if (p.helmet) {
+      const s = document.createElement('div');
+      const hm = p.helmet;
+      s.textContent = `Wearing a light tactical helmet (${Math.round(hm.condition * 100)}%${hm.dents.length ? `, ${hm.dents.length} round${hm.dents.length === 1 ? '' : 's'} off it` : ''})`;
+      cb.appendChild(s);
     }
     if (p.vest) {
       const s = document.createElement('div');
@@ -2030,7 +2046,7 @@ export class UI {
       const box = AMMO_KEYS[k] ? AMMO_BOXES[AMMO_KEYS[k]] : null;
       const stands = k === 'stickman' || k === 'officer' || (mod && mod.living) || WALLS[k] || k === 'tree' || k === 'bush' || k === 'gallows';
       const y = stands ? this.sb.surfaceBelow(w.x, 0.15, WALLS[k] || k === 'tree' || k === 'bush' || k === 'gallows' ? w.y + 0.02 : 100).y
-        : Math.max(w.y, k === 'crate' ? 0.39 : k === 'knife' ? 0.03 : k === 'machete' || k === 'crowbar' ? 0.05 : k === 'glock' || k === 'm1911' || k === 'taser' ? 0.08 : k === 'ak47' || k === 'mossberg' || k === 'gasRifle' ? 0.14 : box ? box.h / 2 : 0.04);
+        : Math.max(w.y, k === 'crate' ? 0.39 : k === 'knife' ? 0.03 : k === 'machete' || k === 'crowbar' ? 0.05 : k === 'glock' || k === 'm1911' || k === 'taser' ? 0.08 : isLongGun(k) ? 0.14 : box ? box.h / 2 : 0.04);
       ghost = { kind: box ? 'ammo' : this.spawnKind, size: box ? AMMO_KEYS[k] : null, x: k === 'gallows' ? w.x - 1 : w.x, y, draw: mod && mod.ghost ? mod.ghost : null };
     }
     // a wire being put in: from its first end to the pointer (or, a pin, where it would go)

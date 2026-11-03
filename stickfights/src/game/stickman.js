@@ -52,7 +52,7 @@ import { solve, makeJoints, bounds, JOINTS, BONES, DIM, HEAD_BONE, BELOW_BREAK, 
 import { Health, KO_LEVEL, SEVERABLE } from './health.js';
 import { makeRagdoll, aimMuscles, toJoints, refNear, lyingSide } from './limp.js';
 import { heldGunFrame, gunPoint, goneAt, neckCut } from './draw.js';
-import { isBlade, isGun, armOf, Gun, GUN_MODELS } from './props.js';
+import { isBlade, isGun, isRifle, armOf, Gun, GUN_MODELS } from './props.js';
 import { startStumble, updateStumble, stumblePose } from './stumble.js';
 import { updateTased } from './taser.js';
 import { updateVitals, healVitals, iceBlow, ignite } from './vitals.js';
@@ -85,7 +85,7 @@ const NOMINAL = { walk: strideSpeed('walk'), run: strideSpeed('run'), runScared:
 
 const LYING = new Set(['down', 'ko', 'crawl', 'dead']);
 const HIT_REACTIONS = new Set(['hitHead', 'hitBody', 'hitLow', 'flinch']);
-export const STILL_POSTURES = new Set(['sit', 'sitEdge', 'kneel', 'cry', 'beg', 'cower', 'handsUp', 'pushups', 'squats', 'jacks', 'armsCrossed', 'handsOnHips', 'clutchStomach', 'clutchArm', 'shiver', 'shock', 'clutchStump', 'coverHead', 'handsOnKnees', 'kneelHands', 'sitCuffed', 'think']);
+export const STILL_POSTURES = new Set(['sit', 'sitEdge', 'kneel', 'cry', 'beg', 'cower', 'handsUp', 'pushups', 'squats', 'jacks', 'armsCrossed', 'handsOnHips', 'clutchStomach', 'clutchArm', 'shiver', 'shock', 'clutchStump', 'coverHead', 'handsOnKnees', 'kneelHands', 'sitCuffed', 'think', 'kneelAim', 'sickHunch', 'handsInPockets']);
 /** Which part a ragdoll point belongs to, and which bone takes it when that point hits something. */
 const POINT_PART = {
   head: ['head', 'skull'], neck: ['torso', 'ribs'], chest: ['torso', 'ribs'], hip: ['torso', 'pelvis'],
@@ -114,7 +114,7 @@ const STRIKE_COST = { jab: 0.04, cross: 0.062, uppercut: 0.08, kick: 0.1, stomp:
 // where each thing they carry can go when it is not in their hand: a holster
 // (or the waistband) for a pistol, a pocket for anything small, and on an
 // officer's duty belt, a holster of its own for the taser
-const SLOTS = { holster: new Set(['glock', 'm1911', 'taser']), duty: new Set(['taser']), pocket: new Set(['knife', 'knuckles', 'taser']), back: new Set(['ak47', 'mossberg', 'gasRifle']) };
+const SLOTS = { holster: new Set(['glock', 'm1911', 'taser']), duty: new Set(['taser']), pocket: new Set(['knife', 'knuckles', 'taser']), back: new Set(['ak47', 'mossberg', 'gasRifle', 'm4a1', 'ar15']) };
 
 const HELD_MIX = { arms: 1, legs: 0.35, core: 0.15 };
 const HELD_BY_LEG = { arms: 1, legs: 0.04, core: 0.04 };
@@ -225,7 +225,8 @@ export class Stickman {
     this.stowing = null;      // { item, slot }: on the way in
     this.drawing = null;      // a slot: on the way out
     this.vest = null;
-    this.donning = null;      // a vest going on
+    this.helmet = null;
+    this.donning = null;      // a vest or a helmet going on
     this.role = o.role || null;
     this.cuffed = null;       // { by, t }: hands cuffed behind them
     this.tased = null;        // { by, t, dur }: current going through them (taser.js)
@@ -411,8 +412,10 @@ export class Stickman {
   pickUp(item) {
     if (!this.ready || item.wornBy || this.carrying || this.cuffed || item.frozenInPlace) return false;
     // hands full: only if one of the two can go in a pocket or a holster first
-    if (this.weapon && item.kind !== 'vest' && !this.slotFor(item) && !this.slotFor(this.weapon)) return false;
+    const armour = item.kind === 'vest' || item.kind === 'helmet';
+    if (this.weapon && !armour && !this.slotFor(item) && !this.slotFor(this.weapon)) return false;
     if (item.kind === 'vest' && (this.vest || this.donning)) return false;
+    if (item.kind === 'helmet' && (this.helmet || this.donning || this.cut.head)) return false;
     if (this.species && this.species.canPickUp && !this.species.canPickUp(this, item)) return false;
     if (item.stuckIn && item.stuckIn.person) return false;
     if (!this.health.canUse('armA')) return false;
@@ -488,12 +491,13 @@ export class Stickman {
     this.drawing = null;
   }
 
-  /** A vest, picked up off the floor, going on over the head. */
+  /** A vest, picked up off the floor, going on over the head - or a helmet, onto it, and the strap done up. */
   wearVest(v) {
-    if (this.vest || this.cuffed) return false;
+    const helmet = v.kind === 'helmet';
+    if ((helmet ? this.helmet : this.vest) || this.cuffed || (helmet && this.cut.head)) return false;
     this.donning = v;
     v.wear(this);
-    this.anim.act('vestOn', { fadeIn: 0.08, fadeOut: 0.18 });
+    this.anim.act(helmet ? 'helmetOn' : 'vestOn', { fadeIn: 0.08, fadeOut: 0.18 });
     return true;
   }
 
@@ -688,6 +692,8 @@ export class Stickman {
     const since = this.sandbox.time - (this.weapon ? this.weapon.lastShot : this.lastShotT ?? -99);
     if (since < back) s += 3 * kick * (1 - since / back);
     if (!this.health.canUse('armB') || this.cut.armB) s *= 1.35;
+    // down on one knee, braced: steadier
+    if (this.posture === 'kneelAim') s *= 0.7;
     return s * DEG;
   }
 
@@ -698,7 +704,8 @@ export class Stickman {
     if (!(this.state === 'stand' && this.onGround && !this.anim.acting && !this.rag)) return false;
     if (!this.health.canUse('armA') || this.cut.armA) return false;
     const skill = this.brain ? this.brain.traits.skill : 0.5;
-    this.anim.act(g.kind === 'taser' ? 'reloadTaser' : 'reload', { fadeIn: 0.1, fadeOut: 0.15, speed: 0.75 + skill * 0.55 });
+    // (a rifle's magazine is changed the way a rifle's is)
+    this.anim.act(g.kind === 'taser' ? 'reloadTaser' : isRifle(g.kind) ? 'reloadRifle' : 'reload', { fadeIn: 0.1, fadeOut: 0.15, speed: 0.75 + skill * 0.55 });
     this.reloading = true;
     this.sandbox.emit('reload', { who: this });
     return true;
@@ -835,12 +842,15 @@ export class Stickman {
     // a vest takes the worst out of what lands on the body (a bullet's is in shot())
     const vestK = part === 'torso' && this.vest && !blocked && !bullet && !burn && weapon !== 'vestRound' && h.kind !== 'fall'
       ? (blade ? this.vest.bladeThrough(h.kind) : 0.85) : 1;
-    const dmg = 9 * h.power * MUL[part] * (blocked ? 0.3 : parried ? 0.85 : 1) * rand(0.85, 1.15) * armor * vestK;
+    // and a helmet the worst of what lands on the head (a round's is in shot() too)
+    const helmK = part === 'head' && this.helmet && !blocked && !bullet && !burn && weapon !== 'helmetRound' && !this.cut.head
+      ? this.helmet.blowThrough(h.kind, blade) : 1;
+    const dmg = 9 * h.power * MUL[part] * (blocked ? 0.3 : parried ? 0.85 : 1) * rand(0.85, 1.15) * armor * vestK * helmK;
     const res = this.health.hit(part, dmg, {
       // (how far up the body it went in: what is inside, there)
       at: part === 'torso' && h.x !== undefined ? torsoAt(this.wj, h.x, h.y) : null,
       sharp: (blocked ? sharp * 0.5 : sharp) * vestK, deep: !!h.deep && !blocked && vestK > 0.7, chop: chops && !blocked && vestK > 0.7, shot: bullet || !!(spec && spec.shot),
-      bone: blocked ? null : h.bone || null, breakChance: h.kind === 'stomp' ? 0.06 : spec && spec.breaks ? spec.breaks : 0, strike: h.kind,
+      bone: blocked ? null : h.bone || null, breakChance: h.kind === 'stomp' ? 0.06 : spec && spec.breaks ? spec.breaks : 0, strike: weapon === 'helmetRound' ? 'helmet' : h.kind,
       burn, cutBy: spec ? spec.wound || null : null, cause: spec ? spec.cause || null : null,
       // (an arrow is not a bullet: one to the head does not have to be the end of them)
       instakill: !(spec && spec.instakill === false),
@@ -848,7 +858,9 @@ export class Stickman {
 
     if (h.by && h.by !== this && !blocked && (res.wound || bullet || (blade && dmg > 4))) this.woundedBy = { by: h.by, t: this.sandbox.time };
     // blood, if the skin went or the face took it (a bullet's is its own: see shot())
-    const spray = !bullet && !burn && !this.health.frozen && (res.wound || (part === 'head' && dmg > 10) || (weapon && dmg > 6));
+    // (a round the vest or the helmet stopped bruises: it does not open the skin)
+    const armoured = weapon === 'vestRound' || weapon === 'helmetRound';
+    const spray = !bullet && !burn && !armoured && !this.health.frozen && (res.wound || (part === 'head' && dmg > 10) || (weapon && dmg > 6));
     if (spray && !blocked) {
       const n = Math.round(clamp(dmg * (weapon === 'machete' ? 1.3 : spec && spec.spray ? spec.spray : sharp > 0.9 ? 0.9 : 0.6), 3, 30));
       this.sandbox.fx.blood(h.x, h.y, h.dir * (1 + h.power), 1 + h.power * 0.5, n, 1, this);
@@ -899,8 +911,10 @@ export class Stickman {
       if (this.removed) return res;
     }
     if (wasDead) {
-      this.vel.x += h.dir * h.power * 0.4;
-      if (this.rag) this.rag.shove(h.x, h.y, h.dir * h.power * 1.4, h.power * 0.4);
+      // (a bullet carries little into a body - a few grams, however fast: the dead twitch with it, they are not thrown)
+      const k = bullet ? 0.3 : 1;
+      this.vel.x += h.dir * h.power * 0.4 * k;
+      if (this.rag) this.rag.shove(h.x, h.y, h.dir * h.power * 1.4 * k, h.power * 0.4 * k, bullet ? 0.28 : 0.35);
       return res;
     }
     this.lastHit = { by: h.by, t: this.sandbox.time, part, power: h.power, kind: h.kind, blocked, object: h.object || null, weapon };
@@ -914,8 +928,9 @@ export class Stickman {
 
     if (res.broke) this.sandbox.emit('break', { who: this, part, bone: res.broke, by: h.by });
     if (this.rag) {
-      // already limp: the blow just moves them
-      this.rag.shove(h.x, h.y, h.dir * (1 + shove * 1.5), shove * 0.6);
+      // already limp: the blow just moves them (a bullet hardly at all)
+      if (bullet) this.rag.shove(h.x, h.y, h.dir * (0.35 + shove * 0.45), shove * 0.15, 0.28);
+      else this.rag.shove(h.x, h.y, h.dir * (1 + shove * 1.5), shove * 0.6);
       if (res.fatal) this.die(this.health.cause, h.by, h.dir, h.power);
       else if (res.ko && this.state !== 'held') this.knockOut(h.dir, h.power);
       return res;
@@ -1162,6 +1177,8 @@ export class Stickman {
     if (frozen) sb.fx.shards(m.x, m.y, 14, dir * 2, 1.4);
     else {
       sb.fx.blood(m.x, m.y, dir * 2.5, 2, 32, 1.4, this);
+      // (and bits of what was in the way of whatever took it off)
+      sb.fx.gibs(m.x, m.y, 2 + Math.round(Math.min(3, power)), dir * 1.8, 1.4, { from: this, bone: true, size: 0.8 });
       this.markAt(m.x, m.y, 0.9);
       // out of the end of what is left, the moment it comes off (and then for as long as it bleeds: blood.js)
       const a = w[BEFORE_CUT[mid]] || w.hip, d = Math.hypot(m.x - a.x, m.y - a.y) || 1;
@@ -1207,6 +1224,9 @@ export class Stickman {
     }
     h.decapitate();
     this.cut.head = 'neck';
+    // (a helmet on it comes away with it, and off it)
+    if (this.helmet) { const hm = this.helmet; this.helmet = null; hm.drop(w.head.x, Math.max(0.2, w.head.y), vx + dir * 2, vy + 2); }
+    if (this.donning && this.donning.kind === 'helmet') { const hm = this.donning; this.donning = null; hm.drop(w.head.x, Math.max(0.2, w.head.y), vx, vy + 1); }
     this.headMarks.length = 0;
     // whatever was in their mouth or on the head goes with it; a blade stuck in the neck falls out
     for (const e of [...this.stuck]) if (goneAt(this.cut, e.bone, e.t)) this.pullKnife(e, null);
@@ -1214,6 +1234,7 @@ export class Stickman {
     if (frozen) sb.fx.shards(at.x, at.y, 16, dir * 2, 1.6);
     else {
       sb.fx.blood(at.x, at.y, dir * 2, 2.5, 40, 1.5, this);
+      sb.fx.gibs(at.x, at.y, 3 + Math.round(Math.min(3, power)), dir * 1.5, 1.8, { from: this, bone: true, size: 0.8 });
       this.markAt(at.x, at.y, 1);
       // out of the neck, the moment it goes - and for a good while after, the heart still going a few beats
       const a = w.chest, d = Math.hypot(at.x - a.x, at.y - a.y) || 1, k = bloodK(this);
@@ -1280,6 +1301,21 @@ export class Stickman {
         return 0;
       }
     }
+    // in the head, with a helmet on: through the top or the back of the skull it may stop there - and ring the bell
+    if (part === 'head' && this.helmet && energy > 0.2 && !this.cut.head) {
+      const w = this.wj, r = DIM.headR * this.scale, ha = w.headAngle || 0, f = this.rag ? this.rag.facing : this.facing;
+      // (where on the head, in its own frame: up out of the top of it, and forward out of the face)
+      const ux = (hit.x - w.head.x) * f, uy = hit.y - w.head.y;
+      const lx = ux * Math.cos(ha) - uy * Math.sin(ha), ly = ux * Math.sin(ha) + uy * Math.cos(ha);
+      const covered = ly > -0.15 * r || (lx < 0 && ly > -0.55 * r);
+      if (covered && this.helmet.stopsRound(energy, Math.atan2(lx, ly))) {
+        sb0.fx.sparks(hit.x, hit.y, 4);
+        sb0.fx.dust(hit.x, hit.y, 2, 0.25);
+        this.takeHit({ by, part, x: hit.x, y: hit.y, dir: sign(dx) || 1, power: 0.95 * energy, kind: 'shot', weapon: 'helmetRound', bone: 'skull' });
+        sb0.emit('helmetStop', { who: this, by, x: hit.x, y: hit.y, energy });
+        return 0;
+      }
+    }
     // (a body metres thick keeps whatever goes into it: a mod's giant)
     const stop = this.species && this.species.stopsRounds ? energy : (part === 'torso' ? 0.64 : part === 'head' ? 0.68 : 0.4) * rand(0.8, 1.2);
     const left = energy - stop;
@@ -1295,7 +1331,20 @@ export class Stickman {
         sb.fx.gush(hit.x + dx * 0.05, hit.y + dy * 0.05, dx * 3.4, dy * 3.4 + 0.4, 0.8 * bloodK(this), 0.12, this);
       }
     }
+    const aliveBefore = !this.dead;
+    if (through && energy > 1.25 && !this.health.frozen) sb.fx.mist(hit.x + dx * 0.06, hit.y + dy * 0.06, dx, dy, Math.round(10 + energy * 9), 0.32, this);
     this.takeHit({ by, part, x: hit.x, y: hit.y, dir: sign(dx) || 1, power: 2.7 * energy, kind: 'shot', weapon: 'bullet', bone, through });
+    // a rifle round that kills through the head opens it: a spray out of the far side, and bits of skull and what was in it
+    if (part === 'head' && aliveBefore && this.dead && energy > 1.3 && !this.removed && !this.health.frozen && !this.cut.head) {
+      const w = this.wj.head;
+      sb.fx.mist(w.x + dx * 0.1, w.y + dy * 0.1, dx, dy, 34, 0.5, this);
+      sb.fx.blood(w.x + dx * 0.08, w.y + dy * 0.08, dx * 4, dy * 4 + 1, 26, 1.4, this);
+      sb.fx.gibs(w.x + dx * 0.08, w.y + dy * 0.08, 7, dx * 3.5, dy * 3.5 + 1.2, { from: this, bone: true, brain: true, size: 0.75 });
+      this.headMark(w.x + dx * 0.1, w.y + dy * 0.1, 2.2);
+      this.face.blood = 1;
+      this.headBurst = (this.headBurst || 0) + 1;
+      sb.emit('headBurst', { who: this, by, x: w.x, y: w.y });
+    }
     if (!through && !this.removed) this.health.lodge(bone);
     sb.emit('bulletHit', { what: this, x: hit.x, y: hit.y, energy });
     if (!this.removed && !this.steadfast && !this.health.frozen) this.shotOff(bone, energy, sign(dx) || 1);
@@ -1680,6 +1729,18 @@ export class Stickman {
       if (ct.ny < -0.5 && ct.b.mass > 5 && ct.b.owner) { this.pinnedBy = ct.b.owner; this.pinT = this.sandbox.time; }
     }
     if (rag.impacts.length) this.limpImpacts(rag.impacts);
+    // dragged along the floor bleeding (or with the clothes soaked through): it leaves a smear
+    const h = this.health;
+    if (ground && !h.frozen && ((h.bleeding > 0.0005 && !h.dry) || this.wounds.some((x) => (x.soak || 0) > 0.25)) && (this.smearT = (this.smearT || 0) - dt) <= 0) {
+      this.smearT = 0.05;
+      for (const k of ['hip', 'chest', 'head', 'kneeA', 'kneeB']) {
+        const q = rag.p[rag.byName[k]];
+        if (!q || !q.ground || q.body || q.r < 0.006) continue;
+        const vx = (q.x - q.px) / dt;
+        if (Math.abs(vx) < 0.5) continue;
+        this.sandbox.fx.smear(q.x - vx * 0.05, q.x, this.tint || null, Math.min(1, h.bleeding * 200 + 0.3));
+      }
+    }
   }
 
   /**
@@ -2165,11 +2226,11 @@ export class Stickman {
     this.anim.update(dt);
     for (const ev of this.anim.events) this.animEvent(ev);
     const an = this.anim.actionName;
-    if (this.reloading && an !== 'reload' && an !== 'reloadTaser') this.reloading = false;
+    if (this.reloading && an !== 'reload' && an !== 'reloadTaser' && an !== 'reloadRifle') this.reloading = false;
     // whatever was being put away, got out or put on, interrupted before it got there
     if (this.stowing && an !== 'holster' && an !== 'pocket') this.stowing = null;
     if (this.drawing && an !== 'drawGun' && an !== 'unpocket') this.drawing = null;
-    if (this.donning && an !== 'vestOn') this.finishVest();
+    if (this.donning && an !== 'vestOn' && an !== 'helmetOn') this.finishVest();
     if (this.rag) { this.tickBubbles(dt); return; }
     const pose = this.anim.sample();
     // stumbling, no clip: the pendulum says where everything is
@@ -2279,7 +2340,8 @@ export class Stickman {
     if (this.carrying) overlay = 'carry';
     else if (this.pushing) overlay = 'push';
     // a pistol is held up at someone, or carried low
-    else if (this.gunReady && !STILL_POSTURES.has(this.posture)) overlay = this.aiming ? 'aimPistol' : 'gunLow';
+    // (down on one knee behind a rifle, the aim goes on too)
+    else if (this.gunReady && (!STILL_POSTURES.has(this.posture) || this.posture === 'kneelAim')) overlay = this.aiming ? 'aimPistol' : 'gunLow';
     else if ((this.posture === 'guard' || this.posture === 'block') && sp > 0.1) overlay = this.posture === 'block' ? 'block' : this.guardClip();
     this.anim.setOverlay(overlay, overlay === 'gunLow' ? 'arms' : 'upper');
   }
@@ -2322,6 +2384,9 @@ export class Stickman {
       case 'sitCuffed': return 'sitCuffed';
       case 'bounce': return 'bounce';
       case 'think': return 'think';
+      case 'kneelAim': return 'kneelAim';
+      case 'sickHunch': return 'sickHunch';
+      case 'handsInPockets': return 'handsInPockets';
       default: break;
     }
     switch (this.mood) {
@@ -2888,8 +2953,8 @@ export class Stickman {
         const h = this.wj.handA;
         if (Math.hypot(item.pos.x - h.x, item.pos.y - h.y) < 0.6) {
           if (item.stuckIn) item.unstick();
-          // a vest goes on, over the head
-          if (item.kind === 'vest') {
+          // a vest goes on, over the head; a helmet, onto it
+          if (item.kind === 'vest' || item.kind === 'helmet') {
             this.wearVest(item);
             sb.emit('pickup', { who: this, item });
             return;
@@ -2996,7 +3061,7 @@ export class Stickman {
         sb.emit('drawWeapon', { who: this, item: it, slot: k, x: this.wj.hip.x, y: this.wj.hip.y });
         this.notify('drew', { item: it });
       }
-    } else if (ev === 'vestOn') {
+    } else if (ev === 'vestOn' || ev === 'helmetOn') {
       this.finishVest();
     } else if (ev === 'ammo') {
       const box = this.ammoBox;
@@ -3033,15 +3098,17 @@ export class Stickman {
     }
   }
 
-  /** The vest that was going on is on (or, if there is one already, back on the floor). */
+  /** The vest (or the helmet) that was going on is on - or, if there is one already, back on the floor. */
   finishVest() {
     const v = this.donning;
     if (!v) return;
     this.donning = null;
-    if (this.vest || v.removed) { if (!v.removed && v.wornBy === this) v.drop(this.pos.x + this.facing * 0.3, 0.3); return; }
-    this.vest = v;
-    this.sandbox.emit('vestOn', { who: this, vest: v, x: this.wj.chest.x, y: this.wj.chest.y });
-    this.notify('vest', { vest: v });
+    const slot = v.kind === 'helmet' ? 'helmet' : 'vest';
+    if (this[slot] || v.removed || (slot === 'helmet' && this.cut.head)) { if (!v.removed && v.wornBy === this) v.drop(this.pos.x + this.facing * 0.3, 0.3); return; }
+    this[slot] = v;
+    const at = slot === 'helmet' ? this.wj.head : this.wj.chest;
+    this.sandbox.emit(slot === 'helmet' ? 'helmetOn' : 'vestOn', { who: this, [slot]: v, x: at.x, y: at.y });
+    this.notify(slot, { [slot]: v });
   }
 
   /**
@@ -3415,6 +3482,9 @@ export class Stickman {
     if (h.frozen || h.dry || h.bleeding <= 0) { this.dripAcc = 0; return; }
     const src = bleedSources(this);
     if (!src.list.length) return;
+    // (the clothes round an open wound soak it up: a stain spreading from it, slowly, while it bleeds)
+    const soakK = Math.min(1, h.bleeding * 120) * dt * 0.035;
+    for (const wd of this.wounds) if ((wd.hole || wd.gash) && (wd.soak || 0) < 1) wd.soak = Math.min(1, (wd.soak || 0) + soakK);
     const fx = this.sandbox.fx;
     this.dripAcc += src.drip * 1500 * dt;
     while (this.dripAcc >= 1) {

@@ -101,12 +101,18 @@ export const UZI_LINES = {
   thrownLand: ['Ow. Rude.', 'I hate whoever did that.'],
   dying: ["Tell my dad... actually, don't tell him anything.", 'This is so... embarrassing...', "I was... just getting started..."],
   severedSelf: ["My {part}! That's not supposed to come off!", "MY {part}! I NEEDED THAT!"],
-  acidBurn: ["It's eating me! It's EATING me!", 'Get it out get it out get it out!', "I'm melting! This is the worst!", "Nanites! Nanites in my everything!"],
-  sawed: ['AAAH! Get that saw off me!', "It's cutting through my chassis!", 'NOT the chainsaw! NOT the chainsaw!'],
-  clawed: ['Ow! Claws! Of course it has claws!', 'Get your claws off me!'],
-  tailStabbed: ['Ow! The tail! Gross gross gross!', "It stung me! I'm going to die, aren't I?"],
-  burned: ['Hot! Hot! Hot!', "I'm on fire! I'm literally on fire!"],
-  blownUp: ['My audio sensors! I can only hear ringing!', "Okay. Ow. Who's blowing things up without me?"],
+  acidBurn: [
+    "It's eating me!", "Get it off, get it off!", "I'm melting!", "Something's eating me from the inside!", "It burns!",
+  ],
+  sawed: [
+    "AAAAGH! THE SAW!", "It's cutting into me!", "{other}! Stop! Stop!", "Turn it off! Turn it off!", "It won't stop!",
+  ],
+  clawed: ["It clawed me!", "Agh! Claws!", "{other} ripped me open!", "Oh God, I'm cut up!", "I'm bleeding everywhere!"],
+  tailStabbed: ["Its tail stabbed me!", "Something stung me!", "Ow! What was that?!", "The tail! The tail got me!"],
+  burned: ["It burns!", "My skin! It's burning!", "Agh! Hot! Hot!", "I'm on fire!", "That laser- agh!"],
+  blownUp: [
+    "AAAAH!", "My ears! I can't hear anything!", "What was that?!", "It blew up right next to me!", "Everything's ringing...",
+  ],
   healed: ['Huh. Good as new. Better, maybe.', "Okay, that's actually amazing."],
   wake: ['Ugh... what hit me?', 'Rebooting... ugh...'],
 
@@ -126,7 +132,10 @@ export const UZI_LINES = {
   /* --------------------------------- the drones --------------------------------- */
   seeN: ["Oh. It's you. The nice one. Hi, N.", 'N? Okay. Okay, I can handle N.', "Just don't do the claw thing, N."],
   seeV: ['Oh no. Her.', "V. Don't come any closer.", "Stay on your side, V. I mean it.", "Great. The psycho's here."],
-  seeMurderDrone: ['Murder drone. Okay. Stay calm, Uzi.', "That's a murder drone. Keep your distance."],
+  seeMurderDrone: [
+    "What is that?!", "Is that a robot? With wings?!", "Oh no. Oh no, that thing's got a tail.", "Nobody move. Maybe it can't see us.",
+    "Are its eyes... glowing?", "I don't like the look of {other}.", "Why's it looking at me like that?",
+  ],
 
   /* ------------------------------ the Minecraft mod ------------------------------ */
   seeWither: ['What is THAT?!', 'Three heads?! Who designed that?!', "Okay, that's a lot of skulls.", 'My railgun has never wanted anything more.'],
@@ -356,21 +365,27 @@ addLines({
     'Are those eyes... glowing?', 'I do not like the look of {other}.', 'Why does it look like it wants to take me apart?',
   ],
   droneArmFear: [
-    'Your hand just turned into a {what}!', 'Is that a {what}?! Where did your hand go?!', 'Those are NOT hands!', 'What are you?!',
-    'Put the {what} away. Please.', 'Okay, that is new. And terrifying.',
+    "Your hand just turned into a {what}!", "Is that a {what}?! Where did your hand go?!", "Those aren't hands!", "What are you?!",
+    "Put the {what} away. Please.", "Okay. That's new. And terrifying.",
   ],
   burned: ['It burns!', "My skin! It's burning!", 'Aaah! Hot! Hot!', "I'm on fire!", 'That LASER!'],
-  swordHit: ['AAAH! A sword!', '{other} cut me open!', 'That hand is a SWORD!', "I'm cut! I'm cut!", 'It went right through me!'],
+  swordHit: [
+    "Agh! A blade!", "{other} cut me open!", "Its hand's a blade!", "I'm cut! I'm cut!", "It went right through me!",
+  ],
   clawed: ['It clawed me!', 'AAAH! Claws!', '{other} raked me open!', 'Three cuts at once?!', "I'm bleeding everywhere!"],
   sawed: ['AAAAARGH! THE CHAINSAW!', "It's chewing me up!", '{other}! STOP THE SAW!', 'Turn it off! TURN IT OFF!', "It won't stop cutting!"],
   tailStabbed: ['Its TAIL stabbed me!', 'Something stung me!', 'Ow! What was that?!', 'The tail! The tail got me!'],
-  boomHeard: ['What was that?!', 'Was that an explosion?!', 'Something just blew up!', 'That came from over there!'],
-  railHeard: ["That wasn't a gun. What WAS that?!", 'What was THAT?!', 'Something just went through the wall!', 'The air is buzzing...'],
-  laserHeard: ['What is that humming?', 'Is something burning?', 'I smell something burning.'],
-  missileHeard: ['What was that whoosh?!', 'Something just flew past!', 'Incoming?!'],
+  boomHeard: ["What was that?!", "Was that an explosion?!", "Something just blew up!", "That came from over there!"],
+  railHeard: [
+    "That wasn't a gun. What was that?!", "What the hell was that?!", "Something just went through the wall!", "The air's buzzing...",
+  ],
+  laserHeard: ["What's that humming?", "Is something burning?", "I can smell something burning."],
+  missileHeard: ["What was that whoosh?!", "Something just flew past!", "Is something coming?!"],
   blownUp: ['AAAAH! It EXPLODED!', "My ears! I can't hear anything!", 'What was THAT?!', 'It blew up right next to me!', 'Everything is ringing...'],
-  sawDroneHit: ["{other}'s hand is a {what}!", '{victim}! Get away from it!', 'Somebody stop {other}!', 'Oh god, {victim}...', 'Its hands! Look at its hands!'],
-  sawTailHit: ['Its tail! It stung {victim}!', '{victim}! Watch the tail!', 'That tail has a needle on it!'],
+  sawDroneHit: [
+    "{other}'s hand is a {what}!", "{victim}! Get away from it!", "Somebody stop {other}!", "Oh God, {victim}...", "Its hands! Look at its hands!",
+  ],
+  sawTailHit: ["Its tail! It stung {victim}!", "{victim}! Watch the tail!", "There's a needle on that tail!"],
   acidBurn: ["It's eating me!", 'Get it out, get it out!', "It's melting!", 'Something is eating me from the inside!', 'It BURNS!'],
   crashLanded: ['Hello.', 'Ta-da.'],
   morph: ['Look at this!', 'Hands, change!'],

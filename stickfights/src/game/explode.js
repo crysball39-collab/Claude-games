@@ -127,6 +127,12 @@ export function explode(sb, x, y, kind = 'grenade', by = null) {
       }
       // right on top of it, the head too
       if (!p.removed && ks.head > 0.7 && chance((ks.head - 0.65) * spec.sever * 0.5)) p.decapitate(dir, power, { by });
+      // and right in it, pieces of them: chunks of flesh thrown out with everything else
+      // (a grenade has to be almost touching them; anything bigger, less so)
+      if (!p.removed && !p.health.frozen && power > 1 && ks.torso > (power > 1.4 ? 0.8 : 0.86)) {
+        const n = Math.round((power > 1.4 ? 4 : 2) + (ks.torso - 0.8) * 20 * Math.min(2, power / 1.5));
+        sb.fx.gibs(cx, cy, n, sign(cx - x) * (3 + 4 * k), 2 + 4 * k, { from: p, bone: true });
+      }
     }
     if (p.removed) continue;
     // and thrown, away from it

@@ -3,8 +3,9 @@
 A 2D sandbox of stickmen with minds of their own, on a grey background and a
 black floor. You spawn **stickmen** and **police officers**, **brass
 knuckles**, **combat knives**, **machetes**, **crowbars**, **Glock-19** and
-**M1911** pistols, an **AK-47**, a **Mossberg 500** pump shotgun, a **gas
-rifle**, **tasers**, **light vests**, a box of **ammo** for each kind of gun,
+**M1911** pistols, an **AK-47**, an **M4A1** and an **AR-15**, a **Mossberg
+500** pump shotgun, a **gas rifle**, **tasers**, **light vests** and **light
+tactical helmets**, a box of **ammo** for each kind of gun,
 **grenades**, **C4**, **TNT** and **missiles**, **crates**, **wood**,
 **metal** and **glass walls**, small and large **metal beams**, a
 **gallows**, **trees** and **bushes**, and a **generator** with
@@ -158,7 +159,7 @@ street - people walk along in front of them, and nothing in the street lands
 on them - but they come apart like walls do (see [Buildings](#buildings-and-the-city)),
 and the hand from above can pull a lump off one.
 
-The spawn menu (☰ **SPAWN**, top left) has thirty-four things in it, in eight
+The spawn menu (☰ **SPAWN**, top left) has thirty-eight things in it, in eight
 sections:
 
 | Section | Thing | What it is |
@@ -172,6 +173,8 @@ sections:
 | Weapons | **Glock-19** | A pistol: 15 rounds in the magazine and two spare. Bullets go through people and crates, and ricochet off the floor. |
 | Weapons | **M1911** | A .45: seven rounds and two spare magazines. Each one hits harder and goes further through than a 9 mm, and it kicks. |
 | Weapons | **AK-47** | An automatic rifle: 30 rounds of 7.62 and two spare magazines, fired in bursts as fast as the trigger is held. Goes through a person, a wood wall, glass. Carried slung across the back. |
+| Weapons | **M4A1** | A carbine: 30 rounds of 5.56 and two spare magazines, fully automatic - about thirteen rounds a second with the trigger held - and lighter in the kick than the AK. Black, with a red dot sight. Goes through a person and a wood wall. Carried slung across the back. |
+| Weapons | **AR-15** | A semi-automatic rifle: the same 30 rounds of 5.56, one shot for each pull of the trigger, slower and more careful. Tan furniture and a scope. Carried slung across the back. |
 | Weapons | **Mossberg 500** | A pump shotgun: six shells of 12 gauge, each one eight pellets that spread as they go - devastating close up, much less so across the room. The pump is worked after every shot, and the red shell flies out. |
 | Weapons | **Taser** | Two barbed probes on wires: both in, and five seconds of current lock every muscle - down they go, stiff as a board. A vest stops it. Out of cartridges, it still hurts pressed against somebody. |
 | Weapons | **Gas Rifle** | Five canisters of poison gas and ten spare, lobbed in an arc to come down on whoever it is aimed at; each bursts into a green cloud that hangs there a quarter of a minute. Whoever breathes it chokes, coughs and passes out, and it eats at their lungs. Carried slung across the back. |
@@ -181,7 +184,8 @@ sections:
 | Explosives | **Missile** | Tap it: the motor lights and it flies straight the way it points, trailing fire and smoke, until its nose meets somebody, a wall or the ground. Turn it with the hand to aim it. |
 | Objects | **Crate** | 22 kg of wood. Stack it, climb it, throw it - or let a stickman throw it. |
 | Objects | **Light Vest** | Soft armour for the body. Stops most pistol rounds to the chest - they still land like a hammer - and takes the worst out of a blade. Wears down with every round. |
-| Ammo | **9 mm**, **.45 ACP**, **7.62 mm** and **12 gauge** | 50 rounds for the Glock (a cardboard box with a blue band), 50 for the M1911 (a green plastic case), 120 for the AK (a steel can) and 25 shells for the Mossberg (a red box). Rounds only go in the gun they are made for: anyone running low comes for the box that fits, and leaves the others. |
+| Objects | **Light Tactical Helmet** | A cut-away combat helmet, rails and a night-vision mount on it, put on and the chin strap done up. Pistol rounds to the top, side or back of the head mostly stop in it - it rings like a bell, and leaves them dizzy - and it takes the worst out of blows and blades. A rifle round goes through it. It wears down, and gets dented. |
+| Ammo | **9 mm**, **.45 ACP**, **7.62 mm**, **5.56 mm** and **12 gauge** | 50 rounds for the Glock (a cardboard box with a blue band), 50 for the M1911 (a green plastic case), 120 for the AK (a steel can), 120 for the M4A1 and the AR-15 (a tan can with a black band) and 25 shells for the Mossberg (a red box). Rounds only go in the gun they are made for: anyone running low comes for the box that fits, and leaves the others. |
 | Building | **Wood Wall** | Planks on battens, 2.4 m tall. Bullets punch straight through; blows, bodies and crates break it up a few centimetres at a time; a knife thrown point first sticks in it. |
 | Building | **Metal Wall** | A riveted steel plate. Stops pistol rounds dead (and sometimes sends them back off it), and takes a great deal to dent, let alone break. |
 | Building | **Glass Wall** | A pane they can see through. Every knock cracks it further, and cracked enough it all comes down in shards - which cut whoever they land on. |
@@ -799,9 +803,9 @@ break.
 ### Animated while they are in charge
 
 Every pose they strike on their own comes from **hand-keyed clips** in
-`src/game/clips.js`: 122 of them, from idling and walking to a front kick, a
-knife thrust, a machete chop, aiming and reloading a pistol, tying off a
-tourniquet, press-ups, a hug, falling on your back, getting up off your front,
+`src/game/clips.js`: 184 of them, from idling and walking to a front kick, a
+knife thrust, a machete chop, aiming and reloading a pistol, reloading a rifle,
+aiming down on one knee, putting on a helmet, tying off a tourniquet, press-ups, a hug, falling on your back, getting up off your front,
 sobbing into your hands and dying. Each clip is a list of frames, and
 each frame is a pose and how long it is held.
 
@@ -822,6 +826,8 @@ shadowbox  laughPoint  highFive  hug  handshake  clap  thumbsUp  nod  bow
 pushups  squats  jumpingJacks  clutchStomach  clutchArm  shiver
 macheteGuard  chop  hack  aimPistol  gunLow  reload  tourniquet  popJoint
 retch  checkWound  clutchStump  shock  coverHead
+helmetOn  reloadRifle  kneelAim  checkGun  coverEars  sickHunch  checkWatch
+rubNeck  shieldEyes  handsInPockets  ...and more
 ```
 
 Clips play in three layers - a base (standing, walking, lying), an upper-body
@@ -889,9 +895,13 @@ Broken limbs hang from the break, a paralysed body does not pull at all below
 the injury, and a ragdoll knows which way it is lying, so it gets up off its
 back or its front.
 
-Ragdolls touch everything: they pile up on each other, drape over crates,
-knock crates about, and stop a falling crate, which lands on the body and
-pins it there. A body that hits the floor, a wall or a crate fast enough gets
+Ragdolls touch everything: they pile up on each other - every joint of one
+held off every bone of the other, so a leg across a body lies on it, and
+they grip, so a body that lands on another stays there - drape over crates,
+knock crates about, push guns and knives and whatever else is lying on the
+floor out of the way, and stop a falling crate, which lands on the body and
+pins it there. A bullet pushes a body about as much as a bullet would, which
+is hardly at all. A body that hits the floor, a wall or a crate fast enough gets
 hurt where it hit, and hard enough breaks bones.
 
 ### Bodies get hurt
@@ -1099,12 +1109,17 @@ if someone dangerous is standing over them; trapped under a crate they shout
 for help, and friends come.
 
 They also talk - out loud, in speech bubbles, with a babbling voice pitched to
-each of them - from 1,120 lines for 204 situations in `src/game/lines.js`,
-from small talk to "My leg! It's bent the wrong way!", "Don't shoot!", "Did
-you hear what Axl did?", "My hand... it's gone. It's on the floor.", "Can
-we... take five?" and "I want a lawyer." (officers have a way of talking all
-their own: "Police! Stop right there!", "Taser! Taser!", "Dispatch, one in
-custody.") - and
+each of them - from 1,630 lines for 269 situations in `src/game/lines.js`,
+all written to sound like people really talk: short, plain, interrupted, and
+scared when there is something to be scared of. From small talk ("Did you
+sleep alright? I was up half the night.", "Rent's gone up again. Can you
+believe it?") to "My leg- it's not supposed to bend like that.", "Don't
+pull it out! Leave it in!", "Call an ambulance! Tam's been shot!", "Did you
+hear? Axl hit Bea.", "Can we... stop for a sec?" and "I'm not saying anything
+without a lawyer." (officers have a way of talking all their own: "Police!
+Don't move!", "Taser! Taser!", "Control, one in custody.") What people say
+about a mod's things is written the same way; a mod's own characters keep
+their own voices. And they
 think in pictures, in thought bubbles: a fist, a crate, a tear, a question
 mark - and, going for a weapon, that very weapon: the knuckles, the knife, the
 machete, the crowbar, the taser, the Glock, the M1911, the AK-47 or the
@@ -1172,6 +1187,17 @@ more - a person, a wood wall, a pane of glass - before it stops. It fires as
 fast as the trigger is held, about ten rounds a second, and whoever has it
 fires in bursts that get longer the angrier they are. Too long for a holster,
 it goes across the back on a sling when they want their hands free.
+
+The **M4A1** and the **AR-15** both take 5.56: thirty rounds and two spare
+magazines, a little lighter than the AK's 7.62 but still through a person
+and a wood wall. The M4A1 is fully automatic, about thirteen rounds a second
+with the trigger held, and kicks less than the AK, so a burst stays nearer
+the target; it is black, with a red dot sight. The AR-15 is semi-automatic:
+one round for each pull of the trigger, so whoever has one fires single,
+spaced shots; it has tan furniture and a scope. Either is reloaded the rifle
+way - the empty magazine out, a fresh one in, the charging handle pulled -
+and, with the range for it, whoever has one gets down on one knee to aim,
+steadier there, and up again to move.
 
 The **Mossberg 500** is a pump shotgun: six 12 gauge shells and two more
 loads. Each shell is eight pellets, spreading by a few degrees as they go:
@@ -1376,9 +1402,9 @@ bar in the inspector:
   heat; something horrible seen, or somebody else being sick - each brings
   it up while it lasts, and in time it settles (quicker keeping still).
   Past half-way they say so, go green in the face and slow down, and every
-  so often they retch; at the top of it they are sick - doubled over, and up
-  it comes, onto the floor and whatever is there - and feel a good deal
-  better for it. Whoever sees it is disgusted, and a little queasy too.
+  so often they retch; at the top of it the stomach turns - a dry heave -
+  and a moment later they are sick - doubled over, and up it comes, onto the
+  floor and whatever is there - and feel a good deal better for it. Whoever sees it is disgusted, and a little queasy too.
 - **Temperature** - 37 °C is right, and a living body steers back to it:
   sweating when it is hot, shivering when it is cold - fast from very hot,
   slowly from very cold, and not at all if it is locked.
@@ -1448,8 +1474,18 @@ one lets them through. Against a blade it takes the worst of it out, a stab
 less than a slash. An officer's is a navy police vest with POLICE across the
 chest.
 
+A **light tactical helmet** goes on the head and the chin strap is done up.
+It covers the top, the sides and the back of the head, not the face. A
+pistol round there mostly stops in it, with sparks: the head rings inside it
+- a bruise and dizziness, never a hole, and no blood - and the helmet is
+dented and worn by it, until a worn-out one lets them through. A rifle round
+goes straight through. It takes the worst out of a blow or a blade to the
+head as well. Someone under fire with one lying nearby goes and puts it on;
+a head that comes off takes the helmet with it.
+
 An **ammo box** holds one kind of round: 9 mm (for the Glock), .45 (for the
-M1911), 7.62 (for the AK) or 12 gauge shells (for the Mossberg). Anyone with
+M1911), 7.62 (for the AK), 5.56 (for the M4A1 and the AR-15) or 12 gauge
+shells (for the Mossberg). Anyone with
 a gun running low, in the hand, the holster or slung on their back, goes over
 to a box of rounds that fit it, crouches by it and takes what their spare
 magazines and the one in the gun will hold, until the box is empty. A box of
@@ -1547,6 +1583,15 @@ pistols, tasers, vests, ammo boxes, severed limbs and a mod's things - each
 kept in the thing's own frame, so it goes where the thing goes and turns
 with it - and people, as blood on them (it does not make them bleed).
 
+**Gore.** A round that goes right through leaves a fine mist out of the far
+side; a rifle round that kills through the head opens it - a spray, bone and
+brain thrown out across the floor, and the face covered - and whoever saw it
+says so, in the middle of whatever they were saying. A blast right against
+somebody throws pieces of them, which land wet, leave a spatter and lie on the
+floor for a minute and a half. Blood soaks out through the clothes round every
+wound as it bleeds, darker and wider the longer it goes on, and a bleeding body
+dragged across the floor leaves a long smear behind it.
+
 **Bled dry**, a body gives no more: no drips, no streams, no pool, and no
 spray when it is cut, shot or a limb comes off. Turn blood off in the
 settings and none of it is drawn.
@@ -1642,10 +1687,11 @@ stickfights/
       brain.js        sense, feel, think, react, remember, gossip
       behaviours.js   what a brain can decide to do
       emotions.js     the five emotions
-      lines.js        everything they can say
+      lines.js        everything they can say, written the way people talk
       people.js       names, looks and personalities
       props.js        crate, brass knuckles, knife, machete, crowbar, the guns (pistols,
-                      the AK-47, the Mossberg), the four kinds of ammo, vests, severed limbs
+                      the AK-47, the M4A1, the AR-15, the Mossberg), the five kinds of
+                      ammo, vests, helmets, severed limbs
       structures.js   walls: wood, metal and glass, cell by cell; what comes off them
       trees.js        trees and bushes: springy limbs, leaves, cells; the logs that fall
       wires.js        ropes, fixed ropes and pins, and the strain on them
@@ -1708,10 +1754,10 @@ screen and checks:
 
 - stickmen are already moving about behind the title, which has MAPS and
   MODS, and PLAY opens an empty sandbox with the spawn menu
-- the spawn menu has exactly thirty-four things in it: a Stickman, an Officer,
+- the spawn menu has exactly thirty-eight things in it: a Stickman, an Officer,
   Brass Knuckles, a Combat Knife, a Machete, a Crowbar, a Glock-19, an M1911,
-  an AK-47, a Mossberg 500, a Taser, a Gas Rifle, a Crate, a Light Vest, four
-  kinds of ammo, three walls, two metal beams, a Gallows, a Tree, a Bush, a
+  an AK-47, an M4A1, an AR-15, a Mossberg 500, a Taser, a Gas Rifle, a Crate, a
+  Light Vest, a Light Tactical Helmet, five kinds of ammo, three walls, two metal beams, a Gallows, a Tree, a Bush, a
   Grenade, C4, TNT, a Missile, a Generator, a Lightbulb, a Floodlight and a
   Volt Meter
 - the background is grey and the ground is black (read off the canvas)
@@ -2008,6 +2054,22 @@ screen and checks:
   Nausea bar; and nausea settles again in time
 - a dead body picked up by the chest hangs from the hand by the head, its
   head the top of it, with no flick of the head
+- the M4A1 fires over ten rounds a second with the trigger held and the AR-15
+  about half that, one round a pull; both are 5.56, and a 5.56 can fits both
+  and not the AK; a rifle is reloaded the rifle way (magazine out, magazine
+  in, charging handle)
+- somebody under fire goes for a Light Tactical Helmet and puts it on; a
+  pistol round to it stops there (dizzy, a bruise, the helmet worn, no hole
+  and no blood on the face), and a rifle round goes through
+- the new moves are all there, and with a rifle at range they kneel to aim
+- a body falling on another stays on it, a 9 mm round barely moves a dead
+  body, and a body falling on a gun shoves it aside
+- a rifle round that kills through the head opens it (a mist, a spray, bone
+  and brain) and the witness says so; C4 against somebody throws pieces of
+  them, which lie on the floor; blood soaks round a wound, and a bleeding
+  body dragged along the floor leaves a long smear
+- there are over sixteen hundred lines, and every blank in them is one that
+  gets filled in
 - the console stays clean, and the single file fetches nothing
 
 Every check starts from the same random numbers and the same clock, so what

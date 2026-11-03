@@ -94,7 +94,7 @@ export class Law {
     const a = e.by, v = e.who;
     if (!this.counts(a, v)) return;
     let kind;
-    if (e.weapon === 'bullet' || e.weapon === 'vestRound') kind = 'shooting';
+    if (e.weapon === 'bullet' || e.weapon === 'vestRound' || e.weapon === 'helmetRound') kind = 'shooting';
     else if (e.weapon === 'taserZap') kind = 'tasing';
     else if (e.kind === 'impact') kind = e.object && e.object.kind === 'crate' ? 'armedAssault' : 'assault';
     else kind = e.armed || e.weapon ? 'armedAssault' : 'assault';

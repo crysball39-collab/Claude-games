@@ -1,7 +1,7 @@
 /* Written by tools/mod-sizes.mjs - do not edit. How many bytes each mod's folder takes up. */
 export const MOD_SIZES = {
-  'godzilla': 303835,
-  'minecraft': 126500,
-  'murder-drones': 139982,
-  'shallow': 122818,
+  'godzilla': 303983,
+  'minecraft': 126763,
+  'murder-drones': 140329,
+  'shallow': 122929,
 };

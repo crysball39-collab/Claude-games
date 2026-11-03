@@ -40,30 +40,40 @@ addLines({
     "You shouldn't have done that.", 'Now look what you made me do.', 'I liked this skin.', 'Oh no. Not again.',
     "It's too small. It was always too small.", 'Ssssssss...', 'Stop. Stop. STOP.',
   ],
-  sawShallowTwitch: ["Did {other}'s face just... move?", 'Is {other} okay? That looked wrong.', 'Your neck did a weird thing, {other}.', '...{other}?'],
+  sawShallowTwitch: [
+    "Did {other}'s face just... move?", "{other}? Are you okay? That looked wrong.", "Your neck just did something weird, {other}.", "...{other}?",
+    "{other}, why are you smiling like that?",
+  ],
   sawShallowCrack: [
-    "What's wrong with {other}?!", "{other}? {other}, you're cracking!", "{other}'s face is coming off!", 'Something is coming out of {other}!',
-    'Stay back from {other}!', 'Oh no. Oh no no no.',
+    "What's wrong with {other}?!", "{other}? {other}, your skin's splitting!", "{other}'s face is coming off!",
+    "Something's coming out of {other}!", "Get back from {other}!", "Oh no. Oh no no no.",
   ],
   sawShallowOut: [
-    'WHAT IS THAT?!', 'It came out of {victim}!', "{victim} wasn't real!", 'It was wearing {victim}!', "It's so tall...",
-    'RUN!', 'Look at its teeth!', 'Those claws!', 'That was never {victim}!',
+    "What the hell is that?!", "It came out of {victim}!", "{victim} wasn't real!", "It was wearing {victim}!", "It's so tall...", "Run!",
+    "Look at its teeth!", "Those claws!", "That was never {victim}!",
   ],
-  seeShallow: ['What... is that?', "Don't look at it. Don't look at it.", 'Look at its smile...', 'Its eyes... just the pupils...', 'RUN!', 'Get away from it!'],
-  sawShallowRip: ['It tore {victim} in HALF!', '{victim}! NO!', 'It ripped {victim} apart!', 'Both halves... oh god...', "I'm going to be sick."],
-  sawShallowEat: ["It's EATING {victim}!", 'It bit {victim}... it bit their head off!', '{victim}! It ate {victim}!', 'It swallowed {victim} whole!', "Don't let it eat me!"],
+  seeShallow: [
+    "What... is that?", "Don't look at it. Don't look at it.", "Look at its smile...", "Its eyes... there's nothing in them...", "Run!",
+    "Get away from it!",
+  ],
+  sawShallowRip: [
+    "It tore {victim} in half!", "{victim}! No!", "It ripped {victim} apart!", "Oh God... oh God...", "I'm going to be sick.",
+  ],
+  sawShallowEat: [
+    "It's eating {victim}!", "It bit {victim}'s head off!", "{victim}! It ate {victim}!", "It swallowed {victim} whole!", "Don't let it get me!",
+  ],
   sawShallowHollow: [
-    "It's cutting {victim} open!", 'What is it doing to {victim}?!', "It's pulling {victim}'s bones out!", "{victim}'s skeleton... it took out the skeleton!",
-    'Their insides... it is throwing their insides!', 'Put {victim} down!',
+    "It's cutting {victim} open!", "What's it doing to {victim}?!", "It's pulling {victim}'s bones out!",
+    "It took {victim}'s skeleton out- oh God-", "It's throwing their insides everywhere!", "Put {victim} down!",
   ],
   sawShallowTake: [
-    "It went INSIDE {victim}!", "That's not {victim} any more!", "Don't go near {victim}! It's wearing them!", '{victim} just got up. {victim} should not get up.',
-    "It's wearing {victim}'s skin!", "That thing is {victim} now!",
+    "It got inside {victim}!", "That's not {victim} any more!", "Don't go near {victim}! It's wearing them!",
+    "{victim} just got up. {victim} shouldn't be able to get up.", "It's wearing {victim}'s skin!", "That thing is {victim} now!",
   ],
   knowsShallow: [
     "Stay away from {other}! That's not really them!", "Don't trust {other}. I saw what happened.", "{other}, I know what you are.",
-    "Everybody get away from {other}!", "That's not {other}. That's the thing.", "{other} is smiling wrong.",
+    "Everybody get away from {other}!", "That's not {other}. That's the thing.", "Look at {other}'s smile. That's not right.",
   ],
-  sawShallowRegrow: ['It grew BACK!', "It's growing a new one!", 'That should have stopped it!', 'Nothing hurts it!'],
-  shallowDead: ["Is it... dead?", 'It\'s melting!', "It's gone. It's really gone.", 'Did we kill it?', 'Where did it go?!'],
+  sawShallowRegrow: ["It grew back!", "It's growing a new one!", "That should have stopped it!", "Nothing hurts it!"],
+  shallowDead: ["Is it... dead?", "It's melting!", "It's gone. It's really gone.", "Did we kill it?", "Where did it go?!"],
 });

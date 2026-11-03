@@ -7,8 +7,9 @@ texture in the game is drawn procedurally onto a canvas at load time.
 > This repository also holds **STICKFIGHTS**, a 2D sandbox on a grey background
 > and a black floor where you spawn stickmen and police officers, brass
 > knuckles, combat knives, machetes, crowbars, Glock-19 and M1911 pistols, an
-> AK-47, a Mossberg 500 pump shotgun, a gas rifle that lobs canisters of poison
-> gas, tasers, light vests, a box of ammo for each kind of gun, grenades, C4,
+> AK-47, an M4A1 and an AR-15, a Mossberg 500 pump shotgun, a gas rifle that lobs
+> canisters of poison gas, tasers, light vests and light tactical helmets, a box
+> of ammo for each kind of gun, grenades, C4,
 > TNT and missiles that wait to be set off (and set each other off), crates,
 > wood, metal and glass walls that break cell by cell (and that the hand lifts,
 > swings round and sets back on their ends), small and large steel beams, a
@@ -33,7 +34,11 @@ texture in the game is drawn procedurally onto a canvas at load time.
 > roll; cold enough they freeze solid, an ice statue that thaws - or shatters.
 > They bleed from the wound that is bleeding - in spurting streams from a stump
 > or an artery, which break up into drops as they fall, from the head that hit the floor - until their blood runs out,
-> and it lands on anything: the floor, the walls, crates, weapons, people.
+> and it lands on anything: the floor, the walls, crates, weapons, people; it soaks
+> out round their wounds and smears behind a body dragged through it, a rifle round
+> through the head opens it, and a blast up close throws pieces of them. Bodies
+> pile on bodies and grip. Everything they say is written the way people really
+> talk.
 > Slow motion and double speed change how fast it all goes. A freeze tool stops anything dead where it is; with the world paused, the
 > hand just moves things; and a wire tool ties anything to anything (or to the
 > background) with wood or metal rope, fixed rods, pins or power cords, which take the strain

@@ -526,6 +526,48 @@ clip('sigh', { frames: [
   [0.4, STAND],
 ] });
 
+// a bang too close: both hands clapped over the ears, the head down
+clip('coverEars', { frames: [
+  [0.08, P({ t: 14, h: 18, aA: [150, 158], aB: [146, 162] })],
+  [0.5, P({ t: 18, h: 24, aA: [152, 160], aB: [148, 164] })],
+  [0.3, P({ t: 12, h: 16, aA: [148, 156], aB: [144, 160] })],
+  [0.3, STAND],
+] });
+
+// sick to the stomach: bent over, a hand on it, the other up at the mouth
+clip('sickHunch', { loop: true, frames: [
+  [0.6, P({ t: 26, s: 10, h: 26, aA: [50, 120], aB: [14, 70], lA: [8, -10], lB: [-4, -8] })],
+  [0.6, P({ t: 29, s: 12, h: 30, aA: [52, 124], aB: [16, 72], lA: [8, -10], lB: [-4, -8] })],
+] });
+
+// the time: the far wrist up in front, a look down at it
+clip('checkWatch', { mask: 'upper', frames: [
+  [0.22, P({ t: 4, h: 28, aA: [4, 8], aB: [44, 104] })],
+  [0.7, P({ t: 5, h: 30, aA: [4, 8], aB: [46, 106] })],
+  [0.25, STAND],
+] });
+
+// a hand round to the back of the neck, rubbing it
+clip('rubNeck', { mask: 'upper', frames: [
+  [0.25, P({ t: 2, h: 24, aA: [162, 166], aB: [4, 8] })],
+  [0.3, P({ t: 3, h: 28, aA: [166, 170], aB: [4, 8] })],
+  [0.3, P({ t: 2, h: 22, aA: [160, 162], aB: [4, 8] })],
+  [0.25, STAND],
+] });
+
+// a hand up over the eyes, to see something a long way off
+clip('shieldEyes', { mask: 'upper', frames: [
+  [0.25, P({ t: -2, h: -6, aA: [132, 118], aB: [4, 8] })],
+  [0.9, P({ t: -3, h: -8, aA: [134, 120], aB: [4, 8] })],
+  [0.25, STAND],
+] });
+
+// standing about, hands in the pockets
+clip('handsInPockets', { loop: true, frames: [
+  [1.4, P({ t: -2, h: 2, aA: [-10, 30], aB: [-12, 32] })],
+  [1.4, P({ t: -1, h: 4, aA: [-9, 32], aB: [-11, 34] })],
+] });
+
 clip('clutchHead', { loop: true, frames: [
   [0.4, P({ t: 8, h: 14, aA: [140, 140], aB: [130, 150] })],
   [0.4, P({ t: 9, h: 18, aA: [142, 138], aB: [132, 148] })],
@@ -834,6 +876,33 @@ clip('reload', { mask: 'upper', frames: [
   [0.16, P({ t: 4, h: 6, aA: [72, 40], aB: [66, 60] })],
 ] });
 
+// a rifle's magazine changed: the rifle canted in, the empty one stripped out, a fresh one off the chest, in and
+// slapped home, the charging handle pulled back and let go
+clip('reloadRifle', { mask: 'upper', frames: [
+  [0.16, P({ t: 6, h: 18, aA: [58, 48], aB: [46, 72] })],
+  [0.14, P({ t: 6, h: 20, aA: [58, 48], aB: [40, 64] }), 'magOut'],
+  [0.24, P({ t: 8, h: 22, aA: [56, 50], aB: [6, 104] })],
+  [0.18, P({ t: 8, h: 22, aA: [56, 50], aB: [10, 100] })],
+  [0.2, P({ t: 6, h: 20, aA: [58, 48], aB: [44, 70] }), 'magIn'],
+  [0.1, P({ t: 6, h: 18, aA: [58, 48], aB: [54, 62] })],
+  [0.16, P({ t: 4, h: 10, aA: [62, 44], aB: [98, 132] }), 'rack'],
+  [0.12, P({ t: 4, h: 8, aA: [64, 42], aB: [104, 120] })],
+  [0.18, P({ t: 4, h: 4, aA: [72, 30], aB: [76, 36] })],
+] });
+
+// down on one knee behind a rifle: steadier than standing, and less of them to hit (the arms are the aim's)
+clip('kneelAim', { loop: true, frames: [
+  [1.1, P({ t: 6, h: -2, aA: [88, 6], aB: [80, 20], lA: [86, -86], lB: [-6, -94] })],
+  [1.1, P({ t: 7, h: -1, aA: [89, 5], aB: [81, 19], lA: [86, -86], lB: [-6, -94] })],
+] });
+
+// a look at the gun in the hand: tipped over to see into it, and back
+clip('checkGun', { mask: 'upper', frames: [
+  [0.22, P({ t: 6, h: 26, aA: [40, 70], aB: [36, 80] })],
+  [0.5, P({ t: 7, h: 28, aA: [44, 74], aB: [40, 84] })],
+  [0.22, STAND],
+] });
+
 /* -------------------------------------------------------------------------- */
 /*                          wounds, and tending them                          */
 /* -------------------------------------------------------------------------- */
@@ -977,6 +1046,17 @@ clip('unpocket', { mask: 'armA', frames: [
 ] });
 
 // a vest on: over the head, pulled down, the straps tugged tight
+// a helmet: up in both hands, over the head and down onto it, a shove to seat it, and the chin strap done up
+clip('helmetOn', { frames: [
+  [0.18, P({ t: 4, h: 6, aA: [70, 60], aB: [66, 64] })],
+  [0.22, P({ t: -2, h: -6, aA: [150, 62], aB: [146, 66] })],
+  [0.18, P({ t: -2, h: 4, aA: [162, 112], aB: [158, 116] }), 'helmetOn'],
+  [0.12, P({ t: 0, h: 8, aA: [152, 122], aB: [150, 126] })],
+  [0.22, P({ t: 2, h: -6, aA: [40, 142], aB: [36, 146] })],
+  [0.14, P({ t: 2, h: -8, aA: [38, 148], aB: [34, 152] })],
+  [0.22, STAND],
+] });
+
 clip('vestOn', { frames: [
   [0.24, P({ t: -4, h: -8, aA: [168, 22], aB: [162, 26] })],
   [0.26, P({ t: -2, h: 4, aA: [128, 110], aB: [124, 114] })],

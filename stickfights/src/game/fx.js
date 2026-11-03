@@ -190,6 +190,67 @@ export class FX {
   }
 
   /** One drop of it, going exactly along (vx, vy). */
+  /**
+   * A fine spray of blood - the mist out of the far side of a body a fast round
+   * has gone through: a cone of tiny, quick droplets along (dx, dy), `spread`
+   * radians either side, that spatter whatever is behind.
+   */
+  mist(x, y, dx, dy, n = 20, spread = 0.35, from = null, tint = null) {
+    if (!this.sb.settings.blood) return;
+    if (from && from.health) n = Math.round(n * bloodK(from));
+    const t = tint || (from && from.tint) || null, a0 = Math.atan2(dy, dx);
+    for (let i = 0; i < n && this.drops.length < MAX_DROPS; i++) {
+      const a = a0 + (Math.random() + Math.random() - 1) * spread, sp = rand(3.5, 9);
+      this.drops.push({
+        x: x + rand(-0.015, 0.015), y: y + rand(-0.015, 0.015), vx: Math.cos(a) * sp, vy: Math.sin(a) * sp + rand(0, 0.6),
+        r: rand(0.004, 0.01), age: 0, from, sticky: Math.random() < STICK, tint: t, mist: true,
+      });
+    }
+  }
+
+  /**
+   * Pieces of somebody: chunks of flesh - and, with `bone`, bits of bone and
+   * brain - thrown out from (x, y) at about (vx, vy). They tumble, land with a
+   * spatter of their own, and lie where they land for a good minute and a half.
+   */
+  gibs(x, y, n, vx = 0, vy = 0, o = {}) {
+    if (!this.sb.settings.blood) return;
+    const t = o.tint || (o.from && o.from.tint) || null;
+    const FLESH = t ? [t[0], t[1], t[1]] : ['#7a0d16', '#9c1b24', '#5c0a10', '#b3474b'];
+    for (let i = 0; i < n; i++) {
+      const bone = o.bone && i % 3 === 0, brain = o.brain && i % 3 === 1;
+      let at = this.debris.length;
+      if (at >= MAX_DEBRIS) {
+        const k = this.debris.findIndex((d) => d.rest && !d.gib);
+        if (k >= 0) at = k; else { this.debris.shift(); at = this.debris.length; }
+      }
+      const sp = rand(0.4, 1.3);
+      this.debris[at] = {
+        x: x + rand(-0.03, 0.03), y: y + rand(-0.03, 0.03), vx: vx * sp + rand(-1.6, 1.6), vy: vy * sp + rand(-0.4, 2.4),
+        s: (o.size || 1) * (bone ? rand(0.014, 0.026) : rand(0.022, 0.05)), c: bone ? (t ? '#c9ced3' : '#ebe3cf') : brain ? '#c98a86' : FLESH[i % FLESH.length],
+        a: rand(0, Math.PI), va: rand(-12, 12), rest: false, age: 0, gib: true, bone, tint: t, from: o.from || null,
+        shape: [rand(0.7, 1.1), rand(0.5, 0.9), rand(0.75, 1.15), rand(0.55, 0.95)],
+      };
+    }
+  }
+
+  /** A body dragged along the floor through its own blood: a long thin smear of it, from x0 to x1. */
+  smear(x0, x1, tint = null, k = 1) {
+    if (!this.sb.settings.blood || Math.abs(x1 - x0) < 0.01) return;
+    const x = (x0 + x1) / 2, w = Math.abs(x1 - x0) / 2 + 0.025;
+    // (going on from the last one, if it is right there)
+    for (let i = this.splats.length - 1; i >= Math.max(0, this.splats.length - 6); i--) {
+      const s = this.splats[i];
+      if (s.smear && s.tint === tint && Math.abs(s.x - x) < s.w + w) {
+        const lo = Math.min(s.x - s.w, x - w), hi = Math.max(s.x + s.w, x + w);
+        s.x = (lo + hi) / 2; s.w = Math.min(1.6, (hi - lo) / 2); s.h = Math.min(0.014, s.h + 0.0004 * k);
+        return;
+      }
+    }
+    if (this.splats.length >= MAX_SPLATS) this.splats.splice(this.splats.findIndex((s) => !s.pool), 1);
+    this.splats.push({ x, w, h: 0.006 + 0.004 * k, dark: Math.random() < 0.5, pool: false, smear: true, tint });
+  }
+
   /** Somebody being sick: a gush of it out of the mouth at (x, y), going (vx, vy), and down onto whatever is under it. */
   spew(x, y, vx, vy, n = 30) {
     if (!this.sb.settings.blood) return;
@@ -561,7 +622,7 @@ export class FX {
       const d = this.debris[i];
       d.age += dt;
       if (d.glow) d.glow = Math.max(0, d.glow - dt * 0.8);
-      if (d.rest) { if (d.age > 40) this.debris.splice(i, 1); continue; }
+      if (d.rest) { if (d.age > (d.gib ? 90 : 40)) this.debris.splice(i, 1); continue; }
       if (d.leaf) {
         // a leaf falls slowly, rocking from side to side
         d.vy = Math.max(d.vy - G * 0.12 * dt, -0.7);
@@ -574,8 +635,11 @@ export class FX {
       if (d.sharp && d.vy < -2 && d.age > 0.05) this.shardHits(d);
       const top = this.casingFloor(d.x, d.y + 0.02);
       if (d.y <= top) {
-        d.y = top;
-        if (Math.abs(d.vy) > 1.2 && !d.leaf) { d.vy = -d.vy * 0.25; d.vx *= 0.5; d.va *= 0.5; }
+        // (a piece of somebody sits on the floor, not half sunk in it)
+        d.y = top + (d.gib ? d.s * 0.5 : 0);
+        // (a piece of somebody lands wet: a spatter where it hits, and it does not bounce much)
+        if (d.gib && !d.splashed && top <= 0.01) { d.splashed = true; this.splat(d.x, d.s * 1.4, d.tint || null); }
+        if (Math.abs(d.vy) > (d.gib ? 2.5 : 1.2) && !d.leaf) { d.vy = -d.vy * (d.gib ? 0.12 : 0.25); d.vx *= 0.5; d.va *= 0.5; }
         else { d.rest = true; d.vx = d.vy = d.va = 0; d.age = 0; }
       }
       if (d.x < sb.left) { d.x = sb.left; d.vx = -d.vx * 0.3; }

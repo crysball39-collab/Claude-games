@@ -24,7 +24,7 @@
    ========================================================================== */
 import {
   drawStickman, drawCrateShape, drawKnuckleShape, drawKnifeShape, drawMacheteShape, drawSeveredLimb, drawSeveredHead,
-  drawTaserShape, drawVestShape, drawAmmoBoxShape, drawGunShape, drawCrowbarShape,
+  drawTaserShape, drawVestShape, drawAmmoBoxShape, drawGunShape, drawCrowbarShape, drawHelmetShape,
   KNIFE_W, KNIFE_H, MACHETE_W, MACHETE_H, CROWBAR_W, CROWBAR_H, INK, BLOOD, BLOOD_DARK, BRASS, BRASS_DARK,
 } from './draw.js';
 import { AMMO_BOXES, VEST_W, VEST_H, GUN_MODELS } from './props.js';
@@ -158,6 +158,15 @@ export class Renderer {
     for (const s of this.sb.fx.splats) {
       if (s.x + s.w < v.minX || s.x - s.w > v.maxX) continue;
       ctx.fillStyle = s.tint ? s.tint[s.dark ? 1 : 0] : s.dark ? BLOOD_DARK : BLOOD;
+      if (s.smear) {
+        // a smear: a long thin streak, ragged at the ends, a second fainter one along it
+        ctx.globalAlpha = 0.85;
+        ctx.fillRect(s.x - s.w, 0, s.w * 2, s.h);
+        ctx.globalAlpha = 0.45;
+        ctx.fillRect(s.x - s.w * 0.85, s.h, s.w * 1.6, s.h * 0.6);
+        ctx.globalAlpha = 1;
+        continue;
+      }
       ctx.beginPath();
       ctx.ellipse(s.x, 0.004, s.w, s.h, 0, 0, TAU);
       ctx.fill();
@@ -339,7 +348,8 @@ export class Renderer {
     ctx.save();
     ctx.translate(b.pos.x, b.pos.y);
     ctx.rotate(b.rot);
-    drawVestShape(ctx, b.w, b.h, v.police, v.condition);
+    if (v.kind === 'helmet') drawHelmetShape(ctx, b.w, v);
+    else drawVestShape(ctx, b.w, b.h, v.police, v.condition);
     ctx.restore();
     drawStains(ctx, v);
   }
@@ -411,6 +421,7 @@ export class Renderer {
       belt: p.officer,
       kit: p.kit.length ? { holster: p.stowed.holster && p.stowed.holster.kind, pocket: p.stowed.pocket && p.stowed.pocket.kind, duty: p.stowed.duty && p.stowed.duty.kind, back: p.stowed.back && p.stowed.back.kind } : null,
       vest: p.vest,
+      helmet: p.cut.head ? null : p.helmet,
       donning: p.donning,
       cuffed: !!p.cuffed,
       wounds: p.wounds,
@@ -520,7 +531,23 @@ export class Renderer {
       ctx.rotate(d.a);
       ctx.globalAlpha = fade * (d.sharp ? 0.85 : 1);
       ctx.fillStyle = d.c;
-      if (d.leaf) {
+      if (d.gib) {
+        // a piece of somebody: a lumpy, wet blob - darker at the core - or a pale chip of bone
+        const sh = d.shape, s = d.s;
+        ctx.beginPath();
+        ctx.moveTo(s * sh[0], 0);
+        ctx.quadraticCurveTo(s * 0.7, s * sh[1], 0, s * sh[1]);
+        ctx.quadraticCurveTo(-s * 0.8, s * 0.6, -s * sh[2], 0);
+        ctx.quadraticCurveTo(-s * 0.6, -s * sh[3], 0, -s * sh[3]);
+        ctx.quadraticCurveTo(s * 0.8, -s * 0.6, s * sh[0], 0);
+        ctx.fill();
+        if (!d.bone) {
+          ctx.fillStyle = 'rgba(40, 0, 4, 0.45)';
+          ctx.beginPath(); ctx.ellipse(-s * 0.1, -s * 0.08, s * 0.45, s * 0.3, 0, 0, TAU); ctx.fill();
+          ctx.fillStyle = 'rgba(255, 200, 200, 0.25)';
+          ctx.beginPath(); ctx.ellipse(s * 0.25, s * 0.25, s * 0.22, s * 0.12, 0, 0, TAU); ctx.fill();
+        }
+      } else if (d.leaf) {
         ctx.beginPath();
         ctx.ellipse(0, 0, d.s, d.s * 0.55, 0, 0, TAU);
         ctx.fill();
@@ -585,6 +612,7 @@ export class Renderer {
     else if (GUN_MODELS[g.kind]) drawGunShape(ctx, g.kind, 1, 0, 0);
     else if (g.kind === 'taser') drawTaserShape(ctx, 1, true);
     else if (g.kind === 'vest') drawVestShape(ctx, VEST_W, VEST_H, false, 1);
+    else if (g.kind === 'helmet') drawHelmetShape(ctx, 0.27);
     else if (g.kind === 'ammo') { const sp = AMMO_BOXES[g.size] || AMMO_BOXES.ammo9; drawAmmoBoxShape(ctx, g.size, sp.w, sp.h, 1); }
     else if (WALLS[g.kind]) { ctx.scale(1, -1); drawWallShape(ctx, g.kind, 0, 0, WALLS[g.kind].h); }
     else if (g.kind === 'tree' || g.kind === 'bush') drawPlantShape(ctx, g.kind, 0, 0, g.kind === 'bush' ? 1 : 5, 11);
@@ -985,7 +1013,9 @@ export function drawIcon(ctx, kind, x, y, s) {
     case 'm1911':
     case 'ak47':
     case 'mossberg':
-    case 'gasRifle': {
+    case 'gasRifle':
+    case 'm4a1':
+    case 'ar15': {
       // the gun they are going for (a long one tipped up, to fit in the cloud)
       const gun = GUN_MODELS[kind] ? kind : 'glock', k = s * Math.min(1.7 / 0.3, 2.6 / GUN_MODELS[gun].w);
       ctx.save();
@@ -1005,6 +1035,12 @@ export function drawIcon(ctx, kind, x, y, s) {
       ctx.save();
       ctx.scale(s * 1.8 / 0.26, -s * 1.8 / 0.26);
       drawVestShape(ctx, 0.26, 0.13, false, 1);
+      ctx.restore();
+      break;
+    case 'helmet':
+      ctx.save();
+      ctx.scale(s * 1.8 / 0.26, -s * 1.8 / 0.26);
+      drawHelmetShape(ctx, 0.26);
       ctx.restore();
       break;
     case 'ammo':

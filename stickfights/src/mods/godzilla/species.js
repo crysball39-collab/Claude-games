@@ -60,7 +60,7 @@ export function harmOf(h, weapon) {
   if (weapon === 'rail' || weapon === 'laser') return 'rail';
   if (weapon === 'shinBeam' || weapon === 'kaijuBreath') return 'beam';
   if (weapon === 'kaijuBlow') return 'kaiju';
-  if (weapon === 'bullet' || weapon === 'vestRound' || weapon === 'arrow' || weapon === 'needle' || h.kind === 'shot') return 'bullet';
+  if (weapon === 'bullet' || weapon === 'vestRound' || weapon === 'helmetRound' || weapon === 'arrow' || weapon === 'needle' || h.kind === 'shot') return 'bullet';
   if (weapon === 'blast' || weapon === 'mcBlast' || weapon === 'gzBlast' || weapon === 'explosion') return 'blast';
   if (weapon === 'fire') return 'burn';
   const spec = armOf(weapon);

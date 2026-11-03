@@ -268,15 +268,17 @@ function updateNausea(man, h, v, dt) {
   h.nausea = n;
   // (the moment it turns: they say so, once, until it has settled again)
   if (n > 0.5 && !v.queasy) { v.queasy = true; if (man.brain && man.alive && man.conscious) man.brain.speak('nauseous', {}, 0.9); }
-  else if (n < 0.3) v.queasy = false;
+  else if (n < 0.3) { v.queasy = false; v.retched = false; }
   // the stomach doing what it does
   if (!man.alive || !man.conscious || man.cut.head || man.tased) return;
   v.sickT = (v.sickT ?? 0) - dt;
   if (v.sickT > 0) return;
-  if (n >= 0.9) { beSick(man, h, v); return; }
-  if (n > 0.55 && chance(dt * (n - 0.5) * 0.6)) {
-    v.sickT = 2.5;
-    h.nausea = Math.max(0, n - 0.04);
+  // (at the top of it the stomach turns first - a heave that brings nothing up - and a moment later it all comes)
+  if (n >= 0.9 && v.retched) { beSick(man, h, v); return; }
+  if (n >= 0.9 || (n > 0.55 && chance(dt * (n - 0.5) * 0.6))) {
+    v.sickT = n >= 0.9 ? 1.1 : 2.5;
+    v.retched = true;
+    if (n < 0.9) h.nausea = Math.max(0, n - 0.04);
     if (man.ready) man.perform('retch');
     if (man.brain) man.brain.speak('retch', {}, 0.8);
     man.sandbox.emit('retch', { who: man, x: w.head.x, y: w.head.y });
@@ -295,6 +297,7 @@ function mouthOf(man) {
 function beSick(man, h, v) {
   const sb = man.sandbox;
   v.sickT = 7;
+  v.retched = false;
   h.nausea = 0.3;
   if (man.ready) man.perform('retch');
   if (man.brain) man.brain.speak('vomit', {}, 1, null, true);

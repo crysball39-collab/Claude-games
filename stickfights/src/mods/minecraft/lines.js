@@ -60,7 +60,10 @@ export const STEVE_LINES = {
   dying: ['I need to... respawn...', 'Should have... brought more food...'],
   healed: ['Full hearts. Nice.', 'Good as new.'],
   wake: ['Whoa. Where am I? Did I respawn?'],
-  withering: ['My hearts are going black!', 'Withering! I need milk!', "That's the Wither effect. Bad."],
+  withering: [
+    "What's happening to me?", "My skin's going grey...", "I feel like I'm turning to ash...", "I feel so weak...",
+    "Something's wrong with me- I'm going dark!",
+  ],
 
   /* ----------------------------------- his kit --------------------------------- */
   eat: ['*crunch*', 'Golden apple time.', 'Need hearts.'],
@@ -70,11 +73,16 @@ export const STEVE_LINES = {
   noApples: ['Out of golden apples...'],
 
   /* ------------------------------ the things it brings ------------------------------ */
-  seeWither: ['The Wither! Everybody get back!', 'Oh no. Who built a Wither here?!', 'Okay. Bow first, then sword when its armour comes up.', 'That thing nearly took my base once.'],
-  seeWitherSkeleton: ["Wither skeletons. Don't let them hit you.", 'Skeletons with stone swords. Careful.'],
-  killedMonster: ['Got it.', "That's one less.", 'Mob down.'],
-  monsterDown: ['Good.', 'Nice one.'],
-  witherDead: ["We did it. We actually did it.", 'A nether star! Worth it.'],
+  seeWither: [
+    "What is that?!", "It's got three heads!", "A giant flying skeleton! Run!", "It's looking at me. All three heads are looking at me.",
+    "That's not a normal skeleton!", "Oh no. Oh no no no.",
+  ],
+  seeWitherSkeleton: [
+    "Skeletons! Walking skeletons!", "Those skeletons have swords!", "Is that a skeleton? Why's it so tall?!", "Stay away from the skeletons!",
+  ],
+  killedMonster: ["I got it!", "Ha! Take that!", "That's one less monster!", "Got the thing!"],
+  monsterDown: ["It's dead! It's actually dead!", "Got it!", "Is it over?", "Yes! Yes!", "Phew."],
+  witherDead: ["The Wither's dead!", "We beat it!", "It blew up! Is it gone?!"],
 
   /* ------------------------------ other people's things ------------------------------ */
   seeMurderDrone: ['That is not a mob I know.', 'Huh. A robot with wings. New one.'],
@@ -85,25 +93,28 @@ export const STEVE_LINES = {
 
 // what everybody else says about the blocky things
 addLines({
-  seeSteve: ['Why is your head a cube?', "Why is everything about you so... square?", 'Are you made of blocks?', 'Cool shirt. Very... teal.', 'Is that a sword made of diamond?!'],
+  seeSteve: [
+    "Why's your head a cube?", "Why is everything about you so... square?", "Are you made of blocks?", "Nice shirt.",
+    "Is that sword made of diamond?!",
+  ],
   seeWither: [
     'WHAT IS THAT?!', 'It has THREE HEADS!', 'A giant flying skeleton! Run!', "It's looking at me. All of it is looking at me.",
     "That's not a normal skeleton!", 'Oh no. Oh no no no.',
   ],
   seeWitherSkeleton: ['Skeletons! Walking skeletons!', 'Those bones have swords!', 'Is that a skeleton? Why is it so tall?!', 'Stay away from the skeletons!'],
   withering: ["I'm... withering?", 'My body feels like ash!', "Everything's turning grey...", "I feel so weak...", 'What is happening to me?!'],
-  mcSwordFear: ['Is that sword made of DIAMOND?!', 'Put the shiny sword away!', 'That is a very sharp, very square sword.'],
-  mcSwordHit: ['AAAH! The sword!', '{other} cut me!', 'That sword is SHARP!', "I'm cut!"],
-  mcSawSword: ['{other} just cut {victim}!', 'Watch out for the sword!'],
-  mcBowFear: ['A bow! Get down!', "Don't shoot that thing at me!"],
-  mcArrowHit: ['An arrow! I got hit by an arrow!', "There's an arrow in me!", 'OW! Arrow!'],
-  mcSawArrow: ['{other} shot {victim} with an arrow!', 'Arrows! Take cover!'],
-  mcBlownUp: ['AAAH! The explosion!', "My ears! I can't hear!", 'Everything went white!', 'What blew up?!'],
-  mcRammed: ['It slammed right into me!', 'OOF! It rammed me!', 'The whole thing hit me!'],
-  mcBoomHeard: ['What was that?!', 'Something exploded!', 'That came from over there!', 'Was that a bomb?!'],
+  mcSwordFear: ["Is that sword made of diamond?!", "Put the sword away!", "That's a very sharp, very square sword."],
+  mcSwordHit: ["Agh! The sword!", "{other} cut me!", "That sword's sharp!", "I'm cut!"],
+  mcSawSword: ["{other} just cut {victim}!", "Watch out for the sword!"],
+  mcBowFear: ["A bow! Get down!", "Don't shoot that thing at me!"],
+  mcArrowHit: ["An arrow! I've been hit by an arrow!", "There's an arrow in me!", "Ow! An arrow!"],
+  mcSawArrow: ["{other} shot {victim} with an arrow!", "Arrows! Take cover!"],
+  mcBlownUp: ["AAAH!", "My ears! I can't hear!", "Everything went white!", "What blew up?!"],
+  mcRammed: ["It slammed right into me!", "Oof! It rammed me!", "The whole thing hit me!"],
+  mcBoomHeard: ["What was that?!", "Something exploded!", "That came from over there!", "Was that a bomb?!"],
   monsterDown: ["It's dead! It's actually dead!", 'Got it!', 'Is it over?', 'Yes! YES!', 'Phew.'],
   killedMonster: ['I got it!', 'Ha! Take that!', "That's one less monster!", "Don't mess with me!"],
   witherDead: ['The Wither is DEAD!', 'We beat it!', 'It exploded! Is it gone?!'],
-  totemSee: ['Why is that glowing?', 'Uh... is it supposed to do that?', 'Everybody get back from the glowing thing!'],
-  netherStarSee: ['Ooh, shiny.', 'What is that star?'],
+  totemSee: ["Why is that glowing?", "Is it supposed to do that?", "Everybody get back from the glowing thing!"],
+  netherStarSee: ["What's that shiny thing?", "What is that? A star?"],
 });
