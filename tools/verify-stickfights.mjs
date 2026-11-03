@@ -3714,12 +3714,19 @@ const tableAt = await ev(() => {
 // (the spawn menu all the way shut first: it slides out over where the table is)
 await page.waitForFunction(() => !document.querySelector('#drawer').classList.contains('open'), null, { timeout: 3000 }).catch(() => {});
 await page.waitForTimeout(500);
-// (what is under the finger as it goes down - for when it is not the table)
+// (where on the table to tap, worked out again now the view has settled - and what is under the finger as it goes down)
 const under = await ev(([x, y]) => {
-  const sf = window.__sf, el = document.elementFromPoint(x, y), w = sf.cam.toWorld(x, y), th = sf.sb.thingAt(w.x, w.y, sf.ui.tol);
-  return { el: el && (el.id || el.className || el.tagName), thing: th && th.name, tool: sf.ui.tool, drawer: document.querySelector('#drawer').classList.contains('open') };
+  const sf = window.__sf, sb = sf.sb, t = window.__table;
+  let at = sf.cam.toScreen(t.pos.x, t.pos.y - 0.12);
+  find: for (const dy of [-0.12, -0.24, 0, 0.12, -0.3]) {
+    for (const dx of [0, -0.18, 0.18, -0.3, 0.3]) {
+      if (sb.thingAt(t.pos.x + dx, t.pos.y + dy, sf.ui.tol) === t) { at = sf.cam.toScreen(t.pos.x + dx, t.pos.y + dy); break find; }
+    }
+  }
+  const el = document.elementFromPoint(at.x, at.y), w = sf.cam.toWorld(at.x, at.y), th = sb.thingAt(w.x, w.y, sf.ui.tol);
+  return { x: at.x, y: at.y, moved: Math.round(Math.hypot(at.x - x, at.y - y)), el: el && (el.id || el.className || el.tagName), thing: th && th.name, tool: sf.ui.tool, drawer: document.querySelector('#drawer').classList.contains('open') };
 }, [tableAt.x, tableAt.y]);
-await tapAt(tableAt.x, tableAt.y);
+await tapAt(under.x, under.y);
 await page.waitForTimeout(300);
 const panel = await ev(() => {
   const b = document.querySelector('#panel-buttons .panel-btn');
