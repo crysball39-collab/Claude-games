@@ -840,7 +840,7 @@ export class Brain {
         if (seen && ev.who && ev.who !== me && d < 14) {
           // (whatever they were in the middle of saying, they stop)
           this.spokeT = -99;
-          this.speak('sawHeadBurst', { victim: ev.who.name }, 0.9, null, true);
+          this.speak('sawHeadBurst', { victim: ev.who.name }, 1, null, true);
           this.shaken(1.1);
           this.note(`${ev.who.name} was shot in the head. Right in front of me.`);
         }

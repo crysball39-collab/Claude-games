@@ -4742,13 +4742,13 @@ check('physics: a body falling on another stays on top of it (bodies pile up, an
 await fresh();
 const burst = await ev(() => {
   const { sb } = window.__sf;
-  const w = sb.spawnStickman(3.5, null, { name: 'Wit' });
-  const said = []; sb.on('speech', (e) => { if (e.who === w) said.push(e.kind); });
-  let p = null, n = 0, tries = 0;
+  let p = null, w = null, n = 0, said = [], tries = 0;
   sb.on('headBurst', (e) => { if (e.who === p) n++; });
-  // (one round in five to the head does not kill outright: then another person, the same shot)
+  sb.on('speech', (e) => { if (e.who === w) said.push(e.kind); });
+  // (one round in five to the head does not kill outright: then the same again, from the start)
   for (; tries < 3 && !(p && p.dead); tries++) {
-    if (p) sb.remove(p);
+    sb.clear(); said = [];
+    w = sb.spawnStickman(3.5, null, { name: 'Wit' });
     p = sb.spawnStickman(0, null, { name: 'Head' }); p.brain = null;
     for (let i = 0; i < 40; i++) sb.step(1 / 120);
     w.faceTo(-5);
