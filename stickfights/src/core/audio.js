@@ -847,6 +847,49 @@ export class Sound {
     this.hiss(0.05, 1800, 1.5, 0.3 * v);
   }
 
+  /** A beam out of somebody's eyes: a buzzing hum and a thin whine, for as long as it lasts (heavier, overcharged). */
+  laserBeam(x, dur = 1, heavy = false) {
+    if (!this.ready) return;
+    const v = this.near(x) * (heavy ? 0.32 : 0.2);
+    this.tone('sawtooth', heavy ? 70 : 110, heavy ? 60 : 104, dur, v * 0.5);
+    this.tone('sine', heavy ? 1400 : 2300, heavy ? 1250 : 2200, dur, v * 0.35);
+    this.hiss(dur, heavy ? 1800 : 3600, 0.9, v * (heavy ? 0.8 : 0.45), 'bandpass');
+  }
+
+  /** A short bolt of it: a zap. */
+  laserBolt(x) {
+    if (!this.ready) return;
+    const v = this.near(x) * 0.22;
+    this.tone('sine', 2200, 520, 0.09, v);
+    this.tone('square', 900, 240, 0.06, v * 0.25);
+    this.hiss(0.05, 4000, 1.2, v * 0.5);
+  }
+
+  /** Something building behind the eyes: a whine that climbs, crackling. */
+  laserCharge(x) {
+    if (!this.ready) return;
+    const v = this.near(x) * 0.2;
+    this.tone('sine', 260, 2400, 1.2, v * 0.8);
+    this.tone('triangle', 130, 1200, 1.2, v * 0.3);
+    for (let i = 0; i < 8; i++) this.hiss(0.02, 5000 + rand(-1200, 1500), 5, v * 0.6, 'bandpass', 0.2 + i * 0.12);
+  }
+
+  /** Heat on skin, or on metal: a sizzle. */
+  sizzle(x, k = 1) {
+    if (!this.ready) return;
+    const v = this.near(x) * 0.2 * k;
+    this.hiss(0.45, 5200, 0.7, v, 'highpass');
+    for (let i = 0; i < 5; i++) this.hiss(0.02, 3800 + rand(-600, 1600), 4, v * 1.4, 'bandpass', rand(0, 0.35));
+  }
+
+  /** A blinding flash: a whoomph, and a high ringing. */
+  flash(x) {
+    if (!this.ready) return;
+    const v = this.near(x) * 0.3;
+    this.hiss(0.25, 900, 0.6, v, 'lowpass');
+    this.tone('sine', 4200, 3900, 0.9, v * 0.18, 0.05);
+  }
+
   /** A power coming on: a rising shimmer. */
   powerUp(x) {
     if (!this.ready) return;

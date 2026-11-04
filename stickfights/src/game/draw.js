@@ -671,6 +671,32 @@ function drawFace(ctx, face, r, lw, hurt = null) {
     }
   }
 
+  // eyes that glow (laser vision): a red glint always, a blaze when it is used
+  const glow = face.glow || 0;
+  if (glow > 0.02 && face.eyes !== 'x' && face.eyes !== 'spiral') {
+    for (let i = 0; i < 2; i++) {
+      const x = ex[i], y = ey;
+      // a halo, the bigger the brighter it burns
+      if (glow > 0.3) {
+        const R = r * (0.2 + Math.min(1.5, glow) * 0.3);
+        const g = ctx.createRadialGradient(x, y, 0, x, y, R);
+        g.addColorStop(0, `rgba(255, 235, 220, ${Math.min(1, glow * 0.6)})`);
+        g.addColorStop(0.35, `rgba(255, 60, 40, ${Math.min(0.9, glow * 0.6)})`);
+        g.addColorStop(1, 'rgba(255, 30, 20, 0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, R, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // and the eye itself, red
+      ctx.fillStyle = glow > 0.8 ? '#fff1e6' : '#ff3b2a';
+      ctx.beginPath();
+      ctx.arc(x, y, r * 0.075, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = INK;
+  }
+
   // eyebrows
   if (face.eyes !== 'x' && face.eyes !== 'spiral') {
     const lift = (face.browLift || 0) * r * 0.16;

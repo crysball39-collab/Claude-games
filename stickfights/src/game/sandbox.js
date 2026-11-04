@@ -875,7 +875,13 @@ export class Sandbox {
         if (pointFirst) {
           const power = clamp((sp - 5) * 0.2 + 0.75, 0.75, 2.3);
           q.takeHit({ by, part: hit.part, x: hit.x, y: hit.y, dir, power, kind: 'stab', weapon: 'knife', deep: true, object: k, bone: q.boneName(hit.bone, hit.t) });
-          if (!q.removed) {
+          if (!q.removed && q.toughSkin) {
+            // skin like stone: point first or not, it does not go in - it glances off
+            b.vel.x *= -0.3; b.vel.y = Math.abs(b.vel.y) * 0.3 + 1;
+            b.angVel += (Math.random() - 0.5) * 22;
+            this.fx.sparks(hit.x, hit.y, 4);
+            this.emit('bladeBounce', { who: q, by, x: hit.x, y: hit.y });
+          } else if (!q.removed) {
             q.stickKnife(k, hit, ux, uy, 0.07 + Math.min(0.05, (sp - 6) * 0.006));
             k.blood = Math.min(1, k.blood + 0.4);
             if (this.hand && this.hand.holding === k) this.hand.release();
@@ -1052,6 +1058,17 @@ export class Sandbox {
           if (ts !== null && (!best || ts < best.t)) best = { t: ts, what: 'stopped', who: q };
         }
       }
+      // somebody standing in front of whoever it would hit, on purpose (super durability: Human
+      // Shield): over their shoulder or not, it is theirs - they put themselves there to take it
+      if (best && best.what === 'person') {
+        const sh = this.people.find((p) => p.shielding === best.who && !p.removed && p.alive && !hit.has(p));
+        const ahead = sh ? (sh.pos.x - px) * Math.sign(dx) : -1;
+        if (sh && ahead > 0 && ahead < Math.abs(best.hit.x - px)) {
+          const c = sh.wj.chest, L = Math.hypot(c.x - px, c.y - py) || 1;
+          const h2 = sh.rayHit(px, py, (c.x - px) / L, (c.y - py) / L, L + 0.6);
+          if (h2) { dx = (c.x - px) / L; dy = (c.y - py) / L; best = { t: h2.t, what: 'person', who: sh, hit: h2 }; }
+        }
+      }
       // glass (a lightbulb, a floodlight's lens) and explosives in the way (power.js, explosives.js)
       for (const t of this.items) {
         if (t.removed || hit.has(t) || !t.body || !((t.shatter && !t.broken) || t.chain)) continue;
@@ -1077,7 +1094,8 @@ export class Sandbox {
         const q = best.who;
         // the world is a little deeper than the picture shows: anyone it was not
         // aimed at may be standing a step to one side of the line, and it goes by
-        if ((o.target || hit.size) && q !== o.target && !chance(STRAY_HIT)) {
+        // (somebody who has put themselves in the line of fire on purpose takes it: super durability)
+        if ((o.target || hit.size) && q !== o.target && !q.shielding && !chance(STRAY_HIT)) {
           passed.add(q);
           px += dx * 0.02; py += dy * 0.02;
           continue;

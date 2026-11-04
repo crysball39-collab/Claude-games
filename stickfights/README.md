@@ -159,7 +159,7 @@ street - people walk along in front of them, and nothing in the street lands
 on them - but they come apart like walls do (see [Buildings](#buildings-and-the-city)),
 and the hand from above can pull a lump off one.
 
-The spawn menu (☰ **SPAWN**, top left) has forty-two things in it, in nine
+The spawn menu (☰ **SPAWN**, top left) has forty-four things in it, in nine
 sections:
 
 | Section | Thing | What it is |
@@ -170,6 +170,8 @@ sections:
 | Superpowers | **Super Strength** | Given the same way. Three times as strong: punches that send people across the room, ground pounds, thunder claps, walls charged straight through, anything near picked up and thrown. |
 | Superpowers | **Super Speed** | Given the same way. Three times as fast on their feet and twice as quick in a fight: afterimages, dodges, flurries of blows, a whirlwind round somebody, the gun gone from a hand. |
 | Superpowers | **Telekinesis** | Given the same way. People and things lifted, thrown, pulled and slammed without a touch; guns pulled out of hands; bullets stopped in the air. |
+| Superpowers | **Super Durability** | Given the same way. Skin like stone: bullets ring off, blades skid off, nothing comes off them, falls and blasts barely hurt. They walk into gunfire, stand in front of friends being shot at, throw themselves on grenades, headbutt, body slam. |
+| Superpowers | **Laser Vision** | Given the same way. Eyes that glow red and beams of heat out of them: people burned and set alight, sweeps, bolts, an overcharged blast through everything in a line, guns melted in hands, walls cut through, bombs set off from across the room, a frozen friend thawed, a blinding flash. |
 | Weapons | **Brass Knuckles** | Worn on the hand. Punches with them land about twice as hard, and cut. |
 | Weapons | **Combat Knife** | Held in the hand. Stabs and slashes; deep cuts bleed fast. Thrown point first, it sticks in. |
 | Weapons | **Machete** | Chops and hacks. Leaves gaping wounds, and a hard enough blow takes off a hand, an arm, a foot or a leg. |
@@ -807,7 +809,7 @@ break.
 ### Animated while they are in charge
 
 Every pose they strike on their own comes from **hand-keyed clips** in
-`src/game/clips.js` (and `powers/clips.js`): 225 of them, from idling and walking to a front kick, a
+`src/game/clips.js` (and `powers/clips.js`): 243 of them, from idling and walking to a front kick, a
 knife thrust, a machete chop, aiming and reloading a pistol, reloading a rifle,
 aiming down on one knee, putting on a helmet, tying off a tourniquet, press-ups, a hug, falling on your back, getting up off your front,
 sobbing into your hands and dying. Each clip is a list of frames, and
@@ -834,7 +836,9 @@ helmetOn  reloadRifle  kneelAim  checkGun  coverEars  sickHunch  checkWatch
 rubNeck  shieldEyes  handsInPockets
 flyHover  flyForward  flyCarry  flyPin  flySlam  diveBomb  heroLand  megaPunch
 groundPound  thunderClap  quakeStomp  speedDash  blitzFlurry  kickStorm  tkLift
-tkChoke  tkSlam  tkFloat  ...and the rest of the powers' moves, and more
+tkChoke  tkSlam  tkFloat  braceSelf  headbutt  slamTuck  shieldArms  smotherDive
+ramCharge  bladeCatch  tauntWide  shrugBurst  laserStare  laserSweep  laserCharge
+laserRelease  eyeFlash  ...and the rest of the powers' moves, and more
 ```
 
 Clips play in three layers - a base (standing, walking, lying), an upper-body
@@ -1117,7 +1121,7 @@ if someone dangerous is standing over them; trapped under a crate they shout
 for help, and friends come.
 
 They also talk - out loud, in speech bubbles, with a babbling voice pitched to
-each of them - from 1,981 lines for 346 situations in `src/game/lines.js` (and `powers/lines.js`),
+each of them - from 2,151 lines for 387 situations in `src/game/lines.js` (and `powers/lines.js`),
 all written to sound like people really talk: short, plain, interrupted, and
 scared when there is something to be scared of. From small talk ("Did you
 sleep alright? I was up half the night.", "Rent's gone up again. Can you
@@ -1645,12 +1649,12 @@ back from where it lands, and does not fire again at somebody still choking.
 
 ### Superpowers
 
-Four powers, in the **SUPERPOWERS** section of the spawn menu (`src/game/powers/`).
+Six powers, in the **SUPERPOWERS** section of the spawn menu (`src/game/powers/`).
 Pick one and tap a stickman: they have it now ("Ana can fly now") - a gold chip
 under their name in the inspector, and a row of buttons, one for each of its ten
 moves, done to whoever they are fighting (or whoever is nearest). Tap them again
 with it to take it away. Anybody their own size can have any of them, and all
-four at once. Getting one, they feel it ("I feel so light...") and whoever sees
+six at once. Getting one, they feel it ("I feel so light...") and whoever sees
 it happen asks what just happened to them; seeing one used, people cannot
 believe it, and say so.
 
@@ -1711,6 +1715,48 @@ hand and into theirs), **Bullet Stop** (rounds fired at them stop in the air and
 hang there, until it ends and they drop), **Slam** (lifted and slammed into the
 floor, three times) and **Float** (up off the ground themselves).
 
+**Super Durability.** Skin like stone. A blow, a cut, a fall, a blast or a fire
+does a fraction of what it would do to anybody else: a bullet rings off them in
+a shower of sparks and goes somewhere else (sometimes into somebody else), a
+blade skids off without opening them up, a thrown knife glances off, and
+nothing - a machete, a grenade, a rifle round - takes a limb off. Bones hardly
+break, and a twelve-metre drop is something to get up from. A bare fist or foot
+that lands on them hurts whoever threw it. They are hard to hurt, not impossible:
+another power's blows, or a monster the size of a building, still get some of it
+through. The moves: **Brace** (feet planted, forearms up: for a few seconds
+nothing moves them, and every fist on them is a fist on a wall), **Bullet Walk**
+(straight at somebody shooting at them, walking, rounds sparking off, and the
+gun taken out of their hand), **Headbutt** (dazed, if not down), **Body Slam**
+(up, and down on top of them - somebody on the floor included), **Human Shield**
+(in front of a friend somebody is shooting at, arms spread, and every round
+meant for the friend is theirs instead), **Smother** (onto a live grenade, C4 or
+TNT: whatever it does, it does mostly to them, and the people round it walk
+away), **Unstoppable** (a charge, head down, through everybody in the way),
+**Blade Catch** (the knife or the machete caught in a bare hand and taken - or,
+with their hands full, snapped), **Hit Me** (arms wide: everybody spoiling for
+a fight comes for them instead, and pays for every blow) and **Shrug Off** (up
+off the floor in an instant, or out of somebody's grip, everybody near shoved
+away). A friend being shot at, a grenade going off among people, or being down
+with somebody standing over them, they do these without being asked.
+
+**Laser Vision.** Eyes that glow red all the time, and blaze white when they use
+it: a beam of heat out of them that burns whatever it touches. Skin scorches and
+clothes catch fire, a crate blackens, a wall is cut through, a tree comes down,
+glass breaks and an explosive goes off. Anything thrown at them they burn out of
+the air (a knife melts; a crate is knocked aside), and a gun pointed at them they
+often melt in the hand that holds it. The moves: **Laser Beam** (a steady beam
+that follows them, a little behind, and often sets them alight), **Sweep** (low
+across the floor in front and out: every pair of legs in the way burned out
+from under), **Rapid Fire** (six bolts, one after another), **Overcharge** (the
+eyes brighter and brighter, then one huge beam through everybody and everything
+in a line, walls included, and a blast where it ends), **Melt Gun** (red-hot,
+dropped, and a puddle of slag), **Cut** (a wall, a beam or a tree in the way,
+cut through at chest height - and what is above the cut comes away), **Sever**
+(a thin beam: an arm or a leg off, the stump seared), **Detonate** (a grenade,
+C4 or TNT near whoever they are after, set off from across the room), **Thaw**
+(a gentle warm beam on a friend frozen solid, or freezing) and **Flash** (a
+blinding flash: whoever is looking at them sees nothing for a few seconds).
+
 In a fight, now and then they use one of their moves instead of a fist - the
 one that suits: a wall near enough to pin somebody to, a crowd for a ground
 pound, something heavy lying about, a line of them for a speedster to go
@@ -1722,7 +1768,7 @@ a body thrown down from six metres seldom gets up again.
 **Far less afraid.** Somebody with a power is a good deal less frightened of
 anything. Whatever would scare anybody else - a gun pointed at them, a knife
 coming at them, shots, a blast, a body, a monster, a memory - scares them about
-a third as much with one power (and a tenth as much with all four), and the
+a third as much with one power (and a tenth as much with four or more), and the
 fright wears off two to three times as fast; so does being afraid of somebody.
 They stand their ground: a gun on them gets no hands up, shots do not send
 them diving behind a crate, somebody coming at them with a knife gets fought
@@ -1807,9 +1853,10 @@ stickfights/
       powers/         superpowers: index.js (giving them, the moves running,
                       what the rest of the game asks), common.js (getting hold,
                       letting go, blows, shockwaves, a grip from a distance),
-                      flight.js, strength.js, speed.js, telekinesis.js (each
-                      power and its ten moves), clips.js, lines.js, fx.js
-                      (afterimages, the telekinetic glow, rings, cracks, wind)
+                      flight.js, strength.js, speed.js, telekinesis.js,
+                      durability.js, laser.js (each power and its ten moves),
+                      clips.js, lines.js, fx.js (afterimages, the telekinetic
+                      glow, rings, cracks, wind, slag, scorch marks, the flash)
       gear.js         the explosives and the electrics, as the spawn menu sees them
       hand.js         dragging and throwing (and, paused, just moving)
       fx.js           blood (drops, streams, splats, the walls, landing on things),
@@ -1858,8 +1905,8 @@ screen and checks:
 
 - stickmen are already moving about behind the title, which has MAPS and
   MODS, and PLAY opens an empty sandbox with the spawn menu
-- the spawn menu has exactly forty-two things in it: a Stickman, an Officer,
-  four superpowers (Flight, Super Strength, Super Speed, Telekinesis), Brass Knuckles, a Combat Knife, a Machete, a Crowbar, a Glock-19, an M1911,
+- the spawn menu has exactly forty-four things in it: a Stickman, an Officer,
+  six superpowers (Flight, Super Strength, Super Speed, Telekinesis, Super Durability, Laser Vision), Brass Knuckles, a Combat Knife, a Machete, a Crowbar, a Glock-19, an M1911,
   an AK-47, an M4A1, an AR-15, a Mossberg 500, a Taser, a Gas Rifle, a Crate, a
   Light Vest, a Light Tactical Helmet, five kinds of ammo, three walls, two metal beams, a Gallows, a Tree, a Bush, a
   Grenade, C4, TNT, a Missile, a Generator, a Lightbulb, a Floodlight and a
@@ -2176,7 +2223,7 @@ screen and checks:
   gets filled in
 - the spawn menu has a SUPERPOWERS section; picking one and tapping a stickman
   gives it to them (a toast, a chip, a row of moves in the inspector), and
-  tapping them again takes it away; each power has ten moves, and all forty run
+  tapping them again takes it away; each power has ten moves, and all sixty run
   from start to finish
 - a flier grabs somebody, flies up and throws them down (and they are badly
   hurt), pins somebody to a wall and punches them twice, kicks somebody up and
@@ -2194,6 +2241,17 @@ screen and checks:
   a knife is fought rather than run from, a fright is about a third the size
   and wears off faster (and so does being afraid of somebody), and they say
   they are not scared
+- super durability: five rounds ring off them without a hole, twenty seconds of
+  a machete takes nothing off, a twelve-metre drop and a grenade at their feet
+  are lived through, a fist on them when braced comes off worse, a friend they
+  shield from gunfire is not touched, and a grenade they smother spares the
+  friend beside it
+- laser vision: the eyes glow (and blaze when it is used), the beam burns, Melt
+  Gun leaves the hand empty, Cut takes a wall apart, Detonate sets off a grenade
+  from across the room, Thaw brings a frozen friend back, and Flash blinds
+  whoever was looking (and not whoever was not); people watching say so
+- the two new powers bring eighteen new animations and over a hundred and fifty
+  new lines
 - the console stays clean, and the single file fetches nothing
 
 Every check starts from the same random numbers and the same clock, so what

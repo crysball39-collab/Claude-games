@@ -77,6 +77,8 @@ const KINDS = {
   strength: { name: 'Super Strength', short: 'STRENGTH', plural: 'powers', power: true, proper: true, given: 'has super strength now', taken: 'is only as strong as anybody again' },
   speed: { name: 'Super Speed', short: 'SPEED', plural: 'powers', power: true, proper: true, given: 'has super speed now', taken: 'is back to normal speed' },
   tk: { name: 'Telekinesis', short: 'TELEKINESIS', plural: 'powers', power: true, proper: true, given: 'is telekinetic now', taken: "can't move things with their mind any more" },
+  durability: { name: 'Super Durability', short: 'DURABILITY', plural: 'powers', power: true, proper: true, given: 'is unbreakable now', taken: 'can be hurt like anybody again' },
+  laser: { name: 'Laser Vision', short: 'LASER VISION', plural: 'powers', power: true, proper: true, given: 'has laser vision now', taken: "can't shoot lasers from their eyes any more" },
   knuckles: { name: 'Brass Knuckles', short: 'KNUCKLES', plural: 'brass knuckles', limit: 'knuckles' },
   knife: { name: 'Combat Knife', short: 'KNIFE', plural: 'knives', limit: 'knives' },
   machete: { name: 'Machete', short: 'MACHETE', plural: 'machetes', limit: 'machetes' },
@@ -2119,7 +2121,7 @@ function spawnHint(k, info) {
 
 /** A power's card: a stickman doing it (flying, punching, running, lifting), and a touch of what it looks like. */
 function drawPowerIcon(ctx, kind, w, h, card, cv) {
-  const POSE = { flight: 'flyForward', strength: 'megaPunch', speed: 'speedDash', tk: 'tkLift' }[kind];
+  const POSE = { flight: 'flyForward', strength: 'megaPunch', speed: 'speedDash', tk: 'tkLift', durability: 'braceSelf', laser: 'laserStare' }[kind];
   const pose = CLIPS[POSE].frames[0].p;
   const j = solve(pose, 1, makeJoints());
   // fitted to the card, whatever shape the pose is: lying flat out flying, or reaching up
@@ -2152,8 +2154,25 @@ function drawPowerIcon(ctx, kind, w, h, card, cv) {
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
     ctx.lineWidth = 0.04;
     for (const r of [0.14, 0.26]) { ctx.beginPath(); ctx.arc(hd.x + 0.04, hd.y, r, -1, 1); ctx.stroke(); }
+  } else if (kind === 'durability') {
+    // rounds sparking off the forearms
+    const c = { x: (j.handA.x + j.handB.x) / 2 + 0.12, y: (j.handA.y + j.handB.y) / 2 };
+    ctx.strokeStyle = 'rgba(255, 210, 90, 0.95)';
+    ctx.lineWidth = 0.03;
+    for (const [dx, dy] of [[0.22, 0.12], [0.26, -0.04], [0.18, -0.16], [0.3, 0.05]]) {
+      ctx.beginPath(); ctx.moveTo(c.x + dx * 0.4, c.y + dy * 0.4); ctx.lineTo(c.x + dx, c.y + dy); ctx.stroke();
+    }
+  } else if (kind === 'laser') {
+    // a beam out of the eye, off the edge of the card
+    const e = { x: j.head.x + DIM.headR * 0.6, y: j.head.y + DIM.headR * 0.12 };
+    ctx.strokeStyle = 'rgba(255, 60, 40, 0.5)';
+    ctx.lineWidth = 0.09;
+    ctx.beginPath(); ctx.moveTo(e.x, e.y); ctx.lineTo(e.x + 1.4, e.y - 0.35); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255, 240, 220, 0.95)';
+    ctx.lineWidth = 0.025;
+    ctx.stroke();
   }
-  drawStickman(ctx, j, { scale: 1, facing: 1, hair: 'tuft', face: { eyes: 'normal', brow: kind === 'strength' ? -0.6 : 0, mouth: 0.3, open: 0 }, ink, far: ink });
+  drawStickman(ctx, j, { scale: 1, facing: 1, hair: 'tuft', face: { eyes: 'normal', brow: kind === 'strength' || kind === 'durability' ? -0.6 : kind === 'laser' ? -0.4 : 0, mouth: 0.3, open: 0, glow: kind === 'laser' ? 1 : 0 }, ink, far: ink });
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 

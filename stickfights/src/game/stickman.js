@@ -59,7 +59,7 @@ import { updateVitals, healVitals, iceBlow, ignite } from './vitals.js';
 import { bleedSources, pickSource, feedStreams, splatter, contactOf, woundId, bloodK } from './blood.js';
 import { tiedUp, noosed } from './wires.js';
 import { launchGas, lob, GAS_SPEED, GAS_G } from './gas.js';
-import { updatePowers, powersAir, powersTouchDown, powerSpeed, powerTempo, powersBeforeHit, powerSteady, powersLanded, endMove } from './powers/index.js';
+import { updatePowers, powersAir, powersTouchDown, powerSpeed, powerTempo, powersBeforeHit, powerSteady, powersLanded, powerArmor, powersStruck, powersShot, endMove } from './powers/index.js';
 import { clamp, clamp01, lerp, lerpAngle, rand, chance, moveToward, segDist, sign, smooth, wrapAngle, wobble, DEG } from '../core/util.js';
 
 export const G = 18;
@@ -168,6 +168,9 @@ export class Stickman {
     this.held = null;
     this.heldBy = null;
     this.powers = null;       // superpowers (powers/index.js): Map of power id to its state
+    this.toughSkin = false;   // super durability: nothing cuts them open, nothing comes off, rounds ring off
+    this.shielding = null;    // ...standing in front of somebody being shot at (they take the rounds)
+    this.smothering = null;   // ...lying on a bomb: { bomb, until }
     this.pmove = null;        // a power's move, running: it has the body until it is done
     this.spin = 0;
     this.spinV = 0;
@@ -821,6 +824,7 @@ export class Stickman {
     // (super speed: not there by the time it lands)
     if (this.powers && !this.dead && powersBeforeHit(this, h) === 'dodged') return null;
     const wasDead = this.dead;
+    if (this.powers && !wasDead) powersStruck(this, h);
     let part = h.part;
     let blocked = false;
     const fromFront = h.by ? sign(h.by.pos.x - this.pos.x) === this.facing : false;
@@ -850,12 +854,15 @@ export class Stickman {
     // and a helmet the worst of what lands on the head (a round's is in shot() too)
     const helmK = part === 'head' && this.helmet && !blocked && !bullet && !burn && weapon !== 'helmetRound' && !this.cut.head
       ? this.helmet.blowThrough(h.kind, blade) : 1;
-    const dmg = 9 * h.power * MUL[part] * (blocked ? 0.3 : parried ? 0.85 : 1) * rand(0.85, 1.15) * armor * vestK * helmK;
+    // skin like stone (super durability): a fraction of it gets through, and nothing cuts it open
+    const tough = this.toughSkin;
+    const pk = this.powers ? powerArmor(this, h, part, weapon) : 1;
+    const dmg = 9 * h.power * MUL[part] * (blocked ? 0.3 : parried ? 0.85 : 1) * rand(0.85, 1.15) * armor * vestK * helmK * pk;
     const res = this.health.hit(part, dmg, {
       // (how far up the body it went in: what is inside, there)
       at: part === 'torso' && h.x !== undefined ? torsoAt(this.wj, h.x, h.y) : null,
-      sharp: (blocked ? sharp * 0.5 : sharp) * vestK, deep: !!h.deep && !blocked && vestK > 0.7, chop: chops && !blocked && vestK > 0.7, shot: bullet || !!(spec && spec.shot),
-      bone: blocked ? null : h.bone || null, breakChance: h.kind === 'stomp' ? 0.06 : spec && spec.breaks ? spec.breaks : 0, strike: weapon === 'helmetRound' ? 'helmet' : h.kind,
+      sharp: (blocked ? sharp * 0.5 : sharp) * vestK * (tough ? 0.12 : 1), deep: !!h.deep && !blocked && vestK > 0.7 && !tough, chop: chops && !blocked && vestK > 0.7 && !tough, shot: bullet || !!(spec && spec.shot),
+      bone: blocked ? null : h.bone || null, breakChance: (h.kind === 'stomp' ? 0.06 : spec && spec.breaks ? spec.breaks : 0) * (tough ? 0.1 : 1), strike: weapon === 'helmetRound' ? 'helmet' : h.kind,
       burn, cutBy: spec ? spec.wound || null : null, cause: spec ? spec.cause || null : null,
       // (an arrow is not a bullet: one to the head does not have to be the end of them)
       instakill: !(spec && spec.instakill === false),
@@ -865,7 +872,7 @@ export class Stickman {
     // blood, if the skin went or the face took it (a bullet's is its own: see shot())
     // (a round the vest or the helmet stopped bruises: it does not open the skin)
     const armoured = weapon === 'vestRound' || weapon === 'helmetRound';
-    const spray = !bullet && !burn && !armoured && !this.health.frozen && (res.wound || (part === 'head' && dmg > 10) || (weapon && dmg > 6));
+    const spray = !bullet && !burn && !armoured && !this.health.frozen && (!tough || dmg > 8) && (res.wound || (part === 'head' && dmg > 10) || (weapon && dmg > 6));
     if (spray && !blocked) {
       const n = Math.round(clamp(dmg * (weapon === 'machete' ? 1.3 : spec && spec.spray ? spec.spray : sharp > 0.9 ? 0.9 : 0.6), 3, 30));
       this.sandbox.fx.blood(h.x, h.y, h.dir * (1 + h.power), 1 + h.power * 0.5, n, 1, this);
@@ -877,7 +884,7 @@ export class Stickman {
         this.markAt(h.x, h.y, 0.7 + dmg * 0.02, -(h.dir || 0));
         // a machete leaves it open (and a set of claws, three times over)
         const gashes = weapon === 'machete' ? 1 : spec && spec.gash ? spec.gash : 0;
-        if (gashes && res.wound) {
+        if (gashes && res.wound && !tough) {
           const n2 = this.nearestPart(h.x, h.y);
           if (n2.part !== 'head') {
             const tilt = rand(-0.5, 0.5);
@@ -893,11 +900,11 @@ export class Stickman {
       if (n2.part === 'head') this.headMark(h.x, h.y, 0.9, true);
       else this.addWound({ bone: n2.bone, t: n2.t, r: 0.5, burn: true });
       this.sandbox.fx.dust(h.x, h.y, 2, 0.3);
-      if (!(spec && spec.ignite === false) && chance(clamp(dmg / 40, 0, 0.3) * 0.4)) ignite(this, { part, power: 0.35, by: h.by || null });
+      if (!(spec && spec.ignite === false) && chance(clamp(dmg / 40, 0, 0.3) * 0.4 * (tough ? 0.3 : 1))) ignite(this, { part, power: 0.35, by: h.by || null });
     }
     // hard enough, a machete goes right through; a kick to the knee can put it out
-    if ((weapon === 'machete' || (spec && spec.sever)) && !blocked && !this.removed) this.trySever(h, dmg, spec ? spec.sever : 1);
-    if ((h.kind === 'kick' || h.kind === 'stomp') && !blocked && (h.bone === 'tibiaA' || h.bone === 'tibiaB' || h.bone === 'femurA' || h.bone === 'femurB') &&
+    if ((weapon === 'machete' || (spec && spec.sever)) && !blocked && !this.removed && !tough) this.trySever(h, dmg, spec ? spec.sever : 1);
+    if ((h.kind === 'kick' || h.kind === 'stomp') && !blocked && !tough && (h.bone === 'tibiaA' || h.bone === 'tibiaB' || h.bone === 'femurA' || h.bone === 'femurB') &&
       h.power > 1.3 && chance(0.07 * h.power)) this.dislocate('knee' + h.bone.slice(-1));
     if (dmg > 3) this.sandbox.fx.burst(h.x, h.y, h.power);
     // a taser pressed against them: it does not put them down, but nothing hurts like it
@@ -1144,6 +1151,7 @@ export class Stickman {
    * neck), the head comes off.
    */
   trySever(h, dmg, k = 1) {
+    if (this.toughSkin) return false;
     const bone = h.bone;
     if (bone === 'neck' || (bone === 'skull' && h.y !== undefined && h.y < this.wj.head.y - DIM.headR * this.scale * 0.35)) {
       if (dmg < BEHEAD_FORCE || this.steadfast || !chance(((h.kind === 'chop' ? 0.07 : 0.025) + (dmg - BEHEAD_FORCE) * 0.02) * k)) return false;
@@ -1162,7 +1170,7 @@ export class Stickman {
    */
   sever(bone, dir = 0, power = 1, o = {}) {
     const h = this.health, limb = LIMB_OF[bone], mid = BREAK_OF[bone];
-    if (!limb || h.severed[bone] || this.steadfast) return false;
+    if (!limb || h.severed[bone] || this.steadfast || (this.toughSkin && !o.force)) return false;
     // nothing to cut if it is already gone from further in
     if (this.cut[limb] && CHAIN_AT[this.cut[limb]] <= CHAIN_AT[mid]) return false;
     const w = this.wj, pw = this.prevWj, sb = this.sandbox;
@@ -1211,7 +1219,7 @@ export class Stickman {
    */
   decapitate(dir = 0, power = 1, o = {}) {
     const h = this.health, sb = this.sandbox, sp = this.species;
-    if (this.cut.head || this.steadfast || this.removed || (sp && sp.skin && (sp.skin.head || sp.skin.full))) return false;
+    if (this.cut.head || this.steadfast || this.removed || (this.toughSkin && !o.force) || (sp && sp.skin && (sp.skin.head || sp.skin.full))) return false;
     const w = this.wj, pw = this.prevWj, f = this.rag ? this.rag.facing : this.facing;
     const at = neckCut(w, f, this.scale);
     const vx = clamp((w.head.x - pw.head.x) * 120, -12, 12), vy = clamp((w.head.y - pw.head.y) * 120, -12, 12);
@@ -1294,6 +1302,8 @@ export class Stickman {
    * Returns the energy it comes out with (0 if it stayed in).
    */
   shot(by, hit, dx, dy, energy) {
+    // (skin like stone: it rings off, and goes on somewhere else)
+    if (this.powers && !this.dead) { const r = powersShot(this, by, hit, dx, dy, energy); if (r !== null) return r; }
     const bone = this.boneName(hit.bone, hit.tb);
     const part = hit.part;
     const sb0 = this.sandbox;
@@ -1795,7 +1805,7 @@ export class Stickman {
     if (top < 8 || now - (this.slamT || -99) < 0.25) return;
     this.slamT = now;
     const e = top - 8;
-    const total = e * e * 1.5 + e * 3.5;
+    const total = (e * e * 1.5 + e * 3.5) * (this.toughSkin ? 0.12 : 1);
     const share = new Map();
     let sum = 0;
     for (const im of list) {
@@ -2797,7 +2807,7 @@ export class Stickman {
     if (v < 6.5) return;
     const e = v - 6.5;
     // (a body built of metal takes a fall better: a mod's species says how much)
-    const dmg = (e * e * 1.25 + e * 3) * (this.species && this.species.fall !== undefined ? this.species.fall : 1);
+    const dmg = (e * e * 1.25 + e * 3) * (this.species && this.species.fall !== undefined ? this.species.fall : 1) * (this.toughSkin ? 0.12 : 1);
     const spread = how === 'legs' ? [['legA', 0.38, 'tibiaA'], ['legB', 0.38, 'tibiaB'], ['torso', 0.24, 'pelvis']]
       : how === 'head' ? [['head', 0.55, 'skull'], ['torso', 0.3, null], ['armA', 0.15, null]]
       : how === 'side' ? [['torso', 0.4, 'ribs'], ['head', 0.3, 'skull'], ['armA', 0.15, null], ['legA', 0.15, null]]

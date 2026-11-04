@@ -1,17 +1,20 @@
 /* =============================================================================
-   SUPERPOWERS - flight, super strength, super speed and telekinesis: given to
-   anybody from the spawn menu (tap a power, then tap them), as many of them
-   at once as you like, and taken away again the same way.
+   SUPERPOWERS - flight, super strength, super speed, telekinesis, super
+   durability and laser vision: given to anybody from the spawn menu (tap a
+   power, then tap them), as many of them at once as you like, and taken away
+   again the same way.
 
-   Each power is a module (flight.js, strength.js, speed.js, telekinesis.js)
-   with what it does all the time - how a flier stays up, how fast a speedster
-   goes - and ten moves. A move is started by their brain in a fight (or to
+   Each power is a module (flight.js, strength.js, speed.js, telekinesis.js,
+   durability.js, laser.js) with what it does all the time - how a flier stays
+   up, how fast a speedster goes, what a bullet does to skin like stone - and
+   ten moves. A move is started by their brain in a fight (or to
    get a friend out of one), or from the inspector, and while it runs it has
    their body (common.js says how a move is put together).
 
    The rest of the game asks this file: is anything holding them up in the
-   air, how fast do they go, did that blow reach them at all, did a bullet
-   stop short of them - and the inspector, what can they do.
+   air, how fast do they go, did that blow reach them at all (and how much of
+   it got through), did a bullet stop short of them or ring off them - and the
+   inspector, what can they do.
    ========================================================================== */
 import { clamp, rand, chance, sign } from '../../core/util.js';
 import { alive, setPhase, now } from './common.js';
@@ -19,10 +22,12 @@ import { FLIGHT } from './flight.js';
 import { STRENGTH } from './strength.js';
 import { SPEED } from './speed.js';
 import { TELEKINESIS } from './telekinesis.js';
+import { DURABILITY } from './durability.js';
+import { LASER } from './laser.js';
 import './clips.js';
 import './lines.js';
 
-export const POWERS = { flight: FLIGHT, strength: STRENGTH, speed: SPEED, tk: TELEKINESIS };
+export const POWERS = { flight: FLIGHT, strength: STRENGTH, speed: SPEED, tk: TELEKINESIS, durability: DURABILITY, laser: LASER };
 export const POWER_IDS = Object.keys(POWERS);
 export const isPower = (k) => !!POWERS[k];
 
@@ -105,7 +110,8 @@ export function startMove(man, powerId, moveId, o = null, opts = {}) {
   if (!P || !st) return false;
   const def = P.moves[moveId];
   if (!def || man.pmove || man.dead || !man.conscious || man.rag || man.frozenInPlace || man.cuffed) return false;
-  if (man.state !== 'stand' && man.state !== 'air') return false;
+  // (a few start from the floor, or out of somebody's grip: def.allow)
+  if (man.state !== 'stand' && man.state !== 'air' && !(def.allow && def.allow.includes(man.state))) return false;
   if (def.needs !== 'none' && !alive(o) && def.needs !== 'friend') return false;
   if (o === man) return false;
   const m = { power: powerId, id: moveId, def, o, t: 0, pt: 0, phase: 'start', data: {}, ...opts };
@@ -188,6 +194,29 @@ export function powerSteady(man) {
   return k;
 }
 
+/** How much of a blow, a cut or a blast gets through to them (super durability: hardly any). */
+export function powerArmor(man, h, part, weapon) {
+  if (!man.powers) return 1;
+  let k = 1;
+  for (const [id, st] of man.powers) if (POWERS[id].armor) k *= POWERS[id].armor(man, st, h, part, weapon);
+  return k;
+}
+
+/** A blow landing on them, before it does anything: a power may make whoever threw it regret it. */
+export function powersStruck(man, h) {
+  if (!man.powers) return;
+  for (const [id, st] of man.powers) if (POWERS[id].struck) POWERS[id].struck(man, st, h);
+}
+
+/** A round reaching them: what a power does with it instead (it rings off them) - the energy it goes on with, or null for the usual. */
+export function powersShot(man, by, hit, dx, dy, energy) {
+  if (!man.powers) return null;
+  for (const [id, st] of man.powers) {
+    if (POWERS[id].shot) { const r = POWERS[id].shot(man, st, by, hit, dx, dy, energy); if (r !== null && r !== undefined) return r; }
+  }
+  return null;
+}
+
 /** A round on its way: how far along it something stops it (a telekinetic's shield), or null. */
 export function stopsRound(man, px, py, dx, dy, range) {
   if (!man.powers) return null;
@@ -204,7 +233,7 @@ export function roundStopped(man, x, y, dx, dy) {
 export function powerThreat(man) { return man && man.powers ? 1 + man.powers.size * 0.7 : 1; }
 
 // how much of the fear anybody else would feel does not get to them: with one
-// power, two thirds of it; with all four, nine tenths (they are still people)
+// power, two thirds of it; with four or more, nine tenths (they are still people)
 const COURAGE = [0, 0.65, 0.78, 0.85, 0.9];
 
 /** How little frightens them, 0 (everybody) to 0.9: the brain takes that much off every fear. */
@@ -240,7 +269,7 @@ export function powerAbilities(man) {
   return out;
 }
 
-export const POWER_ROWS = { flight: 'Flight', strength: 'Strength', speed: 'Speed', tk: 'Telekinesis' };
+export const POWER_ROWS = { flight: 'Flight', strength: 'Strength', speed: 'Speed', tk: 'Telekinesis', durability: 'Durability', laser: 'Laser Vision' };
 
 function whyNot(man, def) {
   if (man.pmove) return `${man.name} is in the middle of something`;

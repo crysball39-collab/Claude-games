@@ -68,7 +68,15 @@ const SCORCH = ['#2b2621', '#1a1612'];
  * tool). Returns the effect it left, for whatever wants to watch it.
  */
 export function explode(sb, x, y, kind = 'grenade', by = null) {
-  const spec = BLASTS[kind] || BLASTS.grenade;
+  let spec = BLASTS[kind] || BLASTS.grenade;
+  // somebody lying on it (super durability: Smother) takes the worst of it - everybody else, a fraction
+  const lid = sb.people.find((p) => p.smothering && p.smothering.bomb && p.smothering.bomb.removed && !p.removed &&
+    Math.hypot(p.wj.chest.x - x, p.wj.chest.y - y) < 1.3);
+  if (lid) {
+    spec = { ...spec, r: spec.r * 0.45, power: spec.power * 0.3, frag: 0, fire: spec.fire * 0.2, sever: 0, smoke: spec.smoke * 0.7, dirt: spec.dirt * 0.5, size: spec.size * 0.6, shake: spec.shake * 0.7 };
+    lid.smothering = null;
+    sb.emit('smotherBlast', { who: lid, x, y, kind, loud: true });
+  }
   const R = spec.r, power = spec.power;
   y = Math.max(0.05, y);
   const fx = sb.fx;
@@ -101,26 +109,28 @@ export function explode(sb, x, y, kind = 'grenade', by = null) {
     const wasDead = p.dead;
     p.takeHit({ by, part, x: n.x, y: n.y, dir, power: dose(Math.max(k, ks[part]), power) * shield, kind: 'impact', weapon: 'explosion', bone });
     if (p.removed) continue;
+    // (skin like stone - super durability - takes a blast as it takes anything: a fraction of it)
+    const toughK = p.toughSkin ? 0.2 : 1;
     for (const pt of PARTS) {
       if (pt === part || ks[pt] <= 0) continue;
-      p.health.hit(pt, 9 * dose(ks[pt], power) * PART_K[pt] * shield * rand(0.85, 1.15), { cause: 'an explosion', strike: 'blast' });
+      p.health.hit(pt, 9 * dose(ks[pt], power) * PART_K[pt] * shield * rand(0.85, 1.15) * toughK, { cause: 'an explosion', strike: 'blast' });
     }
     if (shield === 1) {
       // close in, the heat: burned where it was nearest, and the flames may catch
       let marks = 0;
       for (const pt of PARTS) {
         if (ks[pt] < 0.5) continue;
-        p.health.hit(pt, 6 * ks[pt] * power, { burn: true, cutBy: 'Blast', cause: 'an explosion' });
+        p.health.hit(pt, 6 * ks[pt] * power * (p.toughSkin ? 0.3 : 1), { burn: true, cutBy: 'Blast', cause: 'an explosion' });
         if (marks++ < 3) scorchOn(p, pt);
       }
       // and the lungs and the gut: it does damage inside that only shows later
-      if (k > 0.3) p.health.internal += 0.0012 * k * power;
+      if (k > 0.3) p.health.internal += 0.0012 * k * power * toughK;
     }
     if (p.health.dead && !wasDead && p.alive) p.die('an explosion', by, dir, power * 2);
     if (p.removed) continue;
     if (shield === 1 && k > 0.55 && chance(spec.fire * (0.3 + k))) ignite(p, { part: n.part, power: 0.35 + spec.fire * 0.4, by });
     // big enough and close enough, it tears them apart
-    if (shield === 1 && spec.sever) {
+    if (shield === 1 && spec.sever && !p.toughSkin) {
       for (const [b, w, pt] of LIMBS) {
         if (p.removed) break;
         if (ks[pt] > 0.5 && chance((ks[pt] - 0.45) * spec.sever * w * 0.6)) p.sever(b, dir, power);

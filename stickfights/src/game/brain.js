@@ -73,6 +73,11 @@ const HEAR = {
   powerGiven: 8, powerMove: 11, pwTakeoff: 9, pwLand: 5, shockwave: 16, skyToss: 14, skyDrop: 14, slamDown: 11, wallPin: 10,
   wallSmash: 14, bulletStopped: 10, diveImpact: 16, megaPunch: 11, thunderClap: 20, groundPound: 16, quakeStomp: 16, blitz: 9,
   blink: 9, lightningLine: 11, whirlwind: 11, speedDodge: 7, tkThrow: 10, tkSlam: 11, tkPush: 10, heave: 10, launched: 10,
+  // super durability: rounds ringing off somebody, a body slam, a grenade smothered; laser vision: a beam, a gun melting
+  bulletBounce: 14, headbutt: 9, bodySlam: 12, humanShield: 12, smother: 12, smotherBlast: 60, unstoppable: 12, ram: 10,
+  bladeCatch: 8, bladeSnap: 9, hitMe: 14, shrugOff: 9, hardSkin: 7, bladeBounce: 7, gunTaken: 9, brace: 6,
+  laserFire: 16, laserBolt: 14, laserCharge: 12, overcharge: 22, gunMelted: 12, laserCut: 14, laserSever: 12, laserDetonate: 14,
+  eyeFlash: 14, laserZap: 10, laserThaw: 8,
 };
 // what counts as violence done to them, for fear and grudges
 const VIOLENT = new Set(['koMe', 'cutMe', 'stabbedMe', 'choppedMe', 'severedMe', 'shotMe', 'shotAtMe', 'aimedAtMe', 'sawStab', 'sawShoot', 'sawSever', 'sawKill', 'sawThreat', 'tasedMe', 'burnedMe', 'sawBurn']);
@@ -150,6 +155,8 @@ const REPEAT = {
   // (seeing the impossible: said once, not every time it happens again)
   sawFlying: 25, sawSpeedster: 16, sawTelekinesis: 12, sawShockwave: 9, sawBulletStop: 14, sawWallSmash: 14, sawGotPower: 20, sawSkyToss: 9,
   sawSuperBlow: 7, sawSlam: 7, sawSpeedBlow: 8, sawCrush: 10, pwCarriedUp: 3, pwLifted: 3, pwDodged: 6, flyJoy: 30,
+  sawBulletsBounce: 10, sawHeadbutt: 8, sawShield: 12, sawSmother: 10, sawSmotherBlast: 12, sawUnstoppable: 10, sawLaser: 10,
+  sawGunMelt: 12, sawLaserCut: 12, sawOvercharge: 10, pwHandHurt: 3, pwBulletBounce: 6, pwDazzled: 3,
   // (not scared, with a superpower: said now and then, not every time)
   pwUnafraidGun: 8, pwUnafraidArmed: 8, pwUnafraidAimed: 6, pwUnafraidShot: 5, pwUnafraidHeld: 4,
 };
@@ -438,6 +445,8 @@ export class Brain {
   canSee(x, y, own = null) {
     const me = this.man;
     if (!me.conscious) return false;
+    // (dazzled - a flash out of somebody's eyes: laser vision - nothing, for a few seconds)
+    if (this.blindT && this.sb.time < this.blindT) return false;
     const eye = me.wj.head;
     const dx = x - eye.x, d = Math.abs(dx);
     if (d > SIGHT || Math.abs(y - eye.y) > 9) return false;
@@ -868,6 +877,8 @@ export class Brain {
         break;
       case 'powerGiven': case 'pwTakeoff': case 'powerMove': case 'shockwave': case 'skyToss': case 'skyDrop': case 'wallSmash':
       case 'bulletStopped': case 'blitz': case 'blink': case 'lightningLine': case 'whirlwind': case 'speedDodge': case 'diveImpact':
+      case 'bulletBounce': case 'headbutt': case 'bodySlam': case 'humanShield': case 'smother': case 'smotherBlast': case 'unstoppable':
+      case 'laserFire': case 'laserBolt': case 'overcharge': case 'gunMelted': case 'laserCut':
         this.sawPower(ev, seen, x, y, d);
         break;
       case 'vestStop':
@@ -1139,7 +1150,10 @@ export class Brain {
       r.fear = clamp01(r.fear + 0.12 * (1.2 - T.bravery));
       if (this.rel(o).like > 0.3) r.like = clamp(r.like - 0.15, -1, 1);
     }
-    if (o === me) { r.fear = clamp01(r.fear + 0.3 * (1.2 - T.bravery)); E.bump('fear', 0.3 * (1.2 - T.bravery)); }
+    // (somebody putting themselves between everybody and the danger is not to be feared: quite the opposite)
+    const saving = ev.type === 'humanShield' || ev.type === 'smother' || ev.type === 'smotherBlast';
+    if (saving) { r.like = clamp(r.like + (o === me ? 0.45 : 0.2), -1, 1); r.fear *= 0.6; }
+    else if (o === me) { r.fear = clamp01(r.fear + 0.3 * (1.2 - T.bravery)); E.bump('fear', 0.3 * (1.2 - T.bravery)); }
     const vars = { other: who.name, victim: o ? o.name : 'them' };
     switch (ev.type) {
       case 'powerGiven': this.speak('sawGotPower', vars, 0.6, null, false); break;
@@ -1151,6 +1165,32 @@ export class Brain {
       case 'blitz': case 'blink': case 'lightningLine': case 'whirlwind': case 'speedDodge':
         this.speak('sawSpeedster', vars, 0.5, null, true); break;
       case 'diveImpact': this.speak('sawShockwave', vars, 0.5, null, true); break;
+      // super durability
+      case 'bulletBounce': {
+        // (the shot itself has them talking first: a moment later, what it did - or did not do)
+        const t = this.sb.time;
+        if (t - (this.sawBounceT ?? -99) > 10) { this.sawBounceT = t; this.sb.later(0.9, () => this.speak('sawBulletsBounce', vars, 0.9, null, true)); }
+        this.note(`The bullets are bouncing off ${who.name}.`);
+        break;
+      }
+      case 'headbutt': this.speak('sawHeadbutt', vars, 0.5, null, true); break;
+      case 'bodySlam': this.speak('sawSlam', vars, 0.6, null, true); break;
+      case 'humanShield': this.speak('sawShield', vars, 0.7, null, true); this.note(`${who.name} is standing in front of ${vars.victim}, taking the bullets.`); break;
+      case 'smother': this.speak('sawSmother', vars, 0.8, null, true); this.note(`${who.name} threw themselves on top of the bomb.`); break;
+      case 'smotherBlast': if (who.alive) { this.speak('sawSmotherBlast', vars, 0.8, null, true); this.note(`${who.name} took the whole blast, and lived.`); } break;
+      case 'unstoppable': this.speak('sawUnstoppable', vars, 0.5, null, true); break;
+      // laser vision
+      case 'laserFire': case 'laserBolt': {
+        // (nobody sees that for the first time and says nothing)
+        const t = this.sb.time, first = t - (this.sawLaserT ?? -99) > 12;
+        this.sawLaserT = t;
+        this.speak('sawLaser', vars, first ? 0.95 : 0.4, null, true);
+        this.note(`${who.name} is shooting beams out of their eyes.`);
+        break;
+      }
+      case 'overcharge': this.speak('sawOvercharge', vars, 0.8, null, true); this.shaken(0.3); break;
+      case 'gunMelted': this.speak('sawGunMelt', vars, 0.7, null, true); this.note(`${who.name} melted the gun in ${vars.victim}'s hand just by looking at it.`); break;
+      case 'laserCut': this.speak('sawLaserCut', vars, 0.6, null, true); break;
       case 'powerMove':
         if (ev.power === 'tk' && o) { this.speak('sawTelekinesis', vars, 0.5, null, true); this.note(`${who.name} is moving ${o.name} without touching them.`); }
         else if (ev.power === 'speed') this.speak('sawSpeedster', vars, 0.35, null, true);

@@ -480,7 +480,8 @@ function updateFire(man, dt) {
       if (k < 0.05) continue;
       lit += k;
       if (!was) continue;
-      h.hit(p, BURN[p] * k * 0.25, { burn: true, cutBy: 'Fire', cause: 'burns' });
+      // (skin like stone - super durability - scorches, more than it burns)
+      h.hit(p, BURN[p] * k * 0.25 * (man.toughSkin ? 0.25 : 1), { burn: true, cutBy: 'Fire', cause: 'burns' });
     }
     if (was) {
       h.shock = Math.min(1, h.shock + 0.003 * lit);

@@ -192,6 +192,27 @@ for (const k of ['blitz', 'blink', 'lightningLine', 'whirlwind', 'speedDodge', '
 for (const k of ['tkThrow', 'tkPush', 'tkPull', 'tkDisarm', 'tkHurl']) sb.on(k, (e) => sound.tkHum(e.x, 1));
 sb.on('powerMove', (e) => { if (e.power === 'tk') sound.tkHum(e.x, 0.7); else if (e.power === 'speed') sound.zip(e.x); });
 sb.on('bulletStopped', (e) => sound.bulletStop(e.x));
+// super durability: rounds ringing off them, a fist on stone, a blade glancing off, a head like a rock, a body landing
+sb.on('bulletBounce', (e) => sound.ricochet(e.x));
+sb.on('hardSkin', (e) => sound.thunk(e.x));
+sb.on('bladeBounce', (e) => sound.clang(0.7, e.x));
+for (const k of ['bladeCatch', 'bladeSnap']) sb.on(k, (e) => sound.clang(k === 'bladeSnap' ? 1.3 : 0.9, e.x));
+sb.on('headbutt', (e) => { sound.punch(1.8, false, e.x); cam.shake(0.15); });
+sb.on('ram', (e) => sound.punch(1.4, false, e.x));
+sb.on('unstoppable', (e) => sound.whoosh(e.x, true));
+sb.on('bodySlam', (e) => { sound.boom(e.x, 1); cam.shake(0.4); });
+sb.on('shrugOff', (e) => { sound.boom(e.x, 0.6); cam.shake(0.15); });
+sb.on('smother', (e) => sound.thud(5, e.x));
+sb.on('brace', (e) => sound.thump(e.x));
+// laser vision: the beam's hum, a bolt's zap, the charge, heat on skin and metal, the flash
+sb.on('laserFire', (e) => sound.laserBeam(e.x, e.dur || 1));
+sb.on('laserCut', (e) => sound.laserBeam(e.x, 1.3));
+for (const k of ['laserBolt', 'laserDetonate', 'laserZap']) sb.on(k, (e) => sound.laserBolt(e.x));
+sb.on('laserCharge', (e) => sound.laserCharge(e.x));
+sb.on('overcharge', (e) => { sound.laserBeam(e.x, 0.8, true); cam.shake(0.45); });
+for (const k of ['gunMelted', 'laserSever']) sb.on(k, (e) => sound.sizzle(e.x, 1.2));
+sb.on('laserThaw', (e) => sound.steamHiss(e.x, false));
+sb.on('eyeFlash', (e) => sound.flash(e.x));
 sb.on('thud', (e) => sound.thud(e.speed, e.x));
 sb.on('collide', (e) => { sound.thud(e.speed * 0.8, e.x); cam.shake(Math.min(0.4, e.speed * 0.025)); });
 sb.on('land', (e) => { if (e.speed > 5) sound.thud(e.speed * 0.5, e.who.pos.x); });

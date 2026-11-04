@@ -10,6 +10,10 @@
               shoulderCharge
    speed      speedDash, blitzFlurry, kickStorm, gustPunch, dropkick
    telekinesis  tkLift, tkThrow, tkPush, tkPull, tkChoke, tkShield, tkSlam, tkFloat
+   durability   braceSelf, toughWalk, shoveHard, headbutt, slamTuck, slamLand,
+              shieldArms, smotherDive, ramCharge, bladeCatch, tauntWide,
+              shrugBurst
+   laser      laserStare, laserSweep, laserBlink, laserCharge, laserRelease, eyeFlash
    ========================================================================== */
 import { defineClip } from '../clips.js';
 import { P } from '../skeleton.js';
@@ -246,4 +250,115 @@ defineClip('tkSlam', { loop: true, frames: [
 defineClip('tkFloat', { loop: true, frames: [
   [0.8, P({ t: 0, h: -4, aA: [40, 10], aB: [34, 14], lA: [70, -110], lB: [60, -120] })],
   [0.8, P({ t: 1, h: -3, aA: [44, 12], aB: [38, 16], lA: [72, -114], lB: [62, -122] })],
+] });
+
+/* --------------------------------- durability --------------------------------- */
+
+// feet planted wide, forearms up in front of the face, chin down: let it come
+defineClip('braceSelf', { frames: [
+  [0.15, P({ t: 10, h: 12, aA: [70, 120], aB: [64, 128], lA: [26, -26], lB: [-26, -20] })],
+  [3.5, P({ t: 12, h: 14, aA: [74, 126], aB: [68, 132], lA: [28, -30], lB: [-28, -22] })],
+  [0.25, STAND],
+] });
+// walking into it: chin down, chest out, hands a little forward
+defineClip('toughWalk', { mask: 'upper', loop: true, frames: [
+  [0.4, P({ t: 6, h: 6, aA: [34, 40], aB: [26, 46] })],
+  [0.4, P({ t: 7, h: 7, aA: [30, 44], aB: [30, 42] })],
+] });
+// both hands into the chest, hard
+defineClip('shoveHard', { frames: [
+  [0.08, P({ t: -4, h: 2, aA: [70, 110], aB: [64, 116], lA: [16, -16], lB: [-14, -12] })],
+  [0.06, P({ t: 18, h: 8, x: 0.1, aA: [92, 6], aB: [88, 10], lA: [30, -22], lB: [-22, -10] })],
+  [0.3, P({ t: 16, h: 7, x: 0.1, aA: [90, 8], aB: [86, 12], lA: [28, -20], lB: [-22, -10] })],
+  [0.25, STAND],
+] });
+// back, and the forehead into theirs
+defineClip('headbutt', { frames: [
+  [0.14, P({ t: -14, s: -6, h: -16, aA: [60, 90], aB: [54, 96], lA: [14, -14], lB: [-12, -10] })],
+  [0.06, P({ t: 26, s: 10, h: 24, x: 0.12, aA: [70, 80], aB: [64, 86], lA: [30, -26], lB: [-22, -10] })],
+  [0.25, P({ t: 22, s: 8, h: 20, x: 0.1, aA: [66, 84], aB: [60, 90], lA: [28, -24], lB: [-20, -10] })],
+  [0.25, STAND],
+] });
+// curled up in the air, elbows out, coming down on them
+defineClip('slamTuck', { loop: true, frames: [
+  [0.3, P({ t: 30, h: 16, aA: [100, 120], aB: [94, 126], lA: [70, -100], lB: [60, -96] })],
+  [0.3, P({ t: 32, h: 18, aA: [104, 118], aB: [96, 124], lA: [74, -104], lB: [62, -98] })],
+] });
+// down: a crouch, a fist on the floor
+defineClip('slamLand', { frames: [
+  [0.06, P({ t: 42, h: 22, aA: [72, 10], aB: [30, 60], lA: [84, -118], lB: [30, -104] })],
+  [0.5, P({ t: 40, h: 20, aA: [74, 12], aB: [30, 60], lA: [82, -116], lB: [30, -102] })],
+  [0.3, STAND],
+] });
+// arms spread, chest out, between the gun and whoever it is pointed at
+defineClip('shieldArms', { loop: true, frames: [
+  [0.5, P({ t: -4, h: -4, aA: [124, 8], aB: [-58, 10], lA: [20, -12], lB: [-20, -10] })],
+  [0.5, P({ t: -5, h: -5, aA: [120, 10], aB: [-62, 12], lA: [20, -12], lB: [-20, -10] })],
+] });
+// flat out, onto it
+defineClip('smotherDive', { frames: [
+  [0.12, P({ t: 30, h: 10, aA: [120, 10], aB: [110, 14], lA: [40, -60], lB: [-10, -30] })],
+  [0.2, P({ rot: 40, t: 20, h: -10, aA: [160, 6], aB: [150, 10], lA: [-10, -10], lB: [-20, -6] })],
+] });
+// head down, shoulder first: running straight through them
+defineClip('ramCharge', { mask: 'upper', loop: true, frames: [
+  [0.2, P({ t: 30, s: 12, h: -4, aA: [40, 100], aB: [20, 110] })],
+  [0.2, P({ t: 31, s: 12, h: -4, aA: [36, 104], aB: [24, 106] })],
+] });
+// a bare hand out, closing on the blade, and the blade wrenched away
+defineClip('bladeCatch', { frames: [
+  [0.12, P({ t: 6, h: 4, aA: [100, 30], aB: [30, 60], lA: [20, -18], lB: [-16, -12] })],
+  [0.1, P({ t: 8, h: 6, x: 0.05, aA: [104, 10], aB: [30, 60], lA: [24, -20], lB: [-16, -12] })],
+  [0.35, P({ t: -4, h: 0, aA: [60, 120], aB: [30, 60], lA: [16, -14], lB: [-14, -10] })],
+  [0.25, STAND],
+] });
+// arms wide, chest out, chin up: come on, then
+defineClip('tauntWide', { frames: [
+  [0.25, P({ t: -10, s: -6, h: -12, aA: [116, 20], aB: [-70, 20], lA: [22, -10], lB: [-22, -8] })],
+  [3.7, P({ t: -12, s: -8, h: -14, aA: [120, 24], aB: [-74, 24], lA: [22, -10], lB: [-22, -8] })],
+  [0.3, STAND],
+] });
+// everything off them at once: a crouch, and up and out
+defineClip('shrugBurst', { frames: [
+  [0.08, P({ t: 20, h: 10, aA: [40, 120], aB: [30, 126], lA: [40, -60], lB: [-20, -40] })],
+  [0.1, P({ t: -14, s: -6, h: -12, aA: [150, 20], aB: [-80, 20], lA: [20, -10], lB: [-20, -8] })],
+  [0.35, P({ t: -10, h: -8, aA: [140, 30], aB: [-70, 30], lA: [18, -10], lB: [-18, -8] })],
+  [0.3, STAND],
+] });
+
+/* -------------------------------- laser vision -------------------------------- */
+
+// a hard stare: chin down, shoulders set, fists clenched
+defineClip('laserStare', { loop: true, frames: [
+  [0.12, P({ t: 8, h: 6, aA: [-8, 34], aB: [-4, 38], lA: [18, -12], lB: [-18, -10] })],
+  [0.12, P({ t: 9, h: 7, aA: [-9, 36], aB: [-5, 40], lA: [18, -12], lB: [-18, -10] })],
+] });
+// looking down at the floor in front, and up and out across it
+defineClip('laserSweep', { frames: [
+  [0.15, P({ t: 12, h: 28, aA: [-10, 30], aB: [-6, 34], lA: [20, -14], lB: [-20, -12] })],
+  [1.25, P({ t: 5, h: 0, aA: [-12, 32], aB: [-8, 36], lA: [20, -14], lB: [-20, -12] })],
+  [0.25, STAND],
+] });
+// a bolt, and another, and another: the head jerks with each one
+defineClip('laserBlink', { loop: true, frames: [
+  [0.07, P({ t: 6, h: 4, aA: [-8, 30], aB: [-4, 34], lA: [16, -12], lB: [-16, -10] })],
+  [0.07, P({ t: 3, h: -2, aA: [-10, 32], aB: [-6, 36], lA: [16, -12], lB: [-16, -10] })],
+] });
+// knees bent, fists clenched at the sides, head down: something building up behind the eyes
+defineClip('laserCharge', { frames: [
+  [0.3, P({ t: 14, h: 22, aA: [-20, 60], aB: [-16, 64], lA: [30, -40], lB: [-26, -30] })],
+  [1.2, P({ t: 16, h: 26, aA: [-22, 64], aB: [-18, 68], lA: [32, -44], lB: [-28, -32] })],
+] });
+// and out: the head up, the body thrown back by it
+defineClip('laserRelease', { frames: [
+  [0.06, P({ t: -14, s: -6, h: -2, aA: [-40, 24], aB: [-36, 28], lA: [12, -10], lB: [-32, -22] })],
+  [0.7, P({ t: -12, s: -5, h: 0, aA: [-38, 22], aB: [-34, 26], lA: [12, -10], lB: [-30, -20] })],
+  [0.3, STAND],
+] });
+// a flash: head down, then up wide-eyed, arms flung back
+defineClip('eyeFlash', { frames: [
+  [0.1, P({ t: 12, h: 20, aA: [20, 60], aB: [16, 64], lA: [20, -20], lB: [-18, -14] })],
+  [0.08, P({ t: -10, h: -8, aA: [-50, 20], aB: [-46, 24], lA: [16, -10], lB: [-20, -12] })],
+  [0.35, P({ t: -8, h: -6, aA: [-46, 22], aB: [-42, 26], lA: [16, -10], lB: [-20, -12] })],
+  [0.25, STAND],
 ] });

@@ -287,3 +287,96 @@ export class StoppedRounds {
     ctx.restore();
   }
 }
+
+/* --------------------------------- laser vision --------------------------------- */
+
+/** What is left of a gun (or a knife) a beam of heat melted: glowing, then cooling, then just a lump. */
+export class Slag {
+  constructor(x, y) {
+    this.x = x; this.y = Math.max(0.01, y); this.age = 0; this.life = 30;
+    this.blobs = [];
+    for (let i = 0; i < 6; i++) this.blobs.push({ dx: rand(-0.08, 0.08), r: rand(0.025, 0.05), h: rand(0.5, 1) });
+    this.smokeT = 0;
+  }
+  update(dt, sb) {
+    this.age += dt;
+    return this.age < this.life;
+  }
+  drawUnder(ctx) {
+    const hot = clamp(1 - this.age / 5, 0, 1), fade = Math.min(1, (this.life - this.age) / 4);
+    ctx.save();
+    for (const b of this.blobs) {
+      const r = Math.round(60 + 195 * hot), g = Math.round(58 + 110 * hot * hot), bl = Math.round(56 + 20 * hot * hot * hot);
+      ctx.fillStyle = `rgba(${r}, ${g}, ${bl}, ${fade})`;
+      ctx.beginPath();
+      ctx.ellipse(this.x + b.dx, this.y + b.r * b.h * 0.4, b.r * 1.4, b.r * b.h * 0.5, 0, 0, TAU);
+      ctx.fill();
+    }
+    if (hot > 0.05) {
+      const gl = ctx.createRadialGradient(this.x, this.y + 0.02, 0, this.x, this.y + 0.02, 0.22);
+      gl.addColorStop(0, `rgba(255, 140, 40, ${0.45 * hot})`);
+      gl.addColorStop(1, 'rgba(255, 90, 20, 0)');
+      ctx.fillStyle = gl;
+      ctx.beginPath(); ctx.arc(this.x, this.y + 0.02, 0.22, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+  }
+  draw() {}
+}
+
+/** Black burns on the floor where a beam ran along it (one of these per sandbox, holding all of them). */
+export class Scorch {
+  static of(sb) { return single(sb, '_pwScorch', () => new Scorch()); }
+  constructor() { this.marks = []; }
+  mark(x, r = 0.2) {
+    const last = this.marks[this.marks.length - 1];
+    // (a beam held on one spot darkens it, rather than piling up marks)
+    if (last && Math.abs(last.x - x) < 0.04) { last.r = Math.min(0.45, last.r + 0.01); last.age = 0; return; }
+    this.marks.push({ x, r, age: 0 });
+    if (this.marks.length > 160) this.marks.shift();
+  }
+  update(dt) {
+    for (const m of this.marks) m.age += dt;
+    while (this.marks.length && this.marks[0].age > 60) this.marks.shift();
+    return true;
+  }
+  drawUnder(ctx) {
+    ctx.save();
+    for (const m of this.marks) {
+      const a = Math.min(1, (60 - m.age) / 8) * 0.55, hot = clamp(1 - m.age / 1.5, 0, 1);
+      ctx.fillStyle = `rgba(${Math.round(25 + 200 * hot)}, ${Math.round(20 + 60 * hot)}, 15, ${a + 0.3 * hot})`;
+      ctx.beginPath(); ctx.ellipse(m.x, 0.004, m.r * 0.5, 0.012, 0, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+  }
+  draw() {}
+}
+
+/** A flash out of somebody's eyes: a burst of white, and a cone of light in front of them. */
+export class EyeFlash {
+  constructor(x, y, dir) { this.x = x; this.y = y; this.dir = dir || 1; this.age = 0; this.life = 0.45; }
+  update(dt) { this.age += dt; return this.age < this.life; }
+  draw(ctx) {
+    const k = 1 - this.age / this.life;
+    ctx.save();
+    const g = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, 0.6 + 0.6 * (1 - k));
+    g.addColorStop(0, `rgba(255, 255, 255, ${0.95 * k})`);
+    g.addColorStop(0.35, `rgba(255, 210, 200, ${0.6 * k})`);
+    g.addColorStop(1, 'rgba(255, 80, 60, 0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(this.x, this.y, 0.6 + 0.6 * (1 - k), 0, TAU); ctx.fill();
+    // the cone, out in front
+    const L = 9, a = 0.42;
+    const cg = ctx.createLinearGradient(this.x, this.y, this.x + this.dir * L, this.y);
+    cg.addColorStop(0, `rgba(255, 245, 235, ${0.5 * k})`);
+    cg.addColorStop(1, 'rgba(255, 245, 235, 0)');
+    ctx.fillStyle = cg;
+    ctx.beginPath();
+    ctx.moveTo(this.x, this.y);
+    ctx.lineTo(this.x + this.dir * L, this.y + Math.tan(a) * L);
+    ctx.lineTo(this.x + this.dir * L, this.y - Math.tan(a) * L);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+}
