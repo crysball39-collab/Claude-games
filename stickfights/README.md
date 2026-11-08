@@ -260,8 +260,9 @@ slow motion, **double speed** (everything twice as fast; it and slow motion
 are one or the other), pause, settings, and clear everything (tap twice).
 
 **Tap a stickman** to open the inspector: their name and mood, what they are
-doing, their personality, five emotions, how conscious they are, their
-adrenaline, oxygen, nausea and temperature, pain, blood and stamina, an X-ray
+doing, their personality, five emotions, how conscious and how aware they
+are, their adrenaline, oxygen, nausea and temperature, pain, shock, blood and
+stamina, an X-ray
 of their body coloured by injury - their organs in it, darker the more each is
 damaged and crossed out when it is gone, every broken bone snapped and named,
 whatever has been cut off missing, joints out of their sockets ringed in
@@ -809,7 +810,7 @@ break.
 ### Animated while they are in charge
 
 Every pose they strike on their own comes from **hand-keyed clips** in
-`src/game/clips.js` (and `powers/clips.js`): 243 of them, from idling and walking to a front kick, a
+`src/game/clips.js` (and `powers/clips.js`): 246 of them, from idling and walking to a front kick, a
 knife thrust, a machete chop, aiming and reloading a pistol, reloading a rifle,
 aiming down on one knee, putting on a helmet, tying off a tourniquet, press-ups, a hug, falling on your back, getting up off your front,
 sobbing into your hands and dying. Each clip is a list of frames, and
@@ -831,7 +832,7 @@ armsCrossed  handsOnHips  tapFoot  yawn  kickDirt  lookUp  wipeBrow  flex
 shadowbox  laughPoint  highFive  hug  handshake  clap  thumbsUp  nod  bow
 pushups  squats  jumpingJacks  clutchStomach  clutchArm  shiver
 macheteGuard  chop  hack  aimPistol  gunLow  reload  tourniquet  popJoint
-retch  checkWound  clutchStump  shock  coverHead
+retch  checkWound  clutchStump  shock  coverHead  ballUpBack  ballUpFront  dropDown
 helmetOn  reloadRifle  kneelAim  checkGun  coverEars  sickHunch  checkWatch
 rubNeck  shieldEyes  handsInPockets
 flyHover  flyForward  flyCarry  flyPin  flySlam  diveBomb  heroLand  megaPunch
@@ -987,7 +988,9 @@ bones inside them (see `src/game/health.js`). On top of that:
   grin), all of which fade except the teeth.
 - **Shock** - bad enough wounds and blood loss put them in shock: pale, cold,
   shaking and slow, and sometimes they just faint. Seeing something horrible
-  done to someone else can make them faint too, or throw up.
+  done to someone else can make them faint too, or throw up. It has a bar of
+  its own in the inspector (see [Curling up, covering up, shock and
+  awareness](#curling-up-covering-up-shock-and-awareness)).
 - **Death** - from the head, from the torso (internal injuries), a broken
   neck, a bullet, or bleeding out. The dead lie where they fall, with crosses
   for eyes, and keep bleeding into a pool under the wounds for a while -
@@ -1078,7 +1081,8 @@ but not against something urgent, like someone coming at them. The options:
 | **Flee** / keep away | afraid of them, or of what they just watched them do - and nobody sensible squares up to a knife bare-handed |
 | **Hide** | fleeing with a crate to get behind, or shots going off |
 | **Hands up** | a gun pointed at them |
-| **Cower**, beg, cover their head | terrified, hurt and cornered by someone coming for them |
+| **Cower**, beg, cover their head | terrified, hurt and cornered by someone coming for them; shots going off close by with nowhere to hide; a blast not far off; still being hit and too worn out or hurt to hit back (they cover up) |
+| **Curl up** in a ball on the floor | kicked while they are down, or somebody dangerous standing over them; shot at out in the open; right by a blast; freezing, in agony or deep in shock |
 | **Get a weapon** | angry or expecting trouble - first, if one is on the way to the fight. The kind and the timid leave a blade where it is; the brave want the gun if somebody else might get it |
 | **Throw the knife** | at someone getting away |
 | **Pull a knife out** | there is one in them: it comes out first, whatever else is going on - then they keep it or drop it |
@@ -1117,11 +1121,11 @@ An officer has a few more of their own:
 set of knuckles or a knife flying at them may get a duck or a jump. A blow
 they take gets a flinch from the body straight away and, a beat later (longer
 for the clumsy), a decision about it. On the floor they may stay down and beg
-if someone dangerous is standing over them; trapped under a crate they shout
+if someone dangerous is standing over them, or curl up in a ball; trapped under a crate they shout
 for help, and friends come.
 
 They also talk - out loud, in speech bubbles, with a babbling voice pitched to
-each of them - from 2,151 lines for 387 situations in `src/game/lines.js` (and `powers/lines.js`),
+each of them - from 2,196 lines for 395 situations in `src/game/lines.js` (and `powers/lines.js`),
 all written to sound like people really talk: short, plain, interrupted, and
 scared when there is something to be scared of. From small talk ("Did you
 sleep alright? I was up half the night.", "Rent's gone up again. Can you
@@ -1461,6 +1465,48 @@ comes away still in its ice, and the stump bleeds once it thaws); a very
 hard one, a bullet in the body, or a drop from high up shatters the whole
 thing.
 
+### Curling up, covering up, shock and awareness
+
+When there is nothing better to do, people protect themselves the way people
+do:
+
+- **Curling up in a ball** - on the floor, knees drawn up to the chest and the
+  forearms wrapped over the head. Kicked while they are down, somebody
+  dangerous standing over them, rounds cracking past them out in the open with
+  nothing to get behind and nothing to shoot back with, a blast right next to
+  them (they throw themselves flat), freezing cold, agony, or deep in shock and
+  frightened - the timid curl up sooner, the brave hardly ever, and they uncurl
+  a couple of seconds after the reason has gone. It works: three kicks in four
+  meant for the head land on the arms instead, everything lands softer (the
+  body most of all) and shoves them about less - though it does nothing
+  against a bullet. Curled up, a cold body keeps its heat in and warms back up
+  much faster. Anybody decent who sees somebody kicked while they are curled up
+  on the floor is angry with whoever is doing it, and says so.
+- **Getting down, hands over the head** - shots going off close by with
+  nowhere to hide and nothing to shoot back with (whoever the rounds are
+  cracking past would rather be flat on the floor), or a blast a little
+  further off: down where they are for a moment, arms over the head.
+- **Covering up** - still being hit and too worn out, too hurt or too badly
+  off to hit back: arms wrapped round the head, chin down. Covering up (or
+  cowering) is a block from any side - blows aimed at the head and the body
+  land on the arms.
+
+**Shock** has a bar in the inspector. Bad wounds put them in it - a bullet, a
+limb off, heavy blood loss, burns - and so do a blast close by, a hard blow,
+seeing somebody shot or cut up, and watching somebody die (far more if they
+cared about them); somebody coming to help them brings it down. In shock they
+go pale and cold, tremble, slow down and may faint; deep in it, and
+frightened, they curl up on the floor, because they cannot take any more.
+
+**Awareness** has one too: how much of what is going on around them they are
+taking in. It is full for anybody well and calm, and drops when they are dazed
+by a knock on the head, half-conscious, in shock, in bad pain, short of air,
+too cold or too hot, sick, blinded by a flash, panicking, worn out or tased (a
+rush of adrenaline sharpens it a little). Only half there, they notice nothing
+past a few metres closer than before and less of what is behind them, hear
+less, decide more slowly, block and duck less often, look round less and aim
+worse.
+
 ### Holsters and pockets
 
 Besides what is in their hand, a stickman carries a pistol or a taser in a
@@ -1542,7 +1588,9 @@ Whoever is down, tased or has given up is knelt over and **cuffed**,
 whatever they had taken off them and put down out of their reach, and the
 officer calls it in on the radio. Cuffed, they sit on the floor with their
 hands behind their back, complaining; somebody cuffed for something small is
-let go with a warning after a while. Everyone else is relieved to see an
+let go with a warning after a while. Whoever they were fighting leaves it
+there once they give themselves up - only the truly furious keep at somebody
+on their knees for an officer, or in handcuffs. Everyone else is relieved to see an
 officer turn up - except whoever has just done something.
 
 ### The hand
@@ -1828,7 +1876,7 @@ stickfights/
                       body that hit something bleeds from, and stains on anything
       vitals.js       adrenaline, oxygen and temperature; fire, frost and ice,
                       and how each of them is drawn
-      brain.js        sense, feel, think, react, remember, gossip
+      brain.js        sense, feel, think, react, remember, gossip; awareness
       behaviours.js   what a brain can decide to do
       emotions.js     the five emotions
       lines.js        everything they can say, written the way people talk
@@ -2252,6 +2300,20 @@ screen and checks:
   whoever was looking (and not whoever was not); people watching say so
 - the two new powers bring eighteen new animations and over a hundred and fifty
   new lines
+- kicked while they are down, people curl up in a ball and the kicks meant for
+  the head land on their arms; six kicks to the head do a fraction to somebody
+  curled up of what they do to somebody lying flat; and whoever is watching is
+  angry with the one kicking, and says so (or steps in)
+- rounds cracking over somebody's head out in the open put them flat on the
+  floor (or down, hands over the head), and whoever is standing by the gun gets
+  down with their hands over their head; a blast five metres away puts people
+  on the floor or cowering, and leaves them in some shock
+- freezing, they curl up, and curled up a cold body warms faster than one
+  standing; too worn out to fight back and still being hit, they cover up, and
+  most of the blows land on their arms
+- an arm off puts them in shock and shortens how far they notice anything, a
+  hard knock on the head leaves them dazed, and the inspector's Awareness and
+  Shock bars say so; there are three new animations and forty-odd new lines
 - the console stays clean, and the single file fetches nothing
 
 Every check starts from the same random numbers and the same clock, so what

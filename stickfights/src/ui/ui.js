@@ -928,9 +928,9 @@ export class UI {
     this.vals = {};
     this.locks = {};
     const rows = [...EMOTION_ROWS.map((r) => [...r, 'ins-emotions']),
-      ['conscious', 'Conscious', '#e6dfc8', 'ins-vitals'], ['adrenaline', 'Adrenaline', '#ffb13b', 'ins-vitals'], ['oxygen', 'Oxygen', '#5cc8ff', 'ins-vitals'], ['nausea', 'Nausea', '#a8c83c', 'ins-vitals'],
+      ['conscious', 'Conscious', '#e6dfc8', 'ins-vitals'], ['aware', 'Awareness', '#7fd8c8', 'ins-vitals'], ['adrenaline', 'Adrenaline', '#ffb13b', 'ins-vitals'], ['oxygen', 'Oxygen', '#5cc8ff', 'ins-vitals'], ['nausea', 'Nausea', '#a8c83c', 'ins-vitals'],
       ['temp', 'Temp', null, 'ins-vitals'],
-      ['pain', 'Pain', '#ff6b6b', 'ins-vitals'], ['blood', 'Blood', '#c0182a', 'ins-vitals'], ['stamina', 'Stamina', '#4fbf78', 'ins-vitals']];
+      ['pain', 'Pain', '#ff6b6b', 'ins-vitals'], ['shock', 'Shock', '#b896ff', 'ins-vitals'], ['blood', 'Blood', '#c0182a', 'ins-vitals'], ['stamina', 'Stamina', '#4fbf78', 'ins-vitals']];
     for (const [key, label, color, where] of rows) {
       const box = $(where);
       if (key === 'temp') { this.tempRow(box); continue; }
@@ -1084,13 +1084,17 @@ export class UI {
     this.insT = 0;
   }
 
-  /** The body's bars: how awake, how much adrenaline and air, how sick, the temperature, the pain, the blood, the breath. */
+  /** The body's bars: how awake and how aware, how much adrenaline and air, how sick, the temperature, the pain, the shock, the blood, the breath. */
   showVitals(p) {
     const h = p.health, m = this.meters, v = this.vals;
     const pct = (x) => Math.round(clamp(x, 0, 1) * 100) + '%';
     const bar = (k, f, text) => { m[k].style.width = (clamp(f, 0, 1) * 100).toFixed(0) + '%'; v[k].textContent = text; };
     const awake = p.dead || h.frozen ? 0 : h.conscious;
     bar('conscious', awake, pct(awake));
+    // (how much of what is round them they are taking in: only a mind can be aware)
+    const aware = p.dead || h.frozen || !p.brain ? 0 : p.brain.aware;
+    bar('aware', aware, p.brain ? pct(aware) : '—');
+    m.aware.parentNode.parentNode.classList.toggle('off', !p.brain || p.dead);
     bar('adrenaline', h.adrenaline || 0, pct(h.adrenaline || 0));
     const air = breathes(p);
     bar('oxygen', air ? h.oxygen : 1, air ? pct(h.oxygen) : '—');
@@ -1100,6 +1104,7 @@ export class UI {
     bar('nausea', sick, air && hasVitals(p) ? pct(sick) : '—');
     m.nausea.parentNode.parentNode.classList.toggle('off', !(air && hasVitals(p)));
     bar('pain', p.dead ? 0 : h.pain / 100, String(p.dead ? 0 : Math.round(h.pain)));
+    bar('shock', p.dead ? 0 : h.shock || 0, pct(p.dead ? 0 : h.shock || 0));
     // (what they can still lose: empty is bled dry, and nothing more comes out of them)
     bar('blood', h.bloodLeft, pct(h.bloodLeft));
     bar('stamina', p.dead ? 0 : p.stamina, pct(p.dead ? 0 : p.stamina));

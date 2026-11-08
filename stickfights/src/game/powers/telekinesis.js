@@ -318,6 +318,8 @@ const MOVES = {
           m.data.x = o.wj.chest.x;
           m.data.g = 0;
           m.data.n = 0;
+          // (the first lift is from wherever they are - on their feet, as often as not - not from the floor)
+          m.data.from = o.wj.chest.y;
           act(man, 'tkSlam', { fadeOut: 0.3 });
           setPhase(m, 'up');
           if (o.brain) o.brain.speak('pwLifted', { other: man.name }, 0.7, man, true);
@@ -327,8 +329,8 @@ const MOVES = {
           pose(man, 'tkSlam');
           const top = m.data.g + 2.4, bottom = m.data.g + 0.28;
           if (m.phase === 'up') {
-            const k = Math.min(1, m.pt / 0.38);
-            float(man, m, o, m.data.x, bottom + (top - bottom) * k, 0, 2);
+            const k = Math.min(1, m.pt / 0.38), from = m.data.from ?? bottom;
+            float(man, m, o, m.data.x, from + (top - from) * k, 0, 2);
             if (m.pt > 0.42) setPhase(m, 'down');
           } else {
             const k = Math.min(1, m.pt / 0.11);
@@ -339,7 +341,7 @@ const MOVES = {
               man.sandbox.fx.dust(m.data.x, m.data.g, 10, 1);
               man.sandbox.emit('tkSlam', { who: man, target: o, n: m.data.n, x: m.data.x, y: m.data.g, loud: true });
               if (m.data.n >= 3) { letGo(man, o, 0, -2); setPhase(m, 'after'); }
-              else setPhase(m, 'up');
+              else { m.data.from = bottom; setPhase(m, 'up'); }
             }
           }
           return true;

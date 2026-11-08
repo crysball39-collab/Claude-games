@@ -439,6 +439,10 @@ export class Fight extends Behaviour {
       this.lost += dt;
       if (this.lost > 3) return false;
     } else this.lost = 0;
+    // giving themselves up to an officer, or already in handcuffs: that is the end of it, for
+    // anybody but the truly furious (or somebody told to see it through)
+    const arrested = o.cuffed || (o.brain && o.brain.behaviour && (o.brain.behaviour.kind === 'comply' || o.brain.behaviour.kind === 'detained'));
+    if (arrested && !(T.aggression > 0.72 && r.anger > 0.82) && !(b.ordered && b.ordered.target === o)) return false;
     r.foughtT = this.now;
     me.lookAt = o.wj.head;
     const d = Math.abs(o.pos.x - me.pos.x), dir = side(me, o);
@@ -465,9 +469,11 @@ export class Fight extends Behaviour {
       // (with a power, the merciless have worse things to do to somebody already down)
       if (merciless && me.powers && powerFight(this, dt, o, d, dir, r)) return true;
       if (merciless && o.lying && me.strikes().includes('stomp')) {
-        const spot = o.wj.hip.x - dir * 0.48 * me.scale;
+        // (a stamp aimed at the middle of whatever is on the floor - flat out or curled up in a ball)
+        const cx = (o.box.minX + o.box.maxX) / 2;
+        const spot = cx - dir * 0.36 * me.scale;
         if (arrive(me, spot, 'walk', 0.1, { jump: false })) {
-          me.faceTo(o.wj.hip.x);
+          me.faceTo(cx);
           if (me.ready && (this.cool -= dt) <= 0) { me.attack('stomp', o); this.cool = rand(0.6, 1.2); }
         }
         return this.downT < 12;
@@ -772,20 +778,34 @@ export class Hide extends Behaviour {
 
 export class Cower extends Behaviour {
   get kind() { return 'cower'; }
-  get label() { return 'Cowering from ' + this.target.name; }
+  get label() { return this.target ? 'Cowering from ' + this.target.name : 'Cowering, hands over the head'; }
   get icon() { return 'sweat'; }
   start() {
-    this.brain.begging = true;
-    if (this.brain.isHostile(this.target)) this.brain.speak('beg', { other: this.target.name }, 1, this.target, true);
-    else this.brain.speak('fear', {}, 0.6);
+    const b = this.brain, o = this.target;
+    // (o.cover: 'head' - hands over the head, from gunfire or a blast; 'up' - covering up, being hit)
+    this.cover = this.o.cover || null;
+    b.begging = !!o;
+    if (this.cover === 'head') b.speak(o ? 'cowerShots' : 'cowerBlast', o ? { other: o.name } : {}, 0.85, o, true);
+    else if (this.cover === 'up') b.speak('coverUp', { other: o.name }, 0.9, o, true);
+    else if (o && b.isHostile(o)) b.speak('beg', { other: o.name }, 1, o, true);
+    else b.speak('fear', {}, 0.6);
     this.next = rand(2.5, 4);
     this.calm = 0;
   }
   update(dt) {
     this.t += dt;
     const o = this.target, me = this.me, b = this.brain;
-    if (!o || o.removed) return false;
-    if (me.ready && me.posture !== 'cower' && me.posture !== 'beg' && me.posture !== 'handsUp' && me.posture !== 'coverHead') {
+    // nobody in particular (a blast): hands over the head where they stand, for a moment
+    if (!o) {
+      me.stop();
+      if (me.ready && me.posture !== 'coverHead') me.setPosture('coverHead');
+      return this.t < (this.o.dur || 2.5);
+    }
+    if (o.removed) return false;
+    const want = this.cover === 'head' ? 'coverHead' : this.cover === 'up' ? 'protectHead' : null;
+    if (want && me.ready && me.posture !== want && me.posture !== 'handsUp') {
+      me.setPosture(want);
+    } else if (!want && me.ready && me.posture !== 'cower' && me.posture !== 'beg' && me.posture !== 'handsUp' && me.posture !== 'coverHead') {
       const gun = o.gunReady, shooting = b.gunThreat && this.now - b.gunThreat.t < 3;
       me.setPosture(gun ? (shooting && chance(0.6) ? 'coverHead' : 'handsUp')
         : o.armedWith === 'knife' && chance(0.7) ? 'handsUp' : Math.abs(o.pos.x - me.pos.x) < 2 && chance(0.5) ? 'beg' : 'cower');
@@ -801,8 +821,28 @@ export class Cower extends Behaviour {
   end() {
     this.brain.begging = false;
     const p = this.me.posture;
-    if (p === 'cower' || p === 'beg' || p === 'handsUp' || p === 'coverHead') this.me.setPosture(null);
+    if (p === 'cower' || p === 'beg' || p === 'handsUp' || p === 'coverHead' || p === 'protectHead') this.me.setPosture(null);
   }
+}
+
+/**
+ * Down on the floor on purpose, curled up in a ball: shot at out in the open,
+ * a blast going off right next to them, too cold to stay standing, or past
+ * coping. On the floor, the brain's whileDown has them (and keeps them down,
+ * curled up, for as long as the reason lasts).
+ */
+export class CurlUp extends Behaviour {
+  get kind() { return 'curlUp'; }
+  get label() { return 'Curling up on the floor'; }
+  get icon() { return 'sweat'; }
+  start() {
+    const b = this.brain, why = this.o.why || 'fire';
+    if (!this.me.curlUp(this.o.dur || 3)) return;
+    b.curlWhy = why;
+    b.curlT = this.now;
+    b.speak({ fire: 'hitDeck', blast: 'hitDeck', cold: 'curlCold', shock: 'curlShock' }[why] || 'hitDeck', {}, 0.85, null, why === 'fire' || why === 'blast');
+  }
+  update() { return false; }
 }
 
 /** A gun on them: still, hands up, facing it, until it is pointed somewhere else. */
@@ -1398,6 +1438,6 @@ export const KINDS = {
   help: Help, mourn: Mourn, arm: Arm, inspect: Inspect, play: Play, throw: ThrowCrate,
   investigate: Investigate, pullout: PullOut, throwKnife: ThrowKnife, exercise: Exercise,
   surrender: Surrender, vest: GearUp, ammo: Resupply, catchBreath: CatchBreath,
-  burning: Burning, douse: Douse, getClear: GetClear,
+  burning: Burning, douse: Douse, getClear: GetClear, curlUp: CurlUp,
 };
 

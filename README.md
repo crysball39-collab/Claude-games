@@ -28,8 +28,9 @@ texture in the game is drawn procedurally onto a canvas at load time.
 > with real joints when they go over - holster and pocket what they are not
 > using, and answer to the officers, who go after whoever commits a crime with
 > a warning, a taser and a pair of handcuffs. Each one has a consciousness,
+> awareness (dazed, in shock or half-frozen, they take in less and react slower),
 > adrenaline, oxygen, nausea (spun round, swung about, gassed or sickened by what
-> they see, they retch and then throw up) and temperature meter, and a temperature typed into it
+> they see, they retch and then throw up), shock and temperature meter, and a temperature typed into it
 > becomes theirs: hot enough they catch fire, run screaming and stop, drop and
 > roll; cold enough they freeze solid, an ice statue that thaws - or shatters.
 > They bleed from the wound that is bleeding - in spurting streams from a stump
@@ -38,7 +39,11 @@ texture in the game is drawn procedurally onto a canvas at load time.
 > out round their wounds and smears behind a body dragged through it, a rifle round
 > through the head opens it, and a blast up close throws pieces of them. Bodies
 > pile on bodies and grip. Everything they say is written the way people really
-> talk.
+> talk. They curl up in a ball on the floor when anybody would - kicked while
+> they are down, shot at out in the open, right by a blast, freezing - and it
+> takes the worst out of a kicking; they get down with their hands over their
+> heads when shots go off close by, and cover up when they are too worn out to
+> hit back.
 > Six superpowers - flight, super strength, super speed, telekinesis, super
 > durability and laser vision - are given to anybody by tapping them, each with
 > ten moves (grab somebody, fly up and throw them down; pin them to a wall and

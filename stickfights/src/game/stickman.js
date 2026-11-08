@@ -86,7 +86,7 @@ const NOMINAL = { walk: strideSpeed('walk'), run: strideSpeed('run'), runScared:
 
 const LYING = new Set(['down', 'ko', 'crawl', 'dead']);
 const HIT_REACTIONS = new Set(['hitHead', 'hitBody', 'hitLow', 'flinch']);
-export const STILL_POSTURES = new Set(['sit', 'sitEdge', 'kneel', 'cry', 'beg', 'cower', 'handsUp', 'pushups', 'squats', 'jacks', 'armsCrossed', 'handsOnHips', 'clutchStomach', 'clutchArm', 'shiver', 'shock', 'clutchStump', 'coverHead', 'handsOnKnees', 'kneelHands', 'sitCuffed', 'think', 'kneelAim', 'sickHunch', 'handsInPockets']);
+export const STILL_POSTURES = new Set(['sit', 'sitEdge', 'kneel', 'cry', 'beg', 'cower', 'protectHead', 'handsUp', 'pushups', 'squats', 'jacks', 'armsCrossed', 'handsOnHips', 'clutchStomach', 'clutchArm', 'shiver', 'shock', 'clutchStump', 'coverHead', 'handsOnKnees', 'kneelHands', 'sitCuffed', 'think', 'kneelAim', 'sickHunch', 'handsInPockets']);
 /** Which part a ragdoll point belongs to, and which bone takes it when that point hits something. */
 const POINT_PART = {
   head: ['head', 'skull'], neck: ['torso', 'ribs'], chest: ['torso', 'ribs'], hip: ['torso', 'pelvis'],
@@ -171,6 +171,7 @@ export class Stickman {
     this.toughSkin = false;   // super durability: nothing cuts them open, nothing comes off, rounds ring off
     this.shielding = null;    // ...standing in front of somebody being shot at (they take the rounds)
     this.smothering = null;   // ...lying on a bomb: { bomb, until }
+    this.balled = false;      // curled up in a ball on the floor (knees up, arms over the head): the brain says when
     this.pmove = null;        // a power's move, running: it has the body until it is done
     this.spin = 0;
     this.spinV = 0;
@@ -693,6 +694,8 @@ export class Stickman {
     // out of breath, the sights will not keep still; nor with the adrenaline up, or shivering
     s += (1 - clamp01(this.stamina / 0.5)) * 2.5;
     s += (this.health.adrenaline || 0) * 3 + Math.max(0, 35 - (this.health.temp ?? 37)) * 0.8;
+    // (dazed, in shock, half there: the sights wander)
+    if (this.brain && this.brain.aware < 1) s += (1 - this.brain.aware) * 3;
     // and a heavy pistol takes longer to come back down after each shot
     const kick = this.weapon && this.weapon.spec ? this.weapon.spec.kick : 1, back = 0.35 * Math.max(1, kick);
     const since = this.sandbox.time - (this.weapon ? this.weapon.lastShot : this.lastShotT ?? -99);
@@ -834,7 +837,9 @@ export class Stickman {
     const spec = armOf(weapon);
     const burn = !!(spec && spec.burn);
     // (a raised arm does nothing against a bullet, or a beam)
-    if (!wasDead && this.blocking && this.state === 'stand' && fromFront && (part === 'head' || part === 'torso') && h.kind !== 'impact' && !bullet && !burn) {
+    // (and covering up - cowering, the arms wrapped round the head - is a block from any side)
+    const covering = this.posture === 'protectHead' || this.posture === 'coverHead' || this.posture === 'cower';
+    if (!wasDead && (this.blocking && fromFront || covering) && this.state === 'stand' && (part === 'head' || part === 'torso') && h.kind !== 'impact' && !bullet && !burn) {
       blocked = true;
       part = this.cut.armA ? 'armB' : this.cut.armB ? 'armA' : chance(0.5) ? 'armA' : 'armB';
     }
@@ -846,6 +851,10 @@ export class Stickman {
     // machete it just puts the forearm where the blade comes down
     const parried = blocked && (weapon === 'machete' || !!(spec && spec.sever));
     if (parried) { blocked = false; h = { ...h, bone: 'forearm' + part.slice(-1) }; }
+    // curled up in a ball on the floor: the forearms over the head and the knees drawn up
+    // take the worst of a kicking (not of a bullet, which finds its way through anything)
+    const curled = this.balled && this.lying && this.conscious && !wasDead && !bullet && h.kind !== 'shot';
+    if (curled && part === 'head' && chance(0.75)) { part = this.cut.armA ? 'armB' : this.cut.armB ? 'armA' : chance(0.5) ? 'armA' : 'armB'; h = { ...h, bone: 'forearm' + part.slice(-1) }; }
     // some bodies are harder to hurt than others (a mod's)
     const armor = this.species && this.species.armor ? this.species.armor(this, h, part, weapon) : 1;
     // a vest takes the worst out of what lands on the body (a bullet's is in shot())
@@ -857,7 +866,8 @@ export class Stickman {
     // skin like stone (super durability): a fraction of it gets through, and nothing cuts it open
     const tough = this.toughSkin;
     const pk = this.powers ? powerArmor(this, h, part, weapon) : 1;
-    const dmg = 9 * h.power * MUL[part] * (blocked ? 0.3 : parried ? 0.85 : 1) * rand(0.85, 1.15) * armor * vestK * helmK * pk;
+    const curlK = curled ? (part === 'torso' ? 0.65 : 0.8) : 1;
+    const dmg = 9 * h.power * MUL[part] * (blocked ? 0.3 : parried ? 0.85 : 1) * rand(0.85, 1.15) * armor * vestK * helmK * pk * curlK;
     const res = this.health.hit(part, dmg, {
       // (how far up the body it went in: what is inside, there)
       at: part === 'torso' && h.x !== undefined ? torsoAt(this.wj, h.x, h.y) : null,
@@ -916,7 +926,7 @@ export class Stickman {
     }
     this.hurtT = this.sandbox.time;
     this.sandbox.emit('hit', { who: this, by: h.by, part, power: h.power, blocked, armed: !!weapon, weapon,
-      kind: h.kind, x: h.x, y: h.y, damage: dmg, fatal: res.fatal && !wasDead, object: h.object || null, deep: !!h.deep });
+      kind: h.kind, x: h.x, y: h.y, damage: dmg, fatal: res.fatal && !wasDead, object: h.object || null, deep: !!h.deep, curled });
     // frozen solid: the ice cracks, a limb may snap off, the whole of them may shatter
     if (this.health.frozen && !blocked) {
       iceBlow(this, { part, bone: h.bone, power: h.power, x: h.x, y: h.y, dir: h.dir, by: h.by, bullet });
@@ -932,7 +942,7 @@ export class Stickman {
     this.lastHit = { by: h.by, t: this.sandbox.time, part, power: h.power, kind: h.kind, blocked, object: h.object || null, weapon };
 
     // a blade cuts more than it shoves, and a bullet more still
-    const shove = h.power * (blocked ? 0.25 : 1) * (weapon === 'knife' ? 0.55 : weapon === 'machete' ? 0.8 : bullet ? 0.35 : spec && spec.shove !== undefined ? spec.shove : 1) * (this.powers ? powerSteady(this) : 1);
+    const shove = h.power * (blocked ? 0.25 : 1) * (weapon === 'knife' ? 0.55 : weapon === 'machete' ? 0.8 : bullet ? 0.35 : spec && spec.shove !== undefined ? spec.shove : 1) * (this.powers ? powerSteady(this) : 1) * (curled ? 0.6 : 1);
     this.balance -= shove * (part === 'head' ? 0.36 : 0.27) * (1.2 - this.health.toughness * 0.35);
     // taking one knocks the wind out of them a little
     if (!blocked) this.tire(0.015 + dmg * 0.003);
@@ -1482,6 +1492,31 @@ export class Stickman {
     return true;
   }
 
+  /**
+   * Down onto the floor on purpose, and curled up in a ball: under fire with
+   * nowhere to hide, a blast going off close by, too cold to stand about, or
+   * past being able to take any more. On the floor already, they just curl up
+   * where they are. `dur`: how long they mean to stay down, at least.
+   */
+  curlUp(dur = 3) {
+    if (!this.alive || !this.conscious || this.health.frozen || this.state === 'held' || this.state === 'thrown' || this.rag) return false;
+    this.balled = true;
+    if (this.state === 'down' || this.state === 'crawl') { this.setState('down'); this.downT = Math.max(this.downT, dur); return true; }
+    if (this.state !== 'stand') return false;
+    this.strike = null;
+    this.blocking = false;
+    this.dropCarried();
+    this.anim.stopAction(0.05);
+    this.posture = null;
+    this.stop();
+    this.lieSide = 'front';
+    this.setState('down');
+    this.anim.play('dropDown', { blend: 0.08, restart: true });
+    this.downT = dur;
+    this.sandbox.emit('curlUp', { who: this, x: this.pos.x, y: this.pos.y + 0.4 });
+    return true;
+  }
+
   /** Back to full health: the sandbox's heal button. Only for the living. */
   heal() {
     if (this.dead) return false;
@@ -1634,6 +1669,12 @@ export class Stickman {
         clip = 'koBack';
         break;
       case 'down':
+        if (this.balled && awake && !this.tased) {
+          // curling up, limp or not: the muscles pull the body into a ball
+          clip = lyingSide(rag) === 'back' ? 'ballUpBack' : 'ballUpFront';
+          tone = 0.4;
+          break;
+        }
         clip = this.tased ? 'tased' : this.lieSide === 'back' ? 'pinned' : 'lieFront';
         tone = this.tased ? 0.85 : awake ? 0.12 : 0;
         break;
@@ -2401,6 +2442,7 @@ export class Stickman {
       case 'shock': return 'shock';
       case 'clutchStump': return 'clutchStump';
       case 'coverHead': return 'coverHead';
+      case 'protectHead': return 'protectHead';
       case 'handsOnKnees': return 'handsOnKnees';
       case 'kneelHands': return 'kneelHands';
       case 'sitCuffed': return 'sitCuffed';
@@ -2517,12 +2559,14 @@ export class Stickman {
       this.downT = Math.max(this.downT, 0.6);
       return;
     }
-    const falling = this.anim.baseName === 'fallBack' || this.anim.baseName === 'fallFront';
+    const falling = this.anim.baseName === 'fallBack' || this.anim.baseName === 'fallFront' || this.anim.baseName === 'dropDown';
     if (!falling || this.anim.baseDone) {
       let name;
       if (this.tased) name = 'tasedFloor';
       else if (pinned) { name = 'pinned'; this.lieSide = 'back'; }
       else if (this.health.paralysed === 'all') name = this.lieSide === 'back' ? 'koBack' : 'koFront';
+      // curled up in a ball: knees up, arms over the head
+      else if (this.balled && this.conscious) name = this.lieSide === 'back' ? 'ballUpBack' : 'ballUpFront';
       else if (this.health.pain > 45) name = this.lieSide === 'back' ? 'writheBack' : 'writheFront';
       else name = this.lieSide === 'back' ? 'lieBack' : 'lieFront';
       this.anim.play(name, { blend: 0.35 });
@@ -2540,6 +2584,7 @@ export class Stickman {
   }
 
   getUp() {
+    this.balled = false;
     this.tire(0.04);
     this.setState('getup');
     this.anim.play(this.lieSide === 'back' ? 'getUpBack' : 'getUpFront', { blend: 0.15, restart: true, speed: 0.8 + this.health.mobility * 0.3 });
@@ -2854,7 +2899,9 @@ export class Stickman {
     const spec = this.weapon ? null : armOf(this.innate);
     const blade = d.blade && (isBlade(this.armedWith) || !!(spec && spec.blade));
     // what is doing the hitting: the fist or foot, or the point and edge of a blade
-    const pts = blade ? this.bladePoints().pts : [this.wj[d.limb]];
+    // (a stamp comes down through whatever is under it - somebody curled up included - not just onto the floor)
+    const foot = this.wj[d.limb];
+    const pts = blade ? this.bladePoints().pts : s.kind === 'stomp' ? [foot, { x: foot.x, y: foot.y + 0.14 * this.scale }, { x: foot.x, y: foot.y + 0.28 * this.scale }] : [foot];
     const prev = this.prevWj[d.limb], limb = this.wj[d.limb];
     const speed = Math.hypot(limb.x - prev.x, limb.y - prev.y) / dt;
     const armed = (!!this.weapon || !!this.innate) && d.limb === 'handA';
@@ -3180,11 +3227,13 @@ export class Stickman {
     const st = this.state;
     const brain = this.brain;
     const fear = brain ? brain.emo.fear : 0;
+    // (terror shakes them; so does shock)
+    const shake = Math.max(fear - 0.55, (h.shock || 0) - 0.4);
 
     if (st === 'stand' && !this.anim.acting) {
       p.t += Math.sin(t * 1.9 + this.seed) * 0.6 * DEG;
-      if (fear > 0.55 && this.conscious) {
-        const k = (fear - 0.55) * 4 * DEG;
+      if (shake > 0 && this.conscious) {
+        const k = shake * 4 * DEG;
         p.h += wobble(t * 9, this.seed) * k;
         p.aAu += wobble(t * 11, this.seed + 3) * k;
         p.aBu += wobble(t * 10, this.seed + 7) * k;

@@ -1716,14 +1716,17 @@ check('the padlock holds a temperature exactly where it is; let go, the body swe
 
 // adrenaline: up with fright, and wearing off
 const adr = await ev(() => {
-  const sb = window.__sf.sb, v = window.__v1;
+  const sb = window.__sf.sb, v = window.__v1, w = window.__v2;
   const before = v.health.adrenaline;
   v.brain.setEmotion('fear', 0.95);
   for (let i = 0; i < 240; i++) sb.step(1 / 120);
   const up = v.health.adrenaline, painK = v.health.numbed;
   v.brain.setEmotion('fear', 0);
   v.brain.emo.lock('fear', true);
+  // (left in peace while it wears off: neither of them starts anything - a chat that turns into a fight, say)
+  v.brain.thinkT = w.brain.thinkT = 99;
   for (let i = 0; i < 120 * 30; i++) sb.step(1 / 120);
+  v.brain.thinkT = w.brain.thinkT = 0;
   v.brain.emo.lock('fear', false);
   return { before, up, painK, later: v.health.adrenaline, speed: v.maxSpeed('run') };
 });
@@ -5089,14 +5092,31 @@ const aiFight = await ev(() => {
   for (const pid of powers.POWER_IDS) {
     sb.clear();
     const A = sb.spawnStickman(0, null, { name: 'Max', traits: { aggression: 0.9, temper: 0.9, bravery: 0.9 } });
-    // (one of them, tough, who keeps getting up: a fight that goes on long enough to see how it is fought)
-    const B = sb.spawnStickman(3, null, { name: 'Bea', traits: { aggression: 0.7, bravery: 0.9, toughness: 1 } });
+    // (one of them, tough, who keeps getting up: a fight that goes on long enough to see how it is fought -
+    // and should one of them not get up again, somebody else squares up to them)
+    const foe = (x, name) => sb.spawnStickman(x, null, { name, traits: { aggression: 0.7, bravery: 0.9, toughness: 1 } });
+    let B = foe(3, 'Bea');
     for (let i = 0; i < 60; i++) sb.step(1 / 120);
     powers.givePower(A, pid);
-    for (const [x, y] of [[A, B], [B, A]]) { const rr = x.brain.rel(y); rr.like = -0.9; rr.anger = 0.95; rr.met = true; }
-    A.brain.order('fight', B);
+    const squareUp = () => {
+      for (const [x, y] of [[A, B], [B, A]]) { const rr = x.brain.rel(y); rr.like = -0.9; rr.anger = 0.95; rr.met = true; }
+      A.brain.order('fight', B);
+    };
+    squareUp();
     cur = { who: A, moves: new Set() };
-    for (let i = 0; i < 120 * 30; i++) { sb.step(1 / 120); if (B.dead || B.removed) break; }
+    const next = ['Cyd', 'Dov'];
+    let gone = 0;
+    for (let i = 0; i < 120 * 30; i++) {
+      sb.step(1 / 120);
+      // (dead, or down and staying down)
+      gone = B.alive && !B.removed && B.conscious && !B.lying ? 0 : gone + 1 / 120;
+      if (B.dead || B.removed || gone > 4) {
+        if (cur.moves.size >= 2 || !next.length || !A.alive) break;
+        gone = 0;
+        B = foe(A.pos.x + (A.pos.x < 0 ? 3 : -3), next.shift());
+        squareUp();
+      }
+    }
     out[pid] = [...cur.moves];
   }
   cur = null;
@@ -5443,6 +5463,212 @@ const pwExtra2 = await ev(() => {
 });
 check('the two new powers bring eighteen new animations and over a hundred and fifty new lines', !pwExtra2.missing.length && pwExtra2.clips === 18 && pwExtra2.lines >= 150,
   `${pwExtra2.clips} clips, ${pwExtra2.lines} lines${pwExtra2.missing.length ? '; missing ' + pwExtra2.missing.join(' ') : ''}`);
+
+/* ------------- curling up in a ball, covering up, shock and awareness ------------ */
+
+// knocked to the floor, and somebody furious kicking them while they are down
+await fresh();
+const balled = await ev(() => {
+  const { sb } = window.__sf;
+  const steps = (n, each) => { for (let i = 0; i < n; i++) { sb.step(1 / 120); if (each) each(); } };
+  const lay = (p) => { p.stop(); p.lieSide = 'back'; p.setState('down'); p.anim.play('lieBack', { blend: 0.05 }); };
+  const out = {};
+  // (and somebody watching it)
+  const v = sb.spawnStickman(0, null, { name: 'Vic', traits: { bravery: 0.1, aggression: 0.1 } });
+  const a = sb.spawnStickman(-1, null, { name: 'Axe', traits: { aggression: 1, temper: 1, empathy: 0 } });
+  const w = sb.spawnStickman(5, null, { name: 'Wen', traits: { empathy: 0.9, bravery: 0.3 } });
+  steps(60);
+  v.brain.emo.fear = 0.85;
+  const r = a.brain.rel(v); r.anger = 1; r.like = -1;
+  const said = [], wSaid = [];
+  sb.on('speech', (e) => { if (e.who === v) said.push(e.kind); else if (e.who === w) wSaid.push(e.kind); });
+  let hits = 0, onArms = 0, curledT = 0;
+  const clips = new Set();
+  sb.on('hit', (e) => { if (e.who === v) { hits++; if (e.curled) onArms++; } });
+  lay(v); v.downT = 2.5;
+  w.faceTo(0);
+  const anger0 = w.brain.rel(a).anger;
+  a.brain.order('fight', v);
+  let wAnger = anger0;
+  steps(120 * 8, () => { if (v.balled) curledT += 1 / 120; clips.add(v.anim.baseName); wAnger = Math.max(wAnger, w.brain.rel(a).anger); });
+  out.beaten = { curled: +curledT.toFixed(1), hits, curledHits: onArms, alive: v.alive, said: [...new Set(said)], clips: [...clips].filter((k) => /^ball|^drop/.test(k)),
+    wSaid: [...new Set(wSaid)], wAnger: +(wAnger - anger0).toFixed(2) };
+  // the same six kicks to the head: curled up, and lying flat
+  sb.clear();
+  const c = sb.spawnStickman(-2, null, { name: 'Cur' }), f = sb.spawnStickman(2, null, { name: 'Fla' });
+  steps(60);
+  for (const p of [c, f]) { p.brain = null; lay(p); p.downT = 60; }
+  c.curlUp(60);
+  steps(90);
+  for (let i = 0; i < 6; i++) {
+    for (const p of [c, f]) { const h = p.wj.head; p.takeHit({ by: null, part: 'head', x: h.x, y: h.y, dir: 1, power: 0.9, kind: 'kick', bone: null }); }
+    steps(90);
+  }
+  const head = (p) => +(p.health.parts.head.hp / p.health.parts.head.max).toFixed(2);
+  out.guard = { curledHead: head(c), flatHead: head(f), curledHp: +c.health.overall.toFixed(2), flatHp: +f.health.overall.toFixed(2), clip: c.anim.baseName, balled: c.balled };
+  return out;
+});
+check('CURLING UP: kicked while they are down, they curl up in a ball, and the kicks meant for the head land on their arms',
+  balled.beaten.curled > 2 && balled.beaten.curledHits >= 2 && balled.beaten.clips.length > 0, JSON.stringify(balled.beaten));
+check('...the same six kicks to the head: curled up, the head takes a fraction of what it does lying flat',
+  balled.guard.balled && /^ballUp/.test(balled.guard.clip) && balled.guard.curledHead > balled.guard.flatHead + 0.1 && balled.guard.curledHp > balled.guard.flatHp, JSON.stringify(balled.guard));
+check('...and whoever sees somebody kicked while curled up on the floor is angry at whoever is doing it, and says so (or steps in)',
+  (balled.beaten.wSaid.includes('sawBeatDown') || balled.beaten.wSaid.includes('stopFight')) && balled.beaten.wAnger > 0.1, JSON.stringify({ said: balled.beaten.wSaid, anger: balled.beaten.wAnger }));
+
+// rounds cracking just over somebody's head, out in the open, with nothing to get behind and nothing to shoot back with
+// (and somebody standing behind whoever is shooting)
+await fresh();
+const underFire = await ev(() => {
+  const { sb } = window.__sf;
+  const steps = (n, each) => { for (let i = 0; i < n; i++) { sb.step(1 / 120); if (each) each(); } };
+  const t = sb.spawnStickman(1, null, { name: 'Tam', traits: { bravery: 0.25 } }), u = sb.spawnStickman(-4.4, null, { name: 'Uma', traits: { bravery: 0.25 } });
+  const g = sb.spawnStickman(-2.2, null, { name: 'Gus' });
+  g.brain = null;
+  steps(60);
+  const pistol = sb.spawnGun(-1.8, 0.1);
+  pistol.wear(g); g.weapon = pistol; g.facing = 1;
+  for (const p of [t, u]) { p.brain.clearBehaviour(); p.stop(); p.faceTo(g.pos.x); }
+  const over = () => g.aimAt({ x: t.pos.x, y: t.wj.head.y + 0.6 });
+  over(); steps(60);
+  let down = 0, covering = 0, uDown = 0, uCover = 0, fired = 0;
+  for (let i = 0; i < 3; i++) {
+    over();
+    if (g.fire()) fired++;
+    steps(80, () => { if (t.balled) down += 1 / 120; if (t.posture === 'coverHead') covering += 1 / 120; if (u.balled) uDown += 1 / 120; if (u.posture === 'coverHead') uCover += 1 / 120; });
+  }
+  return { fired, down: +down.toFixed(1), covering: +covering.toFixed(1), hp: +t.health.overall.toFixed(2), uCover: +uCover.toFixed(1), uDown: +uDown.toFixed(1), uHp: +u.health.overall.toFixed(2) };
+});
+check('...rounds cracking just over their head, out in the open with nothing to get behind: flat on the floor (or down, hands over the head)',
+  underFire.fired === 3 && underFire.hp > 0.9 && (underFire.down > 1 || underFire.covering > 1), JSON.stringify(underFire));
+check('...and somebody right by the gun going off, with nothing aimed at them: down where they are, hands over their head',
+  underFire.uCover > 1 && underFire.uHp === 1, JSON.stringify(underFire));
+
+// a stick of dynamite going off five metres away
+await fresh();
+const blastBall = await ev(() => {
+  const { sb, ui, cam } = window.__sf;
+  const steps = (n, each) => { for (let i = 0; i < n; i++) { sb.step(1 / 120); if (each) each(); } };
+  const t = sb.spawnStickman(0, null, { name: 'Tam', traits: { bravery: 0.3 } }), u = sb.spawnStickman(-1.2, null, { name: 'Uma', traits: { bravery: 0.3 } });
+  steps(60);
+  const s0 = t.health.shock;
+  cam.follow = null; cam.glide = null; cam.ppm = 60; cam.x = 2; cam.y = 1.5; cam.clamp();
+  ui.setTool('explode'); ui.setBlastKind('dynamite');
+  const q = cam.toScreen(5.2, 0.4); ui.tap(q.x, q.y);
+  ui.setBlastKind('grenade'); ui.setTool('hand');
+  const got = { Tam: new Set(), Uma: new Set() };
+  let booms = 0;
+  steps(120 * 3, () => { for (const p of [t, u]) { if (p.balled) got[p.name].add('curled'); if (p.posture === 'coverHead') got[p.name].add('covered'); } });
+  return { tam: [...got.Tam], uma: [...got.Uma], shock: +(t.health.shock - s0).toFixed(2), hurt: +(1 - t.health.overall).toFixed(2) };
+});
+check('...a blast five metres away: they hit the floor or cower, hands over the head - and it leaves them in some shock',
+  blastBall.tam.length > 0 && blastBall.uma.length > 0 && blastBall.shock > 0.1 && blastBall.hurt < 0.05, JSON.stringify(blastBall));
+
+// freezing cold
+await fresh();
+const coldBall = await ev(() => {
+  const { sb } = window.__sf;
+  const steps = (n, each) => { for (let i = 0; i < n; i++) { sb.step(1 / 120); if (each) each(); } };
+  const t = sb.spawnStickman(0, null, { name: 'Tam' });
+  steps(60);
+  t.health.temp = 33.4;
+  let curledT = 0;
+  steps(120 * 6, () => { if (t.balled) curledT += 1 / 120; });
+  // (and two bodies just as cold, side by side: one curled up, one standing)
+  sb.clear();
+  const c = sb.spawnStickman(-2, null, { name: 'Cur' }), s = sb.spawnStickman(2, null, { name: 'Sta' });
+  steps(60);
+  c.brain = null; s.brain = null;
+  c.health.temp = s.health.temp = 33.4;
+  c.curlUp(30);
+  steps(120 * 8);
+  return { curled: +curledT.toFixed(1), curledTemp: +c.health.temp.toFixed(2), standingTemp: +s.health.temp.toFixed(2) };
+});
+check('...freezing cold, they curl up on the floor - and curled up, a cold body warms back up faster than one standing about',
+  coldBall.curled > 2 && coldBall.curledTemp > coldBall.standingTemp + 0.15, JSON.stringify(coldBall));
+
+// too worn out to fight back, and still being hit
+await fresh();
+const coverUp = await ev(() => {
+  const { sb } = window.__sf;
+  const steps = (n, each) => { for (let i = 0; i < n; i++) { sb.step(1 / 120); if (each) each(); } };
+  const v = sb.spawnStickman(0, null, { name: 'Vic', traits: { bravery: 0.35, toughness: 0.9 } });
+  const a = sb.spawnStickman(-1.2, null, { name: 'Axe', traits: { aggression: 0.8, temper: 0.6 } });
+  steps(60);
+  a.strength = 0.5;
+  const r = a.brain.rel(v); r.anger = 0.9; r.like = -1;
+  a.brain.order('fight', v);
+  steps(60);
+  let blocked = 0, hits = 0, covering = 0, next = 0, n = 0;
+  sb.on('hit', (e) => { if (e.who === v) { hits++; if (e.blocked) blocked++; } });
+  steps(120 * 6, () => {
+    v.stamina = Math.min(v.stamina, 0.08);
+    // (and a jab every 0.7 s, mostly at the head)
+    if (sb.time >= next && Math.abs(a.pos.x - v.pos.x) < 2.5 && v.state === 'stand') {
+      next = sb.time + 0.7;
+      const h = v.wj.head;
+      v.takeHit({ by: a, part: n++ % 3 === 2 ? 'torso' : 'head', x: h.x, y: h.y, dir: Math.sign(v.pos.x - a.pos.x) || 1, power: 0.5, kind: 'jab', bone: null });
+    }
+    if (v.posture === 'protectHead') covering += 1 / 120;
+  });
+  return { covering: +covering.toFixed(1), hits, blocked, hp: +v.health.overall.toFixed(2), doing: v.brain.doing };
+});
+check('...too worn out to fight back and still being hit: they cover up, arms wrapped round the head, and it takes the sting out of the blows',
+  coverUp.covering > 1.5 && coverUp.blocked >= 2, JSON.stringify(coverUp));
+
+// shock and awareness: an arm off, a knock on the head, and the inspector's two new bars
+await fresh();
+const aware = await ev(() => {
+  const { sb, ui } = window.__sf;
+  const steps = (n, each) => { for (let i = 0; i < n; i++) { sb.step(1 / 120); if (each) each(); } };
+  const out = {};
+  // a hard knock on the head: dazed
+  const q = sb.spawnStickman(0, null, { name: 'Kit' });
+  steps(60);
+  const kitBefore = q.brain.aware, h = q.wj.head;
+  q.takeHit({ by: null, part: 'head', x: h.x, y: h.y, dir: 1, power: 1.6, kind: 'punch', bone: null });
+  let qLow = 1;
+  steps(60, () => { qLow = Math.min(qLow, q.brain.aware); });
+  out.knock = { before: kitBefore, low: +qLow.toFixed(2), dizzy: +q.health.dizzy.toFixed(1), conscious: q.conscious };
+  // an arm off: shock - and how far they take in what is around them
+  sb.clear();
+  const p = sb.spawnStickman(0, null, { name: 'Sam' });
+  steps(60);
+  // (the furthest they would notice anything, looking either way)
+  const range = () => {
+    const e = p.wj.head, f = p.facing;
+    let r = 0;
+    for (const s of [1, -1]) { p.facing = s; for (let d = 1; d <= 16; d += 0.25) if (p.brain.canSee(e.x + s * d, e.y)) r = Math.max(r, d); }
+    p.facing = f;
+    return r;
+  };
+  out.before = { shock: p.health.shock, aware: p.brain.aware, sees: range() };
+  p.sever('humerusA', 1, 1);
+  let low = 1;
+  steps(120 * 2, () => { low = Math.min(low, p.brain.aware); });
+  out.severed = { shock: +p.health.shock.toFixed(2), aware: +p.brain.aware.toFixed(2), low: +low.toFixed(2), sees: range(), conscious: p.conscious };
+  ui.select(p);
+  return out;
+});
+await page.waitForTimeout(300);
+const awareBars = await ev(() => {
+  const rows = [...document.querySelectorAll('#ins-vitals .meter')];
+  const val = (l) => { const r = rows.find((m) => m.querySelector('span').textContent === l); return r ? r.querySelector('b').textContent : null; };
+  return { rows: rows.map((r) => r.querySelector('span').textContent), aware: val('Awareness'), shock: val('Shock'), conds: [...document.querySelectorAll('#ins-conds div')].map((d) => d.textContent) };
+});
+check('SHOCK: an arm off sends them into shock - and in shock they take in less: they notice nothing past a few metres closer than before',
+  aware.before.shock < 0.05 && aware.before.aware === 1 && aware.before.sees >= 13.5 && aware.severed.shock > 0.45 && aware.severed.aware < 0.75 && aware.severed.sees < aware.before.sees * 0.85, JSON.stringify(aware.before) + ' ' + JSON.stringify(aware.severed));
+check('AWARENESS: a hard knock on the head leaves them dazed, only half there', aware.knock.before === 1 && aware.knock.low < 0.6, JSON.stringify(aware.knock));
+check('...and the inspector has an Awareness and a Shock bar with the rest of the body\'s, saying so',
+  awareBars.rows.includes('Awareness') && awareBars.rows.includes('Shock') && parseInt(awareBars.shock) > 45 && parseInt(awareBars.aware) < 75 && awareBars.conds.includes('In shock'), JSON.stringify(awareBars));
+await ev(() => window.__sf.ui.select(null));
+
+const curlExtra = await ev(() => {
+  const { CLIPS, LINES } = window.__sf;
+  const need = ['ballUpBack', 'ballUpFront', 'dropDown', 'protectHead', 'coverHead'];
+  const kinds = ['ballUp', 'hitDeck', 'curlCold', 'curlShock', 'cowerShots', 'cowerBlast', 'coverUp', 'sawBeatDown'];
+  return { missing: need.filter((n) => !CLIPS[n]).concat(kinds.filter((k) => !LINES[k])), lines: kinds.reduce((n, k) => n + (LINES[k] ? LINES[k].length : 0), 0) };
+});
+check('...with three new animations for it, and forty-odd new lines', !curlExtra.missing.length && curlExtra.lines >= 40, `${curlExtra.lines} lines${curlExtra.missing.length ? '; missing ' + curlExtra.missing.join(' ') : ''}`);
 
 check('the console stays clean', errors.length === 0, errors.slice(0, 3).join(' | '));
 if (FILE_MODE) check('the single file fetches nothing', network.length === 0, network.slice(0, 3).join(', '));

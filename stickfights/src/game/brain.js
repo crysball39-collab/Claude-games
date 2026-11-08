@@ -157,6 +157,8 @@ const REPEAT = {
   sawSuperBlow: 7, sawSlam: 7, sawSpeedBlow: 8, sawCrush: 10, pwCarriedUp: 3, pwLifted: 3, pwDodged: 6, flyJoy: 30,
   sawBulletsBounce: 10, sawHeadbutt: 8, sawShield: 12, sawSmother: 10, sawSmotherBlast: 12, sawUnstoppable: 10, sawLaser: 10,
   sawGunMelt: 12, sawLaserCut: 12, sawOvercharge: 10, pwHandHurt: 3, pwBulletBounce: 6, pwDazzled: 3,
+  // curled up, cowering, down flat: said as it happens, not every second of it
+  ballUp: 2.5, hitDeck: 4, curlCold: 8, curlShock: 8, cowerShots: 4, cowerBlast: 6, coverUp: 3, sawBeatDown: 6,
   // (not scared, with a superpower: said now and then, not every time)
   pwUnafraidGun: 8, pwUnafraidArmed: 8, pwUnafraidAimed: 6, pwUnafraidShot: 5, pwUnafraidHeld: 4,
 };
@@ -218,6 +220,14 @@ export class Brain {
     this.traits = traits;
     this.emo = new Emotions(traits);
     this.courage = 0;         // from their superpowers (powerCourage): how much less frightens them
+    this.aware = 1;           // 0..1: how much of what is going on round them they take in (updateAwareness)
+    this.beatenT = -99;       // when they were last hit, lying on the floor
+    this.hitT = -99;          // when they were last hit at all, by somebody
+    this.underFireT = -99;    // when they were last shot at (a round at them, or one going past)
+    this.blastT = -99;        // when something last blew up near them, and how near (0..1)
+    this.blastNear = 0;
+    this.curlWhy = null;      // why they curled up on the floor: 'fire', 'blast', 'cold', 'shock' (or being beaten)
+    this.curlT = -99;
     this.rels = new Map();
     this.things = new Map();
     this.inspected = new Set();
@@ -311,7 +321,7 @@ export class Brain {
       case 'stumble': return 'Stumbling';
       case 'thrown': return me.onGround ? 'Falling over' : 'Flying through the air';
       case 'crawl': return me.health.paralysed === 'legs' ? 'Dragging themselves along' : 'Crawling';
-      case 'down': return me.health.paralysed === 'all' ? 'Lying paralysed' : me.cuffed ? 'Lying in handcuffs' : this.stayDown ? 'Staying down' : me.pinnedBy ? 'Pinned under a crate' : 'On the floor';
+      case 'down': return me.health.paralysed === 'all' ? 'Lying paralysed' : me.cuffed ? 'Lying in handcuffs' : me.balled ? 'Curled up in a ball on the floor' : this.stayDown ? 'Staying down' : me.pinnedBy ? 'Pinned under a crate' : 'On the floor';
       case 'getup': return 'Getting up';
       case 'stagger': return 'Staggering';
       default: return this.behaviour ? this.behaviour.label : 'Thinking';
@@ -360,6 +370,7 @@ export class Brain {
     this.courage = this.emo.courage = me.powers ? powerCourage(me) : 0;
     this.emo.update(dt);
     this.feelings(dt);
+    this.updateAwareness(dt);
     if ((this.senseT -= dt) <= 0) {
       this.senseT = 0.18 + rand(0, 0.06);
       this.sense();
@@ -402,7 +413,7 @@ export class Brain {
       }
     }
     if ((this.thinkT -= dt) <= 0 && this.react <= 0) {
-      this.thinkT = 0.35 + rand(0, 0.25);
+      this.thinkT = (0.35 + rand(0, 0.25)) * (this.aware < 1 ? 1 + (1 - this.aware) * 1.2 : 1);
       this.think();
     }
     const b = this.behaviour;
@@ -449,8 +460,9 @@ export class Brain {
     if (this.blindT && this.sb.time < this.blindT) return false;
     const eye = me.wj.head;
     const dx = x - eye.x, d = Math.abs(dx);
-    if (d > SIGHT || Math.abs(y - eye.y) > 9) return false;
-    if (d > BEHIND && sign(dx) !== me.facing && !me.lying) return false;
+    // (dazed, half-awake, in shock: they see less far, and notice less of what is behind them)
+    if (d > SIGHT * this.awareK(0.45) || Math.abs(y - eye.y) > 9) return false;
+    if (d > BEHIND * this.awareK(0.3) && sign(dx) !== me.facing && !me.lying) return false;
     return this.sb.lineOfSight(eye.x, eye.y, x, y, own);
   }
 
@@ -680,6 +692,41 @@ export class Brain {
     }
   }
 
+  /**
+   * How aware they are of what is going on around them, 0..1: wide awake and
+   * taking it all in at 1. Knocked silly, in shock, in a lot of pain, short of
+   * air, too hot or too cold, sick, dazzled, panicking or worn out, it
+   * narrows: they see and hear less of what is round them, notice it later,
+   * react more slowly, dodge less and shoot worse. It drops at once, and
+   * comes back slowly. (Somebody fine and calm is at exactly 1: none of it
+   * comes into anything.)
+   */
+  updateAwareness(dt) {
+    const me = this.man, h = me.health, E = this.emo, now = this.sb.time;
+    let a = me.dead || h.frozen || !me.conscious ? 0 : clamp01((h.conscious - 0.3) / 0.6);
+    if (a > 0) {
+      a *= 1 - Math.min(0.6, (h.dizzy || 0) * 0.15);
+      a *= 1 - Math.max(0, (h.shock || 0) - 0.1) * 0.6;
+      a *= 1 - Math.max(0, h.pain - 35) / 65 * 0.35;
+      a *= clamp((h.oxygen ?? 1) - 0.5, 0.045, 0.3) / 0.3;
+      const t = h.temp ?? 37;
+      if (t < 35.5) a *= clamp(1 - (35.5 - t) * 0.15, 0.15, 1);
+      else if (t > 39) a *= clamp(1 - (t - 39) * 0.2, 0.15, 1);
+      a *= 1 - Math.max(0, (h.nausea || 0) - 0.3) * 0.5;
+      if (this.blindT && now < this.blindT) a *= 0.15;
+      a *= 1 - Math.max(0, E.fear - 0.75) * 1.4;
+      a *= 0.8 + 0.2 * clamp01(me.stamina / 0.25);
+      if (me.tased) a *= 0.2;
+      // (adrenaline sharpens them up: it cannot undo a knock on the head, but it helps)
+      a = clamp01(a + Math.max(0, (h.adrenaline || 0) - 0.2) * 0.25 * a);
+    }
+    this.aware += (a - this.aware) * (1 - Math.exp(-dt * (a < this.aware ? 6 : 1.2)));
+    if (Math.abs(a - this.aware) < 1e-4) this.aware = a;
+  }
+
+  /** How much of the usual a sense reaches: all of it wide awake; `floor` of it with nobody home. */
+  awareK(floor) { return this.aware < 1 ? floor + (1 - floor) * this.aware : 1; }
+
   /** Every event in the sandbox comes through here. */
   perceive(ev) {
     const me = this.man;
@@ -690,7 +737,7 @@ export class Brain {
     const y = ev.y ?? (src && src.pos ? src.pos.y + 1 : 1);
     const d = Math.abs(x - me.pos.x);
     const seen = this.canSee(x, y, src && src.kind === 'crate' ? src.body : null);
-    const heard = d < (HEAR[ev.type] || 6) * (ev.loud ? 1.7 : 1);
+    const heard = d < (HEAR[ev.type] || 6) * (ev.loud ? 1.7 : 1) * this.awareK(0.45);
     if (!seen && !heard) return;
     const E = this.emo, T = this.traits, now = this.sb.time;
     switch (ev.type) {
@@ -1059,6 +1106,7 @@ export class Brain {
     const d = Math.abs(x - me.pos.x);
     E.bump('fear', (seen ? 0.3 : 0.18) * (1.25 - T.bravery) * (d < 8 ? 1.4 : d < 20 ? 1 : 0.6));
     this.gunThreat = { who: by, t: now, x, y };
+    if (ev.target === me && by !== me) this.underFireT = now;
     if (by && by !== me) {
       const r = this.rel(by);
       r.violent += 1.2;
@@ -1104,6 +1152,9 @@ export class Brain {
     const by = ev.who && !ev.who.removed && ev.who !== me ? ev.who : null;
     const near = clamp01(1 - d / ((ev.r || 3) * 3 + 6));
     E.bump('surprise', 0.9);
+    this.blastT = now;
+    this.blastNear = near;
+    if (near > 0.25) me.health.shock = Math.min(1, me.health.shock + (near - 0.15) * 0.35 * (1.2 - T.toughness * 0.5) * (1 - this.courage * 0.5));
     E.bump('fear', (0.12 + near * 0.55) * (1.3 - T.bravery) * Math.min(1.4, 0.6 + (ev.power || 1) * 0.25));
     if (by) {
       const r = this.rel(by);
@@ -1210,6 +1261,9 @@ export class Brain {
     E.bump('surprise', amount * 0.7);
     E.bump('sadness', amount * 0.2 * T.empathy);
     this.horror = Math.min(1.5, this.horror + amount);
+    // and something like that, seen, is a shock to the system as well as the stomach
+    const h0 = me.health;
+    h0.shock = Math.min(1, h0.shock + amount * 0.3 * (1.15 - T.toughness * 0.5) * (1 - this.courage * 0.5));
     // (a superpower steadies the stomach as well as the nerves - some)
     const weak = (1 - T.toughness) * (0.4 + T.empathy * 0.6) * (1.1 - T.bravery * 0.5) * (1 - this.courage * 0.5);
     // (and it turns the stomach)
@@ -1230,7 +1284,7 @@ export class Brain {
   hearLoud(x) {
     const me = this.man;
     if (this.glance || Math.abs(x - me.pos.x) > 9) return;
-    this.glance = { x, at: this.sb.time + rand(0.25, 0.6) * (1.3 - this.traits.skill * 0.5) };
+    this.glance = { x, at: this.sb.time + rand(0.25, 0.6) * (1.3 - this.traits.skill * 0.5) * (this.aware < 1 ? 2 - this.aware : 1) };
   }
 
   sawHit(ev, seen, x, y) {
@@ -1270,6 +1324,12 @@ export class Brain {
       else if (ev.weapon === 'bullet' && !this.fighting) this.speak('sawShot', { victim: V.name, other: A.name }, 0.6, null, true);
       else if (sp && sp.seen && !this.fighting) this.speak(sp.seen, { victim: V.name, other: A.name, what: sp.noun || 'that' }, 0.5, null, true);
       if (!this.fighting && !this.fleeing) this.speak('witnessHit', {}, 0.15);
+    }
+    // somebody curled up on the floor, being kicked: nobody decent watches that and says nothing
+    if (ev.curled && V !== me && rv.like > -0.3 && !this.fighting && T.empathy > 0.3) {
+      ra.anger = clamp01(ra.anger + 0.12 * (0.4 + T.empathy));
+      ra.like = clamp(ra.like - 0.08 * T.empathy, -1, 1);
+      this.speak('sawBeatDown', { victim: V.name, other: A.name }, 0.7, A, true);
     }
     const sp2 = armOf(ev.weapon);
     const nasty = ev.weapon === 'bullet' ? 3 : ev.weapon === 'machete' ? 2.8 : ev.weapon === 'knife' ? 2.6 : sp2 ? sp2.nasty || 2.6 : A.weapon ? 1.6 : 1;
@@ -1335,6 +1395,7 @@ export class Brain {
     const rv = this.rel(V);
     const care = Math.max(0, rv.like) + rv.fam * 0.35;
     this.griefs.set(V, { t: now, care, mourned: 0 });
+    if (seen) me.health.shock = Math.min(1, me.health.shock + (0.08 + Math.min(1, care) * 0.3) * (1 - this.courage * 0.5));
     E.bump('surprise', 0.75);
     E.bump('fear', (0.25 + (K ? 0.15 : 0)) * (1.25 - T.bravery));
     E.bump('sadness', 0.1 + care * 0.75 * (0.5 + T.empathy));
@@ -1530,6 +1591,7 @@ export class Brain {
         break;
       case 'nearMiss': {
         // a bullet going past close enough to hear it crack
+        this.underFireT = this.sb.time;
         E.bump('fear', 0.3 * (1.2 - T.bravery));
         E.bump('surprise', 0.5);
         if (d.by && d.by !== me) { const r = this.rel(d.by); r.fear = clamp01(r.fear + 0.2 * (1.1 - T.bravery)); this.remember('shotAtMe', d.by); }
@@ -1702,6 +1764,9 @@ export class Brain {
     const me = this.man, E = this.emo, T = this.traits, now = this.sb.time;
     const by = d.by && d.by !== me && !d.by.removed ? d.by : null;
     const sev = clamp((d.damage || 0) / 22, 0, 1.6);
+    if (by) { this.hitT = now; if (me.lying) this.beatenT = now; }
+    if (d.weapon === 'bullet') this.underFireT = now;
+    if ((d.damage || 0) > 16) me.health.shock = Math.min(1, me.health.shock + ((d.damage || 0) - 16) * 0.008);
     E.bump('surprise', 0.3 + sev * 0.25);
     E.bump('fear', (0.07 + sev * 0.22) * (1.2 - T.bravery));
     E.bump('sadness', sev * 0.04);
@@ -1899,6 +1964,8 @@ export class Brain {
 
   helpedBy(h) {
     const r = this.rel(h);
+    // (somebody looking after them: the shock eases)
+    this.man.health.shock = Math.max(0, this.man.health.shock - 0.15);
     r.like = clamp(r.like + 0.35, -1, 1);
     r.fam = clamp01(r.fam + 0.2);
     this.remember('helpedMe', h);
@@ -2040,8 +2107,8 @@ export class Brain {
       f *= fit;
       // out of breath, a fight looks a lot less inviting
       f *= 0.55 + 0.45 * clamp01(me.stamina / 0.5);
-      // somebody in handcuffs is done with; and an officer deals with suspects their own way
-      if (o.cuffed) f *= 0.15;
+      // somebody in handcuffs (or giving themselves up to an officer) is done with; and an officer deals with suspects their own way
+      if (o.cuffed || (o.brain && o.brain.behaviour && o.brain.behaviour.kind === 'comply')) f *= 0.15;
       if (this.cop) f *= this.cop.cases.has(o) ? 0.05 : hostile ? 1 : 0.2;
       // an officer telling them to stop: whatever else they were up to can wait
       if (this.police && now - this.police.t < 7 && o !== this.police.by) f *= 0.3;
@@ -2193,6 +2260,32 @@ export class Brain {
       if (c) add('hide', sh, scared * 1.15, 'Shots! Get behind that crate!', { crate: c }, true);
       const d = Math.abs(sh.pos.x - me.pos.x);
       add('flee', sh, scared * 0.9 / (1 + Math.max(0, d - 8) / 6), `${sh.name} is shooting! Run!`, null, d < 12);
+      // nowhere to get behind, and too close to outrun it: down where they are, hands over the head
+      // (less so with the rounds cracking right past them: then it is flat on the floor, below)
+      const shotAt = now - this.underFireT < 2;
+      if (!c && d < 7 && !me.gunReady) add('cower', sh, scared * (shotAt ? 0.8 : 1.05), `${sh.name} is shooting! Don't shoot!`, { cover: 'head' }, true);
+      // and shot at themselves, out in the open: flat on the floor
+      if (!c && shotAt && !me.gunReady && !me.officer) {
+        add('curlUp', null, (0.55 + E.fear * 0.6) * (1.15 - brave) * (1 - courage * 0.8), "They're shooting at me! Get down!", { dur: 3.5, why: 'fire' }, true);
+      }
+    }
+    // something blowing up nearby: right next to them, flat on the floor; a little further, hands over the head for a moment
+    if (now - this.blastT < 1.2 && this.blastNear > 0.4 && me.state === 'stand') {
+      add('curlUp', null, (0.6 + E.fear * 0.5) * (1.2 - brave) * (1 - courage * 0.8), 'Get down!', { dur: 3, why: 'blast' }, true);
+    } else if (now - this.blastT < 1.5 && this.blastNear > 0.12) {
+      add('cower', null, (0.45 + E.fear * 0.5) * (1.15 - brave) * (1 - courage * 0.8), 'What was that?!', { cover: 'head', dur: 2.2 }, true);
+    }
+    // being hit, and no way to hit back - too tired, too hurt, nothing to fight with: covering up
+    if (threat && this.isHostile(threat) && now - this.hitT < 1.5 && (me.stamina < 0.18 || !canFight || health < 0.4) && Math.abs(threat.pos.x - me.pos.x) < 2.2) {
+      add('cower', threat, (0.6 + E.fear * 0.5) * (1.15 - brave), `${threat.name} won't stop hitting me!`, { cover: 'up' }, true);
+    }
+    // too cold to stand about: curled up on the floor, they keep what heat they have
+    if ((me.health.temp ?? 37) < 34.5 && !me.flames && !(threat && this.isHostile(threat))) {
+      add('curlUp', null, 0.45 + (34.5 - me.health.temp) * 0.35, 'So cold. I need to curl up.', { dur: 6, why: 'cold' });
+    }
+    // past coping: deep in shock, and frightened
+    if (me.health.shock > 0.72 && E.fear > 0.45) {
+      add('curlUp', null, (me.health.shock - 0.55) * 1.6 * (1.1 - brave), "I can't... I can't take any more.", { dur: 6, why: 'shock' });
     }
     // the knife, thrown, at someone getting away
     if (me.armedWith === 'knife') {
@@ -2548,7 +2641,7 @@ export class Brain {
       this.dodged.set(thing, now);
       const aware = sign(rx) === me.facing || v2 > 100;
       const p = (0.2 + T.skill * 0.45 + T.bravery * 0.1) * (aware ? 1 : 0.35) *
-        (1 - Math.min(0.6, me.health.pain / 150)) * (me.health.dizzy > 0.5 ? 0.5 : 1);
+        (1 - Math.min(0.6, me.health.pain / 150)) * (me.health.dizzy > 0.5 ? 0.5 : 1) * this.awareK(0.25);
       this.emo.bump('surprise', 0.35);
       if (!chance(p)) return;
       if (py > -0.35) me.perform('duck', { fadeIn: 0.03, fadeOut: 0.15 });
@@ -2624,11 +2717,34 @@ export class Brain {
     const tr = threat && this.rels.get(threat);
     this.stayDown = scared && me.state === 'down' && (this.isHostile(threat) || (tr && now - tr.hurtT < 12));
     this.begging = scared;
+    // curled up in a ball, and staying down while it lasts
+    const curl = this.curlReason(threat);
+    if (curl && !me.balled && !me.health.frozen && me.health.paralysed !== 'all') {
+      if (me.rag) me.balled = true;
+      else me.curlUp(1.5);
+      if (me.balled) {
+        this.curlT = now;
+        if (!this.curlWhy) this.curlWhy = curl;
+        const line = curl === 'beaten' || curl === 'loom' ? 'ballUp' : curl === 'cold' ? 'curlCold' : curl === 'shock' ? 'curlShock' : curl === 'agony' ? 'hurtBig' : 'hitDeck';
+        if (this.speak(line, threat ? { other: threat.name } : {}, 0.85, threat, curl !== 'cold' && curl !== 'shock')) this.downTalk = Math.max(this.downTalk, 2.5);
+        this.note(curl === 'cold' ? 'So cold. Curl up. Keep warm.' : curl === 'shock' ? "I can't. I just can't." : curl === 'beaten' || curl === 'loom' ? 'Cover up. Protect your head.' : 'Stay down. Stay down.');
+      }
+    } else if (me.balled && !curl && now - this.curlT > 2) {
+      me.balled = false;
+      this.curlWhy = null;
+    }
+    if (me.balled && curl) {
+      this.stayDown = true;
+      if (me.state === 'crawl') me.stop();
+    }
     if (this.downTalk <= 0) {
       this.downTalk = rand(2.5, 4.5);
       const pinned = me.pinnedBy && now - me.pinT < 0.5;
       if (pinned) { this.speak('pinned', {}, 0.9, null, true); this.calledHelp = now; }
       else if (me.health.paralysed === 'all') { this.speak('paralysed', {}, 0.8, null, true); this.calledHelp = now; }
+      else if (me.balled && curl === 'cold') this.speak('curlCold', {}, 0.6);
+      else if (me.balled && curl === 'shock') this.speak('curlShock', {}, 0.5);
+      else if (me.balled && (curl === 'beaten' || curl === 'loom')) { this.speak(chance(0.5) ? 'ballUp' : 'beg', threat ? { other: threat.name } : {}, 0.85, threat, true); }
       else if (scared) { this.speak('beg', { other: threat.name }, 0.8, threat, true); this.downTalk += this.stayDown ? 0 : 2; }
       else if (me.state === 'crawl') { this.speak('crawl', {}, 0.7); this.calledHelp = now; }
       else if (me.health.pain > 60) this.speak('hurtSmall', {}, 0.4);
@@ -2639,6 +2755,29 @@ export class Brain {
       else if (friend) me.goTo(friend.pos.x, 'walk');
       else me.stop();
     }
+  }
+
+  /**
+   * On the floor: a reason to curl up in a ball (and stay curled up), or null.
+   *   beaten   somebody is hitting them while they are down
+   *   loom     somebody who means them harm standing right over them
+   *   fire     being shot at, or something blowing up close by, a moment ago
+   *   cold     too cold: curled up, they keep their heat
+   *   agony    in too much pain to do anything else
+   *   shock    past coping: deep in shock, and frightened
+   * The brave (and anybody with a superpower) need more of a reason.
+   */
+  curlReason(threat) {
+    const me = this.man, h = me.health, E = this.emo, now = this.sb.time, brave = this.brave;
+    if (!me.conscious || me.flames || me.tased || me.cuffed || me.tied || me.state === 'held') return null;
+    if (now - this.beatenT < 2.5 && 0.95 - brave * 0.75 > 0.35) return 'beaten';
+    if (threat && this.isHostile(threat) && Math.abs(threat.pos.x - me.pos.x) < 1.8 && !threat.lying && (E.fear - 0.25) * (1.15 - brave) * 1.6 > 0.35) return 'loom';
+    const why = this.curlWhy;
+    if ((now - this.underFireT < 3 || (now - this.blastT < 3 && this.blastNear > 0.2)) && 0.85 - brave * 0.6 > 0.35) return 'fire';
+    if ((h.temp ?? 37) < (why === 'cold' ? 35.8 : 35)) return 'cold';
+    if (h.pain > (why === 'agony' ? 60 : 78) && brave < 0.85) return 'agony';
+    if (h.shock > (why === 'shock' ? 0.5 : 0.7) && E.fear > 0.4 && brave < 0.8) return 'shock';
+    return null;
   }
 
   /* -------------------------------------------------------------------------- */

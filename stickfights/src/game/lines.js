@@ -267,6 +267,17 @@ export const LINES = {
   mournStranger: ["Poor soul.", "Rest in peace.", "Who did this?", "Someone's going to miss them."],
   healed: ["I feel... better?", "It doesn't hurt anymore!", "How is that possible?", "My bones- they're fine!", "I feel like new."],
   hide: ["Hide!", "They won't see me here.", "Shh...", "Stay down. Stay quiet.", "Please don't find me."],
+  // curled up on the floor, being hit; down flat when the shooting starts; curled up from the cold; past coping
+  ballUp: ["Stop! Stop!", "Not my head! Not my head!", "Leave me alone!", "I'm down! I'm down!", "Enough... please...", "No more, no more...", "I'm not fighting back!", "Please, stop kicking me!"],
+  hitDeck: ["Get down!", "Down, down, down!", "Get on the floor!", "Stay down!", "Everybody down!", "Keep your head down!"],
+  curlCold: ["So c-cold...", "Just need to... keep warm...", "C-can't feel my hands...", "Curl up. Keep warm. Keep warm.", "Somebody... a blanket..."],
+  curlShock: ["This isn't happening...", "I can't... I can't...", "Make it stop.", "I just want to go home.", "Not real. This isn't real.", "Breathe. Just breathe."],
+  // cowering where they stand: from gunfire with nowhere to go, after a blast, from a beating they cannot stop
+  cowerShots: ["Don't shoot! Don't shoot!", "Please, don't shoot me!", "Oh God, oh God, oh God...", "Make it stop!", "{other}, stop! Please!"],
+  cowerBlast: ["What was that?!", "My ears...", "Is it over?", "Oh God...", "Is everybody okay?"],
+  coverUp: ["Okay! Okay!", "Stop hitting me!", "I give up!", "Not the face!", "Alright! Alright! Enough!"],
+  // watching somebody curled up on the floor being kicked
+  sawBeatDown: ["Leave them alone! They're down!", "Stop it! They're not even fighting back!", "That's enough! They're on the floor!", "{other}, they're down! Stop!", "Somebody stop {other}!"],
   panic: ["AAAAH!", "We're all going to die!", "Oh God, oh God, oh God!", "Everybody run!", "Somebody do something!"],
   lookAround: ["Hm?", "Huh.", "Anyone there?", "What's going on?"],
   rest: ["I need to sit down.", "Ow... just a minute.", "Phew.", "Give me a second.", "Just need a breather."],

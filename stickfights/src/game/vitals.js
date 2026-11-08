@@ -161,7 +161,8 @@ function updateTemp(man, h, v, dt, regulates) {
     const target = NORMAL_TEMP + (1 - clamp01(man.stamina / 0.6)) * 0.7 + h.adrenaline * 0.3;
     // (a body on fire sheds anything past 42 into the flames in a second or two; one that is not, past 50, a good deal slower)
     const shed = h.burning ? 0.08 * Math.max(0, T - 42) : 0.012 * Math.max(0, T - 50);
-    const k = T > target ? 0.03 + 0.006 * Math.max(0, T - 40) + shed : 0.022 * (T > 32 ? 1 : T > 26 ? 0.7 : 0.3);
+    // (curled up in a ball, a cold body holds on to its heat, and warms back up faster)
+    const k = T > target ? 0.03 + 0.006 * Math.max(0, T - 40) + shed : 0.022 * (T > 32 ? 1 : T > 26 ? 0.7 : 0.3) * (man.balled ? 1.7 : 1);
     T += (target - T) * (1 - Math.exp(-k * dt));
   } else {
     // the dead, the frozen and the undead go to the temperature of the air: the further off it, the faster

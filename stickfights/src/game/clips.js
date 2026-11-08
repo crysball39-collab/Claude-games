@@ -307,6 +307,27 @@ clip('writheFront', { loop: true, frames: [
   [0.55, P({ rot: 90, t: 0, h: -34, aA: [172, 8], aB: [-14, 6], lA: [-4, -46], lB: [-6, -18] })],
 ] });
 
+// Curled up on the floor: knees to the chest, the forearms over the head - the way anybody
+// takes a beating they cannot stop, waits for the shooting (or the noise) to stop, keeps
+// warm, or just stops being able to cope. On the back (on the side, really) or face down,
+// knees under them; a tremble through it.
+export const BALL_BACK = P({ rot: -95, t: 20, s: 10, h: 36, aA: [150, 140], aB: [138, 148], lA: [160, -150], lB: [150, -145] });
+export const BALL_FRONT = P({ t: 82, s: 14, h: 30, aA: [125, 150], aB: [118, 155], lA: [104, -156], lB: [98, -156] });
+clip('ballUpBack', { loop: true, frames: [
+  [0.35, BALL_BACK],
+  [0.35, tweak(BALL_BACK, { t: 22, h: 38, aA: [152, 141] })],
+] });
+clip('ballUpFront', { loop: true, frames: [
+  [0.35, BALL_FRONT],
+  [0.35, tweak(BALL_FRONT, { t: 84, aA: [127, 151] })],
+] });
+// down on purpose, and fast: a crouch, and flat on the floor, hands over the head
+clip('dropDown', { frames: [
+  [0.1, P({ t: 34, h: 24, aA: [120, 140], aB: [110, 146], lA: [64, -124], lB: [54, -124] })],
+  [0.14, P({ rot: 45, t: 18, h: 6, aA: [150, 140], aB: [140, 146], lA: [96, -136], lB: [80, -130] })],
+  [0.14, BALL_FRONT, 'thud'],
+] });
+
 // on fire and rolling it out: stickman.js turns them over between these two -
 // each a heave onto the side, knees and elbows in, the arms beating at the flames
 clip('rollBack', { frames: [
