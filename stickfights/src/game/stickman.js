@@ -82,7 +82,7 @@ function strideSpeed(name) {
   const b = solve(c.frames[2].p, 1, makeJoints());
   return Math.abs(a.footA.x - b.footA.x) / (c.frames[0].d + c.frames[1].d);
 }
-const NOMINAL = { walk: strideSpeed('walk'), run: strideSpeed('run'), runScared: strideSpeed('runScared'), shuffle: 1.1 };
+const NOMINAL = { walk: strideSpeed('walk'), run: strideSpeed('run'), runScared: strideSpeed('runScared'), shuffle: 1.1, crouchWalk: strideSpeed('crouchWalk') };
 
 const LYING = new Set(['down', 'ko', 'crawl', 'dead']);
 const HIT_REACTIONS = new Set(['hitHead', 'hitBody', 'hitLow', 'flinch']);
@@ -172,6 +172,9 @@ export class Stickman {
     this.shielding = null;    // ...standing in front of somebody being shot at (they take the rounds)
     this.smothering = null;   // ...lying on a bomb: { bomb, until }
     this.balled = false;      // curled up in a ball on the floor (knees up, arms over the head): the brain says when
+    this.crouching = false;   // down on the haunches: lower, slower, and all but silent on their feet
+    this.crouchHold = false;  // ...and told to stay that way (the inspector), until told to stand up
+    this.hiddenIn = null;     // shut away inside something (a mod's wardrobe): out of sight, out of reach
     this.pmove = null;        // a power's move, running: it has the body until it is done
     this.spin = 0;
     this.spinV = 0;
@@ -297,7 +300,7 @@ export class Stickman {
     if (this.state === s) return;
     this.state = s;
     this.stateT = 0;
-    if (s !== 'stand') { this.blocking = false; this.pushing = null; }
+    if (s !== 'stand') { this.blocking = false; this.pushing = null; this.crouching = false; }
     if (s !== 'stumble') this.stumble = null;
   }
 
@@ -330,6 +333,29 @@ export class Stickman {
     it.jump = o.jump ?? true;
     it.climb = o.climb ?? true;
     if (STILL_POSTURES.has(this.posture)) this.posture = null;
+    // creeping along stays low; going anywhere faster than that, they get up first (unless told to stay down)
+    if (speed === 'sneak') this.crouch(true);
+    else if (this.crouching && !this.crouchHold && !o.low) this.crouching = false;
+  }
+
+  /** Down on the haunches, or back up: low, slow, and all but silent on their feet. */
+  crouch(on = true) {
+    if (on && (this.state !== 'stand' || this.carrying || this.rag || this.cuffed || this.held)) return false;
+    this.crouching = !!on;
+    return true;
+  }
+
+  /**
+   * How far off their footsteps can be heard, in metres: nothing standing
+   * still, not much creeping along crouched, a fair way walking, and a long
+   * way running.
+   */
+  footNoise() {
+    if (this.state !== 'stand' && this.state !== 'stagger' && this.state !== 'stumble' && this.state !== 'climb') return 0;
+    const sp = Math.abs(this.vel.x);
+    if (sp < 0.15 && this.state !== 'climb') return 0;
+    if (this.crouching) return 0.9 + sp * 0.5;
+    return (sp > 2.6 ? 8 + sp * 2.2 : 2.5 + sp * 2.5) * Math.sqrt(this.scale);
   }
 
   stop() { this.intent.x = null; this.intent.backpedal = false; }
@@ -737,10 +763,12 @@ export class Stickman {
   }
 
   /** Puts words in a speech bubble over their head. */
-  say(text, { dur = 0, loud = false, to = null, kind = null } = {}) {
+  say(text, { dur = 0, loud = false, to = null, kind = null, whisper = false } = {}) {
     if (!this.alive || !this.conscious || !text) return false;
-    this.bubble = { text, t: 0, dur: dur || clamp(1.3 + text.length * 0.055, 1.6, 4), loud };
-    this.sandbox.emit('speech', { who: this, text, loud, to, kind });
+    // (a whisper: barely a breath, heard by nobody more than a step or two away)
+    if (whisper) loud = false;
+    this.bubble = { text, t: 0, dur: dur || clamp(1.3 + text.length * 0.055, 1.6, 4), loud, whisper };
+    this.sandbox.emit('speech', { who: this, text, loud, to, kind, whisper });
     return true;
   }
 
@@ -756,6 +784,8 @@ export class Stickman {
    * Fists, feet and blades use it to find out what they hit.
    */
   touch(x, y, r) {
+    // (shut away inside something: nothing outside it reaches them)
+    if (this.hiddenIn) return null;
     const j = this.wj, s = this.scale, half = (DIM.line / 2) * s;
     if (x < this.box.minX - r || x > this.box.maxX + r || y < this.box.minY - r || y > this.box.maxY + r) return null;
     // a body of some other shape (a mod's) goes by its own pieces
@@ -2333,6 +2363,8 @@ export class Stickman {
     if (this.cuffed) s = Math.min(s, SPEEDS.walk * 0.9);
     if (this.carrying) s = Math.min(s, SPEEDS.walk * 0.8);
     if (this.posture === 'guard' && kind !== 'run' && kind !== 'flee') s = Math.min(s, SPEEDS.shuffle);
+    // crouched, it is a creep at best
+    if (this.crouching) s = Math.min(s, SPEEDS.sneak * this.health.mobility);
     return s;
   }
 
@@ -2341,6 +2373,8 @@ export class Stickman {
     if (this.posture === 'sitEdge' && !(this.onGround && this.support)) this.posture = null;
     if (!this.onGround) { this.setState('air'); return; }
     if (this.health.legsBroken >= 1 && !this.held) { this.knockDown(0, 0.5); return; }
+    // told to stay down: back down again, after getting up or climbing over something
+    if (this.crouchHold && !this.crouching && !this.carrying && !this.cuffed) this.crouching = true;
     const it = this.intent;
     const act = this.anim.action;
     const rooted = act && !act.ending && act.mask === MASKS.full;
@@ -2359,8 +2393,11 @@ export class Stickman {
         const ob = this.obstacleAhead(dir);
         if (ob) {
           if (ob.rise <= 0.95 && it.jump && ob.dist < 0.3 && !this.carrying) {
+            // (up off the haunches for it)
+            this.crouching = false;
             this.jump(dir * Math.max(1.6, Math.abs(this.vel.x)), 5.6 + ob.rise * 0.4);
           } else if (ob.rise <= 1.7 && it.climb && ob.dist < 0.14 && !this.carrying && this.health.canUse('armA') && this.health.canUse('armB')) {
+            this.crouching = false;
             this.startClimb(ob, dir);
             return;
           } else if (ob.dist < 0.03) {
@@ -2393,10 +2430,12 @@ export class Stickman {
       speed = sp / (NOMINAL[name] * this.scale);
     } else if (sp > 0.1) {
       // (a bigger body covers more ground with every stride)
-      if (this.posture === 'guard' || back) { name = 'shuffle'; speed = clamp(sp / (NOMINAL.shuffle * this.scale), 0.6, 1.6); }
+      if (this.crouching) { name = 'crouchWalk'; speed = clamp(sp / (NOMINAL.crouchWalk * this.scale), 0.45, 1.8); }
+      else if (this.posture === 'guard' || back) { name = 'shuffle'; speed = clamp(sp / (NOMINAL.shuffle * this.scale), 0.6, 1.6); }
       else { name = 'walk'; speed = sp / (NOMINAL.walk * this.scale); }
     } else {
-      name = this.idleClip();
+      // crouched: on the haunches - unless the posture is one of the whole body's own (on the knees, hands over the head)
+      name = this.crouching && !STILL_POSTURES.has(this.posture) ? 'crouch' : this.idleClip();
     }
     this.anim.play(name, { blend: name === 'walk' || name === 'run' ? 0.18 : 0.25, speed });
     let overlay = null;
@@ -2405,7 +2444,7 @@ export class Stickman {
     // a pistol is held up at someone, or carried low
     // (down on one knee behind a rifle, the aim goes on too)
     else if (this.gunReady && (!STILL_POSTURES.has(this.posture) || this.posture === 'kneelAim')) overlay = this.aiming ? 'aimPistol' : 'gunLow';
-    else if ((this.posture === 'guard' || this.posture === 'block') && sp > 0.1) overlay = this.posture === 'block' ? 'block' : this.guardClip();
+    else if ((this.posture === 'guard' || this.posture === 'block') && (sp > 0.1 || this.crouching)) overlay = this.posture === 'block' ? 'block' : this.guardClip();
     this.anim.setOverlay(overlay, overlay === 'gunLow' ? 'arms' : 'upper');
   }
 

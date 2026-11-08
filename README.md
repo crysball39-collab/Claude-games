@@ -51,6 +51,9 @@ texture in the game is drawn procedurally onto a canvas at load time.
 > stopped in the air; bullets ringing off them as they walk into the gunfire; a
 > grenade smothered; a beam from the eyes that cuts a wall in half), and whoever
 > has one is far less afraid of anything: guns, knives, blasts, monsters.
+> Anybody can crouch - lower, slower, and all but silent on their feet - and
+> does, behind cover and around anything that hunts by ear, where everybody
+> whispers.
 > Slow motion and double speed change how fast it all goes. A freeze tool stops anything dead where it is; with the world paused, the
 > hand just moves things; and a wire tool ties anything to anything (or to the
 > background) with wood or metal rope, fixed rods, pins or power cords, which take the strain
@@ -77,7 +80,10 @@ texture in the game is drawn procedurally onto a canvas at load time.
 > into his third form and then his fourth: eighteen metres, 50,000 health - whose breath is black
 > smog, then fire, then a purple beam that cuts buildings in half, who fires beams from every
 > plate on his back and from the end of his tail, and who freezes solid when he dies; they tear the
-> city apart, and put down together they fight. The **explode tool** sets off a grenade,
+> city apart, and put down together they fight; and **Things in the Dark** brings two
+> things that come through when the lights flicker - the Grasp, a tide of pale arms, and the
+> Rattle, a spinning knot of rusted chain that comes back again and again - the Listener, a
+> blind thing with great ears that hunts by sound, and a wardrobe to hide in. The **explode tool** sets off a grenade,
 > dynamite, C4 or a bomb wherever you tap. The single-file build is `dist/stickfights.html`,
 > the source lives in `stickfights/`, and
 > [`stickfights/README.md`](stickfights/README.md) has the details.

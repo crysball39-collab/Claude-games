@@ -270,6 +270,10 @@ export const LINES = {
   // curled up on the floor, being hit; down flat when the shooting starts; curled up from the cold; past coping
   ballUp: ["Stop! Stop!", "Not my head! Not my head!", "Leave me alone!", "I'm down! I'm down!", "Enough... please...", "No more, no more...", "I'm not fighting back!", "Please, stop kicking me!"],
   hitDeck: ["Get down!", "Down, down, down!", "Get on the floor!", "Stay down!", "Everybody down!", "Keep your head down!"],
+  // something that cannot see, but hears everything (a mod's): whispered, mostly
+  freezeStill: ["Don't move.", "Don't. Breathe.", "Shh... shh...", "It can't see us. Don't make a sound.", "Stay still. Stay still.", "Please don't hear me. Please don't hear me."],
+  creepAway: ["Slowly... slowly...", "Quiet. Step by step.", "Easy. Keep it quiet.", "Stay low. Don't make a sound.", "Careful where you put your feet.", "It can't see us. Just keep quiet."],
+  itHeardMe: ["It heard me! RUN!", "It's coming! It's coming!", "No no no, it heard me!", "RUN!", "Oh god, it knows where I am!", "Get away from it! GO!"],
   curlCold: ["So c-cold...", "Just need to... keep warm...", "C-can't feel my hands...", "Curl up. Keep warm. Keep warm.", "Somebody... a blanket..."],
   curlShock: ["This isn't happening...", "I can't... I can't...", "Make it stop.", "I just want to go home.", "Not real. This isn't real.", "Breathe. Just breathe."],
   // cowering where they stand: from gunfire with nowhere to go, after a blast, from a beating they cannot stop

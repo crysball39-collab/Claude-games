@@ -272,7 +272,9 @@ the duty belt), the options they are weighing up right now and how much each
 appeals, what they remember, and their recent thoughts. **Follow** keeps the
 camera on them, **Heal** mends them (not the dead), **Uncuff** lets somebody
 in handcuffs go, **Put away** has them holster or pocket what is in their
-hand (and **Get it out** draws it again), **Remove** takes them away.
+hand (and **Get it out** draws it again), **Crouch** puts them down on their
+haunches and keeps them there - creeping about crouched, wherever they go -
+until **Stand up**, and **Remove** takes them away.
 
 The inspector is also where you change their mind:
 
@@ -694,6 +696,55 @@ beam back at him, then close in - claws, jaws, tails and kicks, each a blow
 on their own scale, a few hundred health at a time. Neither walks through
 the other. Everybody else runs.
 
+### Things in the Dark
+
+Three things that should not be there, and somewhere to hide from them
+(`src/mods/dark/`). Nobody knows what any of it is the first time; they learn.
+
+- **The Grasp** - tap anywhere and the lights start to go: on and off, more
+  off than on, with a moan far off getting nearer. Then it comes through from
+  the end of the world nearer where you tapped to the other end, a little
+  above the floor and faster than anybody can run: a dark mass trailing away
+  to nothing, and out of it pale arms, hundreds of them, reaching on ahead
+  with their fingers spread and streaming back behind like weed in a current.
+  It has no legs, and does not walk or run: it floats, and is gone. Whoever is
+  out in the open as it goes past is taken - thrown along with it and dropped,
+  dead; crates and anything loose are flung ahead of it. (Somebody with Super
+  Durability is thrown down the room and gets up again.)
+- **The Rattle** - the same - the lights, then chain rattling, far off and
+  nearer - and a spinning knot of rusted chain and hooks, with something
+  burning at the middle of it and sparks coming off it, tears through whoever
+  it hits. Then it comes back: two to six more times, from whichever end it
+  went out of, faster each time - after a quiet that feels like it is over.
+- **The Listener** - tall, thin and ash grey, stooped, with no eyes at all and
+  two great fans of ears that turn after every sound. It cannot see. It hears
+  everything: a run from a long way off, a walk from a good way, somebody
+  creeping along crouched only right beside it; a voice (a whisper only at
+  arm's length), a fall, a crash, a door, and a gunshot from anywhere. It
+  clicks its tongue as it goes and listens to what comes back; it walks
+  slowly, stopping to listen, goes to have a look at anything far off and goes
+  for anything near, fast. Whoever it gets its hands on it lifts up to its face
+  and crushes. Somebody keeping perfectly still and quiet can have it walk
+  right past them - unless they are frightened enough that it hears them
+  breathing. It has a bar along the top, a hide like old leather, and every
+  shot fired at it tells it exactly where the shooter is.
+- **A wardrobe** - tall, old and dark, with room in it for two. Whoever is
+  shut inside is out of sight: the Grasp and the Rattle go past (it rattles
+  on its feet), and the Listener cannot see in - but right outside it can hear
+  somebody breathing too hard in there, and then it tears the doors off.
+
+What people make of it: the first time the lights go nobody knows what it
+means - the nervous get into a wardrobe anyway, the rest stand about asking
+what is wrong with the lights. Whoever has lived through one knows: when the
+lights go they run for a wardrobe if there is one they can reach in time
+(shouting to everybody else to hide), and cover their heads if there is not.
+Inside, they whisper, and come out when it has been quiet a little while -
+which is how the Rattle catches people; whoever has seen it come back stays in
+until it is really over. Around the Listener everybody keeps their voice down
+(it all comes out as whispers), creeps away crouched, freezes when it is close
+and says nothing at all right beside it, makes for a wardrobe if one is nearer
+than it is - and runs flat out only once it has heard them and is coming.
+
 ### Making one
 
 A mod is a folder under `src/mods/` whose `index.js` calls `registerMod()`
@@ -810,7 +861,7 @@ break.
 ### Animated while they are in charge
 
 Every pose they strike on their own comes from **hand-keyed clips** in
-`src/game/clips.js` (and `powers/clips.js`): 246 of them, from idling and walking to a front kick, a
+`src/game/clips.js` (and `powers/clips.js`): 248 of them, from idling and walking to a front kick, a
 knife thrust, a machete chop, aiming and reloading a pistol, reloading a rifle,
 aiming down on one knee, putting on a helmet, tying off a tourniquet, press-ups, a hug, falling on your back, getting up off your front,
 sobbing into your hands and dying. Each clip is a list of frames, and
@@ -833,6 +884,7 @@ shadowbox  laughPoint  highFive  hug  handshake  clap  thumbsUp  nod  bow
 pushups  squats  jumpingJacks  clutchStomach  clutchArm  shiver
 macheteGuard  chop  hack  aimPistol  gunLow  reload  tourniquet  popJoint
 retch  checkWound  clutchStump  shock  coverHead  ballUpBack  ballUpFront  dropDown
+crouch  crouchWalk
 helmetOn  reloadRifle  kneelAim  checkGun  coverEars  sickHunch  checkWatch
 rubNeck  shieldEyes  handsInPockets
 flyHover  flyForward  flyCarry  flyPin  flySlam  diveBomb  heroLand  megaPunch
@@ -1083,6 +1135,8 @@ but not against something urgent, like someone coming at them. The options:
 | **Hands up** | a gun pointed at them |
 | **Cower**, beg, cover their head | terrified, hurt and cornered by someone coming for them; shots going off close by with nowhere to hide; a blast not far off; still being hit and too worn out or hurt to hit back (they cover up) |
 | **Curl up** in a ball on the floor | kicked while they are down, or somebody dangerous standing over them; shot at out in the open; right by a blast; freezing, in agony or deep in shock |
+| **Keep perfectly still** | something blind that hunts by ear (a mod's) right beside them: crouched, not a sound - until it moves off, or comes for them anyway |
+| **Creep away** | something blind that hunts by ear a little way off: crouched, slow and silent, watching it - and running only once it is coming |
 | **Get a weapon** | angry or expecting trouble - first, if one is on the way to the fight. The kind and the timid leave a blade where it is; the brave want the gun if somebody else might get it |
 | **Throw the knife** | at someone getting away |
 | **Pull a knife out** | there is one in them: it comes out first, whatever else is going on - then they keep it or drop it |
@@ -1125,7 +1179,7 @@ if someone dangerous is standing over them, or curl up in a ball; trapped under 
 for help, and friends come.
 
 They also talk - out loud, in speech bubbles, with a babbling voice pitched to
-each of them - from 2,196 lines for 395 situations in `src/game/lines.js` (and `powers/lines.js`),
+each of them - from 2,214 lines for 398 situations in `src/game/lines.js` (and `powers/lines.js`),
 all written to sound like people really talk: short, plain, interrupted, and
 scared when there is something to be scared of. From small talk ("Did you
 sleep alright? I was up half the night.", "Rent's gone up again. Can you
@@ -1507,6 +1561,23 @@ past a few metres closer than before and less of what is behind them, hear
 less, decide more slowly, block and duck less often, look round less and aim
 worse.
 
+### Crouching, and keeping quiet
+
+Anybody can **crouch**: down on their haunches, half a metre lower, head up
+and hands ready. Crouched, they creep rather than walk - slowly, low, with
+short careful steps - and their feet make next to no sound (a walk is heard a
+good way off, a run a long way, a creep only right beside them); jumping up
+on something or climbing, they get up for it. They crouch behind a crate they
+are hiding behind, coming up only to look over it, and they creep about
+crouched around something that hunts by ear - and the inspector's **Crouch**
+button keeps anybody down until **Stand up**.
+
+When they need to keep quiet - something blind that hunts by ear is about,
+or they are hiding inside something - whatever they say comes out as a
+**whisper**: a small slanted line in a dotted bubble, heard by nobody more
+than a step or two away. Right beside that something, they say nothing at
+all.
+
 ### Holsters and pockets
 
 Besides what is in their hand, a stickman carries a pistol or a taser in a
@@ -1876,7 +1947,8 @@ stickfights/
                       body that hit something bleeds from, and stains on anything
       vitals.js       adrenaline, oxygen and temperature; fire, frost and ice,
                       and how each of them is drawn
-      brain.js        sense, feel, think, react, remember, gossip; awareness
+      brain.js        sense, feel, think, react, remember, gossip; awareness;
+                      keeping quiet around something that hunts by ear
       behaviours.js   what a brain can decide to do
       emotions.js     the five emotions
       lines.js        everything they can say, written the way people talk
@@ -1937,6 +2009,11 @@ stickfights/
                       to each other, the breath, the smog, the fire and the
                       beams, the steam he changes in, their looks, what everybody
                       says and makes of them, and their noises
+      dark/           Things in the Dark: the Grasp and the Rattle (the
+                      warning, the passes, the Rattle coming back), the
+                      Listener (its hearing, its hunting, its hands), the
+                      wardrobe and hiding in it, what everybody makes of all
+                      of it and learns, looks, lines and sounds
 ```
 
 ## Verifying it
@@ -2314,6 +2391,28 @@ screen and checks:
 - an arm off puts them in shock and shortens how far they notice anything, a
   hard knock on the head leaves them dazed, and the inspector's Awareness and
   Shock bars say so; there are three new animations and forty-odd new lines
+- the inspector's Crouch button puts somebody down on their haunches (half a
+  metre lower), told to run they creep, at no more than a creep's pace and all
+  but silently, and Stand up puts them back on their feet
+- the MODS screen has Things in the Dark, and installed, the Grasp, the
+  Rattle, the Listener and a wardrobe are in the spawn menu
+- the Grasp: the lights go, it comes through from one end of the world to the
+  other and is gone; whoever knows what the lights mean gets into a wardrobe,
+  two to each, and is passed by, and comes out afterwards; whoever could not
+  reach one in time is taken; the first time, the nervous hide anyway and the
+  brave are taken - and the survivors know from then on
+- the Rattle: three to seven passes, the other way each time and faster each
+  time; whoever sees it come back stays in the wardrobe until it is over
+- the Listener: somebody walking up to it is heard, gone for and crushed,
+  while somebody standing still right beside it and somebody creeping off
+  crouched are never heard; a shot fired into the air twenty metres off brings
+  it straight there; everybody who has seen it whispers (and says nothing at
+  all right beside it), freezes crouched beside it and creeps off crouched
+  further away
+- a wardrobe with the Listener right outside: somebody calm in it is never
+  found; somebody terrified is heard, the doors come off and it has them
+- removing Things in the Dark takes the Listener, the wardrobes and anything
+  on its way out of the world and the menu, and lets out whoever was hiding
 - the console stays clean, and the single file fetches nothing
 
 Every check starts from the same random numbers and the same clock, so what

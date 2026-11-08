@@ -6,5 +6,6 @@ import './murder-drones/index.js';
 import './minecraft/index.js';
 import './shallow/index.js';
 import './godzilla/index.js';
+import './dark/index.js';
 
 export * from './registry.js';

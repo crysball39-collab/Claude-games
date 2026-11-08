@@ -237,6 +237,14 @@ clip('dodge', { frames: [
 const DUCK = P({ t: 34, h: 24, aA: [72, 140], aB: [62, 146], lA: [64, -124], lB: [54, -124] });
 clip('duck', { frames: [[0.08, DUCK], [0.3, DUCK], [0.15, STAND]] });
 
+// crouched: down on the haunches, weight forward, head up and the hands ready
+export const CROUCH = P({ t: 26, h: -18, aA: [34, 74], aB: [52, 82], lA: [92, -138], lB: [64, -132] });
+clip('crouch', { loop: true, frames: [[0.9, CROUCH], [0.9, tweak(CROUCH, { t: 27, h: -17, aA: [35, 76], aB: [53, 84] })]] });
+// moving crouched: short, careful steps, staying low
+const CW0 = P({ t: 26, h: -16, aA: [24, 70], aB: [56, 80], lA: [104, -126], lB: [46, -120] });
+const CW1 = P({ t: 27, h: -17, aA: [38, 74], aB: [44, 76], lA: [76, -140], lB: [84, -112], lift: 0.012 });
+clip('crouchWalk', { loop: true, frames: [[0.26, CW0], [0.26, CW1], [0.26, mirror(CW0)], [0.26, mirror(CW1)]] });
+
 /* -------------------------------------------------------------------------- */
 /*                                 taking a hit                               */
 /* -------------------------------------------------------------------------- */

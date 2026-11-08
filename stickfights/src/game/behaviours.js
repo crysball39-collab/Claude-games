@@ -693,8 +693,11 @@ export class Flee extends Behaviour {
   get label() { return (this.calm ? 'Keeping away from ' : 'Running from ') + this.target.name; }
   get icon() { return this.calm ? 'eye' : 'run'; }
   start() {
-    this.calm = !this.brain.isHostile(this.target);
-    if (!this.calm) {
+    // (o.quiet: away from something blind that hunts by ear - low, slow and without a sound)
+    this.quiet = !!(this.o && this.o.quiet);
+    this.calm = !this.quiet && !this.brain.isHostile(this.target);
+    if (this.quiet) this.brain.speak('creepAway', { other: this.target.name }, 0.45);
+    else if (!this.calm) {
       this.brain.speak('flee', { other: this.target.name }, 0.8, null, true);
       this.me.setEmote('sweat', 2.5);
     }
@@ -709,6 +712,22 @@ export class Flee extends Behaviour {
     const away = sign(me.pos.x - o.pos.x) || -me.facing;
     const gap = Math.abs(me.pos.x - o.pos.x);
     const room = away > 0 ? sb.right - me.pos.x : me.pos.x - sb.left;
+    if (this.quiet) {
+      // it has heard them, and is coming: no point being quiet any more
+      if (huntedBy(o, me)) {
+        this.quiet = false;
+        this.calm = false;
+        b.speak('itHeardMe', { other: o.name }, 0.9, null, true);
+        me.setEmote('sweat', 2.5);
+      } else {
+        // creeping off, crouched: nothing to hear but a whisper of feet; far enough, or up against the edge, keep still
+        if (gap > 10 || room < 1.2) { me.stop(); me.crouch(true); me.lookAt = o.wj.head; this.safe += dt; return this.safe < 4 && this.t < 40; }
+        me.goTo(me.pos.x + away * 3, 'sneak');
+        me.lookAt = o.wj.head;
+        this.safe = 0;
+        return this.t < 40;
+      }
+    }
     if (room < 1.4 && gap < 4) {
       // backed up to the edge by someone who is not actually coming for them: they stay put and watch
       if (!b.isHostile(o)) {
@@ -744,6 +763,37 @@ export class Flee extends Behaviour {
   }
 }
 
+/** Whether something that hunts by ear (a mod's: species.hunting) is coming for them. */
+export const huntedBy = (o, me) => !!(o && o.species && o.species.hunting && o.species.hunting(o) === me);
+
+/**
+ * Something that hunts by ear, right there: not a sound, not a movement -
+ * crouched where they are, holding their breath - until it has moved off,
+ * or comes for them anyway.
+ */
+export class Freeze extends Behaviour {
+  get kind() { return 'freeze'; }
+  get label() { return 'Keeping perfectly still'; }
+  get icon() { return 'sweat'; }
+  start() {
+    this.me.stop();
+    this.me.setPosture(null);
+    this.me.crouch(true);
+    this.brain.speak('freezeStill', { other: this.target.name }, 0.5);
+  }
+  update(dt) {
+    this.t += dt;
+    const o = this.target, me = this.me;
+    if (!o || o.removed || !o.alive) return false;
+    me.stop();
+    if (!me.crouching) me.crouch(true);
+    me.lookAt = o.wj.head;
+    // coming anyway: think again (run)
+    if (huntedBy(o, me)) return false;
+    return Math.abs(o.pos.x - me.pos.x) < 4.6 && this.t < 30;
+  }
+}
+
 export class Hide extends Behaviour {
   get kind() { return 'hide'; }
   get label() { return 'Hiding from ' + this.target.name; }
@@ -764,16 +814,24 @@ export class Hide extends Behaviour {
     if (!arrive(me, spot, 'flee', 0.15)) return true;
     me.facing = -side;
     this.peek -= dt;
-    if (this.peek > 0) { if (me.ready && me.posture !== 'cower') me.setPosture('cower'); }
-    else {
+    if (this.peek > 0) {
+      // down behind it, crouched (the terrified, curled up small behind it)
+      if (b.emo.fear > 0.78) { if (me.ready && me.posture !== 'cower') me.setPosture('cower'); }
+      else { if (me.posture === 'cower') me.setPosture(null); me.crouch(true); }
+    } else {
+      // up for a look over the top
       if (me.posture === 'cower') me.setPosture(null);
+      if (!me.crouchHold) me.crouching = false;
       me.lookAt = o.wj.head;
       if (this.peek < -1.2) this.peek = rand(3, 5);
     }
     this.unseen = b.sees(o) && b.isHostile(o) ? 0 : this.unseen + dt;
     return this.unseen < 7 && this.t < 40;
   }
-  end() { if (this.me.posture === 'cower') this.me.setPosture(null); }
+  end() {
+    if (this.me.posture === 'cower') this.me.setPosture(null);
+    if (!this.me.crouchHold) this.me.crouching = false;
+  }
 }
 
 export class Cower extends Behaviour {
@@ -1438,6 +1496,9 @@ export const KINDS = {
   help: Help, mourn: Mourn, arm: Arm, inspect: Inspect, play: Play, throw: ThrowCrate,
   investigate: Investigate, pullout: PullOut, throwKnife: ThrowKnife, exercise: Exercise,
   surrender: Surrender, vest: GearUp, ammo: Resupply, catchBreath: CatchBreath,
-  burning: Burning, douse: Douse, getClear: GetClear, curlUp: CurlUp,
+  burning: Burning, douse: Douse, getClear: GetClear, curlUp: CurlUp, freeze: Freeze,
 };
+
+/** A mod's own behaviour, for the brain to choose by its kind (a mod's consider hook offers it: brain.js addConsider). */
+export function addBehaviour(kind, Class) { KINDS[kind] = Class; }
 

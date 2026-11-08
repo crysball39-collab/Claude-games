@@ -55,6 +55,15 @@ import { powerReflexes, powerThreat, powerCourage } from './powers/index.js';
 
 const SIGHT = 14;
 const BEHIND = 2.2;
+/**
+ * What a mod adds to what everybody considers (alongside their own species'
+ * consider): fn(brain, add, { threat, threatScore, calm, canFight, fit }),
+ * calling add(kind, target, score, why, extra, urgent) for a behaviour the mod
+ * has added with behaviours.js addBehaviour.
+ */
+const CONSIDER_HOOKS = [];
+export function addConsider(fn) { if (!CONSIDER_HOOKS.includes(fn)) CONSIDER_HOOKS.push(fn); }
+
 // how far away each kind of event can be heard, in metres
 const HEAR = {
   hit: 9, death: 12, speech: 9, thud: 8, clatter: 7, knock: 5, swing: 3, knockdown: 10, ko: 10, break: 9,
@@ -345,6 +354,13 @@ export class Brain {
     const said = SAID_AS[kind] || kind;
     if (REPEAT[said] && now - (this.saidT[said] ?? -99) < REPEAT[said]) return false;
     vars.me = me.name;
+    // keeping quiet (something close by hunting by ear, or hiding from something): it comes out as a whisper -
+    // and with it right beside them, not even that (unless it is already coming for them)
+    const hush = this.hushed;
+    if (hush) loud = false;
+    // (seen, or known to be about: they have only just turned their back on it)
+    const bl = this.blindOne || (this.lastBlind && now - this.lastBlindT < 12 ? this.lastBlind : null);
+    if (bl && !bl.removed && !bl.dead && Math.abs(bl.pos.x - me.pos.x) < 3.2 && !B.huntedBy(bl, me)) return false;
     // somebody a mod made may have their own way of saying it - and lines kept
     // for one person in particular, as kind@who (who: the key of that one's look)
     const aimed = to && to.look && to.look.key && me.lines ? kind + '@' + to.look.key : null;
@@ -355,8 +371,19 @@ export class Brain {
     this.spokeT = now;
     this.saidT[said] = now;
     this.lastLine = text;
-    me.say(text, { loud, to, kind });
+    me.say(text, { loud, to, kind, whisper: hush });
     return true;
+  }
+
+  /**
+   * Keeping their voice down: something that hunts by ear is near (or was, a
+   * moment ago, and has not gone far - they know it is about, even with their
+   * back to it), or they are hiding inside something.
+   */
+  get hushed() {
+    const now = this.sb.time, b = this.lastBlind;
+    if (now < (this.hushT ?? -99) || this.man.hiddenIn) return true;
+    return !!b && !b.removed && !b.dead && now - this.lastBlindT < 12 && Math.abs(b.pos.x - this.man.pos.x) < 16;
   }
 
   /* -------------------------------------------------------------------------- */
@@ -471,13 +498,21 @@ export class Brain {
   sense() {
     const me = this.man, sb = this.sb, now = sb.time;
     this.visible.length = 0;
+    this.blindOne = null;
     if (!me.conscious) return;
     for (const o of sb.people) {
-      if (o === me || o.removed) continue;
+      // (somebody shut away inside something - a wardrobe, say - is not there to be seen)
+      if (o === me || o.removed || o.hiddenIn) continue;
       // (something the size of a building is seen, or felt, from anywhere near it: a mod's)
       const huge = o.species && o.species.unmissable && Math.abs(o.pos.x - me.pos.x) < 30;
       if (!huge && !this.canSee(o.wj.head.x, o.wj.head.y) && !this.canSee(o.wj.hip.x, o.wj.hip.y + 0.15)) continue;
       this.visible.push(o);
+      // something blind that hunts by ear (a mod's): the nearest, and their voice kept down while it is about
+      if (o.species && o.species.blind && o.alive && !o.dead) {
+        const d = Math.abs(o.pos.x - me.pos.x);
+        if (d < 14 && (!this.blindOne || d < Math.abs(this.blindOne.pos.x - me.pos.x))) this.blindOne = o;
+        if (d < 14) { this.hushT = now + 2.5; this.lastBlind = o; this.lastBlindT = now; }
+      }
       const r = this.rel(o);
       const first = !r.met;
       const absent = r.met && now - r.lastSeen > 25;
@@ -737,7 +772,7 @@ export class Brain {
     const y = ev.y ?? (src && src.pos ? src.pos.y + 1 : 1);
     const d = Math.abs(x - me.pos.x);
     const seen = this.canSee(x, y, src && src.kind === 'crate' ? src.body : null);
-    const heard = d < (HEAR[ev.type] || 6) * (ev.loud ? 1.7 : 1) * this.awareK(0.45);
+    const heard = d < (HEAR[ev.type] || 6) * (ev.loud ? 1.7 : ev.whisper ? 0.22 : 1) * this.awareK(0.45);
     if (!seen && !heard) return;
     const E = this.emo, T = this.traits, now = this.sb.time;
     switch (ev.type) {
@@ -2121,8 +2156,20 @@ export class Brain {
         r.killed ? `${o.name} killed ${r.killed.name}. They'll pay.` : hostile ? `${o.name} is coming for me. I'll fight.` : `${o.name} has it coming.`,
         null, hostile && d < 3);
 
+      // something blind that hunts by ear (a mod's): not a sound - crouched and still if it is right there, creeping
+      // away if it is not - and running flat out only once it has heard them, and is coming
+      const blind = !!(o.species && o.species.blind) && o.conscious && !o.dead;
+      if (blind && this.sees(o)) {
+        const coming = B.huntedBy(o, me);
+        const scared = (0.6 + E.fear * 0.6) * (1.25 - brave * 0.6);
+        if (coming) add('flee', o, (1.3 + E.fear) * (1.15 - brave * 0.5), `${o.name} heard me. It's coming!`, null, true);
+        else if (d < 3.4) add('freeze', o, scared * 1.45, `${o.name} is right there. Don't move. Don't breathe.`, null, true);
+        else if (d < 11) add('flee', o, scared, `${o.name} can't see. Quietly...`, { quiet: true }, true);
+        if (scared > threatScore) { threatScore = scared; threat = o; }
+      }
+
       // run from them
-      if (o.conscious && !o.lying) {
+      if (o.conscious && !o.lying && !blind) {
         const danger = Math.max(r.fear, hostile ? E.fear * 0.8 : r.fear * 0.5);
         // someone who is after them, or who they just watched do something terrible
         const menace = hostile ? 1 : r.violent > 1 ? 0.65 : 0.3;
@@ -2410,8 +2457,9 @@ export class Brain {
     if (me.health.pain > 30 && E.fear < 0.5) add('rest', null, (me.health.pain / 100) * 0.7 * (1 - E.fear) * calm, 'I need to sit down for a bit.');
     if (this.victory > 0.2) add('celebrate', null, this.victory * (0.35 + T.aggression * 0.4), 'Ha! I won!');
     if (E.fear > 0.8 && E.surprise > 0.35 && brave < 0.4 && !threat) add('panic', null, 0.55, "I don't know what's happening!");
-    // whatever else a mod's species has in mind
+    // whatever else a mod's species has in mind - and whatever a mod has everybody consider
     if (me.species && me.species.consider) me.species.consider(this, add, { threat, threatScore, calm, canFight, fit });
+    for (const fn of CONSIDER_HOOKS) fn(this, add, { threat, threatScore, calm, canFight, fit });
     // (only from someone actually coming for them: someone they are just scared of gets kept at a distance)
     if (threat && E.fear > 0.6 && (health < 0.35 || this.cornered(threat)) && this.isHostile(threat)) {
       add('cower', threat, E.fear * (1.1 - brave) * 0.9, "Please don't hurt me...", null, true);

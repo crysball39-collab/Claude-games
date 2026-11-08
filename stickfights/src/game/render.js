@@ -120,7 +120,8 @@ export class Renderer {
     // what goes behind the people: a speedster's afterimages
     for (const e of sb.effects) if (e.drawUnder) e.drawUnder(ctx);
     for (const p of order) {
-      if (p.box.maxX < v.minX || p.box.minX > v.maxX) continue;
+      // (shut away inside something - a mod's wardrobe - it draws whatever shows of them)
+      if (p.hiddenIn || p.box.maxX < v.minX || p.box.minX > v.maxX) continue;
       this.drawPerson(ctx, p);
     }
     for (const c of sb.crates) if (c.carriedBy) this.drawCrate(ctx, c);
@@ -651,6 +652,15 @@ export class Renderer {
 
   drawOverlay(ctx, p, ui, bubbles) {
     const cam = this.cam;
+    // shut away inside something: nothing shows of them but what they say (from inside it)
+    if (p.hiddenIn) {
+      if (this.opts.bubbles && p.bubble) {
+        const b = p.bubble, at = p.hiddenIn.bubbleAt ? p.hiddenIn.bubbleAt(p) : p.wj.head;
+        const q = cam.toScreen(at.x, at.y);
+        bubbles.push({ x: q.x, y: q.y - 4, text: b.text, loud: b.whisper ? 'whisper' : b.loud, alpha: clamp((b.dur - b.t) / 0.25, 0, 1), sel: p === ui.selected });
+      }
+      return;
+    }
     const r = DIM.headR * p.scale;
     const top = cam.toScreen(p.wj.head.x, Math.max(p.wj.head.y + r, p.box.maxY));
     const headS = cam.toScreen(p.wj.head.x, p.wj.head.y);
@@ -729,7 +739,7 @@ export class Renderer {
 
     if (this.opts.bubbles && p.bubble) {
       const b = p.bubble;
-      bubbles.push({ x: top.x, y: y - 4, text: b.text, loud: b.loud, alpha: clamp((b.dur - b.t) / 0.25, 0, 1), sel });
+      bubbles.push({ x: top.x, y: y - 4, text: b.text, loud: b.whisper ? 'whisper' : b.loud, alpha: clamp((b.dur - b.t) / 0.25, 0, 1), sel });
     }
   }
 
@@ -784,12 +794,14 @@ function wrap(ctx, text, max) {
   return lines;
 }
 
-function bubbleFont(loud) { return `${loud ? 800 : 600} ${loud ? 13 : 12}px ${FONT}`; }
+// (loud: true for a shout, 'whisper' for a whisper - small, slanted, in a dotted bubble)
+function bubbleFont(loud) { return loud === 'whisper' ? `italic 500 11px ${FONT}` : `${loud ? 800 : 600} ${loud ? 13 : 12}px ${FONT}`; }
 
 function measureBubble(ctx, text, loud) {
   ctx.font = bubbleFont(loud);
-  const lines = wrap(ctx, loud ? text.toUpperCase() : text, 150);
-  const lh = loud ? 15 : 14;
+  const shout = loud && loud !== 'whisper';
+  const lines = wrap(ctx, shout ? text.toUpperCase() : loud === 'whisper' ? text.toLowerCase() : text, 150);
+  const lh = shout ? 15 : loud === 'whisper' ? 13 : 14;
   let w = 0;
   for (const l of lines) w = Math.max(w, ctx.measureText(l).width);
   return { lines, lh, w: w + 14, h: lines.length * lh + 9 };
@@ -799,9 +811,11 @@ function measureBubble(ctx, text, loud) {
 function drawBubbleAt(ctx, m, bx, by, tx, ty, loud) {
   const { w, h } = m;
   const base = clamp(tx, bx + 10, bx + w - 10);
-  ctx.fillStyle = loud ? '#fff6d6' : '#ffffff';
-  ctx.strokeStyle = '#111';
-  ctx.lineWidth = loud ? 2 : 1.5;
+  const hush = loud === 'whisper', shout = loud && !hush;
+  ctx.fillStyle = shout ? '#fff6d6' : hush ? 'rgba(236, 236, 236, 0.92)' : '#ffffff';
+  ctx.strokeStyle = hush ? '#555' : '#111';
+  ctx.lineWidth = shout ? 2 : hush ? 1.2 : 1.5;
+  if (hush) ctx.setLineDash([2.5, 2.5]);
   roundRect(ctx, bx, by, w, h, 7);
   ctx.fill();
   ctx.stroke();
@@ -815,8 +829,9 @@ function drawBubbleAt(ctx, m, bx, by, tx, ty, loud) {
   ctx.lineTo(tx, ty);
   ctx.lineTo(base + 4, by + h);
   ctx.stroke();
+  ctx.setLineDash([]);
   ctx.font = bubbleFont(loud);
-  ctx.fillStyle = '#111';
+  ctx.fillStyle = hush ? '#444' : '#111';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   m.lines.forEach((l, i) => ctx.fillText(l, bx + w / 2, by + 5 + i * m.lh));

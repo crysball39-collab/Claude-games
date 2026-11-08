@@ -16,7 +16,7 @@ import { Sound } from './core/audio.js';
 import { UI } from './ui/ui.js';
 import { loadMap } from './game/maps.js';
 import { CLIPS } from './game/clips.js';
-import { LINES } from './game/lines.js';
+import { LINES, EXTRA_LINES } from './game/lines.js';
 import { armOf } from './game/props.js';
 import { spawnOfficer } from './game/police.js';
 import * as Mods from './mods/index.js';
@@ -343,4 +343,4 @@ function start() {
 document.getElementById('btn-play').addEventListener('click', start);
 
 // for tests and the curious
-window.__sf = { sb, cam, ui, hand, sound, renderer, STYLE, start, demo, CLIPS, LINES, mods: Mods, vitals: Vitals, wires: Wires, powers: Powers };
+window.__sf = { sb, cam, ui, hand, sound, renderer, STYLE, start, demo, CLIPS, LINES, EXTRA_LINES, mods: Mods, vitals: Vitals, wires: Wires, powers: Powers };

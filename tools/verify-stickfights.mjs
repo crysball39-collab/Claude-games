@@ -10,8 +10,8 @@
    Most checks set something up and then run the simulation forward in fixed
    steps inside the page, so they do not depend on how fast the machine is.
    The mods are checked too: off until installed from the MODS screen, the
-   storage each shows, and everything the Murder Drones, Minecraft, Shallow
-   and Godzilla mods add - Steve, crafting a Wither Totem, the Wither from
+   storage each shows, and everything the Murder Drones, Minecraft, Shallow,
+   Godzilla and Things in the Dark mods add - Steve, crafting a Wither Totem, the Wither from
    its first skull to its Nether Star, Shallow from its disguise to the next
    skin it climbs into, Godzilla ('54) from his first roar, through every
    one of his moves, to where he falls, and Shin Godzilla from his second
@@ -5669,6 +5669,287 @@ const curlExtra = await ev(() => {
   return { missing: need.filter((n) => !CLIPS[n]).concat(kinds.filter((k) => !LINES[k])), lines: kinds.reduce((n, k) => n + (LINES[k] ? LINES[k].length : 0), 0) };
 });
 check('...with three new animations for it, and forty-odd new lines', !curlExtra.missing.length && curlExtra.lines >= 40, `${curlExtra.lines} lines${curlExtra.missing.length ? '; missing ' + curlExtra.missing.join(' ') : ''}`);
+
+/* ------------------------- crouching (and keeping quiet) ------------------------- */
+
+await fresh();
+await ev(() => {
+  const sb = window.__sf.sb;
+  window.__cr = sb.spawnStickman(0, null, { name: 'Cro' });
+  window.__cr2 = sb.spawnStickman(-6, null, { name: 'Wal' });
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  window.__cr2.brain = null;
+  window.__sf.ui.select(window.__cr);
+});
+await page.waitForTimeout(250);
+const crouch0 = await ev(() => {
+  const b = document.getElementById('ins-crouch');
+  return { shown: !!b && !b.classList.contains('hidden'), text: b && b.textContent, head: +window.__cr.wj.head.y.toFixed(2) };
+});
+await ev(() => document.getElementById('ins-crouch').click());
+await sim(1);
+await page.waitForTimeout(250);
+const crouch1 = await ev(() => {
+  const sb = window.__sf.sb, p = window.__cr, w = window.__cr2;
+  const out = { crouching: p.crouching, hold: p.crouchHold, head: +p.wj.head.y.toFixed(2), clip: p.anim.baseName, text: document.getElementById('ins-crouch').textContent };
+  // across the room, still crouched: a creep - and next to no sound to it (their own mind kept out of it, for now)
+  p.brain.clearBehaviour();
+  p.brain.thinkT = 99;
+  p.goTo(p.pos.x + 4, 'run');
+  w.goTo(w.pos.x + 4, 'walk');
+  let top = 0, noise = 0, wNoise = 0, clip = null;
+  for (let i = 0; i < 180; i++) { sb.step(1 / 120); top = Math.max(top, Math.abs(p.vel.x)); noise = Math.max(noise, p.footNoise()); wNoise = Math.max(wNoise, w.footNoise()); if (i === 120) clip = p.anim.baseName; }
+  p.brain.thinkT = 0;
+  Object.assign(out, { top: +top.toFixed(2), noise: +noise.toFixed(2), walkNoise: +wNoise.toFixed(2), moving: clip, stillCrouched: p.crouching });
+  return out;
+});
+await ev(() => document.getElementById('ins-crouch').click());
+await sim(0.6);
+await page.waitForTimeout(250);
+const crouch2 = await ev(() => ({ crouching: window.__cr.crouching, head: +window.__cr.wj.head.y.toFixed(2), text: document.getElementById('ins-crouch').textContent }));
+await ev(() => window.__sf.ui.select(null));
+check('CROUCH: the inspector has a Crouch button - and they get down on their haunches, a good half-metre lower, and stay down',
+  crouch0.shown && crouch0.text === 'Crouch' && crouch1.crouching && crouch1.hold && crouch1.head < 1.25 && crouch1.head < crouch0.head - 0.3 && /^crouch/.test(crouch1.clip) && crouch1.text === 'Stand up',
+  JSON.stringify({ crouch0, crouch1 }));
+check('...told to run anywhere, crouched it is a creep - and their feet make next to no sound, where a walk is heard a long way off',
+  crouch1.stillCrouched && crouch1.moving === 'crouchWalk' && crouch1.top <= 0.85 && crouch1.noise < 1.6 && crouch1.walkNoise > 5, JSON.stringify(crouch1));
+check('...and Stand up has them back on their feet', !crouch2.crouching && crouch2.head > crouch1.head + 0.3 && crouch2.text === 'Crouch', JSON.stringify(crouch2));
+
+/* ------------------------------- Things in the Dark ------------------------------- */
+
+await fresh();
+await ev(() => { window.__sf.ui.toggleDrawer(true); });
+await page.waitForTimeout(300);
+await page.tap('#btn-mods');
+await page.waitForTimeout(300);
+const dkItem = await ev(() => {
+  const el = document.querySelector('.mod-item[data-mod="dark"]');
+  return el && { name: el.querySelector('.mod-name').textContent, btn: el.querySelector('.mod-btn').textContent, adds: [...el.querySelectorAll('.mod-adds .chip')].map((c) => c.textContent), size: el.querySelector('.mod-size').textContent };
+});
+check('the MODS screen has Things in the Dark, which adds the Grasp, the Rattle, the Listener and a wardrobe',
+  !!dkItem && dkItem.name === 'Things in the Dark' && dkItem.btn === 'INSTALL' && dkItem.adds.join() === 'The Grasp,The Rattle,The Listener,Wardrobe' && /^Storage needed: [\d.]+ KB$/.test(dkItem.size), JSON.stringify(dkItem));
+await page.tap('.mod-item[data-mod="dark"] .mod-btn');
+await page.waitForFunction(() => window.__sf.mods.isInstalled('dark'), null, { timeout: 8000 }).catch(() => {});
+await page.waitForTimeout(150);
+await page.tap('#mods-close');
+await page.waitForTimeout(250);
+const dkCards = await ev(() => { window.__sf.ui.toggleDrawer(true); return [...document.querySelectorAll('.card')].map((k) => k.dataset.spawn); });
+await ev(() => window.__sf.ui.toggleDrawer(false));
+check('...installed, all four are in the spawn menu', ['dk-grasp', 'dk-rattle', 'dk-listener', 'dk-wardrobe'].every((k) => dkCards.includes(k)), dkCards.filter((k) => k.startsWith('dk-')).join(', '));
+
+// the Grasp: the lights, and then it comes through
+await fresh();
+const grasp = await ev(() => {
+  const { sb, ui } = window.__sf;
+  const steps = (n, each) => { for (let i = 0; i < n; i++) { sb.step(1 / 120); if (each) each(); } };
+  const ppl = [sb.spawnStickman(-5, null, { name: 'Ana', traits: { bravery: 0.25 } }), sb.spawnStickman(-1.5, null, { name: 'Ben' }), sb.spawnStickman(2.5, null, { name: 'Cal', traits: { bravery: 0.3 } }), sb.spawnStickman(6, null, { name: 'Dee', traits: { bravery: 0.7 } }),
+    sb.spawnStickman(17.5, null, { name: 'Eve' })];
+  ui.setSpawnKind('dk-wardrobe'); ui.spawnAt(-3, 0); ui.spawnAt(4.5, 0); ui.setSpawnKind('stickman');
+  steps(60);
+  // (all of them have seen it before: they know what the lights mean)
+  for (const p of ppl) p.brain.dark = { rush: true, rebound: false, listener: false };
+  ui.setSpawnKind('dk-grasp'); const r = ui.spawnAt(9, 1); ui.setSpawnKind('stickman');
+  const seen = { pass: [], out: [] };
+  sb.on('rushPass', (e) => seen.pass.push({ x: +e.x.toFixed(0), dir: e.dir }));
+  sb.on('wardrobeOut', (e) => seen.out.push(e.who.name));
+  let dark = 0, hiddenAtPass = 0, minX = 99, maxX = -99;
+  steps(120 * 14, () => {
+    dark = Math.max(dark, r.dark);
+    if (r.phase === 'pass') { minX = Math.min(minX, r.x); maxX = Math.max(maxX, r.x); hiddenAtPass = Math.max(hiddenAtPass, ppl.filter((p) => p.hiddenIn).length); }
+  });
+  return { dark: +dark.toFixed(2), pass: seen.pass, from: +maxX.toFixed(0), to: +minX.toFixed(0), hiddenAtPass, gone: r.removed, out: seen.out,
+    dead: ppl.filter((p) => p.dead).map((p) => `${p.name}: ${p.health.cause}`), alive: ppl.filter((p) => !p.dead).map((p) => p.name), stillIn: ppl.filter((p) => p.hiddenIn).length };
+});
+check('THE GRASP: the lights flicker and go - then it comes through, from one end of the world to the other, and is gone',
+  grasp.dark > 0.6 && grasp.pass.length === 1 && grasp.from > 18 && grasp.to < -18 && grasp.gone, JSON.stringify(grasp));
+check('...whoever knows what the lights mean gets into a wardrobe, two to each, and it passes them by - and, once it has gone, they come out',
+  grasp.hiddenAtPass === 4 && ['Ana', 'Ben', 'Cal', 'Dee'].every((n) => grasp.alive.includes(n)) && grasp.out.length === 4 && !grasp.stillIn, JSON.stringify(grasp));
+check('...and whoever could not get to one in time is taken', grasp.dead.length === 1 && grasp.dead[0] === 'Eve: taken by the Grasp', JSON.stringify(grasp.dead));
+
+// the first time: nobody knows what the lights going means - the nervous hide anyway; afterwards, everybody knows
+await fresh();
+const firstTime = await ev(() => {
+  const { sb, ui } = window.__sf;
+  const steps = (n) => { for (let i = 0; i < n; i++) sb.step(1 / 120); };
+  const ppl = [sb.spawnStickman(-4, null, { name: 'Tim', traits: { bravery: 0.12 } }), sb.spawnStickman(-1, null, { name: 'Bo', traits: { bravery: 0.95 } }), sb.spawnStickman(3, null, { name: 'Ida', traits: { bravery: 0.15 } }), sb.spawnStickman(6, null, { name: 'Rex', traits: { bravery: 0.9 } })];
+  ui.setSpawnKind('dk-wardrobe'); ui.spawnAt(-2.5, 0); ui.spawnAt(4.5, 0); ui.setSpawnKind('stickman');
+  steps(60);
+  const said = new Set();
+  sb.on('speech', (e) => said.add(e.kind));
+  ui.setSpawnKind('dk-grasp'); ui.spawnAt(9, 1); ui.setSpawnKind('stickman');
+  steps(120 * 12);
+  return { fate: ppl.map((p) => `${p.name}:${p.dead ? 'taken' : 'alive'}`), knows: ppl.filter((p) => !p.dead).map((p) => `${p.name}:${p.brain.dark && p.brain.dark.rush}`), said: [...said].filter((k) => /rush|hideIn|inWardrobe|outWardrobe/.test(k)) };
+});
+check('...the first time, nobody knows what the lights going means: the nervous get into a wardrobe anyway, the brave stand about - and are taken',
+  firstTime.fate.join() === 'Tim:alive,Bo:taken,Ida:alive,Rex:taken', JSON.stringify(firstTime));
+check('...and after that, whoever lived through it knows', firstTime.knows.every((k) => k.endsWith(':true')) && firstTime.knows.length === 2, JSON.stringify(firstTime.knows));
+
+// the Rattle: through, and back, and back again
+await fresh();
+const rattle = await ev(() => {
+  const { sb, ui } = window.__sf;
+  const steps = (n, each) => { for (let i = 0; i < n; i++) { sb.step(1 / 120); if (each) each(); } };
+  const ppl = [sb.spawnStickman(-5, null, { name: 'Ana', traits: { bravery: 0.3 } }), sb.spawnStickman(-1.5, null, { name: 'Ben' }), sb.spawnStickman(2.5, null, { name: 'Cal', traits: { bravery: 0.3 } }), sb.spawnStickman(6, null, { name: 'Dee' })];
+  ui.setSpawnKind('dk-wardrobe'); ui.spawnAt(-3, 0); ui.spawnAt(4.5, 0); ui.setSpawnKind('stickman');
+  steps(60);
+  for (const p of ppl) p.brain.dark = { rush: true, rebound: false, listener: false };
+  ui.setSpawnKind('dk-rattle'); const r = ui.spawnAt(-9, 1); ui.setSpawnKind('stickman');
+  const passes = [], outs = [], said = new Set();
+  sb.on('rushPass', (e) => passes.push({ dir: e.dir, speed: +r.speed.toFixed(1) }));
+  sb.on('wardrobeOut', (e) => outs.push(+sb.time.toFixed(1)));
+  sb.on('speech', (e) => said.add(e.kind));
+  let goneT = null;
+  steps(120 * 50, () => { if (r.removed && goneT === null) goneT = sb.time; });
+  return { planned: r.passes, passes, goneT, outs, alive: ppl.filter((p) => !p.dead).length, learnt: ppl.filter((p) => p.brain.dark.rebound).length, said: [...said].filter((k) => /rush/.test(k)) };
+});
+const flips = rattle.passes.every((p, i) => i === 0 || p.dir === -rattle.passes[i - 1].dir);
+const faster = rattle.passes.every((p, i) => i === 0 || p.speed > rattle.passes[i - 1].speed);
+check('THE RATTLE: through, and when it has gone out at the far end it comes back - three to seven passes in all, the other way each time, faster each time',
+  rattle.passes.length === rattle.planned && rattle.passes.length >= 3 && rattle.passes[0].dir === 1 && flips && faster && rattle.goneT !== null, JSON.stringify(rattle.passes));
+check('...whoever sees it come back learns that it does, and stays in the wardrobe until it is really over',
+  rattle.learnt === 4 && rattle.alive === 4 && rattle.outs.filter((t) => t >= rattle.goneT).length >= 3, JSON.stringify({ outs: rattle.outs, goneT: rattle.goneT, alive: rattle.alive, said: rattle.said }));
+
+// the Listener: blind, and all ears
+await fresh();
+const ears = await ev(() => {
+  const { sb, ui } = window.__sf;
+  const steps = (n, each) => { for (let i = 0; i < n; i++) { sb.step(1 / 120); if (each) each(); } };
+  const still = sb.spawnStickman(-1.3, null, { name: 'Stil' }), creep = sb.spawnStickman(-2.9, null, { name: 'Crep' }), walk = sb.spawnStickman(7.5, null, { name: 'Walt' });
+  steps(60);
+  // (nobody going anywhere they had in mind)
+  for (const p of [still, creep, walk]) { p.brain = null; p.stop(); }
+  steps(60);
+  ui.setSpawnKind('dk-listener'); const L = ui.spawnAt(0, 0.3); ui.setSpawnKind('stickman');
+  steps(40);
+  // it stands and listens; somebody stands stock still beside it, somebody creeps away crouched, somebody walks up
+  L.ls.phase = 'listen'; L.ls.t = 0; L.ls.listenFor = 99; L.ls.heard = null; L.ls.acted = sb.time; L.ls.target = null;
+  creep.crouchHold = true; creep.crouch(true); creep.goTo(-8, 'sneak');
+  walk.goTo(2.5, 'walk');
+  const phases = new Set();
+  let target = null;
+  steps(120 * 9, () => { phases.add(L.ls.phase); if (L.ls.target && !target) target = L.ls.target.name; });
+  return { scale: L.scale, blind: L.species.blind, phases: [...phases], target, walk: walk.dead ? walk.health.cause : 'alive', still: still.dead ? 'dead' : 'alive', creep: creep.dead ? 'dead' : 'alive', creepX: +creep.pos.x.toFixed(1) };
+});
+check('THE LISTENER: tall, blind and all ears - somebody walking up to it is heard, gone for, and crushed',
+  ears.blind && ears.scale > 1.3 && ears.target === 'Walt' && ears.phases.includes('charge') && ears.walk === 'crushed by the Listener', JSON.stringify(ears));
+check('...while somebody standing stock still right beside it, and somebody creeping off crouched, are never heard at all',
+  ears.still === 'alive' && ears.creep === 'alive' && ears.creepX < -6, JSON.stringify(ears));
+
+await fresh();
+const shotAt = await ev(() => {
+  const { sb, ui } = window.__sf;
+  const steps = (n) => { for (let i = 0; i < n; i++) sb.step(1 / 120); };
+  ui.setSpawnKind('dk-listener'); const L = ui.spawnAt(-6, 0.3); ui.setSpawnKind('stickman');
+  const g = sb.spawnStickman(14, null, { name: 'Gun' });
+  g.brain = null;
+  steps(60);
+  const pistol = sb.spawnGun(14.4, 0.1); pistol.wear(g); g.weapon = pistol; g.facing = 1;
+  L.ls.phase = 'listen'; L.ls.listenFor = 99; L.ls.heard = null; L.ls.acted = sb.time;
+  g.aimAt({ x: 19, y: 6 }); steps(60);
+  const x0 = L.pos.x, hp0 = L.health.overall;
+  g.fire();
+  steps(120 * 2.5);
+  return { fired: pistol.mag < 15, target: L.ls.target && L.ls.target.name, phase: L.ls.phase, moved: +(L.pos.x - x0).toFixed(1), hp: +hp0.toFixed(2) };
+});
+check('...a shot fired anywhere, even into the air twenty metres off: it knows exactly where, and comes', shotAt.target === 'Gun' && shotAt.moved > 4, JSON.stringify(shotAt));
+
+// everybody else, around it: whispering, creeping off crouched, keeping stock still when it is close
+await fresh();
+const hush = await ev(() => {
+  const { sb, ui } = window.__sf;
+  const steps = (n, each) => { for (let i = 0; i < n; i++) { sb.step(1 / 120); if (each) each(); } };
+  const near = sb.spawnStickman(2.6, null, { name: 'Nia', traits: { bravery: 0.35 } }), far = sb.spawnStickman(-6, null, { name: 'Far', traits: { bravery: 0.4 } });
+  steps(60);
+  ui.setSpawnKind('dk-listener'); const L = ui.spawnAt(0, 0.3); ui.setSpawnKind('stickman');
+  // (both of them looking its way when it turns up)
+  for (const p of [near, far]) { p.faceTo(0); p.brain.sense(); }
+  const said = [];
+  sb.on('speech', (e) => { if (e.who === near || e.who === far) said.push(e.whisper ? 'whisper' : 'aloud'); });
+  const did = { Nia: new Set(), Far: new Set() };
+  steps(120 * 5, () => {
+    // (it stays where it is, listening)
+    if (L.ls.phase !== 'listen') { L.ls.phase = 'listen'; L.ls.t = 0; L.ls.listenFor = 99; }
+    for (const p of [near, far]) { const b = p.brain.behaviour; if (b) did[p.name].add(b.kind + (b.quiet ? '-quiet' : '') + (p.crouching ? '-low' : '')); }
+  });
+  // and something said - even something shouted - by somebody a little way off, and by somebody right beside it
+  far.brain.spokeT = -99; near.brain.spokeT = -99;
+  const heard = [];
+  sb.on('speech', (e) => { if (e.who === far || e.who === near) heard.push(`${e.who.name}:${e.whisper ? 'whisper' : e.loud ? 'shout' : 'aloud'}`); });
+  const farSaid = far.brain.speak('flee', { other: L.name }, 1, null, true), nearSaid = near.brain.speak('flee', { other: L.name }, 1, null, true);
+  return { nia: [...did.Nia], far: [...did.Far], said, heard, farSaid, nearSaid, dist: +Math.abs(far.pos.x - L.pos.x).toFixed(1), niaDist: +Math.abs(near.pos.x - L.pos.x).toFixed(1), alive: near.alive && far.alive, farX: +far.pos.x.toFixed(1) };
+});
+check('...and everybody who sees it keeps their voice down: even a shout comes out as a whisper - and right beside it, not a word',
+  hush.said.every((s) => s === 'whisper') && hush.farSaid && hush.heard[0] === 'Far:whisper' && (hush.niaDist < 3.2 ? !hush.nearSaid : hush.heard[1] === 'Nia:whisper'),
+  JSON.stringify({ said: hush.said, heard: hush.heard, dist: hush.dist, niaDist: hush.niaDist }));
+check('...right beside it they keep stock still, crouched; further off they creep away crouched - and it never hears either',
+  hush.nia.includes('freeze-low') && hush.far.some((k) => k.startsWith('flee-quiet')) && hush.alive, JSON.stringify(hush));
+
+// a wardrobe, with it right outside: somebody calm holds their breath; somebody terrified does not
+await fresh();
+const wardBreath = await ev(() => {
+  const { sb, ui } = window.__sf;
+  const steps = (n) => { for (let i = 0; i < n; i++) sb.step(1 / 120); };
+  const out = {};
+  for (const [name, bravery, fear] of [['Cool', 1, 0], ['Shak', 0, 1]]) {
+    sb.clear();
+    const p = sb.spawnStickman(-4, null, { name, traits: { bravery } });
+    ui.setSpawnKind('dk-wardrobe'); const w = ui.spawnAt(-4, 0); ui.setSpawnKind('stickman');
+    steps(60);
+    p.brain.dark = { rush: true, rebound: true, listener: true };
+    w.enter(p);
+    ui.setSpawnKind('dk-listener'); const L = ui.spawnAt(-2.8, 0.3); ui.setSpawnKind('stickman');
+    steps(30);
+    p.brain.emo.fear = fear; p.brain.emo.lock('fear', true);
+    L.ls.phase = 'listen'; L.ls.listenFor = 99; L.ls.heard = null; L.ls.acted = sb.time;
+    let torn = null;
+    sb.on('wardrobeTorn', () => { if (torn === null) torn = +sb.time.toFixed(1); });
+    steps(120 * 15);
+    p.brain.emo.lock('fear', false);
+    out[name] = { torn, fate: p.dead ? p.health.cause : p.hiddenIn ? 'still hidden' : 'alive', broken: w.broken };
+  }
+  return out;
+});
+check('THE WARDROBE: with the Listener right outside, somebody calm in it holds their breath and is never found',
+  wardBreath.Cool.torn === null && wardBreath.Cool.fate === 'still hidden', JSON.stringify(wardBreath.Cool));
+check('...somebody terrified breathes too hard: it tears the doors off, and has them', wardBreath.Shak.torn !== null && wardBreath.Shak.broken && wardBreath.Shak.fate === 'crushed by the Listener', JSON.stringify(wardBreath.Shak));
+
+const darkExtra = await ev(() => {
+  const { CLIPS, LINES, EXTRA_LINES } = window.__sf;
+  const kinds = ['freezeStill', 'creepAway', 'itHeardMe', 'rushLights', 'rushKnow', 'rushBack', 'rushNowhere', 'hideInNow', 'hideInQuiet', 'inWardrobe', 'outWardrobe', 'sawRushKill', 'rushAfter',
+    'seeListener', 'sawListenerKill', 'sawListenerHunt', 'sawWardrobeTorn', 'listenerClicks'];
+  const L = (k) => LINES[k] || EXTRA_LINES[k];
+  return { missing: ['crouch', 'crouchWalk'].filter((n) => !CLIPS[n]).concat(kinds.filter((k) => !L(k))), lines: kinds.reduce((n, k) => n + (L(k) ? L(k).length : 0), 0) };
+});
+check('...with crouching and creeping animations, and around ninety new lines', !darkExtra.missing.length && darkExtra.lines >= 85, `${darkExtra.lines} lines${darkExtra.missing.length ? '; missing ' + darkExtra.missing.join(' ') : ''}`);
+
+// removing it takes all of it away
+await fresh();
+await ev(() => {
+  const { sb, ui } = window.__sf;
+  const p = sb.spawnStickman(-3, null, { name: 'Hid' });
+  ui.setSpawnKind('dk-wardrobe'); const w = ui.spawnAt(-3, 0); ui.setSpawnKind('stickman');
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  w.enter(p);
+  ui.setSpawnKind('dk-listener'); ui.spawnAt(5, 0.3); ui.setSpawnKind('dk-rattle'); ui.spawnAt(9, 1); ui.setSpawnKind('stickman');
+  for (let i = 0; i < 60; i++) sb.step(1 / 120);
+  window.__sf.ui.toggleDrawer(true);
+});
+await page.waitForTimeout(300);
+await page.tap('#btn-mods');
+await page.waitForTimeout(300);
+await page.tap('.mod-item[data-mod="dark"] .mod-btn');
+await page.waitForTimeout(150);
+await page.tap('.mod-item[data-mod="dark"] .mod-btn');
+await page.waitForTimeout(250);
+const dkGone = await ev(() => {
+  const sb = window.__sf.sb;
+  return { people: sb.people.map((p) => p.name), hidden: sb.people.filter((p) => p.hiddenIn).length, items: sb.items.length, effects: sb.effects.filter((e) => e.mod === 'dark').length, installed: window.__sf.mods.isInstalled('dark'), cards: document.querySelectorAll('.card[data-spawn^="dk-"]').length };
+});
+check('removing Things in the Dark takes the Listener, the wardrobes and anything on its way out of the world and the menu - and whoever was hiding is out',
+  dkGone.people.join() === 'Hid' && !dkGone.hidden && !dkGone.items && !dkGone.effects && !dkGone.installed && !dkGone.cards, JSON.stringify(dkGone));
+await page.tap('#mods-close');
+await ev(() => window.__sf.ui.toggleDrawer(false));
+await page.waitForTimeout(250);
 
 check('the console stays clean', errors.length === 0, errors.slice(0, 3).join(' | '));
 if (FILE_MODE) check('the single file fetches nothing', network.length === 0, network.slice(0, 3).join(', '));

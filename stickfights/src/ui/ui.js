@@ -146,6 +146,8 @@ const OPTION_NAMES = {
   watch: (t) => 'Watch ' + t.name + ' fight',
   throw: (t) => 'Throw a crate at ' + t.name,
   hide: (t) => 'Hide from ' + t.name,
+  freeze: (t) => 'Keep perfectly still' + (t.name ? `, with ${t.name} so close` : ''),
+  curlUp: () => 'Curl up on the floor',
   respond: (t) => 'Deal with ' + t.name,
   comply: (t) => 'Do as ' + t.name + ' says',
   detained: () => 'Sit tight in the cuffs',
@@ -895,6 +897,19 @@ export class UI {
       const p = this.selected;
       if (p && p.uncuff()) this.toast(`${p.name} is out of the cuffs`);
     });
+    // down on their haunches, and staying there (creeping about, when they go anywhere) - or back up
+    $('ins-crouch').addEventListener('click', () => {
+      const p = this.selected;
+      if (!p || p.dead || p.cuffed) return;
+      p.crouchHold = !p.crouchHold;
+      if (p.crouchHold) {
+        p.crouch(true);
+        this.toast(`${p.name} crouches down, and stays down`);
+      } else {
+        p.crouching = false;
+        this.toast(`${p.name} stands up`);
+      }
+    });
     // what is in their hand into its holster or a pocket - or out again
     $('ins-kit').addEventListener('click', () => {
       const p = this.selected;
@@ -1281,6 +1296,9 @@ export class UI {
     kit.classList.toggle('hidden', p.dead || !!p.cuffed || !(stowable || drawable));
     kit.textContent = p.weapon ? 'Put away' : 'Get it out';
     kit.disabled = p.state !== 'stand';
+    const crouch = $('ins-crouch');
+    crouch.classList.toggle('hidden', p.dead || !!p.cuffed || !!(p.species && (p.species.giant || p.species.noCrouch)));
+    crouch.textContent = p.crouchHold ? 'Stand up' : 'Crouch';
 
     // fire, ice and a hand round the throat first; then whatever is at work on them (a mod's: acid, withering)
     const conds = [...vitalConditions(p), ...p.afflictions.filter((a) => a.label).map((a) => a.label), ...h.conditions()];
