@@ -330,6 +330,18 @@ def hotel_definitions():
         "zt.rush.thunder": event(snd(THUNDER, 1.0, 1.0), category="weather", min_d=32.0, max_d=192.0),
         "zt.rush.banished": event(snd(["sounds/block/beacon/deactivate"], 0.8, 1.0) + snd(CHAIN, 0.6, 1.0), category=hos, min_d=16.0,
                                   max_d=64.0),
+        # Ambush (its wail as it comes, as it comes back, and as it tears past: gen_floor1_audio.py)
+        "zt.ambush.approach": event([{"name": "sounds/zt/ambush_approach", "volume": 1.0, "pitch": 1.0}], category=hos, min_d=4.0,
+                                    max_d=16.0),
+        "zt.ambush.return": event([{"name": "sounds/zt/ambush_return", "volume": 1.0, "pitch": 1.0}], category=hos, min_d=4.0,
+                                  max_d=16.0),
+        "zt.ambush.pass": event([{"name": "sounds/zt/ambush_pass", "volume": 1.0, "pitch": 1.0}], category=hos, min_d=4.0, max_d=16.0),
+        "zt.ambush.turn": event(snd(WHIRL, 0.7, 0.7) + snd(VEX_CHARGE, 0.5, 0.6), category=hos, min_d=16.0, max_d=96.0),
+        "zt.ambush.gone": event(snd(WHIRL, 0.55, 0.6), category=hos, min_d=16.0, max_d=96.0),
+        "zt.ambush.kill": event(snd(EXPLODE, 0.9, 1.0) + snd(SCREAM, 0.8, 1.0) + snd(VEX_CHARGE, 0.6, 1.0), category=hos, min_d=8.0,
+                                max_d=48.0),
+        "zt.ambush.banished": event(snd(["sounds/block/beacon/deactivate"], 0.9, 1.0) + snd(CHAIN, 0.7, 1.0), category=hos,
+                                    min_d=16.0, max_d=64.0),
         "zt.lights.break": event(snd(GLASS, 1.2, 1.0) + snd(LANTERN_BREAK, 1.0, 1.0), category=blk, min_d=8.0, max_d=48.0),
         # Screech (its "psst" is made by gen_floor1_audio.py)
         "zt.screech.psst": event([{"name": "sounds/zt/psst", "volume": 1.0, "pitch": 1.0}], category=hos, min_d=2.0, max_d=12.0),

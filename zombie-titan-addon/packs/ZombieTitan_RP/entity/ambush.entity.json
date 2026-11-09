@@ -1,0 +1,35 @@
+{
+	"format_version": "1.10.0",
+	"minecraft:client_entity": {
+		"description": {
+			"identifier": "zt:ambush",
+			"materials": {
+				"default": "entity_emissive_alpha"
+			},
+			"textures": {
+				"default": "textures/entity/hotel/ambush"
+			},
+			"geometry": {
+				"default": "geometry.zt.ambush"
+			},
+			"render_controllers": [
+				"controller.render.zt.default"
+			],
+			"scripts": {
+				"animate": [
+					"face",
+					"main"
+				]
+			},
+			"animations": {
+				"face": "animation.zt.prop.face",
+				"fly": "animation.zt.ambush.fly",
+				"sink": "animation.zt.ambush.sink",
+				"main": "controller.animation.zt.ambush"
+			},
+			"particle_effects": {
+				"mist": "zt:ambush_mist"
+			}
+		}
+	}
+}

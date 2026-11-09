@@ -48,6 +48,36 @@
 				}
 			}
 		},
+		"controller.animation.zt.ambush": {
+			"initial_state": "fly",
+			"states": {
+				"fly": {
+					"animations": [
+						"fly"
+					],
+					"particle_effects": [
+						{
+							"effect": "mist"
+						}
+					],
+					"transitions": [
+						{
+							"sink": "q.property('zt:anim') == 1"
+						}
+					]
+				},
+				"sink": {
+					"animations": [
+						"sink"
+					],
+					"transitions": [
+						{
+							"fly": "q.property('zt:anim') == 0"
+						}
+					]
+				}
+			}
+		},
 		"controller.animation.zt.screech": {
 			"initial_state": "lurk",
 			"states": {

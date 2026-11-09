@@ -1,7 +1,7 @@
 // The Lobby and Floor 1 (the Hotel) simulation: building the Lobby, riding an elevator down,
 // the reception and the key to door 1, rooms built ahead as you go (every one can be walked
 // through from door to door), locked doors and their keys, drawers with gold and items,
-// hiding in closets and under beds, Hide, Rush, Screech, the crucifix, then on through the
+// hiding in closets and under beds, Hide, Rush, Ambush, Screech, the crucifix, then on through the
 // Seek chases, the Library, Jeff's shop, the Infirmary's skull lock, the Courtyard and the
 // Greenhouse to door 100's lever, key, switches, breaker puzzle and the elevator.
 //   node tools/sim/run.mjs floor1
@@ -124,6 +124,8 @@ let party = [player, buddy];
 const screechSeen = new Set();
 let rushesSeen = 0;
 let rushHidden = 0;
+let ambushesSeen = 0;
+let ambushDeaths = 0;
 /** Walk a player straight to a point (frame cells). Returns "rush" if the lights start flickering on the way. */
 /** Hear a psst: turn and look at it (as a player would). */
 function faceScreech(p) {
@@ -153,8 +155,8 @@ function walk(p, to, speed = 5.0) {
       runTicks(10);
       faceScreech(p);
     } else if (p.getViewDirection && !d.screech?.get(p.id)) delete p.getViewDirection;
-    if (d.rush?.phase === "warn" && !party.some((q) => Doors.isHidden(q))) {
-      result = "rush";
+    if ((d.rush?.phase === "warn" || d.ambush?.phase === "warn") && !party.some((q) => Doors.isHidden(q))) {
+      result = d.ambush ? "ambush" : "rush";
       return true;
     }
     const at = p.location;
@@ -171,9 +173,8 @@ function walk(p, to, speed = 5.0) {
 }
 /** The room a player is in. */
 const roomOf = (p) => Hotel.roomIndexAt(d, fr.local(p.location));
-/** The lights flicker: everyone into a closet or under a bed until Rush has gone by, then out again. */
-function hideFromRush() {
-  rushesSeen++;
+/** Everyone into the nearest closet or under the nearest bed. */
+function hideParty() {
   const alive = party.filter((q) => !q.dead && run.players.get(q.id)?.status === "in");
   const taken = new Set();
   for (const q of alive) {
@@ -189,8 +190,10 @@ function hideFromRush() {
     q.location = { x: at.x + out.x * reach, y: at.y, z: at.z + out.z * reach };
     world.afterEvents.playerInteractWithEntity.fire({ player: q, target: world.getEntity(s.id) });
   }
-  if (alive.some((q) => Doors.isHidden(q))) rushHidden++;
-  runTicks(900, () => !d.rush);
+  return alive;
+}
+/** Everyone hiding comes out. */
+function unhideParty(alive) {
   for (const q of alive) {
     if (!Doors.isHidden(q)) continue;
     q.isSneaking = true;
@@ -198,12 +201,38 @@ function hideFromRush() {
     q.isSneaking = false;
   }
 }
+/** The lights flicker: everyone into a closet or under a bed until Rush has gone by, then out again. */
+function hideFromRush() {
+  rushesSeen++;
+  const alive = hideParty();
+  if (alive.some((q) => Doors.isHidden(q))) rushHidden++;
+  runTicks(900, () => !d.rush);
+  unhideParty(alive);
+}
+/** Ambush: into hiding each time it comes, out again each time it's gone by, until it's gone for good. */
+function hideFromAmbush() {
+  ambushesSeen++;
+  const before = party.filter((q) => !q.dead).length;
+  while (d.ambush) {
+    if (d.ambush.phase === "warn") {
+      const alive = hideParty();
+      runTicks(900, () => !d.ambush || d.ambush.phase === "gap");
+      unhideParty(alive);
+    }
+    runTicks(900, () => !d.ambush || d.ambush.phase === "warn");
+  }
+  ambushDeaths += before - party.filter((q) => !q.dead).length;
+}
 /** Walk to a point, hiding from Rush on the way if need be. */
 function go(p, to) {
   for (let tries = 0; tries < 6; tries++) {
     const r = walk(p, to);
     if (r === "rush") {
       hideFromRush();
+      continue;
+    }
+    if (r === "ambush") {
+      hideFromAmbush();
       continue;
     }
     return r === "ok";
@@ -339,6 +368,7 @@ check(d.rooms.slice(1, 27).every((r) => r.ents === undefined || r.lamps?.length 
 const wardrobes = only("zt:wardrobe").length + only("zt:hotel_bed").length;
 check(!player.dead && !buddy.dead, "nobody died on the way");
 check(rushesSeen === 0 || rushHidden === rushesSeen, `when the lights flickered (${rushesSeen} times), you hid until Rush had gone by`);
+check(ambushDeaths === 0, `when Ambush came (${ambushesSeen} times), you hid each time it came by and got out while it was away`);
 trace("spots", d.spots.size, "drawers", d.drawers.size, "ents", d.rooms.slice(1, 15).map((r) => r.ents?.length));
 if (process.env.ZT_TRACE) {
   const counts = {};
@@ -475,6 +505,92 @@ check(dist(buddy.location, lobby.home.loc) < 1.0, "your friend comes back in the
 check(buddy.getGameMode() === GameMode.Survival, "...in their own game mode");
 party = [player];
 
+console.log("Ambush");
+// you hide each time it comes and get out while it's away; Ash stays out in the open
+const ash = new Player(ow, { ...player.location });
+ash.name = "Ash";
+ow.entities.push(ash);
+Doors.join(run, ash);
+runTicks(2);
+const nAmb = roomOf(player);
+const roomA = d.rooms[nAmb];
+const brokenA = roomA.broken;
+for (const l of roomA.lamps ?? []) Hotel.setLamp(run, l, 1);
+roomA.broken = false;
+const litA = lampsLit(nAmb);
+const sounds0 = log.sounds.length;
+Mobs.startAmbush(run, d, nAmb, world.getAbsoluteTime() - 100000, 3);
+check(d.ambush?.phase === "warn" && d.ambush.passes === 4 && log.sounds.includes("zt.ambush.approach"),
+  "the lights flicker, and something comes, wailing...");
+let flickA = false;
+runTicks(30, () => {
+  if (lampsLit(nAmb) < litA) flickA = true;
+});
+check(litA === 0 || flickA, "...the lights going off and on");
+let ashDied = false;
+world.afterEvents.entityDie.subscribe(({ deadEntity }) => {
+  if (deadEntity === ash) ashDied = true;
+});
+const dirs = [];
+let wails = 0;
+let hiddenThrough = true;
+let flickBefore = 0;
+while (d.ambush) {
+  if (d.ambush.phase === "warn") {
+    wails++;
+    const lit0 = lampsLit(nAmb);
+    const alive = hideParty();
+    let flick = false;
+    runTicks(300, () => {
+      if (lampsLit(nAmb) < lit0) flick = true;
+      return !d.ambush || d.ambush.phase === "pass";
+    });
+    if (flick || lit0 === 0) flickBefore++;
+    if (d.ambush?.phase === "pass") dirs.push(d.ambush.dir);
+    runTicks(300, () => {
+      if (d.ambush?.phase === "pass" && !Doors.isHidden(player)) hiddenThrough = false;
+      return !d.ambush || d.ambush.phase === "gap";
+    });
+    unhideParty(alive);
+  }
+  runTicks(400, () => !d.ambush || d.ambush.phase === "warn");
+}
+check(dirs.join(",") === "1,-1,1,-1", `it tore through, then rebounded 3 times, back and forth (${dirs.join(", ")})`);
+check(wails === 4 && flickBefore === 4 && log.sounds.includes("zt.ambush.return"), "before each pass the lights flickered and its wail grew");
+const turns = log.sounds.slice(sounds0).filter((x) => x === "zt.ambush.turn").length;
+check(turns === 3, `you heard it turn at the end of the rooms each time (${turns})`);
+check(ashDied && !player.dead && hiddenThrough, "Ash stayed out in the open: Ambush got them; you hid each time, and it didn't");
+check(log.messages.some((m) => m.includes("AMBUSH")), "...a jumpscare");
+check(!d.ambush && only("zt:ambush").length === 0 && roomA.broken, "then it's gone for good, and its last pass burst the lights");
+// stay hidden through all its comings and goings, and Hide keeps counting while it's away
+player.setGameMode(GameMode.Creative);
+Mobs.startAmbush(run, d, roomOf(player), world.getAbsoluteTime() - 100000, 6);
+hideParty();
+let pausedAway = 0;
+let pausedHere = 0;
+let gapTicks = 0;
+let kicked = false;
+let lastH;
+runTicks(4000, () => {
+  const h = Doors.hiding.get(player.id);
+  if (h && lastH?.h === h && d.ambush) {
+    const more = h.paused - lastH.paused;
+    if (d.ambush.phase === "gap") {
+      gapTicks++;
+      pausedAway += more;
+    } else pausedHere += more;
+  }
+  lastH = h ? { h, paused: h.paused } : undefined;
+  if (!h && d.ambush) kicked = true;
+  return !d.ambush;
+});
+check(pausedHere > 0 && pausedAway === 0, "Hide doesn't count while Ambush comes and goes by, only while it's away");
+check(gapTicks < 300 || kicked, `stay in through all of it and Hide throws you out (${gapTicks} ticks away${kicked ? ", thrown out" : ""})`);
+unhideParty([player]);
+player.setGameMode(GameMode.Adventure);
+hp.setCurrentValue(20);
+roomA.broken = brokenA;
+
 console.log("Screech");
 const darkRoom = d.rooms[roomOf(player)];
 darkRoom.dark = true;
@@ -572,7 +688,7 @@ function walkRooms(upTo, label) {
   }
   check(!bad.length && roomOf(player) === upTo, `${label}: every room walked through` + (bad.length ? ": " + bad.slice(0, 3).join(" | ") : ""));
   check(!player.dead, `${label}: still alive`);
-  if (player.dead) trace("death", player.getDynamicProperty("zt:doors_death"), "room", roomOf(player), d.rooms[roomOf(player)]?.kind, "rush", JSON.stringify(d.rush ? { phase: d.rush.phase, room: d.rush.room } : null), log.messages.filter((m) => /RUSH|died|SEEK|FIGURE/.test(m)).slice(-4));
+  if (player.dead) trace("death", player.getDynamicProperty("zt:doors_death"), "room", roomOf(player), d.rooms[roomOf(player)]?.kind, "rush", JSON.stringify(d.rush ? { phase: d.rush.phase, room: d.rush.room } : null), "ambush", JSON.stringify(d.ambush ? { phase: d.ambush.phase, pass: d.ambush.pass } : null), log.messages.filter((m) => /RUSH|died|SEEK|FIGURE/.test(m)).slice(-4));
 }
 
 /** The Seek chase: through its corridor and hallway, then run, crouching under the shelves, to its last door. */
@@ -771,12 +887,24 @@ player.setGameMode(GameMode.Creative);
 go(player, at100(3.5, 0, 25.5));
 world.afterEvents.playerInteractWithEntity.fire({ player, target: only("zt:wall_lever")[0] });
 check(s100.stage === "lever" && only("zt:wall_lever")[0].props["zt:on"] === true, "pull the lever...");
-runTicks(5);
+let watched = 0;
+runTicks(5, () => {
+  watched++;
+});
 check(b100(-1, 1, 27) === "minecraft:air" && player.cameraOn, "...the gate slides open, and you watch");
-runTicks(600, () => s100.stage !== "lever");
+runTicks(600, () => {
+  watched++;
+  return !player.cameraOn;
+});
 const fig = only("zt:figure")[0];
-check(s100.stage === "hunt" && !!fig, "the Figure came down the stairs, and it's hunting");
+const lever = only("zt:wall_lever")[0];
+const gap = dist(fig.location, player.location);
+check(watched <= 140 && gap >= 12 && fr.local(fig.location).u >= L100.U(4),
+  `a short cutscene (${(watched / 20).toFixed(1)} s): you have your eyes back while the Figure's still up the stairs, ${gap.toFixed(0)} blocks away`);
 check(!player.cameraOn && player.permissions[InputPermissionCategory.Movement] !== false, "you can move again");
+runTicks(400, () => s100.stage !== "descend");
+check(s100.stage === "hunt" && !!fig, "the Figure came down the stairs, and it's hunting");
+check(dist(fig.location, lever.location) >= 4 && fr.local(fig.location).u < L100.U(1), "from the foot of the stairs, not where you pulled the lever");
 const inHalls = (e) => {
   const l = fr.local(e.location);
   return s100.nav.walk(Math.floor(l.r), Math.floor(l.f));

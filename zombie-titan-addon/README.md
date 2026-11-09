@@ -1,6 +1,6 @@
 # Titans: Zombie, Skeleton, Creeper and Spider Titans, the Omegafish, Dark Fists, Obsidian gear, Gum Gum Fruit, Doors, Players, Glowite, Crabulon, Nukes
 
-**Version 1.10.0**
+**Version 1.11.0**
 
 A Minecraft Bedrock (Pocket Edition) add-on that brings the **Zombie Titan**, the
 **Skeleton Titan**, the **Creeper Titan**, the **Spider Titan** and the **Omegafish**
@@ -12,7 +12,7 @@ bar. It also adds:
 - the **Growth Serum**, which turns zombies, skeletons, creepers, spiders and silverfish into titans
 - the **Gum Gum Fruit**: eat it to get rubber powers (and lose the ability to swim)
 - the Roblox horror game **DOORS**: the **Lobby** and all of **Floor 1** (the Hotel,
-  doors 0 to 100, with Rush, Screech, Hide, Seek, the Figure and Jeff's shop), and
+  doors 0 to 100, with Rush, Ambush, Screech, Hide, Seek, the Figure and Jeff's shop), and
   **Door 50** (the Library) and **Door 30** (the Seek chase) on their own
 - **Players**: mobs that play Minecraft like a person, from punching a tree to the
   Ender Dragon, and the **Player API** item to manage them (and to let them chat
@@ -39,7 +39,7 @@ Glowshroom Door 1.26.40 or newer.
 1. Download **[`dist/ZombieTitan.mcaddon`](dist/ZombieTitan.mcaddon)**.
 2. Open **Files → Downloads** and tap `ZombieTitan.mcaddon`. Minecraft opens and
    imports two packs: *Zombie Titan BP* and *Zombie Titan RP*. Their descriptions
-   start with the version number (*Version 1.10.0*).
+   start with the version number (*Version 1.11.0*).
 3. Create a world, or edit one. Under **Behavior Packs**, activate
    **Zombie Titan BP**. Minecraft adds the resource pack with it.
 4. Play. Here is where everything is in the creative inventory:
@@ -77,7 +77,7 @@ If tapping the file does nothing, long-press it, choose **Open with**, and pick
   Storage**, delete the old *Zombie Titan BP* and *Zombie Titan RP*, and import
   again.
 - If the world still acts like the old version, check under **Behavior Packs**
-  that Zombie Titan BP is active and that its description says *Version 1.10.0*.
+  that Zombie Titan BP is active and that its description says *Version 1.11.0*.
 
 ## The Zombie Titan
 
@@ -749,7 +749,7 @@ go, and each one ends in a numbered door:
 | 57 to 70 | Seek's eyes come back from 57, and Seek chases you again between 60 and 70 |
 | 80 | **The Infirmary**: beds behind curtains, and a side room with a **skull lock** that only a skeleton key opens. Inside is the **Herb of Viridis** |
 | 89 | An iron **gate**, out into the **Courtyard**: grass, graves, an angel statue and stairs along its sides |
-| 90 to 99 | **The Greenhouse**: dark rooms of plants under a glass roof, behind gates with white numbers. Lightning, not flickering lights, warns of Rush here |
+| 90 to 99 | **The Greenhouse**: dark rooms of plants under a glass roof, behind gates with white numbers. Lightning, not flickering lights, warns of Rush and Ambush here |
 | 100 | **The Electrical Room** (below) |
 
 **Gold and Jeff's shop.** Gold from drawers is counted for each player (shown when
@@ -762,7 +762,7 @@ chair. Tap Jeff, El Goblino or the goods to shop:
 | **Lighter** | 100 | Hold it and it lights: a warm light follows you, and in dark rooms you can see about 13 blocks. Use it to close it. About a minute of fuel |
 | **Flashlight** | 200 | Hold it and it shines where you look, and in dark rooms you can see about 22 blocks. Use it to switch it off. Two minutes of battery |
 | **Skeleton Key** | 400 | Opens any lock, even skull locks. Two uses |
-| **Crucifix** | 500 | Hold it up (in your hand) against Rush or Screech, and the Guiding Light's chains drag them into the floor. Seek and the Figure are only held back for **5 seconds**. One use |
+| **Crucifix** | 500 | Hold it up (in your hand) against Rush, Ambush or Screech, and the Guiding Light's chains drag them into the floor. Seek and the Figure are only held back for **5 seconds**. One use |
 
 Lighters (15% of drawers), flashlights (5%) and crucifixes (1%) can also be found.
 
@@ -772,13 +772,25 @@ about **7 seconds** a roar grows louder. **Hide** in a closet or under a bed bef
 arrives! Rush tears through the rooms, smashing their lights, and kills anyone not
 hiding.
 
+**Ambush.** Rarer than Rush (a 1-in-20 chance at each door from door 12 on, 1-in-10 in
+the Greenhouse) and faster, glowing green, with a warbling, glitching wail. The lights
+**flicker** and its wail grows for about 3 seconds, then it tears through the rooms like
+Rush, killing anyone not hiding. But it doesn't leave: it **rebounds 3 to 6 times**,
+tearing back the other way, then back again, a few seconds apart. Before each pass the
+lights flicker again and you hear it coming; between passes you hear it turn at the end
+of the rooms. **Hide each time it comes, and get out while it's away**: Hide doesn't
+count the time while Ambush is coming or going by, but it does count while Ambush is
+away, so staying hidden through every pass gets you thrown out. Its last pass smashes
+the lights.
+
 **Screech.** In a **dark room**, you may hear *"psst"*. Screech is hiding nearby.
 **Turn and look at it** within 3 seconds and it shrieks and goes away. Otherwise it
 bites (8 damage).
 
 **Hide.** Don't stay hidden too long. After **10 seconds**, eyes appear around you,
 you hear whispers and the screen flashes red: **get out**. Five seconds later, Hide
-throws you out and hurts you (8 damage).
+throws you out and hurts you (8 damage). The time while Rush goes by, or while Ambush is
+coming or going by, doesn't count.
 
 **Seek and the Figure** are as in their own levels: run from Seek and follow the
 Guiding Light; stay quiet around the Figure.
@@ -794,8 +806,11 @@ grey electrical room: halls around two great square blocks, with shelves and
 closets, open side rooms full of shelves, and a locked door marked **WARNING: HIGH
 VOLTAGE**. Beside a wide grey gate is a **lever**.
 
-1. **Pull the lever.** The gate slides open, and **the Figure** comes down the stairs
-   and starts hunting the halls (it won't leave them). Keep quiet.
+1. **Pull the lever.** The gate slides open, and **the Figure** comes out of a side hall
+   upstairs and roars at the top of the stairs. This short cutscene (about 6 seconds)
+   ends while it's still up there: you can move again while it comes down into the
+   halls. Get away from the lever and into a closet (or crouch) before it reaches the
+   foot of the stairs. From there it hunts the halls by sound (it won't leave them).
 2. Go through the gate and up the stairs to a gated room with the **broken-down
    elevator**. On one of the wooden crates is a grey **Electrical Room Key**.
 3. The key opens the **High Voltage** room. Its **breaker box** has ten empty slots
@@ -1394,7 +1409,7 @@ python3 tools/build.py        # regenerates everything, writes dist/ZombieTitan.
 ```
 
 The Seek chase's music is synthesized by `tools/gen_doors_audio.py`, the elevator
-music, door 100's chase, Screech's whisper and Rush's roar by `tools/gen_floor1_audio.py`,
+music, door 100's chase, Screech's whisper, Rush's roar and Ambush's wail by `tools/gen_floor1_audio.py`,
 and the nukes' sounds (the siren, the launch, the whistle, the blast, the rumble, the silo's
 doors and the Geiger counter) by `tools/gen_nuke_audio.py`. They are encoded with `ffmpeg`
 (libvorbis). Without ffmpeg, the build keeps the existing files.
@@ -1430,6 +1445,16 @@ Development checks:
   poses to PNG.
 
 ## Version history
+
+- **1.11.0** (Ambush)
+  - Fixed: at door 100, the lever's cutscene went on until the Figure had walked all the
+    way down to the lever, so when it ended the Figure was standing right where you
+    were. It now ends after about 6 seconds, while the Figure is still at the top of the
+    stairs, and the Figure starts hunting from the foot of the stairs, not at the lever.
+  - New: **Ambush** in the Hotel. The lights flicker and its wail grows; it tears through
+    the rooms like Rush, then **rebounds 3 to 6 times**, back and forth, with the lights
+    flickering before each pass. Hide each time it comes and get out while it's away. A
+    crucifix drags it into the floor.
 
 - **1.10.0** (Nukes)
   - New: the **Nuke Silo** and the **Missile Silo**, with hatch doors that swing open and

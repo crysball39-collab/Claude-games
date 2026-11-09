@@ -1,10 +1,17 @@
-// The Hotel's creatures (DOORS): Rush, Screech and Hide.
+// The Hotel's creatures (DOORS): Rush, Ambush, Screech and Hide.
 //
 // Rush: after a door opens, now and then (one door in ten; one in four in the Greenhouse,
 // where lightning outside gives it away instead), the lights flicker. Its roar grows louder for
 // seven seconds, then it tears through the rooms from behind you to the next closed door,
 // bursting every light on its way. Anyone it finds who isn't hiding in a closet or under a
 // bed dies, unless they hold up a crucifix: then chains of light drag Rush into the floor.
+//
+// Ambush: rarer (one door in twenty from door 12; one in ten in the Greenhouse), and faster.
+// The lights flicker and its wail grows, and it tears through the rooms like Rush; but it
+// doesn't go. It rebounds, 3 to 6 times: back the other way, then back again, a few seconds
+// apart, the lights flickering and its wail growing before each pass. Hide keeps counting
+// while it's away, so get out of your hiding spot between its passes and back in before it
+// returns. It bursts the lights on its last pass; a crucifix drags it into the floor too.
 //
 // Screech: in a dark room, sometimes a "psst" behind you. Turn and look at it and it screeches
 // and leaves; don't, and it bites (8 damage). A lit lighter or flashlight keeps it away more.
@@ -27,7 +34,7 @@ const SCREECH = { wait: 80, look: 60, damage: 8, cone: 0.92, ban: 300 };
 // ---------------------------------------------------------------- Rush
 /** A door was opened into room n: maybe Rush comes. @param {Run} run @param {FloorData} d */
 export function maybeRush(run, d, n, now) {
-  if (d.rush || n - d.lastRush < 3) return;
+  if (d.rush || d.ambush || n - d.lastRush < 3 || n - (d.lastAmbush ?? -99) < 3) return;
   const room = d.rooms[n];
   const chance = room.kind === "greenhouse" ? 0.25 : 0.1;
   if (Math.random() < chance) startRush(run, d, n, now);
@@ -189,6 +196,208 @@ function banish(run, d, r, e, p, now) {
   for (const q of Doors.livePlayers(run)) q.sendMessage("§b" + p.name + "'s crucifix dragged Rush into the floor!");
 }
 
+// ---------------------------------------------------------------- Ambush
+/**
+ * from, chance: the first door it can come at, and how often (greenhouse: in the Greenhouse);
+ * warn, rewarn: ticks its wail grows before its first pass and before each rebound (the lights
+ * flicker for all but the last 15); speed: blocks a tick; gap: ticks it's away between passes.
+ */
+export const AMBUSH = { from: 12, chance: 0.05, greenhouse: 0.1, warn: 70, rewarn: 50, speed: 1.9, reach: 7, gap: [50, 110],
+  rebounds: [3, 6] };
+
+/** A door was opened into room n: maybe Ambush comes (never with Rush). @param {Run} run @param {FloorData} d */
+export function maybeAmbush(run, d, n, now) {
+  if (d.rush || d.ambush || n < AMBUSH.from || n - (d.lastAmbush ?? -99) < 8 || n - d.lastRush < 3) return;
+  const room = d.rooms[n];
+  if (Math.random() < (room.kind === "greenhouse" ? AMBUSH.greenhouse : AMBUSH.chance)) startAmbush(run, d, n, now);
+}
+
+/** Ambush is coming. @param {Run} run @param {FloorData} d @param {number} [rebounds] how many times it comes back (3 to 6) */
+export function startAmbush(run, d, n, now, rebounds) {
+  const [lo, hi] = AMBUSH.rebounds;
+  const k = rebounds ?? lo + Math.floor(Math.random() * (hi - lo + 1));
+  d.ambush = { phase: "warn", at: now, room: n, pass: 0, passes: k + 1, dir: 1, s: 0, id: undefined, line: undefined,
+    heard: new Set(), broke: new Set(), flickerAt: now, nextAt: 0 };
+  d.lastAmbush = n;
+  warnAmbush(run, d);
+}
+
+/** Before each pass: the lights flicker (the first time, in the Greenhouse, lightning), and its wail grows. @param {Run} run @param {FloorData} d */
+function warnAmbush(run, d) {
+  const a = d.ambush;
+  const first = a.pass === 0;
+  if (first && d.rooms[a.room]?.kind === "greenhouse") {
+    for (const p of Doors.livePlayers(run)) {
+      Doors.fade(p, 0.0, 0.08, 0.35, { red: 0.9, green: 1.0, blue: 0.9 });
+      try {
+        p.playSound("zt.rush.thunder", { volume: 1.0 });
+      } catch {
+        /* ignore */
+      }
+    }
+  } else {
+    for (const p of Doors.livePlayers(run)) Doors.sound(run.dim, "zt.rush.flicker", p.location, 1.0, 1.0);
+  }
+  for (const p of Doors.livePlayers(run)) {
+    try {
+      p.playSound(first ? "zt.ambush.approach" : "zt.ambush.return", { volume: 1.0 });
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+/** @param {Run} run @param {FloorData} d */
+export function ambushTick(run, d, now) {
+  const a = d.ambush;
+  if (!a) return;
+  const t = now - a.at;
+  if (a.phase === "warn") {
+    const warn = a.pass === 0 ? AMBUSH.warn : AMBUSH.rewarn;
+    // the lights flicker in the rooms around you...
+    if (t < warn - 15 && now >= a.flickerAt) {
+      a.flickerAt = now + 2 + Math.floor(Math.random() * 3);
+      for (let n = Math.max(0, d.rear - 1); n <= d.lead; n++) {
+        const room = d.rooms[n];
+        if (room && !room.dark && !room.seg) roomLights(run, room, Math.random() < 0.45);
+      }
+    }
+    // ...and steady, a moment before it's there
+    if (t === warn - 15) {
+      for (let n = Math.max(0, d.rear - 2); n <= d.lead; n++) {
+        const room = d.rooms[n];
+        if (room && !room.dark && !room.seg) roomLights(run, room, true);
+      }
+    }
+    if (t >= warn) ambushComes(run, d, now);
+    return;
+  }
+  if (a.phase === "pass") ambushPass(run, d, a, now);
+  else if (a.phase === "gap" && now >= a.nextAt) {
+    // it's coming back
+    a.phase = "warn";
+    a.at = now;
+    a.flickerAt = now;
+    warnAmbush(run, d);
+  } else if (a.phase === "banished" && now >= a.nextAt) {
+    const e = a.id ? world.getEntity(a.id) : undefined;
+    if (isValid(e)) e.remove();
+    d.ambush = undefined;
+  }
+}
+
+/** Where Ambush is `s` blocks into this pass, and the way it's going. */
+function ambushAt(a, s) {
+  const p = along(a.line, a.dir > 0 ? s : a.line.total - s);
+  return a.dir > 0 ? p : { ...p, dir: { r: -p.dir.r, f: -p.dir.f } };
+}
+
+/** A pass: forward from the room behind the last of you to the next closed door, then back, and so on. @param {Run} run @param {FloorData} d */
+function ambushComes(run, d, now) {
+  const a = d.ambush;
+  let lo = Math.max(1, d.rear - 1);
+  while (d.rooms[lo]?.seg && lo < d.lead) lo++;
+  let hi = Math.max(d.lead, d.frontier);
+  while (hi > lo && d.rooms[hi]?.seg) hi--;
+  if (hi < lo) {
+    d.ambush = undefined;
+    return;
+  }
+  a.line = measure(pathThrough(d, lo, hi, 1.0));
+  a.dir = a.pass % 2 === 0 ? 1 : -1;
+  a.s = 0;
+  a.heard = new Set();
+  const p0 = ambushAt(a, 0);
+  const fr = run.frame;
+  let e;
+  try {
+    e = Doors.spawnFor(run, "zt:ambush", fr.at(p0.r, p0.u, p0.f), { yaw: yawTo(fr.at(0, 0, 0), fr.at(p0.dir.r, 0, p0.dir.f)) });
+  } catch {
+    d.ambush = undefined;
+    return;
+  }
+  a.id = e.id;
+  a.phase = "pass";
+  void now;
+}
+
+/** Through the rooms: whoever isn't hiding dies; on its last pass the lights burst. @param {Run} run @param {FloorData} d */
+function ambushPass(run, d, a, now) {
+  const e = a.id ? world.getEntity(a.id) : undefined;
+  if (!isValid(e)) {
+    d.ambush = undefined;
+    return;
+  }
+  const fr = run.frame;
+  a.s = Math.min(a.line.total, a.s + AMBUSH.speed);
+  const p = ambushAt(a, a.s);
+  const at = fr.at(p.r, p.u, p.f);
+  try {
+    e.teleport(at, { rotation: { x: 0, y: yawTo(fr.at(0, 0, 0), fr.at(p.dir.r, 0, p.dir.f)) } });
+  } catch {
+    /* ignore */
+  }
+  // its shriek as it tears past: each player hears it once a pass, as it comes within reach of them
+  for (const q of Doors.livePlayers(run)) {
+    if (a.heard.has(q.id) || len(sub(q.location, at)) > 28) continue;
+    a.heard.add(q.id);
+    try {
+      q.playSound("zt.ambush.pass", { volume: 1.0, pitch: 0.95 + Math.random() * 0.1 });
+    } catch {
+      /* ignore */
+    }
+  }
+  const last = a.pass + 1 >= a.passes;
+  const here = roomIndexAt(d, p);
+  const room = d.rooms[here];
+  if (last && room && !a.broke.has(here) && !room.seg) {
+    a.broke.add(here);
+    if (breakLights(run, room)) Doors.sound(run.dim, "zt.lights.break", at, 2.0, 1.0);
+  }
+  // whoever it finds out in the open
+  for (const x of d.where ?? []) {
+    const q = /** @type {Player} */ (x.p);
+    if (!isValid(q) || Doors.isHidden(q) || !Doors.canDie(q)) continue;
+    const sameRoom = x.n === here && Math.abs(x.l.f - p.f) < 24;
+    if (!sameRoom && len(sub(q.location, at)) > AMBUSH.reach) continue;
+    if (Doors.holdsCrucifix(q)) {
+      banishAmbush(run, d, a, e, q, now);
+      return;
+    }
+    Doors.kill(q, e, "ambush");
+  }
+  if (a.s < a.line.total) return;
+  particle(run.dim, "zt:ambush_burst", at);
+  if (last) {
+    // it's gone through the last door, for good
+    Doors.sound(run.dim, "zt.ambush.gone", at, 2.0, 1.0);
+    e.remove();
+    d.ambush = undefined;
+    return;
+  }
+  // it turns at the end of the rooms: it'll be back
+  Doors.sound(run.dim, "zt.ambush.turn", at, 2.0, 1.0);
+  e.remove();
+  a.id = undefined;
+  a.pass++;
+  a.phase = "gap";
+  a.nextAt = now + AMBUSH.gap[0] + Math.floor(Math.random() * (AMBUSH.gap[1] - AMBUSH.gap[0] + 1));
+}
+
+/** The crucifix: chains of the Guiding Light drag Ambush down into the floor, for good. @param {Run} run @param {FloorData} d */
+function banishAmbush(run, d, a, e, p, now) {
+  a.phase = "banished";
+  a.nextAt = now + 50;
+  Doors.spendCrucifix(p, { x: e.location.x, y: e.location.y - 1, z: e.location.z });
+  try {
+    e.setProperty("zt:anim", 1);
+  } catch {
+    /* ignore */
+  }
+  Doors.sound(run.dim, "zt.ambush.banished", e.location, 2.5, 1.0);
+  for (const q of Doors.livePlayers(run)) q.sendMessage("§b" + p.name + "'s crucifix dragged Ambush into the floor!");
+}
+
 // ---------------------------------------------------------------- Screech
 /** @param {Run} run @param {FloorData} d */
 export function screechTick(run, d, now) {
@@ -200,7 +409,7 @@ export function screechTick(run, d, now) {
       continue;
     }
     const room = d.rooms[x.n];
-    if (Doors.isHidden(p) || !isOrdinary(room) || !isDark(room) || d.rush) {
+    if (Doors.isHidden(p) || !isOrdinary(room) || !isDark(room) || d.rush || d.ambush) {
       d.darkSince.delete(p.id);
       continue;
     }
@@ -343,14 +552,15 @@ export function hideEyes(p, k) {
 }
 
 // ---------------------------------------------------------------- the end
-/** The run is over: Rush and Screech go. @param {Run} run @param {FloorData} d */
+/** The run is over: Rush, Ambush and Screech go. @param {Run} run @param {FloorData} d */
 export function endAll(run, d) {
-  const r = d.rush;
-  if (r?.id) {
+  for (const r of [d.rush, d.ambush]) {
+    if (!r?.id) continue;
     const e = world.getEntity(r.id);
     if (isValid(e)) e.remove();
   }
   d.rush = undefined;
+  d.ambush = undefined;
   for (const s of d.screech?.values() ?? []) {
     const e = world.getEntity(s.id);
     if (isValid(e)) e.remove();

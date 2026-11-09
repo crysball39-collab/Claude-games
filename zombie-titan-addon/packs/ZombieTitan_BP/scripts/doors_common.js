@@ -679,6 +679,13 @@ const GUIDANCE = {
     "§bHide in a closet or under a bed, and wait until it has passed.",
     "§bI will be here when you try again.",
   ],
+  ambush: [
+    "§bYou died to who you call Ambush...",
+    "§bLike Rush, it makes its presence known: the lights flicker, and you hear it coming.",
+    "§bBut it doesn't leave so soon. It comes back, again and again.",
+    "§bHide when it comes, and get out while it's away, or Hide will find you.",
+    "§bI will be here when you try again.",
+  ],
   screech: [
     "§bYou died to who you call Screech...",
     "§bIt lurks in the dark rooms. When you hear it whisper, look around.",
@@ -704,12 +711,13 @@ const KILLERS = {
   seek: ["§0§lSEEK", "zt.seek.kill"],
   hands: ["§0§lSEEK", "zt.seek.kill"],
   rush: ["§8§lRUSH", "zt.rush.kill"],
+  ambush: ["§2§lAMBUSH", "zt.ambush.kill"],
 };
 
 /**
  * Kill something for a Doors creature. Players get a jumpscare, and the Guiding Light's advice
  * when they respawn.
- * @param {Entity} victim @param {Entity} killer @param {"figure" | "seek" | "hands" | "rush" | "elevator"} kind
+ * @param {Entity} victim @param {Entity} killer @param {"figure" | "seek" | "hands" | "rush" | "ambush" | "elevator"} kind
  */
 export function kill(victim, killer, kind) {
   if (victim.typeId === "minecraft:player") {

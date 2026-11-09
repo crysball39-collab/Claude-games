@@ -8,6 +8,10 @@
   rush_approach.ogg    Rush coming: seven seconds of rumble, roar and static that start almost
                        silent and swell until it bursts in
   rush_pass.ogg        Rush tearing past: a roar that peaks and falls away (its pitch dropping)
+  ambush_approach.ogg  Ambush coming: three and a half seconds of a warbling, glitching electric
+                       wail that starts far off and swells until it bursts in
+  ambush_return.ogg    Ambush coming back after it rebounds: the same, two and a half seconds
+  ambush_pass.ogg      Ambush tearing past: a shriek that peaks and falls away
 
 Nothing is sampled; every sound is made here from sines, saws and noise. The OGGs are encoded
 with ffmpeg (libvorbis) in bit-exact mode, so the same script always produces the same files.
@@ -306,12 +310,67 @@ def rush_pass():
     encode(np.tanh(mix * 1.1), "rush_pass", peak=0.7)
 
 
+# =============================================================================================
+# Ambush
+# =============================================================================================
+def ambush_voice(rng, n, f0, f1):
+    """Ambush's wail: a sawtooth gliding from f0 to f1 Hz, warbling ever faster, ring-modulated
+    into a metallic scream and distorted, with the sound stuttering like a broken recording
+    and static crackling through it. Returns the voice and a low rumble under it."""
+    t = np.arange(n) / SR
+    x = t / t[-1]
+    wob_rate = 9 + 7 * x
+    wob = np.sin(2 * np.pi * np.cumsum(wob_rate) / SR)
+    f = (f0 + (f1 - f0) * x) * (1 + 0.22 * wob)
+    phase = 2 * np.pi * np.cumsum(f) / SR
+    v = 2 * ((phase / (2 * np.pi)) % 1.0) - 1
+    v = v * (0.6 + 0.4 * np.sin(phase * 2.31))                   # ring modulation: metallic
+    v = np.tanh(v * 4.0)
+    v = lowpass(v - lowpass(v, 500), 5200)                       # thin and shrill
+    # it stutters: now and then a scrap of it repeats, like a skipping recording
+    out = v.copy()
+    seg = int(0.06 * SR)
+    for i in range(seg, n - seg, seg):
+        if rng.random() < 0.28:
+            out[i:i + seg] = out[i - seg:i]
+    static = rng.standard_normal(n)
+    static = (static - lowpass(static, 3500)) * (rng.random(n) < 0.3)
+    rumble = lowpass(lowpass(rng.standard_normal(n), 120), 120) * 5.0
+    return t, out + static * 0.35, rumble
+
+
+def ambush_coming(name, seconds, seed):
+    rng = np.random.default_rng(seed)
+    n = int(seconds * SR)
+    t, voice, rumble = ambush_voice(rng, n, 140, 260)
+    x = t / t[-1]
+    # far off and muffled at first, louder and clearer as it comes
+    mix = (voice * (0.35 + 0.65 * x ** 1.5) + rumble * 0.12 * (0.4 + 0.6 * x)) * (0.05 + 0.95 * x ** 2)
+    near = lowpass(mix, 9000)
+    far = lowpass(mix, 1800)
+    mix = far * (1 - x ** 2) + near * x ** 2
+    encode(np.tanh(mix * 1.1), name, peak=0.8)
+
+
+def ambush_pass():
+    rng = np.random.default_rng(1616)
+    n = int(2.2 * SR)
+    t, voice, rumble = ambush_voice(rng, n, 330, 120)
+    env_ = np.clip(t / 0.1, 0, 1) * np.exp(-np.maximum(t - 0.3, 0) * 2.2)
+    whoosh = rng.standard_normal(n)
+    whoosh = lowpass(whoosh - lowpass(whoosh, 400), 2500) * np.exp(-((t - 0.3) / 0.25) ** 2) * 1.2
+    encode(np.tanh((voice * 1.2 + rumble * 0.2 + whoosh) * env_ * 1.2), "ambush_pass", peak=0.68)
+
+
 def main():
     elevator_music()
     chase()
     psst()
     rush_approach()
     rush_pass()
+    ambush_coming("ambush_approach", 3.5, 1515)
+    ambush_coming("ambush_return", 2.5, 1717)
+    ambush_pass()
 
 
 if __name__ == "__main__":

@@ -493,6 +493,30 @@ def effects():
         "minecraft:particle_appearance_tinting": gradient({
             "0.0": [0.02, 0.02, 0.03, 0.95], "0.6": [0.05, 0.05, 0.06, 0.8], "1.0": [0.08, 0.08, 0.09, 0.0]}),
     })
+    # Ambush's trail: glowing green mist streaming behind it, and a burst of it when it turns back
+    grow = "(1.0 + v.particle_random_3 * 1.2) * (0.6 + v.particle_age / v.particle_lifetime * 0.8)"
+    E["ambush_mist"] = effect("zt:ambush_mist", "particles_add", SMOKE, {
+        "minecraft:emitter_rate_steady": {"spawn_rate": 40, "max_particles": 120},
+        "minecraft:emitter_lifetime_looping": {"active_time": 1},
+        "minecraft:emitter_shape_sphere": {"radius": 1.3, "direction": "outwards", "offset": [0, 1.1, 0]},
+        "minecraft:particle_lifetime_expression": {"max_lifetime": "0.6 + v.particle_random_1 * 0.6"},
+        "minecraft:particle_initial_speed": "0.4 + v.particle_random_2 * 0.6",
+        "minecraft:particle_motion_dynamic": {"linear_drag_coefficient": 1.5},
+        "minecraft:particle_appearance_billboard": billboard([grow, grow], 64, 16, flipbook=SMOKE_FLIP),
+        "minecraft:particle_appearance_tinting": gradient({
+            "0.0": [0.35, 0.95, 0.45, 0.8], "0.5": [0.15, 0.6, 0.25, 0.5], "1.0": [0.05, 0.3, 0.1, 0.0]}),
+    })
+    E["ambush_burst"] = effect("zt:ambush_burst", "particles_add", SMOKE, {
+        "minecraft:emitter_rate_instant": {"num_particles": 18},
+        "minecraft:emitter_lifetime_once": {"active_time": 0.05},
+        "minecraft:emitter_shape_sphere": {"radius": 1.6, "direction": "outwards"},
+        "minecraft:particle_lifetime_expression": {"max_lifetime": "0.8 + v.particle_random_1 * 0.6"},
+        "minecraft:particle_initial_speed": "2 + v.particle_random_2 * 3",
+        "minecraft:particle_motion_dynamic": {"linear_drag_coefficient": 2.0},
+        "minecraft:particle_appearance_billboard": billboard([grow, grow], 64, 16, flipbook=SMOKE_FLIP),
+        "minecraft:particle_appearance_tinting": gradient({
+            "0.0": [0.4, 1.0, 0.5, 0.9], "1.0": [0.05, 0.35, 0.1, 0.0]}),
+    })
     # Hide: eyes open in the dark round you, stare, and close
     E["hide_eyes"] = effect("zt:hide_eyes", "particles_alpha", "textures/particle/zt_eyes", {
         "minecraft:emitter_rate_instant": {"num_particles": 1},

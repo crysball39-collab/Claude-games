@@ -521,13 +521,14 @@ export function tick(run, d, now, where) {
     for (const lamp of s.lay.lamps.slice(0, 2)) setLamp(run, lamp, Math.random() < 0.55 ? 1 : 0);
   }
   if (s.stage === "lever") leverScene(run, d, s, now);
+  else if (s.stage === "descend") descendScene(run, d, s, now);
   else if (s.stage === "fire") fireScene(run, d, s, now);
   else if (s.stage === "puzzle") puzzleTick(run, d, s, now);
   else if (s.stage === "power") powerScene(run, d, s, now);
   else if (s.stage === "chase") chaseTick(run, d, s, now, players);
   else if (s.stage === "elevator") elevatorScene(run, d, s, now);
   // the switches meter, once the box is open
-  if (s.collected !== undefined && (s.stage === "hunt" || s.stage === "switches") && now % 10 === 0 && s.boxOpened) {
+  if (s.collected !== undefined && (s.stage === "descend" || s.stage === "hunt" || s.stage === "switches") && now % 10 === 0 && s.boxOpened) {
     for (const p of players) Doors.setMeter(p, "switches", Math.max(1, ((s.collected + s.inserted) / SWITCHES) * 100));
   }
   void where;
@@ -618,43 +619,73 @@ function pullLever(run, d, s, p, lever) {
   }
 }
 
+/**
+ * The lever's cutscene, in ticks from the pull: the Figure comes out of the side hall a second
+ * in, walks to the head of the stairs and roars, and the camera comes back to you (at the
+ * latest at `end`). Then, while you get away, it comes down into the halls (taking `down` at
+ * most) and starts to listen there, at the foot of the stairs, not where you pulled the lever.
+ */
+const LEVER_SCENE = { appear: 20, roar: 20, end: 150, down: 200 };
+/** Where the Figure stops at the foot of the stairs, just inside the halls. */
+const FOOT = { x: -0.5, z: 25.5 };
+
 /** @param {Run} run @param {FloorData} d */
 function leverScene(run, d, s, now) {
   const t = now - s.at;
   const L = s.lay.L;
   const fr = run.frame;
-  if (t === 30) {
+  const pt = (x, y, z) => ({ r: L.R(x), u: L.U(y), f: L.F(z) });
+  if (t === LEVER_SCENE.appear) {
     const fig = Doors.spawnFor(run, Fig.FIGURE, L.at(-12.5, UP.y, 43.5), { spawnEvent: "zt:as_level", yaw: fr.yawOf("r") });
     s.figureId = fig.id;
+    s.roarAt = undefined;
     Fig.attachLevel(fig, run, s.nav, fr);
     Fig.setKillKind(fig, "figure");
-    const pt = (x, y, z) => ({ r: L.R(x), u: L.U(y), f: L.F(z) });
-    Fig.scriptPath(fig, [pt(-6.5, UP.y, 43.5), pt(-0.5, UP.y, 41.5), pt(-0.5, UP.y, 39.5), pt(-0.5, 0, 30.5), pt(-0.5, 0, 28.5),
-      pt(-0.5, 0, 25.5), pt(3.5, 0, 24.5)], 3.2, 1);
+    // out of the side hall, to the head of the stairs
+    Fig.scriptPath(fig, [pt(-6.5, UP.y, 43.5), pt(-0.5, UP.y, 41.5), pt(-0.5, UP.y, 39.5)], 3.6, 1);
     Doors.sound(run.dim, "zt.figure.roar", fig.location, 2.5, 0.9);
     for (const q of Doors.livePlayers(run)) Doors.camera(q, L.at(3.5, 3.2, 23.0), fig, 0.6);
   }
+  if (t <= LEVER_SCENE.appear) return;
   const fig = s.figureId ? world.getEntity(s.figureId) : undefined;
-  if (t > 30 && (!isValid(fig) || !Fig.isWalking(fig) || t > 520)) {
-    if (isValid(fig)) {
-      try {
-        fig.teleport(L.at(3.5, 0, 24.5));
-      } catch {
-        /* ignore */
-      }
-      Fig.scriptAct(fig, "roar", 30);
-      Doors.sound(run.dim, "zt.figure.roar", fig.location, 3.0, 1.0);
-      Fig.release(fig, "search", { r: L.R(3.5), u: L.U(0), f: L.F(24.5) });
-    }
-    s.stage = "hunt";
+  // at the head of the stairs it roars...
+  if (s.roarAt === undefined && isValid(fig) && !Fig.isWalking(fig)) {
+    s.roarAt = t;
+    Fig.scriptAct(fig, "roar", 30);
+    Doors.sound(run.dim, "zt.figure.roar", fig.location, 3.0, 1.0);
+  }
+  // ...and you have your eyes and legs back while it's still up there
+  if ((s.roarAt !== undefined && t >= s.roarAt + LEVER_SCENE.roar) || t >= LEVER_SCENE.end || !isValid(fig)) {
+    s.stage = "descend";
+    s.at = now;
+    if (isValid(fig)) Fig.scriptPath(fig, [pt(-0.5, 0, 30.5), pt(-0.5, 0, 28.5), pt(FOOT.x, 0, FOOT.z)], 2.6, 1);
     for (const q of Doors.livePlayers(run)) {
       Doors.lockInput(q, false);
       Doors.cameraClear(q);
       Doors.title(q, "§4The Figure", "§7Hide in a closet. Find a key upstairs.", 70);
-      q.sendMessage("§cThe Figure is loose in the halls. §7It hears every step: crouch, or hide in a wooden closet.");
+      q.sendMessage("§cThe Figure is coming down into the halls. §7It hears every step: crouch, or hide in a wooden closet.");
       q.sendMessage("§7Through the gate and up the stairs: the grey key opens the §8High Voltage §7room.");
     }
   }
+}
+
+/** The Figure comes down the stairs into the halls, and starts to hunt there. @param {Run} run @param {FloorData} d */
+function descendScene(run, d, s, now) {
+  const fig = s.figureId ? world.getEntity(s.figureId) : undefined;
+  if (isValid(fig) && Fig.isWalking(fig) && now - s.at < LEVER_SCENE.down) return;
+  const L = s.lay.L;
+  if (isValid(fig)) {
+    // (stuck on the way, it's put where it was going)
+    if (Fig.isWalking(fig)) {
+      try {
+        fig.teleport(L.at(FOOT.x, 0, FOOT.z));
+      } catch {
+        /* ignore */
+      }
+    }
+    Fig.release(fig, "search", { r: L.R(FOOT.x), u: L.U(0), f: L.F(FOOT.z) });
+  }
+  s.stage = "hunt";
 }
 
 /** The breaker box: open it, put the switches in, or (during the puzzle) set its switches. @param {Run} run @param {FloorData} d */

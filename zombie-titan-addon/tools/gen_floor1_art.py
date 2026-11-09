@@ -2,10 +2,11 @@
 nightstands, desks, cabinets, couches, keys, flesh piles; the elevator doors, the iron
 gates (with a white door number), door 100's grey metal door, wide grey gate, the
 elevator's folding gate, its lever, breaker box and switches and the live wire; the herb
-plant and the angel statue; Jeff, El Goblino, Bob and the shop's goods; Rush and Screech.
+plant and the angel statue; Jeff, El Goblino, Bob and the shop's goods; Rush, Ambush and Screech.
 
 Shapes follow DOORS (Roblox): Rush is a cloud of black smoke with a huge pale face (wide
-staring eyes, a grin of teeth); Screech a small pale-pink thing coated in black goo, with
+staring eyes, a grin of teeth); Ambush a glowing pale-green face, long and gaunt, with hollow
+black eyes and a gaping mouth of jagged teeth, in a churning mass of green mist; Screech a small pale-pink thing coated in black goo, with
 six tentacles, glowing white eyes and a round mouth of human teeth in red gums; Jeff a
 dark royal-blue tentacled thing with glowing eyes (here blue) in the shadows; El Goblino a
 little red goblin with big yellow eyes, sharp ears, a gold earring, a beaky nose, two
@@ -1092,6 +1093,87 @@ def rush_texture(g):
     save(tex, "rush")
 
 
+MIST = ((22, 70, 34), (54, 150, 72), (150, 236, 150))
+SKIN = ((120, 160, 110), (176, 214, 162), (214, 240, 200))
+
+
+def ambush_geo():
+    g = Geo("geometry.zt.ambush", 256, None, 5, 5, (0, 1.5, 0))
+    for name, size in [("mist", (30, 34, 12)), ("wisp", (14, 14, 10)), ("wisp_s", (9, 9, 8)), ("skin", (20, 28, 1)),
+                       ("brow", (20, 3, 1.6)), ("cheek", (4, 9, 1.4)), ("eye", (6, 8, 0.6)), ("pupil", (1.6, 1.6, 0.4)),
+                       ("mouth", (12, 11, 0.6)), ("tooth", (1.2, 2.6, 0.4))]:
+        g.part(name, *size)
+    g.bone("root")
+    mist = [g.cube("mist", (-15, 0, -6))]
+    rng = np.random.default_rng(11)
+    for k in range(11):
+        a = k * (360 / 11) + rng.uniform(-12, 12)
+        r = 15 + rng.uniform(-2, 3)
+        x, y = math.cos(math.radians(a)) * r * 0.9, 17 + math.sin(math.radians(a)) * r
+        part = "wisp" if k % 3 != 2 else "wisp_s"
+        size = 14 if part == "wisp" else 9
+        mist.append(g.cube(part, (x - size / 2, y - size / 2, -5 + rng.uniform(-1, 3))))
+    g.bone("mist", "root", (0, 17, 0), cubes=mist)
+    # the face: long and gaunt, a heavy brow over hollow eyes, sunken cheeks, the mouth hanging open
+    g.bone("face", "mist", (0, 17, -6.4), cubes=[
+        g.cube("skin", (-10, 3, -6.6)), g.cube("brow", (-10, 23, -7.2)),
+        g.cube("cheek", (-10, 5, -7.0)), g.cube("cheek", (6, 5, -7.0)),
+        g.cube("eye", (-8, 15, -6.9)), g.cube("eye", (2, 15, -6.9))])
+    g.bone("pupils", "face", (0, 19, -7.1), cubes=[g.cube("pupil", (-5.8, 18.2, -7.1)), g.cube("pupil", (4.2, 18.2, -7.1))])
+    # (the mouth and its teeth stretch open and shut on their own)
+    teeth = [g.cube("tooth", (-5.6 + k * 1.6, 10.8 - (k % 2) * 0.6, -7.1)) for k in range(8)]
+    teeth += [g.cube("tooth", (-5.6 + k * 1.6, 2.2 + (k % 2) * 0.8, -7.1)) for k in range(8)]
+    g.bone("maw", "face", (0, 8, -6.9), cubes=[g.cube("mouth", (-6, 2, -6.9))] + teeth)
+    return g
+
+
+def ambush_texture(g):
+    def mist(c, p, rect, side, rng, part):
+        x, y, w, h = rect
+        p.material(x, y, w, h, *MIST, contrast=1.4, grain=0.3)
+        p.blotches(x, y, w, h, (190, 255, 190), threshold=0.72, alpha=0.45)
+        p.shade_edges(x, y, w, h, amount=0.35)
+        # (it glows, and the glow comes and goes in streaks of static)
+        reg = c.a[int(y):int(y) + int(h), int(x):int(x) + int(w)]
+        streak = (rng.random(reg.shape[:2]) < 0.18)
+        reg[..., 3] = np.where(streak, 40, 150)
+
+    def skin(c, p, rect, side, rng, part):
+        x, y, w, h = rect
+        p.material(x, y, w, h, *SKIN, contrast=1.1, grain=0.2)
+        p.blotches(x, y, w, h, (90, 130, 84), threshold=0.66, alpha=0.6)        # rotten patches
+        for _ in range(max(1, int(w * h / 90))):                                # cracks
+            cx, cy = x + rng.uniform(0, w), y + rng.uniform(0, h)
+            for k in range(int(rng.integers(3, 7))):
+                c.px(cx + k * rng.choice([-1, 1]) * 0.7, cy + k, (60, 92, 58))
+        p.shade_edges(x, y, w, h, amount=0.35)
+        reg = c.a[int(y):int(y) + int(h), int(x):int(x) + int(w)]
+        reg[..., 3] = np.minimum(reg[..., 3], 190)                               # (a faint glow of its own)
+
+    def eye(c, p, rect, side, rng, part):
+        x, y, w, h = rect
+        yy, xx = np.mgrid[0:int(h), 0:int(w)]
+        d = np.hypot((xx + 0.5 - w / 2) / (w / 2), (yy + 0.5 - h / 2) / (h / 2))
+        reg = c.a[int(y):int(y) + int(h), int(x):int(x) + int(w)]
+        reg[:] = SKIN[0] + (255,)
+        reg[d <= 1.0] = (6, 14, 8, 255)                                          # hollow and black
+        reg[(d > 0.8) & (d <= 1.0)] = (24, 50, 26, 255)
+
+    def mouth(c, p, rect, side, rng, part):
+        x, y, w, h = rect
+        yy, xx = np.mgrid[0:int(h), 0:int(w)]
+        k = np.clip(1 - np.hypot((xx + 0.5 - w / 2) / (w / 2), (yy + 0.5 - h / 2) / (h / 2)), 0, 1)
+        reg = c.a[int(y):int(y) + int(h), int(x):int(x) + int(w)]
+        reg[..., 0] = 8 + 30 * (1 - k)
+        reg[..., 1] = 14 + 50 * (1 - k)
+        reg[..., 2] = 10 + 24 * (1 - k)
+        reg[..., 3] = 255
+    tex = paint(g, {"skin": skin, "brow": skin, "cheek": mat((70, 104, 66), (110, 150, 100), (150, 190, 140), contrast=1.2),
+                    "eye": eye, "pupil": flat((210, 255, 200, 8)), "mouth": mouth, "tooth": flat((226, 236, 206, 60))},
+                default=mist, seed=3250)
+    save(tex, "ambush")
+
+
 PINK = ((170, 110, 112), (212, 152, 150), (236, 192, 186))
 
 
@@ -1146,7 +1228,7 @@ def main():
         ("breaker_lever", breaker_lever_geo(), breaker_lever_texture), ("live_wire", live_wire_geo(), live_wire_texture),
         ("herb_plant", herb_geo(), herb_texture), ("angel_statue", angel_geo(), angel_texture), ("jeff", jeff_geo(), jeff_texture),
         ("el_goblino", goblino_geo(), goblino_texture), ("bob", bob_geo(), bob_texture), ("shop_display", display_geo(), display_texture),
-        ("rush", rush_geo(), rush_texture), ("screech", screech_geo(), screech_texture),
+        ("rush", rush_geo(), rush_texture), ("ambush", ambush_geo(), ambush_texture), ("screech", screech_geo(), screech_texture),
     ]:
         write_geo(name, geo)
         painter(geo)

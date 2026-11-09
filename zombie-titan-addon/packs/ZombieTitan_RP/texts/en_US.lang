@@ -116,6 +116,7 @@ entity.zt:el_goblino.name=El Goblino
 entity.zt:bob.name=Bob
 entity.zt:shop_display.name=Jeff's Goods
 entity.zt:rush.name=Rush
+entity.zt:ambush.name=Ambush
 entity.zt:screech.name=Screech
 entity.zt:switch_bar.name=Breaker Switches
 item.zt:doors_floor1.name=Spawn The Lobby+Floor 1

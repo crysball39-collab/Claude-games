@@ -2,8 +2,8 @@
 // the reception, where the key to door 1 hangs behind the desk. From there the hotel's rooms
 // are built ahead of you as you go, a different hotel every run: rooms with closets to hide
 // in and beds to hide under, drawers with gold and things to find, locked doors whose key is
-// somewhere in the room. The lights flicker before Rush comes; Screech waits in the dark;
-// Hide doesn't like you hiding for long. Eyes on the walls from door 27 mean Seek, at 30 and
+// somewhere in the room. The lights flicker before Rush comes, and before Ambush (again and
+// again); Screech waits in the dark; Hide doesn't like you hiding for long. Eyes on the walls from door 27 mean Seek, at 30 and
 // again at 60; the Library at 50; Jeff's shop at 52; the hotel falls apart after it; the
 // Infirmary at 80, the Courtyard at 89, the Greenhouse to 99, and at door 100 the way out.
 import { system, world } from "@minecraft/server";
@@ -181,7 +181,7 @@ export function startRide(ride, players) {
   Object.assign(d, {
     phase: "ride", ride, rideAt: system.currentTick, buildBusy: false, skipped: 0, frontier: 0, lead: 0, rear: 0,
     gold: new Map(), drawers: new Map(), keys: new Map(), spots: new Map(), hideBan: new Map(), opened: new Set([0]),
-    lastRush: 0, rush: undefined, screech: new Map(), darkSince: new Map(), herb: new Set(), shopIds: new Set(),
+    lastRush: 0, rush: undefined, lastAmbush: -99, ambush: undefined, screech: new Map(), darkSince: new Map(), herb: new Set(), shopIds: new Set(),
     lockedAt: 0, warned: new Map(), seg: "", lobbyCar: ride.inCar, titles: new Set(), skippedTold: false,
   });
   const run = Doors.newRun("floor1", players[0], ride.hotel, [-90, -10, -12, 90, 48, d.maxF + 30], d);
@@ -490,6 +490,7 @@ function tick(run, now) {
   floorDoors(run, d, now, where);
   if (!d.seg) {
     Mobs.rushTick(run, d, now);
+    Mobs.ambushTick(run, d, now);
     Mobs.screechTick(run, d, now);
     if (now % 40 === 0) pullLaggards(run, d, where);
   }
@@ -584,7 +585,10 @@ function onDoorOpened(run, d, n, now) {
   d.opened.add(n);
   d.frontier = Math.max(d.frontier, n);
   const room = d.rooms[n];
-  if (isOrdinary(room) && n >= 4) Mobs.maybeRush(run, d, n, now);
+  if (isOrdinary(room) && n >= 4) {
+    Mobs.maybeRush(run, d, n, now);
+    Mobs.maybeAmbush(run, d, n, now);
+  }
 }
 
 /** Special rooms say what they are when you first walk in. @param {Run} run @param {FloorData} d */
@@ -761,8 +765,9 @@ function setCell(run, c, block) {
 }
 
 /**
- * Crouch to get out; and Hide: ten seconds hidden (not counting while Rush goes by) and its
- * eyes fill your view, five more and it throws you out.
+ * Crouch to get out; and Hide: ten seconds hidden (not counting while Rush goes by, nor while
+ * Ambush is coming or going by: only while it's away between its passes) and its eyes fill
+ * your view, five more and it throws you out.
  * @param {Run} run @param {FloorData} d
  */
 function hidingTick(run, d, now) {
@@ -781,7 +786,7 @@ function hidingTick(run, d, now) {
       unhide(run, d, p);
       continue;
     }
-    if (d.rush) h.paused++;
+    if (d.rush || (d.ambush && d.ambush.phase !== "gap")) h.paused++;
     const t = now - h.since - h.paused;
     if (t >= HIDE_KICK) {
       unhide(run, d, p, true);

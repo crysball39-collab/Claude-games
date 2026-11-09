@@ -3,7 +3,7 @@
 Script-driven properties pick the state: zt:open (closets, the elevator doors, the gates,
 the breaker box's door: played through controller.animation.zt.door), zt:drawers (a bitmask
 of open drawers, eased by the client entity's v.d0..v.d2), a lever's zt:on (eased by v.pull /
-v.flip), the metal door's zt:bang and zt:broken, Rush's zt:anim (0 flying, 1 dragged into the
+v.flip), the metal door's zt:bang and zt:broken, Rush's and Ambush's zt:anim (0 flying, 1 dragged into the
 floor) and Screech's zt:anim (0 lurking, 1 biting, 2 fleeing, 3 dragged into the floor).
 
 Rotation conventions: -X swings a hanging limb forward, +X tilts an upright part forward,
@@ -153,6 +153,21 @@ def creatures():
                   "rotation": ["math.sin(%s * 2000.0) * 8.0" % L, 0, "math.cos(%s * 1700.0) * 10.0" % L]},
         "face": {"position": ["math.sin(%s * 4000.0) * 1.2" % L, "math.cos(%s * 3500.0) * 1.2" % L, 0]},
     })
+    # Ambush: its face shaking and stretching, its jaw working, in mist that churns and swells
+    A["animation.zt.ambush.fly"] = loop({
+        "mist": {"rotation": [0, 0, "math.sin(%s * 520.0) * 6.0" % L],
+                 "scale": ["1.0 + math.sin(%s * 800.0) * 0.08" % L, "1.0 + math.cos(%s * 740.0) * 0.08" % L, 1]},
+        "face": {"position": ["math.sin(%s * 2900.0) * 0.8" % L, "math.cos(%s * 2400.0) * 0.8" % L, 0],
+                 "scale": ["1.0 + math.sin(%s * 1300.0) * 0.06" % L, "1.0 + math.sin(%s * 1700.0) * 0.12" % L, 1]},
+        "maw": {"scale": [1, "1.0 + math.abs(math.sin(%s * 600.0)) * 0.35" % L, 1]},
+        "pupils": {"position": ["math.sin(%s * 3500.0) * 0.4" % L, "math.cos(%s * 3100.0) * 0.4" % L, 0]},
+    })
+    A["animation.zt.ambush.sink"] = hold(2.4, {
+        "mist": {"position": keys([(0.0, [0, 0, 0]), (0.4, [0, 2, 0]), (2.4, [0, -44, 0])]),
+                 "rotation": ["math.sin(%s * 2200.0) * 9.0" % L, 0, "math.cos(%s * 1800.0) * 11.0" % L]},
+        "face": {"position": ["math.sin(%s * 4200.0) * 1.3" % L, "math.cos(%s * 3600.0) * 1.3" % L, 0]},
+        "maw": {"scale": [1, 1.4, 1]},
+    })
     tent = {}
     for k in range(6):
         ph = k * 60
@@ -190,6 +205,10 @@ def controllers():
         }},
         "controller.animation.zt.rush": {"initial_state": "fly", "states": {
             "fly": {"animations": ["fly"], "transitions": [{"sink": "%s == 1" % anim}]},
+            "sink": {"animations": ["sink"], "transitions": [{"fly": "%s == 0" % anim}]},
+        }},
+        "controller.animation.zt.ambush": {"initial_state": "fly", "states": {
+            "fly": {"animations": ["fly"], "particle_effects": [{"effect": "mist"}], "transitions": [{"sink": "%s == 1" % anim}]},
             "sink": {"animations": ["sink"], "transitions": [{"fly": "%s == 0" % anim}]},
         }},
         "controller.animation.zt.screech": {"initial_state": "lurk", "states": {

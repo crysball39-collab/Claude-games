@@ -4543,6 +4543,215 @@
 				}
 			]
 		},
+		"zt.ambush.approach": {
+			"category": "hostile",
+			"min_distance": 4.0,
+			"max_distance": 16.0,
+			"sounds": [
+				{
+					"name": "sounds/zt/ambush_approach",
+					"volume": 1.0,
+					"pitch": 1.0
+				}
+			]
+		},
+		"zt.ambush.return": {
+			"category": "hostile",
+			"min_distance": 4.0,
+			"max_distance": 16.0,
+			"sounds": [
+				{
+					"name": "sounds/zt/ambush_return",
+					"volume": 1.0,
+					"pitch": 1.0
+				}
+			]
+		},
+		"zt.ambush.pass": {
+			"category": "hostile",
+			"min_distance": 4.0,
+			"max_distance": 16.0,
+			"sounds": [
+				{
+					"name": "sounds/zt/ambush_pass",
+					"volume": 1.0,
+					"pitch": 1.0
+				}
+			]
+		},
+		"zt.ambush.turn": {
+			"category": "hostile",
+			"min_distance": 16.0,
+			"max_distance": 96.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/breeze/whirl1",
+					"pitch": 0.7,
+					"volume": 0.7
+				},
+				{
+					"name": "sounds/mob/breeze/whirl2",
+					"pitch": 0.7,
+					"volume": 0.7
+				},
+				{
+					"name": "sounds/mob/breeze/whirl3",
+					"pitch": 0.7,
+					"volume": 0.7
+				},
+				{
+					"name": "sounds/mob/breeze/whirl4",
+					"pitch": 0.7,
+					"volume": 0.7
+				},
+				{
+					"name": "sounds/mob/breeze/whirl5",
+					"pitch": 0.7,
+					"volume": 0.7
+				},
+				{
+					"name": "sounds/mob/vex/charge1",
+					"pitch": 0.5,
+					"volume": 0.6
+				},
+				{
+					"name": "sounds/mob/vex/charge2",
+					"pitch": 0.5,
+					"volume": 0.6
+				},
+				{
+					"name": "sounds/mob/vex/charge3",
+					"pitch": 0.5,
+					"volume": 0.6
+				}
+			]
+		},
+		"zt.ambush.gone": {
+			"category": "hostile",
+			"min_distance": 16.0,
+			"max_distance": 96.0,
+			"sounds": [
+				{
+					"name": "sounds/mob/breeze/whirl1",
+					"pitch": 0.55,
+					"volume": 0.6
+				},
+				{
+					"name": "sounds/mob/breeze/whirl2",
+					"pitch": 0.55,
+					"volume": 0.6
+				},
+				{
+					"name": "sounds/mob/breeze/whirl3",
+					"pitch": 0.55,
+					"volume": 0.6
+				},
+				{
+					"name": "sounds/mob/breeze/whirl4",
+					"pitch": 0.55,
+					"volume": 0.6
+				},
+				{
+					"name": "sounds/mob/breeze/whirl5",
+					"pitch": 0.55,
+					"volume": 0.6
+				}
+			]
+		},
+		"zt.ambush.kill": {
+			"category": "hostile",
+			"min_distance": 8.0,
+			"max_distance": 48.0,
+			"sounds": [
+				{
+					"name": "sounds/random/explode1",
+					"pitch": 0.9,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/random/explode2",
+					"pitch": 0.9,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/random/explode3",
+					"pitch": 0.9,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/random/explode4",
+					"pitch": 0.9,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/endermen/scream1",
+					"pitch": 0.8,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/endermen/scream2",
+					"pitch": 0.8,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/endermen/scream3",
+					"pitch": 0.8,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/endermen/scream4",
+					"pitch": 0.8,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/vex/charge1",
+					"pitch": 0.6,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/vex/charge2",
+					"pitch": 0.6,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/mob/vex/charge3",
+					"pitch": 0.6,
+					"volume": 1.0
+				}
+			]
+		},
+		"zt.ambush.banished": {
+			"category": "hostile",
+			"min_distance": 16.0,
+			"max_distance": 64.0,
+			"sounds": [
+				{
+					"name": "sounds/block/beacon/deactivate",
+					"pitch": 0.9,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/dig/chain1",
+					"pitch": 0.7,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/dig/chain2",
+					"pitch": 0.7,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/dig/chain3",
+					"pitch": 0.7,
+					"volume": 1.0
+				},
+				{
+					"name": "sounds/dig/chain4",
+					"pitch": 0.7,
+					"volume": 1.0
+				}
+			]
+		},
 		"zt.lights.break": {
 			"category": "block",
 			"min_distance": 8.0,

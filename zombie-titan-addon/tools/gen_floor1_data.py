@@ -5,7 +5,7 @@ dressers and cabinets with drawers to search, couches, keys, flesh piles), its d
 elevator doors, the iron gates of doors 89-100, door 100's grey metal door and wide gate, the
 elevator's folding gate), door 100's lever, breaker box, switches and live wire, the
 Infirmary's herb, the Courtyard's angel, Jeff's shop (Jeff, El Goblino, Bob and the goods),
-Rush and Screech, the breaker switches' boss bar; the items (the Lobby item, keys, lighter,
+Rush, Ambush and Screech, the breaker switches' boss bar; the items (the Lobby item, keys, lighter,
 flashlight, crucifix, skeleton key, herb, breaker switch); and the blocks (lamps that can be
 on, off or broken, invisible colliders under the furniture, wallpapers, windows, paintings,
 crates, metal shelves, hospital walls and curtains, elevator panels, hazard stripes, exit
@@ -90,6 +90,7 @@ def entities():
                                     components=comps(box(0.9, 0.45), interact("action.interact.zt_shop")))
     # the hotel's creatures: steered by script, nothing touches them
     E["rush"] = prop_entity("zt:rush", ["zt_rush"], properties=facing({"zt:anim": prop_int(0, 1)}))
+    E["ambush"] = prop_entity("zt:ambush", ["zt_ambush"], properties=facing({"zt:anim": prop_int(0, 1)}))
     E["screech"] = prop_entity("zt:screech", ["zt_screech"], properties=facing({"zt:anim": prop_int(0, 3)}))
     # the switches' meter
     E["switch_bar"] = boss_bar("zt:switch_bar", "Breaker Switches")
@@ -374,6 +375,12 @@ def clients():
                          animations=dict(FACE, fly="animation.zt.rush.fly", sink="animation.zt.rush.sink",
                                          main="controller.animation.zt.rush"),
                          animate=["face", "main"])
+    out["ambush"] = client("zt:ambush", "geometry.zt.ambush", TEX + "ambush",
+                           animations=dict(FACE, fly="animation.zt.ambush.fly", sink="animation.zt.ambush.sink",
+                                           main="controller.animation.zt.ambush"),
+                           animate=["face", "main"])
+    # (its glowing mist streams out behind it)
+    out["ambush"]["minecraft:client_entity"]["description"]["particle_effects"] = {"mist": "zt:ambush_mist"}
     out["screech"] = client("zt:screech", "geometry.zt.screech", TEX + "screech",
                             animations=dict(FACE, lurk="animation.zt.screech.lurk", bite="animation.zt.screech.bite",
                                             flee="animation.zt.screech.flee", sink="animation.zt.screech.sink",
