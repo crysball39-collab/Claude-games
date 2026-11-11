@@ -425,6 +425,18 @@ export class World {
     return out;
   }
 
+  /** The fixed box, if any, that a point is inside. */
+  staticAt(x, y, z) {
+    const c = this.cell;
+    const list = this.grid.get(Math.floor(x / c) * 4096 + Math.floor(z / c));
+    if (!list) return null;
+    for (let i = 0; i < list.length; i++) {
+      const s = list[i];
+      if (x > s.minx && x < s.maxx && y > s.miny && y < s.maxy && z > s.minz && z < s.maxz) return s;
+    }
+    return null;
+  }
+
   wakeBox(minx, miny, minz, maxx, maxy, maxz) {
     for (const isl of this.islands) {
       if (!isl.sleeping) continue;

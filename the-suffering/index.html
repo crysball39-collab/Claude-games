@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="theme-color" content="#14171b" />
+<meta name="description" content="The Suffering - a physics sandbox in a small city" />
+<title>The Suffering</title>
+<link rel="icon" href="data:," />
+<link rel="stylesheet" href="styles/main.css" />
+<script type="importmap">
+{ "imports": { "three": "../vendor/three.module.js", "@anthropic-ai/sdk": "../vendor/anthropic-sdk.js" } }
+</script>
+</head>
+<body>
+<div id="app">
+  <div id="viewport"></div>
+
+  <!-- ================================ HUD ================================ -->
+  <div id="hud" hidden>
+    <div id="stick-zone"><div id="stick-base"><div id="stick-knob"></div></div></div>
+
+    <div id="top-left">
+      <button id="btn-menu" class="hb" aria-label="Sandbox menu"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>SPAWN</span></button>
+      <div id="vitals" aria-label="Your condition">
+        <div class="vrow"><i>YOU</i><div class="vbar"><div id="v-cond"></div></div></div>
+        <div class="vrow"><i>BLOOD</i><div class="vbar blood"><div id="v-blood"></div></div></div>
+      </div>
+    </div>
+
+    <div id="top-right">
+      <button id="btn-doctor" class="hb" aria-label="Doctor mode"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>DOCTOR</span></button>
+      <button id="btn-talk" class="hb" aria-label="Say something"><svg viewBox="0 0 24 24"><path d="M5 6h14v9H10l-4 3v-3H5z"/></svg><span>TALK</span></button>
+      <button id="btn-view" class="hb" aria-label="Change view"><svg viewBox="0 0 24 24"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/><circle cx="12" cy="12" r="2.5"/></svg><span>VIEW</span></button>
+      <button id="btn-pause" class="hb" aria-label="Pause"><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg><span>PAUSE</span></button>
+    </div>
+
+    <div id="weapon-bar"></div>
+    <div id="crosshair"><i></i></div>
+    <div id="move-name"></div>
+    <div id="toast"></div>
+    <div id="doctor-hint" hidden>DOCTOR MODE &middot; tap a person</div>
+
+    <div id="buttons">
+      <div id="move-hints" hidden><span data-i="0"></span><span data-i="1"></span><span data-i="2"></span><span data-i="3"></span></div>
+      <button id="btn-attack" class="ab big"><b id="attack-label">PUNCH</b><small id="attack-next"></small></button>
+      <button id="btn-jump" class="ab"><b>JUMP</b></button>
+      <button id="btn-crouch" class="ab"><b>CROUCH</b></button>
+      <button id="btn-reload" class="ab small" hidden><b>RELOAD</b></button>
+      <button id="btn-use" class="ab small" hidden><b id="use-label">PICK UP</b></button>
+      <button id="btn-drop" class="ab small" hidden><b>DROP</b></button>
+      <div id="ammo" hidden></div>
+    </div>
+
+    <div id="bubbles"></div>
+
+    <form id="talk-bar" hidden autocomplete="off">
+      <input id="talk-input" type="text" maxlength="140" placeholder="Say something to whoever can hear you" enterkeyhint="send" />
+      <button type="submit" id="talk-send">SAY</button>
+      <button type="button" id="talk-cancel" aria-label="Cancel">&times;</button>
+    </form>
+  </div>
+
+  <!-- ============================ SANDBOX MENU ============================ -->
+  <aside id="sandbox" class="panel left" hidden>
+    <header><h2>SANDBOX</h2><button class="x" data-close="sandbox" aria-label="Close">&times;</button></header>
+    <div class="scroll">
+      <h3>People</h3>
+      <div class="grid">
+        <button class="item" data-spawn="human"><i class="ic human"></i><b>Human</b><small>a stranger with a mind of their own</small></button>
+        <button class="item" data-spawn="crowd"><i class="ic crowd"></i><b>Five humans</b><small>a small crowd</small></button>
+      </div>
+      <h3>Objects</h3>
+      <div class="grid">
+        <button class="item" data-spawn="crate"><i class="ic crate"></i><b>Crate</b><small>wooden, heavy, stackable</small></button>
+      </div>
+      <h3>Weapons</h3>
+      <div class="grid">
+        <button class="item" data-spawn="m1911"><i class="ic pistol"></i><b>M1911</b><small>.45 pistol, 7 rounds</small></button>
+        <button class="item" data-spawn="ak47"><i class="ic rifle"></i><b>AK-47</b><small>automatic rifle, 30 rounds</small></button>
+        <button class="item" data-spawn="knife"><i class="ic knife"></i><b>Knife</b><small>slash, backhand, stab, plunge</small></button>
+        <button class="item" data-spawn="machete"><i class="ic machete"></i><b>Machete</b><small>chop, backhand, cleave, sweep</small></button>
+      </div>
+      <h3>Clean up</h3>
+      <div class="row">
+        <button class="chip" data-clean="blood">Blood</button>
+        <button class="chip" data-clean="bodies">Bodies</button>
+        <button class="chip" data-clean="things">Objects</button>
+        <button class="chip" data-clean="all">Everything</button>
+        <button class="chip" data-heal="1">Heal me</button>
+      </div>
+      <p class="note" id="sandbox-count"></p>
+    </div>
+  </aside>
+
+  <!-- ============================= DOCTOR MODE ============================ -->
+  <aside id="doctor" class="panel right" hidden>
+    <header>
+      <div><h2 id="doc-name">Nobody selected</h2><div id="doc-sub">Tap a person in the street</div></div>
+      <button class="x" data-close="doctor" aria-label="Close">&times;</button>
+    </header>
+    <nav id="doc-tabs">
+      <button data-tab="vitals" class="on">STATUS</button>
+      <button data-tab="xray">X-RAY</button>
+      <button data-tab="mind">MIND</button>
+    </nav>
+    <div class="scroll" id="doc-body">
+      <section data-pane="vitals">
+        <div id="doc-cond"><b id="doc-cond-label">-</b><span id="doc-cond-note"></span></div>
+        <canvas id="doc-ecg" width="320" height="54"></canvas>
+        <div id="doc-vitals"></div>
+        <h3>Emotions</h3>
+        <div id="doc-emotions"></div>
+        <h3>Wounds</h3>
+        <ul id="doc-wounds" class="list"></ul>
+      </section>
+      <section data-pane="xray" hidden>
+        <canvas id="doc-xray" width="360" height="500"></canvas>
+        <div id="doc-legend"><span><i class="k ok"></i>intact</span><span><i class="k frac"></i>fractured</span><span><i class="k brk"></i>broken</span><span><i class="k gone"></i>gone</span></div>
+        <ul id="doc-findings" class="list"></ul>
+      </section>
+      <section data-pane="mind" hidden>
+        <p id="doc-persona" class="note"></p>
+        <h3>Doing</h3><p id="doc-doing" class="line"></p>
+        <h3>Sees</h3><p id="doc-sees" class="line"></p>
+        <h3>Hears</h3><p id="doc-hears" class="line"></p>
+        <h3>Feels</h3><p id="doc-feels" class="line"></p>
+        <h3>Last said</h3><p id="doc-said" class="line"></p>
+        <h3>Recent</h3>
+        <ul id="doc-memory" class="list"></ul>
+        <div class="row"><button class="chip" id="doc-ask">Ask how they are</button><button class="chip" id="doc-me">Examine myself</button></div>
+      </section>
+    </div>
+  </aside>
+
+  <!-- ============================== OVERLAYS ============================== -->
+  <div id="dead" class="overlay" hidden>
+    <div class="card">
+      <h1>YOU DIED</h1>
+      <p id="dead-cause"></p>
+      <button class="mb primary" id="btn-respawn">GET UP AGAIN</button>
+    </div>
+  </div>
+
+  <div id="pause" class="overlay" hidden>
+    <div class="card wide">
+      <h1 id="pause-title">PAUSED</h1>
+      <nav class="tabs" id="pause-tabs">
+        <button data-ptab="main" class="on">GAME</button><button data-ptab="settings">SETTINGS</button><button data-ptab="ai">VOICES</button><button data-ptab="help">HOW TO PLAY</button>
+      </nav>
+      <div class="scroll">
+        <section data-ppane="main">
+          <div class="col">
+            <button class="mb primary" id="btn-resume">RESUME</button>
+            <button class="mb" id="btn-restart">BACK TO THE PARK</button>
+            <button class="mb" id="btn-fullscreen">FULL SCREEN</button>
+            <button class="mb" id="btn-quit">MAIN MENU</button>
+          </div>
+        </section>
+        <section data-ppane="settings" hidden>
+          <label class="set"><span>Graphics</span><select id="set-quality"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>
+          <label class="set"><span>Shadows</span><input type="checkbox" id="set-shadows" /></label>
+          <p class="note">Graphics and shadows apply the next time the game starts.</p>
+          <label class="set"><span>Blood</span><input type="checkbox" id="set-gore" checked /></label>
+          <label class="set"><span>Look sensitivity</span><input type="range" id="set-sens" min="30" max="300" value="110" /></label>
+          <label class="set"><span>Field of view</span><input type="range" id="set-fov" min="50" max="90" value="64" /></label>
+          <label class="set"><span>Invert look</span><input type="checkbox" id="set-invert" /></label>
+          <label class="set"><span>Sound</span><input type="range" id="set-volume" min="0" max="100" value="70" /></label>
+          <label class="set"><span>People on the street</span><input type="range" id="set-people" min="0" max="20" value="12" /></label>
+          <label class="set"><span>Cars on the street</span><input type="range" id="set-cars" min="0" max="10" value="6" /></label>
+        </section>
+        <section data-ppane="ai" hidden>
+          <p class="note">Everyone in the city sees, hears and feels for themselves, and has plenty to say about it from their own stock of lines. Connect them to Claude and they can say anything at all.</p>
+          <div id="ai-status" class="status">Scripted voices</div>
+          <label class="set"><span>Claude API key</span><input type="password" id="set-key" placeholder="sk-ant-..." autocomplete="off" spellcheck="false" /></label>
+          <label class="set"><span>Model</span><select id="set-model"></select></label>
+          <label class="set"><span>People speak unprompted</span><input type="checkbox" id="set-live" checked /></label>
+          <label class="set"><span>At most one request every</span><select id="set-pace"><option value="2">2 seconds</option><option value="4">4 seconds</option><option value="8">8 seconds</option><option value="15">15 seconds</option></select></label>
+          <label class="set"><span>Read lines aloud</span><input type="checkbox" id="set-tts" /></label>
+          <div class="row"><button class="chip" id="ai-test">Test the connection</button></div>
+          <p class="note" id="ai-note">With a key, each request is billed to it. The key is kept in this browser and sent only to the Claude API. Without one, TALK and the doctor's "Ask" still reach Claude where the page is opened inside Claude; everywhere else people fall back to their scripted lines.</p>
+        </section>
+        <section data-ppane="help" hidden>
+          <div class="help">
+            <h3>Touch</h3>
+            <p>Left thumb moves. Drag anywhere else to look. JUMP and CROUCH sit by the right thumb.</p>
+            <p>The big button attacks. Tap it again and again for a four move combo; slide your thumb off it left, right, up or down to choose the next move yourself.</p>
+            <p>SPAWN opens the sandbox: humans, crates, the M1911, the AK-47, the knife and the machete. Walk up to a weapon and PICK UP.</p>
+            <p>DOCTOR lets you tap anyone to read their condition, their emotions and an X-ray of their bones and organs.</p>
+            <p>TALK lets you say something. Whoever is close enough to hear it will answer.</p>
+            <h3>Keyboard and mouse</h3>
+            <p>WASD move (Shift walks) &middot; mouse looks (click to capture) &middot; Space jump &middot; C crouch &middot; left click or F attack &middot; right click or Q heavy attack &middot; R reload &middot; E pick up &middot; G drop &middot; 1-5 weapons &middot; Tab sandbox &middot; X doctor &middot; T talk &middot; V view &middot; Esc pause</p>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div id="menu" class="overlay solid" hidden>
+    <div class="menu-inner">
+      <div class="menu-kicker">A PHYSICS SANDBOX IN A SMALL CITY</div>
+      <h1 class="title">THE<br />SUFFERING</h1>
+      <div class="col">
+        <button class="mb primary" id="btn-play">PLAY</button>
+        <button class="mb" id="btn-settings">SETTINGS</button>
+        <button class="mb" id="btn-help">HOW TO PLAY</button>
+      </div>
+      <p class="menu-foot">Works best turned sideways. Contains a great deal of blood.</p>
+    </div>
+  </div>
+
+  <div id="boot" class="overlay solid">
+    <div class="menu-inner">
+      <h1 class="title small">THE SUFFERING</h1>
+      <div class="bar"><div id="boot-bar"></div></div>
+      <p id="boot-status">Waking up&hellip;</p>
+    </div>
+  </div>
+</div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>

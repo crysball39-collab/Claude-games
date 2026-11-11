@@ -136,7 +136,9 @@ export function crateTexture() {
 export function skyTexture() {
   const c = canvas(16, 256), x = c.getContext('2d');
   const g = x.createLinearGradient(0, 0, 0, 256);
-  g.addColorStop(0, '#4d5a6b'); g.addColorStop(0.45, '#7d8a98'); g.addColorStop(0.72, '#a9afb3'); g.addColorStop(0.86, '#c2b8a8'); g.addColorStop(1, '#9aa3ab');
+  // the top of the canvas is straight up; the horizon is half way down
+  g.addColorStop(0, '#465262'); g.addColorStop(0.3, '#6f7c89'); g.addColorStop(0.44, '#a2a6a5');
+  g.addColorStop(0.5, '#c0b6a4'); g.addColorStop(0.53, '#a4a6a3'); g.addColorStop(1, '#8d9296');
   x.fillStyle = g; x.fillRect(0, 0, 16, 256);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
