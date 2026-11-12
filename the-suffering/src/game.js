@@ -220,7 +220,14 @@ export class Game {
 
     this.boxes.commit(); this.crateBoxes.commit(); this.faceQuads.commit(); this.under.commit();
     this.faces.flush(this.time);
-    this.renderer.render(this.scene, this.camera);
+    if (!this.headless) this.renderer.render(this.scene, this.camera);
+  }
+
+  /** Runs the game forward without drawing it: for tests, and for nothing else. */
+  advance(seconds, step = 1 / 60) {
+    this.headless = true;
+    for (let i = 0, n = Math.round(seconds / step); i < n; i++) this.frame(step);
+    this.headless = false;
   }
 
   /** The player's thumbs. */
