@@ -65,6 +65,8 @@ export const ORGANS = [
 const PART_HP = [0, 0, 0, 85, 120, 110, 95, 45, 110, 95, 45, 165, 125, 55, 165, 125, 55];
 /** Millilitres a second out of the stump when a part comes off there. */
 const STUMP_BLEED = [0, 0, 0, 0, 160, 52, 36, 14, 52, 36, 14, 90, 56, 18, 90, 56, 18];
+/** How far one full machete chop gets through each joint: a wrist goes in one, a thigh takes three. */
+const SEVER = [0, 0, 0, 0.3, 0.3, 0.5, 0.6, 0.9, 0.5, 0.6, 0.9, 0.36, 0.45, 0.9, 0.36, 0.45, 0.9];
 const BONE_OF_PART = {};
 for (const b of BONES) (BONE_OF_PART[b.part] = BONE_OF_PART[b.part] || []).push(b.id);
 
@@ -318,12 +320,14 @@ export class Health {
       if (belly && deep > 2.6) this._organ('gut', (deep - 2) * 16, out);
       if (chest && deep > 2.8) this._bone(lp[0] > 0 ? 'ribsL' : 'ribsR', (deep - 2.2) * 26, out);
       if (limb && deep > 2.4) this._bone(limb, (deep - 1.8) * 30, out);
-      if (head && deep > 2.6) { this._bone('skull', (deep - 2) * 34, out); if (deep > 3.4) this._organ('brain', (deep - 3) * 60, out); }
+      if (head && deep > 2.6) { this._bone('skull', (deep - 2) * 34, out); this._organ('brain', (deep - 2.6) * 75, out); }
       this.trauma += deep * 2.5;
       // a heavy blade works its way through a joint
-      if (chop > 0 && (limb || neck || head)) {
+      // a blade coming across at the jaw line takes the head off in a blow or
+      // two; one coming down on the crown splits the skull instead
+      if (chop > 0 && (limb || neck || (head && (lp[1] < -0.03 || Math.abs(ld[1]) < 0.55)))) {
         const at = head ? P.HEAD : part;
-        this.sever[at] += chop * p * (neck || head ? 0.62 : 0.5);
+        this.sever[at] += chop * p * SEVER[at];
         if (this.sever[at] >= 1) out.severed = at;
       }
       this._structural(part, p * (chop > 0 ? 14 : 4), out, true);

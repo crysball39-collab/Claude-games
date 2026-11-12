@@ -94,6 +94,7 @@ export class Human {
     this.weapon = null;                    // what is in the right hand, if anything
     this.guardT = 0;
     this.tripCool = 0; this.jumpCool = 0;
+    this.lunge = 0;                        // metres an attack in progress steps forward
     this.crawlDir = null;
     this._hAcc = Math.random() * 0.1; this._faceT = Math.random() * 0.2; this._faceKey = '';
     this.blinkT = rand(2, 5); this.blink = 0;
@@ -354,13 +355,12 @@ export class Human {
     this.vx = damp(this.vx, tvx, acc, dt); this.vz = damp(this.vz, tvz, acc, dt);
 
     // an attack carries the body a little way forward
+    // the step in happens before the blow, so that it lands at the right distance
     const act = this.anim.action;
-    if (act && this.grounded) {
-      const u = act.t / act.clip.dur;
-      if (u > 0.12 && u < act.clip.hit[1]) {
-        const v = act.clip.lunge / (act.clip.dur * (act.clip.hit[1] - 0.12)) * (this._lungeScale ?? 1);
-        this.vx += Math.sin(this.yaw) * v * 0.5; this.vz += Math.cos(this.yaw) * v * 0.5;
-      }
+    let lx = 0, lz = 0;
+    if (act && this.grounded && this.lunge > 0) {
+      const c = act.clip, u = act.t / c.dur, u1 = c.hit[0] + 0.06;
+      if (u > 0.04 && u < u1) { const v = this.lunge / (c.dur * (u1 - 0.04)); lx = Math.sin(this.yaw) * v; lz = Math.cos(this.yaw) * v; }
     }
     this.speed = Math.hypot(this.vx, this.vz);
 
@@ -377,7 +377,7 @@ export class Human {
     it.jump = false;
     if (!this.grounded) this.vy += GRAVITY * dt;
 
-    let nx = this.x + this.vx * dt, nz = this.z + this.vz * dt, ny = this.y + this.vy * dt;
+    let nx = this.x + (this.vx + lx) * dt, nz = this.z + (this.vz + lz) * dt, ny = this.y + this.vy * dt;
     const res = this._collide(nx, nz, ny);
     if (this.state !== ST.ANIM) return;                 // something knocked us down on the way
     nx = res[0]; nz = res[1];

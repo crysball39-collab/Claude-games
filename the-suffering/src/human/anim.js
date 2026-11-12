@@ -11,6 +11,7 @@
    The output is the forty channel pose from rig.js.
    ========================================================================== */
 import { CH, CHANNELS, legIK, HIP_HEIGHT } from './rig.js';
+import { SWINGS } from './swings.js';
 import { clamp, clamp01, lerp, smooth, damp, TAU } from '../core/util.js';
 
 const WALK = { stride: 0.82, stance: 0.62, lift: 0.085, bob: 0.02, lean: 0.035, arm: 0.36, elbow: 0.2, drop: 0.022, twist: 0.07, pitch: 1 };
@@ -24,6 +25,9 @@ const GUARD = {
   spineTwist: 0, waistTwist: 0, spineBend: 0.08, rootZ: 0, rootY: 0,
 };
 const k = (t, o) => ({ t, o });
+/** How a blade is carried when nothing is happening. */
+const CARRY = SWINGS.rest[0][1];
+const swing = (name) => [k(0, CARRY), ...SWINGS[name].map(([t, o]) => k(t, o)), k(1, CARRY)];
 
 /**
  * Each clip: how long it lasts, when during it the blow can land (as a
@@ -33,64 +37,41 @@ const k = (t, o) => ({ t, o });
 export const CLIPS = {
   /* ---- unarmed ---- */
   jab: {
-    label: 'JAB', dur: 0.34, hit: [0.2, 0.55], limb: 'handL', lunge: 0.1, power: 0.5, kind: 'blunt',
-    keys: [k(0, GUARD), k(0.4, { ...GUARD, shL: 1.78, shLOut: 0.04, shLIn: 0.16, elL: 0.06, spineTwist: -0.28, waistTwist: -0.1, rootZ: 0.07 }), k(0.56, { ...GUARD, shL: 1.74, shLOut: 0.04, shLIn: 0.16, elL: 0.1, spineTwist: -0.26, waistTwist: -0.1, rootZ: 0.07 }), k(1, GUARD)],
+    label: 'JAB', dur: 0.34, hit: [0.2, 0.55], limb: 'handL', lunge: 0.1, reach: 0.8, power: 0.5, kind: 'blunt',
+    keys: [k(0, GUARD), k(0.4, { ...GUARD, shL: 1.78, shLOut: 0.06, shLIn: -0.06, elL: 0.06, spineTwist: -0.3, waistTwist: -0.12, spineBend: 0.12, rootZ: 0.1 }), k(0.56, { ...GUARD, shL: 1.74, shLOut: 0.06, shLIn: -0.06, elL: 0.1, spineTwist: -0.28, waistTwist: -0.12, spineBend: 0.12, rootZ: 0.1 }), k(1, GUARD)],
   },
   cross: {
-    label: 'CROSS', dur: 0.44, hit: [0.26, 0.58], limb: 'handR', lunge: 0.16, power: 0.95, kind: 'blunt',
-    keys: [k(0, GUARD), k(0.2, { ...GUARD, shR: 0.4, elR: 2.1, spineTwist: -0.2 }), k(0.46, { ...GUARD, shR: 1.8, shROut: 0.03, shRIn: 0.22, elR: 0.05, spineTwist: 0.46, waistTwist: 0.22, spineBend: 0.14, rootZ: 0.11 }), k(0.6, { ...GUARD, shR: 1.76, shROut: 0.03, shRIn: 0.22, elR: 0.1, spineTwist: 0.44, waistTwist: 0.22, spineBend: 0.14, rootZ: 0.11 }), k(1, GUARD)],
+    label: 'CROSS', dur: 0.44, hit: [0.26, 0.58], limb: 'handR', lunge: 0.16, reach: 0.82, power: 0.95, kind: 'blunt',
+    keys: [k(0, GUARD), k(0.2, { ...GUARD, shR: 0.4, elR: 2.1, spineTwist: -0.2 }), k(0.46, { ...GUARD, shR: 1.8, shROut: 0.1, shRIn: -0.22, elR: 0.05, spineTwist: 0.34, waistTwist: 0.14, spineBend: 0.16, rootZ: 0.14 }), k(0.6, { ...GUARD, shR: 1.76, shROut: 0.1, shRIn: -0.22, elR: 0.1, spineTwist: 0.32, waistTwist: 0.14, spineBend: 0.16, rootZ: 0.14 }), k(1, GUARD)],
   },
   uppercut: {
-    label: 'UPPERCUT', dur: 0.52, hit: [0.3, 0.6], limb: 'handR', lunge: 0.2, power: 1.15, kind: 'blunt', up: true,
+    label: 'UPPERCUT', dur: 0.52, hit: [0.3, 0.6], limb: 'handR', lunge: 0.2, reach: 0.66, power: 1.15, kind: 'blunt', up: true,
     keys: [k(0, GUARD), k(0.26, { ...GUARD, shR: 0.12, shROut: 0.12, shRIn: 0.1, elR: 1.75, spineTwist: -0.3, spineBend: 0.26, rootY: -0.13 }), k(0.5, { ...GUARD, shR: 1.2, shROut: 0.05, shRIn: 0.3, elR: 1.2, spineTwist: 0.38, spineBend: -0.1, rootY: 0.02, rootZ: 0.12 }), k(0.64, { ...GUARD, shR: 1.42, shROut: 0.05, shRIn: 0.3, elR: 1.25, spineTwist: 0.4, spineBend: -0.14, rootY: 0.03, rootZ: 0.12 }), k(1, GUARD)],
   },
   kick: {
-    label: 'KICK', dur: 0.62, hit: [0.34, 0.62], limb: 'footR', lunge: 0.12, power: 1.25, kind: 'blunt', push: true,
+    label: 'KICK', dur: 0.62, hit: [0.34, 0.62], limb: 'footR', lunge: 0.12, reach: 1.0, power: 1.25, kind: 'blunt', push: true,
     keys: [
       k(0, { ...GUARD, hipR: 0, kneeR: 0.05, ankleR: 0, hipL: 0, kneeL: 0.05, ankleL: 0, rootPitch: 0 }),
-      k(0.3, { ...GUARD, shLOut: 0.7, shROut: 0.7, hipR: 1.45, kneeR: 1.9, ankleR: 0.3, hipL: -0.1, kneeL: 0.12, ankleL: 0, rootPitch: -0.1 }),
-      k(0.48, { ...GUARD, shLOut: 0.9, shROut: 0.9, elL: 1.2, elR: 1.2, hipR: 1.66, kneeR: 0.08, ankleR: 0.35, hipL: -0.24, kneeL: 0.1, ankleL: -0.02, rootPitch: -0.24, spineBend: 0.3 }),
-      k(0.62, { ...GUARD, shLOut: 0.9, shROut: 0.9, elL: 1.2, elR: 1.2, hipR: 1.6, kneeR: 0.14, ankleR: 0.35, hipL: -0.22, kneeL: 0.1, ankleL: -0.02, rootPitch: -0.22, spineBend: 0.3 }),
+      k(0.3, { ...GUARD, shLOut: 0.7, shROut: 0.7, hipR: 1.3, kneeR: 1.9, ankleR: 0.3, hipL: -0.1, kneeL: 0.12, ankleL: 0, rootPitch: -0.1, rootZ: 0.04 }),
+      k(0.48, { ...GUARD, shLOut: 0.9, shROut: 0.9, elL: 1.2, elR: 1.2, hipR: 1.36, kneeR: 0.06, ankleR: 0.2, hipL: -0.22, kneeL: 0.1, ankleL: -0.02, rootPitch: -0.22, spineBend: 0.3, rootZ: 0.12 }),
+      k(0.62, { ...GUARD, shLOut: 0.9, shROut: 0.9, elL: 1.2, elR: 1.2, hipR: 1.32, kneeR: 0.1, ankleR: 0.2, hipL: -0.2, kneeL: 0.1, ankleL: -0.02, rootPitch: -0.2, spineBend: 0.3, rootZ: 0.12 }),
       k(0.8, { ...GUARD, hipR: 1.0, kneeR: 1.5, ankleR: 0, hipL: -0.06, kneeL: 0.1, ankleL: 0, rootPitch: -0.06 }),
       k(1, { ...GUARD, hipR: 0, kneeR: 0.05, ankleR: 0, hipL: 0, kneeL: 0.05, ankleL: 0, rootPitch: 0 }),
     ],
   },
 
-  /* ---- knife: the blade is held like a hammer unless the clip says otherwise ---- */
-  slash: {
-    label: 'SLASH', dur: 0.4, hit: [0.22, 0.62], limb: 'blade', lunge: 0.14, power: 1.0, kind: 'cut',
-    keys: [k(0, { shR: 0.9, shROut: 0.4, shRIn: 0.1, elR: 1.1, wrR: -0.4, spineTwist: 0 }), k(0.2, { shR: 1.45, shROut: 1.0, shRIn: -0.45, elR: 0.9, wrR: -0.5, spineTwist: -0.4 }), k(0.6, { shR: 1.5, shROut: 0.75, shRIn: 1.35, elR: 0.3, wrR: -0.5, spineTwist: 0.45 }), k(1, { shR: 0.9, shROut: 0.4, shRIn: 0.1, elR: 1.1, wrR: -0.4, spineTwist: 0 })],
-  },
-  backslash: {
-    label: 'BACKHAND', dur: 0.4, hit: [0.22, 0.62], limb: 'blade', lunge: 0.14, power: 1.0, kind: 'cut',
-    keys: [k(0, { shR: 0.9, shROut: 0.4, shRIn: 0.1, elR: 1.1, wrR: -0.4, spineTwist: 0 }), k(0.2, { shR: 1.5, shROut: 0.8, shRIn: 1.4, elR: 1.25, wrR: -0.5, spineTwist: 0.4 }), k(0.6, { shR: 1.45, shROut: 0.95, shRIn: -0.3, elR: 0.2, wrR: -0.5, spineTwist: -0.4 }), k(1, { shR: 0.9, shROut: 0.4, shRIn: 0.1, elR: 1.1, wrR: -0.4, spineTwist: 0 })],
-  },
-  stab: {
-    label: 'STAB', dur: 0.42, hit: [0.3, 0.6], limb: 'blade', lunge: 0.22, power: 1.15, kind: 'stab',
-    keys: [k(0, { shR: 0.9, shROut: 0.4, shRIn: 0.1, elR: 1.1, wrR: -0.4, spineTwist: 0, rootZ: 0 }), k(0.24, { shR: 0.2, shROut: 0.15, shRIn: 0, elR: 1.85, wrR: -1.45, spineTwist: -0.35, rootZ: -0.03 }), k(0.5, { shR: 1.28, shROut: 0.04, shRIn: 0.2, elR: 0.1, wrR: -1.5, spineTwist: 0.42, rootZ: 0.14 }), k(0.62, { shR: 1.28, shROut: 0.04, shRIn: 0.2, elR: 0.16, wrR: -1.5, spineTwist: 0.4, rootZ: 0.14 }), k(1, { shR: 0.9, shROut: 0.4, shRIn: 0.1, elR: 1.1, wrR: -0.4, spineTwist: 0, rootZ: 0 })],
-  },
-  overhand: {
-    label: 'PLUNGE', dur: 0.5, hit: [0.34, 0.66], limb: 'blade', lunge: 0.2, power: 1.4, kind: 'stab', reverse: true, down: true,
-    keys: [k(0, { shR: 0.9, shROut: 0.4, shRIn: 0.1, elR: 1.1, wrR: 0, spineBend: 0 }), k(0.3, { shR: 2.75, shROut: 0.2, shRIn: 0.1, elR: 1.5, wrR: 0.2, spineBend: -0.18 }), k(0.56, { shR: 1.25, shROut: 0.05, shRIn: 0.2, elR: 0.55, wrR: 0.3, spineBend: 0.3 }), k(0.68, { shR: 1.1, shROut: 0.05, shRIn: 0.2, elR: 0.5, wrR: 0.3, spineBend: 0.32 }), k(1, { shR: 0.9, shROut: 0.4, shRIn: 0.1, elR: 1.1, wrR: 0, spineBend: 0 })],
-  },
+  /* ---- knife. These, and the machete's, are solved from hand positions by
+     tools/pose-solve.mjs: the carry, the swing, and back to the carry ---- */
+  slash: { label: 'SLASH', dur: 0.4, hit: [0.22, 0.62], limb: 'blade', lunge: 0.14, reach: 0.9, power: 1.0, kind: 'cut', keys: swing('slash') },
+  backslash: { label: 'BACKHAND', dur: 0.4, hit: [0.22, 0.62], limb: 'blade', lunge: 0.14, reach: 0.9, power: 1.0, kind: 'cut', keys: swing('backslash') },
+  stab: { label: 'STAB', dur: 0.42, hit: [0.3, 0.6], limb: 'blade', lunge: 0.22, reach: 1.0, power: 1.15, kind: 'stab', keys: swing('stab') },
+  overhand: { label: 'PLUNGE', dur: 0.5, hit: [0.34, 0.68], limb: 'blade', lunge: 0.2, reach: 0.86, power: 1.4, kind: 'stab', reverse: true, down: true, keys: swing('overhand') },
 
   /* ---- machete ---- */
-  chop: {
-    label: 'CHOP', dur: 0.5, hit: [0.3, 0.64], limb: 'blade', lunge: 0.18, power: 1.9, kind: 'cut', chop: 1,
-    keys: [k(0, { shR: 0.9, shROut: 0.4, shRIn: 0.1, elR: 1.1, wrR: -0.3, spineTwist: 0, spineBend: 0 }), k(0.26, { shR: 2.35, shROut: 0.7, shRIn: -0.2, elR: 1.35, wrR: -0.2, spineTwist: -0.35, spineBend: -0.1 }), k(0.58, { shR: 0.75, shROut: 0.25, shRIn: 0.75, elR: 0.25, wrR: -0.6, spineTwist: 0.48, spineBend: 0.22 }), k(1, { shR: 0.9, shROut: 0.4, shRIn: 0.1, elR: 1.1, wrR: -0.3, spineTwist: 0, spineBend: 0 })],
-  },
-  backhand: {
-    label: 'BACKHAND', dur: 0.5, hit: [0.3, 0.64], limb: 'blade', lunge: 0.18, power: 1.8, kind: 'cut', chop: 1,
-    keys: [k(0, { shR: 0.9, shROut: 0.4, shRIn: 0.1, elR: 1.1, wrR: -0.3, spineTwist: 0, spineBend: 0 }), k(0.26, { shR: 2.0, shROut: 0.5, shRIn: 1.3, elR: 1.5, wrR: -0.2, spineTwist: 0.38, spineBend: -0.05 }), k(0.58, { shR: 0.85, shROut: 0.7, shRIn: -0.2, elR: 0.2, wrR: -0.6, spineTwist: -0.42, spineBend: 0.2 }), k(1, { shR: 0.9, shROut: 0.4, shRIn: 0.1, elR: 1.1, wrR: -0.3, spineTwist: 0, spineBend: 0 })],
-  },
-  cleave: {
-    label: 'CLEAVE', dur: 0.6, hit: [0.36, 0.66], limb: 'blade', lunge: 0.2, power: 2.3, kind: 'cut', chop: 1.15, down: true,
-    keys: [k(0, { shR: 0.9, shROut: 0.4, shRIn: 0.1, elR: 1.1, wrR: -0.3, spineBend: 0, waistBend: 0, rootY: 0 }), k(0.32, { shR: 2.95, shROut: 0.15, shRIn: 0.1, elR: 1.4, wrR: 0.2, spineBend: -0.26, waistBend: -0.05, rootY: 0.02 }), k(0.6, { shR: 0.8, shROut: 0.05, shRIn: 0.2, elR: 0.12, wrR: -0.75, spineBend: 0.46, waistBend: 0.2, rootY: -0.09 }), k(0.7, { shR: 0.7, shROut: 0.05, shRIn: 0.2, elR: 0.12, wrR: -0.8, spineBend: 0.48, waistBend: 0.2, rootY: -0.09 }), k(1, { shR: 0.9, shROut: 0.4, shRIn: 0.1, elR: 1.1, wrR: -0.3, spineBend: 0, waistBend: 0, rootY: 0 })],
-  },
-  sweep: {
-    label: 'SWEEP', dur: 0.56, hit: [0.26, 0.66], limb: 'blade', lunge: 0.16, power: 2.1, kind: 'cut', chop: 1.25, level: true,
-    keys: [k(0, { shR: 0.9, shROut: 0.4, shRIn: 0.1, elR: 1.1, wrR: -0.3, spineTwist: 0 }), k(0.24, { shR: 1.62, shROut: 1.25, shRIn: -0.7, elR: 0.6, wrR: -0.45, spineTwist: -0.55 }), k(0.62, { shR: 1.66, shROut: 0.9, shRIn: 1.55, elR: 0.14, wrR: -0.45, spineTwist: 0.62 }), k(1, { shR: 0.9, shROut: 0.4, shRIn: 0.1, elR: 1.1, wrR: -0.3, spineTwist: 0 })],
-  },
+  chop: { label: 'CHOP', dur: 0.5, hit: [0.3, 0.64], limb: 'blade', lunge: 0.18, reach: 1.12, power: 1.9, kind: 'cut', chop: 1, keys: swing('chop') },
+  backhand: { label: 'BACKHAND', dur: 0.5, hit: [0.3, 0.64], limb: 'blade', lunge: 0.18, reach: 1.12, power: 1.8, kind: 'cut', chop: 1, keys: swing('backhand') },
+  cleave: { label: 'CLEAVE', dur: 0.6, hit: [0.36, 0.7], limb: 'blade', lunge: 0.2, reach: 1.2, power: 2.3, kind: 'cut', chop: 1.15, down: true, keys: swing('cleave') },
+  sweep: { label: 'SWEEP', dur: 0.56, hit: [0.26, 0.66], limb: 'blade', lunge: 0.16, reach: 1.18, power: 2.1, kind: 'cut', chop: 1.25, level: true, keys: swing('sweep') },
 };
 
 /** The four attacks each way of fighting has, in combo order. */
@@ -255,7 +236,8 @@ export class Animator {
     }
     if (W.blade > 0.01) {
       const a = W.blade * (1 - g * 0.5);
-      this._to(CH.shR, 0.9, a); this._to(CH.shROut, 0.4, a); this._to(CH.shRIn, 0.1, a); this._to(CH.elR, 1.1, a); this._to(CH.wrR, -0.35, a);
+      this._to(CH.shR, CARRY.shR, a); this._to(CH.shROut, CARRY.shROut, a); this._to(CH.shRIn, CARRY.shRIn, a); this._to(CH.elR, CARRY.elR, a);
+      this._to(CH.wrR, CARRY.wrR, a); this._to(CH.wrRSide, CARRY.wrRSide, a);
       this._to(CH.shL, 0.5, a * 0.7); this._to(CH.elL, 1.5, a * 0.7); this._to(CH.shLIn, 0.3, a * 0.7);
     }
     const up = this.aim;

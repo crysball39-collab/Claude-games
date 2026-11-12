@@ -238,7 +238,7 @@ export class Weapons {
         if (score < best) { best = score; target = o; }
       }
     }
-    let low = 0, lunge = 1;
+    let low = 0, lunge = clip.lunge;
     if (target) {
       const dx = target.x - human.x, dz = target.z - human.z, d = Math.hypot(dx, dz);
       const yaw = Math.atan2(dx, dz);
@@ -247,11 +247,11 @@ export class Weapons {
       const c = target.bodies[P.CHEST];
       // someone on the ground has to be reached down to
       low = clamp01((0.85 - (c.py - human.y)) / 0.6);
-      const reach = (def.blade ? 0.75 + def.blade[1] : clip.limb === 'footR' ? 1.0 : 0.72) * human.scale / 0.93;
-      lunge = clamp((d - reach) / clip.lunge, 0, 2.4);
+      // step in far enough for this particular move to connect
+      lunge = clamp(d - clip.reach * human.scale, 0, 0.85);
     }
     human.lowAim = clip.limb === 'footR' ? 0 : low;
-    human._lungeScale = lunge;
+    human.lunge = lunge;
     human.guardT = 5;
     human.anim.play(name);
     const act = human.anim.action;
