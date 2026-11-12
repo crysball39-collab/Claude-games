@@ -412,7 +412,7 @@ export class Mind {
     this.note('felt', 'hit', `${how} the ${where}${by}`, clamp(0.4 + rep.pain / 50, 0.4, 1), { part, attacker: isHuman ? attacker : null });
     for (const b of rep.bones) if (b.state !== 'intact') this.note('felt', 'bone', `felt my ${boneWord(b.id)} ${b.state === 'broken' ? 'break' : 'crack'}`, 0.9);
     this.stir('fear', rep.pain * 0.8 + (type === 'blunt' ? 6 : 26));
-    this.stir('anger', type === 'blunt' && seen ? 30 : 9);
+    this.stir('anger', type === 'blunt' && seen ? 45 : 10);
     this.stir('surprise', seen ? 22 : 55);
     this.stir('joy', -40);
     if (isHuman) {
@@ -430,7 +430,9 @@ export class Mind {
     const where = part === P.HEAD || part === P.NECK ? 'head' : PARTS[part].label;
     this.note('felt', 'lost', `my ${where} was ${burst ? 'blown apart' : 'cut off'}`, 1, { part });
     this.stir('fear', 60); this.stir('sadness', 50); this.stir('surprise', 60); this.stir('joy', -60);
-    this.ask('lostLimb', 97, { part: where.replace('left ', '').replace('right ', '').replace('upper ', '') }, 0.9);
+    // nobody says "my left forearm" at a time like this
+    const word = part >= P.THIGH_L ? (part === P.FOOT_L || part === P.FOOT_R ? 'foot' : 'leg') : part === P.HAND_L || part === P.HAND_R ? 'hand' : 'arm';
+    this.ask('lostLimb', 97, { part: word }, 0.9);
   }
 
   splashed(owner) {

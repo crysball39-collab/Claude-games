@@ -142,14 +142,14 @@ export function flavour(text, persona, mood) {
   if (!text || !chance(0.22)) return text;
   const q = persona.quirk || '';
   if (q.includes('polite')) return chance(0.5) ? 'Sorry- ' + lower(text) : text.replace(/[.!]$/, '') + ', if you would not mind.';
-  if (q.includes('swears')) return pick(['Damn it. ', 'Bloody hell. ', 'For crying out loud. ']) + text;
+  if (q.includes('swears') && mood !== 'calm') return pick(['Damn it. ', 'Bloody hell. ', 'For crying out loud. ']) + text;
   if (q.includes('prays')) return pick(['Lord help me. ', 'God have mercy. ', 'Please God. ']) + text;
   if (q.includes('dark jokes') && mood !== 'calm') return text + pick([' Great day for it.', ' Typical Tuesday.', ' Ten out of ten. Would not recommend.']);
   if (q.includes('filmed')) return text + pick([' Where is the camera?', ' This is a prank, right?']);
   if (q.includes('late')) return text + pick([' And I am going to be LATE.', ' I do not have time for this.']);
   if (q.includes('dog')) return mood === 'calm' ? text : text + pick([' Who is going to feed Biscuit?', ' I have to get home to the dog.']);
-  if (q.includes('counts')) return pick(['One. Two. Three. ', 'Four, five, six... ']) + text;
-  if (q.includes('questions')) return text + pick([' Why? Why is this happening?', ' What is going on? Who is doing this?']);
+  if (q.includes('counts') && mood !== 'calm') return pick(['One. Two. Three. ', 'Four, five, six... ']) + text;
+  if (q.includes('questions') && mood !== 'calm') return text + pick([' Why? Why is this happening?', ' What is going on? Who is doing this?']);
   return text;
 }
 function lower(t) { return t.charAt(0).toLowerCase() + t.slice(1); }

@@ -1,0 +1,16 @@
+{
+  "name": "the-suffering",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A physics sandbox in a small city.",
+  "type": "module",
+  "scripts": {
+    "start": "cd .. && python3 -m http.server 8080",
+    "build": "node tools/build.mjs",
+    "test": "node tools/test-physics.mjs && node tools/test-health.mjs",
+    "verify": "node tools/verify.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0"
+  }
+}

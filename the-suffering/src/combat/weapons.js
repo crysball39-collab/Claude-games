@@ -336,7 +336,7 @@ export class Weapons {
     const g = this.game, clip = act.clip, def = act.def, t = hit.human;
     const strength = (attacker.isPlayer ? 1.1 : 0.72) * clamp(0.6 + attacker.h.mobility * 0.4, 0.5, 1) * rand(0.9, 1.1);
     const power = clip.power * strength;
-    let J = clip.kind === 'blunt' ? (clip.push ? 50 : 14 + clip.power * 14) : clip.kind === 'stab' ? 13 : def.chops ? 30 : 10;
+    let J = clip.kind === 'blunt' ? (clip.push ? 50 : 8 + clip.power * 18) : clip.kind === 'stab' ? 13 : def.chops ? 30 : 10;
     J *= strength;
     // a blow lands along the way the fist was travelling, biased the way the attacker faces
     const fx = Math.sin(attacker.yaw), fz = Math.cos(attacker.yaw);

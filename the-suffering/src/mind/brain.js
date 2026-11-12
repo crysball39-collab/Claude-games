@@ -92,13 +92,19 @@ export class Brain {
       const src = t.src, k = src ? m.known.get(src.id) : null;
       const gun = k && (k.armed === 'm1911' || k.armed === 'ak47');
       const blade = k && (k.armed === 'knife' || k.armed === 'machete');
-      const willFight = src && src.h.alive && src.h.conscious && !gun && (!blade || p.bravery > 0.85) && p.bravery > 0.42 &&
-        e.anger > 32 && e.anger > e.fear * (blade ? 1.3 : 0.75) && (k && (k.hurtMe || p.temper > 0.72)) && h.h.mobility > 0.55 && d < 16;
+      // anger and nerve on one side of the scales, fear on the other
+      const urge = e.anger + p.bravery * 30 - e.fear * (blade ? 1.3 : 0.8);
+      const willFight = src && src.h.alive && src.h.conscious && !gun && (!blade || p.bravery > 0.85) && p.bravery > 0.3 &&
+        urge > (this.mode === 'fight' ? 8 : 20) && (k && (k.hurtMe || p.temper > 0.72)) && h.h.mobility > 0.55 && d < 16;
+      const calm = this.mode === 'wander' || this.mode === 'gawk' || this.mode === 'mourn';
       if (willFight) mode = 'fight';
-      else if (m.aimed > 0.5 && d < 15 && (this.mode === 'surrender' || p.bravery < 0.6 || e.fear > 72)) mode = 'surrender';
-      else if (this.mode === 'surrender' && this.modeT < 2.5) mode = 'surrender';
+      // a gun pointed straight at you: most people stop where they are
+      else if (m.aimed > 0 && d < 16 && (this.mode === 'surrender' || p.bravery < 0.72 || e.fear > 80)) mode = 'surrender';
+      else if (this.mode === 'surrender' && this.modeT < 3) mode = 'surrender';
       else if (e.fear > 26 || danger > 42) {
         if (this.mode === 'cower' && this.modeT < 5 && d < 11) mode = 'cower';
+        // the first sight of a weapon close by roots some people to the spot
+        else if (calm && (gun || blade) && d < 9 && chance(p.bravery < 0.4 ? 0.55 : 0.22)) mode = gun ? 'surrender' : 'cower';
         else if (this.mode !== 'cower' && e.fear > 84 && d < 6 && p.bravery < 0.33 && chance(0.2)) mode = 'cower';
         else mode = 'flee';
       } else mode = d < 42 ? 'gawk' : 'wander';

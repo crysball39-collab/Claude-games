@@ -94,7 +94,7 @@ export class Gore {
     this.px[i] = x; this.py[i] = y; this.pz[i] = z;
     this.vx[i] = vx; this.vy[i] = vy; this.vz[i] = vz;
     this.life[i] = 6; this.age[i] = 0; this.ml[i] = ml; this.kind[i] = kind;
-    this.rad[i] = clamp(0.009 + Math.cbrt(ml) * 0.0085, 0.01, 0.034);
+    this.rad[i] = clamp(0.007 + Math.cbrt(ml) * 0.0068, 0.009, 0.027);
     this.owner[i] = owner;
     if (link >= 0 && this.life[link] > 0) { this.prev[i] = link; this.prevGen[i] = this.gen[link]; } else this.prev[i] = -1;
     this.stats.emitted++;

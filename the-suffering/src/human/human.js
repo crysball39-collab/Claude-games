@@ -155,7 +155,8 @@ export class Human {
 
   /** Blood loss shows in the skin. */
   _tintSkin() {
-    const pale = this.h.alive ? clamp01((92 - this.h.bloodPct) / 50) : clamp01(0.45 + this.deadFor / 60);
+    // the colour goes with the blood, and then, slowly, with everything else
+    const pale = clamp01((92 - this.h.bloodPct) / 50 + (this.h.alive ? 0 : this.deadFor / 150));
     const q = Math.round(pale * 10);
     if (q === this._pallor) return;
     this._pallor = q;

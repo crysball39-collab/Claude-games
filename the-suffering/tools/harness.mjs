@@ -5,9 +5,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Needs playwright and a chromium to drive: npm i -D playwright && npx playwright install chromium.
+// Set CHROMIUM_PATH to use a chromium you already have.
 const require = createRequire(import.meta.url);
 let chromium;
-try { ({ chromium } = require('playwright')); } catch { ({ chromium } = require('/opt/node-tools/node_modules/playwright')); }
+try { ({ chromium } = require('/opt/node-tools/node_modules/playwright')); } catch { ({ chromium } = require('playwright')); }
 
 export const GAME = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const REPO = path.resolve(GAME, '..');
@@ -26,7 +28,7 @@ export function serve() {
 
 export async function open({ width = 900, height = 520, touch = false, url = null, scale = 1 } = {}) {
   const server = url ? null : await serve();
-  const browser = await chromium.launch({ args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage', '--ignore-gpu-blocklist'] });
+  const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage', '--ignore-gpu-blocklist'] });
   const ctx = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: scale, hasTouch: touch, isMobile: touch });
   const page = await ctx.newPage();
   const logs = [];
