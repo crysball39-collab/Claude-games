@@ -93,6 +93,8 @@ export class Body {
     this.gravity = o.gravity ?? 1;
     this.boundR = Math.hypot(this.hx, this.hy, this.hz);
     this.collides = o.collides ?? true;
+    this.yields = false;               // while kinematic, leaves slow props alone
+    this.slow = false;                 // a prop that is not moving fast enough to hurt anyone
 
     // points tested against the ground and static geometry: x,y,z,radius ...
     this.pts = o.pts || boxCorners(this.hx, this.hy, this.hz, 0.012);
@@ -525,6 +527,8 @@ export class World {
             if (!bb.collides) continue;
             if (ba.group !== 0 && ba.group === bb.group) continue;
             if (ba.im === 0 && bb.im === 0) continue;
+            // a posed limb does not bulldoze a crate that is merely in the way; whoever owns the limb deals with that
+            if ((ba.kinematic && ba.yields && bb.slow) || (bb.kinematic && bb.yields && ba.slow)) continue;
             const dx = ba.px - bb.px, dy = ba.py - bb.py, dz = ba.pz - bb.pz;
             const rr = ba.boundR + bb.boundR + m;
             if (dx * dx + dy * dy + dz * dz > rr * rr) continue;

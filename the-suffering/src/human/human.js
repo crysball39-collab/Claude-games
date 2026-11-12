@@ -65,6 +65,7 @@ export class Human {
     this.brain = null;
 
     const r = buildRagdoll(game.world, this, this.scale);
+    for (const b of r.bodies) b.yields = true;
     this.bodies = r.bodies; this.joints = r.joints; this.island = r.island; this.group = r.group;
     this.island.mover = true;
     this.attached = new Array(PART_COUNT).fill(true);
@@ -341,6 +342,7 @@ export class Human {
 
   _animated(dt) {
     const it = this.intent, h = this.h, g = this.game;
+    this._dt = dt;
     const mob = this.isPlayer ? Math.max(0.55, h.mobility) : h.mobility;
     const mag = Math.min(1, Math.hypot(it.mx, it.mz));
     this.crouching = !!it.crouch && this.grounded;
@@ -352,7 +354,7 @@ export class Human {
     if (h.legLimp(1) > 0.3 || h.legLimp(-1) > 0.3) top = Math.min(top, 2.2);
     let tvx = 0, tvz = 0;
     if (mag > 0.01) { tvx = it.mx / mag * top; tvz = it.mz / mag * top; }
-    const acc = this.grounded ? 11 : 2.5;
+    const acc = this.grounded ? 11 : 4;
     this.vx = damp(this.vx, tvx, acc, dt); this.vz = damp(this.vz, tvz, acc, dt);
 
     // an attack carries the body a little way forward
@@ -468,6 +470,9 @@ export class Human {
     for (const o of g.props) {
       const b = o.body;
       if (b.py + b.boundR < lo || b.py - b.boundR > hi) continue;
+      // anything whose top is below the knee is stepped on to, not walked into
+      const up = Math.abs(1 - 2 * (b.qx * b.qx + b.qz * b.qz));
+      if (up > 0.9 && b.py + b.hy < lo) continue;
       const dx = nx - b.px, dz = nz - b.pz;
       const reach = R + b.boundR;
       if (dx * dx + dz * dz > reach * reach) continue;
@@ -484,7 +489,9 @@ export class Human {
       nx += ex * pen; nz += ez * pen;
       if (!b.kinematic) {
         const into = -(this.vx * ex + this.vz * ez);
-        if (into > 0.1) b.applyImpulse(-ex * into * 14, 0, -ez * into * 14, _b[0], b.py, _b[2]);
+        // a steady shove, not a kick: a crate leant on at a walk creeps, run at it and it slides
+        const push = into * b.mass * 6 * this._dt;
+        if (into > 0.1) b.applyImpulse(-ex * push, 0, -ez * push, _b[0], b.py, _b[2]);
       }
     }
     // cars
@@ -732,7 +739,8 @@ export class Human {
       const other = b.hitOther;
       if (other && other.owner === this) continue;
       const car = other && other.kind === 'car';
-      if (b.kinematic && !(other && other.im > 0 && other.mass > 4)) continue;
+      // someone on their feet is only hurt by a thing that was already flying at them, not by a crate they walked into
+      if (b.kinematic && !(other && other.im > 0 && other.mass > 4 && other.preSpeed > 4)) continue;
       const speed = b.hit;
       const heavy = car ? 1.9 : other && other.mass > 15 ? 1.25 : 1;
       const power = clamp((speed - 3.6) / 5.2, 0, 3.4) * heavy * (i === P.HEAD ? 1.25 : 1);

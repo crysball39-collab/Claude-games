@@ -71,7 +71,7 @@ export function randomLook() {
     skinShade: darker(skin, 0.72), stubble: !f && chance(0.3),
     noun: f ? 'woman' : 'man',
     wears: topName + ' ' + garment,
-    desc: `a ${f ? 'woman' : 'man'} in a ${topName} ${garment}`,
+    desc: `a ${f ? 'woman' : 'man'} in ${/^[aeiou]/.test(topName) ? 'an' : 'a'} ${topName} ${garment}`,
     outfit: `${topName} ${garment} and ${pantsName}`,
     pitch: f ? rand(1.15, 1.6) : rand(0.7, 1.05),
     mass: (f ? 62 : 78) * build * Math.pow(scale / 0.92, 3),

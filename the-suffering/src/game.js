@@ -193,6 +193,7 @@ export class Game {
     this.traffic?.update(dt);
     for (const h of this.humans) h.update(dt);
     this.weapons?.update(dt);
+    for (const o of this.props) { const b = o.body; b.preSpeed = Math.hypot(b.vx, b.vy, b.vz); b.slow = b.preSpeed < 4.2; }
     this.world.step(dt);
     for (const h of this.humans) h.late(dt);
     this.weapons?.late(dt);
@@ -396,7 +397,10 @@ export class Game {
     const v = new THREE.Vector3(nx, ny, 0.5).unproject(this.camera).sub(this.camera.position).normalize();
     const o = this.camera.position;
     const wall = this.world.rayWorld(o.x, o.y, o.z, v.x, v.y, v.z, 120);
-    const hit = this.rayPeople(o.x, o.y, o.z, v.x, v.y, v.z, wall >= 0 ? wall + 0.3 : 120, this.firstPerson ? this.player : null, 0.09);
+    const far = wall >= 0 ? wall + 0.3 : 120;
+    // your own back is always in the way in third person: anyone else under the finger comes first
+    let hit = this.rayPeople(o.x, o.y, o.z, v.x, v.y, v.z, far, this.player, 0.09);
+    if (!hit && !this.firstPerson) hit = this.rayPeople(o.x, o.y, o.z, v.x, v.y, v.z, far, null, 0.09);
     return hit ? hit.human : null;
   }
 

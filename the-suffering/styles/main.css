@@ -75,7 +75,7 @@ h1, h2, h3, p { margin: 0; }
 
 #weapon-bar { position: absolute; top: var(--gt); left: 50%; transform: translateX(-50%); display: flex; gap: 6px; max-width: 44%; }
 .slot {
-  min-width: 54px; height: 34px; padding: 0 8px; border-radius: 6px; background: var(--glass); border: 1px solid rgba(233, 227, 215, 0.18);
+  min-width: 54px; height: 40px; padding: 0 8px; border-radius: 6px; background: var(--glass); border: 1px solid rgba(233, 227, 215, 0.18);
   font: 700 10px/1 var(--display); letter-spacing: 0.08em; color: var(--dim); display: grid; place-items: center; white-space: nowrap;
 }
 .slot.on { color: var(--bone); border-color: var(--blood); background: rgba(184, 34, 29, 0.28); }
@@ -286,6 +286,9 @@ h1, h2, h3, p { margin: 0; }
   .vrow { grid-template-columns: 30px 1fr; }
 }
 @media (max-width: 420px) {
-  #vitals { display: none; }
+  /* too narrow for one row: vitals drop to a second, weapons to a third */
+  #vitals { position: absolute; top: 54px; left: 0; width: 118px; }
+  #weapon-bar { top: calc(var(--gt) + 100px); }
+  #toast { top: calc(var(--gt) + 148px); }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
