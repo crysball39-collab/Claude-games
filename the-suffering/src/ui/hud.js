@@ -104,7 +104,10 @@ export class UI {
     bindSet('#set-pace', 'aiPace', 'text'); bindSet('#set-tts', 'tts', 'check');
     const sel = $('#set-model');
     for (const m of MODELS) { const o = el('option', null, m.name); o.value = m.id; sel.appendChild(o); }
-    $('#ai-note').textContent = `Everyone has ${LINE_COUNT} lines of their own to draw on. With a key, each request is billed to it; the key is kept in this browser and sent only to the Claude API. Without one, TALK and the doctor's Ask still reach Claude where this page is opened inside Claude; anywhere else people keep to their own lines.`;
+    const inClaude = typeof window !== 'undefined' && window.claude && typeof window.claude.use === 'function';
+    $('#ai-note').textContent = `Everyone has ${LINE_COUNT} lines of their own to draw on. ` + (inClaude
+      ? 'This page is open inside Claude, so TALK and the doctor\'s Ask are answered by Claude, and only when you use them. A key of your own does not work in here, because the page may not contact other servers; it works in the downloaded game, where people then speak unprompted.'
+      : 'With a key, each request is billed to it; the key is kept in this browser and sent only to the Claude API, and people speak unprompted. Without one, people keep to their own lines.');
   }
 
   _syncSettings() {

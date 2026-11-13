@@ -82,6 +82,7 @@ export class Voices {
     this._client = null; this._key = '';
     this.sample = null;               // Claude's own page-side function, where there is one
     this.sampleDead = false;
+    this.keyBlocked = false;          // inside Claude a page may not call other servers, so a key is no use there
     this.onChange = null;
     const c = typeof window !== 'undefined' ? window.claude : null;
     if (c && typeof c.use === 'function') {
@@ -92,16 +93,19 @@ export class Voices {
   get key() { return (this.settings.aiKey || '').trim(); }
   get model() { return MODELS.some((m) => m.id === this.settings.aiModel) ? this.settings.aiModel : MODELS[0].id; }
   /** Can people speak unprompted? Only on the player's own key. */
-  get live() { return !!this.key && this.settings.aiLive !== false; }
+  get live() { return this.keyUsable && this.settings.aiLive !== false; }
   /** Can a person be asked for a line because the player did something? */
-  get askable() { return !!this.key || (!!this.sample && !this.sampleDead); }
+  get askable() { return this.keyUsable || this.sampleUsable; }
+  get keyUsable() { return !!this.key && !this.keyBlocked; }
+  get sampleUsable() { return !!this.sample && !this.sampleDead; }
   ready(now = performance.now()) { return !this.busy && now >= this.backoff; }
 
   /** One line of plain English on what is connected, for the settings page. */
   status() {
+    if (this.keyBlocked && this.sampleUsable) return { text: 'Your key cannot be used from inside Claude. Claude still answers when you speak to someone or press Ask', tone: 'live' };
     if (this.error) return { text: this.error, tone: 'err' };
-    if (this.key) return { text: `Connected with your key - ${MODELS.find((m) => m.id === this.model).name}` + (this.live ? '' : ' (only when you speak to someone)'), tone: 'live' };
-    if (this.sample && !this.sampleDead) return { text: 'Claude answers when you speak to someone or press Ask', tone: 'live' };
+    if (this.keyUsable) return { text: `Connected with your key - ${MODELS.find((m) => m.id === this.model).name}` + (this.live ? '' : ' (only when you speak to someone)'), tone: 'live' };
+    if (this.sampleUsable) return { text: 'Claude answers when you speak to someone or press Ask', tone: 'live' };
     return { text: 'Scripted voices', tone: '' };
   }
 
@@ -122,12 +126,21 @@ export class Voices {
    */
   async speak(scene, { asked = false } = {}) {
     if (this.busy) return null;
-    const key = this.key;
-    if (!key && !(asked && this.sample && !this.sampleDead)) return null;
+    const key = this.keyUsable ? this.key : '';
+    const viaPage = asked && this.sampleUsable;
+    if (!key && !viaPage) return null;
     this.busy = true;
     this.calls++;
     try {
-      const out = key ? await this._viaKey(key, scene) : await this._viaSample(scene);
+      let out = null;
+      if (key) {
+        try { out = await this._viaKey(key, scene); } catch (err) {
+          // Opened inside Claude, the page is not allowed to contact the API itself:
+          // stop trying the key there and use Claude's own connection instead.
+          if (err instanceof Anthropic.APIConnectionError && this.sampleUsable) { this.keyBlocked = true; this.onChange?.(); if (!viaPage) return null; } else throw err;
+        }
+      }
+      if (!out && viaPage && (!key || this.keyBlocked)) out = await this._viaSample(scene);
       if (out) { this.served++; if (this.error) { this.error = ''; this.onChange?.(); } }
       return out;
     } catch (err) {
@@ -203,7 +216,7 @@ export class Voices {
   }
 
   /** Clears a previous failure, for when the player changes the key. */
-  reset() { this.error = ''; this.backoff = 0; this._client = null; this.onChange?.(); }
+  reset() { this.error = ''; this.backoff = 0; this._client = null; this.keyBlocked = false; this.onChange?.(); }
 }
 
 function clean(data) {

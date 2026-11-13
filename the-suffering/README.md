@@ -106,9 +106,10 @@ to them. Connect them to Claude and they can say anything at all:
   unprompted, from an account of exactly what they see, hear, feel and remember. The
   key is kept in your browser's storage and sent only to the Claude API; requests are
   billed to it. You choose the model and how often requests may be made.
-- With no key, where the game is opened as a page inside Claude, TALK and the doctor's
-  "Ask how they are" are answered by Claude on your own account. Nothing is sent unless
-  you speak or ask.
+- Where the game is opened as a page inside Claude, TALK and the doctor's "Ask how they
+  are" are answered by Claude on your own account. Nothing is sent unless you speak or
+  ask. A key of your own does not work there, because such a page may not contact other
+  servers; if one is set, the game notices and uses Claude's own connection instead.
 - With neither, everyone keeps to their own lines. Reflex cries are always scripted, so
   nobody waits on a network to scream.
 
