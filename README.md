@@ -1,5 +1,9 @@
 # GOREBOX
 
+> This repository also holds **The Suffering**, a third person city sandbox with its
+> own physics, medical model and thinking bystanders. It lives in
+> [`the-suffering/`](the-suffering/) and has its own [README](the-suffering/README.md).
+
 A 3D, first person, mobile-first physics sandbox that runs in a browser. Landscape
 orientation, touch controls, no install, no build step, no assets on disk — every
 texture in the game is drawn procedurally onto a canvas at load time.

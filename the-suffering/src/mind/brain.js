@@ -176,9 +176,13 @@ export class Brain {
       return;
     }
     if (!this.path.length) {
+      // wherever the last few minutes left them, the way on starts from their own corner:
+      // setting off straight for the next one would take them diagonally through the traffic
+      let here = city.nodes[this.at];
+      if (Math.hypot(here.x - h.x, here.z - h.z) > 1.6) { this.at = city.nearestNode(h.x, h.z); this.prev = this.at; here = city.nodes[this.at]; }
       const dest = (Math.random() * city.nodes.length) | 0;
       this.path = city.path(this.at, dest);
-      if (this.path[0] === this.at) this.path.shift();
+      if (this.path[0] === this.at && Math.hypot(here.x - h.x, here.z - h.z) <= 1.6) this.path.shift();
       if (!this.path.length) { this.pause = 1; return; }
     }
     if (this._mustWait()) { this.waited += dt; m.doing = 'waiting to cross'; this._small(dt); return; }

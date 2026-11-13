@@ -104,20 +104,23 @@ head('City');
     for (let i = 0; i < 14; i++) { const s = city.randomPavement(); g.spawnHuman(s.x, s.z); }
     const cars0 = g.traffic.cars.map((c) => [c.x, c.z]);
     const ppl = g.humans.filter((h) => !h.isPlayer), p0 = ppl.map((h) => [h.x, h.z]);
-    let onRoad = 0, samples = 0, carsOff = 0;
-    const roadAt = (x, z) => [-54, -18, 18, 54].some((r) => Math.abs(x - r) < 4.5 || Math.abs(z - r) < 4.5);
+    let onRoad = 0, jay = 0, samples = 0, carsOff = 0;
+    const R = [-54, -18, 18, 54];
+    const roadAt = (x, z) => R.some((r) => Math.abs(x - r) < 4.5 || Math.abs(z - r) < 4.5);
+    // properly out in the carriageway (not just a foot over the kerb) and nowhere near a corner, where the crossings are
+    const midBlock = (x, z) => (R.some((r) => Math.abs(x - r) < 3.9) && !R.some((r) => Math.abs(z - r) < 9)) || (R.some((r) => Math.abs(z - r) < 3.9) && !R.some((r) => Math.abs(x - r) < 9));
     for (let i = 0; i < 40; i++) {
       g.advance(0.5);
-      for (const h of ppl) { if (h.removed || h.state !== 0) continue; samples++; if (roadAt(h.x, h.z)) onRoad++; }
+      for (const h of ppl) { if (h.removed || h.state !== 0) continue; samples++; if (roadAt(h.x, h.z)) onRoad++; if (midBlock(h.x, h.z)) jay++; }
       for (const c of g.traffic.cars) if (!roadAt(c.x, c.z)) carsOff++;
     }
     const carMoved = g.traffic.cars.map((c, i) => Math.hypot(c.x - cars0[i][0], c.z - cars0[i][1]));
     const walked = ppl.map((h, i) => Math.hypot(h.x - p0[i][0], h.z - p0[i][1]));
     carMoved.sort((a, b) => a - b);
-    return { cars: g.traffic.cars.length, carMoved: carMoved[carMoved.length >> 1], slowest: carMoved[0], carsOff, walkers: walked.filter((d) => d > 3).length, people: ppl.length, pavement: 1 - onRoad / Math.max(1, samples), upright: ppl.filter((h) => h.state === 0).length };
+    return { cars: g.traffic.cars.length, carMoved: carMoved[carMoved.length >> 1], slowest: carMoved[0], carsOff, walkers: walked.filter((d) => d > 3).length, people: ppl.length, pavement: 1 - onRoad / Math.max(1, samples), jay: jay / Math.max(1, samples), upright: ppl.filter((h) => h.state === 0).length };
   });
   check('cars drive down the streets', r.cars >= 6 && r.carMoved > 40 && r.slowest > 2 && r.carsOff === 0, `${r.cars} cars; in 20 s the typical one covered ${r.carMoved.toFixed(0)} m and the slowest (held up at a crossing) ${r.slowest.toFixed(0)} m; never off the road`);
-  check('people walk on the pavements', r.walkers >= r.people * 0.6 && r.pavement > 0.75, `${r.walkers}/${r.people} walked more than 3 m; ${(r.pavement * 100).toFixed(0)}% of the time on pavement (the rest is crossings)`);
+  check('people walk on the pavements', r.walkers >= r.people * 0.6 && r.pavement > 0.6 && r.jay < 0.03, `${r.walkers}/${r.people} walked more than 3 m; ${(r.pavement * 100).toFixed(0)}% of the time on pavement, the rest on crossings at the corners; ${(r.jay * 100).toFixed(1)}% in the road mid-block`);
 }
 
 /* ------------------------------- sandbox -------------------------------- */
@@ -198,9 +201,11 @@ head('Ragdolls and stumbling');
 /* ------------------------------ doctor mode ----------------------------- */
 head('Doctor mode');
 {
-  const pos = await run(() => { const g = __game; V.stage(); const h = V.still(T.dummy(3)); window.PT = h; g.advance(0.3); const o = []; g.toScreen(h.bodies[2].px, h.bodies[2].py, h.bodies[2].pz, o); g.paused = false; return { x: o[0], y: o[1] }; });
+  await run(() => { const g = __game; V.stage(); const h = V.still(T.dummy(3)); window.PT = h; g.advance(1.2); g.paused = false; });
   await t.page.click('#btn-doctor');
-  await t.page.waitForTimeout(150);
+  await t.page.waitForTimeout(500);
+  // where they are on the screen now that the camera has settled and a frame has been drawn
+  const pos = await run(() => { const h = window.PT, o = []; __game.toScreen(h.bodies[2].px, h.bodies[2].py, h.bodies[2].pz, o); return { x: o[0], y: o[1] }; });
   await t.page.mouse.click(pos.x, pos.y);
   await t.page.waitForFunction(() => { const e = document.querySelector('#doc-cond-label'); return e && e.textContent.trim().length > 2; }, { timeout: 8000 }).catch(() => {});
   const r = await run(() => {

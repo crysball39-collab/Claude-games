@@ -310,12 +310,16 @@ export class Gore {
       const len = clamp(0.18 + hs * 0.07, 0.2, 0.7);
       q = this._groundDecal(pick(UV.streak), x, y, z, len, len * 0.45, -Math.atan2(this.vz[i], this.vx[i]));
     } else if (speed > 3.2 || ml > 5) {
-      const s = clamp(0.1 + Math.cbrt(ml) * 0.07 + speed * 0.012, 0.12, 0.42);
-      q = this._groundDecal(pick(UV.splat), x, y, z, s, s, rand(TAU));
+      const s = clamp(0.1 + Math.cbrt(ml) * 0.07 + speed * 0.012, 0.12, 0.42) * rand(0.7, 1.45);
+      q = this._groundDecal(pick(UV.splat), x, y, z, s, s * rand(0.8, 1.1), rand(TAU));
     } else {
-      const s = clamp(0.035 + Math.cbrt(ml) * 0.03, 0.04, 0.12);
+      const s = clamp(0.035 + Math.cbrt(ml) * 0.03, 0.04, 0.12) * rand(0.8, 1.6);
       q = this._groundDecal(UV.dot, x, y, z, s, s, rand(TAU));
     }
+    // no two marks quite the same red
+    const k = rand(0.55, 1);
+    this.gInfo[q].shade = k;
+    this.ground.tint(q, k, k, k, 1);
     if (this.pools.length < 160) {
       const pool = { x, y, z, vol: ml, r: 0.05, quad: q, rot: rand(TAU), big: false };
       this.gInfo[q].pool = pool;
@@ -415,7 +419,7 @@ export class Gore {
         const info = this.gInfo[i];
         if (!info) continue;
         const dry = clamp01((t - info.born) / 90);
-        const k = 1 - dry * 0.45;
+        const k = (1 - dry * 0.45) * (info.shade || 1);
         this.ground.tint(i, k, k * (1 - dry * 0.15), k * (1 - dry * 0.1), info.alpha);
       }
     }
