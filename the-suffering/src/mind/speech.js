@@ -18,8 +18,21 @@ import { $, el, clamp, rand } from '../core/util.js';
 
 const _s = [0, 0, 0], _v = [0, 0, 0];
 const SCREAMS = new Set(['hitCut', 'hitShot', 'hitStab', 'lostLimb', 'boneBreak']);
+/** What an officer says where a member of the public would say something else; null is nothing at all. */
+const COP = {
+  greet: 'copGreet', greetBack: 'copGreet', replyGreet: 'copGreet', playerNear: 'copGreet', sawSpawn: 'copIdle', idle: 'copIdle', bored: 'copIdle',
+  aimedAt: 'copChallenge', sawWeapon: null, surrender: 'copChallenge', replyThreat: 'copChallenge', replyThreatBrave: 'copChallenge', replyScared: 'copCalm',
+  sawFist: 'copHalt', sawAttack: 'copHalt', sawShot: 'copFire', gunshot: 'copRespond', startle: 'copRespond', flee: 'copRespond', cower: 'copRespond', gawk: 'copRespond',
+  relief: 'copClear', fight: 'copHalt', fightWin: 'copDown', sawDeath: 'copRespond', sawCorpse: 'copRespond', replyGo: 'copGreet', replyInsult: 'copGreet',
+};
 const NOW = {
   reply: null,
+  copChallenge: 'they have their pistol on someone who is holding a weapon, and are ordering them to drop it', copHalt: 'they are ordering someone who has just attacked a person to stop',
+  copFire: 'they have just opened fire on an armed suspect and are calling it in', copDown: 'the suspect is on the ground and they are covering them',
+  copCalm: 'the suspect has stopped and they are keeping them still at gunpoint', copClear: 'the trouble is over and they are standing down', copIdle: 'nothing is happening on their shift',
+  copSubdue: 'words have not worked and they are going in with their hands to put someone on the ground',
+  copReload: 'they are changing magazine in the middle of a firefight', copRespond: 'they are running toward trouble they have heard', copGreet: 'a member of the public has come up to them',
+  hitVest: 'a bullet has just hit their vest and not gone through',
   hitBlunt: 'they have just been struck and react', hitCut: 'they have just been cut and react', hitStab: 'they have just been stabbed and react',
   hitShot: 'they have just been shot and react', hitUnseen: 'something has just hurt them and they did not see what', hitCar: 'a car has just hit them',
   lostLimb: 'a part of their body has just been taken off', boneBreak: 'a bone has just broken', bleeding: 'they have noticed how much they are bleeding',
@@ -180,6 +193,7 @@ export class Speech {
     if (kind === 'react') return;
     const vars = Object.assign({ first: L.first, job: L.persona.job, errand: L.persona.errand }, want.vars || {});
     if (kind === 'reply') kind = this._replyKind(m, vars.text || '');
+    if (h.officer && COP[kind] !== undefined) { kind = COP[kind]; if (!kind) return; }
     let text = line(kind, vars);
     if (!text) return;
     text = flavour(text, m.p, m.mood);

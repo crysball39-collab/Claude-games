@@ -133,6 +133,22 @@ export function crateTexture() {
   return tex(c);
 }
 
+/** White capitals on a coloured board, for the front of a building. */
+export function signTexture(text, bg = '#16306b', fg = '#f1f1ea') {
+  const c = canvas(512, 96), x = c.getContext('2d');
+  x.fillStyle = bg; x.fillRect(0, 0, 512, 96);
+  x.strokeStyle = fg; x.lineWidth = 4; x.strokeRect(6, 6, 500, 84);
+  x.fillStyle = fg; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.font = '900 62px "Arial Black", "Helvetica Neue", Arial, sans-serif';
+  // letter by letter, spaced out, so it reads from across a park
+  const gap = 430 / text.length;
+  for (let i = 0; i < text.length; i++) x.fillText(text[i], 256 + (i - (text.length - 1) / 2) * gap, 51);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
 export function skyTexture() {
   const c = canvas(16, 256), x = c.getContext('2d');
   const g = x.createLinearGradient(0, 0, 0, 256);

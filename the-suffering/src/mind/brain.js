@@ -16,12 +16,16 @@ import { P } from '../human/rig.js';
 import { onRoad } from '../world/city.js';
 import { clamp, rand, chance, wrapAngle, pick } from '../core/util.js';
 
-const _a = [0, 0, 0];
+const _a = [0, 0, 0], _r = [0, 0];
+const WORD = { m1911: 'gun', ak47: 'rifle', knife: 'knife', machete: 'machete' };
 
 export class Brain {
   constructor(human, game) {
     this.h = human; this.g = game; this.m = human.mind;
-    this.mode = 'wander'; this.modeT = 0;
+    this.mode = human.officer ? 'post' : 'wander'; this.modeT = 0;
+    // officers only
+    this.post = null; this.suspect = null; this.sk = null; this.aimT = 0; this.calmT = 9; this.skill = rand(0.55, 0.85);
+    this.dest = null; this.saidDown = false; this.saidReload = false; this.firedAt = false; this.strafe = 1;
     this.path = []; this.at = game.city.nearestNode(human.x, human.z); this.prev = this.at;
     this.side = rand(-0.75, 0.75);
     this.pause = rand(0, 2); this.phone = 0;
@@ -44,6 +48,7 @@ export class Brain {
     it.mx = 0; it.mz = 0; it.run = false; it.crouch = false; it.face = null;
     h.pose.cower = 0; h.pose.handsUp = 0; h.pose.phone = 0;
     this.modeT += dt; this.sayT -= dt; this.attackT -= dt;
+    if (h.state !== ST.ANIM) { h.aimYaw = null; }
     if (!hh.alive) { m.doing = 'dead'; h.crawlDir = null; return; }
     if (!hh.conscious) { m.doing = 'unconscious'; h.crawlDir = null; return; }
 
@@ -68,8 +73,11 @@ export class Brain {
     if (h.state === ST.GETUP) { m.doing = 'getting up'; if (this.modeT > 0.2 && this.sayT <= 0) { m.ask('getUp', 30); this.sayT = 8; } return; }
 
     this.decideT -= dt;
-    if (this.decideT <= 0) { this.decideT = 0.35; this._decide(); }
+    if (this.decideT <= 0) { this.decideT = 0.35; if (h.officer) this._decideOfficer(); else this._decide(); }
     switch (this.mode) {
+      case 'post': this._post(dt); break;
+      case 'respond': this._respond(dt); break;
+      case 'engage': this._engage(dt); break;
       case 'flee': this._flee(dt); break;
       case 'cower': this._cower(dt); break;
       case 'surrender': this._surrender(dt); break;
@@ -117,6 +125,232 @@ export class Brain {
       }
     }
     if (mode !== this.mode) this._enter(mode);
+  }
+
+  /* ================================= officers ============================== */
+
+  /** Who, of everyone this officer knows about, most needs dealing with? */
+  _decideOfficer() {
+    const h = this.h, m = this.m, g = this.g, now = g.time;
+    let best = null, bk = null, bs = 0;
+    for (const k of m.known.values()) {
+      if (!(k.crime > 0)) continue;
+      const o = k.o;
+      if (!o || o.removed || o.officer || !o.h.alive) { k.crime = 0; continue; }
+      // time without a fresh offence, and the count comes down
+      if (now - k.crimeT > 9) k.crime = Math.max(0, k.crime - 0.07);
+      if (k.crime < 0.9) continue;
+      const d = Math.hypot(o.x - h.x, o.z - h.z);
+      const sc = k.crime * 10 - d * 0.1 + (k.hurtMe ? 8 : 0);
+      if (sc > bs) { bs = sc; best = o; bk = k; }
+    }
+    const changed = best !== this.suspect;
+    this.suspect = best; this.sk = bk;
+    let t = m.threat;
+    if (t && t.src && !best) { const k = m.known.get(t.src.id); if (t.src.officer || ((!k || k.crime < 0.9) && now - (k ? k.crimeT : 0) > 6)) { m.threat = null; t = null; } }
+    const mode = best ? 'engage' : t && t.level > 30 ? 'respond' : 'post';
+    if (mode !== this.mode) {
+      const was = this.mode;
+      this._enter(mode);
+      if (mode === 'post' && was !== 'post') { m.ask('copClear', 44, null, rand(0.6, 1.6)); this.calmT = 0; }
+    }
+    if (best && (changed || this.modeT === 0)) { this.aimT = 0; this.firedAt = false; this.saidDown = false; this._radio(best, bk.crime); }
+  }
+
+  /** What one officer knows, the others on the net know. */
+  _radio(suspect, crime) {
+    const h = this.h, now = this.g.time;
+    for (const o of this.g.humans) {
+      if (o === h || !o.officer || !o.mind || !o.h.alive || !o.h.conscious) continue;
+      if (Math.hypot(o.x - h.x, o.z - h.z) > 150) continue;
+      const k = o.mind._know(suspect);
+      if (k.crime >= crime) continue;
+      k.crime = crime; k.crimeT = now; k.x = suspect.x; k.z = suspect.z;
+      o.mind.note('heard', 'radio', `heard over the radio that ${o.mind.name(suspect)} ${crime >= 2.5 ? 'has attacked someone and is dangerous' : 'is causing trouble'}`, 0.7);
+    }
+  }
+
+  /** Which part of the station a point is in: out of it, the public side of the lobby, or behind the desk. */
+  _zone(x, z) {
+    const S = this.g.city.police;
+    if (!S || x < S.x0 || x > S.x1 || z < S.z0 || z > S.z1) return 'out';
+    return z > S.deskZ + 0.3 && x < S.side + 1.6 ? 'back' : 'front';
+  }
+
+  /** The next place to walk to on the way to a point, given the door and the desk are in the way. */
+  _route(tx, tz) {
+    const h = this.h, S = this.g.city.police;
+    const a = this._zone(h.x, h.z), b = this._zone(tx, tz);
+    if (!S || a === b) { _r[0] = tx; _r[1] = tz; return _r; }
+    const cx = S.door.x;
+    if (a === 'out') {
+      // in through the door: line up with it, then step through
+      if (Math.abs(h.x - cx) < 0.9 && h.z > S.door.z - 0.7) { _r[0] = S.inside.x; _r[1] = S.inside.z; } else { _r[0] = S.door.x; _r[1] = S.door.z; }
+    } else if (a === 'back') {
+      // round the end of the desk
+      if (h.x < S.side - 0.4) { _r[0] = S.side; _r[1] = S.deskZ + 1.1; } else { _r[0] = S.side; _r[1] = S.deskZ - 0.7; }
+    } else if (b === 'back') {
+      if (h.x < S.side - 0.4 || h.z > S.deskZ - 0.5 && h.x > S.side + 0.4) { _r[0] = S.side; _r[1] = S.deskZ - 0.7; } else { _r[0] = S.side; _r[1] = S.deskZ + 1.1; }
+    } else {
+      // front of the lobby to the street
+      if (Math.abs(h.x - cx) < 0.9) { _r[0] = S.door.x; _r[1] = S.door.z - 0.5; } else { _r[0] = S.inside.x; _r[1] = S.inside.z; }
+    }
+    return _r;
+  }
+
+  /** Gets an officer to a point: through the station if need be, along the pavements if it is far. */
+  _walkTo(x, z, run) {
+    const h = this.h, city = this.g.city, d = Math.hypot(x - h.x, z - h.z);
+    const zh = this._zone(h.x, h.z), zt = this._zone(x, z);
+    if (d < 17 || zh !== 'out') {
+      // close, or still indoors: straight there, by way of the door
+      const far = zh !== 'out' && zt === 'out' && d >= 17;
+      const r = far ? this._route(city.police.door.x, city.police.door.z - 1.5) : this._route(x, z);
+      this.path.length = 0;
+      return this._go(r[0], r[1], run, 1);
+    }
+    // a long way: along the pavements, like anyone else, to the corner nearest it
+    this.replan -= 0.016;
+    if (!this.dest || Math.hypot(this.dest.x - x, this.dest.z - z) > 8 || !this.path.length || this.replan <= 0) {
+      this.replan = 2.5;
+      this.dest = { x, z };
+      this.at = city.nearestNode(h.x, h.z); this.prev = this.at;
+      this.path = city.path(this.at, city.nearestNode(x, z));
+      const n0 = city.nodes[this.path[0]];
+      if (this.path.length > 1 && n0 && Math.hypot(n0.x - h.x, n0.z - h.z) < 1.2) this.path.shift();
+    }
+    if (!this._follow(run, 1)) return this._go(x, z, run, 1);
+    return d;
+  }
+
+  /** Nothing is happening: stand where they are posted, or walk the beat. */
+  _post(dt) {
+    const h = this.h, m = this.m, g = this.g, post = this.post;
+    h.aimYaw = null; h.aimPitch = h.weapon ? -0.85 : 0;
+    this.calmT += dt;
+    // the pistol goes back in its holster once things have been quiet for a moment
+    if (h.weapon && this.calmT > 1.2 && !h.swap && !h.reload) {
+      if (h.weapon.def.gun && h.weapon.ammo < h.weapon.def.mag) { g.weapons.reloadFor(h); return; }
+      if (this.calmT > 2.2) g.weapons.putAway(h);
+    }
+    if (h.reload) { m.doing = 'reloading'; return; }
+    if (!post || post.kind === 'beat') { this._wander(dt); return; }
+    const d = Math.hypot(post.x - h.x, post.z - h.z);
+    if (d > 0.45) { m.doing = 'going back to their post'; this._walkTo(post.x, post.z, false); return; }
+    m.doing = post.kind === 'desk' ? 'on duty at the front desk' : post.kind === 'door' ? 'standing guard at the station door' : 'standing guard';
+    // facing out, eyes moving
+    h.intent.face = post.yaw + Math.sin(g.time * 0.23 + h.id) * 0.45;
+    const pl = g.player, dp = Math.hypot(pl.x - h.x, pl.z - h.z);
+    if (dp < 2.2 && pl.state === ST.ANIM) { this.nearT += dt; if (this.nearT > 1.5) { m.ask('copGreet', 30); this.nearT = -14; } } else this.nearT = Math.min(0, this.nearT + dt);
+    if (this.sayT <= 0 && m.speakCool <= 0) { if (chance(0.5)) m.ask('copIdle', 12); this.sayT = rand(14, 34); }
+  }
+
+  /** Trouble somewhere, and nobody yet to hold responsible: go and look. */
+  _respond(dt) {
+    const h = this.h, m = this.m, g = this.g, t = m.threat;
+    if (!t) return;
+    this.calmT = 0;
+    m.doing = 'going to see what the trouble is';
+    const dx = t.x - h.x, dz = t.z - h.z, d = Math.hypot(dx, dz);
+    // gunfire: the pistol is out before they get there
+    if (t.level > 55 && d < 45 && !h.weapon && !h.swap) g.weapons.draw(h);
+    h.aimYaw = null; h.aimPitch = h.weapon ? -0.85 : 0;
+    if (d > 5) this._walkTo(t.x, t.z, t.level > 45);
+    else h.intent.face = Math.atan2(dx, dz);
+    if (this.sayT <= 0) { if (d > 8) m.ask('copRespond', 42); this.sayT = rand(9, 17); }
+  }
+
+  /**
+   * Someone has to be stopped. Words first, at gunpoint, for a weapon in the
+   * hand or a blow struck; the pistol for anyone who has used a weapon on a
+   * person, who is holding a gun and has already been warned off it, or who
+   * comes at them with a blade. Nobody who has stopped is shot.
+   */
+  _engage(dt) {
+    const h = this.h, m = this.m, g = this.g, S = this.suspect, k = this.sk, now = g.time, W = g.weapons;
+    if (!S || !k || S.removed) return;
+    this.calmT = 0;
+    const c = S.bodies[P.CHEST];
+    const seen = m.canSeeHuman(S) > 0;
+    if (seen) { k.x = S.x; k.z = S.z; }
+    const tx = seen || k.x == null ? S.x : k.x, tz = seen || k.z == null ? S.z : k.z;
+    const dx = tx - h.x, dz = tz - h.z, d = Math.hypot(dx, dz) || 1;
+    const gun = !!(h.weapon && h.weapon.def.gun);
+    const sGun = !!(S.weapon && S.weapon.def.gun), sBlade = !!(S.weapon && !S.weapon.def.gun);
+    const down = S.state === ST.RAGDOLL || !S.h.conscious;
+    const quiet = now - k.crimeT;
+    const complying = !down && ((!S.weapon && !S.anim.action && quiet > 3.5) || S.pose.handsUp > 0.5);
+    const lethal = k.crime >= 2.5 || (sGun && k.crime >= 1.6) || (sBlade && seen && d < 3.4 && k.crime >= 1) || (k.hurtMe && h.h.pain > 42);
+    // someone with empty hands who will not stop is put on the ground by hand
+    const subdue = !lethal && !S.weapon && !down && !complying && k.crime >= 1.9 && h.h.armOk(1) && h.h.armOk(-1);
+    m.doing = down ? `covering ${m.name(S)}, who is down` : complying ? `holding ${m.name(S)} at gunpoint` : lethal ? `in a fight for their life with ${m.name(S)}` : subdue ? `going in to restrain ${m.name(S)}` : `ordering ${m.name(S)} to stop`;
+
+    if (subdue) {
+      h.aimYaw = null; h.aimPitch = 0;
+      if (h.weapon && !h.swap && !h.reload) W.putAway(h);
+      h.intent.face = Math.atan2(dx, dz); h.guardT = 2;
+      if (d > 1.05) this._walkTo(tx, tz, d > 3);
+      if (!h.weapon && d < 1.35 && this.attackT <= 0) { W.npcAttack(h, S); this.attackT = rand(0.6, 1.1); }
+      if (this.sayT <= 0) { m.ask('copSubdue', 64); this.sayT = rand(3, 5); }
+      return;
+    }
+
+    // the pistol comes out. With no pistol, or no arm for it, it is fists or distance.
+    if (!gun && !h.swap && !W.draw(h)) {
+      if (sGun || sBlade) { m._threaten(S, 92); this._flee(dt); return; }
+      h.intent.face = Math.atan2(dx, dz); h.guardT = 2;
+      if (d > 1.05) this._go(tx, tz, d > 4, 1);
+      if (d < 1.35 && this.attackT <= 0 && !down && !complying) { W.npcAttack(h, S); this.attackT = rand(0.7, 1.3); }
+      return;
+    }
+
+    // where to stand: near enough to be heard and to hit, not near enough to be grabbed
+    const want = lethal ? 11 : 6.5;
+    if (!seen && d > 2.5) this._walkTo(tx, tz, true);
+    else if (d > want + 3) this._walkTo(tx, tz, d > want + 9);
+    else if (d < 3.4 && !down && !complying) this._go(h.x - dx / d * 3, h.z - dz / d * 3, false, 0.75);
+    const yaw = Math.atan2(S.x - h.x, S.z - h.z);
+    if (seen || d < 14) h.intent.face = yaw;
+
+    // the muzzle follows the suspect while there is one to see; otherwise low and ready
+    const eye = h.y + 1.42 * h.scale;
+    if (seen && gun && !h.reload) { h.aimYaw = yaw; h.aimPitch = Math.atan2(c.py - eye, Math.hypot(S.x - h.x, S.z - h.z)); this.aimT += dt; }
+    else { h.aimYaw = null; h.aimPitch = gun ? -0.85 : 0; this.aimT = 0; }
+
+    if (down) {
+      if (!this.saidDown) { this.saidDown = true; m.ask('copDown', 62, null, rand(0.4, 1.2)); }
+      // somebody who cannot get up is no longer anybody's emergency
+      if (quiet > 5) k.crime = Math.max(0, k.crime - dt * 0.5);
+      return;
+    }
+    this.saidDown = false;
+    if (complying) {
+      if (this.sayT <= 0) { m.ask('copCalm', 50); this.sayT = rand(4, 7); }
+      return;
+    }
+    if (!seen) return;
+    if (!lethal) {
+      if (this.sayT <= 0) { m.ask(S.weapon ? 'copChallenge' : 'copHalt', 66, { weapon: WORD[S.weapon ? S.weapon.def.id : ''] || 'weapon' }); this.sayT = rand(2.6, 4.4); }
+      return;
+    }
+    if (h.reload) { if (!this.saidReload) { this.saidReload = true; m.ask('copReload', 60); } return; }
+    this.saidReload = false;
+    if (!gun || h.swap || this.aimT < 0.55 || d > 44) return;
+    // is anyone else in the way?
+    const mu = h.weapon.muzzleWorld || [h.x, eye, h.z];
+    const ax = c.px + S.vx * 0.08 - mu[0], ay = c.py - mu[1], az = c.pz + S.vz * 0.08 - mu[2], al = Math.hypot(ax, ay, az) || 1;
+    const first = g.rayPeople(mu[0], mu[1], mu[2], ax / al, ay / al, az / al, al + 0.4, h, 0.14);
+    if (first && first.human !== S) {
+      // a step to the side for a clear line
+      if (chance(dt * 0.6)) this.strafe = -this.strafe;
+      this._go(h.x - dz / d * this.strafe * 2, h.z + dx / d * this.strafe * 2, false, 0.7);
+      h.intent.face = yaw;
+      return;
+    }
+    if (W.npcFire(h, [c.px + S.vx * 0.08, c.py + rand(-0.14, 0.1), c.pz + S.vz * 0.08], this.skill) && !this.firedAt) {
+      this.firedAt = true;
+      m.ask('copFire', 70, null, rand(0.2, 0.8));
+    }
   }
 
   /* -------------------------------- moving -------------------------------- */
@@ -375,7 +609,7 @@ export class Brain {
 /** Keeps the pavements populated: new faces arrive where you are not looking. */
 export function populate(game, target) {
   let living = 0;
-  for (const h of game.humans) if (!h.isPlayer && h.h.alive) living++;
+  for (const h of game.humans) if (!h.isPlayer && h.h.alive && !h.officer) living++;
   if (living >= target || game.humans.length >= game.maxPeople) return null;
   const p = game.player;
   for (let i = 0; i < 12; i++) {

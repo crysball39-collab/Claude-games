@@ -8,7 +8,7 @@ import { Boxes } from './render/boxes.js';
 import { Quads, cellUV } from './render/quads.js';
 import { decalAtlas, FaceAtlas, crateTexture, DECAL, ATLAS_COLS, ATLAS_ROWS } from './render/textures.js';
 import { Human, ST } from './human/human.js';
-import { playerLook, randomLook } from './human/looks.js';
+import { playerLook, randomLook, officerLook } from './human/looks.js';
 import { P } from './human/rig.js';
 import { Gore } from './combat/gore.js';
 import { clamp, clamp01, damp, lerp, rand, wrapAngle } from './core/util.js';
@@ -136,9 +136,35 @@ export class Game {
       this.removeHuman(worst);
     }
     const h = new Human(this, look, x, z, yaw);
+    h.officer = !!look.officer;
     this.humans.push(h);
     this.minds?.adopt(h);
     return h;
+  }
+
+  /** A police officer: uniform, light vest, an M1911 on the hip. `post` is where they stand when nothing is happening. */
+  spawnOfficer(x, z, yaw = 0, post = null) {
+    const h = this.spawnHuman(x, z, yaw, officerLook());
+    h.wearVest(true);
+    this.weapons?.give(h, 'm1911');
+    if (h.brain) h.brain.post = post || { x, z, yaw, kind: 'spot' };
+    return h;
+  }
+
+  /** Mans the station: one officer to each post that has nobody. */
+  staffStation(all = false) {
+    const S = this.city.police;
+    if (!S) return 0;
+    let made = 0;
+    for (const post of S.posts) {
+      if (this.humans.some((h) => h.officer && h.h.alive && h.brain && h.brain.post === post)) continue;
+      // nobody comes on duty right under the player's nose
+      if (!all && Math.hypot(post.x - this.player.x, post.z - this.player.z) < 30) continue;
+      this.spawnOfficer(post.x, post.z, post.yaw, post);
+      made++;
+      if (!all) break;
+    }
+    return made;
   }
 
   removeHuman(h) {

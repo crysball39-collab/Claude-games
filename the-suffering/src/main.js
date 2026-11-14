@@ -98,6 +98,8 @@ async function boot() {
     if (Math.hypot(s.x - game.player.x, s.z - game.player.z) > 11 && game.city.isClear(s.x, s.z, 0.5)) game.spawnHuman(s.x, s.z);
   }
 
+  game.staffStation(true);
+
   await stage('Almost there', 90);
   try { game.renderer.compile(game.scene, game.camera); } catch { /* it will compile as it goes */ }
   game.frame(1 / 60);
@@ -105,7 +107,7 @@ async function boot() {
   window.addEventListener('resize', () => { game.resize(); ui._layout(); });
   window.addEventListener('orientationchange', () => setTimeout(() => { game.resize(); ui._layout(); }, 200));
 
-  let last = performance.now(), popT = 0, stepT = 0;
+  let last = performance.now(), popT = 0, stepT = 0, copT = 0;
   function loop(now) {
     const dt = clamp((now - last) / 1000, 0, 0.1);
     last = now;
@@ -114,6 +116,9 @@ async function boot() {
       // the streets refill, a face at a time, out of sight
       popT += dt;
       if (popT > 1.3) { popT = 0; populate(game, settings.people); }
+      // a post left empty is filled again, in time
+      copT += dt;
+      if (copT > 40) { copT = 0; game.staffStation(false); }
       // running feet are heard, and so is the nearest engine
       const p = game.player;
       if (p.state === ST.ANIM && p.speed > 3.2 && p.grounded) {

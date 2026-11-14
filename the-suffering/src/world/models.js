@@ -15,7 +15,7 @@ const _glow = new THREE.MeshBasicMaterial({ vertexColors: true });
  */
 export function buildCar(paint, kind = 'sedan') {
   const m = new Merger(), g = new Merger();
-  const van = kind === 'van', taxi = kind === 'taxi';
+  const van = kind === 'van', taxi = kind === 'taxi', police = kind === 'police';
   const dark = 0x15171a, glass = 0x1b242d, trim = 0x2a2c30;
   // body
   m.box(0, 0.52, 0, 1.8, 0.5, 4.3, paint);
@@ -37,6 +37,14 @@ export function buildCar(paint, kind = 'sedan') {
     m.cyl(sx + Math.sign(sx) * 0.12, 0.33, sz, 0.34, 0.04, 0x8d9197, 0, 0, Math.PI / 2);
   }
   if (taxi) m.box(0, 1.42, -0.1, 0.5, 0.16, 0.22, 0xf4e9b0);
+  if (police) {
+    // dark doors, a bar of lights on the roof
+    m.box(0.905, 0.56, -0.2, 0.02, 0.4, 2.3, 0x16306b); m.box(-0.905, 0.56, -0.2, 0.02, 0.4, 2.3, 0x16306b);
+    m.box(0, 0.79, 1.5, 1.82, 0.03, 1.0, 0x16306b);
+    m.box(0, 1.38, -0.2, 1.2, 0.07, 0.3, 0x1c1e22);
+    g.box(0.36, 1.45, -0.2, 0.42, 0.1, 0.24, 0x2b6cff); g.box(-0.36, 1.45, -0.2, 0.42, 0.1, 0.24, 0xd41f1f);
+    g.box(0, 1.45, -0.2, 0.2, 0.08, 0.2, 0xf2f2f2);
+  }
   // lamps
   g.box(0.62, 0.62, 2.16, 0.34, 0.14, 0.05, 0xfff3c8); g.box(-0.62, 0.62, 2.16, 0.34, 0.14, 0.05, 0xfff3c8);
   g.box(0.66, 0.64, -2.16, 0.3, 0.12, 0.05, 0xc41515); g.box(-0.66, 0.64, -2.16, 0.3, 0.12, 0.05, 0xc41515);

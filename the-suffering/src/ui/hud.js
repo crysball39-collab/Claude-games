@@ -242,6 +242,11 @@ export class UI {
         if (h.mind) { h.mind.note('felt', 'arrive', 'found myself standing in the street with no idea how I got here', 0.6); h.mind.stir('surprise', 50); h.mind.ask('sawSpawn', 40, null, rand(0.6, 2)); }
       }
       this.toast(n > 1 ? 'Five people' : 'A person');
+    } else if (what === 'officer') {
+      const [x, z] = g.spotAhead(3.2, 0.3);
+      const h = g.spawnOfficer(x, z, Math.atan2(p.x - x, p.z - z));
+      g.minds.witness({ kind: 'spawn', what: h.look.desc, x, y: h.y + 1.4, z });
+      this.toast('A police officer');
     } else if (what === 'crate') {
       const [x, z] = g.spotAhead(2.6, 0.15);
       g.spawnCrate(x, groundHeight(x, z) + 1.3, z);

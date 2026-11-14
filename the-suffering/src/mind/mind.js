@@ -173,7 +173,7 @@ export class Mind {
       if (a === 0) continue;
       const d = Math.sqrt(d2);
       let k = this.known.get(o.id);
-      if (!k) { k = { first: now, last: now, state: 'ok', armed: null, hostile: 0, hurtMe: false, bits: '' }; this.known.set(o.id, k); }
+      if (!k) { k = { first: now, last: now, state: 'ok', armed: null, hostile: 0, hurtMe: false, bits: '', crime: 0, crimeT: 0, o }; this.known.set(o.id, k); }
       k.last = now; k.x = o.x; k.z = o.z;
       const detail = a > 0.5 && d < 32;
       const bits = detail ? o.appearance() : [];
@@ -200,13 +200,18 @@ export class Mind {
         }
         k.state = state;
       }
+      // a weapon out in the street is an offence for as long as it stays out (unless it is an officer's)
+      if (detail && armed && armed !== 'fists' && !o.officer && o.h.alive && o.state === ST.ANIM) { k.crime = Math.max(k.crime, armed === 'm1911' || armed === 'ak47' ? 1.3 : 1); k.crimeT = now; }
       if (detail && armed !== k.armed) {
         k.armed = armed;
         if (armed && armed !== 'fists' && o.h.alive) {
           this.note('saw', 'armed', `saw ${this.name(o)} holding a ${WEAPON_WORD[armed]}`, 0.7, { o });
-          this.stir('fear', WEAPON_FEAR[armed] * 0.45 * falloff(d)); this.stir('surprise', 30);
-          this._threaten(o, WEAPON_FEAR[armed] * 0.5 * falloff(d));
-          this.ask('sawWeapon', 62, { weapon: WEAPON_WORD[armed] });
+          if (o.officer && !h.officer) { this.stir('fear', 12 * falloff(d)); this.stir('surprise', 24); }
+          else if (!h.officer) {
+            this.stir('fear', WEAPON_FEAR[armed] * 0.45 * falloff(d)); this.stir('surprise', 30);
+            this._threaten(o, WEAPON_FEAR[armed] * 0.5 * falloff(d));
+            this.ask('sawWeapon', 62, { weapon: WEAPON_WORD[armed] });
+          } else if (!o.officer) this._threaten(o, 40);
         }
       }
       if (!nearest || d < nearest.d) nearest = { o, d };
@@ -234,6 +239,7 @@ export class Mind {
       this.aimed += 0.3;
       this.stir('fear', 6);
       this._threaten(pl, 92);
+      const kp = this._know(pl); kp.crime = Math.max(kp.crime, this.aimed > 1.4 ? 2.6 : 1.5); kp.crimeT = now;
     } else this.aimed = Math.max(0, this.aimed - 0.6);
 
     // blood on the ground underfoot
@@ -271,16 +277,22 @@ export class Mind {
         const verb = ev.weapon === 'fists' ? 'hit' : ev.weapon === 'knife' ? (ev.rep && ev.rep.type === 'stab' ? 'stab' : 'slash') : ev.weapon === 'machete' ? 'hack at' : 'shoot';
         this.note('saw', 'attack', `saw ${this.name(A)} ${verb} ${this.name(V)}${ev.weapon === 'fists' ? '' : ' with a ' + word}`, 0.9, { o: A, v: V });
         this.stir('fear', sev * 0.6 * k); this.stir('sadness', 14 * k); this.stir('anger', (ev.weapon === 'fists' ? 16 : 8) * k); this.stir('surprise', 35 * k);
-        const kn = this._know(A); kn.hostile = 1; kn.armed = ev.weapon;
-        this._threaten(A, sev * (0.45 + 0.55 * k));
-        this.ask(ev.weapon === 'fists' ? 'sawFist' : ev.weapon === 'm1911' || ev.weapon === 'ak47' ? 'sawShot' : 'sawAttack', ev.weapon === 'fists' ? 52 : 72);
+        const kn = this._know(A); kn.armed = ev.weapon;
+        // the law using force is not a crime, and neither is hitting back at someone who started it
+        const vk = this.known.get(V.id), lawful = A.officer || (vk && vk.crime >= 1 && !V.officer);
+        if (!lawful) { kn.hostile = 1; kn.crime = ev.weapon === 'fists' ? Math.max(kn.crime, Math.min(2.4, kn.crime + 1)) : Math.min(6, kn.crime + 3); kn.crimeT = this.game.time; }
+        if (h.officer && A.officer) break;
+        this._threaten(A, sev * (0.45 + 0.55 * k) * (A.officer ? 0.6 : 1));
+        if (!h.officer) this.ask(ev.weapon === 'fists' ? 'sawFist' : ev.weapon === 'm1911' || ev.weapon === 'ak47' ? 'sawShot' : 'sawAttack', ev.weapon === 'fists' ? 52 : 72);
         break;
       }
       case 'shot': {
         if (A === h) return;
-        const kn = this._know(A); kn.hostile = Math.max(kn.hostile, 0.8); kn.armed = ev.weapon;
+        const kn = this._know(A); kn.armed = ev.weapon;
         this.note('saw', 'shot', `saw ${this.name(A)} fire a ${WEAPON_WORD[ev.weapon]}`, 0.8, { o: A });
-        this._threaten(A, 86 * (0.4 + 0.6 * k));
+        if (!A.officer) { kn.hostile = Math.max(kn.hostile, 0.8); kn.crime = Math.max(kn.crime, 2); kn.crimeT = this.game.time; }
+        if (h.officer && A.officer) break;
+        this._threaten(A, 86 * (0.4 + 0.6 * k) * (A.officer ? 0.6 : 1));
         break;
       }
       case 'swing':
@@ -292,6 +304,8 @@ export class Mind {
       case 'death':
         if (V === h) return;
         this.note('saw', 'death', `saw ${this.name(V)} die`, 1, { v: V });
+        // whoever did it has killed someone, whatever they used
+        if (A && typeof A === 'object' && A.h && A !== h && !A.officer && A !== V) { const ka = this._know(A); if (!(this.known.get(V.id) || {}).crime || V.officer) { ka.crime = Math.max(ka.crime, 3); ka.crimeT = this.game.time; } }
         this.stir('fear', 26 * k); this.stir('sadness', 38 * k); this.stir('surprise', 20 * k);
         h.h.disgust = Math.min(70, h.h.disgust + p.squeamish * 30 * k);
         this.ask('sawDeath', 80, null, 0.5);
@@ -333,7 +347,7 @@ export class Mind {
 
   _know(o) {
     let k = this.known.get(o.id);
-    if (!k) { k = { first: this.game.time, last: this.game.time, state: 'ok', armed: null, hostile: 0, hurtMe: false }; this.known.set(o.id, k); }
+    if (!k) { k = { first: this.game.time, last: this.game.time, state: 'ok', armed: null, hostile: 0, hurtMe: false, crime: 0, crimeT: 0, o }; this.known.set(o.id, k); }
     return k;
   }
 
@@ -420,6 +434,7 @@ export class Mind {
     if (isHuman) {
       const k = this._know(attacker);
       k.hurtMe = true; k.hostile = 1; if (weapon) k.armed = weapon;
+      if (!attacker.officer) { k.crime = type === 'blunt' && !vestTook ? Math.max(k.crime, Math.min(2.4, k.crime + 1.2)) : Math.min(6, k.crime + 3); k.crimeT = now; }
       if (seen) this._threaten(attacker, type === 'blunt' && !vestTook ? 70 : 96);
       else { this._threaten(null, 72, h.x - Math.sin(h.yaw) * 2, h.z - Math.cos(h.yaw) * 2); this.lookAt = { x: attacker.x, y: attacker.y + 1.5, z: attacker.z, until: now + 2 }; }
     }

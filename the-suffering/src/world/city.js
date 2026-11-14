@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import { mulberry } from '../core/util.js';
 import { Merger, tiledBox } from '../render/merge.js';
 import {
-  asphaltTexture, pavementTexture, grassTexture, facadeTexture, skyTexture, FACADE_COUNT,
+  asphaltTexture, pavementTexture, grassTexture, facadeTexture, skyTexture, signTexture, FACADE_COUNT,
 } from '../render/textures.js';
 import {
   buildCar, addLamp, addTree, addBench, addBin, addHydrant, propMaterial, glowMaterial, CAR, CAR_PAINT,
@@ -114,13 +114,14 @@ export class City {
     for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) {
       const x0 = ROADS[i] + ROAD_W / 2, x1 = ROADS[i + 1] - ROAD_W / 2;
       const z0 = ROADS[j] + ROAD_W / 2, z1 = ROADS[j + 1] - ROAD_W / 2;
-      const kind = i === 1 && j === 1 ? 'park' : i === 2 && j === 0 ? 'lot' : 'buildings';
+      const kind = i === 1 && j === 1 ? 'park' : i === 2 && j === 0 ? 'lot' : i === 1 && j === 2 ? 'police' : 'buildings';
       const b = { i, j, x0, x1, z0, z1, kind };
       this.blocks.push(b);
       this._slab(x0, z0, x1, z1);
       const ix0 = x0 + SIDEWALK, ix1 = x1 - SIDEWALK, iz0 = z0 + SIDEWALK, iz1 = z1 - SIDEWALK;
       if (kind === 'park') this._park(ix0, iz0, ix1, iz1);
       else if (kind === 'lot') this._lot(ix0, iz0, ix1, iz1);
+      else if (kind === 'police') this._police(ix0, iz0, ix1, iz1);
       else this._buildingBlock(ix0, iz0, ix1, iz1, patterns[pi++ % patterns.length], r);
     }
   }
@@ -233,6 +234,99 @@ export class City {
     this._solid(x1 - 7, 0, z0 + 0.1, x1, KERB + 0.9, z0 + 0.5, 'wall');
     // somewhere for the first crates
     this.crateSpots.push([x0 + 4, z0 + 5], [x0 + 5.0, z0 + 5.1], [x0 + 4.5, z0 + 5, 1], [x0 + 9, z0 + 8.5]);
+  }
+
+  /**
+   * The police station, across the road from the far side of the park. A
+   * forecourt with patrol cars, a single storey lobby you can walk into - a
+   * front desk, a cell, a bench - and the rest of the building behind it.
+   * Its front faces -Z.
+   */
+  _police(x0, z0, x1, z1) {
+    const P = this.props, cx = (x0 + x1) / 2;
+    const BLUE = 0x16306b, WALL = 0xa9b0b8, TRIM = 0x2a2e34, FLOOR = 0x7d848c;
+    const bx0 = x0 + 1, bx1 = x1 - 1, zf = z0 + 5.4, zb = zf + 6.2, top = KERB + 3.3, T = 0.3;
+    // the offices behind: an ordinary building, with the lobby against its front wall
+    this._building(bx0, zb, bx1, z1, 8.5, 1);
+    // forecourt and lobby floor
+    this.marks.flat(cx, KERB + 0.02, (z0 + zf) / 2, x1 - x0, zf - z0, 0x3a3d42);
+    this.marks.flat(cx, KERB + 0.025, (zf + zb) / 2, bx1 - bx0, zb - zf, FLOOR);
+    for (let k = 0; k < 4; k++) this.marks.flat(x0 + 1.4 + k * 3, KERB + 0.03, z0 + 2.6, 0.12, 4.8, 0xd8d8d2);
+    // walls: a piece of masonry is drawn and is solid
+    const wall = (ax0, ay0, az0, ax1, ay1, az1, hex = WALL, opaque = true) => {
+      P.box((ax0 + ax1) / 2, KERB + (ay0 + ay1) / 2, (az0 + az1) / 2, ax1 - ax0, ay1 - ay0, az1 - az0, hex);
+      this._solid(ax0, KERB + ay0, az0, ax1, KERB + ay1, az1, 'building', opaque);
+    };
+    const door = 1.7;                                    // half the width of the way in
+    wall(bx0, 0, zf, bx0 + T, 3.3, zb);                  // the side walls
+    wall(bx1 - T, 0, zf, bx1, 3.3, zb);
+    for (const s of [-1, 1]) {
+      // each side of the door: a sill, a window you can see through, a header, and a pier at either end
+      const a = s < 0 ? bx0 + T : cx + door, b = s < 0 ? cx - door : bx1 - T;
+      wall(a, 0, zf, b, 1.0, zf + T);
+      wall(a, 2.45, zf, b, 3.3, zf + T);
+      wall(s < 0 ? b - 0.7 : a, 1.0, zf, s < 0 ? b : a + 0.7, 2.45, zf + T);
+      wall(s < 0 ? a : b - 0.9, 1.0, zf, s < 0 ? a + 0.9 : b, 2.45, zf + T);
+      // window frame, and a lamp beside the door
+      P.box((a + b) / 2, KERB + 1.0, zf - 0.02, b - a - 1.6, 0.07, 0.1, TRIM);
+      P.box((a + b) / 2, KERB + 2.45, zf - 0.02, b - a - 1.6, 0.07, 0.1, TRIM);
+      this.glow.box(cx + s * (door + 0.35), KERB + 2.2, zf - 0.12, 0.2, 0.3, 0.16, 0x4f86ff);
+    }
+    wall(cx - door, 2.45, zf, cx + door, 3.3, zf + T);   // over the door
+    // roof, with a blue band round the edge
+    P.box(cx, top + 0.15, (zf + zb) / 2 - 0.15, bx1 - bx0 + 0.4, 0.3, zb - zf + 0.3, 0x3a3e45);
+    this._solid(bx0 - 0.2, top, zf - 0.3, bx1 + 0.2, top + 0.3, zb, 'building', true);
+    P.box(cx, top - 0.14, zf - 0.04, bx1 - bx0 + 0.1, 0.28, 0.1, BLUE);
+    // a ceiling that is lit from below, with strip lights, so indoors does not look like night
+    this.glow.box(cx, top - 0.012, (zf + zb) / 2 + 0.1, bx1 - bx0 - 0.5, 0.02, zb - zf - 0.4, 0x767d85);
+    for (const k of [-1, 0, 1]) this.glow.box(cx + k * 5.6, top - 0.035, (zf + zb) / 2, 2.2, 0.03, 0.42, 0xf6f2e2);
+    // the sign
+    const sign = new THREE.MeshBasicMaterial({ map: signTexture('POLICE') }), edge = new THREE.MeshLambertMaterial({ color: 0x10244f });
+    this._mesh(new THREE.BoxGeometry(6.4, 1.2, 0.16), [edge, edge, edge, edge, edge, sign], cx, top + 0.95, zf - 0.1, false);
+    P.box(cx - 2.6, top + 0.35, zf - 0.1, 0.12, 0.2, 0.12, TRIM); P.box(cx + 2.6, top + 0.35, zf - 0.1, 0.12, 0.2, 0.12, TRIM);
+    // inside: the desk, facing the door
+    const dz = zb - 1.9;
+    wall(cx - 2.6, 0, dz, cx + 2.6, 1.08, dz + 0.6, 0x3b4654, false);
+    P.box(cx, KERB + 1.11, dz + 0.3, 5.4, 0.06, 0.8, 0x23272d);
+    P.box(cx + 1.4, KERB + 1.3, dz + 0.36, 0.5, 0.34, 0.05, 0x15171a);            // a screen
+    P.box(cx, KERB + 2.5, zb - 0.06, 3.2, 0.9, 0.06, BLUE);                        // a board on the back wall
+    P.box(cx, KERB + 2.5, zb - 0.1, 2.9, 0.62, 0.03, 0xdad6c8);
+    // a cell in the right hand corner: bars you can see and be seen through
+    const cxa = bx1 - T - 3.6, cza = zb - 3.2;
+    for (let k = 0; k <= 12; k++) P.box(cxa, KERB + 1.3, cza + k * 0.266, 0.05, 2.6, 0.05, 0x3d4249);
+    for (let k = 1; k <= 13; k++) P.box(cxa + k * 0.257, KERB + 1.3, cza, 0.05, 2.6, 0.05, 0x3d4249);
+    P.box(cxa + 1.8, KERB + 2.62, cza, 3.6, 0.08, 0.08, 0x3d4249); P.box(cxa, KERB + 2.62, cza + 1.6, 0.08, 0.08, 3.2, 0x3d4249);
+    this._solid(cxa - 0.04, KERB, cza, cxa + 0.04, KERB + 2.6, zb, 'bars', false);
+    this._solid(cxa, KERB, cza - 0.04, bx1 - T, KERB + 2.6, cza + 0.04, 'bars', false);
+    wall(cxa + 0.5, 0, zb - 0.6, bx1 - T - 0.3, 0.45, zb - 0.1, 0x5b5f66, false);   // the bunk
+    // on the left: a bench for whoever is waiting, and lockers
+    wall(bx0 + T + 0.2, 0, zf + 1.4, bx0 + T + 0.7, 0.45, zf + 4.2, 0x6a4a2c, false);
+    P.box(bx0 + T + 0.26, KERB + 0.75, zf + 2.8, 0.08, 0.5, 2.8, 0x6a4a2c);
+    for (let k = 0; k < 4; k++) P.box(bx0 + T + 1.6 + k * 0.62, KERB + 0.95, zb - 0.28, 0.58, 1.9, 0.5, k % 2 ? 0x3c4a5c : 0x445468);
+    this._solid(bx0 + T + 1.3, KERB, zb - 0.55, bx0 + T + 3.8, KERB + 1.9, zb, 'building', true);
+    // patrol cars in the bays, nose out
+    this.patrol = [];
+    for (const k of [0, 1]) {
+      const x = x0 + 2.9 + k * 3, z = z0 + 2.6;
+      const car = buildCar(0xf0f0ec, 'police');
+      car.position.set(x, KERB, z); car.rotation.y = Math.PI;
+      car.traverse((o) => { o.matrixAutoUpdate = false; o.updateMatrix(); if (o.isMesh) o.castShadow = this.shadows; });
+      this.group.add(car);
+      this._solid(x - CAR.halfW, 0, z - CAR.halfL, x + CAR.halfW, KERB + 1.38, z + CAR.halfL, 'car', true);
+      this.parked.push({ x, z, yaw: Math.PI });
+      this.patrol.push({ x, z });
+    }
+    // where the officers stand, and how they get in and out
+    this.police = {
+      door: { x: cx, z: zf - 1.1 }, inside: { x: cx, z: zf + 1.6 },
+      x0: bx0, x1: bx1, z0: zf, z1: zb, deskZ: dz, side: cx + 3.4,
+      posts: [
+        { x: cx + 0.2, z: dz + 1.25, yaw: Math.PI, kind: 'desk', indoors: true },
+        { x: cx - door - 1.0, z: zf - 0.9, yaw: Math.PI, kind: 'door' },
+        { x: cx + door + 1.0, z: zf - 0.9, yaw: Math.PI, kind: 'door' },
+        { x: cx + 5.5, z: z0 - 1.4, yaw: Math.PI, kind: 'beat' },
+      ],
+    };
   }
 
   /* ----------------------- the buildings all around ----------------------- */

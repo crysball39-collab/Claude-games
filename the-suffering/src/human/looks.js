@@ -83,6 +83,29 @@ export function randomLook() {
   };
 }
 
+const COP_QUIRKS = ['speaks in clipped radio phrases', 'calls everyone sir or madam', 'has seen it all and says so', 'narrates what they are doing as if for the report',
+  'is unfailingly polite even when terrified', 'makes dark jokes under stress', 'goes very quiet and precise when things are bad'];
+const COP_ERRANDS = ['on patrol', 'on duty until six', 'covering a double shift', 'on duty, first week on the job', 'on duty, a month from retirement'];
+
+/** A police officer: navy uniform, cap, steady nerves. The vest and the pistol are put on them by the game. */
+export function officerLook() {
+  const L = randomLook();
+  const f = L.sex === 'f';
+  L.age = Math.round(rand(23, 58));
+  L.officer = true;
+  L.top = 0x1b2a4a; L.pants = 0x141c2e; L.shoes = 0x0e0e10; L.longSleeve = true; L.shorts = false;
+  L.style = 'cap'; L.hat = 0x16223d;
+  L.name = 'Officer ' + L.name; L.title = 'Officer';
+  L.wears = 'police uniform';
+  L.desc = 'a police officer';
+  L.noun = f ? 'woman, police officer' : 'man, police officer';
+  L.outfit = 'navy police uniform';
+  const p = L.persona;
+  p.job = 'police officer'; p.errand = pick(COP_ERRANDS); p.quirk = pick(COP_QUIRKS);
+  p.bravery = rand(0.74, 0.96); p.temper = rand(0.25, 0.7); p.jumpy = rand(0.05, 0.4); p.patience = rand(0.5, 0.95); p.squeamish = rand(0, 0.4);
+  return L;
+}
+
 /** You. */
 export function playerLook() {
   return {
