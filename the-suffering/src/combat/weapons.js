@@ -13,19 +13,19 @@
    crosshair. A rifle round keeps going out of the far side.
    ========================================================================== */
 import { Body, Island, rayBody } from '../physics/world.js';
-import { CLIPS, MOVES } from '../human/anim.js';
+import { CLIPS, MOVES, RELOAD } from '../human/anim.js';
 import { ST } from '../human/human.js';
 import { P } from '../human/rig.js';
 import { groundHeight, KERB } from '../world/city.js';
 import { rgb } from '../render/boxes.js';
 import { cellUV } from '../render/quads.js';
 import { DECAL, ATLAS_COLS, ATLAS_ROWS } from '../render/textures.js';
-import { clamp, clamp01, lerp, rand, chance, wrapAngle } from '../core/util.js';
+import { clamp, clamp01, lerp, smooth, rand, chance, wrapAngle } from '../core/util.js';
 
-const STEEL = 0xc3c8cc, DARK = 0x26282c, WOOD = 0x7a4a26, GRIP = 0x3a2a1c;
+const STEEL = 0xc3c8cc, DARK = 0x26282c, WOOD = 0x7a4a26, GRIP = 0x3a2a1c, VEST = 0x121316, MAG = 0x15161a;
 const tilt = (a) => [Math.sin(a / 2), 0, 0, Math.cos(a / 2)];
 
-/** Box lists: x, y, z, width, height, length, colour, [rotation], [is blade]. Barrel or blade toward +Z. */
+/** Box lists: x, y, z, width, height, length, colour, [rotation], [is blade], [is the magazine]. Barrel or blade toward +Z. */
 export const WEAPONS = {
   fists: { id: 'fists', name: 'Fists', label: 'PUNCH', hold: 'guard', moves: MOVES.fists, melee: true },
   knife: {
@@ -39,18 +39,50 @@ export const WEAPONS = {
   m1911: {
     id: 'm1911', name: 'M1911', label: 'FIRE', hold: 'pistol', gun: true, mag: 7, auto: false, gap: 0.17, power: 1.0, hp: 32, impulse: 20, spread: 0.01, kick: 0.03,
     reload: 1.5, loud: 158, mass: 1.1, half: [0.018, 0.07, 0.11], centre: 0.04, grip: [0, -0.055, -0.02], muzzle: [0, 0.022, 0.17], sound: 'pistol',
-    boxes: [[0, 0.022, 0.06, 0.028, 0.032, 0.21, DARK], [0, 0, 0.04, 0.026, 0.02, 0.13, 0x3c3f44], [0, -0.062, -0.02, 0.028, 0.11, 0.046, GRIP, tilt(0.22)], [0, -0.026, 0.03, 0.008, 0.03, 0.05, DARK], [0, 0.04, -0.03, 0.01, 0.01, 0.012, 0x101010]],
+    boxes: [[0, 0.022, 0.06, 0.028, 0.032, 0.21, DARK], [0, 0, 0.04, 0.026, 0.02, 0.13, 0x3c3f44], [0, -0.062, -0.02, 0.028, 0.11, 0.046, GRIP, tilt(0.22)], [0, -0.026, 0.03, 0.008, 0.03, 0.05, DARK], [0, 0.04, -0.03, 0.01, 0.01, 0.012, 0x101010], [0, -0.121, -0.033, 0.024, 0.014, 0.042, MAG, tilt(0.22), 0, 1]],
+    slide: 0, magSize: [0.011, 0.05, 0.017],
   },
   ak47: {
     id: 'ak47', name: 'AK-47', label: 'FIRE', hold: 'rifle', gun: true, mag: 30, auto: true, gap: 0.1, power: 1.4, hp: 44, impulse: 26, spread: 0.016, kick: 0.019, pierce: true,
     reload: 2.3, loud: 162, mass: 3.6, half: [0.03, 0.11, 0.45], centre: 0.12, grip: [0, -0.07, -0.06], muzzle: [0, 0.012, 0.6], sound: 'rifle',
     boxes: [[0, 0, 0, 0.046, 0.07, 0.3, DARK], [0, 0.012, 0.38, 0.02, 0.02, 0.44, 0x1b1c1f], [0, 0.042, 0.27, 0.026, 0.026, 0.2, 0x303236], [0, 0.004, 0.25, 0.052, 0.05, 0.2, WOOD],
-      [0, -0.02, -0.28, 0.04, 0.085, 0.27, WOOD, tilt(0.1)], [0, -0.085, -0.06, 0.035, 0.1, 0.042, WOOD, tilt(0.3)], [0, -0.095, 0.085, 0.03, 0.13, 0.06, 0x202124, tilt(-0.32)],
-      [0, -0.19, 0.135, 0.03, 0.08, 0.056, 0x202124, tilt(-0.62)], [0, 0.045, 0.56, 0.01, 0.04, 0.012, DARK], [0, 0.05, 0.05, 0.02, 0.02, 0.03, DARK]],
+      [0, -0.02, -0.28, 0.04, 0.085, 0.27, WOOD, tilt(0.1)], [0, -0.085, -0.06, 0.035, 0.1, 0.042, WOOD, tilt(0.3)], [0, -0.095, 0.085, 0.03, 0.13, 0.06, 0x202124, tilt(-0.32), 0, 1],
+      [0, -0.19, 0.135, 0.03, 0.08, 0.056, 0x202124, tilt(-0.62), 0, 1], [0, 0.045, 0.56, 0.01, 0.04, 0.012, DARK], [0, 0.05, 0.05, 0.02, 0.02, 0.03, DARK]],
+    slide: 9, magSize: [0.014, 0.09, 0.028],
+  },
+  /* not a weapon, but it is picked up and dropped like one */
+  vest: {
+    id: 'vest', name: 'Light vest', wear: true, mass: 2.4, half: [0.2, 0.06, 0.25], centre: 0,
+    boxes: [[0, 0, 0.08, 0.38, 0.1, 0.3, VEST], [0, 0, -0.15, 0.31, 0.09, 0.16, VEST], [0.13, 0.03, 0.2, 0.07, 0.05, 0.1, 0x1c1e22], [-0.13, 0.03, 0.2, 0.07, 0.05, 0.1, 0x1c1e22]],
   },
 };
 
+/** Turns three perpendicular unit vectors (where a thing's own X, Y and Z end up) into a rotation. */
+function basis(ex, ey, ez) {
+  const m00 = ex[0], m10 = ex[1], m20 = ex[2], m01 = ey[0], m11 = ey[1], m21 = ey[2], m02 = ez[0], m12 = ez[1], m22 = ez[2];
+  const tr = m00 + m11 + m22;
+  if (tr > 0) { const k = Math.sqrt(tr + 1) * 2; return [(m21 - m12) / k, (m02 - m20) / k, (m10 - m01) / k, 0.25 * k]; }
+  if (m00 > m11 && m00 > m22) { const k = Math.sqrt(1 + m00 - m11 - m22) * 2; return [0.25 * k, (m01 + m10) / k, (m02 + m20) / k, (m21 - m12) / k]; }
+  if (m11 > m22) { const k = Math.sqrt(1 + m11 - m00 - m22) * 2; return [(m01 + m10) / k, 0.25 * k, (m12 + m21) / k, (m02 - m20) / k]; }
+  const k = Math.sqrt(1 + m22 - m00 - m11) * 2; return [(m02 + m20) / k, (m12 + m21) / k, 0.25 * k, (m10 - m01) / k];
+}
+const H = Math.SQRT1_2;
+const slant = (a) => { const d = [Math.sin(a), -Math.cos(a), 0]; return basis([0, 0, 1], [d[1], -d[0], 0], d); };
+const slantUp = (a) => { const d = [Math.sin(a), Math.cos(a), 0]; return basis([0, 0, -1], [-d[1], d[0], 0], d); };
+/**
+ * Where each weapon rides when it is not in the hand: which part of the body,
+ * where on it (metres, for someone of average size), which way it lies, and
+ * how the right hand gets there. +X is the wearer's left.
+ */
+export const MOUNT = {
+  m1911: { part: P.PELVIS, pos: [-0.192, 0.035, 0.03], q: [H, 0, 0, H], reach: 'hip', dur: 0.46, word: 'holster' },       // muzzle down on the right hip
+  knife: { part: P.PELVIS, pos: [0.186, 0.03, 0.02], q: [H, 0, 0, H], reach: 'cross', dur: 0.52, word: 'sheath' },        // blade down on the left hip
+  machete: { part: P.CHEST, pos: [-0.11, 0.12, -0.135], q: slant(0.5), reach: 'back', dur: 0.66, word: 'back' },          // across the back, handle at the right shoulder
+  ak47: { part: P.CHEST, pos: [0.02, -0.02, -0.15], q: slantUp(0.62), reach: 'back', dur: 0.7, word: 'back' },            // slung, muzzle over the left shoulder
+};
+
 const _a = [0, 0, 0], _b = [0, 0, 0], _c = [0, 0, 0], _hit = [0, 0, 0, 0, 0, 0, 0], _n = [0, 0, 0];
+const NONE = [];
 
 export class Weapons {
   constructor(game) {
@@ -62,10 +94,14 @@ export class Weapons {
     this.near = null;                  // a weapon on the ground within reach
     this.tracers = [];
     this.casings = [];
-    this.cool = 0; this.heat = 0; this.reloading = 0;
+    this.cool = 0; this.heat = 0;
     this.lastMove = '';
     this.assist = null;
+    this.lastItem = null;              // what the player last had out, for DRAW
   }
+
+  /** Seconds left of the player's reload. */
+  get reloading() { const r = this.game.player.reload; return r ? r.dur - r.t : 0; }
 
   get equipped() { return this.current >= 0 ? this.inventory[this.current] : null; }
   get def() { const e = this.equipped; return e ? e.def : WEAPONS.fists; }
@@ -80,13 +116,38 @@ export class Weapons {
       const old = this.items.find((i) => !i.holder && !this.inventory.includes(i));
       if (old) this.remove(old);
     }
-    const g = this.game;
-    const item = { type, def, body: null, island: null, prop: null, holder: null, ammo: def.mag || 0, bloody: 0, inst: def.boxes.map(() => g.boxes.alloc()), px: x, py: y, pz: z, q: [0, 0, 0, 1] };
-    this._paint(item);
-    this.items.push(item);
+    const item = this._make(type);
+    item.px = x; item.py = y; item.pz = z;
     this._toGround(item, x, y, z, rand(-3, 3), [rand(-1, 1), 1, rand(-1, 1)]);
     return item;
   }
+
+  _make(type) {
+    const g = this.game, def = WEAPONS[type];
+    const item = { type, def, body: null, island: null, prop: null, holder: null, ammo: def.mag || 0, bloody: 0, inst: def.boxes.map(() => g.boxes.alloc()),
+      px: 0, py: 0, pz: 0, q: [0, 0, 0, 1], cool: 0, magOut: false, slide: 0, spots: [] };
+    this._paint(item);
+    this.items.push(item);
+    return item;
+  }
+
+  /** Puts a weapon straight on to somebody: in its holster, or in the hand. */
+  give(human, type, inHand = false) {
+    if (!WEAPONS[type] || type === 'fists' || WEAPONS[type].wear) return null;
+    const item = this._make(type);
+    item.holder = human;
+    if (human.isPlayer) {
+      this.inventory.push(item);
+      if (inHand) { this.current = this.inventory.length - 1; this._sync(); } else this.game.ui?.weaponsChanged();
+    } else {
+      (human.kit || (human.kit = [])).push(item);
+      if (inHand) human.weapon = item;
+    }
+    return item;
+  }
+
+  /** Everything this person has on them. */
+  kit(human) { return human.isPlayer ? this.inventory : human.kit || NONE; }
 
   _paint(item) {
     const g = this.game, red = rgb(0x6e0808);
@@ -121,6 +182,15 @@ export class Weapons {
     item.body = null; item.island = null; item.prop = null;
   }
 
+  /** A person is gone for good: so is what they were carrying. */
+  forget(human) {
+    if (human.isPlayer) return;
+    for (const it of (human.kit || NONE).slice()) this.remove(it);
+    human.kit = null; human.weapon = null;
+    if (human.reload && human.reload.magIdx >= 0) this.game.boxes.release(human.reload.magIdx);
+    human.reload = null; human.swap = null;
+  }
+
   remove(item) {
     this._offGround(item);
     for (const i of item.inst) this.game.boxes.release(i);
@@ -134,23 +204,79 @@ export class Weapons {
   /* ------------------------------- carrying ------------------------------- */
 
   pickUp(item = this.near) {
-    if (!item || item.holder || !this.game.player.h.armOk(-1)) return false;
-    if (this.inventory.length >= 4) { this.game.ui?.toast('Your hands are full. Drop something first.'); return false; }
+    const g = this.game, p = g.player;
+    if (!item || item.holder === p) return false;
+    if (item.def.wear) {
+      if (p.vest) { g.ui?.toast('You are already wearing one.'); return false; }
+      this.remove(item);
+      p.wearVest();
+      g.audio?.play('pickup', 0.5);
+      g.ui?.toast('Light vest on');
+      g.ui?.weaponsChanged();
+      return true;
+    }
+    if (!p.h.armOk(-1)) return false;
+    if (this.inventory.length >= 4) { g.ui?.toast('You are carrying all you can. Drop something first.'); return false; }
+    // off the ground, or off somebody who is in no state to object
+    const from = item.holder;
+    if (from) { const k = from.kit ? from.kit.indexOf(item) : -1; if (k >= 0) from.kit.splice(k, 1); if (from.weapon === item) from.weapon = null; }
     this._offGround(item);
     this.inventory.push(item);
     this.current = this.inventory.length - 1;
     this._sync();
-    this.game.audio?.play('pickup', 0.5);
-    this.game.ui?.toast(item.def.name + (item.def.gun ? ` - ${item.ammo} rounds` : ''));
+    g.audio?.play('pickup', 0.5);
+    g.ui?.toast(item.def.name + (item.def.gun ? ` - ${item.ammo} rounds` : '') + (from ? ', taken from ' + (from.look.first || 'them') : ''));
     return true;
   }
 
   select(i) {
+    const p = this.game.player;
     if (i < -1 || i >= this.inventory.length || i === this.current) return;
-    if (this.game.player.anim.busy) return;
-    this.current = i; this.reloading = 0; this.combo = 0;
-    this._sync();
-    this.game.audio?.play('pickup', 0.3);
+    if (p.anim.busy || p.swap || p.state !== ST.ANIM) return;
+    this.current = i; this.combo = 0;
+    if (i >= 0) this.lastItem = this.inventory[i];
+    this._swapTo(p, i >= 0 ? this.inventory[i] : null);
+    this.game.ui?.weaponsChanged();
+  }
+
+  /** Puts away what is in the hand, or takes out what was last in it. */
+  holster() {
+    if (this.current >= 0) { this.lastItem = this.equipped; this.select(-1); return; }
+    if (!this.inventory.length) return;
+    const i = this.inventory.indexOf(this.lastItem);
+    this.select(i >= 0 ? i : this.inventory.length - 1);
+  }
+
+  /** Takes off the vest and leaves it at the player's feet. */
+  shedVest() {
+    const p = this.game.player;
+    if (!p.vest || p.state !== ST.ANIM) return;
+    p.removeVest();
+    this.spawn('vest', p.x + Math.sin(p.yaw) * 0.5, p.y + 1.0, p.z + Math.cos(p.yaw) * 0.5);
+    this.game.ui?.toast('Vest off');
+    this.game.ui?.weaponsChanged();
+  }
+
+  /* ---- for anyone: hand to holster and back ---- */
+
+  /** Starts moving `to` into the hand (or the hand's contents away, for null). */
+  _swapTo(h, to) {
+    if (h.weapon === to && !h.swap) return false;
+    const out = h.weapon, m = MOUNT[(out || to).type];
+    this._cancelReload(h);
+    h.swap = { t: 0, dur: m.dur * (out && to ? 1.25 : 1), to, reach: m.reach, w: 0, done: false };
+    return true;
+  }
+  /** An armed person brings out their weapon: the one named, or the first gun they carry, or anything. */
+  draw(h, item = null) {
+    const kit = this.kit(h);
+    const it = item || kit.find((x) => x.def.gun) || kit[0];
+    if (!it || h.weapon === it || h.swap || h.state !== ST.ANIM || !h.h.armOk(-1)) return false;
+    return this._swapTo(h, it);
+  }
+  putAway(h) {
+    if (!h.weapon || h.swap || h.state !== ST.ANIM) return false;
+    return this._swapTo(h, null);
   }
   cycle(d) {
     const n = this.inventory.length + 1;
@@ -176,18 +302,31 @@ export class Weapons {
 
   /** Whatever this person was holding falls. */
   dropFrom(human, all = false) {
-    if (!human.isPlayer) { human.weapon = null; return; }
+    this._cancelReload(human); human.swap = null;
+    if (!human.isPlayer) {
+      const kit = human.kit || NONE;
+      for (const item of all ? kit.slice() : human.weapon ? [human.weapon] : NONE) {
+        const i = kit.indexOf(item); if (i >= 0) kit.splice(i, 1);
+        if (human.weapon === item) { human.weapon = null; this._release(item, human, false); }
+        else { const b = human.bodies[MOUNT[item.type].part]; this._toGround(item, b.px, b.py, b.pz, human.yaw, [human.vx, 0.5, human.vz]); }
+      }
+      human.weapon = null;
+      return;
+    }
     const list = all ? this.inventory.slice() : this.equipped ? [this.equipped] : [];
     for (const item of list) { const i = this.inventory.indexOf(item); if (i >= 0) this.inventory.splice(i, 1); this._release(item, human, false); }
     this.current = Math.min(this.current, this.inventory.length - 1);
     if (!all) this.current = -1;
     this._sync();
   }
-  onRespawn(oldP, newP) { this.current = -1; this.reloading = 0; this._sync(); }
+  onRespawn(oldP, newP) { this.current = -1; this.lastItem = null; this._sync(); }
 
+  /** The hand holds what is selected, at once: for picking up, dropping, starting again. */
   _sync() {
     const p = this.game.player, e = this.equipped;
+    this._cancelReload(p); p.swap = null;
     p.weapon = e;
+    if (e) this.lastItem = e;
     if (e) e.holder = p;
     for (const it of this.inventory) if (it !== e) it.holder = p;
     this.game.ui?.weaponsChanged();
@@ -361,16 +500,124 @@ export class Weapons {
   /* ----------------------------------- guns ------------------------------- */
 
   reload() {
-    const e = this.equipped;
-    if (!e || !e.def.gun || this.reloading > 0 || e.ammo >= e.def.mag) return;
-    this.reloading = e.def.reload;
-    this.game.audio?.play('reload', 0.7);
-    this.game.ui?.toast('Reloading');
+    const p = this.game.player, e = this.equipped;
+    if (!e || !e.def.gun || p.weapon !== e || p.reload || p.swap || e.ammo >= e.def.mag) return;
+    if (this.reloadFor(p)) this.game.ui?.toast('Reloading');
+  }
+
+  /** Anyone with a gun in their hand and a spare arm changes the magazine. */
+  reloadFor(h) {
+    const item = h.weapon;
+    if (!item || !item.def.gun || h.reload || h.swap || h.state !== ST.ANIM || !h.h.armOk(-1)) return false;
+    h.reload = { t: 0, dur: item.def.reload * (h.h.armOk(1) ? 1 : 1.8), item, kind: item.def.hold, out: false, grab: false, seated: false, racked: false, magIdx: -1 };
+    return true;
+  }
+  _cancelReload(h) {
+    const r = h.reload;
+    if (!r) return;
+    if (r.magIdx >= 0) this.game.boxes.release(r.magIdx);
+    r.item.magOut = false; r.item.slide = 0;
+    h.reload = null; h.handFull = 0;
+  }
+
+  /** One frame of whatever a person's hands are in the middle of. */
+  _hands(h, dt) {
+    const g = this.game, sw = h.swap;
+    if (sw) {
+      if (h.state !== ST.ANIM || !h.h.conscious) h.swap = null;
+      else {
+        sw.t += dt;
+        const u = sw.t / sw.dur;
+        sw.w = smooth(Math.min(u, 1 - u) * 3);
+        if (!sw.done && u >= 0.5) {
+          sw.done = true;
+          h.weapon = sw.to && sw.to.holder === h ? sw.to : null;
+          g.audio?.at('pickup', h.x, h.y + 1, h.z, 0.35);
+          if (h.isPlayer) { g.ui?.weaponsChanged(); g.ui?.ammoChanged(); }
+        }
+        if (u >= 1) h.swap = null;
+      }
+    }
+    const r = h.reload;
+    if (!r) return;
+    const item = r.item, R = RELOAD[r.kind] || RELOAD.pistol;
+    if (h.weapon !== item || h.state !== ST.ANIM || !h.h.conscious || !h.h.armOk(-1)) { this._cancelReload(h); return; }
+    r.t += dt;
+    const u = r.t / r.dur, hand = h.bodies[P.HAND_L];
+    if (!r.out && u >= R.magOut) {
+      r.out = true; item.magOut = true;
+      this._dropMag(h, item);
+      g.audio?.at('click', item.px, item.py, item.pz, 0.5);
+    }
+    if (!r.grab && u >= R.grab) {
+      r.grab = true;
+      if (h.h.armOk(1)) { h.handFull = 1; r.magIdx = g.boxes.alloc(); g.boxes.colorHex(r.magIdx, MAG); }
+    }
+    if (!r.seated && u >= R.magIn) {
+      r.seated = true; item.magOut = false; item.ammo = item.def.mag; h.handFull = 0;
+      if (r.magIdx >= 0) { g.boxes.release(r.magIdx); r.magIdx = -1; }
+      g.audio?.at('reload', item.px, item.py, item.pz, 0.7);
+      if (h.isPlayer) g.ui?.ammoChanged();
+    }
+    // the slide comes back with the hand, and goes forward on its own
+    item.slide = u > R.rackA && u < R.rackB ? (u - R.rackA) / (R.rackB - R.rackA) : 0;
+    if (!r.racked && u >= R.rackB) { r.racked = true; g.audio?.at('click', item.px, item.py, item.pz, 0.75); }
+    if (r.magIdx >= 0) {
+      const sz = item.def.magSize, s = h.scale;
+      g.boxes.setOn(r.magIdx, hand.px, hand.py, hand.pz, hand.qx, hand.qy, hand.qz, hand.qw, -0.026 * s, -0.03 * s, 0.02 * s, sz[0] * 2, sz[2] * 2, sz[1] * 2);
+    }
+    if (u >= 1) { h.reload = null; h.handFull = 0; item.slide = 0; }
+  }
+
+  /** The empty magazine, on its way to the ground. */
+  _dropMag(h, item) {
+    const g = this.game, sz = item.def.magSize;
+    this._trimCasings();
+    rotv(item.q, 0, -0.12, 0, _a);
+    const b = new Body({ hx: sz[0], hy: sz[1], hz: sz[2], mass: 0.12, x: item.px + _a[0], y: item.py + _a[1], z: item.pz + _a[2], kind: 'casing', friction: 0.7, bounce: 0.2, inertiaFloor: 0.0004, angDamp: 0.6, collides: false });
+    b.qx = item.q[0]; b.qy = item.q[1]; b.qz = item.q[2]; b.qw = item.q[3];
+    b.vx = h.vx + rand(-0.3, 0.3); b.vz = h.vz + rand(-0.3, 0.3); b.vy = -0.6;
+    b.wx = rand(-4, 4); b.wz = rand(-4, 4);
+    const island = new Island(null); island.add(b); g.world.addIsland(island);
+    const idx = g.boxes.alloc(); g.boxes.colorHex(idx, MAG);
+    this.casings.push({ body: b, island, idx, size: [sz[0] * 2, sz[1] * 2, sz[2] * 2] });
+  }
+  _trimCasings() {
+    const g = this.game;
+    while (this.casings.length > 44) { const o = this.casings.shift(); g.world.removeIsland(o.island); g.boxes.release(o.idx); }
+  }
+
+  /**
+   * Somebody other than the player fires at something. `aim` is the point they
+   * mean to hit; how near they come depends on range, nerves and how fast
+   * they are shooting. Returns true if a round went off.
+   */
+  npcFire(h, aim, skill = 0.6) {
+    const g = this.game, e = h.weapon;
+    if (!e || !e.def.gun || e.cool > 0 || h.reload || h.swap || h.state !== ST.ANIM || !h.h.armOk(-1)) return false;
+    const d = e.def;
+    if (e.ammo <= 0) { g.audio?.at('click', h.x, h.y + 1.4, h.z, 0.5); e.cool = 0.4; this.reloadFor(h); return false; }
+    e.ammo--; e.cool = d.gap * rand(2.2, 4.5);
+    const m = e.muzzleWorld || [h.x, h.y + 1.4 * h.scale, h.z];
+    let dx = aim[0] - m[0], dy = aim[1] - m[1], dz = aim[2] - m[2];
+    let l = Math.hypot(dx, dy, dz) || 1;
+    const sp = d.spread * 2 + (1 - skill) * 0.075 + (h.speed > 1 ? 0.03 : 0) + clamp01(h.h.pain / 90) * 0.05;
+    dx = dx / l + rand(-sp, sp); dy = dy / l + rand(-sp, sp) * 0.7; dz = dz / l + rand(-sp, sp);
+    l = Math.hypot(dx, dy, dz); dx /= l; dy /= l; dz /= l;
+    this._bullet(h, d, m[0], m[1], m[2], dx, dy, dz, d.power, 0);
+    h.anim.recoil = 1;
+    g.gore.puff('flash', m[0] + dx * 0.12, m[1] + dy * 0.12, m[2] + dz * 0.12, d.auto ? 0.5 : 0.36, 0.055, 1, 0.92, 0.7);
+    g.gore.puff('smoke', m[0] + dx * 0.2, m[1] + dy * 0.2, m[2] + dz * 0.2, 0.22, 0.7, 0.75, 0.75, 0.75);
+    this._casing(h, m, dx, dz);
+    g.audio?.at(d.sound, m[0], m[1], m[2], 1);
+    g.minds?.noise(m[0], m[1], m[2], d.loud, 'gunshot', h);
+    g.minds?.witness({ kind: 'shot', actor: h, weapon: d.id, x: m[0], y: m[1], z: m[2] });
+    return true;
   }
 
   fire() {
     const g = this.game, p = g.player, e = this.equipped;
-    if (!e || !e.def.gun || this.cool > 0 || this.reloading > 0) return false;
+    if (!e || !e.def.gun || this.cool > 0 || p.reload || p.swap || p.weapon !== e) return false;
     if (!p.h.armOk(-1)) return false;
     const d = e.def;
     if (e.ammo <= 0) { g.audio?.play('click', 0.6); this.cool = 0.25; this.reload(); return false; }
@@ -467,7 +714,7 @@ export class Weapons {
 
   _casing(p, m, dx, dz) {
     const g = this.game;
-    if (this.casings.length > 40) { const o = this.casings.shift(); g.world.removeIsland(o.island); g.boxes.release(o.idx); }
+    this._trimCasings();
     const b = new Body({ hx: 0.006, hy: 0.006, hz: 0.014, mass: 0.02, x: m[0] - dx * 0.2, y: m[1] + 0.02, z: m[2] - dz * 0.2, kind: 'casing', friction: 0.6, bounce: 0.3, inertiaFloor: 0.00002, angDamp: 0.4, collides: false });
     // out to the right, up and a little back
     b.vx = -dz * rand(1.6, 2.4) + p.vx; b.vz = dx * rand(1.6, 2.4) + p.vz; b.vy = rand(2, 3);
@@ -483,20 +730,20 @@ export class Weapons {
     const g = this.game, p = g.player, inp = g.input;
     this.cool = Math.max(0, this.cool - dt);
     this.heat = Math.max(0, this.heat - dt * 1.6);
-    if (this.reloading > 0) {
-      this.reloading -= dt;
-      if (this.reloading <= 0) { const e = this.equipped; if (e && e.def.gun) { e.ammo = e.def.mag; g.ui?.ammoChanged(); } }
-    }
+    for (const it of this.items) if (it.cool > 0) it.cool -= dt;
+    for (const h of g.humans) if (h.swap || h.reload) this._hands(h, dt);
     // the player's hands
     if (g.doctor == null && p.state === ST.ANIM) {
       const def = this.def;
-      if (def.gun) { if (def.auto ? inp.down.attack : inp.pressed.attack) this.fire(); }
+      if (p.swap) { this.queued = false; this.choice = -1; }
+      else if (def.gun) { if (def.auto ? inp.down.attack : inp.pressed.attack) this.fire(); }
       else if (inp.pressed.attack) this.attack(-1);
       else if (inp.pressed.alt) this.attack(3);
       else if ((this.queued || this.choice >= 0) && !p.anim.busy) this.attack(-1);
       if (inp.pressed.reload) this.reload();
       if (inp.pressed.use) this.pickUp();
       if (inp.pressed.drop) this.drop();
+      if (inp.pressed.holster) this.holster();
     }
     if (!p.anim.action) p.lowAim = 0;
     // every swing in progress, the player's and everybody else's
@@ -505,9 +752,14 @@ export class Weapons {
     // what is lying within reach?
     let near = null, nd = 1.9;
     if (p.state === ST.ANIM) for (const it of this.items) {
-      if (!it.body) continue;
-      const d = Math.hypot(it.body.px - p.x, it.body.pz - p.z);
-      if (d < nd && Math.abs(it.body.py - p.y) < 1.6) { nd = d; near = it; }
+      if (it.body) {
+        const d = Math.hypot(it.body.px - p.x, it.body.pz - p.z);
+        if (d < nd && Math.abs(it.body.py - p.y) < 1.6) { nd = d; near = it; }
+      } else if (it.holder && it.holder !== p && !it.holder.removed && (!it.holder.h.alive || !it.holder.h.conscious) && !it.def.wear) {
+        // still on somebody who is past minding
+        const d = Math.hypot(it.px - p.x, it.pz - p.z) + 0.3;
+        if (d < nd && Math.abs(it.py - p.y) < 1.6) { nd = d; near = it; }
+      }
     }
     if (near !== this.near) { this.near = near; g.ui?.nearChanged(); }
   }
@@ -516,43 +768,66 @@ export class Weapons {
   late(dt) {
     const g = this.game, bx = g.boxes, p = g.player;
     for (const it of this.items) {
-      const d = it.def;
-      let px, py, pz, qx, qy, qz, qw, show = true;
+      const d = it.def, h = it.holder;
+      let px = it.px, py = it.py, pz = it.pz, qx = 0, qy = 0, qz = 0, qw = 1, show = true;
       if (it.body) {
         const b = it.body;
-        px = b.px; py = b.py; pz = b.pz; qx = b.qx; qy = b.qy; qz = b.qz; qw = b.qw;
+        qx = b.qx; qy = b.qy; qz = b.qz; qw = b.qw;
         // the box round a weapon is centred on its middle, the model on its grip
         b.toWorld(0, 0, -d.centre, _a); px = _a[0]; py = _a[1]; pz = _a[2];
         if (b.py < -10) { b.teleport(p.x, 2, p.z); b.vx = b.vy = b.vz = 0; }
-      } else if (it === this.equipped && !p.gone[P.HAND_R] && p.attached[P.HAND_R]) {
-        const hand = p.bodies[P.HAND_R], s = p.scale;
-        if (d.gun) {
-          // a gun points where you are looking, whatever the wrist is doing
-          const yaw = g.firstPerson || p.state === ST.ANIM ? g.camYaw : p.yaw, pitch = p.state === ST.ANIM ? g.camPitch + p.anim.recoil * 0.12 : 0;
+      } else if (h && !h.removed && h.weapon === it && !h.gone[P.HAND_R] && h.attached[P.HAND_R]) {
+        // in the hand, lying in the curl of the fingers
+        const hand = h.bodies[P.HAND_R], s = h.scale;
+        if (d.gun && h.state === ST.ANIM) {
+          // a gun points where its owner is looking, whatever the wrist is doing
+          const yaw = h.isPlayer ? g.camYaw : h.aimYaw ?? h.yaw;
+          const rw = h.anim.reloadW, R = RELOAD[d.hold], low = h.isPlayer ? 0 : h.gunLow || 0;
+          const pitch = (h.isPlayer ? g.camPitch : h.aimPitch || 0) * (1 - rw) * (1 - low) + h.anim.recoil * 0.12 + R.tilt * rw - low * 0.9;
+          const roll = R.roll * rw;
           const sy = Math.sin(yaw / 2), cy = Math.cos(yaw / 2), sx = Math.sin(-pitch / 2), cx = Math.cos(-pitch / 2);
           qx = cy * sx; qy = sy * cx; qz = -sy * sx; qw = cy * cx;
+          if (roll) { const sr = Math.sin(roll / 2), cr = Math.cos(roll / 2); const ax = qx * cr + qy * sr, ay = qy * cr - qx * sr, az = qz * cr + qw * sr, aw = qw * cr - qz * sr; qx = ax; qy = ay; qz = az; qw = aw; }
           it.q[0] = qx; it.q[1] = qy; it.q[2] = qz; it.q[3] = qw;
           rotv(it.q, d.grip[0], d.grip[1], d.grip[2], _a);
-          hand.toWorld(0, -0.03 * s, 0.01, _b);
+          hand.toWorld(0.016 * s, -0.03 * s, 0.01, _b);
           px = _b[0] - _a[0]; py = _b[1] - _a[1]; pz = _b[2] - _a[2];
           rotv(it.q, d.muzzle[0], d.muzzle[1], d.muzzle[2], _a);
           it.muzzleWorld = [px + _a[0], py + _a[1], pz + _a[2]];
         } else {
-          const act = p.anim.action, rev = act && act.clip.reverse;
-          hand.toWorld(0, -0.03 * s, 0, _a); px = _a[0]; py = _a[1]; pz = _a[2];
+          const act = h.anim.action, rev = act && act.clip.reverse;
+          hand.toWorld(0.016 * s, -0.03 * s, 0, _a); px = _a[0]; py = _a[1]; pz = _a[2];
           // a reversed grip is the hand's rotation followed by half a turn about its own Y
           if (rev) { qx = -hand.qz; qy = hand.qw; qz = hand.qx; qw = -hand.qy; }
           else { qx = hand.qx; qy = hand.qy; qz = hand.qz; qw = hand.qw; }
+          it.q[0] = qx; it.q[1] = qy; it.q[2] = qz; it.q[3] = qw;
+        }
+      } else if (h && !h.removed && h.weapon !== it) {
+        // put away: on the hip, in its sheath, across the back
+        const m = MOUNT[it.type], b = h.bodies[m.part], s = h.scale;
+        if (!m || h.gone[m.part]) show = false;
+        else {
+          b.toWorld(m.pos[0] * s, m.pos[1] * s, m.pos[2] * s, _a); px = _a[0]; py = _a[1]; pz = _a[2];
+          const ax = m.q[0], ay = m.q[1], az = m.q[2], aw = m.q[3];
+          qx = b.qw * ax + b.qx * aw + b.qy * az - b.qz * ay;
+          qy = b.qw * ay - b.qx * az + b.qy * aw + b.qz * ax;
+          qz = b.qw * az + b.qx * ay - b.qy * ax + b.qz * aw;
+          qw = b.qw * aw - b.qx * ax - b.qy * ay - b.qz * az;
+          it.q[0] = qx; it.q[1] = qy; it.q[2] = qz; it.q[3] = qw;
         }
       } else show = false;
       it.px = px; it.py = py; it.pz = pz;
+      if (it.body) { it.q[0] = qx; it.q[1] = qy; it.q[2] = qz; it.q[3] = qw; }
+      it.shown = show;
       for (let i = 0; i < d.boxes.length; i++) {
-        if (!show) { bx.hide(it.inst[i]); continue; }
         const b = d.boxes[i];
-        bx.setOn(it.inst[i], px, py, pz, qx, qy, qz, qw, b[0], b[1], b[2], b[3], b[4], b[5], b[7] || null);
+        if (!show || (b[9] && it.magOut)) { bx.hide(it.inst[i]); continue; }
+        // the slide, or the bolt handle, comes back when it is worked
+        const back = it.slide && i === d.slide ? it.slide * 0.034 : 0;
+        bx.setOn(it.inst[i], px, py, pz, qx, qy, qz, qw, b[0], b[1], b[2] - back, b[3], b[4], b[5], b[7] || null);
       }
     }
-    for (const o of this.casings) { const b = o.body; bx.set(o.idx, b.px, b.py, b.pz, b.qx, b.qy, b.qz, b.qw, 0.012, 0.012, 0.028); }
+    for (const o of this.casings) { const b = o.body, z = o.size; bx.set(o.idx, b.px, b.py, b.pz, b.qx, b.qy, b.qz, b.qw, z ? z[0] : 0.012, z ? z[1] : 0.012, z ? z[2] : 0.028); }
     // tracers: a streak that lasts a blink
     const fx = g.gore.fx, cam = g.camera.position;
     for (let i = this.tracers.length - 1; i >= 0; i--) {

@@ -61,7 +61,7 @@ export class Game {
 
     this.atlas = decalAtlas();
     this.faces = new FaceAtlas();
-    this.boxes = new Boxes(scene, 2400, new THREE.MeshLambertMaterial({ color: 0xffffff }), { shadows: this.shadows });
+    this.boxes = new Boxes(scene, 4096, new THREE.MeshLambertMaterial({ color: 0xffffff }), { shadows: this.shadows });
     this.crateBoxes = new Boxes(scene, 96, new THREE.MeshLambertMaterial({ map: crateTexture() }), { shadows: this.shadows });
     this.faceQuads = new Quads(scene, 64, this.faces.texture, { offset: -2, renderOrder: 4, alphaTest: 0.08 });
     this.under = new Quads(scene, 96, this.atlas, { offset: -1, renderOrder: 0, alphaTest: 0.005 });
@@ -430,8 +430,7 @@ export class Game {
   respawn(home = false) {
     const old = this.player, sp = this.city.spawn;
     const x = home ? sp.x : clamp(old.x, -LIMIT + 2, LIMIT - 2), z = home ? sp.z : clamp(old.z, -LIMIT + 2, LIMIT - 2);
-    const held = old.weapon;
-    if (held) this.weapons?.dropFrom(old, true);
+    this.weapons?.dropFrom(old, true);
     const i = this.humans.indexOf(old);
     old.remove();
     this.pieces = this.pieces.filter((pc) => pc.human !== old);

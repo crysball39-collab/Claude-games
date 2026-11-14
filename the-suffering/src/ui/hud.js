@@ -32,6 +32,7 @@ export class UI {
     inp.bind($('#btn-reload'), 'reload');
     inp.bind($('#btn-use'), 'use');
     inp.bind($('#btn-drop'), 'drop');
+    inp.bind($('#btn-holster'), 'holster');
     inp.bind($('#btn-attack'), 'attack', {
       onDown: () => { if (!w.def.gun) { this._hints(true); } if (g.doctor) this._pickCentre(); },
       onUp: () => this._hints(false),
@@ -298,9 +299,17 @@ export class UI {
     };
     add('FISTS', -1);
     w.inventory.forEach((it, i) => add(it.def.name.toUpperCase(), i));
+    if (this.g.player.vest) {
+      // worn, not held: tapping it takes it off
+      const b = el('button', 'slot worn', 'VEST');
+      b.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); w.shedVest(); });
+      bar.appendChild(b);
+    }
     const d = w.def;
     $('#btn-reload').hidden = !d.gun;
     $('#btn-drop').hidden = d.id === 'fists';
+    $('#btn-holster').hidden = w.inventory.length === 0;
+    $('#holster-label').textContent = w.current >= 0 ? 'HOLSTER' : 'DRAW';
     $('#crosshair').classList.toggle('gun', !!d.gun);
     this._label(); this.ammoChanged(); this.nearChanged();
   }

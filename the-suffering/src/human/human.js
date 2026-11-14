@@ -93,6 +93,12 @@ export class Human {
     this.hold = 'none';
     this.aimPitch = 0; this.lookYaw = 0; this.lookPitch = 0; this.lowAim = 0;
     this.weapon = null;                    // what is in the right hand, if anything
+    this.handFull = 0;                     // 0..1: something small held in the left hand
+    this.kit = null;                       // everything carried, in the hand or put away (the player's is kept by Weapons)
+    this.swap = null;                      // a weapon on its way between hand and holster
+    this.reload = null;                    // a magazine change in progress
+    this.aimYaw = null; this.gunLow = 0;   // where a gun in this hand points, and how far it is lowered
+    this.vest = null;
     this.guardT = 0;
     this.tripCool = 0; this.jumpCool = 0;
     this.lunge = 0;                        // metres an attack in progress steps forward
@@ -143,6 +149,12 @@ export class Human {
       g.boxes.colorHex(idx, h[6] ? L.hat : L.hair);
       return { idx, l: [h[0] * s, h[1] * s, h[2] * s], s: [h[3] * s, h[4] * s, h[5] * s] };
     });
+    // ten boxes a hand: four fingers and a thumb, two segments each
+    this.fingers = [[], []];
+    for (let hnd = 0; hnd < 2; hnd++) for (let k = 0; k < 10; k++) { const idx = g.boxes.alloc(); g.boxes.colorHex(idx, L.skin); this.fingers[hnd].push(idx); }
+    this.curl = [0.3, 0.3];               // how closed each hand is: left, right
+    this.trigger = 0.3;                   // the right index finger, which has a job of its own
+    this.splay = [0, 0];
     this.faceCell = g.faces.alloc();
     this.faceQuad = g.faceQuads.alloc();
     if (this.faceCell >= 0 && this.faceQuad >= 0) {
@@ -154,6 +166,41 @@ export class Human {
     this._pallor = -1;
   }
 
+  _reloadState() {
+    const r = this.reload;
+    if (!r) return null;
+    const o = this._rl || (this._rl = { kind: '', u: 0 });
+    o.kind = r.kind; o.u = r.t / r.dur;
+    return o;
+  }
+
+  /* ---- the vest: black, over the chest and the belly ---- */
+
+  /** Puts a light vest on. `police` adds the white patches front and back. */
+  wearVest(police = false) {
+    if (this.vest) return;
+    const g = this.game, s = this.scale, c = this.sizes[P.CHEST], a = this.sizes[P.ABDOMEN];
+    const mk = (part, l, z, hex) => { const idx = g.boxes.alloc(); g.boxes.colorHex(idx, hex); return { idx, part, l, z }; };
+    const BLACK = 0x121316, TRIM = 0x1d2024;
+    const boxes = [
+      mk(P.CHEST, [0, -0.012 * s, 0], [c[0] + 0.04 * s, c[1] * 0.94, c[2] + 0.055 * s], BLACK),
+      mk(P.ABDOMEN, [0, 0.008 * s, 0], [a[0] + 0.045 * s, a[1] + 0.02 * s, a[2] + 0.055 * s], BLACK),
+      mk(P.CHEST, [0.115 * s, c[1] * 0.5 + 0.004 * s, 0], [0.07 * s, 0.03 * s, c[2] + 0.03 * s], TRIM),
+      mk(P.CHEST, [-0.115 * s, c[1] * 0.5 + 0.004 * s, 0], [0.07 * s, 0.03 * s, c[2] + 0.03 * s], TRIM),
+      mk(P.CHEST, [0, -0.05 * s, c[2] * 0.5 + 0.034 * s], [0.2 * s, 0.11 * s, 0.022 * s], TRIM),
+    ];
+    if (police) {
+      boxes.push(mk(P.CHEST, [0.07 * s, 0.07 * s, c[2] * 0.5 + 0.03 * s], [0.11 * s, 0.035 * s, 0.006 * s], 0xe9e9e4));
+      boxes.push(mk(P.CHEST, [0, 0.04 * s, -(c[2] * 0.5 + 0.03 * s)], [0.24 * s, 0.06 * s, 0.006 * s], 0xe9e9e4));
+    }
+    this.vest = { boxes, hits: 0, police, lift: 0.03 * s };
+  }
+  removeVest() {
+    if (!this.vest) return;
+    for (const b of this.vest.boxes) this.game.boxes.release(b.idx);
+    this.vest = null;
+  }
+
   /** Blood loss shows in the skin. */
   _tintSkin() {
     // the colour goes with the blood, and then, slowly, with everything else
@@ -162,9 +209,9 @@ export class Human {
     if (q === this._pallor) return;
     this._pallor = q;
     const base = rgb(this.look.skin), grey = rgb(0xb9bdb6), k = q / 10 * 0.72;
-    for (const i of this.skinParts) {
-      this.game.boxes.color(this.inst[i], lerp(base[0], grey[0], k), lerp(base[1], grey[1], k), lerp(base[2], grey[2], k));
-    }
+    const cr = lerp(base[0], grey[0], k), cg = lerp(base[1], grey[1], k), cb = lerp(base[2], grey[2], k);
+    for (const i of this.skinParts) this.game.boxes.color(this.inst[i], cr, cg, cb);
+    for (const hand of this.fingers) for (const i of hand) this.game.boxes.color(i, cr, cg, cb);
   }
 
   _expression(dt) {
@@ -222,6 +269,7 @@ export class Human {
       hold: this.hold, aimPitch: this.aimPitch, lookYaw: this.lookYaw, lookPitch: this.lookPitch, pose: this.pose,
       limp: lm, limpSide: this.h.legLimp(1) >= this.h.legLimp(-1) ? 1 : -1, lowAim: this.lowAim,
       leanZ: this._leanZ || 0, leanX: this._leanX || 0,
+      reach: this.swap ? this.swap.reach : null, reachW: this.swap ? this.swap.w : 0, reload: this._reloadState(),
     });
     channelsToLocal(ch, this.local);
     solvePose(x, y, z, yaw, this.scale, ch, this.local, this.pos, this.quat);
@@ -763,6 +811,7 @@ export class Human {
     if (this.state === ST.ANIM || this.state === ST.GETUP) { /* root is ours */ }
     this._faceT += dt;
     if (this._faceT > 0.12) { this._expression(this._faceT); this._faceT = 0; }
+    this._hands(dt);
     this._draw();
     // pieces that have lain about long enough are cleared away by the game
     for (const p of this.pieces) p.age += dt;
@@ -772,8 +821,16 @@ export class Human {
     const g = this.game, bx = g.boxes;
     for (let i = 0; i < PART_COUNT; i++) {
       if (this.gone[i]) continue;
+      if (i === P.HAND_L || i === P.HAND_R) continue;
       const b = this.bodies[i], s = this.sizes[i];
       bx.set(this.inst[i], b.px, b.py, b.pz, b.qx, b.qy, b.qz, b.qw, s[0], s[1], s[2]);
+    }
+    this._drawHand(P.HAND_L, 0, -1);
+    this._drawHand(P.HAND_R, 1, 1);
+    if (this.vest) for (const v of this.vest.boxes) {
+      if (this.gone[v.part]) { bx.hide(v.idx); continue; }
+      const b = this.bodies[v.part];
+      bx.setOn(v.idx, b.px, b.py, b.pz, b.qx, b.qy, b.qz, b.qw, v.l[0], v.l[1], v.l[2], v.z[0], v.z[1], v.z[2]);
     }
     const hide = this.gone[P.HEAD] || (this.isPlayer && g.firstPerson && this.attached[P.HEAD]);
     const hd = this.bodies[P.HEAD];
@@ -795,6 +852,80 @@ export class Human {
     }
   }
 
+  /**
+   * A hand: a palm, four fingers and a thumb. Each finger is two segments that
+   * turn at the knuckle and at the middle joint, toward the palm; `palm` is
+   * which way that is in the hand's own space (+X for the right hand).
+   */
+  _drawHand(part, hnd, palm) {
+    const bx = this.game.boxes, idx = this.fingers[hnd];
+    if (this.gone[part]) { for (const i of idx) bx.hide(i); return; }
+    const b = this.bodies[part], s = this.scale, sz = this.sizes[part];
+    const px = b.px, py = b.py, pz = b.pz, qx = b.qx, qy = b.qy, qz = b.qz, qw = b.qw;
+    // the palm is the top six tenths of what used to be the whole hand
+    const top = sz[1] * 0.5, knuckle = -0.012 * s;
+    bx.setOn(this.inst[part], px, py, pz, qx, qy, qz, qw, 0, (top + knuckle) * 0.5, 0, sz[0], top - knuckle, sz[2]);
+    const c = this.curl[hnd], sp = this.splay[hnd];
+    for (let f = 0; f < 4; f++) {
+      const fl = FINGERS[f];
+      // the index finger of a hand on a gun lies along it until it is wanted
+      const cf = hnd === 1 && f === 0 ? this.trigger : c * fl[3];
+      const a1 = palm * cf * 1.38, a2 = a1 + palm * cf * 1.5;
+      const l1 = fl[1] * s, l2 = fl[2] * s, z0 = fl[0] * s, w = 0.0195 * s, fan = sp * FAN[f];
+      const s1 = Math.sin(a1), c1 = Math.cos(a1), s2 = Math.sin(a2), c2 = Math.cos(a2);
+      // a little fan when the hand is spread: each finger leans away from the middle one
+      _fq[0] = 0; _fq[1] = 0; _fq[2] = Math.sin(a1 / 2); _fq[3] = Math.cos(a1 / 2);
+      bx.setOn(idx[f * 2], px, py, pz, qx, qy, qz, qw, s1 * l1 * 0.5, knuckle - c1 * l1 * 0.5, z0 + fan * l1 * 0.5, 0.021 * s, l1, w, _fq);
+      const ex = s1 * l1, ey = knuckle - c1 * l1, ez = z0 + fan * l1;
+      _fq[2] = Math.sin(a2 / 2); _fq[3] = Math.cos(a2 / 2);
+      bx.setOn(idx[f * 2 + 1], px, py, pz, qx, qy, qz, qw, ex + s2 * l2 * 0.5, ey - c2 * l2 * 0.5, ez + fan * l2 * 0.5, 0.019 * s, l2, w * 0.92, _fq);
+    }
+    // the thumb leaves the front edge of the palm, pointing down and forward, and closes across it
+    const ct = c;
+    const th = -0.75 + ct * 0.25, a1 = palm * (0.12 + ct * 0.95), a2 = a1 + palm * (0.1 + ct * 0.9);
+    const l1 = 0.036 * s, l2 = 0.03 * s;
+    const bxp = palm * 0.006 * s, byp = top - 0.04 * s, bzp = sz[2] * 0.5 - 0.004 * s;
+    const sh = Math.sin(th / 2), chh = Math.cos(th / 2), cth = Math.cos(th), sth = Math.sin(th);
+    // turn about Z (toward the palm), then about X (forward): q = qX * qZ
+    let sa = Math.sin(a1 / 2), ca = Math.cos(a1 / 2);
+    _fq[0] = sh * ca; _fq[1] = -sh * sa; _fq[2] = chh * sa; _fq[3] = chh * ca;
+    let dx = Math.sin(a1), dy = -Math.cos(a1) * cth, dz = -Math.cos(a1) * sth;
+    bx.setOn(idx[8], px, py, pz, qx, qy, qz, qw, bxp + dx * l1 * 0.5, byp + dy * l1 * 0.5, bzp + dz * l1 * 0.5, 0.023 * s, l1, 0.023 * s, _fq);
+    const ex = bxp + dx * l1, ey = byp + dy * l1, ez = bzp + dz * l1;
+    sa = Math.sin(a2 / 2); ca = Math.cos(a2 / 2);
+    _fq[0] = sh * ca; _fq[1] = -sh * sa; _fq[2] = chh * sa; _fq[3] = chh * ca;
+    dx = Math.sin(a2); dy = -Math.cos(a2) * cth; dz = -Math.cos(a2) * sth;
+    bx.setOn(idx[9], px, py, pz, qx, qy, qz, qw, ex + dx * l2 * 0.5, ey + dy * l2 * 0.5, ez + dz * l2 * 0.5, 0.021 * s, l2, 0.021 * s, _fq);
+  }
+
+  /** How closed each hand wants to be, given what it is doing. */
+  _hands(dt) {
+    const w = this.anim.w, alive = this.h.alive && this.h.conscious, anim = this.state === ST.ANIM || this.state === ST.GETUP;
+    let l = 0.28, r = 0.28, sl = 0, sr = 0, trig = -1;
+    if (!alive) { l = r = 0.36; }
+    else if (!anim) { l = r = this.state === ST.STUMBLE ? 0.12 : 0.3; sl = sr = this.state === ST.STUMBLE ? 0.6 : 0.15; }
+    else {
+      const fist = Math.max(w.guard, this.anim.action && this.anim.action.clip.kind === 'blunt' ? 1 : 0);
+      const open = Math.max(w.handsUp, w.brace);
+      l = r = lerp(0.28 + clamp01(this.speed / 5) * 0.3, 1, fist);
+      l = lerp(l, 0.04, open); r = lerp(r, 0.04, open); sl = sr = open;
+      l = lerp(l, 0.55, w.cower); r = lerp(r, 0.55, w.cower);
+      r = lerp(r, 0.8, w.phone);
+      l = lerp(l, 0.75, Math.max(w.pistol, w.rifle));      // the hand that steadies the gun
+      if (this.handFull > 0) l = lerp(l, 0.9, this.handFull);   // a magazine in the left hand
+    }
+    const item = this.weapon;
+    if (item && this.attached[P.HAND_R] && !this.gone[P.HAND_R]) {
+      r = 1; sr = 0;
+      if (item.def.gun) trig = alive && anim ? 0.42 + this.anim.recoil * 0.5 : 0.6;
+    }
+    const k = 1 - Math.exp(-dt * 14);
+    this.curl[0] += (l - this.curl[0]) * k; this.curl[1] += (r - this.curl[1]) * k;
+    this.splay[0] += (sl - this.splay[0]) * k; this.splay[1] += (sr - this.splay[1]) * k;
+    const tt = trig >= 0 ? trig : this.curl[1] * FINGERS[0][3];
+    this.trigger += (tt - this.trigger) * (1 - Math.exp(-dt * 22));
+  }
+
   /* ---------------------------------- hits -------------------------------- */
 
   /**
@@ -806,9 +937,20 @@ export class Human {
    * Returns the health report, with what became of the body added.
    */
   hit(info) {
-    const { part, type } = info, g = this.game;
+    const { part } = info, g = this.game;
+    let type = info.type, power = info.power, hp = info.hp, stopped = false;
     const b = this.bodies[part];
     if (this.gone[part]) return null;
+    if (this.vest && this.attached[part] && (part === P.CHEST || part === P.ABDOMEN)) {
+      // a light vest: stops a pistol round and a slash, slows a rifle round and a point
+      const was = type;
+      if (type === 'bullet') { if (info.weapon === 'ak47') { power *= 0.7; if (hp) hp *= 0.7; } else { type = 'blunt'; power *= 0.6; stopped = true; } }
+      else if (type === 'cut') { type = 'blunt'; power *= 0.3; stopped = true; }
+      else if (type === 'stab') power *= 0.45;
+      else if (type === 'blunt') power *= 0.8;
+      this.vest.hits++;
+      this.vestHit = { was, stopped, t: g.time };
+    }
     b.toLocal(info.point[0], info.point[1], info.point[2], _a);
     const lp = [_a[0], _a[1], _a[2]];
     b.dirToLocal(info.dir[0], info.dir[1], info.dir[2], _b);
@@ -823,8 +965,14 @@ export class Human {
       return null;
     }
     const wasAlive = this.h.alive;
-    const rep = this.h.hit({ part, type, power: info.power, lp, ln, ld, through: info.through, chop: info.chop, hp: info.hp, weapon: info.weapon });
+    const rep = this.h.hit({ part, type, power, lp, ln, ld, through: info.through, chop: info.chop, hp, weapon: info.weapon });
     rep.wasAlive = wasAlive;
+    rep.stopped = stopped;
+    if (stopped) {
+      // what the vest took shows on the vest
+      g.gore.mark(this, part, info.type === 'bullet' ? 'entry' : 'slash', lp, ln, info.type === 'bullet' ? 0.045 : 0.09, this.vest.lift);
+      g.gore.puff('smoke', info.point[0], info.point[1], info.point[2], 0.16, 0.35, 0.3, 0.3, 0.3);
+    }
     this.lastAttacker = info.attacker || this.lastAttacker;
     if (rep.wound) g.gore.wound(this, rep.wound);
     if (rep.exit) {
@@ -833,12 +981,12 @@ export class Human {
       g.gore.burst(_a[0], _a[1], _a[2], info.dir[0], info.dir[1] + 0.15, info.dir[2], 22, 5.5, 0.35);
     }
     // what comes out of the wound, back the way the blow came
-    const spray = type === 'bullet' ? 9 : type === 'blunt' ? (info.power > 0.9 && part === P.HEAD ? 6 : 0) : type === 'stab' ? 10 : 12 + info.power * 5;
+    const spray = type === 'bullet' ? 9 : type === 'blunt' ? (power > 0.9 && part === P.HEAD ? 6 : 0) : type === 'stab' ? 10 : 12 + power * 5;
     if (spray > 0) g.gore.burst(info.point[0], info.point[1], info.point[2], -info.dir[0] * 0.6, 0.5, -info.dir[2] * 0.6, spray, type === 'cut' ? 3.4 : 2.6, 0.7);
     if (rep.arterial) g.gore.burst(info.point[0], info.point[1], info.point[2], -info.dir[0], 0.8, -info.dir[2], 26, 4.5, 0.5);
     this.bloodied = Math.min(1, this.bloodied + (type === 'blunt' ? 0.02 : 0.12));
 
-    if (this.mind) this.mind.feel(part, type, rep, info.attacker, info.weapon);
+    if (this.mind) this.mind.feel(part, type, rep, info.attacker, info.weapon, stopped ? info.type : null);
     let limbGone = false;
     if (rep.burst) { this.burst(part, [info.dir[0] * 3, 2, info.dir[2] * 3]); limbGone = true; }
     else if (rep.severed >= 0) { this.sever(rep.severed, [info.dir[0] * 1.5, 1.2, info.dir[2] * 1.5]); limbGone = true; }
@@ -1069,16 +1217,23 @@ export class Human {
     if (this.removed) return;
     this.removed = true;
     const g = this.game;
-    g.weapons?.dropFrom(this);
+    if (this.isPlayer) g.weapons?.dropFrom(this); else g.weapons?.forget(this);
+    this.removeVest();
     for (const p of this.pieces.slice()) this.dropPiece(p.island);
     for (const j of this.joints) if (j.enabled) { j.enabled = false; g.world.removeJoint(j); }
     g.world.removeIsland(this.island);
     for (const i of this.inst) g.boxes.release(i);
     for (const h of this.hair) g.boxes.release(h.idx);
+    for (const hand of this.fingers) for (const i of hand) g.boxes.release(i);
     g.faceQuads.release(this.faceQuad); g.faces.release(this.faceCell);
     g.gore.clearHuman(this);
   }
 }
+
+/** Fingers, index to little: where along the knuckles, the two segment lengths, how readily it closes. */
+const FINGERS = [[0.033, 0.04, 0.031, 0.96], [0.011, 0.044, 0.034, 1], [-0.011, 0.04, 0.031, 1.03], [-0.033, 0.032, 0.026, 1.06]];
+const FAN = [0.3, 0.1, -0.1, -0.32];
+const _fq = [0, 0, 0, 1];
 
 /** The face of a box a local point or direction belongs to. */
 function faceOf(v) {

@@ -24,6 +24,32 @@ const GUARD = {
   shL: 0.62, shLOut: 0.24, shLIn: 0.34, elL: 2.0, shR: 0.56, shROut: 0.26, shRIn: 0.3, elR: 2.02,
   spineTwist: 0, waistTwist: 0, spineBend: 0.08, rootZ: 0, rootY: 0,
 };
+/** Where the right hand goes to put a weapon away or take it out: the hip, across to the other hip, over the shoulder. */
+const REACH = {
+  hip: { shR: -0.68, shROut: 0.03, shRIn: 0.3, elR: 1.22 },
+  cross: { shR: 0.57, shROut: -0.2, shRIn: 0.83, elR: 0.08 },
+  back: { shR: 2.75, shROut: 0.12, shRIn: -0.63, elR: 2.45 },
+};
+/**
+ * Reloading. The gun comes in to the chest; the left hand strips the empty
+ * magazine, fetches a full one from the belt, seats it and works the action.
+ * Each key: when (0..1), the right arm, the left arm.
+ */
+const RA_P = [0.03, 0.21, 0.63, 1.75], RA_R = [-0.54, 0.03, 0.41, 1.98];
+const LA = {
+  pouch: [-0.54, -0.01, 0.44, 1.3], magP: [0.17, 0.2, 0.89, 1.33], slideA: [0.33, 0.35, 0.88, 1.69], slideB: [0.17, 0.24, 1.01, 1.89],
+  magR: [0.59, 0.24, 0.99, 0.52], boltA: [0.43, 0.33, 1.12, 1.22], boltB: [0.3, 0.22, 1.22, 1.42],
+};
+export const RELOAD = {
+  pistol: {
+    right: RA_P, magOut: 0.13, grab: 0.33, magIn: 0.57, rackA: 0.7, rackB: 0.8, tilt: 0.55, roll: 0.5,
+    left: [[0, LA.magP], [0.1, LA.magP], [0.17, LA.magP], [0.33, LA.pouch], [0.4, LA.pouch], [0.57, LA.magP], [0.62, LA.magP], [0.7, LA.slideA], [0.8, LA.slideB], [0.86, LA.slideA], [1, LA.magP]],
+  },
+  rifle: {
+    right: RA_R, magOut: 0.15, grab: 0.34, magIn: 0.56, rackA: 0.68, rackB: 0.78, tilt: 0.3, roll: 0.35,
+    left: [[0, LA.magR], [0.1, LA.magR], [0.18, LA.magR], [0.34, LA.pouch], [0.4, LA.pouch], [0.56, LA.magR], [0.61, LA.magR], [0.68, LA.boltA], [0.78, LA.boltB], [0.84, LA.boltA], [1, LA.magR]],
+  },
+};
 const k = (t, o) => ({ t, o });
 /** How a blade is carried when nothing is happening. */
 const CARRY = SWINGS.rest[0][1];
@@ -104,6 +130,7 @@ export class Animator {
     this.flinch = 0; this.flX = 0; this.flZ = 0;
     this.aim = 0; this.lookYaw = 0; this.lookPitch = 0;
     this.recoil = 0;
+    this.reachW = 0; this.reloadW = 0;
     this.limp = 0; this.limpSide = 1;
     this.lowAim = 0;
   }
@@ -268,8 +295,9 @@ export class Animator {
     }
     if (W.handsUp > 0.01) {
       const a = W.handsUp, sh = Math.sin(t * 27) * 0.02;
-      this._to(CH.shL, 2.2 + sh, a); this._to(CH.shR, 2.2 - sh, a); this._to(CH.shLOut, 0.75, a); this._to(CH.shROut, 0.75, a);
-      this._to(CH.elL, 1.05, a); this._to(CH.elR, 1.05, a); this._to(CH.shLIn, 0, a); this._to(CH.shRIn, 0, a);
+      // upper arms out to the sides, forearms straight up, palms forward
+      this._to(CH.shL, 1.48 + sh, a); this._to(CH.shR, 1.48 - sh, a); this._to(CH.shLOut, 0, a); this._to(CH.shROut, 0, a);
+      this._to(CH.elL, 1.7, a); this._to(CH.elR, 1.7, a); this._to(CH.shLIn, -1.3, a); this._to(CH.shRIn, -1.3, a);
     }
     if (W.hurt > 0.01) {
       // doubled over, one arm across the belly
@@ -323,6 +351,35 @@ export class Animator {
       this._to(CH.headBend, -0.5, a); this._to(CH.neckBend, -0.3, a); this._to(CH.spineBend, -0.12, a);
       this.crawlPull = Math.max(0, Math.cos(f)) * a;
     } else this.crawlPull = 0;
+
+    /* ---- putting a weapon away, taking one out ---- */
+    this.reachW = s.reach ? s.reachW || 0 : 0;
+    if (this.reachW > 0.01) {
+      const a = this.reachW, r = REACH[s.reach] || REACH.hip;
+      this._to(CH.shR, r.shR, a); this._to(CH.shROut, r.shROut, a); this._to(CH.shRIn, r.shRIn, a); this._to(CH.elR, r.elR, a);
+      this._to(CH.wrR, 0, a); this._to(CH.wrRSide, 0, a);
+      if (s.reach === 'back') { ch[CH.spineBend] += 0.08 * a; ch[CH.headBend] += 0.1 * a; }
+      else { ch[CH.headBend] += 0.16 * a; ch[CH.spineTwist] += (s.reach === 'cross' ? 0.12 : -0.1) * a; }
+    }
+
+    /* ---- reloading ---- */
+    const rl = s.reload;
+    this.reloadW = 0;
+    if (rl) {
+      const R = RELOAD[rl.kind] || RELOAD.pistol, u = clamp01(rl.u);
+      const a = Math.min(smooth(u / 0.1), smooth((1 - u) / 0.14));
+      this.reloadW = a;
+      const keys = R.left;
+      let i = 0;
+      while (i < keys.length - 2 && u > keys[i + 1][0]) i++;
+      const A = keys[i], B = keys[i + 1], f = smooth((u - A[0]) / (B[0] - A[0]));
+      this._to(CH.shR, R.right[0], a); this._to(CH.shROut, R.right[1], a); this._to(CH.shRIn, R.right[2], a); this._to(CH.elR, R.right[3], a); this._to(CH.wrR, 0, a);
+      this._to(CH.shL, lerp(A[1][0], B[1][0], f), a); this._to(CH.shLOut, lerp(A[1][1], B[1][1], f), a);
+      this._to(CH.shLIn, lerp(A[1][2], B[1][2], f), a); this._to(CH.elL, lerp(A[1][3], B[1][3], f), a);
+      // eyes down on the work, and the twist of a shooting stance let go
+      ch[CH.headBend] += 0.3 * a; ch[CH.neckBend] += 0.12 * a;
+      ch[CH.spineTwist] *= 1 - 0.7 * a; ch[CH.neckTwist] *= 1 - 0.7 * a;
+    }
 
     /* ---- the head goes where the eyes want ---- */
     ch[CH.headTwist] += this.lookYaw * 0.55; ch[CH.neckTwist] += this.lookYaw * 0.3; ch[CH.spineTwist] += this.lookYaw * 0.12;

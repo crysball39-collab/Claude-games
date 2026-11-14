@@ -206,11 +206,11 @@ export class Gore {
   }
 
   /** A plain mark on any body part: a stain, a hole in something already dead. */
-  mark(human, part, kind, lp, ln, size) {
+  mark(human, part, kind, lp, ln, size, lift = 0.004) {
     if (!this.enabled || human.gone[part]) return;
     const b = human.bodies[part];
     const cell = kind === 'entry' ? UV.entry : kind === 'bruise' ? UV.bruise : kind === 'slash' ? UV.slash : kind === 'dot' ? UV.dot : pick(UV.splat);
-    const d = this._attach(b, this._onFace(b, lp, ln, size, size, rand(TAU)), cell, human, part);
+    const d = this._attach(b, this._onFace(b, lp, ln, size, size, rand(TAU), lift), cell, human, part);
     if (d && (kind === 'dot' || kind === 'splat')) d.stain = true;
   }
 

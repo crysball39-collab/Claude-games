@@ -397,7 +397,7 @@ export class Mind {
   /* -------------------------------- feeling ------------------------------- */
 
   /** A blow, as it is experienced by the one who took it. */
-  feel(part, type, rep, attacker, weapon) {
+  feel(part, type, rep, attacker, weapon, vestTook = null) {
     const h = this.h, now = this.game.time;
     if (!h.h.conscious && !rep.ko) return;
     const where = PARTS[part].label;
@@ -407,21 +407,23 @@ export class Mind {
       const k = this.known.get(attacker.id);
       seen = (k && now - k.last < 1.6) || this.canSeeHuman(attacker) > 0;
     }
-    const how = type === 'bullet' ? 'was shot in' : type === 'stab' ? 'was stabbed in' : type === 'cut' ? 'was cut across' : type === 'crush' ? 'was crushed in' : 'took a blow to';
+    // something the vest stopped still lands like a hammer
+    const how = vestTook === 'bullet' ? 'was shot, and the vest stopped it, in' : vestTook === 'cut' ? 'felt a blade drag across the vest over' :
+      type === 'bullet' ? 'was shot in' : type === 'stab' ? 'was stabbed in' : type === 'cut' ? 'was cut across' : type === 'crush' ? 'was crushed in' : 'took a blow to';
     const by = isHuman ? (seen ? ' by ' + this.name(attacker) + (weapon && weapon !== 'fists' ? ' with a ' + WEAPON_WORD[weapon] : '') : ' by someone I did not see') : attacker ? ' by ' + attacker : '';
     this.note('felt', 'hit', `${how} the ${where}${by}`, clamp(0.4 + rep.pain / 50, 0.4, 1), { part, attacker: isHuman ? attacker : null });
     for (const b of rep.bones) if (b.state !== 'intact') this.note('felt', 'bone', `felt my ${boneWord(b.id)} ${b.state === 'broken' ? 'break' : 'crack'}`, 0.9);
-    this.stir('fear', rep.pain * 0.8 + (type === 'blunt' ? 6 : 26));
+    this.stir('fear', rep.pain * 0.8 + (type === 'blunt' && !vestTook ? 6 : 26));
     this.stir('anger', type === 'blunt' && seen ? 45 : 10);
     this.stir('surprise', seen ? 22 : 55);
     this.stir('joy', -40);
     if (isHuman) {
       const k = this._know(attacker);
       k.hurtMe = true; k.hostile = 1; if (weapon) k.armed = weapon;
-      if (seen) this._threaten(attacker, type === 'blunt' ? 70 : 96);
+      if (seen) this._threaten(attacker, type === 'blunt' && !vestTook ? 70 : 96);
       else { this._threaten(null, 72, h.x - Math.sin(h.yaw) * 2, h.z - Math.cos(h.yaw) * 2); this.lookAt = { x: attacker.x, y: attacker.y + 1.5, z: attacker.z, until: now + 2 }; }
     }
-    const cat = attacker === 'a car' ? 'hitCar' : isHuman && !seen && chance(0.5) ? 'hitUnseen' : type === 'bullet' ? 'hitShot' : type === 'stab' ? 'hitStab' : type === 'cut' ? 'hitCut' : 'hitBlunt';
+    const cat = attacker === 'a car' ? 'hitCar' : vestTook === 'bullet' ? 'hitVest' : isHuman && !seen && chance(0.5) ? 'hitUnseen' : type === 'bullet' ? 'hitShot' : type === 'stab' ? 'hitStab' : type === 'cut' ? 'hitCut' : 'hitBlunt';
     this.ask(cat, 95, { part: where });
     if (rep.bones.some((b) => b.state === 'broken')) this.ask('boneBreak', 78, { part: where.replace('left ', '').replace('right ', '') }, 1.4);
   }

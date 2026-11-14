@@ -62,6 +62,7 @@ export const LINES = {
   carNear: ['Watch where you are driving!', 'Are you blind?!', 'The crossing is RIGHT THERE!', 'Maniac!', 'You nearly killed me!', 'Slow DOWN!'],
   horn: ['Alright, alright, I am moving!', 'Keep your hair on!', 'I heard you the first time!', 'Yes, yes, the horn works.'],
   hitBlunt: ['Agh!', 'Ow!', 'Oof-', 'What the-!', 'Stop it!', 'Hey!', 'Ugh!', 'My {part}!', 'Get off me!', 'Nnf!'],
+  hitVest: ['Hnngh- vest. The vest took it.', 'Agh! That hit the plate!', 'Oof- I am hit. I am okay. I am okay.', 'Ghh- that knocked the wind out of me.', 'Vest stopped it. God, that hurts.', 'I felt that. Still here.'],
   hitCut: ['AAGH!', 'He cut me!', 'I am cut, I am cut!', 'My {part}!', 'It burns!', 'Oh God, that is deep.', 'Aaah! Get it away!'],
   hitStab: ['Hhk-', 'He stabbed me.', 'Oh... oh no.', 'It went in. It went right in.', 'I have been stabbed!', 'Nn- my {part}-'],
   hitShot: ['I am hit!', 'He shot me!', 'AAAGH! My {part}!', 'I have been shot, I have been shot!', 'Oh God it hurts-', 'It went straight through.', 'Shot. I have been shot.'],
