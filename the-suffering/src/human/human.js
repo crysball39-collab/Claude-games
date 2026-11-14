@@ -978,11 +978,14 @@ export class Human {
     if (rep.exit) {
       g.gore.wound(this, rep.exit);
       b.toWorld(rep.exit.x, rep.exit.y, rep.exit.z, _a);
-      g.gore.burst(_a[0], _a[1], _a[2], info.dir[0], info.dir[1] + 0.15, info.dir[2], 22, 5.5, 0.35);
+      g.gore.burst(_a[0], _a[1], _a[2], info.dir[0], info.dir[1] + 0.15, info.dir[2], 16, 5.5, 0.35);
+      g.gore.mist(_a[0], _a[1], _a[2], info.dir[0], info.dir[1] + 0.1, info.dir[2], 34, 7.5, 0.5);
     }
     // what comes out of the wound, back the way the blow came
     const spray = type === 'bullet' ? 9 : type === 'blunt' ? (power > 0.9 && part === P.HEAD ? 6 : 0) : type === 'stab' ? 10 : 12 + power * 5;
     if (spray > 0) g.gore.burst(info.point[0], info.point[1], info.point[2], -info.dir[0] * 0.6, 0.5, -info.dir[2] * 0.6, spray, type === 'cut' ? 3.4 : 2.6, 0.7);
+    if (type === 'bullet') g.gore.mist(info.point[0], info.point[1], info.point[2], -info.dir[0], 0.25, -info.dir[2], 12, 3.2, 0.8);
+    else if (type === 'cut' && power > 1.2) g.gore.mist(info.point[0], info.point[1], info.point[2], info.dir[0], 0.4, info.dir[2], 14, 4.2, 0.9);
     if (rep.arterial) g.gore.burst(info.point[0], info.point[1], info.point[2], -info.dir[0], 0.8, -info.dir[2], 26, 4.5, 0.5);
     this.bloodied = Math.min(1, this.bloodied + (type === 'blunt' ? 0.02 : 0.12));
 

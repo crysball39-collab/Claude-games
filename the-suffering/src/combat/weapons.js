@@ -126,6 +126,12 @@ export class Weapons {
     const g = this.game, def = WEAPONS[type];
     const item = { type, def, body: null, island: null, prop: null, holder: null, ammo: def.mag || 0, bloody: 0, inst: def.boxes.map(() => g.boxes.alloc()),
       px: 0, py: 0, pz: 0, q: [0, 0, 0, 1], cool: 0, magOut: false, slide: 0, spots: [] };
+    // the flat faces blood can land on: every box of the model that sits square to it
+    if (!def.wear) {
+      item.skin = [];
+      for (const b of def.boxes) if (!b[7] && (def.gun ? b[5] > 0.1 : b[8])) item.skin.push(new Surface(item, b));
+      item.reach2 = (def.half[2] * 2 + 0.2) ** 2;
+    }
     this._paint(item);
     this.items.push(item);
     return item;
@@ -193,6 +199,7 @@ export class Weapons {
 
   remove(item) {
     this._offGround(item);
+    if (item.skin) for (const f of item.skin) this.game.gore.clearBody(f);
     for (const i of item.inst) this.game.boxes.release(i);
     const k = this.items.indexOf(item);
     if (k >= 0) this.items.splice(k, 1);
@@ -440,6 +447,10 @@ export class Weapons {
     if (!act.prev) { act.prev = new Float32Array(24); act.prev.set(pts); return; }
     const clip = act.clip, def = act.def, prev = act.prev;
     const maxHits = def.blade ? 2 : 1;
+    if (def.blade && human.weapon && human.weapon.bloody > 0.25 && chance(dt * 26 * human.weapon.bloody)) {
+      const k = (n - 1) * 3, vx = (pts[k] - prev[k]) / dt, vy = (pts[k + 1] - prev[k + 1]) / dt, vz = (pts[k + 2] - prev[k + 2]) / dt;
+      if (vx * vx + vy * vy + vz * vz > 16) g.gore.castOff(pts[k], pts[k + 1], pts[k + 2], vx, vy, vz, human.weapon.bloody);
+    }
     // from the tip inward: the tip travels furthest and arrives first
     for (let k = n - 1; k >= 0 && act.landed < maxHits; k--) {
       const ox = prev[k * 3], oy = prev[k * 3 + 1], oz = prev[k * 3 + 2];
@@ -491,7 +502,16 @@ export class Weapons {
     g.minds?.witness({ kind: 'attack', actor: attacker, victim: t, weapon: def.id, part: hit.part, x: px, y: py, z: pz, rep });
     if (def.blade && act.def === def) {
       const item = attacker.weapon;
-      if (item) { item.bloody = Math.min(1, item.bloody + 0.34); this._paint(item); }
+      if (item) {
+        item.bloody = Math.min(1, item.bloody + 0.34); this._paint(item);
+        if (rep && !rep.stopped) g.gore.smear(item, 2 + (power > 1.3 ? 2 : 0), true);
+      }
+    }
+    // and on the hand that held it
+    if (rep && !rep.stopped && (rep.wound && rep.wound.bleed > 0.5 || clip.kind !== 'blunt') && !attacker.gone[P.HAND_R]) {
+      const part = clip.limb === 'handL' ? P.HAND_L : clip.limb === 'footR' ? P.FOOT_R : P.HAND_R;
+      if (!attacker.gone[part]) g.gore.mark(attacker, part, 'dot', [rand(-0.02, 0.02), rand(-0.04, 0.02), rand(-0.03, 0.03)], [chance(0.5) ? 1 : -1, 0, 0], rand(0.03, 0.06));
+      attacker.bloodied = Math.min(1, attacker.bloodied + 0.04);
     }
     if (attacker.isPlayer) { g.shake = Math.max(g.shake, 0.35 + power * 0.25); g.ui?.hitMark(); }
     return rep;
@@ -680,6 +700,7 @@ export class Weapons {
       const t = ph.human, limb = ph.part >= P.UARM_L;
       const rep = t.hit({ part: ph.part, type: 'bullet', power, point: [hx, hy, hz], dir: [dx, dy, dz], normal: ph.ln, impulse: d.impulse * power / d.power, through: ph.exit, hp: d.hp * power / d.power, attacker: shooter, weapon: d.id });
       g.audio?.at('flesh', hx, hy, hz, 0.8);
+      if (depth === 0 && far < 1.5 && shooter.weapon && rep && !rep.stopped) g.gore.smear(shooter.weapon, far < 0.8 ? 2 : 1);
       g.minds?.witness({ kind: 'attack', actor: shooter, victim: t, weapon: d.id, part: ph.part, x: hx, y: hy, z: hz, rep });
       if (shooter.isPlayer) g.ui?.hitMark();
       // out the other side, and on
@@ -846,6 +867,34 @@ export class Weapons {
     }
   }
 }
+
+/**
+ * One flat-sided piece of a weapon, for blood to stick to. It answers the same
+ * questions a physics body does about where its own points are in the world,
+ * from wherever the weapon was last drawn: in a hand, on a hip, on the ground.
+ */
+class Surface {
+  constructor(item, b) {
+    this.item = item;
+    this.ox = b[0]; this.oy = b[1]; this.oz = b[2];
+    this.hx = b[3] / 2; this.hy = b[4] / 2; this.hz = b[5] / 2;
+    this.island = null;
+  }
+  toWorld(x, y, z, out) {
+    const it = this.item;
+    rotv(it.q, this.ox + x, this.oy + y, this.oz + z, out);
+    out[0] += it.px; out[1] += it.py; out[2] += it.pz;
+    return out;
+  }
+  toLocal(x, y, z, out) {
+    const it = this.item, q = it.q;
+    _iq[0] = -q[0]; _iq[1] = -q[1]; _iq[2] = -q[2]; _iq[3] = q[3];
+    rotv(_iq, x - it.px, y - it.py, z - it.pz, out);
+    out[0] -= this.ox; out[1] -= this.oy; out[2] -= this.oz;
+    return out;
+  }
+}
+const _iq = [0, 0, 0, 1];
 
 let _hole = null, _white = null;
 function HOLE_UV() { return _hole || (_hole = cellUV(DECAL.hole[0], DECAL.hole[1], ATLAS_COLS, ATLAS_ROWS)); }

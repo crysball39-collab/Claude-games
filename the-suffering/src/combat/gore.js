@@ -27,6 +27,7 @@ for (const k in DECAL) UV[k] = Array.isArray(DECAL[k][0]) ? DECAL[k].map(uv) : u
 
 const BREAK = 0.17;            // a stream stretched past this parts
 const _v = [0, 0, 0], _w = [0, 0, 0], _n = [0, 0, 0];
+const NONE = [];
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3();
 const _z = new THREE.Vector3(0, 0, 1), _d = new THREE.Vector3(), _col = new THREE.Color();
 
@@ -72,6 +73,8 @@ export class Gore {
     this.gSlot = 0;
     this.gInfo = new Array(decals).fill(null);
     this.pools = [];
+    this.flowing = new Set();             // pools on their way to a new size or place
+    this.drains = [];                     // marks being drawn into a pool that has reached them
     this.body = new Quads(scene, bodyDecals, game.atlas, { offset: -6, renderOrder: 3 });
     this.bDecals = [];                    // { body, c[12], quad, human, part, grow }
     this.fx = new Quads(scene, 96, game.atlas, { offset: 0, renderOrder: 6, alphaTest: 0.01 });
@@ -80,7 +83,7 @@ export class Gore {
     /* ---- lumps ---- */
     this.gibsList = [];
     this.maxGibs = 54;
-    this.stats = { emitted: 0, landed: 0, parted: 0, streams: 0 };
+    this.stats = { emitted: 0, landed: 0, parted: 0, streams: 0, merged: 0, onWeapons: 0, onPeople: 0, satellites: 0 };
     this._budget = 0;
     this._tintT = 0;
   }
@@ -113,6 +116,71 @@ export class Gore {
         dx * s + (Math.random() - 0.5) * speed * spread, dy * s + (Math.random() - 0.3) * speed * spread * 0.8, dz * s + (Math.random() - 0.5) * speed * spread,
         1.5 + Math.random() * 4);
     }
+  }
+
+  /** Fine spray: many small drops, fast, the kind a bullet throws out of the far side. */
+  mist(x, y, z, dx, dy, dz, count, speed, spread = 0.5) {
+    if (!this.enabled) return;
+    const l = Math.hypot(dx, dy, dz) || 1;
+    dx /= l; dy /= l; dz /= l;
+    count = Math.min(count, 70);
+    for (let i = 0; i < count; i++) {
+      const s = speed * (0.35 + Math.random() * 0.9);
+      this._spawn(x, y, z, dx * s + (Math.random() - 0.5) * speed * spread, dy * s + (Math.random() - 0.4) * speed * spread, dz * s + (Math.random() - 0.5) * speed * spread, 0.25 + Math.random() * 0.8);
+    }
+  }
+
+  /** Blood thrown off a wet blade as it swings: a line of drops along the way the tip is going. */
+  castOff(x, y, z, vx, vy, vz, wet) {
+    if (!this.enabled) return;
+    const n = 1 + ((wet * 3) | 0);
+    for (let i = 0; i < n; i++) this._spawn(x, y, z, vx * rand(0.45, 0.8) + rand(-0.4, 0.4), vy * rand(0.45, 0.8) + rand(0, 0.8), vz * rand(0.45, 0.8) + rand(-0.4, 0.4), 0.6 + Math.random() * 1.6);
+  }
+
+  /**
+   * Blood on a weapon: `n` marks on whichever of its surfaces took it. With a
+   * point (world space) the mark goes on the nearest surface to it; without,
+   * anywhere along the blade or the front of the gun.
+   */
+  smear(item, n = 1, big = false) {
+    if (!this.enabled || !item.skin || !item.skin.length) return 0;
+    let made = 0;
+    for (let k = 0; k < n; k++) {
+      const f = item.skin[(Math.random() * item.skin.length) | 0];
+      // the widest pair of faces is the one that shows
+      const ax = f.hx <= f.hy && f.hx <= f.hz ? 0 : f.hy <= f.hz ? 1 : 2;
+      const sgn = Math.random() < 0.5 ? -1 : 1;
+      const lp = [rand(-f.hx, f.hx), rand(-f.hy, f.hy), rand(f.hz * (item.def.gun ? 0.2 : -0.6), f.hz)];
+      const ln = [ax === 0 ? sgn : 0, ax === 1 ? sgn : 0, ax === 2 ? sgn : 0];
+      const size = big ? rand(0.05, 0.1) : rand(0.025, 0.055);
+      const d = this._attach(f, this._onFace(f, lp, ln, size, size, rand(TAU), 0.0015), Math.random() < 0.5 ? UV.dot : pick(UV.splat), null, -1, rand(0.6, 1));
+      if (d) { d.stain = true; made++; }
+    }
+    this.stats.onWeapons += made;
+    return made;
+  }
+
+  /** A drop in flight meets a weapon somebody is carrying. */
+  _dropOnItems(x, y, z, ml) {
+    const list = this.game.weapons ? this.game.weapons.items : NONE;
+    for (let k = 0; k < list.length; k++) {
+      const it = list[k];
+      if (!it.skin || !it.shown || it.body) continue;
+      const dx = x - it.px, dy = y - it.py, dz = z - it.pz;
+      if (dx * dx + dy * dy + dz * dz > it.reach2) continue;
+      for (const f of it.skin) {
+        f.toLocal(x, y, z, _v);
+        const m = 0.014;
+        if (Math.abs(_v[0]) > f.hx + m || Math.abs(_v[1]) > f.hy + m || Math.abs(_v[2]) > f.hz + m) continue;
+        const face = nearestFace(_v, f);
+        const size = clamp(0.02 + Math.cbrt(ml) * 0.022, 0.022, 0.07);
+        const d = this._attach(f, this._onFace(f, [_v[0], _v[1], _v[2]], face, size, size, rand(TAU), 0.0015), ml > 2.5 ? pick(UV.splat) : UV.dot, null, -1, rand(0.6, 1));
+        if (d) { d.stain = true; this.stats.onWeapons++; }
+        if (it.def.blade && it.bloody < 1) { it.bloody = Math.min(1, it.bloody + 0.04); this.game.weapons._paint(it); }
+        return true;
+      }
+    }
+    return false;
   }
 
   vomit(human) {
@@ -288,49 +356,123 @@ export class Gore {
       return;
     }
     // near blood that is already there, it simply joins it
-    let best = null, bd = 0.2;
+    // (a fine drop only joins what it actually lands in, so that spray stays spray)
+    let best = null, bd = ml < 1.3 ? 0.01 : 0.2;
     for (const p of this.pools) {
-      const d = Math.hypot(p.x - x, p.z - z) - p.r * 0.75;
+      if (Math.abs(p.y - y) > 0.06) continue;
+      const d = Math.hypot(p.x - x, p.z - z) - p.tr * 0.8 + (p.big || ml < 1.3 ? 0 : 0.12);
       if (d < bd) { bd = d; best = p; }
     }
-    if (best) {
-      best.vol += ml;
-      const r = Math.min(1.5, 0.07 + Math.sqrt(best.vol) * 0.021);
-      if (r > best.r + 0.004) {
-        best.r = r;
-        if (!best.big && best.vol > 40) { best.big = true; const c = pick(UV.pool); this.ground.uvRect(best.quad, c[0], c[1], c[2], c[3]); }
-        this.ground.flat(best.quad, best.x, best.y + 0.014 + (best.quad % 7) * 0.0008, best.z, r * 2.3, r * 2.3, best.rot);
-      }
-      return;
-    }
+    if (best) { this._feed(best, ml); return; }
     const hs = Math.hypot(this.vx[i], this.vz[i]);
-    let q;
+    let q, size;
     if (hs > 2.4 && hs > -this.vy[i] * 0.9) {
       // came in low and fast: a streak along the way it was going
-      const len = clamp(0.18 + hs * 0.07, 0.2, 0.7);
+      const len = clamp(0.18 + hs * 0.07, 0.2, 0.7) * rand(0.8, 1.25);
       q = this._groundDecal(pick(UV.streak), x, y, z, len, len * 0.45, -Math.atan2(this.vz[i], this.vx[i]));
+      size = len * 0.6;
     } else if (speed > 3.2 || ml > 5) {
-      const s = clamp(0.1 + Math.cbrt(ml) * 0.07 + speed * 0.012, 0.12, 0.42) * rand(0.7, 1.45);
-      q = this._groundDecal(pick(UV.splat), x, y, z, s, s * rand(0.8, 1.1), rand(TAU));
+      size = clamp(0.1 + Math.cbrt(ml) * 0.07 + speed * 0.012, 0.12, 0.42) * rand(0.7, 1.45);
+      q = this._groundDecal(pick(UV.splat), x, y, z, size, size * rand(0.8, 1.1), rand(TAU));
     } else {
-      const s = clamp(0.035 + Math.cbrt(ml) * 0.03, 0.04, 0.12) * rand(0.8, 1.6);
-      q = this._groundDecal(UV.dot, x, y, z, s, s, rand(TAU));
+      size = clamp(0.035 + Math.cbrt(ml) * 0.03, 0.04, 0.12) * rand(0.8, 1.6);
+      q = this._groundDecal(UV.dot, x, y, z, size, size, rand(TAU));
     }
     // no two marks quite the same red
     const k = rand(0.55, 1);
     this.gInfo[q].shade = k;
     this.ground.tint(q, k, k, k, 1);
-    if (this.pools.length < 160) {
-      const pool = { x, y, z, vol: ml, r: 0.05, quad: q, rot: rand(TAU), big: false };
+    // a drop that lands hard throws smaller ones on ahead of it
+    if (ml > 2.2 && speed > 4.6) {
+      const n = speed > 7 ? 3 : 2, dir = hs > 0.4 ? Math.atan2(this.vz[i], this.vx[i]) : rand(TAU);
+      for (let j = 0; j < n; j++) {
+        const a = dir + rand(-0.9, 0.9) * (hs > 0.4 ? 1 : 3.4), v = rand(0.7, 1.9) + hs * 0.2;
+        this._spawn(x, y + 0.02, z, Math.cos(a) * v, rand(0.7, 1.6), Math.sin(a) * v, rand(0.25, 0.7));
+        this.stats.satellites++;
+      }
+    }
+    if (this.pools.length < 180) {
+      const pool = { x, y, z, tx: x, tz: z, vol: ml, r: size * 0.42, tr: size * 0.42, quad: q, rot: this.gInfo[q].rot, big: false, size, info: this.gInfo[q] };
       this.gInfo[q].pool = pool;
       this.pools.push(pool);
+      this._merge(pool);
+    }
+  }
+
+  /** More blood arrives in a pool. */
+  _feed(p, ml) {
+    p.vol += ml;
+    const r = Math.min(1.5, 0.07 + Math.sqrt(p.vol) * 0.021);
+    if (r > p.tr + 0.003) {
+      p.tr = r;
+      this.flowing.add(p);
+      this._merge(p);
+    }
+  }
+
+  /**
+   * Two pools that have grown into each other are one pool. The larger takes
+   * the smaller's blood and moves a little toward where it lay; the smaller is
+   * drawn in and gone. Repeats, because the pool that results may now touch a third.
+   */
+  _merge(p) {
+    for (let pass = 0; pass < 6; pass++) {
+      let other = null;
+      for (const o of this.pools) {
+        if (o === p || Math.abs(o.y - p.y) > 0.06) continue;
+        const d = Math.hypot(o.tx - p.tx, o.tz - p.tz);
+        if (d < (p.tr + o.tr) * 0.84) { other = o; break; }
+      }
+      if (!other) return;
+      let big = p, small = other;
+      if (other.vol > p.vol) { big = other; small = p; }
+      const total = big.vol + small.vol, f = small.vol / total;
+      big.tx += (small.tx - big.tx) * f; big.tz += (small.tz - big.tz) * f;
+      big.vol = total;
+      big.tr = Math.max(big.tr, Math.min(1.5, 0.07 + Math.sqrt(total) * 0.021));
+      this.flowing.add(big);
+      this._drain(small, big);
+      this.stats.merged++;
+      p = big;
+    }
+  }
+
+  _drain(small, into) {
+    const k = this.pools.indexOf(small);
+    if (k >= 0) this.pools.splice(k, 1);
+    this.flowing.delete(small);
+    const info = this.gInfo[small.quad];
+    if (!info || info.pool !== small) return;
+    info.pool = null;
+    this.drains.push({ quad: small.quad, info, x: small.x, y: small.y, z: small.z, into, size: small.big ? small.r * 2.3 : small.size, rot: small.rot, t: 0 });
+  }
+
+  /** Pools easing out to the size and place they are heading for; marks being swallowed. */
+  _flow(dt) {
+    const G = this.ground, k = 1 - Math.exp(-dt * 4.5);
+    for (const p of this.flowing) {
+      const info = this.gInfo[p.quad];
+      if (!info || info.pool !== p) { this.flowing.delete(p); continue; }
+      p.r += (p.tr - p.r) * k; p.x += (p.tx - p.x) * k; p.z += (p.tz - p.z) * k;
+      if (!p.big && (p.vol > 40 || p.r > 0.14)) { p.big = true; const c = pick(UV.pool); G.uvRect(p.quad, c[0], c[1], c[2], c[3]); }
+      if (p.big) G.flat(p.quad, p.x, p.y + 0.014 + (p.quad % 7) * 0.0008, p.z, p.r * 2.3, p.r * 2.3, p.rot);
+      info.x = p.x; info.z = p.z;
+      if (Math.abs(p.tr - p.r) < 0.002 && Math.abs(p.tx - p.x) + Math.abs(p.tz - p.z) < 0.004) this.flowing.delete(p);
+    }
+    for (let i = this.drains.length - 1; i >= 0; i--) {
+      const d = this.drains[i];
+      if (this.gInfo[d.quad] !== d.info) { this.drains.splice(i, 1); continue; }
+      d.t += dt / 0.5;
+      if (d.t >= 1) { G.hide(d.quad); this.gInfo[d.quad] = null; this.drains.splice(i, 1); continue; }
+      const u = d.t * d.t * (3 - 2 * d.t), sz = d.size * (1 - u);
+      G.flat(d.quad, d.x + (d.into.x - d.x) * u, d.y + 0.013, d.z + (d.into.z - d.z) * u, sz, sz, d.rot);
     }
   }
 
   /** Everything blood has been spilled on, wiped clean. */
   clean() {
     for (let i = 0; i < this.ground.capacity; i++) { this.ground.hide(i); this.gInfo[i] = null; }
-    this.pools.length = 0;
+    this.pools.length = 0; this.flowing.clear(); this.drains.length = 0;
     for (let i = 0; i < this.N; i++) this.life[i] = 0;
     for (let i = this.bDecals.length - 1; i >= 0; i--) if (this.bDecals[i].stain) this._detach(i);
   }
@@ -381,6 +523,7 @@ export class Gore {
     const g = this.game, t = g.time;
     this._emit(dt, t);
     this._simulate(dt);
+    this._flow(dt);
     this._drawDrops();
     this._moveDecals();
 
@@ -550,12 +693,13 @@ export class Gore {
           if (this.kind[i] === 0 && Math.random() < 0.6) {
             const face = nearestFace(_v, b);
             this.mark(hm, pi, this.ml[i] > 4 ? 'splat' : 'dot', [_v[0], _v[1], _v[2]], face, clamp(0.035 + Math.cbrt(this.ml[i]) * 0.035, 0.04, 0.13));
-            if (this.owner[i] !== hm) { hm.bloodied = Math.min(1, hm.bloodied + 0.02); hm.mind?.splashed(this.owner[i]); }
+            if (this.owner[i] !== hm) { hm.bloodied = Math.min(1, hm.bloodied + 0.02); hm.mind?.splashed(this.owner[i]); this.stats.onPeople++; }
           }
           hitSomething = true;
           break;
         }
       }
+      if (!hitSomething && this.kind[i] === 0 && this._dropOnItems(x, y, z, this.ml[i])) hitSomething = true;
       if (!hitSomething) {
         for (const o of g.props) {
           const b = o.body;
@@ -563,7 +707,10 @@ export class Gore {
           if (ex * ex + ey * ey + ez * ez > b.boundR * b.boundR) continue;
           b.toLocal(x, y, z, _v);
           if (Math.abs(_v[0]) > b.hx || Math.abs(_v[1]) > b.hy || Math.abs(_v[2]) > b.hz) continue;
-          if (this.kind[i] === 0 && Math.random() < 0.5) {
+          if (o.kind === 'weapon') {
+            // a weapon on the ground takes blood on its own surfaces, not on the box round it
+            if (this.kind[i] === 0 && o.item && o.item.skin && Math.random() < 0.6) this.smear(o.item, 1);
+          } else if (this.kind[i] === 0 && Math.random() < 0.5) {
             const face = nearestFace(_v, b);
             const d = this._attach(b, this._onFace(b, [_v[0], _v[1], _v[2]], face, 0.14, 0.14, rand(TAU)), pick(UV.splat), null, -1);
             if (d) d.stain = true;
@@ -629,6 +776,8 @@ export class Gore {
           d.settled = false;
         }
       }
+      if (b.item && !b.item.shown) { if (!d.hidden) { B.hide(d.quad); d.hidden = true; } continue; }
+      d.hidden = false;
       const asleep = b.island && b.island.sleeping;
       if (asleep && d.settled) continue;
       d.settled = asleep;

@@ -250,7 +250,7 @@ export class UI {
     } else if (WEAPONS[what]) {
       const [x, z] = g.spotAhead(1.5, 0.1);
       this.weapons.spawn(what, x, groundHeight(x, z) + 1.1, z);
-      this.toast(WEAPONS[what].name + ' - walk up to it and pick it up');
+      this.toast(WEAPONS[what].name + (WEAPONS[what].wear ? ' - walk up to it and put it on' : ' - walk up to it and pick it up'));
     }
     this._count();
   }
@@ -266,7 +266,8 @@ export class UI {
     const g = this.g;
     const alive = g.humans.filter((h) => !h.isPlayer && h.h.alive).length, dead = g.humans.filter((h) => !h.isPlayer && !h.h.alive).length;
     const crates = g.props.filter((p) => p.kind === 'crate').length;
-    $('#sandbox-count').textContent = `${alive} alive, ${dead} dead, ${crates} crate${crates === 1 ? '' : 's'}, ${this.weapons.items.length} weapon${this.weapons.items.length === 1 ? '' : 's'}.`;
+    const arms = this.weapons.items.filter((i) => !i.def.wear).length;
+    $('#sandbox-count').textContent = `${alive} alive, ${dead} dead, ${crates} crate${crates === 1 ? '' : 's'}, ${arms} weapon${arms === 1 ? '' : 's'}.`;
   }
 
   /* ------------------------------ small things ---------------------------- */
@@ -321,7 +322,7 @@ export class UI {
   nearChanged() {
     const n = this.weapons.near;
     $('#btn-use').hidden = !n;
-    if (n) $('#use-label').textContent = 'PICK UP';
+    if (n) $('#use-label').textContent = n.def.wear ? 'PUT ON' : n.holder ? 'TAKE' : 'PICK UP';
   }
 
   update(dt) {
