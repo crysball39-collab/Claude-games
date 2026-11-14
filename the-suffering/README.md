@@ -32,6 +32,7 @@ npm start            # python3 -m http.server 8080, from the repository root
 | Attack | the big red button | left click or F |
 | Choose the move | slide off the button left, up, right or down | right click or Q for the heavy one |
 | Pick up / drop / reload | PICK UP, DROP, RELOAD | E, G, R |
+| Holster or draw | HOLSTER / DRAW | H |
 | Weapon slots | tap a slot | 1 to 5 |
 | Sandbox menu | SPAWN | Tab |
 | Doctor mode | DOCTOR, then tap a person | X, then click a person |
@@ -52,13 +53,27 @@ button repeatedly for the combo, or slide off it to pick one.
 
 The M1911 holds seven rounds and fires as fast as you tap. The AK-47 holds thirty, fires
 automatically and goes through people. Bullets leave holes in walls, crates, cars and
-bodies, and exit wounds on the far side.
+bodies, and exit wounds on the far side. Reloading is done by hand and takes as long as
+it looks: the gun comes in to the chest, the empty magazine drops to the ground, the left
+hand fetches a full one from the belt and seats it, and the action is racked. You cannot
+fire until it is finished.
 
-**The sandbox menu** spawns humans (one or five), crates, and the four weapons, and can
-clear away blood, bodies or objects, or patch you up.
+**Carrying.** Whatever you are not holding rides on you where it would: the pistol in a
+holster on the right hip, the knife in a sheath on the left, the machete and the rifle
+across your back. HOLSTER puts away what is in your hand and DRAW brings it back, with the
+reach that takes. People are frightened of a weapon in the hand, not one put away.
+
+**The light vest.** Black, over the chest and the belly. It stops a pistol round and a
+slash (you get the bruise, and perhaps a cracked rib, instead), takes the edge off a
+stab, and only slows a rifle round. It covers nothing else.
+
+**The sandbox menu** spawns humans (one or five), police officers, crates, the light
+vest and the four weapons, and can clear away blood, bodies or objects, or patch you up.
 
 **Bodies.** Every person is seventeen rigid parts on sixteen limited joints, driven by
-muscles with real torque limits. A light blow is a flinch. A harder one is a stumble:
+muscles with real torque limits. Each hand has four fingers and a thumb, in two segments
+that turn at the knuckle and the middle joint: closed round a grip, a trigger finger
+apart from the rest, balled into a fist, open and spread when the hands go up. A light blow is a flinch. A harder one is a stumble:
 the body is handed to the physics and the legs try to get back under it. Harder still
 and it is a ragdoll, which gets up again if it can, crawls if it cannot walk, and lies
 still if it cannot do either. People crouch, jump, duck at gunshots, vault crates and
@@ -71,7 +86,11 @@ kill them: blood loss, a destroyed brain, a stopped heart, a blocked airway.
 Blades leave cuts, deep slashes and stab wounds. Limbs can be cut off, heads too, and a
 limb that takes enough damage comes apart altogether. Arteries pump blood out in
 streams that break up into separate drops as they fall, mark whatever they land on and
-gather into pools.
+gather into pools. A drop that lands hard throws smaller ones on ahead of it; a bullet
+leaves a fine spray out of the far side; a wet blade flings a line of drops off its tip
+as it swings. Blood lands on, and stays on, whatever is in its way: the ground, walls,
+crates, other people, the blade that did it and the hand that held it, a pistol on
+somebody's hip. Pools that grow into each other become one pool.
 
 **Doctor mode.** Tap anyone, or examine yourself.
 
@@ -112,6 +131,18 @@ to them. Connect them to Claude and they can say anything at all:
   servers; if one is set, the game notices and uses Claude's own connection instead.
 - With neither, everyone keeps to their own lines. Reflex cries are always scripted, so
   nobody waits on a network to scream.
+
+**The police.** The station is across the road from the far side of the park: a
+forecourt with two patrol cars, a lobby you can walk into with a front desk and a cell,
+and four officers, one at the desk, two at the door and one walking the beat. Each wears
+a vest and carries an M1911 in a holster. They keep count of what they have seen each
+person do, and tell each other by radio. A weapon in your hand near them gets pistols
+drawn and orders shouted. Put it away and stand still, and they hold you there a while
+and then stand down. Somebody with empty hands who keeps hitting people is put on the
+ground by hand. Use a weapon on a person, or keep a gun pointed at an officer, and they
+shoot; they stop when you are down, do not fire with a bystander in the way, and reload
+before they holster. A post left empty is filled again in time. An officer who is past
+caring can be relieved of their pistol.
 
 ## Working on it
 

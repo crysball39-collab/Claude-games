@@ -22,6 +22,7 @@ await run(() => {
       for (const o of g.props.slice()) g.removeProp(o);
       const p = g.player;
       g.weapons.dropFrom(p, true);
+      if (p.vest) p.removeVest();
       for (const it of g.weapons.items.slice()) g.weapons.remove(it);
       p.h.heal(); p.reset(0, -18, Math.PI / 2);
       g.camYaw = Math.PI / 2; g.camPitch = -0.08; g.gore.clean();
@@ -390,6 +391,229 @@ head('People');
   check('a person can crouch', r.crouch > 0.3, `head drops ${r.crouch.toFixed(2)} m`);
   check('a person can jump', r.jump > 0.5, `${r.jump.toFixed(2)} m`);
   check('they duck or jump on their own when a shot goes off', r.ducked + r.jumped > 0, `${r.ducked} ducked, ${r.jumped} jumped out of ${r.n} (${r.modes})`);
+}
+
+/* --------------------------------- hands -------------------------------- */
+head('Fingers');
+{
+  const r = await run(() => {
+    const g = __game, out = {};
+    V.stage();
+    let pose = 'rest';
+    const h = g.spawnHuman(3, -18, 0);
+    h.brain = { update() { h.pose.handsUp = pose === 'up' ? 1 : 0; if (pose === 'fist') h.guardT = 1; }, pause: 0, mode: 'wander' };
+    // how far the tip of the index finger is from the middle of the palm, and which way the two segments point
+    const tip = () => { const m = g.boxes.m, a = h.fingers[1][0] * 16, b = h.fingers[1][1] * 16, hand = h.bodies[10];
+      return { reach: Math.hypot(m[b + 12] - hand.px, m[b + 13] - hand.py, m[b + 14] - hand.pz), bend: Math.acos(Math.max(-1, Math.min(1, (m[a + 4] * m[b + 4] + m[a + 5] * m[b + 5] + m[a + 6] * m[b + 6]) / (Math.hypot(m[a + 4], m[a + 5], m[a + 6]) * Math.hypot(m[b + 4], m[b + 5], m[b + 6]))))) }; };
+    g.advance(1); out.rest = { curl: h.curl[1], ...tip() };
+    pose = 'fist'; g.advance(1); out.fist = { curl: h.curl[1], ...tip() };
+    pose = 'up'; g.advance(1.2); out.up = { curl: h.curl[1], splay: h.splay[1], ...tip() };
+    out.boxes = h.fingers[0].length + h.fingers[1].length;
+    out.drawn = h.fingers[0].concat(h.fingers[1]).every((i) => g.boxes.m[i * 16 + 15] === 1);
+    V.give('m1911'); g.advance(0.6);
+    out.grip = { curl: g.player.curl[1], trigger: g.player.trigger };
+    return out;
+  });
+  check('each hand has four fingers and a thumb, in two parts each', r.boxes === 20 && r.drawn, `${r.boxes} segments drawn`);
+  check('the segments turn at their joints', r.fist.bend > 1.0 && r.up.bend < 0.3, `second joint bent ${r.fist.bend.toFixed(2)} rad in a fist, ${r.up.bend.toFixed(2)} rad with the hand open`);
+  check('fingers close into a fist and open for raised hands', r.fist.curl > 0.9 && r.up.curl < 0.15 && r.fist.reach < r.up.reach - 0.02, `fingertip ${(r.up.reach * 100).toFixed(1)} cm from the palm open, ${(r.fist.reach * 100).toFixed(1)} cm closed; at rest ${(r.rest.reach * 100).toFixed(1)} cm`);
+  check('a hand closes round a grip, trigger finger apart', r.grip.curl > 0.9 && r.grip.trigger < 0.7, `grip ${r.grip.curl.toFixed(2)}, trigger finger ${r.grip.trigger.toFixed(2)}`);
+}
+
+/* -------------------------------- holsters ------------------------------ */
+head('Holstering');
+{
+  await run(() => { const g = __game; V.stage(); g.weapons.give(g.player, 'm1911'); g.weapons.give(g.player, 'ak47'); g.advance(0.5); g.paused = false; });
+  const a = await run(() => { const g = __game, p = g.player, w = g.weapons, it = w.inventory[0], ak = w.inventory[1], hip = p.bodies[0], chest = p.bodies[2], v = [0, 0, 0];
+    chest.toLocal(ak.px, ak.py, ak.pz, v);
+    return { hand: p.weapon ? p.weapon.type : null, shown: it.shown && ak.shown, hipDist: Math.hypot(it.px - hip.px, it.py - hip.py, it.pz - hip.pz), behind: v[2], btn: !document.querySelector('#btn-holster').hidden, label: document.querySelector('#holster-label').textContent }; });
+  check('a pistol not in the hand rides on the hip', a.hand === null && a.shown && a.hipDist < 0.3, `${(a.hipDist * 100).toFixed(0)} cm from the middle of the hips`);
+  check('a rifle not in the hand is slung across the back', a.behind < -0.1, `${(-a.behind * 100).toFixed(0)} cm behind the chest`);
+  check('the HOLSTER button offers to draw', a.btn && a.label === 'DRAW', a.label);
+  await t.page.keyboard.press('KeyH');
+  await run(() => { __game.paused = true; });
+  const b = await run(() => { const g = __game, p = g.player; g.paused = false; g.advance(0.15); const mid = { swap: !!p.swap, reach: p.anim.reachW, hand: p.weapon ? p.weapon.type : null }; g.advance(0.9); g.paused = true;
+    return { mid, hand: p.weapon ? p.weapon.type : null, label: document.querySelector('#holster-label').textContent, hold: p.hold }; });
+  check('H reaches for it', b.mid.swap && b.mid.reach > 0.2 && b.mid.hand === null, `arm ${(b.mid.reach * 100).toFixed(0)}% of the way to the holster, hand still empty`);
+  check('and it comes out into the hand', b.hand !== null && b.label === 'HOLSTER', `${b.hand} in hand, held as ${b.hold}`);
+  const c = await run(() => { const g = __game, p = g.player, w = g.weapons; g.paused = false; const fired0 = w.equipped.ammo; w.holster(); g.advance(0.1); const blocked = !w.fire(); g.advance(1); const out = { hand: p.weapon ? p.weapon.type : null, blocked, ammo: w.inventory.map((i) => i.ammo), fired0 }; g.paused = true; return out; });
+  check('HOLSTER puts it away again, and nothing fires on the way', c.hand === null && c.blocked);
+}
+
+/* --------------------------------- reload ------------------------------- */
+head('Reloading');
+for (const gun of ['m1911', 'ak47']) {
+  const r = await run((gun) => {
+    const g = __game, p = g.player, w = g.weapons, out = { stages: [] };
+    V.stage(); V.give(gun); g.camYaw = 0; g.camPitch = 0.3; g.advance(0.3);
+    const it = w.equipped;
+    for (let i = 0; i < 3; i++) { w.fire(); g.advance(gun === 'ak47' ? 0.12 : 0.3); }
+    out.before = it.ammo;
+    const handL = p.bodies[7], hip = p.bodies[0];
+    const rest = Math.hypot(handL.px - hip.px, handL.py - hip.py, handL.pz - hip.pz);
+    w.reload(); out.started = !!p.reload;
+    let sawOut = false, sawFull = false, sawSlide = false, minBelt = 9, canFire = false, mags0 = w.casings.filter((c) => c.size).length, tilt = 0, hidden = false;
+    const dur = it.def.reload;
+    for (let t = 0; t < dur + 0.4; t += 1 / 30) {
+      g.advance(1 / 30);
+      if (it.magOut) { sawOut = true; hidden = hidden || it.def.boxes.some((b, i) => b[9] && g.boxes.m[it.inst[i] * 16 + 15] === 0); }
+      if (p.handFull > 0.5) sawFull = true;
+      if (it.slide > 0.3) sawSlide = true;
+      if (p.reload) { minBelt = Math.min(minBelt, Math.hypot(handL.px - hip.px, handL.py - hip.py, handL.pz - hip.pz)); tilt = Math.max(tilt, p.anim.reloadW); if (w.fire()) canFire = true; }
+    }
+    out.after = it.ammo; out.mag = it.def.mag; out.done = !p.reload;
+    Object.assign(out, { sawOut, sawFull, sawSlide, minBelt, rest, canFire, tilt, hidden, mags: w.casings.filter((c) => c.size).length - mags0 });
+    return out;
+  }, gun);
+  const name = gun === 'm1911' ? 'M1911' : 'AK-47';
+  check(`${name}: the empty magazine comes out and falls`, r.started && r.sawOut && r.hidden && r.mags === 1, `${r.mags} magazine on the ground`);
+  check(`${name}: the left hand goes to the belt and comes back with a full one`, r.sawFull && r.minBelt < 0.34, `hand within ${(r.minBelt * 100).toFixed(0)} cm of the hip`);
+  check(`${name}: the action is worked and the gun is full`, r.sawSlide && r.done && r.after === r.mag && r.before < r.mag, `${r.before} -> ${r.after} rounds`);
+  check(`${name}: it cannot be fired half way through`, !r.canFire && r.tilt > 0.9);
+}
+
+/* ---------------------------------- vest -------------------------------- */
+head('Light vest');
+{
+  await run(() => { V.stage(); __game.paused = false; });
+  await t.page.click('#btn-menu');
+  await t.page.click('[data-spawn="vest"]');
+  await t.page.click('[data-close="sandbox"]');
+  const r = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, out = {};
+    g.advance(1.5);
+    const it = w.items.find((i) => i.type === 'vest');
+    out.spawned = !!it;
+    if (it) { p.reset(it.body.px - 0.5, it.body.pz, Math.PI / 2); g.advance(0.4); out.label = document.querySelector('#use-label').textContent; out.put = w.pickUp(); g.advance(0.3); }
+    out.worn = !!p.vest;
+    out.parts = p.vest ? [...new Set(p.vest.boxes.map((b) => b.part))].sort().join(',') : '';
+    out.black = p.vest ? p.vest.boxes.slice(0, 2).every((b) => g.boxes.c[b.idx * 3] < 0.03 && g.boxes.c[b.idx * 3 + 1] < 0.03 && g.boxes.c[b.idx * 3 + 2] < 0.03) : false;
+    out.covers = p.vest ? p.vest.boxes[0].z[0] > p.sizes[2][0] && p.vest.boxes[1].z[0] > p.sizes[1][0] : false;
+    out.chip = [...document.querySelectorAll('#weapon-bar .slot')].some((b) => b.textContent === 'VEST');
+    const mk = (z, vest) => { const h = V.still(g.spawnHuman(p.x + 4, p.z + z, -Math.PI / 2)); if (vest) h.wearVest(); return h; };
+    const A = mk(-1, true), B = mk(1, false);
+    g.advance(0.3);
+    const shoot = (h, part, weapon = 'm1911') => { const c = h.bodies[part]; return h.hit({ part, type: 'bullet', power: weapon === 'ak47' ? 1.4 : 1, point: [c.px - c.hx, c.py, c.pz], dir: [1, 0, 0], normal: [-1, 0, 0], impulse: 6, attacker: p, weapon, through: 0.2, hp: 32 }); };
+    const a1 = shoot(A, 2), a2 = shoot(A, 1), b1 = shoot(B, 2);
+    g.advance(0.5);
+    out.vested = { wounds: A.h.wounds.map((x) => x.type).join(','), bleed: A.h.bleedOut, stopped: a1.stopped && a2.stopped };
+    out.bare = { wounds: B.h.wounds.map((x) => x.type).join(','), bleed: B.h.bleedOut };
+    const a3 = shoot(A, 4);
+    out.head = A.h.wounds.some((x) => x.type === 'gunshot');
+    const C = mk(3, true); g.advance(0.2);
+    out.rifle = shoot(C, 2, 'ak47').stopped === false && C.h.wounds.some((x) => x.type === 'gunshot');
+    w.shedVest(); g.advance(0.8);
+    out.off = !p.vest && w.items.some((i) => i.type === 'vest' && i.body);
+    return out;
+  });
+  check('it is in the spawn menu and can be put on', r.spawned && r.put && r.worn && r.label === 'PUT ON', r.label);
+  check('black, over the chest and the belly', r.black && r.parts === '1,2' && r.covers, 'covers parts ' + r.parts + ' (belly, chest)');
+  check('it stops a pistol round: a bruise, no bleeding', r.vested.stopped && !/gunshot/.test(r.vested.wounds) && r.vested.bleed === 0, `vested: ${r.vested.wounds}; the same shot without one: ${r.bare.wounds}, bleeding ${r.bare.bleed.toFixed(1)} ml/s`);
+  check('it does not protect what it does not cover, and a rifle round goes through', r.head && r.rifle);
+  check('it comes off again', r.chip && r.off);
+}
+
+/* ------------------------------ blood, again ---------------------------- */
+head('Splatter and puddles');
+{
+  const r = await run(() => {
+    const g = __game, p = g.player, G = g.gore, w = g.weapons, out = {};
+    V.stage();
+    const gy = g.world.ground(4, -18);
+    const drip = (x, z, n) => { for (let i = 0; i < n; i++) G._spawn(x + (Math.random() - 0.5) * 0.05, gy + 0.4, z + (Math.random() - 0.5) * 0.05, 0, 0, 0, 6); };
+    const overlaps = () => { const b = G.pools; let n = 0; for (let i = 0; i < b.length; i++) for (let j = i + 1; j < b.length; j++) if (Math.abs(b[i].y - b[j].y) < 0.06 && Math.hypot(b[i].tx - b[j].tx, b[i].tz - b[j].tz) < (b[i].tr + b[j].tr) * 0.84) n++; return n; };
+    // two wounds dripping half a metre apart: two puddles to begin with
+    for (let k = 0; k < 6; k++) { drip(4, -18.3, 2); drip(4, -17.7, 2); g.advance(0.1); }
+    g.advance(0.8);
+    out.first = { pools: G.pools.filter((q) => q.big || q.vol > 20).length, merged: G.stats.merged };
+    for (let k = 0; k < 50; k++) { drip(4, -18.3, 3); drip(4, -17.7, 3); g.advance(0.1); }
+    g.advance(1.5);
+    out.then = { pools: G.pools.filter((q) => q.big).length, merged: G.stats.merged, overlaps: overlaps(), r: Math.max(...G.pools.map((q) => q.r)), vol: Math.round(G.pools.reduce((a, q) => a + q.vol, 0)) };
+    // a blade, a victim, and somebody standing where the blood goes
+    G.clean(); w.give(p, 'machete', true); g.advance(0.3);
+    const v = V.still(T.dummy(1.1)); g.advance(0.3);
+    const s0 = { ...G.stats }, blade = p.weapon;
+    for (let i = 0; i < 2; i++) { w.attack(i); g.advance(1.0); }
+    g.advance(1.5);
+    out.blade = { marks: G.bDecals.filter((d) => d.body.item === blade).length, bloody: blade.bloody };
+    out.attacker = G.bDecals.filter((d) => d.human === p).length;
+    out.satellites = G.stats.satellites - s0.satellites;
+    const by = V.still(g.spawnHuman(p.x + 3, p.z + 3, 0)); g.advance(0.3);
+    const c = by.bodies[2], on0 = G.stats.onPeople;
+    G.burst(c.px - 1.0, c.py + 0.1, c.pz, 1, 0.15, 0, 40, 6, 0.25); g.advance(1.2);
+    out.bystander = { marks: G.bDecals.filter((d) => d.human === by).length, hits: G.stats.onPeople - on0, felt: by.mind.memory.some((m) => /blood splashed/.test(m.text)) };
+    // a pistol on somebody's hip is in the way of it too
+    const gun = w.give(by, 'm1911'); g.advance(0.2);
+    let onGun = 0;
+    for (let k = 0; k < 6 && !onGun; k++) { G.burst(gun.px - 0.5, gun.py + 0.12, gun.pz, 1, -0.1, 0, 50, 4, 0.2); g.advance(0.5); onGun = G.bDecals.filter((d) => d.body.item === gun).length; }
+    out.holstered = onGun;
+    return out;
+  });
+  check('two puddles that grow into each other become one', r.first.pools >= 2 && r.then.pools === 1 && r.then.merged > r.first.merged, `${r.first.pools} puddles, then 1 of ${r.then.vol} ml and ${r.then.r.toFixed(2)} m across after ${r.then.merged} mergers`);
+  check('no puddle lies on top of another', r.then.overlaps === 0);
+  check('a blade that has cut comes away bloody', r.blade.marks >= 2 && r.blade.bloody > 0.3, `${r.blade.marks} marks on the machete`);
+  check('and so does whoever swung it', r.attacker > 0, `${r.attacker} marks on the attacker`);
+  check('a drop that lands hard throws smaller ones', r.satellites > 0, `${r.satellites} satellite drops`);
+  check('spray lands on other people, and they notice', r.bystander.marks > 0 && r.bystander.felt, `${r.bystander.marks} marks on a bystander`);
+  check('and on a weapon somebody is carrying', r.holstered > 0, `${r.holstered} marks on a holstered pistol`);
+}
+
+/* --------------------------------- police ------------------------------- */
+head('Police');
+{
+  const r = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, S = g.city.police, out = {};
+    V.stage();
+    out.station = !!S && g.city.blocks.some((b) => b.kind === 'police');
+    out.staffed = g.staffStation(true);
+    g.advance(2);
+    const cops = () => g.humans.filter((h) => h.officer);
+    out.kit = cops().map((h) => ({ vest: !!(h.vest && h.vest.police), gun: (h.kit || []).map((i) => i.type).join(','), holstered: !h.weapon, uniform: h.look.top === 0x1b2a4a, post: h.brain.post.kind, at: Math.hypot(h.x - h.brain.post.x, h.z - h.brain.post.z) }));
+    out.inside = cops().some((h) => h.x > S.x0 && h.x < S.x1 && h.z > S.z0 && h.z < S.z1);
+    // can you walk in?
+    p.reset(S.door.x, S.door.z - 2, 0); g.camYaw = 0; g.advance(0.3); __ts.input.move.y = 1; g.advance(1.5); __ts.input.move.y = 0; g.advance(0.2);
+    out.walkedIn = p.z > S.z0 + 0.5 && p.z < S.z1;
+    return out;
+  });
+  check('there is a police station', r.station && r.walkedIn, 'with a lobby you can walk into');
+  check('officers are on duty at it', r.staffed === 4 && r.kit.length === 4 && r.inside && r.kit.filter((k) => k.post !== 'beat').every((k) => k.at < 1), `${r.kit.length} officers: ${r.kit.map((k) => k.post).join(', ')}`);
+  check('each has a vest and a holstered M1911', r.kit.every((k) => k.vest && k.gun === 'm1911' && k.holstered && k.uniform));
+
+  await run(() => { V.stage(); __game.paused = false; });
+  await t.page.click('#btn-menu');
+  await t.page.click('[data-spawn="officer"]');
+  await t.page.click('[data-close="sandbox"]');
+  const s = await run(() => { const g = __game; g.advance(0.5); const o = g.humans.filter((h) => h.officer); return { n: o.length, vest: o[0] && !!o[0].vest, gun: o[0] && (o[0].kit || []).map((i) => i.type).join(',') }; });
+  check('an officer can be spawned from the menu', s.n === 1 && s.vest && s.gun === 'm1911');
+
+  const e = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, out = {};
+    V.stage(); g.staffStation(true); g.advance(1.5);
+    const cops = () => g.humans.filter((h) => h.officer);
+    const said = []; const orig = g.speech.say.bind(g.speech); g.speech.say = (h, text, o) => { if (h.officer) said.push(text); return orig(h, text, o); };
+    let fires = 0; const nf = w.npcFire.bind(w); w.npcFire = (h, a, sk) => { const ok = nf(h, a, sk); if (ok) fires++; return ok; };
+    // a gun out in front of the station, pointed at nobody
+    p.reset(0, 22, Math.PI); g.camYaw = Math.PI; g.camPitch = -0.3; w.give(p, 'm1911', true); g.advance(5);
+    out.challenge = { drawn: cops().filter((h) => h.weapon).length, aiming: cops().filter((h) => h.aimYaw != null).length, fires, said: said.slice(0, 2).join(' / ') };
+    // put away: they hold, then stand down, and their pistols go back
+    w.holster(); g.advance(30);
+    out.standDown = { modes: cops().map((h) => h.brain.mode).join(','), drawn: cops().filter((h) => h.weapon).length, fires, alive: p.h.alive };
+    // now shoot somebody
+    said.length = 0;
+    p.h.heal(); p.reset(6, 21.5, -Math.PI / 2); g.camYaw = -Math.PI / 2; g.camPitch = 0; g.advance(0.3);
+    const v = V.still(g.spawnHuman(2.5, 21.5, Math.PI / 2)); w.holster(); g.advance(0.9);
+    V.aimAt(v.bodies[2]); g.advance(0.1); w.fire(); g.advance(0.3); w.fire();
+    let reloading = false, down = false;
+    for (let i = 0; i < 260; i++) { g.advance(0.1); if (cops().some((h) => h.reload)) reloading = true; if (p.state === 2 || !p.h.alive) down = true; if (down && i > 150 && cops().every((h) => h.brain.mode === 'post' && !h.weapon)) break; }
+    out.fight = { fires, hit: p.h.wounds.length, down, reloading, said: said.slice(0, 3).join(' / '), ammo: cops().map((h) => h.kit && h.kit[0] ? h.kit[0].ammo : -1).join(','), modes: cops().map((h) => h.brain.mode + (h.weapon ? '+gun' : '')).join(','), mags: w.casings.filter((c) => c.size).length };
+    g.speech.say = orig; w.npcFire = nf;
+    return out;
+  });
+  check('a weapon out in front of them: pistols drawn, orders shouted, nobody shot', e.challenge.drawn >= 3 && e.challenge.aiming >= 3 && e.challenge.fires === 0, e.challenge.said);
+  check('put it away and they stand down and holster', e.standDown.drawn === 0 && e.standDown.fires === 0 && e.standDown.alive && /^post(,post)*$/.test(e.standDown.modes));
+  check('shoot somebody and they shoot back', e.fight.fires > 0 && e.fight.hit > 0, `${e.fight.fires} rounds fired; "${e.fight.said}"`);
+  check('they stop when you are down', e.fight.down);
+  check('officers reload, with the same animation, before they holster', e.fight.reloading && e.fight.mags > 0 && e.fight.ammo.split(',').every((a) => a === '7' || a === '-1'), `magazines on the ground: ${e.fight.mags}; pistols now hold ${e.fight.ammo}`);
 }
 
 /* --------------------------------- report ------------------------------- */

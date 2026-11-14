@@ -200,6 +200,8 @@ export class Weapons {
   remove(item) {
     this._offGround(item);
     if (item.skin) for (const f of item.skin) this.game.gore.clearBody(f);
+    const who = item.holder;
+    if (who && !who.isPlayer) { const k = who.kit ? who.kit.indexOf(item) : -1; if (k >= 0) who.kit.splice(k, 1); if (who.weapon === item) who.weapon = null; if (who.reload && who.reload.item === item) this._cancelReload(who); if (who.swap && who.swap.to === item) who.swap = null; }
     for (const i of item.inst) this.game.boxes.release(i);
     const k = this.items.indexOf(item);
     if (k >= 0) this.items.splice(k, 1);
