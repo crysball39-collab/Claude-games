@@ -125,7 +125,7 @@ export class Animator {
     this.t = Math.random() * 10;
     this.phase = Math.random();
     this.run = 0; this.moving = 0; this.crouch = 0; this.air = 0; this.land = 0;
-    this.w = { guard: 0, blade: 0, pistol: 0, rifle: 0, cower: 0, handsUp: 0, hurt: 0, talk: 0, stagger: 0, writhe: 0, crawl: 0, brace: 0, phone: 0, kneel: 0 };
+    this.w = { guard: 0, blade: 0, pistol: 0, rifle: 0, cower: 0, handsUp: 0, hurt: 0, talk: 0, stagger: 0, writhe: 0, crawl: 0, brace: 0, phone: 0, kneel: 0, cuffed: 0, cuffing: 0 };
     this.action = null;
     this.flinch = 0; this.flX = 0; this.flZ = 0;
     this.aim = 0; this.lookYaw = 0; this.lookPitch = 0;
@@ -379,6 +379,22 @@ export class Animator {
       // eyes down on the work, and the twist of a shooting stance let go
       ch[CH.headBend] += 0.3 * a; ch[CH.neckBend] += 0.12 * a;
       ch[CH.spineTwist] *= 1 - 0.7 * a; ch[CH.neckTwist] *= 1 - 0.7 * a;
+    }
+
+    /* ---- putting handcuffs on somebody: both hands out and down to their wrists ---- */
+    if (W.cuffing > 0.01) {
+      const a = W.cuffing, wk = Math.sin(t * 13) * 0.07;
+      this._to(CH.shR, 0.61 + wk, a); this._to(CH.shROut, 0.13, a); this._to(CH.shRIn, 0.44, a); this._to(CH.elR, 0.17, a);
+      this._to(CH.shL, 0.62 - wk, a); this._to(CH.shLOut, 0.09, a); this._to(CH.shLIn, 0.4, a); this._to(CH.elL, 0.16, a);
+      ch[CH.spineBend] += 0.22 * a; ch[CH.headBend] += 0.25 * a;
+    }
+    /* ---- in handcuffs: wrists together at the small of the back, whatever else the arms had in mind ---- */
+    if (W.cuffed > 0.01) {
+      const a = W.cuffed;
+      this._to(CH.shL, -0.57, a); this._to(CH.shLOut, -0.2, a); this._to(CH.shLIn, -0.19, a); this._to(CH.elL, 0.45, a);
+      this._to(CH.shR, -0.56, a); this._to(CH.shROut, -0.2, a); this._to(CH.shRIn, -0.19, a); this._to(CH.elR, 0.43, a);
+      this._to(CH.wrR, 0, a); this._to(CH.wrRSide, 0, a);
+      ch[CH.spineBend] += 0.06 * a;
     }
 
     /* ---- the head goes where the eyes want ---- */

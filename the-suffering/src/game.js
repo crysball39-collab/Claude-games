@@ -146,7 +146,7 @@ export class Game {
   spawnOfficer(x, z, yaw = 0, post = null) {
     const h = this.spawnHuman(x, z, yaw, officerLook());
     h.wearVest(true);
-    this.weapons?.give(h, 'm1911');
+    for (const kit of ['m1911', 'taser', 'cuffs']) this.weapons?.give(h, kit);
     if (h.brain) h.brain.post = post || { x, z, yaw, kind: 'spot' };
     return h;
   }
@@ -456,6 +456,7 @@ export class Game {
   respawn(home = false) {
     const old = this.player, sp = this.city.spawn;
     const x = home ? sp.x : clamp(old.x, -LIMIT + 2, LIMIT - 2), z = home ? sp.z : clamp(old.z, -LIMIT + 2, LIMIT - 2);
+    if (old.cuffed) this.weapons?.uncuff(old, null);
     this.weapons?.dropFrom(old, true);
     const i = this.humans.indexOf(old);
     old.remove();

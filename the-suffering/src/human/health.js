@@ -465,7 +465,7 @@ export class Health {
     this.events.push('death');
   }
 
-  kill(cause) { this._die(cause); }
+  kill(cause) { if (!this.god) this._die(cause); }
 
   /** Puts everything back, limbs excepted: those are a matter for whoever owns the body. */
   heal() {
@@ -488,6 +488,12 @@ export class Health {
    */
   tick(dt, { fear = 0, anger = 0, moving = 0 } = {}) {
     this.events.length = 0;
+    if (this.god && this.alive) {
+      // whatever else is true, they are whole
+      this.blood = this.bloodMax; this.air = 98; this.pain = 0; this.shock = 0; this.nausea = 0; this.dizzy = 0; this.concussion = 0; this.bleedOut = 0;
+      this.conscious = true; this.dazed = false; this.heartStopped = false;
+      return;
+    }
     const O = this.organs, B = this.bones;
     this.exertion = lerp(this.exertion, moving, 1 - Math.exp(-dt / 6));
     this.adrenaline = clamp01(fear * 0.008 + anger * 0.005);

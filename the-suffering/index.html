@@ -28,6 +28,7 @@
       <div id="vitals" aria-label="Your condition">
         <div class="vrow"><i>YOU</i><div class="vbar"><div id="v-cond"></div></div></div>
         <div class="vrow"><i>BLOOD</i><div class="vbar blood"><div id="v-blood"></div></div></div>
+        <div id="v-cheat" hidden>INFINITE HP</div>
       </div>
     </div>
 
@@ -79,11 +80,14 @@
       <div class="grid">
         <button class="item" data-spawn="crate"><i class="ic crate"></i><b>Crate</b><small>wooden, heavy, stackable</small></button>
         <button class="item" data-spawn="vest"><i class="ic vest"></i><b>Light vest</b><small>black, covers chest and belly; stops a pistol round</small></button>
+        <button class="item" data-spawn="helmet"><i class="ic helmet"></i><b>Light helmet</b><small>covers the skull, not the face; turns a blow</small></button>
+        <button class="item" data-spawn="cuffs"><i class="ic cuffs"></i><b>Handcuffs</b><small>for someone who is down or has given up</small></button>
       </div>
       <h3>Weapons</h3>
       <div class="grid">
         <button class="item" data-spawn="m1911"><i class="ic pistol"></i><b>M1911</b><small>.45 pistol, 7 rounds</small></button>
         <button class="item" data-spawn="ak47"><i class="ic rifle"></i><b>AK-47</b><small>automatic rifle, 30 rounds</small></button>
+        <button class="item" data-spawn="taser"><i class="ic taser"></i><b>Taser</b><small>two probes, seven metres, five seconds rigid</small></button>
         <button class="item" data-spawn="knife"><i class="ic knife"></i><b>Knife</b><small>slash, backhand, stab, plunge</small></button>
         <button class="item" data-spawn="machete"><i class="ic machete"></i><b>Machete</b><small>chop, backhand, cleave, sweep</small></button>
       </div>
@@ -174,6 +178,9 @@
           <label class="set"><span>Sound</span><input type="range" id="set-volume" min="0" max="100" value="70" /></label>
           <label class="set"><span>People on the street</span><input type="range" id="set-people" min="0" max="20" value="12" /></label>
           <label class="set"><span>Cars on the street</span><input type="range" id="set-cars" min="0" max="10" value="6" /></label>
+          <h3 class="sub">Cheats</h3>
+          <label class="set"><span>Infinite HP</span><input type="checkbox" id="set-cheat-hp" /></label>
+          <p class="note">Nothing can injure you: no wounds, no bleeding, nothing cut off, no dying. You can still be knocked over, tased and handcuffed.</p>
         </section>
         <section data-ppane="ai" hidden>
           <p class="note">Everyone in the city sees, hears and feels for themselves, and has plenty to say about it from their own stock of lines. Connect them to Claude and they can say anything at all.</p>

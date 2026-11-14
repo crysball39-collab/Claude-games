@@ -12,7 +12,7 @@
    The two guns trace a line from the muzzle to whatever is under the
    crosshair. A rifle round keeps going out of the far side.
    ========================================================================== */
-import { Body, Island, rayBody } from '../physics/world.js';
+import { Body, Island, Joint, BALL, rayBody } from '../physics/world.js';
 import { CLIPS, MOVES, RELOAD } from '../human/anim.js';
 import { ST } from '../human/human.js';
 import { P } from '../human/rig.js';
@@ -22,7 +22,7 @@ import { cellUV } from '../render/quads.js';
 import { DECAL, ATLAS_COLS, ATLAS_ROWS } from '../render/textures.js';
 import { clamp, clamp01, lerp, smooth, rand, chance, wrapAngle } from '../core/util.js';
 
-const STEEL = 0xc3c8cc, DARK = 0x26282c, WOOD = 0x7a4a26, GRIP = 0x3a2a1c, VEST = 0x121316, MAG = 0x15161a;
+const STEEL = 0xc3c8cc, DARK = 0x26282c, WOOD = 0x7a4a26, GRIP = 0x3a2a1c, VEST = 0x121316, MAG = 0x15161a, YELLOW = 0xd8b614;
 const tilt = (a) => [Math.sin(a / 2), 0, 0, Math.cos(a / 2)];
 
 /** Box lists: x, y, z, width, height, length, colour, [rotation], [is blade], [is the magazine]. Barrel or blade toward +Z. */
@@ -50,9 +50,25 @@ export const WEAPONS = {
       [0, -0.19, 0.135, 0.03, 0.08, 0.056, 0x202124, tilt(-0.62), 0, 1], [0, 0.045, 0.56, 0.01, 0.04, 0.012, DARK], [0, 0.05, 0.05, 0.02, 0.02, 0.03, DARK]],
     slide: 9, magSize: [0.014, 0.09, 0.028],
   },
-  /* not a weapon, but it is picked up and dropped like one */
+  /* two barbed probes on seven metres of wire: no wound to speak of, and five seconds in which no muscle answers */
+  taser: {
+    id: 'taser', name: 'Taser', label: 'TASE', hold: 'pistol', gun: true, taser: true, mag: 2, auto: false, gap: 0.7, power: 0, hp: 0, impulse: 0, spread: 0.008, kick: 0.006,
+    reload: 1.5, loud: 92, mass: 0.45, half: [0.02, 0.06, 0.1], centre: 0.03, grip: [0, -0.05, -0.02], muzzle: [0, 0.02, 0.135], sound: 'tasershot', range: 7.5, cycle: 5,
+    boxes: [[0, 0.02, 0.03, 0.036, 0.052, 0.16, YELLOW], [0, -0.056, -0.02, 0.03, 0.105, 0.046, 0x1d1e22, tilt(0.2)], [0, -0.018, 0.03, 0.008, 0.028, 0.05, 0x1d1e22],
+      [0, 0.05, 0, 0.012, 0.012, 0.03, 0x17181b], [0, 0.02, 0.118, 0.032, 0.046, 0.03, 0x17181b, tilt(0), 0, 1]],
+    slide: -1, magSize: [0.015, 0.022, 0.015],
+  },
+  /* not weapons, but picked up, carried and dropped like them */
+  cuffs: {
+    id: 'cuffs', name: 'Handcuffs', label: 'CUFF', hold: 'none', tool: true, cuffs: true, mass: 0.35, half: [0.085, 0.014, 0.04], centre: 0,
+    boxes: [[0.045, 0, 0, 0.07, 0.016, 0.075, STEEL], [-0.045, 0, 0, 0.07, 0.016, 0.075, STEEL], [0, 0, 0, 0.03, 0.008, 0.014, 0x8d9197], [0.045, 0, 0, 0.04, 0.02, 0.045, 0x26282c], [-0.045, 0, 0, 0.04, 0.02, 0.045, 0x26282c]],
+  },
+  helmet: {
+    id: 'helmet', name: 'Light helmet', wear: 'helmet', mass: 1.2, half: [0.125, 0.085, 0.14], centre: 0,
+    boxes: [[0, 0.03, 0, 0.24, 0.1, 0.26, VEST], [0, -0.04, -0.115, 0.24, 0.09, 0.03, VEST], [0.11, -0.03, -0.02, 0.022, 0.08, 0.19, VEST], [-0.11, -0.03, -0.02, 0.022, 0.08, 0.19, VEST], [0, 0, 0.14, 0.2, 0.02, 0.04, 0x1c1e22]],
+  },
   vest: {
-    id: 'vest', name: 'Light vest', wear: true, mass: 2.4, half: [0.2, 0.06, 0.25], centre: 0,
+    id: 'vest', name: 'Light vest', wear: 'vest', mass: 2.4, half: [0.2, 0.06, 0.25], centre: 0,
     boxes: [[0, 0, 0.08, 0.38, 0.1, 0.3, VEST], [0, 0, -0.15, 0.31, 0.09, 0.16, VEST], [0.13, 0.03, 0.2, 0.07, 0.05, 0.1, 0x1c1e22], [-0.13, 0.03, 0.2, 0.07, 0.05, 0.1, 0x1c1e22]],
   },
 };
@@ -79,6 +95,8 @@ export const MOUNT = {
   knife: { part: P.PELVIS, pos: [0.186, 0.03, 0.02], q: [H, 0, 0, H], reach: 'cross', dur: 0.52, word: 'sheath' },        // blade down on the left hip
   machete: { part: P.CHEST, pos: [-0.11, 0.12, -0.135], q: slant(0.5), reach: 'back', dur: 0.66, word: 'back' },          // across the back, handle at the right shoulder
   ak47: { part: P.CHEST, pos: [0.02, -0.02, -0.15], q: slantUp(0.62), reach: 'back', dur: 0.7, word: 'back' },            // slung, muzzle over the left shoulder
+  taser: { part: P.PELVIS, pos: [0.125, 0.035, 0.112], q: [H, 0, 0, H], reach: 'cross', dur: 0.5, word: 'holster' },      // cross-draw, front of the left hip
+  cuffs: { part: P.PELVIS, pos: [0.05, 0.03, -0.118], q: [H, 0, 0, H], reach: 'hip', dur: 0.4, word: 'belt' },            // on the belt at the back
 };
 
 const _a = [0, 0, 0], _b = [0, 0, 0], _c = [0, 0, 0], _hit = [0, 0, 0, 0, 0, 0, 0], _n = [0, 0, 0];
@@ -140,6 +158,7 @@ export class Weapons {
   /** Puts a weapon straight on to somebody: in its holster, or in the hand. */
   give(human, type, inHand = false) {
     if (!WEAPONS[type] || type === 'fists' || WEAPONS[type].wear) return null;
+    if (human.cuffed) return null;
     const item = this._make(type);
     item.holder = human;
     if (human.isPlayer) {
@@ -193,12 +212,17 @@ export class Weapons {
     if (human.isPlayer) return;
     for (const it of (human.kit || NONE).slice()) this.remove(it);
     human.kit = null; human.weapon = null;
+    if (human.cuffed) { const c = human.cuffed; this.game.world.removeJoint(c.joint); c.item.wornBy = null; human.cuffed = null; this.remove(c.item); }
+    human.cuffing = null;
+    for (const it of this.items) if (it.wire && it.wire.target === human) this._dropWire(it);
     if (human.reload && human.reload.magIdx >= 0) this.game.boxes.release(human.reload.magIdx);
     human.reload = null; human.swap = null;
   }
 
   remove(item) {
     this._offGround(item);
+    this._dropWire(item);
+    if (item.wornBy && item.wornBy.cuffed && item.wornBy.cuffed.item === item) { const t = item.wornBy; this.game.world.removeJoint(t.cuffed.joint); t.cuffed = null; t.pose.cuffed = 0; item.wornBy = null; }
     if (item.skin) for (const f of item.skin) this.game.gore.clearBody(f);
     const who = item.holder;
     if (who && !who.isPlayer) { const k = who.kit ? who.kit.indexOf(item) : -1; if (k >= 0) who.kit.splice(k, 1); if (who.weapon === item) who.weapon = null; if (who.reload && who.reload.item === item) this._cancelReload(who); if (who.swap && who.swap.to === item) who.swap = null; }
@@ -214,13 +238,19 @@ export class Weapons {
 
   pickUp(item = this.near) {
     const g = this.game, p = g.player;
-    if (!item || item.holder === p) return false;
+    if (!item) {
+      // nothing to pick up, but somebody in cuffs within reach: take them off
+      if (this.nearCuffed && !p.cuffed) { this.uncuff(this.nearCuffed, null); g.ui?.toast('Cuffs off'); return true; }
+      return false;
+    }
+    if (item.holder === p || p.cuffed) return false;
     if (item.def.wear) {
-      if (p.vest) { g.ui?.toast('You are already wearing one.'); return false; }
+      const helmet = item.def.wear === 'helmet';
+      if (helmet ? p.helmet : p.vest) { g.ui?.toast('You are already wearing one.'); return false; }
       this.remove(item);
-      p.wearVest();
+      if (helmet) p.wearHelmet(); else p.wearVest();
       g.audio?.play('pickup', 0.5);
-      g.ui?.toast('Light vest on');
+      g.ui?.toast(helmet ? 'Light helmet on' : 'Light vest on');
       g.ui?.weaponsChanged();
       return true;
     }
@@ -240,6 +270,7 @@ export class Weapons {
 
   select(i) {
     const p = this.game.player;
+    if (p.cuffed) return;
     if (i < -1 || i >= this.inventory.length || i === this.current) return;
     if (p.anim.busy || p.swap || p.state !== ST.ANIM) return;
     this.current = i; this.combo = 0;
@@ -256,14 +287,94 @@ export class Weapons {
     this.select(i >= 0 ? i : this.inventory.length - 1);
   }
 
-  /** Takes off the vest and leaves it at the player's feet. */
-  shedVest() {
+  /** Takes off the vest, or the helmet, and leaves it at the player's feet. */
+  shedVest() { this._shed('vest'); }
+  shedHelmet() { this._shed('helmet'); }
+  _shed(what) {
     const p = this.game.player;
-    if (!p.vest || p.state !== ST.ANIM) return;
-    p.removeVest();
-    this.spawn('vest', p.x + Math.sin(p.yaw) * 0.5, p.y + 1.0, p.z + Math.cos(p.yaw) * 0.5);
-    this.game.ui?.toast('Vest off');
+    if (p.state !== ST.ANIM || p.cuffed) return;
+    if (what === 'helmet') { if (!p.helmet) return; p.removeHelmet(); } else { if (!p.vest) return; p.removeVest(); }
+    this.spawn(what, p.x + Math.sin(p.yaw) * 0.5, p.y + (what === 'helmet' ? 1.5 : 1.0), p.z + Math.cos(p.yaw) * 0.5);
+    this.game.ui?.toast(what === 'helmet' ? 'Helmet off' : 'Vest off');
     this.game.ui?.weaponsChanged();
+  }
+
+  /* ---- handcuffs ---- */
+
+  /** Can this person be handcuffed as they are? Down, out cold, locked rigid by a taser, or given up. */
+  cuffable(t) {
+    if (!t || t.removed || t.cuffed || !t.h.alive) return false;
+    for (const i of [P.FARM_L, P.FARM_R, P.HAND_L, P.HAND_R]) if (t.gone[i] || !t.attached[i]) return false;
+    if (t.state !== ST.ANIM || t.tased > 0 || !t.h.conscious) return true;
+    return t.pose.handsUp > 0.5 || t.pose.cower > 0.5;
+  }
+
+  /**
+   * Starts putting handcuffs on somebody: it takes a moment, and they have to
+   * stay within reach for it. `force` is for someone who is standing still and
+   * letting it happen.
+   */
+  cuff(by, target, force = false) {
+    const item = this.kit(by).find((i) => i.def.cuffs);
+    if (!item || by.cuffing || by.cuffed || by.state !== ST.ANIM || by.swap || by.reload) return false;
+    if (!(force ? target && !target.cuffed && target.h.alive && !target.removed : this.cuffable(target))) return false;
+    if (Math.hypot(target.x - by.x, target.z - by.z) > 2.0) return false;
+    by.cuffing = { target, item, t: 0, dur: 1.5, low: target.state !== ST.ANIM };
+    return true;
+  }
+
+  _applyCuffs(by, t, item) {
+    const g = this.game;
+    // off the belt, or out of the hand
+    if (by.isPlayer) { const i = this.inventory.indexOf(item); if (i >= 0) this.inventory.splice(i, 1); if (this.current >= this.inventory.length || this.inventory[this.current] !== this.equipped) this.current = -1; this._sync(); }
+    else { const k = by.kit ? by.kit.indexOf(item) : -1; if (k >= 0) by.kit.splice(k, 1); if (by.weapon === item) by.weapon = null; }
+    // whatever they were carrying is taken off them
+    this.dropFrom(t, true);
+    item.holder = null; item.wornBy = t;
+    const s = t.scale, a = t.bodies[P.FARM_L], b = t.bodies[P.FARM_R];
+    const joint = new Joint(a, b, { la: [-0.03 * s, -0.12 * s, -0.02 * s], lb: [0.03 * s, -0.12 * s, -0.02 * s], type: BALL, swing: Math.PI, twist: Math.PI, damp: 0.4, name: 'cuffs' });
+    g.world.addJoint(joint);
+    t.cuffed = { item, by, joint, t: g.time };
+    t.pose.cuffed = 1;
+    g.audio?.at('cuff', t.x, t.y + 1, t.z, 0.8);
+    t.mind?.note('felt', 'cuffed', `was handcuffed by ${t.mind.name(by)}`, 0.9, { by });
+    t.mind?.stir('fear', 20); t.mind?.stir('anger', 14);
+    t.mind?.ask('cuffed', 60, null, rand(0.6, 1.6));
+    g.minds?.witness({ kind: 'cuff', actor: by, victim: t, x: t.x, y: t.y + 1, z: t.z });
+    if (by.officer && by.brain && by.brain.arrested) by.brain.arrested(t);
+    if (t.isPlayer) { g.ui?.toast('You have been handcuffed.', 3.5); g.ui?.weaponsChanged(); }
+    else if (by.isPlayer) g.ui?.toast('Handcuffed');
+  }
+
+  /** Takes the cuffs off somebody. They go to `to`, or on to the ground. */
+  uncuff(t, to = null) {
+    const c = t.cuffed, g = this.game;
+    if (!c) return;
+    g.world.removeJoint(c.joint);
+    t.cuffed = null; t.custody = null; t.pose.cuffed = 0;
+    const item = c.item;
+    item.wornBy = null;
+    g.audio?.at('cuff', t.x, t.y + 1, t.z, 0.5);
+    if (to && to.isPlayer && this.inventory.length < 4) { item.holder = to; this.inventory.push(item); }
+    else if (to && !to.isPlayer) { item.holder = to; (to.kit || (to.kit = [])).push(item); }
+    else { const h = t.bodies[P.PELVIS]; this._toGround(item, h.px, h.py + 0.1, h.pz, 0, [rand(-0.5, 0.5), 0.8, rand(-0.5, 0.5)]); }
+    if (t.isPlayer || (to && to.isPlayer)) g.ui?.weaponsChanged();
+  }
+
+  /** The player, with cuffs in hand, uses them on whoever is in front of them. */
+  useCuffs() {
+    const g = this.game, p = g.player;
+    if (p.cuffing || p.cuffed) return false;
+    let t = null, best = 1.8;
+    for (const o of g.humans) {
+      if (o === p || o.removed) continue;
+      const d = Math.hypot(o.x - p.x, o.z - p.z);
+      if (d < best && Math.abs(wrapAngle(Math.atan2(o.x - p.x, o.z - p.z) - g.camYaw)) < 1.3) { best = d; t = o; }
+    }
+    if (!t) { g.ui?.toast('Nobody within reach.'); return false; }
+    if (t.cuffed) { this.uncuff(t, p); g.ui?.toast('Cuffs off'); return true; }
+    if (!this.cuffable(t)) { g.ui?.toast('They have to be down, or to have given up.'); return false; }
+    return this.cuff(p, t);
   }
 
   /* ---- for anyone: hand to holster and back ---- */
@@ -279,8 +390,8 @@ export class Weapons {
   /** An armed person brings out their weapon: the one named, or the first gun they carry, or anything. */
   draw(h, item = null) {
     const kit = this.kit(h);
-    const it = item || kit.find((x) => x.def.gun) || kit[0];
-    if (!it || h.weapon === it || h.swap || h.state !== ST.ANIM || !h.h.armOk(-1)) return false;
+    const it = item || kit.find((x) => x.def.gun && !x.def.taser) || kit.find((x) => !x.def.tool);
+    if (!it || h.weapon === it || h.swap || h.cuffed || h.cuffing || h.state !== ST.ANIM || !h.h.armOk(-1)) return false;
     return this._swapTo(h, it);
   }
   putAway(h) {
@@ -346,8 +457,9 @@ export class Weapons {
   /** The player asks for an attack. `which` picks a move, or -1 for the next in the combo. */
   attack(which = -1) {
     const g = this.game, p = g.player, def = this.def;
-    if (p.state !== ST.ANIM || !p.h.conscious) return false;
+    if (p.state !== ST.ANIM || !p.h.conscious || p.cuffed || p.cuffing) return false;
     if (def.gun) return this.fire();
+    if (def.tool) return this.useCuffs();
     if (p.anim.busy) { if (which >= 0) this.choice = which; else this.queued = true; return false; }
     const usesRight = def.id !== 'fists';
     if (usesRight && !p.h.armOk(-1)) { g.ui?.toast('That arm is useless.'); return false; }
@@ -410,7 +522,7 @@ export class Weapons {
 
   /** Someone who is not the player throws a punch. */
   npcAttack(human, target) {
-    if (human.state !== ST.ANIM || human.anim.busy) return false;
+    if (human.state !== ST.ANIM || human.anim.busy || human.cuffed || human.cuffing) return false;
     const def = WEAPONS.fists;
     const able = def.moves.filter((n) => (CLIPS[n].limb === 'handL' ? human.h.armOk(1) : CLIPS[n].limb === 'handR' ? human.h.armOk(-1) : human.h.legOk(1) && human.h.legOk(-1)));
     if (!able.length) return false;
@@ -530,7 +642,8 @@ export class Weapons {
   /** Anyone with a gun in their hand and a spare arm changes the magazine. */
   reloadFor(h) {
     const item = h.weapon;
-    if (!item || !item.def.gun || h.reload || h.swap || h.state !== ST.ANIM || !h.h.armOk(-1)) return false;
+    if (!item || !item.def.gun || h.reload || h.swap || h.state !== ST.ANIM || !h.h.armOk(-1) || h.cuffed) return false;
+    this._dropWire(item);
     h.reload = { t: 0, dur: item.def.reload * (h.h.armOk(1) ? 1 : 1.8), item, kind: item.def.hold, out: false, grab: false, seated: false, racked: false, magIdx: -1 };
     return true;
   }
@@ -558,6 +671,17 @@ export class Weapons {
           if (h.isPlayer) { g.ui?.weaponsChanged(); g.ui?.ammoChanged(); }
         }
         if (u >= 1) h.swap = null;
+      }
+    }
+    const c = h.cuffing;
+    if (c) {
+      const t = c.target;
+      if (h.state !== ST.ANIM || !h.h.conscious || t.removed || !t.h.alive || t.cuffed || Math.hypot(t.x - h.x, t.z - h.z) > 2.6 || t.gone[P.HAND_L] || t.gone[P.HAND_R]) h.cuffing = null;
+      else {
+        // the clock only runs while they are within arm's length
+        if (Math.hypot(t.x - h.x, t.z - h.z) < 1.35) c.t += dt;
+        c.low = t.state !== ST.ANIM;
+        if (c.t >= c.dur) { h.cuffing = null; this._applyCuffs(h, t, c.item); }
       }
     }
     const r = h.reload;
@@ -616,8 +740,14 @@ export class Weapons {
    */
   npcFire(h, aim, skill = 0.6) {
     const g = this.game, e = h.weapon;
-    if (!e || !e.def.gun || e.cool > 0 || h.reload || h.swap || h.state !== ST.ANIM || !h.h.armOk(-1)) return false;
+    if (!e || !e.def.gun || e.cool > 0 || h.reload || h.swap || h.cuffed || h.cuffing || h.state !== ST.ANIM || !h.h.armOk(-1)) return false;
     const d = e.def;
+    if (d.taser) {
+      const m = e.muzzleWorld || [h.x, h.y + 1.4 * h.scale, h.z];
+      let dx = aim[0] - m[0], dy = aim[1] - m[1], dz = aim[2] - m[2];
+      const l = Math.hypot(dx, dy, dz) || 1, sp = 0.02 + (1 - skill) * 0.04;
+      return this._taser(h, e, dx / l + rand(-sp, sp), dy / l + rand(-sp, sp), dz / l + rand(-sp, sp));
+    }
     if (e.ammo <= 0) { g.audio?.at('click', h.x, h.y + 1.4, h.z, 0.5); e.cool = 0.4; this.reloadFor(h); return false; }
     e.ammo--; e.cool = d.gap * rand(2.2, 4.5);
     const m = e.muzzleWorld || [h.x, h.y + 1.4 * h.scale, h.z];
@@ -637,10 +767,111 @@ export class Weapons {
     return true;
   }
 
+  /**
+   * A taser. With its wires already in somebody, the trigger sends another
+   * cycle down them; otherwise it fires a cartridge, and if the probes find a
+   * person inside seven metres that person stops being in charge of their body.
+   */
+  _taser(h, e, dx, dy, dz) {
+    const g = this.game, d = e.def, m = e.muzzleWorld || [h.x, h.y + 1.4 * h.scale, h.z];
+    const w = e.wire;
+    if (w && w.hit && w.target && !w.target.removed && w.life > 0) {
+      w.zap = d.cycle; w.target.tase(d.cycle, h);
+      e.cool = 0.6;
+      g.audio?.at('taser', m[0], m[1], m[2], 0.9);
+      g.minds?.noise(m[0], m[1], m[2], 80, 'crackle', h);
+      return true;
+    }
+    if (e.ammo <= 0) { g.audio?.at('click', m[0], m[1], m[2], 0.6); e.cool = 0.3; this.reloadFor(h); return false; }
+    e.ammo--; e.cool = d.gap;
+    this._dropWire(e);
+    let far = d.range;
+    const wall = g.world.rayWorld(m[0], m[1], m[2], dx, dy, dz, far);
+    if (wall >= 0) far = wall;
+    const ph = g.rayPeople(m[0], m[1], m[2], dx, dy, dz, far, h, 0.04);
+    h.anim.recoil = 0.35;
+    g.audio?.at('tasershot', m[0], m[1], m[2], 0.9);
+    g.gore.puff('smoke', m[0] + dx * 0.1, m[1] + dy * 0.1, m[2] + dz * 0.1, 0.12, 0.3, 0.8, 0.8, 0.75);
+    g.minds?.noise(m[0], m[1], m[2], d.loud, 'crackle', h);
+    const fx = g.gore.fx;
+    if (ph) {
+      const t = ph.human;
+      // the probes skate off a helmet
+      const stopped = ph.part === P.HEAD && t.helmet && !t.gone[P.HEAD];
+      e.wire = { target: t, part: ph.part, lp: ph.lp.slice(), ln: ph.ln.slice(), life: stopped ? 0.5 : 24, zap: stopped ? 0 : d.cycle, hit: !stopped, q: [fx.alloc(), fx.alloc()], spark: 0, buzz: 0 };
+      if (!stopped) {
+        t.tase(d.cycle, h);
+        g.minds?.witness({ kind: 'attack', actor: h, victim: t, weapon: 'taser', part: ph.part, x: t.x, y: t.y + 1.2, z: t.z, rep: null });
+        if (h.isPlayer) g.ui?.hitMark();
+      }
+    } else {
+      // a miss: the wires lie where they fell for a moment
+      e.wire = { target: null, end: [m[0] + dx * far, m[1] + dy * far - 0.3, m[2] + dz * far], life: 0.6, zap: 0, hit: false, q: [fx.alloc(), fx.alloc()], spark: 0, buzz: 0 };
+    }
+    return true;
+  }
+  _dropWire(item) {
+    const w = item.wire;
+    if (!w) return;
+    for (const q of w.q) this.game.gore.fx.release(q);
+    item.wire = null;
+  }
+
+  /** The wires, drawn from muzzle to probes, and the current kept flowing while the cycle lasts. */
+  _wires(it, dt) {
+    const g = this.game, w = it.wire, h = it.holder, fx = g.gore.fx, cam = g.camera.position;
+    w.life -= dt; w.zap -= dt;
+    const t = w.target;
+    if (w.life <= 0 || !h || h.weapon !== it || !it.muzzleWorld || (t && (t.removed || t.gone[w.part]))) { this._dropWire(it); return; }
+    const m = it.muzzleWorld;
+    let ex, ey, ez;
+    if (t) { t.bodies[w.part].toWorld(w.lp[0], w.lp[1], w.lp[2], _a); ex = _a[0]; ey = _a[1]; ez = _a[2]; } else { ex = w.end[0]; ey = w.end[1]; ez = w.end[2]; }
+    const len = Math.hypot(ex - m[0], ey - m[1], ez - m[2]);
+    if (len > it.def.range + 2.5) { this._dropWire(it); return; }
+    const live = w.zap > 0 && t;
+    for (let k = 0; k < 2; k++) {
+      // two wires, a hand's width apart where they land
+      const o = (k ? 0.045 : -0.045), q = w.q[k];
+      if (q < 0) continue;
+      const bx = ex + o * (ez - m[2]) / (len || 1), by = ey + (k ? 0.03 : -0.03), bz = ez - o * (ex - m[0]) / (len || 1);
+      const dx = bx - m[0], dy = by - m[1], dz = bz - m[2];
+      const vx = cam.x - m[0], vy = cam.y - m[1], vz = cam.z - m[2];
+      let sx = dy * vz - dz * vy, sy = dz * vx - dx * vz, sz = dx * vy - dy * vx;
+      const sl = Math.hypot(sx, sy, sz) || 1, wd = 0.004 + 0.0012 * Math.hypot(vx, vy, vz);
+      sx = sx / sl * wd; sy = sy / sl * wd; sz = sz / sl * wd;
+      fx.corners(q, m[0] - sx, m[1] - sy, m[2] - sz, bx - sx, by - sy, bz - sz, bx + sx, by + sy, bz + sz, m[0] + sx, m[1] + sy, m[2] + sz);
+      const uvw = WHITE_UV();
+      fx.uvRect(q, uvw[0], uvw[1], uvw[2], uvw[3]);
+      const f = live ? 0.75 + 0.25 * Math.sin(g.time * 90 + k) : 0.5;
+      fx.tint(q, live ? 0.75 : 0.5, live ? 0.9 : 0.52, live ? 1 : 0.56, f);
+    }
+    if (live) {
+      t.tased = Math.max(t.tased, Math.min(w.zap, 0.3));
+      w.spark -= dt; w.buzz -= dt;
+      if (w.spark <= 0) { w.spark = 0.07; g.gore.puff('flash', ex + rand(-0.05, 0.05), ey + rand(-0.05, 0.05), ez + rand(-0.05, 0.05), rand(0.05, 0.11), 0.05, 0.7, 0.88, 1); }
+      if (w.buzz <= 0) { w.buzz = 0.42; g.audio?.at('taser', ex, ey, ez, 0.85); g.minds?.noise(ex, ey, ez, 78, 'crackle', h); }
+    }
+  }
+
   fire() {
     const g = this.game, p = g.player, e = this.equipped;
-    if (!e || !e.def.gun || this.cool > 0 || p.reload || p.swap || p.weapon !== e) return false;
+    if (!e || !e.def.gun || this.cool > 0 || p.reload || p.swap || p.weapon !== e || p.cuffed || p.cuffing) return false;
     if (!p.h.armOk(-1)) return false;
+    if (e.def.taser) {
+      if (e.cool > 0) return false;
+      const a = g.aim, m = e.muzzleWorld || [p.x, p.y + 1.4, p.z];
+      // toward whatever the crosshair is on, as with any gun
+      let far = 40;
+      const wl = g.world.rayWorld(a.ox, a.oy, a.oz, a.dx, a.dy, a.dz, far); if (wl >= 0) far = wl;
+      const hp = g.rayPeople(a.ox, a.oy, a.oz, a.dx, a.dy, a.dz, far, p, 0.03); if (hp) far = hp.t;
+      let dx = a.ox + a.dx * far - m[0], dy = a.oy + a.dy * far - m[1], dz = a.oz + a.dz * far - m[2];
+      const l = Math.hypot(dx, dy, dz) || 1;
+      if (l < 0.6) { dx = a.dx; dy = a.dy; dz = a.dz; } else { dx /= l; dy /= l; dz /= l; }
+      const ok = this._taser(p, e, dx, dy, dz);
+      this.cool = e.cool;
+      g.ui?.ammoChanged();
+      return ok;
+    }
     const d = e.def;
     if (e.ammo <= 0) { g.audio?.play('click', 0.6); this.cool = 0.25; this.reload(); return false; }
     e.ammo--; this.cool = d.gap; this.heat = Math.min(1, this.heat + (d.auto ? 0.13 : 0.3));
@@ -754,7 +985,7 @@ export class Weapons {
     this.cool = Math.max(0, this.cool - dt);
     this.heat = Math.max(0, this.heat - dt * 1.6);
     for (const it of this.items) if (it.cool > 0) it.cool -= dt;
-    for (const h of g.humans) if (h.swap || h.reload) this._hands(h, dt);
+    for (const h of g.humans) if (h.swap || h.reload || h.cuffing) this._hands(h, dt);
     // the player's hands
     if (g.doctor == null && p.state === ST.ANIM) {
       const def = this.def;
@@ -765,8 +996,8 @@ export class Weapons {
       else if ((this.queued || this.choice >= 0) && !p.anim.busy) this.attack(-1);
       if (inp.pressed.reload) this.reload();
       if (inp.pressed.use) this.pickUp();
-      if (inp.pressed.drop) this.drop();
-      if (inp.pressed.holster) this.holster();
+      if (inp.pressed.drop && !p.cuffed) this.drop();
+      if (inp.pressed.holster && !p.cuffed) this.holster();
     }
     if (!p.anim.action) p.lowAim = 0;
     // every swing in progress, the player's and everybody else's
@@ -784,7 +1015,32 @@ export class Weapons {
         if (d < nd && Math.abs(it.py - p.y) < 1.6) { nd = d; near = it; }
       }
     }
-    if (near !== this.near) { this.near = near; g.ui?.nearChanged(); }
+    // or somebody in handcuffs, who could be let out of them
+    let nc = null;
+    if (!near && p.state === ST.ANIM && !p.cuffed) { let bd = 1.5; for (const o of g.humans) { if (o === p || !o.cuffed || o.removed) continue; const d = Math.hypot(o.x - p.x, o.z - p.z); if (d < bd) { bd = d; nc = o; } } }
+    if (near !== this.near || nc !== this.nearCuffed) { this.near = near; this.nearCuffed = nc; g.ui?.nearChanged(); }
+  }
+
+  /** A bracelet on each wrist and a link of chain between them. */
+  _drawCuffs(it) {
+    const bx = this.game.boxes, t = it.wornBy, s = t.scale;
+    const L = t.bodies[P.FARM_L], R = t.bodies[P.FARM_R];
+    if (t.removed || t.gone[P.FARM_L] || t.gone[P.FARM_R]) { for (const i of it.inst) bx.hide(i); it.shown = false; return; }
+    it.shown = true;
+    const z = 0.1 * s, y = -0.118 * s;
+    bx.setOn(it.inst[0], L.px, L.py, L.pz, L.qx, L.qy, L.qz, L.qw, 0, y, 0, z, 0.028 * s, z);
+    bx.setOn(it.inst[1], R.px, R.py, R.pz, R.qx, R.qy, R.qz, R.qw, 0, y, 0, z, 0.028 * s, z);
+    bx.hide(it.inst[3]); bx.hide(it.inst[4]);
+    // the chain: a thin box from one wrist to the other, its long side turned along the line between them
+    L.toWorld(0, y, 0, _a); R.toWorld(0, y, 0, _b);
+    const dx = _b[0] - _a[0], dy = _b[1] - _a[1], dz = _b[2] - _a[2], len = Math.hypot(dx, dy, dz) || 1e-4;
+    const ux = dx / len, uy = dy / len, uz = dz / len;
+    // the turn that takes +X to (ux,uy,uz)
+    let qx = 0, qy = -uz, qz = uy, qw = 1 + ux;
+    const ql = Math.hypot(qy, qz, qw);
+    if (ql < 1e-5) { qy = 1; qz = 0; qw = 0; } else { qy /= ql; qz /= ql; qw /= ql; }
+    bx.set(it.inst[2], (_a[0] + _b[0]) / 2, (_a[1] + _b[1]) / 2, (_a[2] + _b[2]) / 2, qx, qy, qz, qw, len, 0.012 * s, 0.012 * s);
+    it.px = (_a[0] + _b[0]) / 2; it.py = (_a[1] + _b[1]) / 2; it.pz = (_a[2] + _b[2]) / 2;
   }
 
   /** After physics: put every weapon where it now is. */
@@ -793,6 +1049,8 @@ export class Weapons {
     for (const it of this.items) {
       const d = it.def, h = it.holder;
       let px = it.px, py = it.py, pz = it.pz, qx = 0, qy = 0, qz = 0, qw = 1, show = true;
+      if (it.wire) this._wires(it, dt);
+      if (it.wornBy) { this._drawCuffs(it); continue; }
       if (it.body) {
         const b = it.body;
         qx = b.qx; qy = b.qy; qz = b.qz; qw = b.qw;
@@ -825,10 +1083,10 @@ export class Weapons {
           else { qx = hand.qx; qy = hand.qy; qz = hand.qz; qw = hand.qw; }
           it.q[0] = qx; it.q[1] = qy; it.q[2] = qz; it.q[3] = qw;
         }
-      } else if (h && !h.removed && h.weapon !== it) {
+      } else if (h && !h.removed && h.weapon !== it && MOUNT[it.type]) {
         // put away: on the hip, in its sheath, across the back
         const m = MOUNT[it.type], b = h.bodies[m.part], s = h.scale;
-        if (!m || h.gone[m.part]) show = false;
+        if (h.gone[m.part]) show = false;
         else {
           b.toWorld(m.pos[0] * s, m.pos[1] * s, m.pos[2] * s, _a); px = _a[0]; py = _a[1]; pz = _a[2];
           const ax = m.q[0], ay = m.q[1], az = m.q[2], aw = m.q[3];

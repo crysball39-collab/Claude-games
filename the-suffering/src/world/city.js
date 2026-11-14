@@ -294,10 +294,14 @@ export class City {
     // a cell in the right hand corner: bars you can see and be seen through
     const cxa = bx1 - T - 3.6, cza = zb - 3.2;
     for (let k = 0; k <= 12; k++) P.box(cxa, KERB + 1.3, cza + k * 0.266, 0.05, 2.6, 0.05, 0x3d4249);
-    for (let k = 1; k <= 13; k++) P.box(cxa + k * 0.257, KERB + 1.3, cza, 0.05, 2.6, 0.05, 0x3d4249);
+    for (let k = 1; k <= 13; k++) if (k < 2 || k > 5) P.box(cxa + k * 0.257, KERB + 1.3, cza, 0.05, 2.6, 0.05, 0x3d4249);
+    // the cell door, standing open
+    for (let k = 0; k <= 4; k++) P.box(cxa + 1.542 - k * 0.09, KERB + 1.3, cza - k * 0.27, 0.05, 2.6, 0.05, 0x3d4249);
+    P.box(cxa + 1.36, KERB + 2.62, cza - 0.54, 0.08, 0.08, 1.16, 0x3d4249, 0, -0.32, 0); P.box(cxa + 1.36, KERB + 0.08, cza - 0.54, 0.08, 0.08, 1.16, 0x3d4249, 0, -0.32, 0);
     P.box(cxa + 1.8, KERB + 2.62, cza, 3.6, 0.08, 0.08, 0x3d4249); P.box(cxa, KERB + 2.62, cza + 1.6, 0.08, 0.08, 3.2, 0x3d4249);
     this._solid(cxa - 0.04, KERB, cza, cxa + 0.04, KERB + 2.6, zb, 'bars', false);
-    this._solid(cxa, KERB, cza - 0.04, bx1 - T, KERB + 2.6, cza + 0.04, 'bars', false);
+    this._solid(cxa, KERB, cza - 0.04, cxa + 0.3, KERB + 2.6, cza + 0.04, 'bars', false);
+    this._solid(cxa + 1.5, KERB, cza - 0.04, bx1 - T, KERB + 2.6, cza + 0.04, 'bars', false);
     wall(cxa + 0.5, 0, zb - 0.6, bx1 - T - 0.3, 0.45, zb - 0.1, 0x5b5f66, false);   // the bunk
     // on the left: a bench for whoever is waiting, and lockers
     wall(bx0 + T + 0.2, 0, zf + 1.4, bx0 + T + 0.7, 0.45, zf + 4.2, 0x6a4a2c, false);
@@ -320,6 +324,7 @@ export class City {
     this.police = {
       door: { x: cx, z: zf - 1.1 }, inside: { x: cx, z: zf + 1.6 },
       x0: bx0, x1: bx1, z0: zf, z1: zb, deskZ: dz, side: cx + 3.4,
+      cellDoor: { x: cxa + 0.9, z: cza }, cell: { x: cxa + 2.1, z: cza + 1.5 }, cellWait: { x: cxa - 0.6, z: cza - 1.0 },
       posts: [
         { x: cx + 0.2, z: dz + 1.25, yaw: Math.PI, kind: 'desk', indoors: true },
         { x: cx - door - 1.0, z: zf - 0.9, yaw: Math.PI, kind: 'door' },

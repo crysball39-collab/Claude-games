@@ -19,7 +19,7 @@ import { $, store, IS_TOUCH, clamp } from './core/util.js';
 
 const DEFAULTS = {
   quality: IS_TOUCH ? 'medium' : 'high', shadows: !IS_TOUCH, gore: true, sens: 110, fov: 64, invert: false, volumePct: 70,
-  people: IS_TOUCH ? 10 : 13, cars: 6, aiKey: '', aiModel: 'claude-opus-5-5', aiLive: true, aiPace: 4, tts: false,
+  people: IS_TOUCH ? 10 : 13, cars: 6, aiKey: '', aiModel: 'claude-opus-5-5', aiLive: true, aiPace: 4, tts: false, cheatHp: false,
 };
 const settings = Object.assign({}, DEFAULTS, store.get('settings', {}));
 const save = () => store.set('settings', settings);
@@ -59,6 +59,8 @@ async function boot() {
     sound.setVolume(settings.volume);
     game.gore.enabled = settings.gore !== false;
     game.traffic.setCount(settings.cars);
+    game.player.h.god = !!settings.cheatHp;
+    game.ui?.cheatChanged();
     game.resize();
   };
   const ui = new UI(game, { input, weapons: game.weapons, speech: game.speech, voices, doctor, sound, settings, save, apply });

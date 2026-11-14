@@ -61,6 +61,7 @@ export class Human {
     this.name = look.name;
     this.scale = look.scale;
     this.h = new Health({ mass: look.mass, scale: look.scale, tough: player ? 1.35 : rand(0.9, 1.1), pulse: rand(62, 82), temp: rand(36.5, 37.1) });
+    this.h.god = !!(player && game.settings && game.settings.cheatHp);
     this.mind = null;                      // feelings and senses, for those who have them
     this.brain = null;
 
@@ -89,7 +90,7 @@ export class Human {
     this.blend = 0; this.blendDur = 0;
     this.balance = 1; this.stumbleT = 0; this.ragT = 0; this.stillT = 0; this.getT = 0;
     this.speed = 0;
-    this.pose = { cower: 0, handsUp: 0, hurt: 0, talk: 0, stagger: 0, writhe: 0, crawl: 0, brace: 0, phone: 0, kneel: 0 };
+    this.pose = { cower: 0, handsUp: 0, hurt: 0, talk: 0, stagger: 0, writhe: 0, crawl: 0, brace: 0, phone: 0, kneel: 0, cuffed: 0, cuffing: 0 };
     this.hold = 'none';
     this.aimPitch = 0; this.lookYaw = 0; this.lookPitch = 0; this.lowAim = 0;
     this.weapon = null;                    // what is in the right hand, if anything
@@ -98,7 +99,11 @@ export class Human {
     this.swap = null;                      // a weapon on its way between hand and holster
     this.reload = null;                    // a magazine change in progress
     this.aimYaw = null; this.gunLow = 0;   // where a gun in this hand points, and how far it is lowered
-    this.vest = null;
+    this.vest = null; this.helmet = null;
+    this.tased = 0; this.dazeT = 0;        // seconds of a taser's cycle left; seconds of being no use to anyone after it
+    this.cuffed = null;                    // { item, by, joint } while in handcuffs
+    this.cuffing = null;                   // { target, item, t, dur } while putting them on somebody
+    this.custody = null;                   // { by } when it was the police who did it
     this.guardT = 0;
     this.tripCool = 0; this.jumpCool = 0;
     this.lunge = 0;                        // metres an attack in progress steps forward
@@ -199,6 +204,74 @@ export class Human {
     if (!this.vest) return;
     for (const b of this.vest.boxes) this.game.boxes.release(b.idx);
     this.vest = null;
+  }
+
+  /* ---- the helmet: a black shell over the skull, open at the face ---- */
+
+  wearHelmet() {
+    if (this.helmet) return;
+    const g = this.game, s = this.scale;
+    const mk = (l, z, hex) => { const idx = g.boxes.alloc(); g.boxes.colorHex(idx, hex); return { idx, part: P.HEAD, l: [l[0] * s, l[1] * s, l[2] * s], z: [z[0] * s, z[1] * s, z[2] * s] }; };
+    const BLACK = 0x121316, TRIM = 0x1d2024;
+    this.helmet = {
+      hits: 0, lift: 0.022 * s,
+      boxes: [
+        mk([0, 0.1, -0.006], [0.246, 0.085, 0.262], BLACK),            // crown
+        mk([0, 0.03, -0.124], [0.246, 0.15, 0.03], BLACK),             // back, down to the nape
+        mk([0.118, 0.035, -0.02], [0.022, 0.11, 0.2], BLACK), mk([-0.118, 0.035, -0.02], [0.022, 0.11, 0.2], BLACK),
+        mk([0, 0.066, 0.138], [0.2, 0.02, 0.04], TRIM),                // a stub of a brim
+        mk([0.112, -0.06, 0.03], [0.012, 0.1, 0.014], TRIM), mk([-0.112, -0.06, 0.03], [0.012, 0.1, 0.014], TRIM),
+      ],
+    };
+  }
+  removeHelmet() {
+    if (!this.helmet) return;
+    for (const b of this.helmet.boxes) this.game.boxes.release(b.idx);
+    this.helmet = null;
+  }
+
+  /** Is a point on the head (in the head's own space) under the helmet? Everything but the face and the jaw. */
+  _helmeted(lp, ln) {
+    const s = this.scale;
+    if (lp[1] < -0.035 * s) return false;
+    return !(ln[2] > 0.5 && lp[1] < 0.05 * s);
+  }
+
+  /* ---- a taser ---- */
+
+  /**
+   * Current through the muscles for `secs`: every one of them contracts at
+   * once, which is not something anybody stays standing through.
+   */
+  tase(secs, by = null) {
+    if (this.removed || !this.h.alive) return;
+    const fresh = this.tased <= 0;
+    this.tased = Math.max(this.tased, secs);
+    this.dazeT = 1.6;
+    if (by) this.lastAttacker = by;
+    if (fresh) {
+      const g = this.game;
+      if (this.state !== ST.RAGDOLL) this.toRagdoll();
+      // the pose they were in when it hit is the pose they are stuck in
+      const pel = this.bodies[P.PELVIS];
+      this._stiff = this.bodies.map((b) => {
+        const ax = -pel.qx, ay = -pel.qy, az = -pel.qz, aw = pel.qw;
+        return [aw * b.qx + ax * b.qw + ay * b.qz - az * b.qy, aw * b.qy - ax * b.qz + ay * b.qw + az * b.qx, aw * b.qz + ax * b.qy - ay * b.qx + az * b.qw, aw * b.qw - ax * b.qx - ay * b.qy - az * b.qz];
+      });
+      // nobody balances like that: over they go, stiff as a board, on to their face or their back
+      const way = chance(0.5) ? 1 : -1, fx = Math.sin(this.yaw) * way, fz = Math.cos(this.yaw) * way;
+      for (const i of [P.CHEST, P.HEAD, P.ABDOMEN]) { const b = this.bodies[i]; if (this.attached[i]) b.applyImpulse(fx * b.mass * 1.9, 0, fz * b.mass * 1.9); }
+      g.weapons?.dropFrom(this);
+      this.scream = Math.max(this.scream, 0.9);
+      if (this.mind) {
+        const m = this.mind, seen = by && typeof by === 'object' && (m.canSeeHuman(by) > 0 || (m.known.get(by.id) && g.time - m.known.get(by.id).last < 1.6));
+        m.note('felt', 'tased', `every muscle locked at once: a taser${seen ? ', fired by ' + m.name(by) : ''}`, 1, { attacker: by });
+        m.stir('fear', 40); m.stir('surprise', 60); m.stir('anger', 12); m.stir('joy', -40);
+        if (by && typeof by === 'object') { const k = m._know(by); k.hurtMe = true; k.hostile = 1; k.armed = 'taser'; if (!by.officer) { k.crime = Math.max(k.crime, Math.min(2.4, k.crime + 1.2)); k.crimeT = g.time; } if (seen) m._threaten(by, 78); }
+        m.ask('tased', 96);
+      }
+      if (this.isPlayer) g.shake = Math.max(g.shake, 1.1);
+    }
   }
 
   /** Blood loss shows in the skin. */
@@ -398,10 +471,15 @@ export class Human {
     if (this.crouching) top = CROUCH * mag;
     else if (it.run) top = mag < 0.55 ? WALK * (mag / 0.55) : lerp(WALK, RUN, (mag - 0.55) / 0.45);
     else top = WALK * mag;
-    top *= (this.scale / 0.93) * lerp(0.4, 1, mob) * (this.anim.busy ? 0.3 : 1);
+    top *= (this.scale / 0.93) * lerp(0.4, 1, mob) * (this.anim.busy ? 0.3 : 1) * (this.cuffed ? 0.72 : 1) * (this.cuffing ? 0 : 1);
+    if (this.cuffing) { this.crouching = !!this.cuffing.low && this.grounded; this.pose.cuffing = 1; } else this.pose.cuffing = 0;
     if (h.legLimp(1) > 0.3 || h.legLimp(-1) > 0.3) top = Math.min(top, 2.2);
     let tvx = 0, tvz = 0;
     if (mag > 0.01) { tvx = it.mx / mag * top; tvz = it.mz / mag * top; }
+    if (this.cuffing) {
+      const ct = this.cuffing.target, cdx = ct.x - this.x, cdz = ct.z - this.z, cd = Math.hypot(cdx, cdz);
+      if (cd > 0.95) { tvx = cdx / cd * 1.7; tvz = cdz / cd * 1.7; }
+    }
     const acc = this.grounded ? 11 : 4;
     this.vx = damp(this.vx, tvx, acc, dt); this.vz = damp(this.vz, tvz, acc, dt);
 
@@ -417,11 +495,12 @@ export class Human {
 
     // which way to face
     let face = it.face;
+    if (this.cuffing) { const ct = this.cuffing.target; face = Math.atan2(ct.x - this.x, ct.z - this.z); }
     if (face == null && this.speed > 0.25) face = Math.atan2(this.vx, this.vz);
     if (face != null) this.yaw = turnToward(this.yaw, face, (it.face != null ? 13 : 9) * dt);
 
     // up and down
-    if (it.jump && this.grounded && this.jumpCool <= 0 && h.legOk(1) && h.legOk(-1) && !this.anim.busy) {
+    if (it.jump && this.grounded && this.jumpCool <= 0 && h.legOk(1) && h.legOk(-1) && !this.anim.busy && !this.cuffing) {
       this.vy = JUMP_V * lerp(0.6, 1, mob); this.grounded = false; this.jumpCool = 0.35;
       g.audio?.at('step', this.x, this.y, this.z, 0.5);
     }
@@ -712,7 +791,32 @@ export class Human {
     // being flung about is disorienting
     const spin = Math.hypot(chest.wx, chest.wy, chest.wz);
     if (spin > 4) h.dizzy = Math.min(45, h.dizzy + (spin - 4) * dt * 6);
-    if (!h.alive || !h.conscious) { this._relax(); this.island.canSleep = true; this.pose.writhe = 0; this.pose.crawl = 0; this.pose.brace = 0; return; }
+    if (!h.alive || !h.conscious) { this._relax(); this.island.canSleep = true; this.pose.writhe = 0; this.pose.crawl = 0; this.pose.brace = 0; this.tased = 0; return; }
+
+    if (this.tased > 0) {
+      this.tased -= dt;
+      this.pose.writhe = 0; this.pose.crawl = 0; this.pose.brace = 0;
+      this.island.canSleep = false; this.island.wake();
+      // every muscle pulling at once: the body is a plank, and it shakes
+      const st = this._stiff;
+      for (let i = 1; i < PART_COUNT; i++) {
+        if (!this.attached[i] || !st) continue;
+        const b = this.bodies[i], o = this.orients[i], r = st[i];
+        o.x = pel.qw * r[0] + pel.qx * r[3] + pel.qy * r[2] - pel.qz * r[1];
+        o.y = pel.qw * r[1] - pel.qx * r[2] + pel.qy * r[3] + pel.qz * r[0];
+        o.z = pel.qw * r[2] + pel.qx * r[1] - pel.qy * r[0] + pel.qz * r[3];
+        o.w = pel.qw * r[3] - pel.qx * r[0] - pel.qy * r[1] - pel.qz * r[2];
+        o.s = 0.55;
+        b.orient = o;
+        const tw = i >= P.UARM_L ? 9 : 4;
+        b.wx += rand(-tw, tw) * dt * 22; b.wz += rand(-tw, tw) * dt * 22;
+      }
+      this.stillT = 0;
+      h.pain = Math.max(h.pain, 56);
+      if (this.tased <= 0) { this.tased = 0; this._relax(); if (this.mind) this.mind.ask('afterTase', 58, null, rand(0.8, 1.8)); }
+      return;
+    }
+    if (this.dazeT > 0) { this.dazeT -= dt; this._relax(); this.stillT = 0; return; }
 
     const low = pel.py - this.y < 0.45 * this.scale;
     const still = this.speed < 0.55;
@@ -724,7 +828,7 @@ export class Human {
     // what a conscious body does while it is down
     const falling = !low || this.speed > 2.5;
     this.pose.brace = falling ? 1 : 0;
-    const crawl = !falling && !!this.crawlDir && !h.paralysedArms && (h.armOk(1) || h.armOk(-1));
+    const crawl = !falling && !!this.crawlDir && !h.paralysedArms && (h.armOk(1) || h.armOk(-1)) && !this.cuffed;
     this.pose.crawl = crawl ? 1 : 0;
     this.pose.writhe = !falling && !crawl && h.pain > 30 ? 1 : 0;
     const active = falling || crawl || this.pose.writhe > 0;
@@ -734,6 +838,7 @@ export class Human {
     this._solve(dt, 0, 0, 0, 0);
     this.speed = Math.hypot(pel.vx, pel.vy, pel.vz);
     this._muscles(falling ? 0.22 : crawl ? 0.3 : this.pose.writhe ? 0.13 + h.pain * 0.0012 : 0.05, true);
+    if (this.cuffed) for (const i of ARM_L.concat(ARM_R)) { const b = this.bodies[i]; if (this.attached[i] && this.tone[i] > 0.1) { b.orient = this.orients[i]; b.orient.s = Math.max(b.orient.s || 0, 0.3); } }
     if (crawl && this.anim.crawlPull > 0.25 && chest.grounded > 0) {
       // roll onto the front, then haul
       chest.dirToWorld(0, 0, 1, _a);
@@ -791,7 +896,7 @@ export class Human {
       if (b.kinematic && !(other && other.im > 0 && other.mass > 4 && other.preSpeed > 4)) continue;
       const speed = b.hit;
       const heavy = car ? 1.9 : other && other.mass > 15 ? 1.25 : 1;
-      const power = clamp((speed - 3.6) / 5.2, 0, 3.4) * heavy * (i === P.HEAD ? 1.25 : 1);
+      const power = clamp((speed - 3.6) / 5.2, 0, 3.4) * heavy * (i === P.HEAD ? (this.helmet ? 0.5 : 1.25) : 1);
       this.partCool[i] = 0.35;
       if (power < 0.25 || !this.attached[i]) { if (speed > 4) g.audio?.at('thud', b.px, b.py, b.pz, clamp01(speed / 10)); continue; }
       b.toLocal(b.hitX, b.hitY, b.hitZ, _a);
@@ -834,8 +939,13 @@ export class Human {
     }
     const hide = this.gone[P.HEAD] || (this.isPlayer && g.firstPerson && this.attached[P.HEAD]);
     const hd = this.bodies[P.HEAD];
+    const lid = this.helmet ? 0.085 * this.scale : 9;
+    if (this.helmet) for (const v of this.helmet.boxes) {
+      if (hide) { bx.hide(v.idx); continue; }
+      bx.setOn(v.idx, hd.px, hd.py, hd.pz, hd.qx, hd.qy, hd.qz, hd.qw, v.l[0], v.l[1], v.l[2], v.z[0], v.z[1], v.z[2]);
+    }
     for (const h of this.hair) {
-      if (hide) bx.hide(h.idx);
+      if (hide || h.l[1] > lid) bx.hide(h.idx);
       else bx.setOn(h.idx, hd.px, hd.py, hd.pz, hd.qx, hd.qy, hd.qz, hd.qw, h.l[0], h.l[1], h.l[2], h.s[0], h.s[1], h.s[2]);
     }
     if (this.isPlayer && g.firstPerson && this.attached[P.HEAD]) { bx.hide(this.inst[P.HEAD]); bx.hide(this.inst[P.NECK]); }
@@ -913,6 +1023,8 @@ export class Human {
       r = lerp(r, 0.8, w.phone);
       l = lerp(l, 0.75, Math.max(w.pistol, w.rifle));      // the hand that steadies the gun
       if (this.handFull > 0) l = lerp(l, 0.9, this.handFull);   // a magazine in the left hand
+      if (this.cuffed) { l = r = 0.5; sl = sr = 0; }
+      if (this.cuffing) { l = r = 0.7; }
     }
     const item = this.weapon;
     if (item && this.attached[P.HAND_R] && !this.gone[P.HAND_R]) {
@@ -951,6 +1063,20 @@ export class Human {
       this.vest.hits++;
       this.vestHit = { was, stopped, t: g.time };
     }
+    let armour = stopped ? 'vest' : '';
+    if (this.helmet && part === P.HEAD && this.attached[part]) {
+      b.toLocal(info.point[0], info.point[1], info.point[2], _a);
+      const n0 = info.normal || faceOf([_a[0] / b.hx, _a[1] / b.hy, _a[2] / b.hz]);
+      if (this._helmeted(_a, n0)) {
+        // a light helmet: turns a blow and a slash, turns some pistol rounds, takes a little off a rifle round
+        if (type === 'bullet') { if (info.weapon === 'ak47') { power *= 0.9; } else if (chance(0.6)) { type = 'blunt'; power *= 0.8; stopped = true; } else { power *= 0.8; if (hp) hp *= 0.8; } }
+        else if (type === 'cut') { type = 'blunt'; power *= 0.35; stopped = true; }
+        else if (type === 'stab') power *= 0.5;
+        else power *= 0.4;
+        this.helmet.hits++;
+        if (stopped) armour = 'helmet';
+      }
+    }
     b.toLocal(info.point[0], info.point[1], info.point[2], _a);
     const lp = [_a[0], _a[1], _a[2]];
     b.dirToLocal(info.dir[0], info.dir[1], info.dir[2], _b);
@@ -970,7 +1096,7 @@ export class Human {
     rep.stopped = stopped;
     if (stopped) {
       // what the vest took shows on the vest
-      g.gore.mark(this, part, info.type === 'bullet' ? 'entry' : 'slash', lp, ln, info.type === 'bullet' ? 0.045 : 0.09, this.vest.lift);
+      g.gore.mark(this, part, info.type === 'bullet' ? 'entry' : 'slash', lp, ln, info.type === 'bullet' ? 0.045 : 0.09, armour === 'helmet' ? this.helmet.lift : this.vest.lift);
       g.gore.puff('smoke', info.point[0], info.point[1], info.point[2], 0.16, 0.35, 0.3, 0.3, 0.3);
     }
     this.lastAttacker = info.attacker || this.lastAttacker;
@@ -982,14 +1108,15 @@ export class Human {
       g.gore.mist(_a[0], _a[1], _a[2], info.dir[0], info.dir[1] + 0.1, info.dir[2], 34, 7.5, 0.5);
     }
     // what comes out of the wound, back the way the blow came
-    const spray = type === 'bullet' ? 9 : type === 'blunt' ? (power > 0.9 && part === P.HEAD ? 6 : 0) : type === 'stab' ? 10 : 12 + power * 5;
+    const spray = this.h.god ? 0 : type === 'bullet' ? 9 : type === 'blunt' ? (power > 0.9 && part === P.HEAD ? 6 : 0) : type === 'stab' ? 10 : 12 + power * 5;
     if (spray > 0) g.gore.burst(info.point[0], info.point[1], info.point[2], -info.dir[0] * 0.6, 0.5, -info.dir[2] * 0.6, spray, type === 'cut' ? 3.4 : 2.6, 0.7);
-    if (type === 'bullet') g.gore.mist(info.point[0], info.point[1], info.point[2], -info.dir[0], 0.25, -info.dir[2], 12, 3.2, 0.8);
+    if (this.h.god) { /* not a mark on them */ }
+    else if (type === 'bullet') g.gore.mist(info.point[0], info.point[1], info.point[2], -info.dir[0], 0.25, -info.dir[2], 12, 3.2, 0.8);
     else if (type === 'cut' && power > 1.2) g.gore.mist(info.point[0], info.point[1], info.point[2], info.dir[0], 0.4, info.dir[2], 14, 4.2, 0.9);
     if (rep.arterial) g.gore.burst(info.point[0], info.point[1], info.point[2], -info.dir[0], 0.8, -info.dir[2], 26, 4.5, 0.5);
-    this.bloodied = Math.min(1, this.bloodied + (type === 'blunt' ? 0.02 : 0.12));
+    if (!this.h.god) this.bloodied = Math.min(1, this.bloodied + (type === 'blunt' ? 0.02 : 0.12));
 
-    if (this.mind) this.mind.feel(part, type, rep, info.attacker, info.weapon, stopped ? info.type : null);
+    if (this.mind) this.mind.feel(part, type, rep, info.attacker, info.weapon, stopped ? info.type : null, armour || 'vest');
     let limbGone = false;
     if (rep.burst) { this.burst(part, [info.dir[0] * 3, 2, info.dir[2] * 3]); limbGone = true; }
     else if (rep.severed >= 0) { this.sever(rep.severed, [info.dir[0] * 1.5, 1.2, info.dir[2] * 1.5]); limbGone = true; }
@@ -1057,6 +1184,8 @@ export class Human {
    * now a separate thing lying in the world.
    */
   sever(part, vel = null, quiet = false) {
+    if (this.h.god) return;
+    if (this.cuffed && part >= P.UARM_L && part <= P.HAND_R) this.game.weapons?.uncuff(this, null);
     if (part <= 0 || !this.attached[part] || this.removed) return null;
     const g = this.game, world = g.world;
     const j = this.joints[part - 1];
@@ -1098,6 +1227,8 @@ export class Human {
 
   /** The part is destroyed outright; whatever hung from it drops. */
   burst(part, vel = [0, 2, 0]) {
+    if (this.h.god) return;
+    if (this.cuffed && part >= P.UARM_L && part <= P.HAND_R) this.game.weapons?.uncuff(this, null);
     if (part <= 0 || this.gone[part] || this.removed) return;
     const g = this.game, world = g.world, b = this.bodies[part];
     const wasAttached = this.attached[part];
@@ -1221,7 +1352,7 @@ export class Human {
     this.removed = true;
     const g = this.game;
     if (this.isPlayer) g.weapons?.dropFrom(this); else g.weapons?.forget(this);
-    this.removeVest();
+    this.removeVest(); this.removeHelmet();
     for (const p of this.pieces.slice()) this.dropPiece(p.island);
     for (const j of this.joints) if (j.enabled) { j.enabled = false; g.world.removeJoint(j); }
     g.world.removeIsland(this.island);

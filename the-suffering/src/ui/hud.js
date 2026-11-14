@@ -34,10 +34,10 @@ export class UI {
     inp.bind($('#btn-drop'), 'drop');
     inp.bind($('#btn-holster'), 'holster');
     inp.bind($('#btn-attack'), 'attack', {
-      onDown: () => { if (!w.def.gun) { this._hints(true); } if (g.doctor) this._pickCentre(); },
+      onDown: () => { if (w.def.melee && !g.player.cuffed) { this._hints(true); } if (g.doctor) this._pickCentre(); },
       onUp: () => this._hints(false),
       // a thumb sliding off the button picks the next move by direction
-      onSwipe: (dir) => { if (!w.def.gun) { w.choice = dir; this._hints(true); } },
+      onSwipe: (dir) => { if (w.def.melee && !g.player.cuffed) { w.choice = dir; this._hints(true); } },
     });
     const tap = (id, fn) => { const b = $(id); b.addEventListener('pointerdown', (e) => e.stopPropagation()); b.addEventListener('click', (e) => { e.preventDefault(); this.sound.unlock(); fn(e); b.blur(); }); };
     tap('#btn-menu', () => this.toggleSandbox());
@@ -99,6 +99,7 @@ export class UI {
     bindSet('#set-gore', 'gore', 'check'); bindSet('#set-sens', 'sens', 'num'); bindSet('#set-fov', 'fov', 'num');
     bindSet('#set-invert', 'invert', 'check'); bindSet('#set-volume', 'volumePct', 'num');
     bindSet('#set-people', 'people', 'num'); bindSet('#set-cars', 'cars', 'num');
+    bindSet('#set-cheat-hp', 'cheatHp', 'check', () => this.toast(s.cheatHp ? 'Infinite HP on' : 'Infinite HP off'));
     bindSet('#set-key', 'aiKey', 'text', () => { this.voices.reset(); this._aiStatus(); });
     bindSet('#set-model', 'aiModel', 'text', () => this._aiStatus());
     bindSet('#set-live', 'aiLive', 'check', () => this._aiStatus());
@@ -115,7 +116,7 @@ export class UI {
     const s = this.settings;
     $('#set-quality').value = s.quality; $('#set-shadows').checked = !!s.shadows; $('#set-gore').checked = s.gore !== false;
     $('#set-sens').value = s.sens; $('#set-fov').value = s.fov; $('#set-invert').checked = !!s.invert; $('#set-volume').value = s.volumePct;
-    $('#set-people').value = s.people; $('#set-cars').value = s.cars;
+    $('#set-people').value = s.people; $('#set-cars').value = s.cars; $('#set-cheat-hp').checked = !!s.cheatHp;
     $('#set-key').value = s.aiKey || ''; $('#set-model').value = this.voices.model; $('#set-live').checked = s.aiLive !== false;
     $('#set-pace').value = String(s.aiPace || 4); $('#set-tts').checked = !!s.tts;
   }
@@ -255,7 +256,7 @@ export class UI {
     } else if (WEAPONS[what]) {
       const [x, z] = g.spotAhead(1.5, 0.1);
       this.weapons.spawn(what, x, groundHeight(x, z) + 1.1, z);
-      this.toast(WEAPONS[what].name + (WEAPONS[what].wear ? ' - walk up to it and put it on' : ' - walk up to it and pick it up'));
+      this.toast(WEAPONS[what].name + (WEAPONS[what].wear ? ' - walk up to it and put it on' : WEAPONS[what].tool ? ' - pick them up, then CUFF someone who is down or has given up' : ' - walk up to it and pick it up'));
     }
     this._count();
   }
@@ -263,8 +264,17 @@ export class UI {
   healPlayer() {
     const g = this.g, p = g.player;
     if (!p.h.alive || p.h.missing.some((m) => m)) { g.respawn(false); $('#dead').hidden = true; this.deadT = 0; this.input.enabled = true; }
-    else { p.h.heal(); g.gore.clearHuman(p); p.bloodied = 0; if (p.state === ST.RAGDOLL) p.startGetUp(); }
+    else { p.h.heal(); g.gore.clearHuman(p); p.bloodied = 0; g.player.tased = 0; g.player.dazeT = 0; if (p.state === ST.RAGDOLL) p.startGetUp(); }
+    if (g.player.cuffed) this.weapons.uncuff(g.player, null);
     this.toast('Good as new');
+  }
+
+  /** The cheat has been switched: say so on the HUD, and mend whatever was wrong when it came on. */
+  cheatChanged() {
+    const on = !!this.settings.cheatHp, tag = $('#v-cheat');
+    if (on && tag.hidden) { const p = this.g.player; if (!p.h.alive || p.h.missing.some((m) => m)) { this.g.respawn(false); $('#dead').hidden = true; this.deadT = 0; this.input.enabled = true; } else { p.h.heal(); this.g.gore.clearHuman(p); p.bloodied = 0; } }
+    tag.hidden = !on;
+    this.g.player.h.god = on;
   }
 
   _count() {
@@ -291,8 +301,9 @@ export class UI {
 
   _label() {
     const w = this.weapons, d = w.def;
-    $('#attack-label').textContent = d.label;
-    $('#attack-next').textContent = d.gun ? '' : CLIPS[d.moves[(w.choice >= 0 ? w.choice : this.g.time - w.lastAttack > 1.15 ? 0 : w.combo) % 4]].label;
+    const bound = !!this.g.player.cuffed;
+    $('#attack-label').textContent = bound ? 'CUFFED' : d.label;
+    $('#attack-next').textContent = bound || !d.melee ? '' : CLIPS[d.moves[(w.choice >= 0 ? w.choice : this.g.time - w.lastAttack > 1.15 ? 0 : w.combo) % 4]].label;
   }
 
   weaponsChanged() {
@@ -305,16 +316,17 @@ export class UI {
     };
     add('FISTS', -1);
     w.inventory.forEach((it, i) => add(it.def.name.toUpperCase(), i));
-    if (this.g.player.vest) {
-      // worn, not held: tapping it takes it off
-      const b = el('button', 'slot worn', 'VEST');
-      b.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); w.shedVest(); });
-      bar.appendChild(b);
-    }
+    // worn, not held: tapping one takes it off
+    const worn = (name, cls, fn) => { const b = el('button', 'slot ' + cls, name); b.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); fn(); }); bar.appendChild(b); };
+    const pl = this.g.player;
+    if (pl.vest) worn('VEST', 'worn', () => w.shedVest());
+    if (pl.helmet) worn('HELMET', 'worn', () => w.shedHelmet());
+    // in a sandbox, handcuffs are only as locked as you want them to be
+    if (pl.cuffed) worn('CUFFED', 'bound', () => { w.uncuff(pl, null); this.toast('You slip the cuffs'); });
     const d = w.def;
     $('#btn-reload').hidden = !d.gun;
     $('#btn-drop').hidden = d.id === 'fists';
-    $('#btn-holster').hidden = w.inventory.length === 0;
+    $('#btn-holster').hidden = w.inventory.length === 0 || !!pl.cuffed;
     $('#holster-label').textContent = w.current >= 0 ? 'HOLSTER' : 'DRAW';
     $('#crosshair').classList.toggle('gun', !!d.gun);
     this._label(); this.ammoChanged(); this.nearChanged();
@@ -325,9 +337,10 @@ export class UI {
     if (!a.hidden) { a.textContent = `${e.ammo} / ${e.def.mag}`; a.classList.toggle('low', e.ammo <= Math.ceil(e.def.mag * 0.2)); }
   }
   nearChanged() {
-    const n = this.weapons.near;
-    $('#btn-use').hidden = !n;
+    const n = this.weapons.near, c = this.weapons.nearCuffed;
+    $('#btn-use').hidden = !n && !c;
     if (n) $('#use-label').textContent = n.def.wear ? 'PUT ON' : n.holder ? 'TAKE' : 'PICK UP';
+    else if (c) $('#use-label').textContent = 'UNCUFF';
   }
 
   update(dt) {

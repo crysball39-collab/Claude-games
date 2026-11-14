@@ -17,7 +17,7 @@ import { ST } from '../human/human.js';
 import { $, el, clamp, rand } from '../core/util.js';
 
 const _s = [0, 0, 0], _v = [0, 0, 0];
-const SCREAMS = new Set(['hitCut', 'hitShot', 'hitStab', 'lostLimb', 'boneBreak']);
+const SCREAMS = new Set(['hitCut', 'hitShot', 'hitStab', 'lostLimb', 'boneBreak', 'tased']);
 /** What an officer says where a member of the public would say something else; null is nothing at all. */
 const COP = {
   greet: 'copGreet', greetBack: 'copGreet', replyGreet: 'copGreet', playerNear: 'copGreet', sawSpawn: 'copIdle', idle: 'copIdle', bored: 'copIdle',
@@ -32,7 +32,11 @@ const NOW = {
   copCalm: 'the suspect has stopped and they are keeping them still at gunpoint', copClear: 'the trouble is over and they are standing down', copIdle: 'nothing is happening on their shift',
   copSubdue: 'words have not worked and they are going in with their hands to put someone on the ground',
   copReload: 'they are changing magazine in the middle of a firefight', copRespond: 'they are running toward trouble they have heard', copGreet: 'a member of the public has come up to them',
-  hitVest: 'a bullet has just hit their vest and not gone through',
+  hitVest: 'a bullet has just hit their vest and not gone through', hitHelmet: 'a bullet has just glanced off their helmet',
+  tased: 'a taser has locked every muscle in their body and they can only make a noise', afterTase: 'a taser has just let go of them and they are lying on the ground getting their body back',
+  cuffed: 'they have just been put in handcuffs', inCell: 'they are locked in the cell at the police station, in handcuffs',
+  copTaser: 'they are about to fire their taser at someone who will not stop, and are shouting the warning', copCuff: 'they are putting handcuffs on the suspect',
+  copCustody: 'they have the suspect in handcuffs and are reporting it', copWalk: 'they are walking a handcuffed prisoner to the station',
   hitBlunt: 'they have just been struck and react', hitCut: 'they have just been cut and react', hitStab: 'they have just been stabbed and react',
   hitShot: 'they have just been shot and react', hitUnseen: 'something has just hurt them and they did not see what', hitCar: 'a car has just hit them',
   lostLimb: 'a part of their body has just been taken off', boneBreak: 'a bone has just broken', bleeding: 'they have noticed how much they are bleeding',

@@ -72,6 +72,9 @@ h1, h2, h3, p { margin: 0; }
 .vbar { height: 6px; border-radius: 3px; background: rgba(233, 227, 215, 0.14); overflow: hidden; }
 .vbar > div { height: 100%; width: 100%; background: var(--ok); border-radius: 3px; transition: width 0.25s; }
 .vbar.blood > div { background: var(--blood); }
+#v-cheat { font: 800 8px/1 var(--display); letter-spacing: 0.12em; color: var(--clinic); text-align: center; }
+.sub { font: 800 10px/1 var(--display); letter-spacing: 0.14em; color: var(--dim); margin: 14px 0 2px; text-transform: uppercase; }
+.slot.bound { color: var(--warn); border-color: var(--warn); border-style: dashed; }
 
 #weapon-bar { position: absolute; top: var(--gt); left: 50%; transform: translateX(-50%); display: flex; gap: 6px; max-width: 44%; }
 .slot {
@@ -189,6 +192,9 @@ h1, h2, h3, p { margin: 0; }
 .ic.crate { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e9e3d7' stroke-width='2'%3E%3Crect x='3' y='3' width='18' height='18'/%3E%3Cpath d='M3 3l18 18M7 3v18M17 3v18'/%3E%3C/svg%3E"); }
 .ic.vest { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e9e3d7'%3E%3Cpath d='M7 2h3l2 3 2-3h3l2 5-2 2v12H5V9L3 7z'/%3E%3Crect x='8' y='13' width='8' height='4' fill='%230e1114'/%3E%3C/svg%3E"); }
 .ic.officer { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e9e3d7'%3E%3Cpath d='M7 5l5-3 5 3v2H7z'/%3E%3Crect x='9' y='7' width='6' height='4'/%3E%3Crect x='8' y='12' width='8' height='6'/%3E%3Crect x='5' y='12' width='2' height='6'/%3E%3Crect x='17' y='12' width='2' height='6'/%3E%3Crect x='8' y='19' width='3' height='4'/%3E%3Crect x='13' y='19' width='3' height='4'/%3E%3Crect x='13' y='13' width='2' height='2' fill='%230e1114'/%3E%3C/svg%3E"); }
+.ic.helmet { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e9e3d7'%3E%3Cpath d='M3 15c0-6 4-10 9-10s9 4 9 10v2H11v-4H7v4H3z'/%3E%3Crect x='11' y='18' width='11' height='2'/%3E%3C/svg%3E"); }
+.ic.cuffs { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e9e3d7' stroke-width='2.4'%3E%3Ccircle cx='7' cy='14' r='4.5'/%3E%3Ccircle cx='17' cy='14' r='4.5'/%3E%3Cpath d='M10 9l2-3 2 3'/%3E%3C/svg%3E"); }
+.ic.taser { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e9e3d7'%3E%3Cpath d='M2 8h14v5h-6l-1 2H7l-1 5H3l1-7H2z'/%3E%3Cpath d='M17 9l2-2 1 2 2-1-1 3 1 2-2-1-1 2-1-2z'/%3E%3C/svg%3E"); }
 .ic.pistol { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e9e3d7'%3E%3Cpath d='M2 7h19v5h-9l-1 2H9l-1 6H4l1-8H2z'/%3E%3C/svg%3E"); }
 .ic.rifle { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e9e3d7'%3E%3Cpath d='M1 9h13V8h4v1h5v2h-5v1h-3l1 6h-3l-1.5-5H9l-2 4H3l2-4H1z'/%3E%3C/svg%3E"); }
 .ic.knife { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e9e3d7'%3E%3Cpath d='M3 21l5-5 2 2-5 5zM9 15L20 2c1 5-2 11-8 16z'/%3E%3C/svg%3E"); }

@@ -87,12 +87,13 @@ export class Doctor {
     $('#doc-name').textContent = h.isPlayer ? 'You' : L.name;
     // what they have on and about them is part of the picture
     const kit = (h.isPlayer ? this.g.weapons.inventory : h.kit || []).map((i) => i.def.name + (h.weapon === i ? ' in hand' : ''));
-    const extra = (h.vest ? ', light vest' + (h.vest.hits ? ` (hit ${h.vest.hits} time${h.vest.hits === 1 ? '' : 's'})` : '') : '') + (kit.length ? ', carrying ' + kit.join(' and ') : '');
+    const hits = (n) => (n ? ` (hit ${n} time${n === 1 ? '' : 's'})` : '');
+    const extra = (h.vest ? ', light vest' + hits(h.vest.hits) : '') + (h.helmet ? ', light helmet' + hits(h.helmet.hits) : '') + (h.cuffed ? ', in handcuffs' : '') + (kit.length ? ', carrying ' + kit.join(' and ') : '');
     $('#doc-sub').textContent = (h.isPlayer ? `${L.outfit}` : `${L.age}, ${L.noun}, ${L.outfit}`) + extra;
     const label = $('#doc-cond-label');
     label.textContent = c.label; label.className = c.tone;
     $('#doc-cond-note').textContent = !hh.alive ? hh.cause + (hh.timeDead > 1 ? ` - ${fmtTime(hh.timeDead)} ago` : '')
-      : c.aware + (hh.heartStopped ? ' - heart stopped' + (hh.mechanism ? ': ' + hh.mechanism.toLowerCase() : '') : hh.mechanism ? ' - ' + hh.mechanism.toLowerCase() : '');
+      : c.aware + (h.tased > 0 ? ' - every muscle locked by a taser' : '') + (hh.god ? ' - cannot be injured' : '') + (hh.heartStopped ? ' - heart stopped' + (hh.mechanism ? ': ' + hh.mechanism.toLowerCase() : '') : hh.mechanism ? ' - ' + hh.mechanism.toLowerCase() : '');
   }
 
   _set(key, pct, text, tone) {
