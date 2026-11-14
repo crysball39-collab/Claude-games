@@ -240,6 +240,8 @@ export class Brain {
       if (this.calmT > 2.2) g.weapons.putAway(h);
     }
     if (h.reload) { m.doing = 'reloading'; return; }
+    // anything on the belt that was put away short of full is taken out again and topped up
+    if (!h.weapon && !h.swap && this.calmT > 3.2) { const low = (h.kit || NOKIT).find((i) => i.def.gun && i.ammo < i.def.mag); if (low && g.weapons.draw(h, low)) return; }
     if (!post || post.kind === 'beat') { this._wander(dt); return; }
     const d = Math.hypot(post.x - h.x, post.z - h.z);
     if (d > 0.45) { m.doing = 'going back to their post'; this._walkTo(post.x, post.z, false); return; }
@@ -441,9 +443,11 @@ export class Brain {
     const h = this.h, m = this.m, g = this.g, c = h.custody, S = g.city.police;
     if (c && c.cell && S) {
       m.doing = 'locked in the cell at the police station';
-      // through the gap in the bars, then to the back of the cell
-      const through = h.z > S.cellDoor.z + 0.5;
-      const tx = through ? S.cell.x : S.cellDoor.x, tz = through ? S.cell.z : S.cellDoor.z + 0.75;
+      // round to the front of the gap in the bars, straight through it, then to the back of the cell
+      const through = h.x > S.cellX0 + 0.25 && h.z > S.cellDoor.z + 0.3;
+      let tx = S.cellDoor.x, tz = S.cellDoor.z - 0.8;
+      if (through) { tx = S.cell.x; tz = S.cell.z; }
+      else if (Math.abs(h.x - S.cellDoor.x) < 0.3 && h.z < S.cellDoor.z + 0.4) tz = S.cellDoor.z + 0.9;
       const d = Math.hypot(tx - h.x, tz - h.z);
       if (d > 0.5 || !through) this._go(tx, tz, false, 0.8); else h.intent.face = Math.PI;
       if (this.sayT <= 0 && through) { m.ask('inCell', 20); this.sayT = rand(14, 30); }

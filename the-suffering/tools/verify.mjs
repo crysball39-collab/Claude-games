@@ -10,6 +10,8 @@ const results = [];
 let section = '';
 const head = (name) => { section = name; };
 const check = (name, ok, detail = '') => { results.push({ section, name, ok: !!ok, detail }); };
+const ONLY = process.argv[2] ? new RegExp(process.argv[2], 'i') : null;
+const want = (name) => !ONLY || ONLY.test(name);
 const run = async (fn, ...a) => t.ev(fn, ...a);
 
 /* helpers that live in the page */
@@ -23,6 +25,9 @@ await run(() => {
       const p = g.player;
       g.weapons.dropFrom(p, true);
       if (p.vest) p.removeVest();
+      if (p.helmet) p.removeHelmet();
+      if (p.cuffed) g.weapons.uncuff(p, null);
+      p.tased = 0; p.dazeT = 0;
       for (const it of g.weapons.items.slice()) g.weapons.remove(it);
       p.h.heal(); p.reset(0, -18, Math.PI / 2);
       g.camYaw = Math.PI / 2; g.camPitch = -0.08; g.gore.clean();
@@ -36,7 +41,7 @@ await run(() => {
 
 /* ------------------------------- the page ------------------------------- */
 head('Page');
-{
+if (want('Page')) {
   const r = await run(() => ({ title: document.title, hud: !document.querySelector('#hud').hidden, menu: document.querySelector('#menu').hidden }));
   check('is called The Suffering', /the suffering/i.test(r.title), r.title);
   check('PLAY starts the game', r.hud && r.menu);
@@ -44,7 +49,7 @@ head('Page');
 
 /* ------------------------------- controls ------------------------------- */
 head('Controls');
-{
+if (want('Controls')) {
   const r = await run(() => {
     const vis = (s) => { const e = document.querySelector(s); if (!e) return false; const b = e.getBoundingClientRect(); return b.width > 20 && b.height > 20 && getComputedStyle(e).visibility !== 'hidden'; };
     return { stick: vis('#stick-base'), crouch: vis('#btn-crouch'), jump: vis('#btn-jump'), attack: vis('#btn-attack') };
@@ -74,6 +79,7 @@ head('Controls');
 /* -------------------------------- melee --------------------------------- */
 head('Melee');
 for (const kit of ['fists', 'knife', 'machete']) {
+  if (!want('Melee')) continue;
   const r = await run((kit) => {
     const g = __game, w = g.weapons, out = [];
     for (let i = 0; i < 4; i++) {
@@ -97,7 +103,7 @@ for (const kit of ['fists', 'knife', 'machete']) {
 
 /* ------------------------------- the city ------------------------------- */
 head('City');
-{
+if (want('City')) {
   const r = await run(() => {
     const g = __game, city = g.city;
     V.stage();
@@ -126,7 +132,7 @@ head('City');
 
 /* ------------------------------- sandbox -------------------------------- */
 head('Sandbox menu');
-{
+if (want('Sandbox menu')) {
   await run(() => { V.stage(); __game.paused = false; });
   await t.page.click('#btn-menu');
   const open = await run(() => !document.querySelector('#sandbox').hidden);
@@ -144,6 +150,7 @@ head('Sandbox menu');
 /* ------------------------------- firearms ------------------------------- */
 head('Firearms');
 for (const gun of ['m1911', 'ak47']) {
+  if (!want('Firearms')) continue;
   const r = await run((gun) => {
     const g = __game, w = g.weapons;
     V.stage();
@@ -173,7 +180,7 @@ for (const gun of ['m1911', 'ak47']) {
 
 /* --------------------------- ragdolls, stumbling ------------------------ */
 head('Ragdolls and stumbling');
-{
+if (want('Ragdolls and stumbling')) {
   const r = await run(() => {
     const g = __game;
     V.stage();
@@ -201,7 +208,7 @@ head('Ragdolls and stumbling');
 
 /* ------------------------------ doctor mode ----------------------------- */
 head('Doctor mode');
-{
+if (want('Doctor mode')) {
   await run(() => { const g = __game; V.stage(); const h = V.still(T.dummy(3)); window.PT = h; g.advance(1.2); g.paused = false; });
   await t.page.click('#btn-doctor');
   await t.page.waitForTimeout(500);
@@ -219,14 +226,16 @@ head('Doctor mode');
   for (const k of ['FEAR', 'ANGER', 'SADNESS', 'JOY', 'SURPRISE', 'BOREDOM']) check(`shows ${k.toLowerCase()}`, r.emo.includes(k));
 
   await t.page.click('[data-tab="xray"]');
-  await t.page.waitForTimeout(300);
+  // the plate is redrawn a few times a second: give it time for one (reading it back repeatedly would only make the browser complain)
+  await t.page.waitForTimeout(1200);
   const x0 = await run(() => { const c = document.querySelector('#doc-xray'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let lit = 0; for (let i = 0; i < d.length; i += 16) if (d[i] + d[i + 1] + d[i + 2] > 240) lit++; return { lit, w: c.width, h: c.height, legend: document.querySelector('#doc-legend').textContent }; });
   check('the X-ray draws a skeleton and organs', x0.lit > 800, `${x0.lit} lit samples on a ${x0.w}x${x0.h} plate`);
   // break a bone and puncture an organ, then look again
   const dmg = await run(() => {
     const g = __game, h = window.PT, pl = g.player;
     const arm = h.bodies[8]; h.hit({ part: 8, type: 'blunt', power: 2.6, point: [arm.px, arm.py, arm.pz], dir: [-1, 0, 0], normal: [1, 0, 0], impulse: 4, attacker: pl, weapon: 'fists' });
-    const c = h.bodies[2]; h.hit({ part: 2, type: 'bullet', power: 1, point: [c.px + 0.1, c.py + 0.06, c.pz - 0.05], dir: [-1, 0, 0], normal: [1, 0, 0], impulse: 2, attacker: pl, weapon: 'm1911', through: true });
+    // three rounds across the chest: whatever their build, one of them finds a lung or the heart
+    const c = h.bodies[2]; for (const dz of [-0.08, 0, 0.08]) h.hit({ part: 2, type: 'bullet', power: 1, point: [c.px + 0.1, c.py + 0.04, c.pz + dz], dir: [-1, 0, 0], normal: [1, 0, 0], impulse: 2, attacker: pl, weapon: 'm1911', through: true });
     g.advance(1);
     const bones = Object.keys(h.h.bones).filter((k) => h.h.boneState(k) !== 'intact');
     const organs = Object.keys(h.h.organs).filter((k) => h.h.organs[k] < 100);
@@ -243,7 +252,7 @@ head('Doctor mode');
 
 /* --------------------------------- gore --------------------------------- */
 head('Wounds and blood');
-{
+if (want('Wounds and blood')) {
   const r = await run(() => {
     const g = __game, out = {};
     V.stage(); V.give('machete');
@@ -289,7 +298,7 @@ head('Wounds and blood');
 
 /* ---------------------------- seeing, hearing --------------------------- */
 head('Senses');
-{
+if (want('Senses')) {
   const r = await run(() => {
     const g = __game, p = g.player, out = {};
     V.stage();
@@ -327,7 +336,7 @@ head('Senses');
 
 /* --------------------------------- speech ------------------------------- */
 head('Speech');
-{
+if (want('Speech')) {
   const r = await run(async () => {
     const g = __game, v = __ts.voices, out = {};
     V.stage();
@@ -359,7 +368,7 @@ head('Speech');
 
 /* ------------------------ people crouch and jump ------------------------ */
 head('People');
-{
+if (want('People')) {
   const r = await run(() => {
     const g = __game, out = {};
     V.stage();
@@ -395,7 +404,7 @@ head('People');
 
 /* --------------------------------- hands -------------------------------- */
 head('Fingers');
-{
+if (want('Fingers')) {
   const r = await run(() => {
     const g = __game, out = {};
     V.stage();
@@ -422,7 +431,7 @@ head('Fingers');
 
 /* -------------------------------- holsters ------------------------------ */
 head('Holstering');
-{
+if (want('Holstering')) {
   await run(() => { const g = __game; V.stage(); g.weapons.give(g.player, 'm1911'); g.weapons.give(g.player, 'ak47'); g.advance(0.5); g.paused = false; });
   const a = await run(() => { const g = __game, p = g.player, w = g.weapons, it = w.inventory[0], ak = w.inventory[1], hip = p.bodies[0], chest = p.bodies[2], v = [0, 0, 0];
     chest.toLocal(ak.px, ak.py, ak.pz, v);
@@ -443,6 +452,7 @@ head('Holstering');
 /* --------------------------------- reload ------------------------------- */
 head('Reloading');
 for (const gun of ['m1911', 'ak47']) {
+  if (!want('Reloading')) continue;
   const r = await run((gun) => {
     const g = __game, p = g.player, w = g.weapons, out = { stages: [] };
     V.stage(); V.give(gun); g.camYaw = 0; g.camPitch = 0.3; g.advance(0.3);
@@ -474,7 +484,7 @@ for (const gun of ['m1911', 'ak47']) {
 
 /* ---------------------------------- vest -------------------------------- */
 head('Light vest');
-{
+if (want('Light vest')) {
   await run(() => { V.stage(); __game.paused = false; });
   await t.page.click('#btn-menu');
   await t.page.click('[data-spawn="vest"]');
@@ -515,7 +525,7 @@ head('Light vest');
 
 /* ------------------------------ blood, again ---------------------------- */
 head('Splatter and puddles');
-{
+if (want('Splatter and puddles')) {
   const r = await run(() => {
     const g = __game, p = g.player, G = g.gore, w = g.weapons, out = {};
     V.stage();
@@ -560,7 +570,7 @@ head('Splatter and puddles');
 
 /* --------------------------------- police ------------------------------- */
 head('Police');
-{
+if (want('Police')) {
   const r = await run(() => {
     const g = __game, p = g.player, w = g.weapons, S = g.city.police, out = {};
     V.stage();
@@ -577,14 +587,14 @@ head('Police');
   });
   check('there is a police station', r.station && r.walkedIn, 'with a lobby you can walk into');
   check('officers are on duty at it', r.staffed === 4 && r.kit.length === 4 && r.inside && r.kit.filter((k) => k.post !== 'beat').every((k) => k.at < 1), `${r.kit.length} officers: ${r.kit.map((k) => k.post).join(', ')}`);
-  check('each has a vest and a holstered M1911', r.kit.every((k) => k.vest && k.gun === 'm1911' && k.holstered && k.uniform));
+  check('each has a vest and a holstered M1911', r.kit.every((k) => k.vest && k.gun.split(',').includes('m1911') && k.holstered && k.uniform));
 
   await run(() => { V.stage(); __game.paused = false; });
   await t.page.click('#btn-menu');
   await t.page.click('[data-spawn="officer"]');
   await t.page.click('[data-close="sandbox"]');
   const s = await run(() => { const g = __game; g.advance(0.5); const o = g.humans.filter((h) => h.officer); return { n: o.length, vest: o[0] && !!o[0].vest, gun: o[0] && (o[0].kit || []).map((i) => i.type).join(',') }; });
-  check('an officer can be spawned from the menu', s.n === 1 && s.vest && s.gun === 'm1911');
+  check('an officer can be spawned from the menu', s.n === 1 && s.vest && s.gun.split(',').includes('m1911'));
 
   const e = await run(() => {
     const g = __game, p = g.player, w = g.weapons, out = {};
@@ -605,7 +615,7 @@ head('Police');
     V.aimAt(v.bodies[2]); g.advance(0.1); w.fire(); g.advance(0.3); w.fire();
     let reloading = false, down = false;
     for (let i = 0; i < 260; i++) { g.advance(0.1); if (cops().some((h) => h.reload)) reloading = true; if (p.state === 2 || !p.h.alive) down = true; if (down && i > 150 && cops().every((h) => h.brain.mode === 'post' && !h.weapon)) break; }
-    out.fight = { fires, hit: p.h.wounds.length, down, reloading, said: said.slice(0, 3).join(' / '), ammo: cops().map((h) => h.kit && h.kit[0] ? h.kit[0].ammo : -1).join(','), modes: cops().map((h) => h.brain.mode + (h.weapon ? '+gun' : '')).join(','), mags: w.casings.filter((c) => c.size).length };
+    out.fight = { fires, hit: p.h.wounds.length, down, reloading, said: said.slice(0, 3).join(' / '), ammo: cops().map((h) => { const pi = (h.kit || []).find((i) => i.type === 'm1911'); return pi ? pi.ammo : -1; }).join(','), modes: cops().map((h) => h.brain.mode + (h.weapon ? '+gun' : '')).join(','), mags: w.casings.filter((c) => c.size).length };
     g.speech.say = orig; w.npcFire = nf;
     return out;
   });
@@ -616,8 +626,276 @@ head('Police');
   check('officers reload, with the same animation, before they holster', e.fight.reloading && e.fight.mags > 0 && e.fight.ammo.split(',').every((a) => a === '7' || a === '-1'), `magazines on the ground: ${e.fight.mags}; pistols now hold ${e.fight.ammo}`);
 }
 
+/* ---------------------------------- taser ------------------------------- */
+head('Taser');
+if (want('Taser')) {
+  await run(() => { V.stage(); __game.paused = false; });
+  await t.page.click('#btn-menu');
+  await t.page.click('[data-spawn="taser"]');
+  await t.page.click('[data-close="sandbox"]');
+  const r = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, out = {};
+    g.advance(1.2);
+    const it = w.items.find((i) => i.type === 'taser');
+    out.spawned = !!it;
+    w.pickUp(it); g.advance(0.4);
+    out.label = document.querySelector('#attack-label').textContent;
+    p.reset(0, -18, Math.PI / 2); g.camYaw = Math.PI / 2; g.advance(0.3);
+    const v = V.still(g.spawnHuman(4.5, -18, -Math.PI / 2));
+    g.advance(0.4);
+    for (let i = 0; i < 3; i++) { V.aimAt(v.bodies[2]); g.advance(0.05); }
+    const a0 = it.ammo;
+    out.fired = w.fire(); g.advance(1.2);
+    const rel = () => v.bodies.map((b) => { const q = v.bodies[0]; return Math.abs(q.qx * b.qx + q.qy * b.qy + q.qz * b.qz + q.qw * b.qw); });
+    const q0 = rel(); g.advance(1.0); const q1 = rel();
+    out.hit = { used: a0 - it.ammo, tased: v.tased, state: T.state(v), chest: v.bodies[2].py - v.y, wire: !!(it.wire && it.wire.hit), drift: Math.max(...q0.map((x, i) => Math.abs(x - q1[i]))),
+      open: v.h.wounds.filter((x) => x.type !== 'bruise').length, acted: !!w.npcAttack(v, p), pain: v.h.pain };
+    g.advance(3.3);
+    out.over = v.tased;
+    const a1 = it.ammo;
+    out.again = w.fire(); g.advance(0.3);
+    out.rezap = { tased: v.tased, free: it.ammo === a1 };
+    let up = -1;
+    for (let i = 0; i < 220 && up < 0; i++) { g.advance(0.1); if (v.state === 0) up = i / 10; }
+    out.up = up; out.alive = v.h.alive; out.felt = v.mind.memory.some((m) => m.kind === 'tased');
+    // somebody too far away for the wires
+    const far = V.still(g.spawnHuman(p.x + 12, p.z + 2, 0));
+    g.advance(0.3);
+    w._dropWire(it); it.ammo = 2; it.cool = 0; w.cool = 0;
+    for (let i = 0; i < 3; i++) { V.aimAt(far.bodies[2]); g.advance(0.05); }
+    w.fire(); g.advance(0.5);
+    out.far = far.tased;
+    it.ammo = 0; w._dropWire(it); it.cool = 0; w.cool = 0;
+    w.reload(); g.advance(2.2);
+    out.reloaded = it.ammo;
+    w.holster(); g.advance(1);
+    const l = [0, 0, 0]; p.bodies[0].toLocal(it.px, it.py, it.pz, l);
+    out.holster = { hand: p.weapon ? p.weapon.type : null, side: l[0], front: l[2] };
+    return out;
+  });
+  check('it is in the spawn menu', r.spawned && r.label === 'TASE');
+  check('the probes drop a person, rigid, inside a second', r.fired && r.hit.used === 1 && r.hit.tased > 0 && r.hit.state === 'RAGDOLL' && r.hit.chest < 0.6 && r.hit.wire && r.hit.drift < 0.05,
+    `chest ${r.hit.chest.toFixed(2)} m off the ground, joints moved ${r.hit.drift.toFixed(3)} in a second`);
+  check('it hurts, and wounds nobody', r.hit.open === 0 && r.hit.pain > 40 && r.alive, `pain ${r.hit.pain.toFixed(0)}, no wound beyond bruises from the fall`);
+  check('they can do nothing for the five seconds it lasts', !r.hit.acted && r.over === 0);
+  check('the trigger sends another cycle down the wires, with no new cartridge', r.again && r.rezap.tased > 3 && r.rezap.free);
+  check('they get up again afterwards, and remember it', r.up >= 0 && r.felt, `on their feet ${r.up.toFixed(1)} s after the second cycle began`);
+  check('it does not reach past its wires', r.far === 0);
+  check('it reloads, and holsters at the front of the left hip', r.reloaded === 2 && r.holster.hand === null && r.holster.side > 0.05 && r.holster.front > 0.05);
+}
+
+/* -------------------------------- handcuffs ----------------------------- */
+head('Handcuffs');
+if (want('Handcuffs')) {
+  await run(() => { V.stage(); __game.paused = false; });
+  await t.page.click('#btn-menu');
+  await t.page.click('[data-spawn="cuffs"]');
+  await t.page.click('[data-close="sandbox"]');
+  const r = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, out = {};
+    g.advance(1.2);
+    const it = w.items.find((i) => i.type === 'cuffs');
+    out.spawned = !!it;
+    w.pickUp(it); g.advance(0.5);
+    out.label = document.querySelector('#attack-label').textContent;
+    p.reset(0, -18, Math.PI / 2); g.camYaw = Math.PI / 2; g.advance(0.3);
+    const v = V.still(T.dummy(1.1));
+    g.advance(0.4);
+    // somebody standing there minding their own business cannot be cuffed
+    out.refused = !w.cuffable(v) && !w.attack(-1);
+    g.advance(0.3);
+    out.stillFree = !v.cuffed && !p.cuffing;
+    // somebody on the ground can
+    v.toRagdoll(); v.dazeT = 8; g.advance(1.3);
+    const pb = v.bodies[0];
+    p.reset(pb.px - 0.9, pb.pz, Math.PI / 2); g.camYaw = Math.atan2(pb.px - p.x, pb.pz - p.z); g.advance(0.3);
+    out.started = w.attack(-1); g.advance(0.6);
+    out.mid = { cuffing: !!p.cuffing, kneeling: p.crouching, cuffed: !!v.cuffed };
+    g.advance(1.6);
+    out.cuffed = !!v.cuffed; out.inv = w.inventory.map((i) => i.type).join(',');
+    const gap = () => { const a = [0, 0, 0], b = [0, 0, 0], s = v.scale; v.bodies[6].toWorld(0, -0.12 * s, 0, a); v.bodies[9].toWorld(0, -0.12 * s, 0, b); return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]); };
+    g.advance(0.5);
+    out.downGap = gap();
+    v.dazeT = 0;
+    let up = false;
+    for (let i = 0; i < 160 && !up; i++) { g.advance(0.1); up = v.state === 0; }
+    g.advance(1.2);
+    const lh = [0, 0, 0], rh = [0, 0, 0];
+    v.bodies[2].toLocal(v.bodies[7].px, v.bodies[7].py, v.bodies[7].pz, lh); v.bodies[2].toLocal(v.bodies[10].px, v.bodies[10].py, v.bodies[10].pz, rh);
+    out.standing = { up, behind: Math.max(lh[2], rh[2]), gap: gap() };
+    out.cannot = !w.npcAttack(v, p) && w.give(v, 'knife') === null;
+    out.drawn = w.items.some((i) => i.wornBy === v && i.shown);
+    // and off again
+    p.reset(v.x - 0.9, v.z, Math.PI / 2); g.advance(0.4);
+    out.useLabel = document.querySelector('#btn-use').hidden ? '' : document.querySelector('#use-label').textContent;
+    w.pickUp(); g.advance(0.4);
+    out.free = !v.cuffed; out.dropped = w.items.some((i) => i.type === 'cuffs' && i.body);
+    return out;
+  });
+  check('they are in the spawn menu', r.spawned && r.label === 'CUFF');
+  check('somebody on their feet and minding their own business cannot be cuffed', r.refused && r.stillFree);
+  check('somebody on the ground can: it takes a moment, on one knee', r.started && r.mid.cuffing && r.mid.kneeling && !r.mid.cuffed && r.cuffed && r.inv === '');
+  check('the wrists are held together', r.downGap < 0.3 && r.standing.gap < 0.3 && r.drawn, `${(r.downGap * 100).toFixed(0)} cm apart on the ground, ${(r.standing.gap * 100).toFixed(0)} cm standing`);
+  check('they can stand up, hands behind their back', r.standing.up && r.standing.behind < -0.05, `hands ${(-r.standing.behind * 100).toFixed(0)} cm behind the chest`);
+  check('in cuffs they can neither hit nor carry', r.cannot);
+  check('and the cuffs come off again', r.useLabel === 'UNCUFF' && r.free && r.dropped);
+}
+
+/* --------------------------------- helmet ------------------------------- */
+head('Light helmet');
+if (want('Light helmet')) {
+  await run(() => { V.stage(); __game.paused = false; });
+  await t.page.click('#btn-menu');
+  await t.page.click('[data-spawn="helmet"]');
+  await t.page.click('[data-close="sandbox"]');
+  const r = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, out = {};
+    g.advance(1.5);
+    const it = w.items.find((i) => i.type === 'helmet');
+    out.spawned = !!it;
+    p.reset(it.body.px - 0.4, it.body.pz, Math.PI / 2); g.advance(0.4);
+    out.label = document.querySelector('#use-label').textContent;
+    out.put = w.pickUp(it); g.advance(0.3);
+    out.worn = !!p.helmet;
+    out.onHead = p.helmet ? p.helmet.boxes.every((b) => b.part === 4) && p.helmet.boxes.length >= 5 : false;
+    out.black = p.helmet ? p.helmet.boxes.slice(0, 4).every((b) => g.boxes.c[b.idx * 3] < 0.03 && g.boxes.c[b.idx * 3 + 2] < 0.03) : false;
+    out.chip = [...document.querySelectorAll('#weapon-bar .slot')].some((b) => b.textContent === 'HELMET');
+    const mk = (z, helm) => { const h = V.still(g.spawnHuman(p.x + 4, p.z + z, -Math.PI / 2)); if (helm) h.wearHelmet(); return h; };
+    const hit = (h, type, power, where, weapon) => {
+      const b = h.bodies[4], off = { top: [0, 0.1, 0], back: [0, 0.03, -0.1], face: [0, -0.02, 0.1] }[where], n = { top: [0, 1, 0], back: [0, 0, -1], face: [0, 0, 1] }[where];
+      const pt = [0, 0, 0], dir = [0, 0, 0];
+      b.toWorld(off[0] * h.scale, off[1] * h.scale, off[2] * h.scale, pt); b.dirToWorld(-n[0], -n[1], -n[2], dir);
+      return h.hit({ part: 4, type, power, point: pt, dir, normal: n, impulse: 2, attacker: p, weapon, through: 0.2, hp: 32 });
+    };
+    const A = mk(-2, true), B = mk(2, false);
+    g.advance(0.3);
+    hit(A, 'blunt', 1.8, 'top', 'fists'); hit(B, 'blunt', 1.8, 'top', 'fists'); g.advance(0.6);
+    out.blow = { helmet: { skull: A.h.bones.skull, conc: A.h.concussion, state: T.state(A) }, bare: { skull: B.h.bones.skull, conc: B.h.concussion, state: T.state(B) } };
+    g.removeHuman(A); g.removeHuman(B);
+    let turned = 0, face = 0;
+    for (let i = 0; i < 20; i++) { const h = mk(0, true); g.advance(0.05); if (hit(h, 'bullet', 1, 'back', 'm1911').stopped) turned++; g.removeHuman(h); }
+    for (let i = 0; i < 6; i++) { const h = mk(0, true); g.advance(0.05); const rep = hit(h, 'bullet', 1, 'face', 'm1911'); if (!rep.stopped && h.h.wounds.some((x) => x.type === 'gunshot')) face++; g.removeHuman(h); }
+    out.turned = turned; out.face = face;
+    const S = mk(0, true); g.advance(0.1);
+    out.slash = hit(S, 'cut', 1.6, 'top', 'machete').stopped;
+    g.removeHuman(S);
+    w.shedHelmet(); g.advance(0.8);
+    out.off = !p.helmet && w.items.some((i) => i.type === 'helmet' && i.body);
+    return out;
+  });
+  check('it is in the spawn menu and can be put on', r.spawned && r.put && r.worn && r.label === 'PUT ON');
+  check('a black shell on the head', r.onHead && r.black);
+  check('it takes the worst out of a blow to the head', r.blow.helmet.skull > r.blow.bare.skull + 8 && r.blow.helmet.conc < r.blow.bare.conc && r.blow.helmet.state === 'ANIM',
+    `skull ${r.blow.helmet.skull.toFixed(0)} against ${r.blow.bare.skull.toFixed(0)} without; concussion ${r.blow.helmet.conc.toFixed(0)} against ${r.blow.bare.conc.toFixed(0)}`);
+  check('it turns a slash, and some pistol rounds', r.slash && r.turned >= 5 && r.turned <= 19, `${r.turned} of 20 pistol rounds to the back of the head`);
+  check('it does not cover the face', r.face === 6);
+  check('it comes off again', r.chip && r.off);
+}
+
+/* --------------------------------- arrests ------------------------------ */
+head('Arrests');
+if (want('Arrests')) {
+  const r = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, S = g.city.police, out = {};
+    V.stage(); g.staffStation(true); g.advance(1.5);
+    const cops = () => g.humans.filter((h) => h.officer);
+    out.belts = cops().every((h) => ['m1911', 'taser', 'cuffs'].every((k) => (h.kit || []).some((i) => i.type === k)));
+    const fires = { taser: 0, pistol: 0 }; const nf = w.npcFire.bind(w);
+    w.npcFire = (h, a, sk) => { const what = h.weapon && h.weapon.def.taser ? 'taser' : 'pistol'; const ok = nf(h, a, sk); if (ok) fires[what]++; return ok; };
+    // keep hitting somebody in front of the station, with nothing in your hands
+    p.reset(0, 26.5, 0); g.camYaw = 0; g.camPitch = 0; g.advance(0.3);
+    const v = V.still(g.spawnHuman(0.2, 27.6, Math.PI));
+    g.advance(0.5);
+    for (let i = 0; i < 4; i++) { w.attack(i % 3); g.advance(1.1); }
+    let tased = false, at = -1;
+    for (let i = 0; i < 260; i++) {
+      if (i < 30 && i % 6 === 0 && p.state === 0 && !p.cuffed) w.attack(0);
+      g.advance(0.1);
+      if (p.tased > 0) tased = true;
+      if (p.cuffed && at < 0) at = i / 10;
+      if (p.cuffed && cops().every((h) => h.brain.mode === 'post' && !h.weapon)) break;
+    }
+    out.player = { tased, cuffedAfter: at, fires: { ...fires }, alive: p.h.alive, open: p.h.wounds.filter((x) => x.type !== 'bruise').length,
+      chip: [...document.querySelectorAll('#weapon-bar .slot')].some((b) => b.textContent === 'CUFFED'), label: document.querySelector('#attack-label').textContent,
+      blocked: !w.attack(0), posts: cops().every((h) => h.brain.mode === 'post' && !h.weapon) };
+    const chip = [...document.querySelectorAll('#weapon-bar .slot')].find((b) => b.textContent === 'CUFFED');
+    if (chip) chip.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    g.advance(0.5);
+    out.slipped = !p.cuffed;
+    // somebody else the police want, who will not stand still
+    g.removeHuman(v); p.h.heal(); p.reset(-30, 0, 0);
+    const n = g.spawnHuman(4, 24, 0);
+    let dir = 1;
+    n.brain = { update() { if (n.cuffed || n.tased > 0 || n.state !== 0) return; if (n.x > 7) dir = -1; if (n.x < -7) dir = 1; n.intent.mx = dir; n.intent.mz = 0; n.intent.run = true; }, pause: 0, mode: 'wander' };
+    g.advance(0.5);
+    for (const o of cops()) { const k = o.mind._know(n); k.crime = 2.2; k.crimeT = g.time; k.x = n.x; k.z = n.z; }
+    let cuffedAt = -1, cellAt = -1;
+    for (let i = 0; i < 1100 && cellAt < 0; i++) {
+      g.advance(0.1);
+      for (const o of cops()) { const k = o.mind.known.get(n.id); if (k && k.crime > 0 && !n.cuffed && n.state === 0 && n.tased <= 0) k.crimeT = g.time; }
+      if (n.cuffed && cuffedAt < 0) { cuffedAt = i / 10; n.brain = new (cops()[0].brain.constructor)(n, g); }
+      if (n.custody && n.custody.cell && n.x > S.cellX0 + 0.3 && n.z > S.cellDoor.z + 0.3 && n.x < S.x1 && n.z < S.z1) cellAt = i / 10;
+    }
+    out.npc = { cuffedAt, cellAt, alive: n.h.alive, doing: n.mind.doing, pistol: fires.pistol };
+    w.npcFire = nf;
+    return out;
+  });
+  check('officers carry a pistol, a taser and handcuffs', r.belts);
+  check('someone with empty hands who will not stop is tased, not shot', r.player.tased && r.player.fires.taser > 0 && r.player.fires.pistol === 0 && r.player.alive && r.player.open === 0, `${r.player.fires.taser} taser shot(s), no pistol rounds`);
+  check('and then handcuffed', r.player.cuffedAfter >= 0 && r.player.chip && r.player.label === 'CUFFED' && r.player.blocked, `cuffs on after ${r.player.cuffedAfter.toFixed(0)} s`);
+  check('the officers go back to their posts once the cuffs are on', r.player.posts);
+  check('in a sandbox the cuffs come off when you want them to', r.slipped);
+  check('a prisoner is walked to the station and into the cell', r.npc.cuffedAt >= 0 && r.npc.cellAt >= 0 && r.npc.alive && r.npc.pistol === 0, `cuffed after ${r.npc.cuffedAt.toFixed(0)} s, behind bars after ${r.npc.cellAt.toFixed(0)} s`);
+}
+
+/* ---------------------------------- cheat ------------------------------- */
+head('Infinite HP');
+if (want('Infinite HP')) {
+  const before = await run(() => {
+    const g = __game, p = g.player;
+    V.stage();
+    window.shootMe = (weapon, part) => { const q = g.player, c = q.bodies[part]; return q.hit({ part, type: 'bullet', power: weapon === 'ak47' ? 1.4 : 1, point: [c.px + 0.1, c.py, c.pz], dir: [-1, 0, 0], normal: [1, 0, 0], impulse: 8, attacker: null, weapon, through: 0.2, hp: 40 }); };
+    shootMe('m1911', 6); shootMe('m1911', 12); g.advance(1.2);
+    g.paused = false;
+    return { wounds: p.h.wounds.length, god: p.h.god };
+  });
+  await t.page.click('#btn-pause');
+  await t.page.click('[data-ptab="settings"]');
+  const there = await run(() => { const e = document.querySelector('#set-cheat-hp'); return !!e && !e.checked && /cheats/i.test(document.querySelector('[data-ppane="settings"]').textContent); });
+  await t.page.click('#set-cheat-hp');
+  await t.page.click('[data-ptab="main"]');
+  await t.page.click('#btn-resume');
+  const on = await run(() => {
+    const g = __game, p = g.player, out = {};
+    g.paused = true; g.paused = false; g.advance(0.4);
+    out.tag = !document.querySelector('#v-cheat').hidden; out.mended = p.h.wounds.length === 0 && p.h.pain < 1;
+    const marks0 = g.gore.bDecals.filter((d) => d.human === p).length;
+    for (let i = 0; i < 12; i++) { shootMe('ak47', [2, 4, 1, 5, 11][i % 5]); g.advance(0.1); }
+    const c = p.bodies[3];
+    p.hit({ part: 3, type: 'cut', power: 3, point: [c.px + 0.05, c.py, c.pz], dir: [0, 0, 1], normal: [1, 0, 0], impulse: 6, attacker: null, weapon: 'machete', chop: 1.3 });
+    p.sever(9, [1, 2, 0]); p.burst(12); p.h.kill('test');
+    g.advance(1.5);
+    out.after = { alive: p.h.alive, wounds: p.h.wounds.length, blood: p.h.bloodPct, whole: p.attached.every((a) => a) && !p.gone.some((x) => x), marks: g.gore.bDecals.filter((d) => d.human === p).length - marks0 };
+    p.tase(2, null); g.advance(0.5); out.tased = p.tased > 0 && p.state === 2;
+    g.advance(9);
+    g.respawn(true); g.advance(0.3); out.kept = g.player.h.god;
+    return out;
+  });
+  await t.page.click('#btn-pause');
+  await t.page.click('[data-ptab="settings"]');
+  await t.page.click('#set-cheat-hp');
+  await t.page.click('[data-ptab="main"]');
+  await t.page.click('#btn-resume');
+  const off = await run(() => { const g = __game, p = g.player; g.advance(0.3); shootMe('m1911', 2); g.advance(0.4); const out = { tag: !document.querySelector('#v-cheat').hidden, god: p.h.god, wounds: p.h.wounds.length }; g.paused = true; return out; });
+  check('it is in the options, under Cheats, while playing', there && before.wounds > 0 && !before.god);
+  check('switching it on mends you and says so on the screen', on.tag && on.mended);
+  check('nothing injures you: no wounds, no bleeding, nothing cut off, no dying', on.after.alive && on.after.wounds === 0 && on.after.blood > 99.9 && on.after.whole && on.after.marks === 0, `after twelve rifle rounds, a machete to the neck and three attempts to take a limb or a life: ${on.after.wounds} wounds, blood ${on.after.blood.toFixed(1)}%, ${on.after.marks} marks`);
+  check('a taser still drops you', on.tased);
+  check('it lasts through starting again, and switches off', on.kept && !off.tag && !off.god && off.wounds > 0);
+}
+
 /* --------------------------------- report ------------------------------- */
-const errors = t.logs.filter((l) => !/401|Failed to load resource/.test(l));
+const errors = t.logs.filter((l) => !/401|Failed to load resource|willReadFrequently/.test(l));
 head('Console');
 check('no errors or warnings in the console', errors.length === 0, errors.slice(0, 3).join(' | '));
 await t.close();

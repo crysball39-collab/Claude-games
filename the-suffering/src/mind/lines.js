@@ -78,6 +78,7 @@ export const LINES = {
   afterTase: ['What... what did you do to me...', 'I cannot... my legs...', 'Everything hurts. Everything.', 'Do not do that again. Please.', 'I could not move. I could not move at all.', 'My whole body just... stopped.'],
   cuffed: ['These are too tight.', 'You cannot do this. Let me go!', 'I have not done anything!', 'Please. Take them off.', 'I cannot feel my hands.', 'What am I being arrested for?', 'This is a mistake. This is a mistake.'],
   inCell: ['I want my phone call.', 'This is a mistake.', 'How long are you going to keep me here?', 'Hello? Is anyone listening?', 'I did not do anything.', 'My wrists are killing me.'],
+  copMedic: ['Control, we need an ambulance here.', 'Stay with me. Help is coming.', 'Do not move them. An ambulance is on its way.', 'Control, one casualty, send medics.', 'Give them some room, please.'],
   copTaser: ['Taser! Taser! Taser!', 'Stop or you will be tased!', 'Taser, taser!', 'Last chance! You will be tased!'],
   copCuff: ['Hands behind your back.', 'You are under arrest.', 'Do not resist.', 'Stay still. Cuffs are going on.', 'You are under arrest. Do not move.'],
   copCustody: ['Control, one in custody.', 'Suspect in custody, bringing them in.', 'One in cuffs. Walking them back.', 'Control, one detained.'],

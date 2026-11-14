@@ -23,6 +23,7 @@ const COP = {
   greet: 'copGreet', greetBack: 'copGreet', replyGreet: 'copGreet', playerNear: 'copGreet', sawSpawn: 'copIdle', idle: 'copIdle', bored: 'copIdle',
   aimedAt: 'copChallenge', sawWeapon: null, surrender: 'copChallenge', replyThreat: 'copChallenge', replyThreatBrave: 'copChallenge', replyScared: 'copCalm',
   sawFist: 'copHalt', sawAttack: 'copHalt', sawShot: 'copFire', gunshot: 'copRespond', startle: 'copRespond', flee: 'copRespond', cower: 'copRespond', gawk: 'copRespond',
+  sawHurt: 'copMedic', sawBlood: 'copMedic', sawDismember: 'copMedic', sawHeadless: 'copMedic', sawCarHit: 'copMedic', mourn: 'copMedic',
   relief: 'copClear', fight: 'copHalt', fightWin: 'copDown', sawDeath: 'copRespond', sawCorpse: 'copRespond', replyGo: 'copGreet', replyInsult: 'copGreet',
 };
 const NOW = {
@@ -36,7 +37,7 @@ const NOW = {
   tased: 'a taser has locked every muscle in their body and they can only make a noise', afterTase: 'a taser has just let go of them and they are lying on the ground getting their body back',
   cuffed: 'they have just been put in handcuffs', inCell: 'they are locked in the cell at the police station, in handcuffs',
   copTaser: 'they are about to fire their taser at someone who will not stop, and are shouting the warning', copCuff: 'they are putting handcuffs on the suspect',
-  copCustody: 'they have the suspect in handcuffs and are reporting it', copWalk: 'they are walking a handcuffed prisoner to the station',
+  copCustody: 'they have the suspect in handcuffs and are reporting it', copMedic: 'someone is badly hurt in front of them and they are calling for an ambulance', copWalk: 'they are walking a handcuffed prisoner to the station',
   hitBlunt: 'they have just been struck and react', hitCut: 'they have just been cut and react', hitStab: 'they have just been stabbed and react',
   hitShot: 'they have just been shot and react', hitUnseen: 'something has just hurt them and they did not see what', hitCar: 'a car has just hit them',
   lostLimb: 'a part of their body has just been taken off', boneBreak: 'a bone has just broken', bleeding: 'they have noticed how much they are bleeding',

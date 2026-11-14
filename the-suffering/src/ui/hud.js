@@ -272,7 +272,7 @@ export class UI {
   /** The cheat has been switched: say so on the HUD, and mend whatever was wrong when it came on. */
   cheatChanged() {
     const on = !!this.settings.cheatHp, tag = $('#v-cheat');
-    if (on && tag.hidden) { const p = this.g.player; if (!p.h.alive || p.h.missing.some((m) => m)) { this.g.respawn(false); $('#dead').hidden = true; this.deadT = 0; this.input.enabled = true; } else { p.h.heal(); this.g.gore.clearHuman(p); p.bloodied = 0; } }
+    if (on && tag.hidden) { const p = this.g.player; if (!p.h.alive || p.h.missing.some((m) => m)) { this.g.respawn(false); $('#dead').hidden = true; this.deadT = 0; this.input.enabled = true; } else { const G = this.g.gore; for (let i = 0; i < G.N; i++) if (G.owner[i] === p) G.life[i] = 0; p.h.heal(); G.clearHuman(p); p.bloodied = 0; } }
     tag.hidden = !on;
     this.g.player.h.god = on;
   }

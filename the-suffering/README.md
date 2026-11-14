@@ -67,8 +67,28 @@ reach that takes. People are frightened of a weapon in the hand, not one put awa
 slash (you get the bruise, and perhaps a cracked rib, instead), takes the edge off a
 stab, and only slows a rifle round. It covers nothing else.
 
+**The light helmet.** A black shell over the skull, open at the face. It takes most of
+a blow to the head, or a fall on to it; turns a slash; turns rather more than half of
+the pistol rounds that hit it, and takes a little off a rifle round. A shot in the face
+is a shot in the face.
+
+**The taser.** Two barbed probes on wires, good for seven metres, two cartridges before
+a reload. Whoever they land in has every muscle contract at once: they go over stiff as
+a board and stay that way, shaking, for five seconds, hurt and wide awake and unable to
+do anything about it. While the wires are in, the trigger sends another five seconds
+down them without using a cartridge. It leaves no wound; the fall may. Probes skate off
+a helmet. People see a taser fired for what it is: frightening, but not a gun.
+
+**Handcuffs.** They go on someone who is on the ground, out cold, locked up by a taser,
+or standing with their hands up, and it takes a moment on one knee beside them. Wrists
+are held together behind the back, on their feet or as a ragdoll, by a real joint. In
+cuffs a person can walk and run, clumsily, and can neither hit anybody nor carry
+anything; what they were carrying is taken off them. PICK UP beside them takes the cuffs
+off again.
+
 **The sandbox menu** spawns humans (one or five), police officers, crates, the light
-vest and the four weapons, and can clear away blood, bodies or objects, or patch you up.
+vest, the light helmet, handcuffs, the taser and the four weapons, and can clear away
+blood, bodies or objects, or patch you up.
 
 **Bodies.** Every person is seventeen rigid parts on sixteen limited joints, driven by
 muscles with real torque limits. Each hand has four fingers and a thumb, in two segments
@@ -135,14 +155,22 @@ to them. Connect them to Claude and they can say anything at all:
 **The police.** The station is across the road from the far side of the park: a
 forecourt with two patrol cars, a lobby you can walk into with a front desk and a cell,
 and four officers, one at the desk, two at the door and one walking the beat. Each wears
-a vest and carries an M1911 in a holster. They keep count of what they have seen each
+a vest and carries an M1911, a taser and a pair of handcuffs on their belt. They keep count of what they have seen each
 person do, and tell each other by radio. A weapon in your hand near them gets pistols
 drawn and orders shouted. Put it away and stand still, and they hold you there a while
-and then stand down. Somebody with empty hands who keeps hitting people is put on the
-ground by hand. Use a weapon on a person, or keep a gun pointed at an officer, and they
+and then stand down. Somebody who keeps hitting people, or will not put a blade down, is
+warned ("Taser! Taser! Taser!") and tased. Anybody with something to answer for who is
+down, or has stopped, is handcuffed by one officer while the others cover; a prisoner is
+then walked back to the station and into the cell. (If the prisoner is you, they leave
+you where you are in cuffs. This is a sandbox: tap CUFFED in the weapon bar and they
+come off.) Use a weapon on a person, or keep a gun pointed at an officer, and they
 shoot; they stop when you are down, do not fire with a bystander in the way, and reload
 before they holster. A post left empty is filled again in time. An officer who is past
 caring can be relieved of their pistol.
+
+**Cheats.** *Pause -> Settings -> Cheats -> Infinite HP.* Nothing injures you: no
+wounds, no bleeding, nothing cut off, no dying, and whatever was wrong with you when you
+switched it on is mended. You can still be knocked over, tased and handcuffed.
 
 ## Working on it
 
@@ -150,6 +178,7 @@ caring can be relieved of their pistol.
 npm install          # only esbuild, for the single-file build
 npm test             # physics and medical model, in Node
 npm run verify       # plays the game in headless Chromium and checks every feature
+                     # (node tools/verify.mjs "Taser|Handcuffs" runs only the sections named)
 npm run build        # writes dist/the-suffering.html
 ```
 

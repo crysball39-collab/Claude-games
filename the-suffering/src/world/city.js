@@ -324,7 +324,7 @@ export class City {
     this.police = {
       door: { x: cx, z: zf - 1.1 }, inside: { x: cx, z: zf + 1.6 },
       x0: bx0, x1: bx1, z0: zf, z1: zb, deskZ: dz, side: cx + 3.4,
-      cellDoor: { x: cxa + 0.9, z: cza }, cell: { x: cxa + 2.1, z: cza + 1.5 }, cellWait: { x: cxa - 0.6, z: cza - 1.0 },
+      cellDoor: { x: cxa + 0.9, z: cza }, cell: { x: cxa + 2.1, z: cza + 1.5 }, cellWait: { x: cxa - 0.7, z: cza - 1.3 }, cellX0: cxa,
       posts: [
         { x: cx + 0.2, z: dz + 1.25, yaw: Math.PI, kind: 'desk', indoors: true },
         { x: cx - door - 1.0, z: zf - 0.9, yaw: Math.PI, kind: 'door' },
