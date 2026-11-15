@@ -27,6 +27,10 @@ import { clamp, clamp01, lerp, damp, smooth, turnToward, wrapAngle, dampAngle, r
 
 export const ST = { ANIM: 0, STUMBLE: 1, RAGDOLL: 2, GETUP: 3 };
 export const RADIUS = 0.27;
+/** Half the room a person takes up among other people: shoulder, arm and a little air. */
+const SPACE = 0.335;
+/** The parts of someone lying down that cannot be walked through. */
+const TRUNK = [P.PELVIS, P.ABDOMEN, P.CHEST, P.HEAD];
 const WALK = 1.5, RUN = 5.0, CROUCH = 1.2, JUMP_V = 4.5;
 const GETUP_TIME = 1.55;
 
@@ -65,7 +69,7 @@ export class Human {
     this.mind = null;                      // feelings and senses, for those who have them
     this.brain = null;
 
-    const r = buildRagdoll(game.world, this, this.scale);
+    const r = buildRagdoll(game.world, this, this.scale, look.build || 1);
     for (const b of r.bodies) b.yields = true;
     this.bodies = r.bodies; this.joints = r.joints; this.island = r.island; this.group = r.group;
     this.island.mover = true;
@@ -87,6 +91,8 @@ export class Human {
     this.quat = new Float32Array(PART_COUNT * 4);
     this.snapPos = new Float32Array(PART_COUNT * 3);
     this.snapQuat = new Float32Array(PART_COUNT * 4);
+    this.snapRel = new Float32Array(PART_COUNT * 3);
+    this.snapRelQ = new Float32Array(PART_COUNT * 4);
     this.blend = 0; this.blendDur = 0;
     this.balance = 1; this.stumbleT = 0; this.ragT = 0; this.stillT = 0; this.getT = 0;
     this.speed = 0;
@@ -349,25 +355,64 @@ export class Human {
   }
 
   _snapshot() {
+    const sp = this.snapPos, sq = this.snapQuat, rp = this.snapRel, rq = this.snapRelQ;
     for (let i = 0; i < PART_COUNT; i++) {
       const b = this.bodies[i];
-      this.snapPos[i * 3] = b.px; this.snapPos[i * 3 + 1] = b.py; this.snapPos[i * 3 + 2] = b.pz;
-      this.snapQuat[i * 4] = b.qx; this.snapQuat[i * 4 + 1] = b.qy; this.snapQuat[i * 4 + 2] = b.qz; this.snapQuat[i * 4 + 3] = b.qw;
+      sp[i * 3] = b.px; sp[i * 3 + 1] = b.py; sp[i * 3 + 2] = b.pz;
+      sq[i * 4] = b.qx; sq[i * 4 + 1] = b.qy; sq[i * 4 + 2] = b.qz; sq[i * 4 + 3] = b.qw;
+    }
+    // and the same thing seen from the pelvis: the shape the body is in, apart from where it is and which way up
+    const ax = -sq[0], ay = -sq[1], az = -sq[2], aw = sq[3];
+    for (let i = 0; i < PART_COUNT; i++) {
+      const o = i * 3, k = i * 4;
+      qrot(ax, ay, az, aw, sp[o] - sp[0], sp[o + 1] - sp[1], sp[o + 2] - sp[2], _a);
+      rp[o] = _a[0]; rp[o + 1] = _a[1]; rp[o + 2] = _a[2];
+      const bx = sq[k], by = sq[k + 1], bz = sq[k + 2], bw = sq[k + 3];
+      rq[k] = aw * bx + ax * bw + ay * bz - az * by; rq[k + 1] = aw * by - ax * bz + ay * bw + az * bx;
+      rq[k + 2] = aw * bz + ax * by - ay * bx + az * bw; rq[k + 3] = aw * bw - ax * bx - ay * by - az * bz;
     }
   }
 
   /** Puts the attached parts where the solved pose says, blending out of a snapshot if one is fading. */
   _apply(dt, w = 1) {
     const pos = this.pos, quat = this.quat, sp = this.snapPos, sq = this.snapQuat;
+    if (w >= 1) {
+      for (let i = 0; i < PART_COUNT; i++) {
+        if (!this.attached[i]) continue;
+        const o = i * 3, k = i * 4;
+        this.bodies[i].setPose(pos[o], pos[o + 1], pos[o + 2], quat[k], quat[k + 1], quat[k + 2], quat[k + 3], dt);
+      }
+      return;
+    }
+    // The pelvis goes from where it lay to where it should be, turning as it goes,
+    // and every other part keeps its place relative to the pelvis, easing from the
+    // shape the body was in to the shape it should be in. Blending each part on its
+    // own straight line instead would fold the body through itself on the way up.
+    const rp = this.snapRel, rq = this.snapRelQ;
+    let rx = sq[0], ry = sq[1], rz = sq[2], rw = sq[3];
+    if (rx * quat[0] + ry * quat[1] + rz * quat[2] + rw * quat[3] < 0) { rx = -rx; ry = -ry; rz = -rz; rw = -rw; }
+    rx += (quat[0] - rx) * w; ry += (quat[1] - ry) * w; rz += (quat[2] - rz) * w; rw += (quat[3] - rw) * w;
+    const rn = 1 / Math.hypot(rx, ry, rz, rw);
+    rx *= rn; ry *= rn; rz *= rn; rw *= rn;
+    const px = sp[0] + (pos[0] - sp[0]) * w, py = sp[1] + (pos[1] - sp[1]) * w, pz = sp[2] + (pos[2] - sp[2]) * w;
+    const tx = -quat[0], ty = -quat[1], tz = -quat[2], tw = quat[3];        // the target pelvis, undone
     for (let i = 0; i < PART_COUNT; i++) {
       if (!this.attached[i]) continue;
       const b = this.bodies[i], o = i * 3, k = i * 4;
-      if (w >= 1) { b.setPose(pos[o], pos[o + 1], pos[o + 2], quat[k], quat[k + 1], quat[k + 2], quat[k + 3], dt); continue; }
-      let ax = sq[k], ay = sq[k + 1], az = sq[k + 2], aw = sq[k + 3];
-      if (ax * quat[k] + ay * quat[k + 1] + az * quat[k + 2] + aw * quat[k + 3] < 0) { ax = -ax; ay = -ay; az = -az; aw = -aw; }
-      let qx = ax + (quat[k] - ax) * w, qy = ay + (quat[k + 1] - ay) * w, qz = az + (quat[k + 2] - az) * w, qw = aw + (quat[k + 3] - aw) * w;
-      const n = 1 / Math.hypot(qx, qy, qz, qw);
-      b.setPose(sp[o] + (pos[o] - sp[o]) * w, sp[o + 1] + (pos[o + 1] - sp[o + 1]) * w, sp[o + 2] + (pos[o + 2] - sp[o + 2]) * w, qx * n, qy * n, qz * n, qw * n, dt);
+      if (i === 0) { b.setPose(px, py, pz, rx, ry, rz, rw, dt); continue; }
+      // where this part should be, seen from the pelvis it should be attached to
+      qrot(tx, ty, tz, tw, pos[o] - pos[0], pos[o + 1] - pos[1], pos[o + 2] - pos[2], _a);
+      const lx = rp[o] + (_a[0] - rp[o]) * w, ly = rp[o + 1] + (_a[1] - rp[o + 1]) * w, lz = rp[o + 2] + (_a[2] - rp[o + 2]) * w;
+      const bx = quat[k], by = quat[k + 1], bz = quat[k + 2], bw = quat[k + 3];
+      const gx = tw * bx + tx * bw + ty * bz - tz * by, gy = tw * by - tx * bz + ty * bw + tz * bx, gz = tw * bz + tx * by - ty * bx + tz * bw, gw = tw * bw - tx * bx - ty * by - tz * bz;
+      let ax = rq[k], ay = rq[k + 1], az = rq[k + 2], aw = rq[k + 3];
+      if (ax * gx + ay * gy + az * gz + aw * gw < 0) { ax = -ax; ay = -ay; az = -az; aw = -aw; }
+      ax += (gx - ax) * w; ay += (gy - ay) * w; az += (gz - az) * w; aw += (gw - aw) * w;
+      const n = 1 / Math.hypot(ax, ay, az, aw);
+      ax *= n; ay *= n; az *= n; aw *= n;
+      qrot(rx, ry, rz, rw, lx, ly, lz, _a);
+      b.setPose(px + _a[0], py + _a[1], pz + _a[2],
+        rw * ax + rx * aw + ry * az - rz * ay, rw * ay - rx * az + ry * aw + rz * ax, rw * az + rx * ay - ry * ax + rz * aw, rw * aw - rx * ax - ry * ay - rz * az, dt);
     }
   }
 
@@ -536,6 +581,13 @@ export class Human {
     this._trip();
   }
 
+  /** Works the pose out again for this instant, for when something has just changed what it should be. */
+  repose() {
+    if (this.state !== ST.ANIM || this.blendDur > 0) return;
+    this._solve(0);
+    this._apply(this._dt || 1 / 60);
+  }
+
   /** What the arms are doing by default, given what is being carried. */
   weaponHold() {
     const w = this.weapon;
@@ -641,15 +693,47 @@ export class Human {
       const closing = (b.vx - this.vx) * ex + (b.vz - this.vz) * ez;
       if (closing > 2.2) { this.x = nx; this.z = nz; this.struckByCar(car, closing); return [nx, nz]; }
     }
-    // other people on their feet
+    // somebody lying in the way: their trunk and their head are gone round, not walked through
     for (const o of g.humans) {
-      if (o === this || o.state !== ST.ANIM || o.removed) continue;
-      const dx = nx - o.x, dz = nz - o.z;
-      const rr = (R + RADIUS * o.scale / 0.93) * 0.92;
+      if (o === this || o.removed || o.state !== ST.RAGDOLL) continue;
+      const ox = nx - o.x, oz = nz - o.z;
+      if (ox * ox + oz * oz > 2.6) continue;
+      for (let t = 0; t < TRUNK.length; t++) {
+        const i = TRUNK[t];
+        if (o.gone[i]) continue;
+        const b = o.bodies[i];
+        if (b.py - b.boundR > hi || b.py + b.boundR < ny + 0.04) continue;
+        b.toLocal(nx, clamp(b.py, ny + 0.06, hi), nz, _a);
+        const cx = clamp(_a[0], -b.hx, b.hx), cy = clamp(_a[1], -b.hy, b.hy), cz = clamp(_a[2], -b.hz, b.hz);
+        b.toWorld(cx, cy, cz, _b);
+        if (_b[1] < ny + 0.04 || _b[1] > hi) continue;
+        let ex = nx - _b[0], ez = nz - _b[2];
+        const d2 = ex * ex + ez * ez, reach = R * 0.92;
+        if (d2 >= reach * reach) continue;
+        let d = Math.sqrt(d2);
+        if (d < 1e-4) { ex = ox; ez = oz; d = Math.hypot(ex, ez) || 1; }
+        ex /= d; ez /= d;
+        nx += ex * (reach - d); nz += ez * (reach - d);
+        // walked into hard enough, a body is shoved along a little
+        if (!b.kinematic && b.im > 0) { const into = -(this.vx * ex + this.vz * ez); if (into > 0.3) { const k = into * b.mass * 2.2 * this._dt; b.applyImpulse(-ex * k, 0, -ez * k, _b[0], b.py, _b[2]); } }
+      }
+    }
+    // other people on their feet: nobody stands inside anybody else
+    for (const o of g.humans) {
+      if (o === this || o.removed || (o.state !== ST.ANIM && o.state !== ST.GETUP)) continue;
+      let dx = nx - o.x, dz = nz - o.z;
+      // shoulder to shoulder with a hand's width to spare; a blow in progress, or a pair of handcuffs, comes in closer than that
+      const close = this.anim.action || o.anim.action || this.cuffing || o.cuffing ? 0.82 : 1;
+      const rr = (this.scale + o.scale) * (SPACE / 0.93) * close;
       const d2 = dx * dx + dz * dz;
       if (d2 >= rr * rr || Math.abs(ny - o.y) > 1.5) continue;
-      const d = Math.sqrt(d2) || 0.001;
-      const push = (rr - d) * (this.isPlayer ? 0.35 : o.isPlayer ? 0.9 : 0.5);
+      let d = Math.sqrt(d2);
+      if (d < 1e-3) { dx = this.id < o.id ? 1 : -1; dz = 0.3; d = Math.hypot(dx, dz); }
+      // each gives way by a share: someone getting up gives none, and the player gives least
+      const share = o.state !== ST.ANIM ? 1 : this.isPlayer ? 0.3 : o.isPlayer ? 0.7 : 0.5;
+      let push = (rr - d) * share;
+      // two people who find themselves on the same spot ease apart; they do not jump
+      if (rr - d > 0.22) push = Math.min(push, 3.5 * this._dt);
       nx += dx / d * push; nz += dz / d * push;
       // barging into someone at a run knocks them about
       if (this.speed > 3.6 && !o.isPlayer && (this.vx * -dx + this.vz * -dz) / d > 3 && o.tripCool <= 0) {
@@ -1362,6 +1446,13 @@ export class Human {
     g.faceQuads.release(this.faceQuad); g.faces.release(this.faceCell);
     g.gore.clearHuman(this);
   }
+}
+
+/** Turns a vector by a quaternion. */
+function qrot(qx, qy, qz, qw, x, y, z, out) {
+  const tx = 2 * (qy * z - qz * y), ty = 2 * (qz * x - qx * z), tz = 2 * (qx * y - qy * x);
+  out[0] = x + qw * tx + (qy * tz - qz * ty); out[1] = y + qw * ty + (qz * tx - qx * tz); out[2] = z + qw * tz + (qx * ty - qy * tx);
+  return out;
 }
 
 /** Fingers, index to little: where along the knuckles, the two segment lengths, how readily it closes. */

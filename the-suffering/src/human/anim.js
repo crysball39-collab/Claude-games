@@ -409,10 +409,13 @@ export class Animator {
       if (u >= 1) this.action = null;
       else {
         const keys = c.keys;
+        // a blow that has landed goes no further: from that moment the limb comes back the way it went
+        const ub = act.bounce;
+        const uk = ub != null && u > ub ? Math.max(0.02, ub - (u - ub) * 0.85) : u;
         let i = 0;
-        while (i < keys.length - 2 && u > keys[i + 1].t) i++;
+        while (i < keys.length - 2 && uk > keys[i + 1].t) i++;
         const a = keys[i], b = keys[i + 1];
-        const f = smooth((u - a.t) / (b.t - a.t));
+        const f = smooth(clamp01((uk - a.t) / (b.t - a.t)));
         const wgt = Math.min(smooth(u / 0.1), smooth((1 - u) / 0.16));
         for (let n = 0; n < c.channels.length; n++) {
           const idx = c.channels[n];

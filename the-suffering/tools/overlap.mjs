@@ -110,6 +110,11 @@ await t.ev(async () => {
         if (sBad) out.selfTime++;
         if (oBad) out.otherTime++;
       }
+      // and how things stand at the end, once whatever was going to happen has happened
+      out.endSelf = 0; out.endOther = 0; out.endPair = '';
+      { const list = typeof people === 'function' ? people() : people;
+        for (let i = 0; i < list.length; i++) { if (list[i].removed) continue; out.endSelf = Math.max(out.endSelf, OV.self(list[i]).d);
+          if (pairs) for (let j = i + 1; j < list.length; j++) { if (list[j].removed) continue; const b = OV.between(list[i], list[j]); if (b.d > out.endOther) { out.endOther = b.d; out.endPair = b.pair; } } } }
       out.selfTime /= out.frames; out.otherTime /= out.frames;
       out.common = Object.entries(tally).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => k + ' ' + Math.round(v / out.frames * 100) + '%').join(', ');
       return out;
@@ -121,7 +126,7 @@ await t.ev(async () => {
 
 const cm = (v) => (v * 100).toFixed(1).padStart(5) + ' cm';
 const rows = [];
-const report = (name, r) => { rows.push({ name, r }); console.log(name.padEnd(34), 'own', cm(r.self), (Math.round(r.selfTime * 100) + '%').padStart(4), (r.selfPair || '-').padEnd(34), r.other !== undefined && r.otherPair ? 'others ' + cm(r.other) + ' ' + Math.round(r.otherTime * 100) + '% ' + r.otherPair : '', r.common ? ' [' + r.common + ']' : ''); };
+const report = (name, r) => { rows.push({ name, r }); console.log(name.padEnd(34), 'own', cm(r.self), (Math.round(r.selfTime * 100) + '%').padStart(4), (r.selfPair || '-').padEnd(34), r.other !== undefined && r.otherPair ? 'others ' + cm(r.other) + ' ' + Math.round(r.otherTime * 100) + '% ' + r.otherPair : '', r.common ? ' [' + r.common + ']' : '', `| at the end: own ${(r.endSelf * 100).toFixed(1)} cm` + (r.endPair ? `, others ${(r.endOther * 100).toFixed(1)} cm ${r.endPair}` : '')); };
 const scen = async (name, fn, arg) => { if (only && !only.test(name)) return; try { report(name, await t.ev(fn, arg)); } catch (e) { console.log(name, 'ERROR', String(e).slice(0, 300)); } };
 
 /* --------------------------- one person, on their feet ----------------------- */

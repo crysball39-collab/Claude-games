@@ -222,46 +222,72 @@ function clampUnit(v) { return v < -1 ? -1 : v > 1 ? 1 : v; }
 
 /* ------------------------------ physics bodies ---------------------------- */
 
+/**
+ * The spheres that stand for a part when it is tested against another part's
+ * box. A limb is a row of them down its length, close enough together that
+ * nothing slips between two; a slab of torso is a row across its width.
+ */
 function limbSpheres(hx, hy, hz) {
-  const r = Math.max(hx, hz);
-  const off = hy - r;
+  // a little fatter than the limb is wide, so that the long edges of its box are inside the row too
+  const r = Math.max(hx, hz) * 1.2;
+  const off = hy - r * 0.8;
   if (off < r * 0.4) return [0, 0, 0, Math.min(r, hy)];
-  return [0, off, 0, r, 0, -off, 0, r];
+  const n = Math.max(2, Math.ceil(2 * off / (r * 1.35)) + 1);
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(0, -off + 2 * off * i / (n - 1), 0, r);
+  return out;
 }
-
+function slabSpheres(hx, hy, hz) {
+  const r = Math.min(hy, hz) * 1.03, off = Math.max(0, hx - r);
+  const n = Math.max(2, Math.ceil(2 * off / (r * 1.3)) + 1);
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(-off + 2 * off * i / (n - 1), 0, 0, r);
+  return out;
+}
+const TORSO = { pelvis: 1, abdomen: 1, chest: 1 };
+const WIDE = { head: 1, neck: 1, handL: 1, handR: 1, footL: 1, footR: 1 };
 const SPHERES = {
-  pelvis: (s) => [0.07 * s, 0, 0, 0.105 * s, -0.07 * s, 0, 0, 0.105 * s],
-  abdomen: (s) => [0.06 * s, 0, 0, 0.095 * s, -0.06 * s, 0, 0, 0.095 * s],
-  chest: (s) => [0.075 * s, 0.01 * s, 0, 0.115 * s, -0.075 * s, 0.01 * s, 0, 0.115 * s],
-  neck: (s) => [0, 0, 0, 0.055 * s],
-  head: (s) => [0, 0, 0, 0.115 * s],
-  handL: (s) => [0, 0, 0, 0.05 * s], handR: (s) => [0, 0, 0, 0.05 * s],
-  footL: (s) => [0, 0, -0.055 * s, 0.045 * s, 0, 0, 0.07 * s, 0.045 * s],
-  footR: (s) => [0, 0, -0.055 * s, 0.045 * s, 0, 0, 0.07 * s, 0.045 * s],
+  neck: (hx) => [0, 0, 0, hx * 1.15],
+  // the skull, and one at each corner of the jaw and of the crown, which are what a bowed head leads with
+  head: (hx, hy, hz) => {
+    const out = [0, 0, 0, Math.min(hx, hy, hz) * 1.08], r = hx * 0.52;
+    for (const sy of [-1, 1]) for (const sx of [-1, 1]) for (const sz of [-1, 1]) out.push(sx * (hx - r * 0.9), sy * (hy - r * 0.9), sz * (hz - r * 0.9), r);
+    return out;
+  },
+  // two rows across the chest: the upper one is the line of the shoulders
+  chest: (hx, hy, hz) => {
+    const out = slabSpheres(hx, hy, hz), r = hz * 0.72, y = hy - r * 0.92;
+    for (const k of [-1, 0, 1]) out.push(k * (hx - r * 0.95), y, 0, r, k * (hx - r * 0.95), -y, 0, r);
+    return out;
+  },
+  handL: (hx, hy) => [0, hy * 0.35, 0, 0.042 / 0.06 * hy, 0, -hy * 0.45, 0, 0.04 / 0.06 * hy],
+  handR: (hx, hy) => [0, hy * 0.35, 0, 0.042 / 0.06 * hy, 0, -hy * 0.45, 0, 0.04 / 0.06 * hy],
+  footL: (hx, hy, hz) => [0, 0, -hz * 0.6, hy * 1.1, 0, 0, 0, hy * 1.1, 0, 0, hz * 0.6, hy * 1.1],
+  footR: (hx, hy, hz) => [0, 0, -hz * 0.6, hy * 1.1, 0, 0, 0, hy * 1.1, 0, 0, hz * 0.6, hy * 1.1],
 };
 
-/** Pairs inside one body that are allowed to collide with each other. */
-const SELF_PAIRS = [
-  [P.FARM_L, P.CHEST], [P.FARM_L, P.ABDOMEN], [P.FARM_L, P.PELVIS], [P.HAND_L, P.CHEST], [P.HAND_L, P.ABDOMEN],
-  [P.HAND_L, P.PELVIS], [P.HAND_L, P.HEAD], [P.FARM_L, P.HEAD],
-  [P.FARM_R, P.CHEST], [P.FARM_R, P.ABDOMEN], [P.FARM_R, P.PELVIS], [P.HAND_R, P.CHEST], [P.HAND_R, P.ABDOMEN],
-  [P.HAND_R, P.PELVIS], [P.HAND_R, P.HEAD], [P.FARM_R, P.HEAD],
-  [P.SHIN_L, P.SHIN_R], [P.THIGH_L, P.THIGH_R], [P.FOOT_L, P.FOOT_R], [P.SHIN_L, P.THIGH_R], [P.SHIN_R, P.THIGH_L],
-  [P.FOOT_L, P.SHIN_R], [P.FOOT_R, P.SHIN_L], [P.FARM_L, P.FARM_R], [P.HAND_L, P.THIGH_L], [P.HAND_R, P.THIGH_R],
-];
+/**
+ * Pairs inside one body that can collide with each other: every pair of parts
+ * that is not joined at a joint. (Parts that are joined overlap at the joint by
+ * design, and the joint's own limits keep them out of each other.)
+ */
+const SELF_PAIRS = [];
+for (let i = 0; i < PARTS.length; i++) for (let j = i + 1; j < PARTS.length; j++) if (PARTS[i].parent !== j && PARTS[j].parent !== i) SELF_PAIRS.push([i, j]);
 
 /**
  * Builds the seventeen bodies and sixteen joints for one person, standing at
  * the origin. Returns { island, bodies, joints, group }.
  */
-export function buildRagdoll(world, owner, scale = 1) {
+export function buildRagdoll(world, owner, scale = 1, build = 1) {
   const island = new Island(owner);
   const group = newGroup();
   const bodies = [], joints = [];
   for (let i = 0; i < PART_COUNT; i++) {
     const p = PARTS[i];
-    const hx = p.size[0] * 0.5 * scale, hy = p.size[1] * 0.5 * scale, hz = p.size[2] * 0.5 * scale;
-    const sph = SPHERES[p.name] ? SPHERES[p.name](scale) : limbSpheres(hx, hy, hz);
+    // a heavier build is wider and deeper in the trunk and the limbs, as it is drawn; heads, hands and feet are not
+    const wide = WIDE[p.name] ? 1 : build;
+    const hx = p.size[0] * 0.5 * scale * wide, hy = p.size[1] * 0.5 * scale, hz = p.size[2] * 0.5 * scale * wide;
+    const sph = SPHERES[p.name] ? SPHERES[p.name](hx, hy, hz) : TORSO[p.name] ? slabSpheres(hx, hy, hz) : limbSpheres(hx, hy, hz);
     const b = new Body({
       hx, hy, hz, mass: p.mass * scale * scale * scale,
       x: p.c[0] * scale, y: p.c[1] * scale, z: p.c[2] * scale,

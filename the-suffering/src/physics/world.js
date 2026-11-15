@@ -28,6 +28,7 @@ const MUSCLE_GAIN = 16;
 const SLEEP_LIN = 0.14;
 const SLEEP_ANG = 1.1;
 const SLEEP_TIME = 0.9;
+const SETTLE_LIN = 0.42, SETTLE_ANG = 3.2;   // below this everywhere, an island is only twitching
 
 export const BALL = 0;
 export const HINGE = 1;
@@ -694,15 +695,19 @@ export class World {
   }
 
   _finish(dt) {
+    const settle = Math.exp(-dt * 5);
     for (const isl of this.islands) {
       if (!isl.live || !isl.canSleep) { if (!isl.sleeping) isl.quiet = 0; continue; }
-      let quiet = true;
+      let quiet = true, slow = true;
       for (const b of isl.bodies) {
         if (b.im === 0) continue;
         const v = b.vx * b.vx + b.vy * b.vy + b.vz * b.vz;
         const w = b.wx * b.wx + b.wy * b.wy + b.wz * b.wz;
-        if (v > SLEEP_LIN * SLEEP_LIN || w > SLEEP_ANG * SLEEP_ANG) { quiet = false; break; }
+        if (v > SLEEP_LIN * SLEEP_LIN || w > SLEEP_ANG * SLEEP_ANG) quiet = false;
+        if (v > SETTLE_LIN * SETTLE_LIN || w > SETTLE_ANG * SETTLE_ANG) { slow = false; break; }
       }
+      // nothing in it is doing more than twitch: take the twitch out
+      if (slow && !quiet) for (const b of isl.bodies) { if (b.im === 0) continue; b.vx *= settle; b.vy *= settle; b.vz *= settle; b.wx *= settle; b.wy *= settle; b.wz *= settle; }
       if (quiet) {
         isl.quiet += dt;
         if (isl.quiet > SLEEP_TIME) isl.sleep();
@@ -1037,21 +1042,11 @@ export class World {
     if (dx * dx + dy * dy + dz * dz > rr * rr) return;
     const mu = Math.min(A.friction, B.friction) * 0.8;
     if (A.shape === 0 && B.shape === 0) {
-      const sa = A.sph, sb = B.sph;
-      for (let i = 0; i < sa.length; i += 4) {
-        rot(A.qx, A.qy, A.qz, A.qw, sa[i], sa[i + 1], sa[i + 2]);
-        const ax = A.px + _x, ay = A.py + _y, az = A.pz + _z, ar = sa[i + 3];
-        for (let k = 0; k < sb.length; k += 4) {
-          rot(B.qx, B.qy, B.qz, B.qw, sb[k], sb[k + 1], sb[k + 2]);
-          const ex = ax - (B.px + _x), ey = ay - (B.py + _y), ez = az - (B.pz + _z);
-          const r = ar + sb[k + 3];
-          const d2 = ex * ex + ey * ey + ez * ez;
-          if (d2 >= r * r || d2 < 1e-10) continue;
-          const d = Math.sqrt(d2);
-          const nx = ex / d, ny = ey / d, nz = ez / d;
-          this._contact(A, B, ax - nx * ar, ay - ny * ar, az - nz * ar, nx, ny, nz, r - d, mu * 0.6, h);
-        }
-      }
+      // Two body parts. Each one's spheres against the other's box, both ways:
+      // a row of spheres alone leaves gaps a limb can pass through, and a box
+      // has none. The second pass sees what the first has already put right.
+      this._partVsBox(A, B, mu * 0.6, h);
+      this._partVsBox(B, A, mu * 0.6, h);
     } else if (A.shape === 0) {
       this._spheresVsBox(A, A.sph, B, mu, h);
     } else if (B.shape === 0) {
@@ -1062,8 +1057,58 @@ export class World {
     }
   }
 
+  /**
+   * One body part's spheres against another's box. All of it is done in the
+   * box's own space, through one rotation worked out for the pair (and worked
+   * out again whenever a contact has moved either of them).
+   */
+  _partVsBox(A, B, mu, h) {
+    const sph = A.sph, hx = B.hx, hy = B.hy, hz = B.hz, R = A.boundR;
+    let m00, m01, m02, m10, m11, m12, m20, m21, m22, tx, ty, tz;
+    const frame = () => {
+      // q = conj(B) * A
+      const bx = -B.qx, by = -B.qy, bz = -B.qz, bw = B.qw, ax = A.qx, ay = A.qy, az = A.qz, aw = A.qw;
+      const x = bw * ax + bx * aw + by * az - bz * ay, y = bw * ay - bx * az + by * aw + bz * ax;
+      const z = bw * az + bx * ay - by * ax + bz * aw, w = bw * aw - bx * ax - by * ay - bz * az;
+      const x2 = x + x, y2 = y + y, z2 = z + z, xx = x * x2, xy = x * y2, xz = x * z2, yy = y * y2, yz = y * z2, zz = z * z2, wx = w * x2, wy = w * y2, wz = w * z2;
+      m00 = 1 - (yy + zz); m01 = xy - wz; m02 = xz + wy;
+      m10 = xy + wz; m11 = 1 - (xx + zz); m12 = yz - wx;
+      m20 = xz - wy; m21 = yz + wx; m22 = 1 - (xx + yy);
+      irot(B.qx, B.qy, B.qz, B.qw, A.px - B.px, A.py - B.py, A.pz - B.pz);
+      tx = _x; ty = _y; tz = _z;
+    };
+    frame();
+    // nowhere near: A as a whole is outside B's box by more than A's own reach
+    if (tx < -hx - R || tx > hx + R || ty < -hy - R || ty > hy + R || tz < -hz - R || tz > hz + R) return;
+    for (let i = 0; i < sph.length; i += 4) {
+      const sx = sph[i], sy = sph[i + 1], sz = sph[i + 2], r = sph[i + 3];
+      const lx = m00 * sx + m01 * sy + m02 * sz + tx, ly = m10 * sx + m11 * sy + m12 * sz + ty, lz = m20 * sx + m21 * sy + m22 * sz + tz;
+      if (lx < -hx - r || lx > hx + r || ly < -hy - r || ly > hy + r || lz < -hz - r || lz > hz + r) continue;
+      const cx = lx < -hx ? -hx : lx > hx ? hx : lx, cy = ly < -hy ? -hy : ly > hy ? hy : ly, cz = lz < -hz ? -hz : lz > hz ? hz : lz;
+      const ex = lx - cx, ey = ly - cy, ez = lz - cz;
+      const d2 = ex * ex + ey * ey + ez * ez;
+      let nx, ny, nz, pen, px, py, pz;
+      if (d2 > 1e-10) {
+        if (d2 >= r * r) continue;
+        const d = Math.sqrt(d2);
+        nx = ex / d; ny = ey / d; nz = ez / d; pen = r - d;
+        px = cx; py = cy; pz = cz;
+      } else {
+        // the centre is inside: out by the nearest face
+        const ox = hx - Math.abs(lx), oy = hy - Math.abs(ly), oz = hz - Math.abs(lz);
+        nx = ny = nz = 0;
+        if (ox <= oy && ox <= oz) { nx = lx < 0 ? -1 : 1; pen = ox; } else if (oy <= oz) { ny = ly < 0 ? -1 : 1; pen = oy; } else { nz = lz < 0 ? -1 : 1; pen = oz; }
+        pen += r; px = lx; py = ly; pz = lz;
+      }
+      rot(B.qx, B.qy, B.qz, B.qw, nx, ny, nz); const wnx = _x, wny = _y, wnz = _z;
+      rot(B.qx, B.qy, B.qz, B.qw, px, py, pz);
+      this._contact(A, B, B.px + _x, B.py + _y, B.pz + _z, wnx, wny, wnz, pen, mu, h);
+      frame();
+    }
+  }
+
   /** A's spheres (or corner points) against B's oriented box. */
-  _spheresVsBox(A, list, B, mu, h) {
+  _spheresVsBox(A, list, B, mu, h, ground = true) {
     const hx = B.hx, hy = B.hy, hz = B.hz;
     irot(B.qx, B.qy, B.qz, B.qw, A.px - B.px, A.py - B.py, A.pz - B.pz);
     const rcx = _x, rcy = _y, rcz = _z;
@@ -1099,7 +1144,7 @@ export class World {
       rot(B.qx, B.qy, B.qz, B.qw, nx, ny, nz); const wnx = _x, wny = _y, wnz = _z;
       rot(B.qx, B.qy, B.qz, B.qw, px, py, pz);
       this._contact(A, B, B.px + _x, B.py + _y, B.pz + _z, wnx, wny, wnz, pen, mu, h);
-      if (wny > 0.6) A.grounded++;
+      if (ground && wny > 0.6) A.grounded++;
     }
   }
 

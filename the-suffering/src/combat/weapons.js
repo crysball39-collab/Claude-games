@@ -332,7 +332,8 @@ export class Weapons {
     this.dropFrom(t, true);
     item.holder = null; item.wornBy = t;
     const s = t.scale, a = t.bodies[P.FARM_L], b = t.bodies[P.FARM_R];
-    const joint = new Joint(a, b, { la: [-0.03 * s, -0.12 * s, -0.02 * s], lb: [0.03 * s, -0.12 * s, -0.02 * s], type: BALL, swing: Math.PI, twist: Math.PI, damp: 0.4, name: 'cuffs' });
+    // the link joins the inner faces of the two wrists, so that they lie side by side and not through each other
+    const joint = new Joint(a, b, { la: [-(a.hx + 0.012 * s), -0.115 * s, 0], lb: [b.hx + 0.012 * s, -0.115 * s, 0], type: BALL, swing: Math.PI, twist: Math.PI, damp: 0.4, name: 'cuffs' });
     g.world.addJoint(joint);
     t.cuffed = { item, by, joint, t: g.time };
     t.pose.cuffed = 1;
@@ -576,6 +577,13 @@ export class Weapons {
       if (hit && !act.hits.has(hit.human)) {
         act.hits.add(hit.human); act.landed++;
         this._land(human, act, hit, ox + dx * hit.t, oy + dy * hit.t, oz + dz * hit.t, dx, dy, dz, len / dt);
+        // A fist, a boot, a point or a chopping edge stops where it lands (a slicing edge goes on through).
+        // The clock goes back to the instant of contact, and the limb is put back where it was then.
+        if (act.bounce == null && (clip.kind !== 'cut' || clip.chop)) {
+          act.t = Math.max(0, act.t - dt * (1 - clamp01(hit.t / (len + 0.03))));
+          act.bounce = act.t / clip.dur;
+          human.repose();
+        }
         continue;
       }
       // crates and cars take the blow too
