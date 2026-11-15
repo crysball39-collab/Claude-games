@@ -76,7 +76,8 @@ h1, h2, h3, p { margin: 0; }
 .sub { font: 800 10px/1 var(--display); letter-spacing: 0.14em; color: var(--dim); margin: 14px 0 2px; text-transform: uppercase; }
 .slot.bound { color: var(--warn); border-color: var(--warn); border-style: dashed; }
 
-#weapon-bar { position: absolute; top: var(--gt); left: 50%; transform: translateX(-50%); display: flex; gap: 6px; max-width: 44%; }
+/* between the two groups of buttons at the top; what does not fit drops to a second row */
+#weapon-bar { position: absolute; top: var(--gt); left: 50%; transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 6px; width: max-content; max-width: calc(100% - 510px); }
 .slot {
   min-width: 54px; height: 40px; padding: 0 8px; border-radius: 6px; background: var(--glass); border: 1px solid rgba(233, 227, 215, 0.18);
   font: 700 10px/1 var(--display); letter-spacing: 0.08em; color: var(--dim); display: grid; place-items: center; white-space: nowrap;

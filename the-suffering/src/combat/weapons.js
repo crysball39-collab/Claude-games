@@ -60,7 +60,7 @@ export const WEAPONS = {
   },
   /* not weapons, but picked up, carried and dropped like them */
   cuffs: {
-    id: 'cuffs', name: 'Handcuffs', label: 'CUFF', hold: 'none', tool: true, cuffs: true, mass: 0.35, half: [0.085, 0.014, 0.04], centre: 0,
+    id: 'cuffs', name: 'Handcuffs', tag: 'Cuffs', label: 'CUFF', hold: 'none', tool: true, cuffs: true, mass: 0.35, half: [0.085, 0.014, 0.04], centre: 0,
     boxes: [[0.045, 0, 0, 0.07, 0.016, 0.075, STEEL], [-0.045, 0, 0, 0.07, 0.016, 0.075, STEEL], [0, 0, 0, 0.03, 0.008, 0.014, 0x8d9197], [0.045, 0, 0, 0.04, 0.02, 0.045, 0x26282c], [-0.045, 0, 0, 0.04, 0.02, 0.045, 0x26282c]],
   },
   helmet: {

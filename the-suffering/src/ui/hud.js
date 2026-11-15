@@ -315,7 +315,7 @@ export class UI {
       bar.appendChild(b);
     };
     add('FISTS', -1);
-    w.inventory.forEach((it, i) => add(it.def.name.toUpperCase(), i));
+    w.inventory.forEach((it, i) => add((it.def.tag || it.def.name).toUpperCase(), i));
     // worn, not held: tapping one takes it off
     const worn = (name, cls, fn) => { const b = el('button', 'slot ' + cls, name); b.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); fn(); }); bar.appendChild(b); };
     const pl = this.g.player;
