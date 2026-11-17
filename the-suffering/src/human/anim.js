@@ -192,7 +192,8 @@ export class Animator {
 
     const g = this.run, m = this.moving, cr = this.crouch;
     const lim = this.limp;
-    const stride = lerp(WALK.stride, RUN.stride, g) * (1 - 0.34 * cr) * (1 - 0.3 * lim);
+    // slower is shorter steps, not the same steps taken slowly
+    const stride = lerp(WALK.stride, RUN.stride, g) * (1 - 0.34 * cr) * (1 - 0.3 * lim) * (0.42 + 0.58 * clamp01(s.speed / 1.4));
     const stance = lerp(WALK.stance, RUN.stance, g);
     if (s.speed > 0.05) this.phase = (this.phase + (s.speed / (stride / stance)) * dt) % 1;
     const ph = this.phase;
@@ -222,8 +223,9 @@ export class Animator {
       else { const u = (p - stance) / (1 - stance); f = -0.5 + smooth(u); lift = Math.sin(Math.PI * u); pitch = lerp(0.42, -0.24, smooth(u)); }
       const reach = f * stride * m * (side === this.limpSide ? 1 - lim * 0.35 : 1);
       const fx = mx * reach, fz = mz * reach - ch[CH.rootZ];
-      const down = HIP_HEIGHT + rootY - ANKLE - lift * liftAmp * m - (side > 0 ? 1 : -1) * ch[CH.rootRoll] * 0.1;
-      legIK(_leg, fx * side + cr * 0.03, down, fz);
+      const down = HIP_HEIGHT + rootY - ANKLE - lift * liftAmp * m - (side > 0 ? 1 : -1) * ch[CH.rootRoll] * 0.1 - ((side > 0 ? s.liftL : s.liftR) || 0);
+      // a foot may come in to meet the other, but never past it: legs do not cross
+      legIK(_leg, Math.max(-0.028, fx * side) + cr * 0.03, down, fz);
       const hip = side > 0 ? CH.hipL : CH.hipR;
       ch[hip] = _leg[0]; ch[hip + 1] = _leg[1]; ch[hip + 3] = _leg[2];
       ch[hip + 4] = clamp((_leg[2] - _leg[0]) - pitch * pitchAmt, -0.8, 0.5);
@@ -391,8 +393,8 @@ export class Animator {
     /* ---- in handcuffs: wrists together at the small of the back, whatever else the arms had in mind ---- */
     if (W.cuffed > 0.01) {
       const a = W.cuffed;
-      this._to(CH.shL, -0.57, a); this._to(CH.shLOut, -0.2, a); this._to(CH.shLIn, -0.19, a); this._to(CH.elL, 0.45, a);
-      this._to(CH.shR, -0.56, a); this._to(CH.shROut, -0.2, a); this._to(CH.shRIn, -0.19, a); this._to(CH.elR, 0.43, a);
+      this._to(CH.shL, -0.71, a); this._to(CH.shLOut, -0.3, a); this._to(CH.shLIn, -0.12, a); this._to(CH.elL, 0.36, a);
+      this._to(CH.shR, -0.71, a); this._to(CH.shROut, -0.3, a); this._to(CH.shRIn, -0.12, a); this._to(CH.elR, 0.36, a);
       this._to(CH.wrR, 0, a); this._to(CH.wrRSide, 0, a);
       ch[CH.spineBend] += 0.06 * a;
     }
@@ -436,6 +438,10 @@ export class Animator {
       ch[CH.spineSide] += this.flX * 0.36 * a; ch[CH.headBend] -= this.flZ * 0.4 * a; ch[CH.headSide] += this.flX * 0.3 * a;
       ch[CH.rootZ] -= this.flZ * 0.05 * a;
     }
+    // the chin stops at the chest, and the back of the head at the shoulders
+    const nod = ch[CH.neckBend] + ch[CH.headBend];
+    if (nod > 0.68) { const k = 0.68 / nod; ch[CH.neckBend] *= k; ch[CH.headBend] *= k; }
+    else if (nod < -0.74) { const k = -0.74 / nod; ch[CH.neckBend] *= k; ch[CH.headBend] *= k; }
     return ch;
   }
 

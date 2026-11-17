@@ -3,6 +3,7 @@
    supposed to do. Run with: npm run verify
    ========================================================================== */
 import { play } from './play.mjs';
+import { installOV } from './overlap.mjs';
 import { LINE_COUNT } from '../src/mind/lines.js';
 
 const t = await play({ width: 1100, height: 600 });
@@ -613,8 +614,13 @@ if (want('Police')) {
     p.h.heal(); p.reset(6, 21.5, -Math.PI / 2); g.camYaw = -Math.PI / 2; g.camPitch = 0; g.advance(0.3);
     const v = V.still(g.spawnHuman(2.5, 21.5, Math.PI / 2)); w.holster(); g.advance(0.9);
     V.aimAt(v.bodies[2]); g.advance(0.1); w.fire(); g.advance(0.3); w.fire();
-    let reloading = false, down = false;
-    for (let i = 0; i < 260; i++) { g.advance(0.1); if (cops().some((h) => h.reload)) reloading = true; if (p.state === 2 || !p.h.alive) down = true; if (down && i > 150 && cops().every((h) => h.brain.mode === 'post' && !h.weapon)) break; }
+    let reloading = false, down = false, calm = 0;
+    for (let i = 0; i < 300; i++) {
+      g.advance(0.1); if (cops().some((h) => h.reload)) reloading = true; if (p.state === 2 || !p.h.alive) down = true;
+      // finished with it all: back at their posts, nothing in their hands and nothing in progress, for a few seconds
+      calm = cops().every((h) => h.brain.mode === 'post' && !h.weapon && !h.reload && !h.swap && !h.cuffing) ? calm + 0.1 : 0;
+      if (down && i > 150 && calm >= 3) break;
+    }
     out.fight = { fires, hit: p.h.wounds.length, down, reloading, said: said.slice(0, 3).join(' / '), ammo: cops().map((h) => { const pi = (h.kit || []).find((i) => i.type === 'm1911'); return pi ? pi.ammo : -1; }).join(','), modes: cops().map((h) => h.brain.mode + (h.weapon ? '+gun' : '')).join(','), mags: w.casings.filter((c) => c.size).length };
     g.speech.say = orig; w.npcFire = nf;
     return out;
@@ -711,10 +717,14 @@ if (want('Handcuffs')) {
     p.reset(pb.px - 0.9, pb.pz, Math.PI / 2); g.camYaw = Math.atan2(pb.px - p.x, pb.pz - p.z); g.advance(0.3);
     out.started = w.attack(-1); g.advance(0.6);
     out.mid = { cuffing: !!p.cuffing, kneeling: p.crouching, cuffed: !!v.cuffed };
-    g.advance(1.6);
-    out.cuffed = !!v.cuffed; out.inv = w.inventory.map((i) => i.type).join(',');
+    // they are turned on to their front and their arms brought round first
+    let took = 0.6;
+    for (let i = 0; i < 60 && !v.cuffed; i++) { g.advance(0.1); took += 0.1; }
+    const fr = [0, 0, 0]; v.bodies[2].dirToWorld(0, 0, 1, fr);
+    out.cuffed = !!v.cuffed; out.took = took; out.front = fr[1] < -0.5; out.inv = w.inventory.map((i) => i.type).join(',');
     const gap = () => { const a = [0, 0, 0], b = [0, 0, 0], s = v.scale; v.bodies[6].toWorld(0, -0.12 * s, 0, a); v.bodies[9].toWorld(0, -0.12 * s, 0, b); return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]); };
-    g.advance(0.5);
+    // (the link draws them together gently, so as not to pull a wrist through anything on the way)
+    g.advance(1.5);
     out.downGap = gap();
     v.dazeT = 0;
     let up = false;
@@ -734,7 +744,7 @@ if (want('Handcuffs')) {
   });
   check('they are in the spawn menu', r.spawned && r.label === 'CUFF');
   check('somebody on their feet and minding their own business cannot be cuffed', r.refused && r.stillFree);
-  check('somebody on the ground can: it takes a moment, on one knee', r.started && r.mid.cuffing && r.mid.kneeling && !r.mid.cuffed && r.cuffed && r.inv === '');
+  check('somebody on the ground can: it takes a moment, on one knee, and they are turned on to their front', r.started && r.mid.cuffing && r.mid.kneeling && !r.mid.cuffed && r.cuffed && r.took < 5.5 && r.front && r.inv === '', `cuffed after ${r.took.toFixed(1)} s, ${r.front ? 'face down' : 'not face down'}`);
   check('the wrists are held together', r.downGap < 0.3 && r.standing.gap < 0.3 && r.drawn, `${(r.downGap * 100).toFixed(0)} cm apart on the ground, ${(r.standing.gap * 100).toFixed(0)} cm standing`);
   check('they can stand up, hands behind their back', r.standing.up && r.standing.behind < -0.05, `hands ${(-r.standing.behind * 100).toFixed(0)} cm behind the chest`);
   check('in cuffs they can neither hit nor carry', r.cannot);
@@ -892,6 +902,108 @@ if (want('Infinite HP')) {
   check('nothing injures you: no wounds, no bleeding, nothing cut off, no dying', on.after.alive && on.after.wounds === 0 && on.after.blood > 99.9 && on.after.whole && on.after.marks === 0, `after twelve rifle rounds, a machete to the neck and three attempts to take a limb or a life: ${on.after.wounds} wounds, blood ${on.after.blood.toFixed(1)}%, ${on.after.marks} marks`);
   check('a taser still drops you', on.tased);
   check('it lasts through starting again, and switches off', on.kept && !off.tag && !off.god && off.wounds > 0);
+}
+
+/* ------------------------------ solid bodies ----------------------------- */
+// Measured on the boxes that are drawn: how far one is inside another, a person's own or somebody else's.
+head('Solid bodies');
+if (want('Solid bodies')) {
+  await installOV(t);
+  const cm = (v) => (v * 100).toFixed(1) + ' cm';
+  const pose = await run(() => {
+    const g = __game; fresh();
+    const kinds = ['', 'h.intent.mz = 1;', 'h.intent.mz = 1; h.intent.run = true;', 'h.intent.crouch = true;', 'h.guardT = 1;', 'h.pose.handsUp = 1;', 'h.pose.cower = 1; h.intent.crouch = true;', 'h.pose.kneel = 1; h.intent.crouch = true;', 'h.pose.hurt = 1;'];
+    let worst = 0, pair = '';
+    for (const k of kinds) {
+      const h = stub(g.spawnHuman(4, -18, 0), new Function('h', k));
+      g.advance(0.8);
+      const r = OV.watch(1.2, [h]);
+      if (r.self > worst) { worst = r.self; pair = r.selfPair; }
+      g.removeHuman(h);
+    }
+    const p = g.player, w = g.weapons;
+    let i = 0;
+    const a = OV.watch(5, [p], { each: (tm) => { if (!p.anim.busy && tm > i * 1.2) { w.attack(i % 4); i++; } } });
+    w.give(p, 'm1911', true); g.advance(0.5);
+    const b = OV.watch(5, [p], { each: (tm) => { g.camPitch = Math.sin(tm * 1.3) * 0.7; if (tm > 1 && tm < 1.05) w.fire(); if (tm > 1.4 && tm < 1.45) w.reload(); } });
+    g.paused = true;
+    return { worst, pair, attack: a.self, gun: b.self };
+  });
+  check('in every pose, a person\'s arms and legs stay out of their own body', pose.worst < 0.012, `worst ${cm(pose.worst)} ${pose.pair}`);
+  check('and while punching, aiming, firing and reloading', pose.attack < 0.012 && pose.gun < 0.012, `${cm(pose.attack)}, ${cm(pose.gun)}`);
+  const fight = await run(() => {
+    const g = __game, p = g.player, w = g.weapons; fresh();
+    const v = stub(T.dummy(1.0)); v.h.tough = 50; g.advance(0.6);
+    let i = 0;
+    const r = OV.watch(8, [p, v], { pairs: true, each: (tm) => { if (!p.anim.busy && tm > i * 1.3) { if (v.state !== 0) v.h.heal(); w.attack(i % 4); i++; } } });
+    g.paused = true;
+    return r;
+  });
+  check('a fist or a foot stops at the body it lands on', fight.otherTime < 0.03 && fight.other < 0.06, `over a centimetre for ${(fight.otherTime * 100).toFixed(1)}% of the time, at worst ${cm(fight.other)} ${fight.otherPair}`);
+  const crowd = await run(() => {
+    const g = __game; fresh();
+    const hs = [];
+    for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; const h = g.spawnHuman(6 + Math.sin(a) * 4, -18 + Math.cos(a) * 4, a + Math.PI); stub(h, (x) => { const dx = 6 - x.x, dz = -18 - x.z, d = Math.hypot(dx, dz) || 1; x.intent.mx = dx / d; x.intent.mz = dz / d; x.intent.run = (i % 2) === 0; }); hs.push(h); }
+    const r = OV.watch(6, hs, { pairs: true });
+    g.paused = true;
+    return r;
+  });
+  check('eight people walking and running into each other do not end up inside each other', crowd.otherTime < 0.04 && crowd.endOther < 0.012, `over a centimetre for ${(crowd.otherTime * 100).toFixed(1)}% of the time, at worst ${cm(crowd.other)} ${crowd.otherPair}`);
+  const heap = await run(() => {
+    const g = __game; fresh();
+    const hs = [];
+    for (let i = 0; i < 6; i++) { const h = stub(g.spawnHuman(5 + (i % 2) * 0.5, -18 + (i % 3) * 0.4, i)); hs.push(h); }
+    g.advance(0.3);
+    hs.forEach((h, i) => { h.h.kill('test'); h.toRagdoll(); for (const b of h.bodies) { b.teleport(b.px, b.py + 0.4 + i * 1.3, b.pz); b.vx = b.vy = b.vz = 0; } });
+    const r = OV.watch(9, hs, { pairs: true });
+    r.asleep = hs.filter((h) => h.island.sleeping).length;
+    g.paused = true;
+    return r;
+  });
+  check('six bodies dropped in a heap come to rest on each other, not in each other', heap.endOther < 0.025 && heap.endSelf < 0.015 && heap.asleep >= 5, `at rest: ${cm(heap.endOther)} between, ${cm(heap.endSelf)} own; ${heap.asleep} of 6 still`);
+  const cuff = await run(() => {
+    const g = __game; fresh();
+    const o = stub(g.spawnOfficer(4, -18, Math.PI / 2)), v = stub(g.spawnHuman(4.75, -18, -Math.PI / 2));
+    g.advance(0.4); v.stayDown = true; v.toRagdoll(); v.bodies[2].applyImpulse(30, 0, 0); g.advance(2.5);
+    const a = [0, 0, 0]; v.bodies[2].dirToWorld(0, 0, 1, a); const upBefore = a[1];
+    const started = g.weapons.cuff(o, v, true);
+    const r = OV.watch(6, [o, v], { pairs: true });
+    v.bodies[2].dirToWorld(0, 0, 1, a);
+    r.started = started; r.upBefore = upBefore; r.upAfter = a[1]; r.cuffed = !!v.cuffed;
+    g.paused = true;
+    return r;
+  });
+  check('someone handcuffed where they lie is rolled on to their front, and the cuffs do not pull their wrists through them', cuff.started && cuff.cuffed && cuff.upAfter < -0.5 && cuff.self < 0.035, `facing ${cuff.upBefore > 0.5 ? 'up' : 'sideways or down'} before, ${cuff.upAfter < -0.5 ? 'down' : 'not down'} after; worst ${cm(cuff.self)} ${cuff.selfPair}`);
+  const over = await run(() => {
+    const g = __game; fresh();
+    g.player.reset(-12, -12, 0); g.advance(0.2);
+    const v = stub(g.spawnHuman(4, -18, Math.PI / 2)); g.advance(0.3); v.h.kill('test'); v.toRagdoll(); g.advance(2.5);
+    const hs = [v];
+    // across the legs, where a foot can come down on them (the trunk is walked round)
+    const leg = v.bodies[12], legR = v.bodies[15];
+    for (let i = 0; i < 3; i++) { const lx = (i === 1 ? legR : leg).px + (i - 1) * 0.08; const h = g.spawnHuman(lx, (i === 1 ? legR : leg).pz - 2.2 - i * 1.3, 0); stub(h, (x) => { x.intent.mz = 1; x.intent.run = i === 1; }); hs.push(h); }
+    let lifted = 0;
+    const z0 = v.bodies[0].pz;
+    const r = OV.watch(6, hs, { pairs: true, each: () => { for (const h of hs) if (h !== v) lifted = Math.max(lifted, h.footLift[0], h.footLift[1]); } });
+    r.lifted = lifted; r.across = hs.filter((h) => h !== v && h.z > z0 + 0.6).length;
+    g.paused = true;
+    return r;
+  });
+  check('people walking across a body step on it or push its limbs aside, not into it', over.across === 3 && over.other < 0.02, `${over.across} of 3 across, feet lifted up to ${cm(over.lifted)}; worst ${cm(over.other)}`);
+  const up = await run(() => {
+    const g = __game; fresh();
+    const hs = [];
+    for (let i = 0; i < 6; i++) { const h = stub(g.spawnHuman(3 + i * 1.6, -18 + (i % 2) * 1.5, i)); hs.push(h); }
+    g.advance(0.5);
+    hs.forEach((h, i) => { h.toRagdoll(); h.bodies[2].applyImpulse(Math.sin(i * 1.3) * 60, 20, Math.cos(i * 1.3) * 60); });
+    let worst = 0, pair = '', rose = 0;
+    const seen = new Set();
+    OV.watch(9, hs, { each: () => { for (const h of hs) if (h.state === 3) { seen.add(h); const s = OV.self(h); if (s.d > worst) { worst = s.d; pair = s.pair; } } } });
+    rose = seen.size;
+    g.paused = true;
+    return { worst, pair, rose };
+  });
+  check('getting up, the arms and legs turn at their joints instead of passing through the body', up.rose >= 4 && up.worst < 0.03, `${up.rose} got up; worst ${cm(up.worst)} ${up.pair}`);
 }
 
 /* --------------------------------- report ------------------------------- */

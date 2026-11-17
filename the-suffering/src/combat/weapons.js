@@ -101,6 +101,8 @@ export const MOUNT = {
 
 const _a = [0, 0, 0], _b = [0, 0, 0], _c = [0, 0, 0], _hit = [0, 0, 0, 0, 0, 0, 0], _n = [0, 0, 0];
 const NONE = [];
+/** How soft the handcuffs' link is while the wrists are still apart (XPBD compliance). */
+const CUFF_SLACK = 4e-4;
 
 export class Weapons {
   constructor(game) {
@@ -319,7 +321,8 @@ export class Weapons {
     if (!item || by.cuffing || by.cuffed || by.state !== ST.ANIM || by.swap || by.reload) return false;
     if (!(force ? target && !target.cuffed && target.h.alive && !target.removed : this.cuffable(target))) return false;
     if (Math.hypot(target.x - by.x, target.z - by.z) > 2.0) return false;
-    by.cuffing = { target, item, t: 0, dur: 1.5, low: target.state !== ST.ANIM };
+    // someone on the ground has to be turned over and their arms brought round first
+    by.cuffing = { target, item, t: 0, dur: target.state !== ST.ANIM ? 2.4 : 1.5, low: target.state !== ST.ANIM };
     return true;
   }
 
@@ -333,7 +336,9 @@ export class Weapons {
     item.holder = null; item.wornBy = t;
     const s = t.scale, a = t.bodies[P.FARM_L], b = t.bodies[P.FARM_R];
     // the link joins the inner faces of the two wrists, so that they lie side by side and not through each other
-    const joint = new Joint(a, b, { la: [-(a.hx + 0.012 * s), -0.115 * s, 0], lb: [b.hx + 0.012 * s, -0.115 * s, 0], type: BALL, swing: Math.PI, twist: Math.PI, damp: 0.4, name: 'cuffs' });
+    // While the wrists are still apart the link only draws them together, gently: a body in the way
+    // stays in the way (a hard joint would pull a wrist through it). Once they meet, it holds.
+    const joint = new Joint(a, b, { la: [-(a.hx + 0.012 * s), -0.115 * s, 0], lb: [b.hx + 0.012 * s, -0.115 * s, 0], type: BALL, swing: Math.PI, twist: Math.PI, damp: 0.4, name: 'cuffs', compliance: CUFF_SLACK });
     g.world.addJoint(joint);
     t.cuffed = { item, by, joint, t: g.time };
     t.pose.cuffed = 1;
@@ -556,11 +561,16 @@ export class Weapons {
   _melee(human, dt) {
     const g = this.game, act = human.anim.action;
     if (!act || !act.def) return;
-    if (!human.anim.striking) { act.prev = null; return; }
+    const clip = act.clip, def = act.def, u = act.t / clip.dur;
+    // A fist or a foot can connect from the moment it starts forward: up close it gets there
+    // before it is up to speed, and lands softer for it. (A blade's early part is its wind-up.)
+    const start = def.blade ? clip.hit[0] : Math.min(clip.hit[0], 0.05);
+    if (u < start || u > clip.hit[1]) { act.prev = null; return; }
+    act.soft = u < clip.hit[0] ? 0.4 + 0.6 * clamp01((u - start) / (clip.hit[0] - start)) : 1;
     const pts = this._pts || (this._pts = new Float32Array(24));
     const n = this._points(human, act, pts);
     if (!act.prev) { act.prev = new Float32Array(24); act.prev.set(pts); return; }
-    const clip = act.clip, def = act.def, prev = act.prev;
+    const prev = act.prev;
     const maxHits = def.blade ? 2 : 1;
     if (def.blade && human.weapon && human.weapon.bloody > 0.25 && chance(dt * 26 * human.weapon.bloody)) {
       const k = (n - 1) * 3, vx = (pts[k] - prev[k]) / dt, vy = (pts[k + 1] - prev[k + 1]) / dt, vz = (pts[k + 2] - prev[k + 2]) / dt;
@@ -607,7 +617,7 @@ export class Weapons {
   _land(attacker, act, hit, px, py, pz, dx, dy, dz, speed) {
     const g = this.game, clip = act.clip, def = act.def, t = hit.human;
     const strength = (attacker.isPlayer ? 1.1 : 0.72) * clamp(0.6 + attacker.h.mobility * 0.4, 0.5, 1) * rand(0.9, 1.1);
-    const power = clip.power * strength;
+    const power = clip.power * strength * (act.soft || 1);
     let J = clip.kind === 'blunt' ? (clip.push ? 50 : 8 + clip.power * 18) : clip.kind === 'stab' ? 13 : def.chops ? 30 : 10;
     J *= strength;
     // a blow lands along the way the fist was travelling, biased the way the attacker faces
@@ -687,9 +697,12 @@ export class Weapons {
       if (h.state !== ST.ANIM || !h.h.conscious || t.removed || !t.h.alive || t.cuffed || Math.hypot(t.x - h.x, t.z - h.z) > 2.6 || t.gone[P.HAND_L] || t.gone[P.HAND_R]) h.cuffing = null;
       else {
         // the clock only runs while they are within arm's length
-        if (Math.hypot(t.x - h.x, t.z - h.z) < 1.35) c.t += dt;
+        const near = Math.hypot(t.x - h.x, t.z - h.z) < 1.35;
+        if (near) c.t += dt;
         c.low = t.state !== ST.ANIM;
-        if (c.t >= c.dur) { h.cuffing = null; this._applyCuffs(h, t, c.item); }
+        if (c.low && near) t.handle(h, Math.min(1, c.t / c.dur));
+        // on the ground, they go on once the wrists have been brought together behind the back
+        if (c.t >= c.dur && (!c.low || t.wristGap() < 0.1 * t.scale || c.t > c.dur + 2)) { h.cuffing = null; this._applyCuffs(h, t, c.item); }
       }
     }
     const r = h.reload;
@@ -1058,7 +1071,12 @@ export class Weapons {
       const d = it.def, h = it.holder;
       let px = it.px, py = it.py, pz = it.pz, qx = 0, qy = 0, qz = 0, qw = 1, show = true;
       if (it.wire) this._wires(it, dt);
-      if (it.wornBy) { this._drawCuffs(it); continue; }
+      if (it.wornBy) {
+        // the link draws the wrists together gently until they meet, and from then on holds them
+        const c = it.wornBy.cuffed;
+        if (c && c.joint) c.joint.compliance = it.wornBy.wristGap() > 0.05 * it.wornBy.scale ? CUFF_SLACK : 0;
+        this._drawCuffs(it); continue;
+      }
       if (it.body) {
         const b = it.body;
         qx = b.qx; qy = b.qy; qz = b.qz; qw = b.qw;

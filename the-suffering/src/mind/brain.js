@@ -423,6 +423,8 @@ export class Brain {
     if (d.state !== ST.ANIM || d.tased > 0 || lag > 3.4) {
       h.intent.face = Math.atan2(d.x - h.x, d.z - h.z);
       if (lag > 5) this._walkTo(d.x, d.z, false);
+      // standing back a step, so that they have room to get up
+      else if (d.state === ST.RAGDOLL && lag < 1.15) { const l = lag || 1; h.intent.mx = (h.x - d.x) / l; h.intent.mz = (h.z - d.z) / l; h.intent.run = false; }
       if (this.modeT > 150) { this.detainee = null; this._enter('post'); }
       return;
     }

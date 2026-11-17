@@ -15,11 +15,11 @@
    enough is simply gone, and what hung from it falls.
    ========================================================================== */
 import {
-  P, PARTS, PART_COUNT, CH, CHANNELS, SUBTREE, CHILDREN, channelsToLocal, solvePose, buildRagdoll, MUSCLE_TORQUE, PELVIS_HEIGHT,
+  P, PARTS, PART_COUNT, CH, CHANNELS, SUBTREE, CHILDREN, channelsToLocal, solvePose, solveArm, buildRagdoll, MUSCLE_TORQUE, PELVIS_HEIGHT,
 } from './rig.js';
 import { Animator, CLIPS } from './anim.js';
 import { Health } from './health.js';
-import { Island, newGroup, GRAVITY } from '../physics/world.js';
+import { Island, newGroup, GRAVITY, rayBody } from '../physics/world.js';
 import { groundHeight, LIMIT } from '../world/city.js';
 import { rgb } from '../render/boxes.js';
 import { restingFace, faceKey, FACE_COLS, FACE_ROWS } from '../render/textures.js';
@@ -91,8 +91,11 @@ export class Human {
     this.quat = new Float32Array(PART_COUNT * 4);
     this.snapPos = new Float32Array(PART_COUNT * 3);
     this.snapQuat = new Float32Array(PART_COUNT * 4);
-    this.snapRel = new Float32Array(PART_COUNT * 3);
-    this.snapRelQ = new Float32Array(PART_COUNT * 4);
+    this.armFix = [new Float32Array(4), new Float32Array(4)];   // what has had to be added to each arm's pose to keep it out of the body
+    this.footLift = [0, 0];                // how far each foot is standing up on something that is not the floor: a body
+    this.gait = 0;                         // how fast the feet are actually covering ground
+    this.gvx = 0; this.gvz = 0;            // and which way
+    this.snapRelQ = new Float32Array(PART_COUNT * 4);   // the snapshot's joint angles: each part relative to its parent
     this.blend = 0; this.blendDur = 0;
     this.balance = 1; this.stumbleT = 0; this.ragT = 0; this.stillT = 0; this.getT = 0;
     this.speed = 0;
@@ -110,6 +113,7 @@ export class Human {
     this.cuffed = null;                    // { item, by, joint } while in handcuffs
     this.cuffing = null;                   // { target, item, t, dur } while putting them on somebody
     this.custody = null;                   // { by } when it was the police who did it
+    this.handled = null;                   // { by, u, t, yaw, ... } while somebody turns them over to cuff them
     this.guardT = 0;
     this.tripCool = 0; this.jumpCool = 0;
     this.lunge = 0;                        // metres an attack in progress steps forward
@@ -335,12 +339,16 @@ export class Human {
 
   /** Runs the animator and the forward kinematics for where we stand now. */
   _solve(dt, x = this.x, y = this.y, z = this.z, yaw = this.yaw) {
-    const sp = this.speed / this.scale;
+    // on their feet, the legs step the way the body is actually going, as fast as it is actually going:
+    // somebody walking into a wall of people, or being shoved sideways, does not stride on regardless
+    const anim = this.state === ST.ANIM;
+    const vx = anim ? this.gvx : this.vx, vz = anim ? this.gvz : this.vz, sp0 = anim ? this.gait : this.speed;
+    const sp = sp0 / this.scale;
     let mx = 0, mz = 1;
-    if (this.speed > 0.05) {
+    if (sp0 > 0.05) {
       const s = Math.sin(this.yaw), c = Math.cos(this.yaw);
-      mz = (this.vx * s + this.vz * c) / this.speed;
-      mx = (this.vx * c - this.vz * s) / this.speed;
+      mz = (vx * s + vz * c) / sp0;
+      mx = (vx * c - vz * s) / sp0;
     }
     const lm = Math.max(this.h.legLimp(1), this.h.legLimp(-1));
     const ch = this.anim.update(dt, {
@@ -349,27 +357,114 @@ export class Human {
       limp: lm, limpSide: this.h.legLimp(1) >= this.h.legLimp(-1) ? 1 : -1, lowAim: this.lowAim,
       leanZ: this._leanZ || 0, leanX: this._leanX || 0,
       reach: this.swap ? this.swap.reach : null, reachW: this.swap ? this.swap.w : 0, reload: this._reloadState(),
+      liftL: this.footLift[0] / this.scale, liftR: this.footLift[1] / this.scale,
     });
+    this._ch = ch;
     channelsToLocal(ch, this.local);
     solvePose(x, y, z, yaw, this.scale, ch, this.local, this.pos, this.quat);
   }
 
+  /**
+   * How far one arm is inside the rest of the body, as the pose now stands:
+   * the sum, over its three parts and everything they could be in, of how far
+   * each would have to move to be clear.
+   */
+  _armCost(side, crowdOnly = false) {
+    const pos = this.pos, quat = this.quat, sz = this.sizes, at = this.attached;
+    const first = side ? P.UARM_R : P.UARM_L, other = side ? P.UARM_L : P.UARM_R;
+    let cost = 0;
+    for (let k = 0; k < 3; k++) {
+      const m = first + k;
+      if (!at[m]) break;
+      if (!crowdOnly) {
+        for (let j = 0; j < ARM_BLOCK.length; j++) {
+          const o = ARM_BLOCK[j];
+          if (!at[o] || (k === 0 && o === P.CHEST)) continue;
+          cost += boxDepth(pos, quat, m, sz[m], o, sz[o]);
+        }
+        for (let j = 0; j < 3; j++) { const o = other + j; if (at[o]) cost += boxDepth(pos, quat, m, sz[m], o, sz[o]); }
+      }
+      // and whoever is standing close enough to be in the way
+      for (let n = 0; n < _crowdN; n++) {
+        const h = _crowd[n], bs = h.bodies, hz = h.sizes;
+        for (let j = 0; j < CROWD_BLOCK.length; j++) { const o = CROWD_BLOCK[j]; if (!h.gone[o]) cost += boxDepthBody(pos, quat, m, sz[m], bs[o], hz[o]); }
+      }
+    }
+    return cost;
+  }
+
+  /**
+   * An arm that the animation has put inside the body is moved out of it: the
+   * shoulder and the elbow are turned, a little at a time, whichever way gets
+   * it clear soonest, and let go again as soon as they can be.
+   */
+  _clearArms() {
+    const ch = this._ch, pos = this.pos, quat = this.quat, s = this.scale, act = this.anim.action;
+    // who is near enough for an arm to reach? (Not while putting handcuffs on them: the hands are meant to get there.)
+    _crowdN = 0;
+    if (!this.cuffing) {
+      const cx = pos[P.CHEST * 3], cy = pos[P.CHEST * 3 + 1], cz = pos[P.CHEST * 3 + 2];
+      for (const o of this.game.humans) {
+        if (o === this || o.removed || _crowdN >= 4) continue;
+        const b = o.bodies[P.CHEST], dx = b.px - cx, dy = b.py - cy, dz = b.pz - cz;
+        if (dx * dx + dy * dy + dz * dz < 1.25) _crowd[_crowdN++] = o;
+      }
+    }
+    // the arm a blow is thrown with stops where it meets somebody, by bending at the elbow: it does not go round them
+    const strike = act && act.def ? (act.clip.limb === 'handL' ? 0 : act.clip.limb === 'footR' ? -1 : 1) : -1;
+    for (let side = 0; side < 2; side++) {
+      if (!this.attached[side ? P.UARM_R : P.UARM_L]) continue;
+      const fix = this.armFix[side];
+      const live = fix[0] !== 0 || fix[1] !== 0 || fix[2] !== 0 || fix[3] !== 0;
+      if (live) solveArm(side, s, ch, fix, pos, quat);
+      if (side === strike && _crowdN > 0) {
+        // (no further than the fist would fold back into the arm)
+        const el = ch[side ? CH.elR : CH.elL];
+        for (let it = 0; it < 8 && el + fix[3] < 1.85 && this._armCost(side, true) > 0; it++) { fix[3] = Math.min(fix[3] + 0.12, 1.85 - el); solveArm(side, s, ch, fix, pos, quat); }
+      }
+      let cost = this._armCost(side);
+      if (cost > 0) {
+        let step = 0.09;
+        for (let it = 0; it < 3 && cost > 0; it++) {
+          let best = cost, bi = -1;
+          for (let c = 0; c < 8; c++) {
+            const i = ARM_TRY[c] >> 1, d = ARM_TRY[c] & 1 ? -step : step;
+            const was = fix[i];
+            fix[i] = clamp(was + d, -1.5, 1.5);
+            solveArm(side, s, ch, fix, pos, quat);
+            const v = this._armCost(side);
+            if (v < best - 1e-5) { best = v; bi = c; }
+            fix[i] = was;
+          }
+          if (bi < 0) { step *= 0.5; continue; }
+          const i = ARM_TRY[bi] >> 1;
+          fix[i] = clamp(fix[i] + (ARM_TRY[bi] & 1 ? -step : step), -1.5, 1.5);
+          cost = best;
+        }
+        solveArm(side, s, ch, fix, pos, quat);
+      } else if (live) {
+        // clear: ease back toward what the animation asked for, for as long as that stays clear
+        for (let i = 0; i < 4; i++) { _fx[i] = fix[i]; fix[i] = Math.abs(fix[i]) < 0.012 ? 0 : fix[i] * 0.84; }
+        solveArm(side, s, ch, fix, pos, quat);
+        if (this._armCost(side) > 0) { for (let i = 0; i < 4; i++) fix[i] = _fx[i]; solveArm(side, s, ch, fix, pos, quat); }
+      }
+    }
+  }
+
   _snapshot() {
-    const sp = this.snapPos, sq = this.snapQuat, rp = this.snapRel, rq = this.snapRelQ;
+    const sp = this.snapPos, sq = this.snapQuat, sl = this.snapRelQ;
     for (let i = 0; i < PART_COUNT; i++) {
       const b = this.bodies[i];
       sp[i * 3] = b.px; sp[i * 3 + 1] = b.py; sp[i * 3 + 2] = b.pz;
       sq[i * 4] = b.qx; sq[i * 4 + 1] = b.qy; sq[i * 4 + 2] = b.qz; sq[i * 4 + 3] = b.qw;
     }
-    // and the same thing seen from the pelvis: the shape the body is in, apart from where it is and which way up
-    const ax = -sq[0], ay = -sq[1], az = -sq[2], aw = sq[3];
-    for (let i = 0; i < PART_COUNT; i++) {
-      const o = i * 3, k = i * 4;
-      qrot(ax, ay, az, aw, sp[o] - sp[0], sp[o + 1] - sp[1], sp[o + 2] - sp[2], _a);
-      rp[o] = _a[0]; rp[o + 1] = _a[1]; rp[o + 2] = _a[2];
+    // and the shape the body is in: each part's turn at its joint, relative to the part it hangs from
+    for (let i = 1; i < PART_COUNT; i++) {
+      const k = i * 4, pk = PARTS[i].parent * 4;
+      const ax = -sq[pk], ay = -sq[pk + 1], az = -sq[pk + 2], aw = sq[pk + 3];
       const bx = sq[k], by = sq[k + 1], bz = sq[k + 2], bw = sq[k + 3];
-      rq[k] = aw * bx + ax * bw + ay * bz - az * by; rq[k + 1] = aw * by - ax * bz + ay * bw + az * bx;
-      rq[k + 2] = aw * bz + ax * by - ay * bx + az * bw; rq[k + 3] = aw * bw - ax * bx - ay * by - az * bz;
+      sl[k] = aw * bx + ax * bw + ay * bz - az * by; sl[k + 1] = aw * by - ax * bz + ay * bw + az * bx;
+      sl[k + 2] = aw * bz + ax * by - ay * bx + az * bw; sl[k + 3] = aw * bw - ax * bx - ay * by - az * bz;
     }
   }
 
@@ -385,35 +480,67 @@ export class Human {
       return;
     }
     // The pelvis goes from where it lay to where it should be, turning as it goes,
-    // and every other part keeps its place relative to the pelvis, easing from the
-    // shape the body was in to the shape it should be in. Blending each part on its
-    // own straight line instead would fold the body through itself on the way up.
-    const rp = this.snapRel, rq = this.snapRelQ;
+    // and every joint turns from the angle it was at to the angle it should be at,
+    // with the limbs hanging from the joints as they turn. Blending where each part
+    // is instead, along a straight line, would fold the body through itself.
+    const BP = _blendP, BQ = _blendQ;
     let rx = sq[0], ry = sq[1], rz = sq[2], rw = sq[3];
     if (rx * quat[0] + ry * quat[1] + rz * quat[2] + rw * quat[3] < 0) { rx = -rx; ry = -ry; rz = -rz; rw = -rw; }
     rx += (quat[0] - rx) * w; ry += (quat[1] - ry) * w; rz += (quat[2] - rz) * w; rw += (quat[3] - rw) * w;
-    const rn = 1 / Math.hypot(rx, ry, rz, rw);
-    rx *= rn; ry *= rn; rz *= rn; rw *= rn;
-    const px = sp[0] + (pos[0] - sp[0]) * w, py = sp[1] + (pos[1] - sp[1]) * w, pz = sp[2] + (pos[2] - sp[2]) * w;
-    const tx = -quat[0], ty = -quat[1], tz = -quat[2], tw = quat[3];        // the target pelvis, undone
+    const n = 1 / Math.hypot(rx, ry, rz, rw);
+    BQ[0] = rx * n; BQ[1] = ry * n; BQ[2] = rz * n; BQ[3] = rw * n;
+    BP[0] = sp[0] + (pos[0] - sp[0]) * w; BP[1] = sp[1] + (pos[1] - sp[1]) * w; BP[2] = sp[2] + (pos[2] - sp[2]) * w;
+    for (let i = 1; i < PART_COUNT; i++) if (this.attached[i]) this._blendPart(i, w);
+    // Even turning at the joints, an arm that lay under the body can come up through it: such an arm
+    // goes on ahead to where it is going (which is clear of the body), as far ahead as it takes.
+    const sz = this.sizes;
+    for (let side = 0; side < 2; side++) {
+      const first = side ? P.UARM_R : P.UARM_L;
+      for (let step = 1; step <= 3; step++) {
+        let inside = false;
+        for (let k = 0; k < 3 && !inside; k++) {
+          const m = first + k;
+          if (!this.attached[m]) break;
+          for (let j = 0; j < ARM_BLOCK.length; j++) {
+            const o = ARM_BLOCK[j];
+            if (!this.attached[o] || (k === 0 && o === P.CHEST)) continue;
+            if (boxDepth(BP, BQ, m, sz[m], o, sz[o]) > 0.006) { inside = true; break; }
+          }
+        }
+        if (!inside) break;
+        const wa = w + (1 - w) * step / 3;
+        for (let k = 0; k < 3; k++) if (this.attached[first + k]) this._blendPart(first + k, wa);
+      }
+    }
     for (let i = 0; i < PART_COUNT; i++) {
       if (!this.attached[i]) continue;
-      const b = this.bodies[i], o = i * 3, k = i * 4;
-      if (i === 0) { b.setPose(px, py, pz, rx, ry, rz, rw, dt); continue; }
-      // where this part should be, seen from the pelvis it should be attached to
-      qrot(tx, ty, tz, tw, pos[o] - pos[0], pos[o + 1] - pos[1], pos[o + 2] - pos[2], _a);
-      const lx = rp[o] + (_a[0] - rp[o]) * w, ly = rp[o + 1] + (_a[1] - rp[o + 1]) * w, lz = rp[o + 2] + (_a[2] - rp[o + 2]) * w;
-      const bx = quat[k], by = quat[k + 1], bz = quat[k + 2], bw = quat[k + 3];
-      const gx = tw * bx + tx * bw + ty * bz - tz * by, gy = tw * by - tx * bz + ty * bw + tz * bx, gz = tw * bz + tx * by - ty * bx + tz * bw, gw = tw * bw - tx * bx - ty * by - tz * bz;
-      let ax = rq[k], ay = rq[k + 1], az = rq[k + 2], aw = rq[k + 3];
-      if (ax * gx + ay * gy + az * gz + aw * gw < 0) { ax = -ax; ay = -ay; az = -az; aw = -aw; }
-      ax += (gx - ax) * w; ay += (gy - ay) * w; az += (gz - az) * w; aw += (gw - aw) * w;
-      const n = 1 / Math.hypot(ax, ay, az, aw);
-      ax *= n; ay *= n; az *= n; aw *= n;
-      qrot(rx, ry, rz, rw, lx, ly, lz, _a);
-      b.setPose(px + _a[0], py + _a[1], pz + _a[2],
-        rw * ax + rx * aw + ry * az - rz * ay, rw * ay - rx * az + ry * aw + rz * ax, rw * az + rx * ay - ry * ax + rz * aw, rw * aw - rx * ax - ry * ay - rz * az, dt);
+      const o = i * 3, k = i * 4;
+      this.bodies[i].setPose(BP[o], BP[o + 1], BP[o + 2], BQ[k], BQ[k + 1], BQ[k + 2], BQ[k + 3], dt);
     }
+  }
+
+  /** One part of a blend between the snapshot and the pose, hung from its parent as the blend already has it. */
+  _blendPart(i, w) {
+    const quat = this.quat, sl = this.snapRelQ, s = this.scale, BP = _blendP, BQ = _blendQ;
+    const p = PARTS[i], k = i * 4, pk = p.parent * 4;
+    // the joint as the pose has it: conj(parent) * part
+    const ax = -quat[pk], ay = -quat[pk + 1], az = -quat[pk + 2], aw = quat[pk + 3];
+    const bx = quat[k], by = quat[k + 1], bz = quat[k + 2], bw = quat[k + 3];
+    const gx = aw * bx + ax * bw + ay * bz - az * by, gy = aw * by - ax * bz + ay * bw + az * bx;
+    const gz = aw * bz + ax * by - ay * bx + az * bw, gw = aw * bw - ax * bx - ay * by - az * bz;
+    let jx = sl[k], jy = sl[k + 1], jz = sl[k + 2], jw = sl[k + 3];
+    if (jx * gx + jy * gy + jz * gz + jw * gw < 0) { jx = -jx; jy = -jy; jz = -jz; jw = -jw; }
+    jx += (gx - jx) * w; jy += (gy - jy) * w; jz += (gz - jz) * w; jw += (gw - jw) * w;
+    const n = 1 / Math.hypot(jx, jy, jz, jw);
+    jx *= n; jy *= n; jz *= n; jw *= n;
+    const px = BQ[pk], py = BQ[pk + 1], pz = BQ[pk + 2], pw = BQ[pk + 3];
+    const qx = pw * jx + px * jw + py * jz - pz * jy, qy = pw * jy - px * jz + py * jw + pz * jx;
+    const qz = pw * jz + px * jy - py * jx + pz * jw, qw = pw * jw - px * jx - py * jy - pz * jz;
+    BQ[k] = qx; BQ[k + 1] = qy; BQ[k + 2] = qz; BQ[k + 3] = qw;
+    qrot(px, py, pz, pw, p.la[0] * s, p.la[1] * s, p.la[2] * s, _a);
+    qrot(qx, qy, qz, qw, p.lb[0] * s, p.lb[1] * s, p.lb[2] * s, _b);
+    const o = i * 3, po = p.parent * 3;
+    BP[o] = BP[po] + _a[0] - _b[0]; BP[o + 1] = BP[po + 1] + _a[1] - _b[1]; BP[o + 2] = BP[po + 2] + _a[2] - _b[2];
   }
 
   /** How hard each part can pull right now. */
@@ -567,11 +694,17 @@ export class Human {
       g.audio?.at('land', nx, ny, nz, clamp01(fall / 8));
       if (fall > 8.5) { this.x = nx; this.z = nz; this.y = ny; this._hardLanding(fall); if (this.state !== ST.ANIM) return; }
     }
+    if (dt > 0) {
+      this.gvx = damp(this.gvx, (nx - this.x) / dt, 16, dt); this.gvz = damp(this.gvz, (nz - this.z) / dt, 16, dt);
+      this.gait = Math.hypot(this.gvx, this.gvz);
+    }
     this.x = nx; this.z = nz; this.y = ny;
 
     // hands come up for a while after a fight starts
     this.hold = this.weaponHold();
+    this._footing(dt);
     this._solve(dt);
+    this._clearArms();
     if (this.blendDur > 0) {
       this.blend += dt;
       const w = smooth(this.blend / this.blendDur);
@@ -581,10 +714,52 @@ export class Human {
     this._trip();
   }
 
+  /**
+   * A foot that comes down where somebody is lying comes down on top of them,
+   * not into them: each foot is lifted to the top of whatever part of a body
+   * is under it (an arm, a leg, the edge of a back), and the knee takes it.
+   */
+  _footing(dt) {
+    const fl = this.footLift, g = this.game;
+    let w0 = 0, w1 = 0;
+    if (this.grounded) {
+      const top = this.y + 0.7;
+      for (const o of g.humans) {
+        if (o === this || o.removed || o.state !== ST.RAGDOLL) continue;
+        const dx = o.x - this.x, dz = o.z - this.z;
+        if (dx * dx + dz * dz > 3.3) continue;
+        for (let side = 0; side < 2; side++) {
+          const f = this.bodies[side ? P.FOOT_R : P.FOOT_L];
+          if (!this.attached[f.part]) continue;
+          // heel, middle and toe
+          for (let k = -1; k <= 1; k++) {
+            f.toWorld(0, 0, k * f.hz * 0.75, _a);
+            const px = _a[0], pz = _a[2];
+            for (let i = 0; i < PART_COUNT; i++) {
+              if (o.gone[i]) continue;
+              const b = o.bodies[i], ex = b.px - px, ez = b.pz - pz, r = b.boundR + 0.06;
+              if (ex * ex + ez * ez > r * r || b.py - b.boundR > top) continue;
+              const t = rayBody(b, px, top, pz, 0, -1, 0, 0.75, null, 0.03);
+              if (t < 0) continue;
+              const h = top - t - this.y;
+              if (side) { if (h > w1) w1 = h; } else if (h > w0) w0 = h;
+            }
+          }
+        }
+      }
+    }
+    // a step up on to a body, not a climb: anything higher than that is walked round
+    const cap = 0.3 * this.scale;
+    w0 = Math.min(w0, cap); w1 = Math.min(w1, cap);
+    fl[0] = damp(fl[0], w0, w0 > fl[0] ? 32 : 12, dt);
+    fl[1] = damp(fl[1], w1, w1 > fl[1] ? 32 : 12, dt);
+  }
+
   /** Works the pose out again for this instant, for when something has just changed what it should be. */
   repose() {
     if (this.state !== ST.ANIM || this.blendDur > 0) return;
     this._solve(0);
+    this._clearArms();
     this._apply(this._dt || 1 / 60);
   }
 
@@ -693,9 +868,9 @@ export class Human {
       const closing = (b.vx - this.vx) * ex + (b.vz - this.vz) * ez;
       if (closing > 2.2) { this.x = nx; this.z = nz; this.struckByCar(car, closing); return [nx, nz]; }
     }
-    // somebody lying in the way: their trunk and their head are gone round, not walked through
+    // somebody lying in the way, or in the middle of getting up: their trunk and their head are gone round, not walked through
     for (const o of g.humans) {
-      if (o === this || o.removed || o.state !== ST.RAGDOLL) continue;
+      if (o === this || o.removed || (o.state !== ST.RAGDOLL && o.state !== ST.GETUP)) continue;
       const ox = nx - o.x, oz = nz - o.z;
       if (ox * ox + oz * oz > 2.6) continue;
       for (let t = 0; t < TRUNK.length; t++) {
@@ -708,35 +883,47 @@ export class Human {
         b.toWorld(cx, cy, cz, _b);
         if (_b[1] < ny + 0.04 || _b[1] > hi) continue;
         let ex = nx - _b[0], ez = nz - _b[2];
-        const d2 = ex * ex + ez * ez, reach = R * 0.92;
-        if (d2 >= reach * reach) continue;
+        const d2 = ex * ex + ez * ez;
+        if (d2 >= 0.81) continue;
         let d = Math.sqrt(d2);
         if (d < 1e-4) { ex = ox; ez = oz; d = Math.hypot(ex, ez) || 1; }
         ex /= d; ez /= d;
+        // clear of it by a body's width, and by however far a foot is reaching toward it: arms and legs
+        // can be stepped on, but nobody puts a foot down on a back or a head
+        const reach = Math.max(R * 0.92, this._toe(-ex, -ez) + 0.03);
+        if (d >= reach) continue;
         nx += ex * (reach - d); nz += ez * (reach - d);
         // walked into hard enough, a body is shoved along a little
         if (!b.kinematic && b.im > 0) { const into = -(this.vx * ex + this.vz * ez); if (into > 0.3) { const k = into * b.mass * 2.2 * this._dt; b.applyImpulse(-ex * k, 0, -ez * k, _b[0], b.py, _b[2]); } }
       }
     }
     // other people on their feet: nobody stands inside anybody else
+    // (someone staggering is in the way too: walk on into them and they are squeezed against whoever is behind)
     for (const o of g.humans) {
-      if (o === this || o.removed || (o.state !== ST.ANIM && o.state !== ST.GETUP)) continue;
+      if (o === this || o.removed || o.state === ST.RAGDOLL) continue;
       let dx = nx - o.x, dz = nz - o.z;
       // shoulder to shoulder with a hand's width to spare; a blow in progress, or a pair of handcuffs, comes in closer than that
       const close = this.anim.action || o.anim.action || this.cuffing || o.cuffing ? 0.82 : 1;
-      const rr = (this.scale + o.scale) * (SPACE / 0.93) * close;
+      let rr = (this.scale + o.scale) * (SPACE / 0.93) * close;
       const d2 = dx * dx + dz * dz;
-      if (d2 >= rr * rr || Math.abs(ny - o.y) > 1.5) continue;
+      if (d2 >= 1.8 * 1.8 || Math.abs(ny - o.y) > 1.5) continue;
       let d = Math.sqrt(d2);
       if (d < 1e-3) { dx = this.id < o.id ? 1 : -1; dz = 0.3; d = Math.hypot(dx, dz); }
+      // and feet: a foot put out toward somebody needs that much more room, theirs too
+      // (but not a kick, or the step into a blow: those are meant to arrive)
+      if (o.state !== ST.STUMBLE && close === 1) rr = Math.max(rr, this._toe(-dx / d, -dz / d) + o._toe(dx / d, dz / d));
+      if (d >= rr) continue;
       // each gives way by a share: someone getting up gives none, and the player gives least
       const share = o.state !== ST.ANIM ? 1 : this.isPlayer ? 0.3 : o.isPlayer ? 0.7 : 0.5;
       let push = (rr - d) * share;
       // two people who find themselves on the same spot ease apart; they do not jump
       if (rr - d > 0.22) push = Math.min(push, 3.5 * this._dt);
       nx += dx / d * push; nz += dz / d * push;
+      // and whoever walks into somebody stops walking into them, and slides along instead of pressing on
+      const into = -(this.vx * dx + this.vz * dz) / d;
+      if (into > 0) { this.vx += dx / d * into; this.vz += dz / d * into; }
       // barging into someone at a run knocks them about
-      if (this.speed > 3.6 && !o.isPlayer && (this.vx * -dx + this.vz * -dz) / d > 3 && o.tripCool <= 0) {
+      if (o.state === ST.ANIM && this.speed > 3.6 && !o.isPlayer && (this.vx * -dx + this.vz * -dz) / d > 3 && o.tripCool <= 0) {
         o.tripCool = 1.5;
         o.shove(this.vx * 0.5, this.vz * 0.5, 34, this);
       }
@@ -745,6 +932,22 @@ export class Human {
     nx = clamp(nx, -lim, lim); nz = clamp(nz, -lim, lim);
     _a[0] = nx; _a[1] = nz;
     return _a;
+  }
+
+  /** How far out from where they stand, in the direction (ux, uz), this person's feet reach as they are now. */
+  _toe(ux, uz) {
+    let far = 0;
+    for (let k = 0; k < 2; k++) {
+      const i = k ? P.FOOT_R : P.FOOT_L;
+      if (!this.attached[i]) continue;
+      const f = this.bodies[i];
+      // the foot's length and width, as they lie along that direction
+      f.dirToWorld(0, 0, 1, _b);
+      const ext = Math.abs(_b[0] * ux + _b[2] * uz) * f.hz + Math.sqrt(Math.max(0, 1 - (_b[0] * ux + _b[2] * uz) ** 2)) * f.hx;
+      const v = (f.px - this.x) * ux + (f.pz - this.z) * uz + ext;
+      if (v > far) far = v;
+    }
+    return far + 0.012;
   }
 
   /** The highest thing under the feet that can be stood on. */
@@ -846,6 +1049,7 @@ export class Human {
     this.pose.stagger = 0;
     this.blend = 0; this.blendDur = 0.28;
     this.grounded = true; this.vy = 0;
+    this.gvx = this.vx; this.gvz = this.vz; this.gait = Math.hypot(this.vx, this.vz);
     this.y = groundHeight(this.x, this.z);
     this.balance = 1;
   }
@@ -875,6 +1079,11 @@ export class Human {
     // being flung about is disorienting
     const spin = Math.hypot(chest.wx, chest.wy, chest.wz);
     if (spin > 4) h.dizzy = Math.min(45, h.dizzy + (spin - 4) * dt * 6);
+    // somebody is putting handcuffs on them where they lie: they go where they are put
+    if (this.handled) {
+      if (this.game.time - this.handled.t < 0.15 && h.alive) { this._beHandled(dt); return; }
+      this.handled = null;
+    }
     if (!h.alive || !h.conscious) { this._relax(); this.island.canSleep = true; this.pose.writhe = 0; this.pose.crawl = 0; this.pose.brace = 0; this.tased = 0; return; }
 
     if (this.tased > 0) {
@@ -907,7 +1116,8 @@ export class Human {
     this.stillT = still && low ? this.stillT + dt : 0;
     if (this.stillT > 0.7 && this.ragT > 1.4 && h.canStand && !this.stayDown) {
       // not everyone springs back up
-      if (this.isPlayer || h.pain < 70 || this.stillT > 4) { this.startGetUp(); return; }
+      // not into somebody else who is getting up right here: one at a time
+      if ((this.isPlayer || h.pain < 70 || this.stillT > 4) && (this.stillT > 5 || !this._crowdedUp())) { this.startGetUp(); return; }
     }
     // what a conscious body does while it is down
     const falling = !low || this.speed > 2.5;
@@ -933,6 +1143,117 @@ export class Human {
     }
   }
 
+  /**
+   * Called every frame by whoever is handcuffing this person on the ground,
+   * with how far through it they are (0..1).
+   */
+  handle(by, u) {
+    const hd = this.handled || (this.handled = { by: null, u: 0, t: -9, yaw: 0, side: 1, turn: 1, k: 0, raised: false, raiseT: 0 });
+    const now = this.game.time;
+    if (hd.by !== by || now - hd.t > 0.3) {
+      // turned over about the line they lie along: the head stays where it is
+      hd.by = by; hd.k = 0; hd.raised = false; hd.raiseT = 0;
+      this.bodies[P.CHEST].dirToWorld(0, 1, 0, _a);
+      hd.yaw = _a[0] * _a[0] + _a[2] * _a[2] > 0.02 ? Math.atan2(_a[0], _a[2]) : this.yaw;
+      // which side of them is the one doing it on? They are rolled away from that side,
+      // and their face is turned away from it too
+      const lat = Math.cos(hd.yaw) * (by.x - this.x) - Math.sin(hd.yaw) * (by.z - this.z);
+      hd.side = lat > 0 ? -1 : 1;
+      hd.turn = lat > 0 ? -1 : 1;
+    }
+    hd.u = u; hd.t = now;
+  }
+
+  /** How far apart the two places the cuffs go are, in metres. */
+  wristGap() {
+    const a = this.bodies[P.FARM_L], b = this.bodies[P.FARM_R], s = this.scale;
+    a.toWorld(-(a.hx + 0.012 * s), -0.115 * s, 0, _a);
+    b.toWorld(b.hx + 0.012 * s, -0.115 * s, 0, _b);
+    return Math.hypot(_a[0] - _b[0], _a[1] - _b[1], _a[2] - _b[2]);
+  }
+
+  /**
+   * Prone handcuffing, as it is taught: rolled on to the front, away from
+   * whoever is doing it, with the arms up past the head so that neither is
+   * trapped underneath; the arms then brought round along the ground to the
+   * sides, and up behind the back; and only then the cuffs, which draw the
+   * wrists the last little way together. Cuffs closed across a body as it
+   * happens to lie would pull the wrists straight through it.
+   */
+  _beHandled(dt) {
+    const hd = this.handled, pel = this.bodies[P.PELVIS], chest = this.bodies[P.CHEST];
+    this.island.canSleep = false; this.island.wake();
+    this.stillT = 0;
+    this.pose.writhe = 0; this.pose.crawl = 0; this.pose.brace = 0;
+    if (this.tased > 0) { this.tased = Math.max(0, this.tased - dt); if (this.tased === 0) this.mind?.ask('afterTase', 58, null, rand(0.8, 1.8)); }
+    // how far over are they? 0 is face down, a half turn either way face up
+    const lx = Math.cos(hd.yaw), lz = -Math.sin(hd.yaw);
+    chest.dirToWorld(0, 0, 1, _a);
+    const roll = Math.atan2(_a[0] * lx + _a[2] * lz, -_a[1]);
+    // Not over before both arms are up past the head, or one of them is rolled on to and trapped
+    // underneath. (Already face down, it is too late for that: they are worked out from where they are.)
+    if (!hd.raised) {
+      hd.raiseT += dt;
+      let up = 0;
+      for (let k = 0; k < 2; k++) { const b = this.bodies[k ? P.HAND_R : P.HAND_L]; chest.toLocal(b.px, b.py, b.pz, _b); if (_b[1] > 0.33 * this.scale) up++; }
+      if (Math.abs(roll) < 0.6 || up === 2 || hd.raiseT > 1.6) hd.raised = true;
+    }
+    // from on their back, over on to the side facing away first; from there, on to the front
+    const want = Math.abs(roll) > 1.75 ? hd.side * Math.PI / 2 : 0;
+    if (hd.raised && Math.abs(roll) < 0.55) hd.k = Math.min(1, hd.k + dt / 1.35);
+    const k = hd.k, ch = _hch;
+    ch.fill(0);
+    let out, back, inn, el;
+    if (k < 0.58) { const v = smooth(k / 0.58); out = lerp(2.75, 0.12, v); back = 0; inn = 0; el = 0.25; }
+    else { const v = smooth((k - 0.58) / 0.42); out = lerp(0.12, -0.3, v); back = lerp(0, -0.71, v); inn = lerp(0, -0.12, v); el = lerp(0.25, 0.36, v); }
+    ch[CH.shLOut] = out; ch[CH.shROut] = out; ch[CH.shL] = back; ch[CH.shR] = back; ch[CH.shLIn] = inn; ch[CH.shRIn] = inn; ch[CH.elL] = el; ch[CH.elR] = el;
+    ch[CH.headTwist] = 1.15 * hd.turn; ch[CH.neckTwist] = 0.35 * hd.turn;
+    channelsToLocal(ch, _hloc);
+    solvePose(0, 0, 0, 0, this.scale, ch, _hloc, _hpos, _hquat);
+    // the trunk is turned over; the limbs are placed relative to the hips as they actually lie
+    lying(hd.yaw, want, _hfd);
+    _hpel.x = pel.qx; _hpel.y = pel.qy; _hpel.z = pel.qz; _hpel.w = pel.qw;
+    for (let i = 0; i < PART_COUNT; i++) {
+      if (!this.attached[i]) continue;
+      const b = this.bodies[i], o = this.orients[i], q = i * 4;
+      const trunk = i <= P.HEAD, base = trunk ? _hfd : _hpel;
+      if (trunk && !hd.raised) { b.orient = null; continue; }
+      const rx = _hquat[q], ry = _hquat[q + 1], rz = _hquat[q + 2], rw = _hquat[q + 3];
+      o.x = base.w * rx + base.x * rw + base.y * rz - base.z * ry;
+      o.y = base.w * ry - base.x * rz + base.y * rw + base.z * rx;
+      o.z = base.w * rz + base.x * ry - base.y * rx + base.z * rw;
+      o.w = base.w * rw - base.x * rx - base.y * ry - base.z * rz;
+      o.s = i <= P.CHEST ? 0.3 : trunk ? 0.35 : i <= P.HAND_R ? 0.45 : 0.14;
+      b.orient = o;
+    }
+  }
+
+  /**
+   * Is somebody else getting up, or standing, where this person would get up?
+   * (Someone getting up sweeps through everything between where they lay and
+   * where they will stand, and so does anyone getting up beside them.)
+   */
+  _crowdedUp() {
+    const pel = this.bodies[P.PELVIS];
+    for (const o of this.game.humans) {
+      if (o === this || o.removed) continue;
+      if (o.state === ST.GETUP) {
+        const b = o.bodies[P.PELVIS], dx = b.px - pel.px, dz = b.pz - pel.pz, ex = o.x - pel.px, ez = o.z - pel.pz;
+        if (dx * dx + dz * dz < 1.69 || ex * ex + ez * ez < 1.69) return true;
+      } else if (o.state === ST.ANIM) {
+        // nobody gets up into somebody standing over them, or next to any part of them
+        const dx = o.x - pel.px, dz = o.z - pel.pz;
+        if (dx * dx + dz * dz < 0.81) return true;
+        for (let i = 1; i < PART_COUNT; i++) {
+          if (!this.attached[i]) continue;
+          const b = this.bodies[i], ex = o.x - b.px, ez = o.z - b.pz;
+          if (ex * ex + ez * ez < 0.36) return true;
+        }
+      }
+    }
+    return false;
+  }
+
   startGetUp() {
     const chest = this.bodies[P.CHEST], pel = this.bodies[P.PELVIS];
     chest.dirToWorld(0, 0, 1, _a);        // which way the chest faces
@@ -945,7 +1266,7 @@ export class Human {
     this.state = ST.GETUP; this.getT = 0;
     for (let i = 0; i < PART_COUNT; i++) if (this.attached[i]) { this.bodies[i].setKinematic(true); this.bodies[i].orient = null; }
     this.island.mover = true; this.island.canSleep = false;
-    this.vx = this.vz = this.vy = 0; this.speed = 0;
+    this.vx = this.vz = this.vy = 0; this.speed = 0; this.gvx = this.gvz = 0; this.gait = 0;
     this.pose.writhe = 0; this.pose.crawl = 0; this.pose.brace = 0;
     this.crawlDir = null;
   }
@@ -958,7 +1279,13 @@ export class Human {
     this.crouching = false;
     this.pose.kneel = u < 0.45 ? 1 : 1 - smooth((u - 0.45) / 0.5);
     this.hold = 'none';
+    // not through a wall, not through whoever else is here: the same rules as for anyone on their feet
+    this._dt = dt; this.vx = 0; this.vz = 0;
+    const at = this._collide(this.x, this.z, this.y);
+    if (this.state !== ST.GETUP) return;
+    this.x = at[0]; this.z = at[1];
     this._solve(dt);
+    this._clearArms();
     this._apply(dt, smooth(u / 0.5));
     if (u >= 1) { this.state = ST.ANIM; this.pose.kneel = 0; this.blendDur = 0; this.balance = 1; }
   }
@@ -1424,6 +1751,7 @@ export class Human {
   reset(x, z, yaw) {
     this.x = x; this.z = z; this.y = groundHeight(x, z); this.yaw = yaw;
     this.vx = this.vz = this.vy = 0; this.speed = 0; this.grounded = true;
+    this.gvx = this.gvz = 0; this.gait = 0;
     this.state = ST.ANIM; this.balance = 1; this.blendDur = 0;
     for (const k in this.pose) this.pose[k] = 0;
     for (let i = 0; i < PART_COUNT; i++) if (this.attached[i]) { this.bodies[i].setKinematic(true); this.bodies[i].orient = null; }
@@ -1446,6 +1774,73 @@ export class Human {
     g.faceQuads.release(this.faceQuad); g.faces.release(this.faceCell);
     g.gore.clearHuman(this);
   }
+}
+
+/** What an arm can be inside: the trunk, the head, the thighs. (The other arm is looked at separately.) */
+const ARM_BLOCK = [P.PELVIS, P.ABDOMEN, P.CHEST, P.HEAD, P.THIGH_L, P.THIGH_R];
+/** Which channel to try turning, and which way, in the order to prefer them: out, less in, up, elbow straighter... (index * 2 + sign) */
+const ARM_TRY = [2, 5, 0, 6, 7, 1, 4, 3];
+/** The parts of somebody else an arm is kept out of. */
+const CROWD_BLOCK = [P.PELVIS, P.ABDOMEN, P.CHEST, P.HEAD, P.UARM_L, P.FARM_L, P.HAND_L, P.UARM_R, P.FARM_R, P.HAND_R, P.THIGH_L, P.THIGH_R];
+const _crowd = [null, null, null, null]; let _crowdN = 0;
+const _blendP = new Float32Array(PART_COUNT * 3), _blendQ = new Float32Array(PART_COUNT * 4);
+const _hch = new Float32Array(CHANNELS), _hloc = new Float32Array(PART_COUNT * 4), _hpos = new Float32Array(PART_COUNT * 3), _hquat = new Float32Array(PART_COUNT * 4);
+const _hfd = { x: 0, y: 0, z: 0, w: 1 }, _hpel = { x: 0, y: 0, z: 0, w: 1 };
+const _bq = [0, 0, 0, 1];
+const _fx = [0, 0, 0, 0];
+const _ma = new Float64Array(9), _mb = new Float64Array(9);
+function axesOf(q, k, o) {
+  const x = q[k], y = q[k + 1], z = q[k + 2], w = q[k + 3];
+  o[0] = 1 - 2 * (y * y + z * z); o[1] = 2 * (x * y + w * z); o[2] = 2 * (x * z - w * y);
+  o[3] = 2 * (x * y - w * z); o[4] = 1 - 2 * (x * x + z * z); o[5] = 2 * (y * z + w * x);
+  o[6] = 2 * (x * z + w * y); o[7] = 2 * (y * z - w * x); o[8] = 1 - 2 * (x * x + y * y);
+}
+/**
+ * How far two parts of a pose are inside each other: the least distance one
+ * of their boxes would have to move for them to be clear, or 0 if they are.
+ */
+function boxDepth(pos, quat, a, sa, b, sb) {
+  const tx = pos[b * 3] - pos[a * 3], ty = pos[b * 3 + 1] - pos[a * 3 + 1], tz = pos[b * 3 + 2] - pos[a * 3 + 2];
+  const ax = sa[0] * 0.5 - 0.003, ay = sa[1] * 0.5 - 0.003, az = sa[2] * 0.5 - 0.003, bx = sb[0] * 0.5 - 0.003, by = sb[1] * 0.5 - 0.003, bz = sb[2] * 0.5 - 0.003;
+  const reach = Math.sqrt(ax * ax + ay * ay + az * az) + Math.sqrt(bx * bx + by * by + bz * bz);
+  if (tx * tx + ty * ty + tz * tz > reach * reach) return 0;
+  axesOf(quat, a * 4, _ma); axesOf(quat, b * 4, _mb);
+  return satDepth(tx, ty, tz, ax, ay, az, bx, by, bz);
+}
+/** Fifteen axes: three faces of each box and the nine pairs of their edges. Reads the two sets of axes from _ma and _mb. */
+function satDepth(tx, ty, tz, ax, ay, az, bx, by, bz) {
+  let best = Infinity;
+  for (let n = 0; n < 15; n++) {
+    let lx, ly, lz;
+    if (n < 3) { lx = _ma[n * 3]; ly = _ma[n * 3 + 1]; lz = _ma[n * 3 + 2]; }
+    else if (n < 6) { lx = _mb[n * 3 - 9]; ly = _mb[n * 3 - 8]; lz = _mb[n * 3 - 7]; }
+    else {
+      const i = ((n - 6) / 3) | 0, j = (n - 6) % 3;
+      const ux = _ma[i * 3], uy = _ma[i * 3 + 1], uz = _ma[i * 3 + 2], vx = _mb[j * 3], vy = _mb[j * 3 + 1], vz = _mb[j * 3 + 2];
+      lx = uy * vz - uz * vy; ly = uz * vx - ux * vz; lz = ux * vy - uy * vx;
+      const l = Math.sqrt(lx * lx + ly * ly + lz * lz);
+      if (l < 1e-5) continue;
+      lx /= l; ly /= l; lz /= l;
+    }
+    const pa = ax * Math.abs(_ma[0] * lx + _ma[1] * ly + _ma[2] * lz) + ay * Math.abs(_ma[3] * lx + _ma[4] * ly + _ma[5] * lz) + az * Math.abs(_ma[6] * lx + _ma[7] * ly + _ma[8] * lz);
+    const pb = bx * Math.abs(_mb[0] * lx + _mb[1] * ly + _mb[2] * lz) + by * Math.abs(_mb[3] * lx + _mb[4] * ly + _mb[5] * lz) + bz * Math.abs(_mb[6] * lx + _mb[7] * ly + _mb[8] * lz);
+    const d = pa + pb - Math.abs(tx * lx + ty * ly + tz * lz);
+    if (d <= 0) return 0;
+    if (d < best) best = d;
+  }
+  return best;
+}
+
+/** The same, between a part of a pose and a body that is somewhere already. */
+function boxDepthBody(pos, quat, a, sa, B, sb) {
+  const tx = B.px - pos[a * 3], ty = B.py - pos[a * 3 + 1], tz = B.pz - pos[a * 3 + 2];
+  const ax = sa[0] * 0.5 - 0.003, ay = sa[1] * 0.5 - 0.003, az = sa[2] * 0.5 - 0.003, bx = sb[0] * 0.5 - 0.003, by = sb[1] * 0.5 - 0.003, bz = sb[2] * 0.5 - 0.003;
+  const reach = Math.sqrt(ax * ax + ay * ay + az * az) + Math.sqrt(bx * bx + by * by + bz * bz);
+  if (tx * tx + ty * ty + tz * tz > reach * reach) return 0;
+  axesOf(quat, a * 4, _ma);
+  _bq[0] = B.qx; _bq[1] = B.qy; _bq[2] = B.qz; _bq[3] = B.qw;
+  axesOf(_bq, 0, _mb);
+  return satDepth(tx, ty, tz, ax, ay, az, bx, by, bz);
 }
 
 /** Turns a vector by a quaternion. */
@@ -1471,6 +1866,16 @@ function faceOf(v) {
 function partCloth(look, part) {
   const c = PARTS[part].cover;
   return c === 'shirt' ? look.top : c === 'pants' ? look.pants : c === 'shoes' ? look.shoes : look.skin;
+}
+
+/**
+ * A rotation that lays a body down with its head toward `yaw`, rolled `roll`
+ * about its length: 0 is on the front, a quarter turn either way on a side.
+ */
+function lying(yaw, roll, o) {
+  const sx = Math.SQRT1_2, cx = Math.SQRT1_2, sz = Math.sin(roll * 0.5), cz = Math.cos(roll * 0.5), sy = Math.sin(yaw * 0.5), cy = Math.cos(yaw * 0.5);
+  const ax = cz * sx, ay = sz * sx, az = sz * cx, aw = cz * cx;
+  o.x = cy * ax + sy * az; o.y = cy * ay + sy * aw; o.z = cy * az - sy * ax; o.w = cy * aw - sy * ay;
 }
 
 /** A rotation that lays a body on its front, head toward `yaw`. */

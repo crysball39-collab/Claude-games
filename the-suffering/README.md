@@ -80,7 +80,10 @@ down them without using a cartridge. It leaves no wound; the fall may. Probes sk
 a helmet. People see a taser fired for what it is: frightening, but not a gun.
 
 **Handcuffs.** They go on someone who is on the ground, out cold, locked up by a taser,
-or standing with their hands up, and it takes a moment on one knee beside them. Wrists
+or standing with their hands up, and it takes a moment on one knee beside them. Someone
+on the ground is rolled on to their front first, away from whoever is doing it, arms up
+past the head so that neither is trapped, and the arms are then brought round along the
+ground and up behind the back; the cuffs go on when the wrists meet. Wrists
 are held together behind the back, on their feet or as a ragdoll, by a real joint. In
 cuffs a person can walk and run, clumsily, and can neither hit anybody nor carry
 anything; what they were carrying is taken off them. PICK UP beside them takes the cuffs
@@ -98,6 +101,21 @@ the body is handed to the physics and the legs try to get back under it. Harder 
 and it is a ragdoll, which gets up again if it can, crawls if it cannot walk, and lies
 still if it cannot do either. People crouch, jump, duck at gunshots, vault crates and
 leap out of the way of cars.
+
+**Solid.** Bodies do not pass through each other, or through themselves. Lying,
+falling or heaped on each other, every part of every body collides with every other part
+it is not jointed to. On their feet, an arm the animation would put into the body (a
+reload, a guard, a cower) is turned at the shoulder and elbow until it is clear, and kept
+out of anyone standing close. A fist or a foot stops at the body it lands on, early if
+they are standing close, and the striking arm bends rather than going into anybody in
+the way. People keep room between them for their feet as well as their shoulders, stop
+pressing when they walk into someone, and take shorter steps in a crush. A body lying in
+the way has its arms and legs stepped on or pushed aside, and its back and head walked
+round. Getting up, every joint turns from where it was to where it is going, so limbs
+swing round instead of passing through (an arm that was lain on goes on ahead, clear of
+the body); and someone who would get up into a person standing next to them, or into
+another person getting up, waits their turn. A heap of bodies comes to rest on itself,
+not in itself.
 
 **Injury.** Underneath is a medical model: 23 bones, 14 organs, wounds that bleed at
 their own rates and clot (or do not), a blood volume that depends on their size, air, pulse,
@@ -180,6 +198,7 @@ npm test             # physics and medical model, in Node
 npm run verify       # plays the game in headless Chromium and checks every feature
                      # (node tools/verify.mjs "Taser|Handcuffs" runs only the sections named)
 npm run build        # writes dist/the-suffering.html
+node tools/overlap.mjs   # how far body parts get inside each other, scenario by scenario
 ```
 
 `npm run verify` needs Playwright and a Chromium; see the note at the top of

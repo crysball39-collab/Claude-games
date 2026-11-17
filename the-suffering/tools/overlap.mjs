@@ -5,11 +5,11 @@
      node tools/overlap.mjs            every scenario
      node tools/overlap.mjs ragdoll    only those whose name matches
    ========================================================================== */
+import { pathToFileURL } from 'node:url';
 import { play } from './play.mjs';
 
-const only = process.argv[2] ? new RegExp(process.argv[2], 'i') : null;
-const t = await play({ width: 900, height: 520 });
-
+/** Puts window.OV (the measuring), window.fresh and window.stub into a page opened with play(). */
+export async function installOV(t) {
 await t.ev(async () => {
   const g = window.__game;
   const rig = await import(location.origin + '/the-suffering/src/human/rig.js');
@@ -123,6 +123,12 @@ await t.ev(async () => {
   window.fresh = () => { T.clear(); for (const o of g.props.slice()) g.removeProp(o); const p = g.player; g.weapons.dropFrom(p, true); for (const it of g.weapons.items.slice()) g.weapons.remove(it); if (p.vest) p.removeVest(); if (p.helmet) p.removeHelmet(); if (p.cuffed) g.weapons.uncuff(p, null); p.h.heal(); p.tased = 0; p.reset(0, -18, Math.PI / 2); g.camYaw = Math.PI / 2; g.camPitch = -0.05; g.gore.clean(); g.paused = false; g.advance(0.3); };
   window.stub = (h, fn) => { h.brain = { update() { h.intent.mx = 0; h.intent.mz = 0; h.intent.run = false; h.intent.crouch = false; h.intent.face = null; for (const k in h.pose) if (k !== 'cuffed' && k !== 'cuffing') h.pose[k] = 0; fn && fn(h); }, pause: 0, mode: 'wander' }; return h; };
 });
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+const only = process.argv[2] ? new RegExp(process.argv[2], 'i') : null;
+const t = await play({ width: 900, height: 520 });
+await installOV(t);
 
 const cm = (v) => (v * 100).toFixed(1).padStart(5) + ' cm';
 const rows = [];
@@ -269,11 +275,15 @@ await scen('arrest: officer cuffs someone on the ground', () => {
 });
 await scen('walking over a body', () => {
   const g = __game; fresh();
+  g.player.reset(-12, -12, 0); g.advance(0.2);
   const v = stub(g.spawnHuman(4, -18, Math.PI / 2)); g.advance(0.3); v.h.kill('test'); v.toRagdoll(); g.advance(2.5);
   const hs = [v];
-  for (let i = 0; i < 3; i++) { const h = g.spawnHuman(0.5 - i * 1.4, -18 + (i - 1) * 0.25, Math.PI / 2); stub(h, (x) => { x.intent.mx = 1; x.intent.run = i === 1; }); hs.push(h); }
+  // across the legs, where a foot can come down on them (the trunk is walked round)
+  const leg = v.bodies[12], legR = v.bodies[15];
+  for (let i = 0; i < 3; i++) { const lx = (i === 1 ? legR : leg).px + (i - 1) * 0.08; const h = g.spawnHuman(lx, (i === 1 ? legR : leg).pz - 2.2 - i * 1.3, 0); stub(h, (x) => { x.intent.mz = 1; x.intent.run = i === 1; }); hs.push(h); }
   return OV.watch(6, hs, { pairs: true });
 });
 
 console.log('\nLOGS:', t.logs.join('\n') || 'none');
 await t.close();
+}

@@ -112,6 +112,9 @@ export class Body {
     this.hit = 0; this.hitOther = null; this.hitNx = 0; this.hitNy = 1; this.hitNz = 0;
     this.hitX = 0; this.hitY = 0; this.hitZ = 0;
     this.grounded = 0;
+    this.touch = 0;                    // how many contacts with other bodies it had in the last step
+    this.pen = 0;                      // and the deepest of them
+    this.sx = 0; this.sy = 0; this.sz = 0; this.sqx = 0; this.sqy = 0; this.sqz = 0; this.sqw = 1;   // where it was when the step began
     // an optional pull toward a world orientation (the "stay upright" reflex)
     this.orient = null;
   }
@@ -497,7 +500,8 @@ export class World {
         if (b.px - r < minx) minx = b.px - r; if (b.px + r > maxx) maxx = b.px + r;
         if (b.py - r < miny) miny = b.py - r; if (b.py + r > maxy) maxy = b.py + r;
         if (b.pz - r < minz) minz = b.pz - r; if (b.pz + r > maxz) maxz = b.pz + r;
-        b.hit = 0; b.hitOther = null; b.grounded = 0;
+        b.hit = 0; b.hitOther = null; b.grounded = 0; b.touch = 0; b.pen = 0;
+        b.sx = b.px; b.sy = b.py; b.sz = b.pz; b.sqw = b.qw; b.sqx = b.qx; b.sqy = b.qy; b.sqz = b.qz;
       }
       isl.minx = minx; isl.miny = miny; isl.minz = minz; isl.maxx = maxx; isl.maxy = maxy; isl.maxz = maxz;
       isl.live = any;
@@ -702,12 +706,29 @@ export class World {
       for (const b of isl.bodies) {
         if (b.im === 0) continue;
         const v = b.vx * b.vx + b.vy * b.vy + b.vz * b.vz;
-        const w = b.wx * b.wx + b.wy * b.wy + b.wz * b.wz;
-        if (v > SLEEP_LIN * SLEEP_LIN || w > SLEEP_ANG * SLEEP_ANG) quiet = false;
+        let w = b.wx * b.wx + b.wy * b.wy + b.wz * b.wz;
+        // A part lying against something does not spin where it lies: it rolls, and then it is going
+        // somewhere. Spinning in place is the solver arguing with itself, and friction would end it.
+        if ((b.touch > 0 || b.grounded > 0) && w > 1.44) {
+          const sw = Math.sqrt(w) * b.boundR, sv = Math.sqrt(v);
+          if (sw > 2.5 * sv + 0.15) { const k = Math.exp(-dt * 14); b.wx *= k; b.wy *= k; b.wz *= k; w *= k * k; }
+        }
+        // Quiet is going nowhere: either slow, or - where two constraints are pushing a part back and forth
+        // against each other, which reads as speed - not having actually moved over the whole step, as
+        // long as nothing is being pushed into it (a part held inside another must not be frozen there).
+        if (v > SLEEP_LIN * SLEEP_LIN || w > SLEEP_ANG * SLEEP_ANG) {
+          const dx = b.px - b.sx, dy = b.py - b.sy, dz = b.pz - b.sz, l = b.pen < 0.004 ? SLEEP_LIN * dt * 0.5 : 0;
+          const dq = Math.abs(b.qw * b.sqw + b.qx * b.sqx + b.qy * b.sqy + b.qz * b.sqz), a = SLEEP_ANG * dt * 0.25;
+          if (dx * dx + dy * dy + dz * dz > l * l || dq < Math.cos(a)) quiet = false;
+        }
         if (v > SETTLE_LIN * SETTLE_LIN || w > SETTLE_ANG * SETTLE_ANG) { slow = false; break; }
       }
-      // nothing in it is doing more than twitch: take the twitch out
-      if (slow && !quiet) for (const b of isl.bodies) { if (b.im === 0) continue; b.vx *= settle; b.vy *= settle; b.vz *= settle; b.wx *= settle; b.wy *= settle; b.wz *= settle; }
+      // nothing in it is doing more than twitch: take the twitch out, and the longer it goes on, the harder
+      isl.slowT = slow ? (isl.slowT || 0) + dt : 0;
+      if (slow && !quiet) {
+        const k = isl.slowT > 1 ? Math.exp(-dt * (5 + 12 * Math.min(1, (isl.slowT - 1) / 2))) : settle;
+        for (const b of isl.bodies) { if (b.im === 0) continue; b.vx *= k; b.vy *= k; b.vz *= k; b.wx *= k; b.wy *= k; b.wz *= k; }
+      }
       if (quiet) {
         isl.quiet += dt;
         if (isl.quiet > SLEEP_TIME) isl.sleep();
@@ -947,6 +968,8 @@ export class World {
       }
     }
 
+    A.touch++; if (pen > A.pen) A.pen = pen;
+    if (B) { B.touch++; if (pen > B.pen) B.pen = pen; }
     // keep it for the velocity pass
     if (_cCount * 10 + 10 > _cN.length) { const n = new Float64Array(_cN.length * 2); n.set(_cN); _cN = n; }
     const o = _cCount * 10;

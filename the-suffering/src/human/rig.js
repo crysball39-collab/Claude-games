@@ -196,6 +196,37 @@ export function solvePose(x, y, z, yaw, scale, ch, local, pos, quat) {
   }
 }
 
+const _la = new Float32Array(12);
+/**
+ * Works one arm out again from its channels, leaving the rest of the pose as
+ * it stands. `side` is 0 for the left arm, 1 for the right; `d` is added to
+ * the shoulder's raise, its swing out and its swing in, and to the elbow.
+ */
+export function solveArm(side, scale, ch, d, pos, quat) {
+  const first = side ? P.UARM_R : P.UARM_L;
+  if (side) {
+    yzx(ch[CH.shRIn] + d[2], -(ch[CH.shROut] + d[1]), -(ch[CH.shR] + d[0]), _la, 0);
+    yzx(0, 0, -Math.min(2.5, Math.max(0, ch[CH.elR] + d[3])), _la, 4);
+    yzx(0, -ch[CH.wrRSide], -ch[CH.wrR], _la, 8);
+  } else {
+    yzx(-(ch[CH.shLIn] + d[2]), ch[CH.shLOut] + d[1], -(ch[CH.shL] + d[0]), _la, 0);
+    yzx(0, 0, -Math.min(2.5, Math.max(0, ch[CH.elL] + d[3])), _la, 4);
+    yzx(0, ch[CH.wrLSide], -ch[CH.wrL], _la, 8);
+  }
+  for (let k = 0; k < 3; k++) {
+    const i = first + k, p = PARTS[i], par = p.parent, o = i * 4, po = par * 4, lo = k * 4;
+    _qa[0] = quat[po]; _qa[1] = quat[po + 1]; _qa[2] = quat[po + 2]; _qa[3] = quat[po + 3];
+    _qb[0] = _la[lo]; _qb[1] = _la[lo + 1]; _qb[2] = _la[lo + 2]; _qb[3] = _la[lo + 3];
+    qmul(_qa, _qb, _qc);
+    quat[o] = _qc[0]; quat[o + 1] = _qc[1]; quat[o + 2] = _qc[2]; quat[o + 3] = _qc[3];
+    qrot(_qa, p.la[0] * scale, p.la[1] * scale, p.la[2] * scale, _v);
+    qrot(_qc, p.lb[0] * scale, p.lb[1] * scale, p.lb[2] * scale, _w);
+    pos[i * 3] = pos[par * 3] + _v[0] - _w[0];
+    pos[i * 3 + 1] = pos[par * 3 + 1] + _v[1] - _w[1];
+    pos[i * 3 + 2] = pos[par * 3 + 2] + _v[2] - _w[2];
+  }
+}
+
 /**
  * Two bone leg: where should the hip and knee be for the ankle to sit at a
  * point given relative to the hip? side is +1 left, -1 right; out is how far
@@ -238,20 +269,26 @@ function limbSpheres(hx, hy, hz) {
   return out;
 }
 function slabSpheres(hx, hy, hz) {
+  // close enough together that the face between two of them dips in by less than a centimetre
   const r = Math.min(hy, hz) * 1.03, off = Math.max(0, hx - r);
-  const n = Math.max(2, Math.ceil(2 * off / (r * 1.3)) + 1);
+  const n = Math.max(2, Math.ceil(2 * off / (r * 0.8)) + 1);
   const out = [];
   for (let i = 0; i < n; i++) out.push(-off + 2 * off * i / (n - 1), 0, 0, r);
+  // and its eight corners, which are what a slab leads with when it is turned edge on
+  const c = Math.min(hx, hy, hz) * 0.42;
+  for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) out.push(sx * (hx - c * 0.9), sy * (hy - c * 0.9), sz * (hz - c * 0.9), c);
   return out;
 }
 const TORSO = { pelvis: 1, abdomen: 1, chest: 1 };
 const WIDE = { head: 1, neck: 1, handL: 1, handR: 1, footL: 1, footR: 1 };
 const SPHERES = {
   neck: (hx) => [0, 0, 0, hx * 1.15],
-  // the skull, and one at each corner of the jaw and of the crown, which are what a bowed head leads with
+  // the skull, one at each corner of the jaw and of the crown, and one along the middle of the chin, the
+  // brow, the nape and the crown: the edges are what a bowed or a thrown-back head leads with
   head: (hx, hy, hz) => {
     const out = [0, 0, 0, Math.min(hx, hy, hz) * 1.08], r = hx * 0.52;
     for (const sy of [-1, 1]) for (const sx of [-1, 1]) for (const sz of [-1, 1]) out.push(sx * (hx - r * 0.9), sy * (hy - r * 0.9), sz * (hz - r * 0.9), r);
+    out.push(0, -(hy - r * 0.9), hz - r * 0.9, r, 0, -(hy - r * 0.9), -(hz - r * 0.9), r);
     return out;
   },
   // two rows across the chest: the upper one is the line of the shoulders
