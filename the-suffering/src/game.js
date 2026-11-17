@@ -11,6 +11,11 @@ import { Human, ST } from './human/human.js';
 import { playerLook, randomLook, officerLook } from './human/looks.js';
 import { P } from './human/rig.js';
 import { Gore } from './combat/gore.js';
+import { Voxels } from './world/voxels.js';
+import { Things } from './world/things.js';
+import { Ropes } from './world/ropes.js';
+import { Lights } from './render/lights.js';
+import { Fire } from './combat/fire.js';
 import { clamp, clamp01, damp, lerp, rand, wrapAngle } from './core/util.js';
 
 export const QUALITY = {
@@ -73,6 +78,11 @@ export class Game {
     this.camX = 0; this.camZ = 0;
     this.gore = new Gore(this, { particles: q.particles });
     this.gore.enabled = settings.gore !== false;
+    this.voxels = new Voxels(this);
+    this.things = new Things(this);
+    this.ropes = new Ropes(this);
+    this.lights = new Lights(this);
+    this.fire = new Fire(this);
 
     const sp = this.city.spawn;
     this.player = new Human(this, playerLook(), sp.x, sp.z, sp.yaw, { player: true });
@@ -188,7 +198,7 @@ export class Game {
     island.add(body);
     this.world.addIsland(island);
     const idx = this.crateBoxes.alloc();
-    const prop = { kind: 'crate', body, island, idx, born: this.time };
+    const prop = { kind: 'crate', body, island, idx, born: this.time, solid: true, wood: true };
     body.owner = prop;
     this.props.push(prop);
     return prop;
@@ -200,6 +210,9 @@ export class Game {
     this.props.splice(i, 1);
     this.world.removeIsland(p.island);
     if (p.kind === 'crate') this.crateBoxes.release(p.idx);
+    if (p.vox) p.vox.dispose();
+    if (p.thing) this.things.forget(p.thing);
+    if (p.fire) this.fire.crates.delete(p);
     this.gore.clearBody(p.body);
     p.removed = true;
     this.weapons?.onPropRemoved(p);
@@ -219,11 +232,14 @@ export class Game {
     this.police?.update(dt);
     this.traffic?.update(dt);
     for (const h of this.humans) h.update(dt);
+    this.ropes.tether();
     this.weapons?.update(dt);
     for (const o of this.props) { const b = o.body; b.preSpeed = Math.hypot(b.vx, b.vy, b.vz); b.slow = b.preSpeed < 4.2; }
     this.world.step(dt);
     for (const h of this.humans) h.late(dt);
     this.weapons?.late(dt);
+    this.voxels.update(dt);
+    this.ropes.update(dt);
 
     // crates
     for (const o of this.props) {
@@ -240,12 +256,15 @@ export class Game {
     }
 
     this._camera(dt);
+    this.things.update(dt);
+    this.fire.update(dt);
     this.gore.update(dt, this.camera);
     this.speech?.update(dt);
     this._underlay();
     this.ui?.update(dt);
     this.audio?.listen(this.camPos.x, this.camPos.y, this.camPos.z, this.camYaw);
 
+    this.lights.commit();
     this.boxes.commit(); this.crateBoxes.commit(); this.faceQuads.commit(); this.under.commit();
     this.faces.flush(this.time);
     if (!this.headless) this.renderer.render(this.scene, this.camera);
@@ -310,7 +329,8 @@ export class Game {
       const hit = this.world.rayWorld(ox, oy, oz, -dx, -dy, -dz, dist + 0.3);
       if (hit >= 0) dist = Math.max(0.35, hit - 0.25);
       for (const o of this.props) {
-        if (o.kind !== 'crate') continue;
+        if (!o.solid) continue;
+        if (o.vox) { const t = o.vox.ray(ox, oy, oz, -dx, -dy, -dz, dist + 0.3); if (t >= 0) dist = Math.max(0.35, t - 0.25); continue; }
         const b = o.body, ex = b.px - ox, ey = b.py - oy, ez = b.pz - oz;
         const t = -(ex * dx + ey * dy + ez * dz);
         if (t > 0 && t < dist && (ex + dx * t) ** 2 + (ey + dy * t) ** 2 + (ez + dz * t) ** 2 < 0.36) dist = Math.max(0.35, t - 0.5);
@@ -453,7 +473,10 @@ export class Game {
       this.pieces.length = 0;
     }
     if (what === 'things' || what === 'all') {
+      this.ropes.clear();
+      this.fire.clear();
       for (const o of this.props.slice()) this.removeProp(o);
+      this.voxels.clear();
     }
   }
 

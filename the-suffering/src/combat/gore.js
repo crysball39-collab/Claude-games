@@ -499,6 +499,17 @@ export class Gore {
     for (let i = this.bDecals.length - 1; i >= 0; i--) if (this.bDecals[i].body === body) this._detach(i);
   }
 
+  /** A body whose centre has moved within it by (ox,oy,oz) (a wall that lost cubes): its marks stay where they were on it. */
+  recentre(body, ox, oy, oz) {
+    for (const d of this.bDecals) {
+      if (d.body !== body) continue;
+      const c = d.c;
+      for (let k = 0; k < 12; k += 3) { c[k] -= ox; c[k + 1] -= oy; c[k + 2] -= oz; }
+      if (d.run) { d.run.lp[0] -= ox; d.run.lp[1] -= oy; d.run.lp[2] -= oz; }
+      d.settled = false;
+    }
+  }
+
   /* -------------------------------- the ground ---------------------------- */
 
   _groundDecal(cell, x, y, z, w, d, rot, alpha = 1) {

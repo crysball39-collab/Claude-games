@@ -16,6 +16,7 @@ export class Sound {
     this.budget = 0; this.budgetT = 0;
     this.hum = null;
     this.played = 0;
+    this.loops = new Map();      // sounds that go on while something keeps asking for them
   }
 
   /** Browsers only let sound start from a touch or a click. */
@@ -40,7 +41,7 @@ export class Sound {
   }
   setVolume(v) { this.volume = v; if (this.master) this.master.gain.value = v; }
   suspend(on) { if (this.ctx) { try { on ? this.ctx.suspend() : this.ctx.resume(); } catch { /* fine */ } } }
-  listen(x, y, z, yaw) { this.lx = x; this.ly = y; this.lz = z; this.yaw = yaw; }
+  listen(x, y, z, yaw) { this.lx = x; this.ly = y; this.lz = z; this.yaw = yaw; if (this.ctx) this._tickLoops(); }
 
   /* ------------------------------- primitives ----------------------------- */
 
@@ -78,6 +79,7 @@ export class Sound {
   _make(name, d, t) {
     switch (name) {
       case 'pistol': this._n(d, t, 0.2, 1.1, 'lowpass', 3200, 500, 0.6); this._t(d, t, 0.13, 0.9, 'sine', 170, 48); this._n(d, t, 0.03, 0.6, 'highpass', 3000); this._n(d, t + 0.04, 0.5, 0.16, 'bandpass', 900, 300, 0.4); break;
+      case 'glock': this._n(d, t, 0.16, 1.0, 'lowpass', 4300, 620, 0.6); this._t(d, t, 0.1, 0.7, 'sine', 205, 60); this._n(d, t, 0.025, 0.75, 'highpass', 3700); this._n(d, t + 0.035, 0.42, 0.14, 'bandpass', 1100, 340, 0.4); break;
       case 'rifle': this._n(d, t, 0.24, 1.2, 'lowpass', 4200, 600, 0.5); this._t(d, t, 0.14, 1.0, 'sine', 130, 40); this._n(d, t, 0.025, 0.8, 'highpass', 4000); this._n(d, t + 0.05, 0.6, 0.2, 'bandpass', 700, 250, 0.4); break;
       case 'carbine': this._n(d, t, 0.19, 1.15, 'lowpass', 5400, 700, 0.5); this._t(d, t, 0.1, 0.8, 'sine', 165, 52); this._n(d, t, 0.02, 0.95, 'highpass', 5200); this._n(d, t + 0.04, 0.55, 0.18, 'bandpass', 950, 300, 0.4); break;
       case 'tasershot': this._n(d, t, 0.05, 0.8, 'highpass', 1800, 900, 1); this._t(d, t, 0.05, 0.3, 'square', 260, 90); this._n(d, t + 0.04, 0.2, 0.25, 'bandpass', 5200, 2600, 3); break;
@@ -105,6 +107,16 @@ export class Sound {
       case 'vomit': for (let i = 0; i < 4; i++) this._n(d, t + i * 0.13, 0.16, 0.5, 'bandpass', 500 + rand(-120, 200), 280, 2.2, 0.03); this._t(d, t, 0.3, 0.25, 'sawtooth', 150, 90, 0.05); break;
       case 'carhit': this._t(d, t, 0.22, 1.1, 'sine', 85, 34); this._n(d, t, 0.26, 0.9, 'lowpass', 2200, 300); this._n(d, t + 0.02, 0.1, 0.5, 'highpass', 1800); break;
       case 'horn': this._t(d, t, 0.55, 0.3, 'sawtooth', 415, 415, 0.02); this._t(d, t, 0.55, 0.3, 'sawtooth', 523, 523, 0.02); break;
+      case 'splinter': for (let i = 0; i < 4; i++) this._n(d, t + i * 0.018 + rand(0, 0.01), 0.035, 0.7, 'bandpass', 1300 + rand(0, 1700), 800, 1.2); this._t(d, t, 0.08, 0.45, 'triangle', 230, 120); this._n(d, t, 0.13, 0.4, 'lowpass', 900, 280); break;
+      case 'clang': this._t(d, t, 0.7, 0.32, 'sine', 1180, 1150, 0.002); this._t(d, t, 0.55, 0.24, 'sine', 1870, 1835, 0.002); this._t(d, t, 0.4, 0.18, 'sine', 2960, 2900, 0.002); this._t(d, t, 0.9, 0.2, 'sine', 410, 400, 0.002); this._n(d, t, 0.04, 0.7, 'highpass', 3000); break;
+      case 'creak': this._t(d, t, 0.55, 0.22, 'sawtooth', 92, 68, 0.08); this._n(d, t, 0.5, 0.22, 'bandpass', 420, 240, 3, 0.1); break;
+      case 'glass': for (let i = 0; i < 8; i++) this._n(d, t + i * 0.014 + rand(0, 0.02), 0.05 + rand(0, 0.09), 0.5, 'highpass', 4000 + rand(0, 3500)); this._t(d, t, 0.16, 0.16, 'sine', 3300, 2500); this._n(d, t, 0.05, 0.6, 'bandpass', 1800, 900, 1); break;
+      case 'snap': this._n(d, t, 0.03, 0.9, 'highpass', 2000); this._t(d, t, 0.13, 0.45, 'triangle', 620, 140); this._n(d, t + 0.02, 0.2, 0.25, 'bandpass', 500, 200, 1); break;
+      case 'whump': this._n(d, t, 0.42, 0.9, 'lowpass', 340, 110, 0.7, 0.04); this._t(d, t, 0.3, 0.6, 'sine', 85, 38); this._n(d, t + 0.05, 0.4, 0.3, 'bandpass', 900, 400, 0.8); break;
+      case 'switch': this._n(d, t, 0.012, 0.6, 'highpass', 3600); this._t(d, t, 0.018, 0.2, 'square', 1900); this._n(d, t + 0.05, 0.01, 0.4, 'highpass', 4200); break;
+      case 'start': this._n(d, t, 0.22, 0.45, 'bandpass', 760, 300, 1.5, 0.02); this._n(d, t + 0.28, 0.2, 0.45, 'bandpass', 700, 280, 1.5, 0.02); for (let i = 0; i < 6; i++) this._t(d, t + 0.55 + i * 0.07, 0.06, 0.4, 'sawtooth', 74, 52); break;
+      case 'stop': for (let i = 0; i < 5; i++) this._t(d, t + i * 0.11, 0.08, 0.35 - i * 0.05, 'sawtooth', 60 - i * 5, 40); break;
+      case 'tie': this._n(d, t, 0.18, 0.35, 'bandpass', 1500, 700, 1.5, 0.03); this._n(d, t + 0.2, 0.12, 0.3, 'bandpass', 1100, 600, 1.5, 0.02); break;
       case 'screech': this._n(d, t, 0.7, 0.45, 'bandpass', 3100, 2300, 9, 0.05); this._n(d, t, 0.7, 0.2, 'bandpass', 1500, 1200, 5, 0.05); break;
       default: return false;
     }
@@ -170,6 +182,72 @@ export class Sound {
       const dur = kind === 'shout' ? rand(0.09, 0.15) : rand(0.055, 0.1);
       this._t(mouth, at, dur, 0.9, i % 3 ? 'triangle' : 'sawtooth', f, f * (0.9 + Math.random() * 0.22), 0.012);
       at += dur + rand(0.025, 0.07);
+    }
+  }
+
+  /* -------------------------------- loops --------------------------------- */
+
+  /**
+   * A sound that keeps going for as long as something asks for it, once a
+   * frame: a generator running, a flamethrower, a fire. When nothing has
+   * asked for a moment it fades out.
+   */
+  loop(key, kind, x, y, z, vol = 1) {
+    if (!this.ctx || this.ctx.state !== 'running') return;
+    let L = this.loops.get(key);
+    if (!L) { L = this._loop(kind); if (!L) return; this.loops.set(key, L); }
+    L.seen = performance.now();
+    const dx = x - this.lx, dy = y - this.ly, dz = z - this.lz, d = Math.hypot(dx, dy, dz);
+    const gain = d > 90 ? 0 : vol * 0.6 / (1 + Math.pow(d / 7, 1.7));
+    const pan = d < 0.5 ? 0 : (dx * -Math.cos(this.yaw) + dz * Math.sin(this.yaw)) / d;
+    const t = this.ctx.currentTime;
+    L.g.gain.setTargetAtTime(gain * L.base, t, 0.06);
+    if (L.p) L.p.pan.setTargetAtTime(clamp(pan * 0.85, -1, 1), t, 0.06);
+    // a fire crackles: now and then a snap of noise on top of the roar
+    if (kind === 'fire' && Math.random() < 0.3) this._n(L.g, t + rand(0, 0.03), rand(0.008, 0.03), rand(0.4, 1.2), 'highpass', rand(1500, 4500));
+  }
+  _loop(kind) {
+    const ctx = this.ctx, g = ctx.createGain();
+    g.gain.value = 0;
+    let p = null;
+    if (ctx.createStereoPanner) { p = ctx.createStereoPanner(); g.connect(p); p.connect(this.master); } else g.connect(this.master);
+    const nodes = [];
+    const noise = (type, f, q, v) => { const s = ctx.createBufferSource(); s.buffer = this.noiseBuf; s.loop = true; const fl = ctx.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q; const gg = ctx.createGain(); gg.gain.value = v; s.connect(fl); fl.connect(gg); gg.connect(g); s.start(0, Math.random()); nodes.push(s); return gg; };
+    let base = 1;
+    if (kind === 'engine') {
+      // a small four-stroke: a low buzz that putters, and the rattle of the frame
+      const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 31;
+      const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 280;
+      const am = ctx.createGain(); am.gain.value = 0.55;
+      const lfo = ctx.createOscillator(); lfo.type = 'square'; lfo.frequency.value = 12.5; const lg = ctx.createGain(); lg.gain.value = 0.4;
+      lfo.connect(lg); lg.connect(am.gain);
+      o.connect(f); f.connect(am); am.connect(g); o.start(); lfo.start(); nodes.push(o, lfo);
+      noise('bandpass', 900, 1.2, 0.18);
+      base = 0.55;
+    } else if (kind === 'flame') {
+      noise('lowpass', 260, 0.7, 0.9);
+      noise('bandpass', 900, 0.6, 0.45);
+      noise('highpass', 3000, 0.5, 0.08);
+      base = 0.8;
+    } else if (kind === 'fire') {
+      noise('lowpass', 420, 0.6, 0.5);
+      noise('bandpass', 1300, 0.8, 0.12);
+      base = 0.5;
+    } else if (kind === 'buzz') {
+      const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = 120; o.connect(g); o.start(); nodes.push(o);
+      base = 0.04;
+    } else return null;
+    return { g, p, nodes, base, seen: performance.now() };
+  }
+  /** Loops nobody has asked for lately fade and stop. */
+  _tickLoops() {
+    if (!this.loops.size) return;
+    const now = performance.now(), t = this.ctx.currentTime;
+    for (const [key, L] of this.loops) {
+      if (now - L.seen < 220) continue;
+      L.g.gain.setTargetAtTime(0, t, 0.08);
+      for (const n of L.nodes) { try { n.stop(t + 0.5); } catch { /* gone */ } }
+      this.loops.delete(key);
     }
   }
 

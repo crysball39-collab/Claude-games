@@ -18,6 +18,7 @@ import { clamp, clamp01, lerp, rand, pick } from '../core/util.js';
 
 const CRUISE = 8.2, TURN_SPEED = 4.2, ACCEL = 3.2, BRAKE = 8.5;
 const HALF = ROAD_W / 2;
+const _pt = [0, 0, 0];
 
 export class Traffic {
   constructor(game, count) {
@@ -157,7 +158,7 @@ export class Traffic {
 
       // people and things in the way
       const look = car.speed * car.speed / (2 * BRAKE) + 4.5;
-      let person = false, thing = false;
+      let person = false, thing = false, wall = false;
       if (!panic || car.speed < 2) {
         for (const h of g.humans) {
           if (h.removed) continue;
@@ -171,19 +172,31 @@ export class Traffic {
         }
       }
       for (const o of g.props) {
-        if (o.kind !== 'crate') continue;
-        const ex = o.body.px - car.x, ez = o.body.pz - car.z;
-        const along = ex * car.dx + ez * car.dz, side = ex * -car.dz + ez * car.dx;
-        if (along < 1.2 || along > look + 1 || Math.abs(side) > 1.4 || o.body.py > 1.6) continue;
-        if (car.blocked > 3.5) continue;
+        if (!o.solid) continue;
+        const b = o.body;
+        if (b.py - b.boundR > 1.6) continue;
+        // the nearest part of it in the lane: its centre, its corners and the middles of its sides
+        const fixed = o.vox && o.vox.anchored;
+        let near = Infinity;
+        for (let u = -1; u <= 1; u++) for (let v = -1; v <= 1; v++) {
+          b.toWorld(u * b.hx, 0, v * b.hz, _pt);
+          const ex = _pt[0] - car.x, ez = _pt[2] - car.z;
+          const along = ex * car.dx + ez * car.dz, side = ex * -car.dz + ez * car.dx;
+          if (along < 1.2 || along > look + 1 || Math.abs(side) > 1.4) continue;
+          if (along < near) near = along;
+        }
+        if (near === Infinity) continue;
+        // a crate or a beam is shoved aside in the end; a wall is not
+        if (car.blocked > 3.5 && !fixed) continue;
         thing = true;
-        stopIn = Math.min(stopIn, along - CAR.halfL - 0.9);
+        if (fixed) wall = true;
+        stopIn = Math.min(stopIn, near - CAR.halfL - 0.9);
       }
 
       // speed
       let target = limit;
       if (stopIn < Infinity) target = Math.min(target, stopIn <= 0.15 ? 0 : Math.sqrt(2 * BRAKE * 0.8 * Math.max(0, stopIn - 0.15)));
-      if ((car.blocked > 3 && !person) || (person && car.blocked > 7)) target = Math.max(target, 1.6);     // push through
+      if ((car.blocked > 3 && !person && !wall) || (person && car.blocked > 7)) target = Math.max(target, 1.6);     // push through
       const before = car.speed;
       if (target < car.speed) car.speed = Math.max(target, car.speed - BRAKE * dt);
       else car.speed = Math.min(target, car.speed + ACCEL * (panic ? 1.8 : 1) * dt);

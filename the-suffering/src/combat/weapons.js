@@ -24,6 +24,7 @@ import { clamp, clamp01, lerp, smooth, rand, chance, wrapAngle } from '../core/u
 
 const STEEL = 0xc3c8cc, DARK = 0x26282c, WOOD = 0x7a4a26, GRIP = 0x3a2a1c, VEST = 0x121316, MAG = 0x15161a, YELLOW = 0xd8b614;
 const BLACK = 0x1c1d20, BLACK2 = 0x2a2c30, FDE = 0x8a7553;   // anodised black, the furniture, and flat dark earth
+const POLY = 0x232427, SLIDE = 0x2e3034;                           // a polymer frame and a matte steel slide
 const tilt = (a) => [Math.sin(a / 2), 0, 0, Math.cos(a / 2)];
 
 /** Box lists: x, y, z, width, height, length, colour, [rotation], [is blade], [is the magazine]. Barrel or blade toward +Z. */
@@ -42,6 +43,15 @@ export const WEAPONS = {
     reload: 1.5, loud: 158, mass: 1.1, half: [0.018, 0.07, 0.11], centre: 0.04, grip: [0, -0.055, -0.02], muzzle: [0, 0.022, 0.17], sound: 'pistol',
     boxes: [[0, 0.022, 0.06, 0.028, 0.032, 0.21, DARK], [0, 0, 0.04, 0.026, 0.02, 0.13, 0x3c3f44], [0, -0.062, -0.02, 0.028, 0.11, 0.046, GRIP, tilt(0.22)], [0, -0.026, 0.03, 0.008, 0.03, 0.05, DARK], [0, 0.04, -0.03, 0.01, 0.01, 0.012, 0x101010], [0, -0.121, -0.033, 0.024, 0.014, 0.042, MAG, tilt(0.22), 0, 1]],
     slide: 0, magSize: [0.011, 0.05, 0.017],
+  },
+  /* 9 mm, fifteen in the magazine: lighter than the .45, quicker to shoot again, a polymer frame */
+  glock: {
+    id: 'glock', name: 'Glock-19', label: 'FIRE', hold: 'pistol', gun: true, mag: 15, auto: false, gap: 0.12, power: 0.92, hp: 29, impulse: 17, spread: 0.011, kick: 0.025,
+    reload: 1.4, loud: 156, mass: 0.85, half: [0.016, 0.066, 0.1], centre: 0.035, grip: [0, -0.052, -0.02], muzzle: [0, 0.025, 0.155], sound: 'glock',
+    boxes: [[0, 0.025, 0.056, 0.025, 0.03, 0.186, SLIDE], [0, 0.003, 0.05, 0.024, 0.02, 0.14, POLY], [0, -0.058, -0.02, 0.027, 0.104, 0.046, POLY, tilt(0.3)],
+      [0, -0.024, 0.035, 0.008, 0.028, 0.046, POLY], [0, 0.043, -0.03, 0.013, 0.008, 0.01, 0x111214], [0, 0.043, 0.138, 0.004, 0.008, 0.006, 0x111214],
+      [0, 0.03, 0.02, 0.026, 0.004, 0.03, 0x1a1b1e], [0, -0.115, -0.036, 0.023, 0.016, 0.04, MAG, tilt(0.3), 0, 1]],
+    slide: 0, magSize: [0.011, 0.055, 0.017],
   },
   ak47: {
     id: 'ak47', name: 'AK-47', label: 'FIRE', hold: 'rifle', gun: true, mag: 30, auto: true, gap: 0.1, power: 1.4, hp: 44, impulse: 26, spread: 0.016, kick: 0.019, pierce: true,
@@ -71,6 +81,16 @@ export const WEAPONS = {
       [0, -0.076, -0.072, 0.03, 0.09, 0.04, FDE, tilt(0.35)], [0, -0.057, -0.005, 0.008, 0.012, 0.07, BLACK], [0, -0.105, 0.058, 0.026, 0.13, 0.062, MAG, tilt(-0.16), 0, 1]],
     slide: 9, magSize: [0.013, 0.085, 0.031],
   },
+  /* burning fuel thrown seven metres: a fuel canister under the wand, a pilot light at the nozzle */
+  flamethrower: {
+    id: 'flamethrower', name: 'Flamethrower', tag: 'Flamer', label: 'BURN', hold: 'rifle', gun: true, flame: true, mag: 100, auto: true, gap: 0.1, power: 0, hp: 0, impulse: 0, spread: 0, kick: 0.002,
+    reload: 2.6, loud: 118, mass: 7.5, half: [0.05, 0.12, 0.44], centre: 0.12, grip: [0, -0.08, -0.04], muzzle: [0, 0.015, 0.66], sound: 'flame', range: 7,
+    boxes: [[0, 0, 0, 0.062, 0.085, 0.3, 0x3d4134], [0, 0.015, 0.38, 0.036, 0.036, 0.46, 0x585c52], [0, 0.015, 0.62, 0.052, 0.052, 0.07, 0x2a2b2d],
+      [0, 0.048, 0.57, 0.03, 0.02, 0.09, 0x9a9a92], [0, -0.07, 0.24, 0.03, 0.1, 0.04, 0x1d1e20, tilt(0.15)], [0, -0.08, -0.04, 0.03, 0.11, 0.046, 0x1d1e20, tilt(0.25)],
+      [0, -0.01, -0.25, 0.046, 0.08, 0.18, 0x3d4134], [0, -0.05, 0.06, 0.02, 0.02, 0.13, 0x111214],
+      [0, -0.105, 0.12, 0.09, 0.09, 0.22, 0xb33a26, null, 0, 1], [0, -0.105, 0.24, 0.04, 0.04, 0.025, 0x1d1e20, null, 0, 1]],
+    slide: -1, magSize: [0.045, 0.045, 0.12],
+  },
   /* two barbed probes on seven metres of wire: no wound to speak of, and five seconds in which no muscle answers */
   taser: {
     id: 'taser', name: 'Taser', label: 'TASE', hold: 'pistol', gun: true, taser: true, mag: 2, auto: false, gap: 0.7, power: 0, hp: 0, impulse: 0, spread: 0.008, kick: 0.006,
@@ -89,6 +109,11 @@ export const WEAPONS = {
     id: 'syringe', name: 'Poison syringe', tag: 'Syringe', label: 'INJECT', hold: 'none', tool: true, syringe: true, mass: 0.05, half: [0.01, 0.01, 0.08], centre: 0, mag: 1,
     boxes: [[0, 0, 0, 0.018, 0.018, 0.075, 0xd9e2e6], [0, 0, 0.005, 0.012, 0.012, 0.06, 0x9ac93c], [0, 0, -0.05, 0.008, 0.008, 0.035, 0xeceff1], [0, 0, -0.07, 0.026, 0.006, 0.006, 0xeceff1],
       [0, 0, 0.045, 0.006, 0.006, 0.014, 0xc8cdd0], [0, 0, 0.07, 0.0022, 0.0022, 0.04, 0xb8bec4]],
+  },
+  /* a coil of rope: TIE one end to something, then the other end to something else */
+  rope: {
+    id: 'rope', name: 'Rope', tag: 'Rope', label: 'TIE', hold: 'none', tool: true, rope: true, mass: 0.8, half: [0.08, 0.03, 0.08], centre: 0,
+    boxes: [[0.0680, -0.012, 0.0000, 0.026, 0.024, 0.058, 0xa88a5c, [0, -0.00000, 0, 1.00000]], [0.0481, -0.012, 0.0481, 0.026, 0.024, 0.058, 0xa88a5c, [0, -0.38268, 0, 0.92388]], [0.0000, -0.012, 0.0680, 0.026, 0.024, 0.058, 0xa88a5c, [0, -0.70711, 0, 0.70711]], [-0.0481, -0.012, 0.0481, 0.026, 0.024, 0.058, 0xa88a5c, [0, -0.92388, 0, 0.38268]], [-0.0680, -0.012, 0.0000, 0.026, 0.024, 0.058, 0xa88a5c, [0, -1.00000, 0, 0.00000]], [-0.0481, -0.012, -0.0481, 0.026, 0.024, 0.058, 0xa88a5c, [0, -0.92388, 0, -0.38268]], [-0.0000, -0.012, -0.0680, 0.026, 0.024, 0.058, 0xa88a5c, [0, -0.70711, 0, -0.70711]], [0.0481, -0.012, -0.0481, 0.026, 0.024, 0.058, 0xa88a5c, [0, -0.38268, 0, -0.92388]], [0.0517, 0.012, 0.0214, 0.026, 0.024, 0.048, 0x9a7e52, [0, -0.19509, 0, 0.98079]], [0.0214, 0.012, 0.0517, 0.026, 0.024, 0.048, 0x9a7e52, [0, -0.55557, 0, 0.83147]], [-0.0214, 0.012, 0.0517, 0.026, 0.024, 0.048, 0x9a7e52, [0, -0.83147, 0, 0.55557]], [-0.0517, 0.012, 0.0214, 0.026, 0.024, 0.048, 0x9a7e52, [0, -0.98079, 0, 0.19509]], [-0.0517, 0.012, -0.0214, 0.026, 0.024, 0.048, 0x9a7e52, [0, -0.98079, 0, -0.19509]], [-0.0214, 0.012, -0.0517, 0.026, 0.024, 0.048, 0x9a7e52, [0, -0.83147, 0, -0.55557]], [0.0214, 0.012, -0.0517, 0.026, 0.024, 0.048, 0x9a7e52, [0, -0.55557, 0, -0.83147]], [0.0517, 0.012, -0.0214, 0.026, 0.024, 0.048, 0x9a7e52, [0, -0.19509, 0, -0.98079]], [0.06, -0.03, 0.06, 0.02, 0.02, 0.09, 0xa88a5c, [0, 0.38268, 0, 0.92388]]],
   },
   /* an officer's fingerprint scanner: a glass plate, a screen, a body; it reads prints off skin */
   scanner: {
@@ -124,6 +149,7 @@ const slantUp = (a) => { const d = [Math.sin(a), Math.cos(a), 0]; return basis([
  */
 export const MOUNT = {
   m1911: { part: P.PELVIS, pos: [-0.192, 0.035, 0.03], q: [H, 0, 0, H], reach: 'hip', dur: 0.46, word: 'holster' },       // muzzle down on the right hip
+  glock: { part: P.CHEST, pos: [0.15, -0.09, 0.0], q: [0, 1, 0, 0], reach: 'cross', dur: 0.5, word: 'shoulder holster' },   // under the left arm, muzzle back
   knife: { part: P.PELVIS, pos: [0.186, 0.03, 0.02], q: [H, 0, 0, H], reach: 'cross', dur: 0.52, word: 'sheath' },        // blade down on the left hip
   machete: { part: P.CHEST, pos: [-0.11, 0.12, -0.135], q: slant(0.5), reach: 'back', dur: 0.66, word: 'back' },          // across the back, handle at the right shoulder
   ak47: { part: P.CHEST, pos: [0.02, -0.02, -0.15], q: slantUp(0.62), reach: 'back', dur: 0.7, word: 'back' },            // slung, muzzle over the left shoulder
@@ -133,6 +159,8 @@ export const MOUNT = {
   cuffs: { part: P.PELVIS, pos: [0.05, 0.03, -0.118], q: [H, 0, 0, H], reach: 'hip', dur: 0.4, word: 'belt' },
   scanner: { part: P.PELVIS, pos: [-0.118, 0.03, 0.112], q: [H, 0, 0, H], reach: 'hip', dur: 0.4, word: 'belt' },              // front of the right hip
   syringe: { part: P.PELVIS, pos: [-0.17, 0.06, 0.08], q: [H, 0, 0, H], reach: 'hip', dur: 0.35, word: 'pocket' },            // in a pocket
+  rope: { part: P.PELVIS, pos: [0.16, 0.0, -0.11], q: [H, 0, 0, H], reach: 'hip', dur: 0.4, word: 'belt' },                  // a coil hung on the belt
+  flamethrower: { part: P.CHEST, pos: [-0.01, -0.03, -0.17], q: slantUp(0.6), reach: 'back', dur: 0.8, word: 'back' },
 };
 
 const _a = [0, 0, 0], _b = [0, 0, 0], _c = [0, 0, 0], _hit = [0, 0, 0, 0, 0, 0, 0], _n = [0, 0, 0];
@@ -154,6 +182,7 @@ export class Weapons {
     this.lastMove = '';
     this.assist = null;
     this.lastItem = null;              // what the player last had out, for DRAW
+    this.stats = { exits: 0, through: 0, voxHits: 0, chops: 0 };
   }
 
   /** Seconds left of the player's reload. */
@@ -279,6 +308,7 @@ export class Weapons {
     if (!item) {
       // nothing to pick up, but somebody in cuffs within reach: take them off
       if (this.nearCuffed && !p.cuffed) { this.uncuff(this.nearCuffed, null); g.ui?.toast('Cuffs off'); return true; }
+      if (g.things && g.things.near && !p.cuffed) return g.things.use();
       return false;
     }
     if (item.holder === p || p.cuffed) return false;
@@ -560,6 +590,7 @@ export class Weapons {
     if (p.state !== ST.ANIM || !p.h.conscious || p.cuffed || p.cuffing) return false;
     if (def.gun) return this.fire();
     if (def.syringe) return this.useSyringe();
+    if (def.rope) return which === 3 ? g.ropes?.undo() : g.ropes?.use();
     if (def.scanner) return this.useScanner();
     if (def.tool) return this.useCuffs();
     if (p.anim.busy) { if (which >= 0) this.choice = which; else this.queued = true; return false; }
@@ -680,6 +711,7 @@ export class Weapons {
       const len = Math.hypot(dx, dy, dz);
       if (len < 0.004) continue;
       dx /= len; dy /= len; dz /= len;
+      if (def.blade && g.ropes && g.ropes.list.length && g.ropes.cutBy(ox, oy, oz, ox + dx * (len + 0.03), oy + dy * (len + 0.03), oz + dz * (len + 0.03)) && human.isPlayer) g.ui?.toast('Cut through the rope.');
       const hit = g.rayPeople(ox, oy, oz, dx, dy, dz, len + 0.03, human, def.blade ? 0.03 : 0.055);
       if (hit && !act.hits.has(hit.human)) {
         act.hits.add(hit.human); act.landed++;
@@ -696,6 +728,33 @@ export class Weapons {
       // crates and cars take the blow too
       if (act.hitThing) continue;
       for (const o of g.props) {
+        if (o.vox) {
+          const v = o.vox, t = v.ray(ox, oy, oz, dx, dy, dz, len + 0.04);
+          if (t < 0) continue;
+          act.hitThing = true;
+          const wood = v.mat === 'wood';
+          const power = (def.chops ? 1.15 : def.blade ? 0.55 : 0.12) * clip.power;
+          const lost = v.chop(v.hit.c, power, dx, dy, dz);
+          this.stats.chops += lost;
+          if (!v.anchored) v.body.applyImpulse(dx * 30 * clip.power, 0, dz * 30 * clip.power, ox + dx * t, oy + dy * t, oz + dz * t);
+          g.audio?.at(wood ? (def.blade ? 'chop' : 'crate') : def.blade ? 'clang' : 'thud', ox + dx * t, oy + dy * t, oz + dz * t, 0.8);
+          if (!wood && def.blade) g.gore.puff('flash', ox + dx * t, oy + dy * t, oz + dz * t, 0.12, 0.05, 1, 0.9, 0.6);
+          g.minds?.noise(ox, oy, oz, 70, 'crash', human);
+          if (human.isPlayer) g.shake = Math.max(g.shake, 0.35);
+          // the blade stops where it bit
+          if (act.bounce == null) { act.t = Math.max(0, act.t - dt * 0.5); act.bounce = act.t / clip.dur; human.repose(); }
+          break;
+        }
+        if (o.thing) {
+          const t = rayBody(o.body, ox, oy, oz, dx, dy, dz, len + 0.04, _hit, 0.03);
+          if (t < 0) continue;
+          act.hitThing = true;
+          g.things?.hurt(o.thing, clip.power, [_hit[0], _hit[1], _hit[2]], 'blow');
+          const J = (clip.limb === 'footR' ? 60 : 30) * clip.power;
+          o.body.applyImpulse(dx * J, J * 0.15, dz * J, ox + dx * t, oy + dy * t, oz + dz * t);
+          g.audio?.at(o.thing.type === 'generator' ? 'thud' : 'clang', o.body.px, o.body.py, o.body.pz, 0.6);
+          break;
+        }
         if (o.kind !== 'crate') continue;
         const t = rayBody(o.body, ox, oy, oz, dx, dy, dz, len + 0.04, _hit, 0.03);
         if (t < 0) continue;
@@ -975,6 +1034,7 @@ export class Weapons {
 
   fire() {
     const g = this.game, p = g.player, e = this.equipped;
+    if (e && e.def.flame) return this._flame(p, e);
     if (!e || !e.def.gun || this.cool > 0 || p.reload || p.swap || p.weapon !== e || p.cuffed || p.cuffing) return false;
     if (!p.h.armOk(-1)) return false;
     if (e.def.taser) {
@@ -1002,7 +1062,7 @@ export class Weapons {
     if (w >= 0) far = w;
     const ph = g.rayPeople(a.ox, a.oy, a.oz, a.dx, a.dy, a.dz, far, p, 0.02);
     if (ph) far = ph.t;
-    for (const o of g.props) { const t = rayBody(o.body, a.ox, a.oy, a.oz, a.dx, a.dy, a.dz, far, null); if (t >= 0 && t < far) far = t; }
+    for (const o of g.props) { const t = o.vox ? o.vox.ray(a.ox, a.oy, a.oz, a.dx, a.dy, a.dz, far) : rayBody(o.body, a.ox, a.oy, a.oz, a.dx, a.dy, a.dz, far, null); if (t >= 0 && t < far) far = t; }
     const tx = a.ox + a.dx * far, ty = a.oy + a.dy * far, tz = a.oz + a.dz * far;
     const m = e.muzzleWorld || [p.x, p.y + 1.4, p.z];
     let dx = tx - m[0], dy = ty - m[1], dz = tz - m[2];
@@ -1028,6 +1088,38 @@ export class Weapons {
     return true;
   }
 
+  /**
+   * One frame of fire from the player's flamethrower, toward whatever is under
+   * the crosshair. Fuel goes at ten units a second.
+   */
+  _flame(p, e) {
+    const g = this.game, d = e.def, dt = g.dt;
+    if (p.reload || p.swap || p.weapon !== e || p.cuffed || p.cuffing || !p.h.armOk(-1)) return false;
+    if (e.ammo <= 0) { if (!this._dry) { this._dry = true; g.audio?.play('click', 0.5); g.ui?.toast('Out of fuel. Reload.'); } return false; }
+    this._dry = false;
+    e.burnT = (e.burnT || 0) + dt;
+    while (e.burnT >= d.gap && e.ammo > 0) { e.burnT -= d.gap; e.ammo--; g.ui?.ammoChanged(); }
+    const a = g.aim, m = e.muzzleWorld || [p.x, p.y + 1.3, p.z];
+    let far = 9;
+    const wl = g.world.rayWorld(a.ox, a.oy, a.oz, a.dx, a.dy, a.dz, far); if (wl >= 0) far = wl;
+    let dx = a.ox + a.dx * far - m[0], dy = a.oy + a.dy * far - m[1], dz = a.oz + a.dz * far - m[2];
+    const l = Math.hypot(dx, dy, dz) || 1;
+    if (l < 0.6) { dx = a.dx; dy = a.dy; dz = a.dz; } else { dx /= l; dy /= l; dz /= l; }
+    // aim a little high: the stream drops
+    dy += 0.05;
+    g.fire?.spray(p, m[0] + dx * 0.05, m[1] + dy * 0.05, m[2] + dz * 0.05, dx, dy, dz, dt);
+    g.audio?.loop('flame' + p.id, 'flame', m[0], m[1], m[2], 1);
+    p.anim.recoil = Math.max(p.anim.recoil || 0, 0.15);
+    g.shake = Math.max(g.shake, 0.12);
+    this._flameT = (this._flameT || 0) - dt;
+    if (this._flameT <= 0) {
+      this._flameT = 0.5;
+      g.minds?.noise(m[0], m[1], m[2], d.loud, 'flame', p);
+      g.minds?.witness({ kind: 'shot', actor: p, weapon: d.id, x: m[0], y: m[1], z: m[2] });
+    }
+    return true;
+  }
+
   /** Follows one round until it stops. */
   _bullet(shooter, d, ox, oy, oz, dx, dy, dz, power, depth) {
     const g = this.game;
@@ -1037,6 +1129,12 @@ export class Weapons {
     if (w >= 0) { far = w; what = 1; }
     const nx = wn[0], ny = wn[1], nz = wn[2];
     for (const o of g.props) {
+      if (o.vox) {
+        // something made of cubes: only the cubes that are left are in the way
+        const t = o.vox.ray(ox, oy, oz, dx, dy, dz, far);
+        if (t >= 0 && t < far) { far = t; what = 2; prop = o; }
+        continue;
+      }
       const t = rayBody(o.body, ox, oy, oz, dx, dy, dz, far, _hit);
       if (t >= 0 && t < far) { far = t; what = 2; prop = o; _c[0] = _hit[3]; _c[1] = _hit[4]; _c[2] = _hit[5]; _b[0] = _hit[0]; _b[1] = _hit[1]; _b[2] = _hit[2]; }
     }
@@ -1047,6 +1145,7 @@ export class Weapons {
     const ph = g.rayPeople(ox, oy, oz, dx, dy, dz, far, depth === 0 ? shooter : null, 0.012);
     if (ph) { far = ph.t; what = 4; }
     const hx = ox + dx * far, hy = oy + dy * far, hz = oz + dz * far;
+    if (g.ropes && g.ropes.list.length) g.ropes.shot(ox, oy, oz, dx, dy, dz, far);
     if (depth === 0) this.tracers.push({ ax: ox, ay: oy, az: oz, bx: hx, by: hy, bz: hz, t: 0, q: g.gore.fx.alloc() });
 
     if (what === 4) {
@@ -1069,6 +1168,31 @@ export class Weapons {
       g.gore.puff('smoke', hx + nx * 0.05, hy + ny * 0.05, hz + nz * 0.05, 0.3, 0.45, 0.8, 0.78, 0.74);
       g.audio?.at(chance(0.3) ? 'ricochet' : 'impact', hx, hy, hz, 0.7);
       g.minds?.noise(hx, hy, hz, 84, 'impact', shooter);
+    } else if (what === 2 && prop.vox) {
+      // cubes: the round takes out what it goes through, and may come out of the far side
+      const v = prop.vox, wood = v.mat === 'wood';
+      const res = v.shoot(ox, oy, oz, dx, dy, dz, power, far + 6);
+      if (!v.anchored) v.body.applyImpulse(dx * 18, dy * 18, dz * 18, hx, hy, hz);
+      if (wood) g.gore.puff('smoke', hx - dx * 0.05, hy - dy * 0.05, hz - dz * 0.05, 0.3, 0.45, 0.62, 0.5, 0.36);
+      else g.gore.puff('flash', hx - dx * 0.03, hy - dy * 0.03, hz - dz * 0.03, 0.2, 0.06, 1, 0.88, 0.6);
+      g.audio?.at(wood ? 'splinter' : res ? 'clang' : 'ricochet', hx, hy, hz, 0.8);
+      g.minds?.noise(hx, hy, hz, wood ? 80 : 88, 'impact', shooter);
+      this.stats.voxHits++;
+      if (res && res.power > 0.08 && depth < 3 && v._tEnd > 0) {
+        const e = v._tEnd + 0.02;
+        if (!wood) g.gore.puff('flash', ox + dx * v._tEnd, oy + dy * v._tEnd, oz + dz * v._tEnd, 0.16, 0.05, 1, 0.85, 0.5);
+        this.stats.through++;
+        this._bullet(shooter, d, ox + dx * e, oy + dy * e, oz + dz * e, dx + rand(-0.02, 0.02), dy + rand(-0.02, 0.02), dz + rand(-0.02, 0.02), res.power, depth + 1);
+      }
+    } else if (what === 2 && prop.thing) {
+      // a lamp or a generator: glass breaks, an engine is wrecked a round at a time
+      const t = prop.thing, b = prop.body;
+      b.applyImpulse(dx * 10, dy * 10, dz * 10, hx, hy, hz);
+      g.things?.hurt(t, power, [_b[0], _b[1], _b[2]], 'shot');
+      if (t.type === 'generator') {
+        const dcl = g.gore._attach(b, g.gore._onFace(b, [_b[0], _b[1], _b[2]], [_c[0], _c[1], _c[2]], 0.1, 0.1, rand(6.28)), HOLE_UV(), null, -1);
+        if (dcl) dcl.stain = true;
+      } else this._through(shooter, d, b, ox, oy, oz, dx, dy, dz, far, power, depth, 0.04, 'none');
     } else if (what === 2) {
       const b = prop.body;
       b.applyImpulse(dx * 24, dy * 24, dz * 24, hx, hy, hz);
@@ -1076,6 +1200,8 @@ export class Weapons {
       const dcl = g.gore._attach(b, g.gore._onFace(b, [_b[0], _b[1], _b[2]], [_c[0], _c[1], _c[2]], 0.12, 0.12, rand(6.28)), HOLE_UV(), null, -1);
       if (dcl) dcl.stain = true;
       g.audio?.at('crate', hx, hy, hz, 0.6);
+      // a crate is planks: the round goes on through, and out of the far side in a spray of splinters
+      if (prop.wood || prop.kind === 'weapon') this._through(shooter, d, b, ox, oy, oz, dx, dy, dz, far, power, depth, prop.wood ? 0.42 : 0, 'wood');
     } else if (what === 3) {
       const b = car.body;
       const dcl = g.gore._attach(b, g.gore._onFace(b, [_b[0], _b[1], _b[2]], [_c[0], _c[1], _c[2]], 0.13, 0.13, rand(6.28)), HOLE_UV(), null, -1);
@@ -1083,7 +1209,45 @@ export class Weapons {
       g.gore.puff('flash', hx, hy, hz, 0.22, 0.07, 1, 0.9, 0.6);
       g.audio?.at('ricochet', hx, hy, hz, 0.8);
       g.traffic.shotAt(car, shooter);
+      // two door skins and what is between them: a rifle round goes through, a pistol round often does
+      this._through(shooter, d, b, ox, oy, oz, dx, dy, dz, far, power, depth, 0.55, 'metal');
     }
+  }
+
+  /**
+   * A round that went into a box (a crate, a car) and comes out of the far
+   * side of it, losing `loss` of its power on the way: a torn exit hole there,
+   * and on it goes. A weapon's thin box (loss 0) is gone through untouched.
+   */
+  _through(shooter, d, b, ox, oy, oz, dx, dy, dz, tIn, power, depth, loss, kind) {
+    const g = this.game;
+    const left = power - loss;
+    if (left <= 0.1 || depth >= 3) return;
+    // the far side of the box, along the same line
+    b.toLocal(ox, oy, oz, _a); b.dirToLocal(dx, dy, dz, _c);
+    const h = [b.hx, b.hy, b.hz];
+    let tOut = Infinity, axis = 0;
+    for (let k = 0; k < 3; k++) {
+      if (Math.abs(_c[k]) < 1e-9) continue;
+      const t = ((_c[k] > 0 ? h[k] : -h[k]) - _a[k]) / _c[k];
+      if (t < tOut) { tOut = t; axis = k; }
+    }
+    if (!(tOut < tIn + 6) || tOut <= tIn) return;
+    if (loss > 0 && kind !== 'none') {
+      const lp = [_a[0] + _c[0] * tOut, _a[1] + _c[1] * tOut, _a[2] + _c[2] * tOut], ln = [0, 0, 0];
+      ln[axis] = _c[axis] > 0 ? 1 : -1;
+      const s = kind === 'wood' ? 0.2 : 0.15;
+      const dcl = g.gore._attach(b, g.gore._onFace(b, lp, ln, s, s, rand(6.28)), kind === 'wood' ? EXIT_WOOD_UV() : EXIT_METAL_UV(), null, -1);
+      if (dcl) dcl.stain = true;
+      const ex = ox + dx * tOut, ey = oy + dy * tOut, ez = oz + dz * tOut;
+      if (kind === 'wood') g.gore.puff('smoke', ex + dx * 0.08, ey + dy * 0.08, ez + dz * 0.08, 0.3, 0.5, 0.62, 0.5, 0.36);
+      else g.gore.puff('flash', ex, ey, ez, 0.16, 0.05, 1, 0.85, 0.5);
+      // splinters, or bright flakes of paint and steel, go on ahead of it
+      if (g.voxels) for (let i = 0; i < (kind === 'wood' ? 4 : 2); i++) g.voxels.chip(ex, ey, ez, dx * rand(2, 5), dy * rand(2, 5) + rand(0.3, 1.2), dz * rand(2, 5), kind === 'wood' ? CHIP_WOOD : CHIP_METAL, kind === 'wood' ? CHIP_WOOD_COL : CHIP_METAL_COL, 0);
+      this.stats.exits++;
+    }
+    const e = tOut + 0.03;
+    this._bullet(shooter, d, ox + dx * e, oy + dy * e, oz + dz * e, dx + rand(-0.025, 0.025), dy + rand(-0.025, 0.025), dz + rand(-0.025, 0.025), left, depth + 1);
   }
 
   _casing(p, m, dx, dz) {
@@ -1283,6 +1447,11 @@ const _iq = [0, 0, 0, 1];
 
 let _hole = null, _white = null;
 function HOLE_UV() { return _hole || (_hole = cellUV(DECAL.hole[0], DECAL.hole[1], ATLAS_COLS, ATLAS_ROWS)); }
+let _exW = null, _exM = null;
+function EXIT_WOOD_UV() { return _exW || (_exW = cellUV(DECAL.exitWood[0], DECAL.exitWood[1], ATLAS_COLS, ATLAS_ROWS)); }
+function EXIT_METAL_UV() { return _exM || (_exM = cellUV(DECAL.exitMetal[0], DECAL.exitMetal[1], ATLAS_COLS, ATLAS_ROWS)); }
+const CHIP_WOOD = [0.03, 0.012, 0.012], CHIP_METAL = [0.012, 0.004, 0.012];
+const CHIP_WOOD_COL = [0.62, 0.45, 0.26], CHIP_METAL_COL = [0.78, 0.8, 0.82];
 function WHITE_UV() { return _white || (_white = cellUV(DECAL.white[0], DECAL.white[1], ATLAS_COLS, ATLAS_ROWS, 0.03)); }
 
 function rotv(q, x, y, z, out) {

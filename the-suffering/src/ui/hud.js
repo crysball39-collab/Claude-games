@@ -255,10 +255,28 @@ export class UI {
       g.spawnCrate(x, groundHeight(x, z) + 1.3, z);
       g.minds.witness({ kind: 'spawn', what: 'a crate', x, y: 1, z });
       this.toast('Crate');
+    } else if (what === 'woodwall' || what === 'steelwall') {
+      // stood on the ground a few paces off, its face to you
+      const [x, z] = g.spotAhead(3.2, 0.05);
+      g.voxels.wall(what === 'woodwall' ? 'wood' : 'sheet', x, z, g.camYaw);
+      g.minds.witness({ kind: 'spawn', what: 'a wall', x, y: 1, z });
+      this.toast(what === 'woodwall' ? 'Wooden wall' : 'Steel wall');
+    } else if (what === 'beam' || what === 'bigbeam') {
+      // lying on the ground across the way you are looking
+      const [x, z] = g.spotAhead(what === 'bigbeam' ? 3.4 : 2.6, 0.05);
+      g.voxels.beam(what === 'bigbeam', x, z, g.camYaw);
+      g.minds.witness({ kind: 'spawn', what: 'a steel beam', x, y: 0.5, z });
+      this.toast(what === 'bigbeam' ? 'Large steel beam' : 'Short steel beam');
+    } else if (what === 'bulb' || what === 'flood' || what === 'generator') {
+      const [x, z] = g.spotAhead(what === 'bulb' ? 1.6 : 2.6, 0.05);
+      g.things.spawn(what, x, z, g.camYaw);
+      g.minds.witness({ kind: 'spawn', what: what === 'generator' ? 'a generator' : 'a light', x, y: 0.5, z });
+      this.toast(what === 'generator' ? 'Generator - walk up to it and START it' : (what === 'bulb' ? 'Light bulb' : 'Floodlight') + ' - it needs a cable from a running generator: use the rope');
     } else if (WEAPONS[what]) {
       const [x, z] = g.spotAhead(1.5, 0.1);
       this.weapons.spawn(what, x, groundHeight(x, z) + 1.1, z);
-      this.toast(WEAPONS[what].name + (WEAPONS[what].wear ? ' - walk up to it and put it on' : WEAPONS[what].tool ? ' - pick them up, then CUFF someone who is down or has given up' : ' - walk up to it and pick it up'));
+      const D = WEAPONS[what];
+      this.toast(D.name + (D.wear ? ' - walk up to it and put it on' : D.rope ? ' - pick it up, TIE one thing, then the other' : D.cuffs ? ' - pick them up, then CUFF someone who is down or has given up' : ' - walk up to it and pick it up'));
     }
     this._count();
   }
@@ -300,9 +318,10 @@ export class UI {
   _count() {
     const g = this.g;
     const alive = g.humans.filter((h) => !h.isPlayer && h.h.alive).length, dead = g.humans.filter((h) => !h.isPlayer && !h.h.alive).length;
-    const crates = g.props.filter((p) => p.kind === 'crate').length;
+    const things = g.props.filter((p) => p.kind !== 'weapon').length;
     const arms = this.weapons.items.filter((i) => !i.def.wear).length;
-    $('#sandbox-count').textContent = `${alive} alive, ${dead} dead, ${crates} crate${crates === 1 ? '' : 's'}, ${arms} weapon${arms === 1 ? '' : 's'}.`;
+    const ropes = g.ropes ? g.ropes.list.length : 0;
+    $('#sandbox-count').textContent = `${alive} alive, ${dead} dead, ${things} object${things === 1 ? '' : 's'}, ${arms} weapon${arms === 1 ? '' : 's'}${ropes ? `, ${ropes} rope${ropes === 1 ? '' : 's'}` : ''}.`;
   }
 
   /* ------------------------------ small things ---------------------------- */
@@ -322,7 +341,7 @@ export class UI {
   _label() {
     const w = this.weapons, d = w.def;
     const bound = !!this.g.player.cuffed;
-    $('#attack-label').textContent = bound ? 'CUFFED' : d.label;
+    $('#attack-label').textContent = bound ? 'CUFFED' : d.rope && this.g.ropes && this.g.ropes.pending ? 'TIE TO' : d.label;
     $('#attack-next').textContent = bound || !d.melee ? '' : CLIPS[d.moves[(w.choice >= 0 ? w.choice : this.g.time - w.lastAttack > 1.15 ? 0 : w.combo) % 4]].label;
   }
 
@@ -357,10 +376,11 @@ export class UI {
     if (!a.hidden) { a.textContent = `${e.ammo} / ${e.def.mag}`; a.classList.toggle('low', e.ammo <= Math.ceil(e.def.mag * 0.2)); }
   }
   nearChanged() {
-    const n = this.weapons.near, c = this.weapons.nearCuffed;
-    $('#btn-use').hidden = !n && !c;
+    const n = this.weapons.near, c = this.weapons.nearCuffed, t = this.g.things && this.g.things.near;
+    $('#btn-use').hidden = !n && !c && !t;
     if (n) $('#use-label').textContent = n.def.wear ? 'PUT ON' : n.holder ? 'TAKE' : 'PICK UP';
     else if (c) $('#use-label').textContent = 'UNCUFF';
+    else if (t) $('#use-label').textContent = this.g.things.label(t);
   }
 
   update(dt) {

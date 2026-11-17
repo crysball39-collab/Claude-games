@@ -32,6 +32,15 @@ const SPACE = 0.335;
 /** The parts of someone lying down that cannot be walked through. */
 const TRUNK = [P.PELVIS, P.ABDOMEN, P.CHEST, P.HEAD];
 const WALK = 1.5, RUN = 5.0, CROUCH = 1.2, JUMP_V = 4.5;
+
+/** Skin of colour (r,g,b) with a burn of `b` (0..100) on it. */
+function burnt(r, g, b, amt) {
+  if (amt < 3) return [r, g, b];
+  if (amt < 30) { const k = (amt - 3) / 27 * 0.6; return [lerp(r, 0.62, k), lerp(g, 0.16, k), lerp(b, 0.12, k)]; }
+  if (amt < 65) { const k = (amt - 30) / 35; return [lerp(0.6, 0.55, k), lerp(0.2, 0.36, k), lerp(0.15, 0.28, k)]; }
+  const k = clamp01((amt - 65) / 35);
+  return [lerp(0.5, 0.06, k), lerp(0.34, 0.045, k), lerp(0.27, 0.04, k)];
+}
 const GETUP_TIME = 1.55;
 
 const _a = [0, 0, 0], _b = [0, 0, 0], _q = [0, 0, 0, 1], _near = [];
@@ -295,12 +304,19 @@ export class Human {
     // the colour goes with the blood, and then, slowly, with everything else
     const pale = clamp01((92 - this.h.bloodPct) / 50 + (this.h.alive ? 0 : this.deadFor / 150));
     const q = Math.round(pale * 10);
-    if (q === this._pallor) return;
-    this._pallor = q;
+    // and where it is burnt: red, then blistered and raw, then charred
+    const B = this.h.burns;
+    let bk = 0;
+    for (const i of this.skinParts) bk = bk * 7 + Math.round(B[i] / 15);
+    if (q === this._pallor && bk === this._burnKey) return;
+    this._pallor = q; this._burnKey = bk;
     const base = rgb(this.look.skin), grey = rgb(0xb9bdb6), k = q / 10 * 0.72;
     const cr = lerp(base[0], grey[0], k), cg = lerp(base[1], grey[1], k), cb = lerp(base[2], grey[2], k);
-    for (const i of this.skinParts) this.game.boxes.color(this.inst[i], cr, cg, cb);
-    for (const hand of this.fingers) for (const i of hand) this.game.boxes.color(i, cr, cg, cb);
+    for (const i of this.skinParts) {
+      const c = burnt(cr, cg, cb, B[i]);
+      this.game.boxes.color(this.inst[i], c[0], c[1], c[2]);
+    }
+    this.fingers.forEach((hand, n) => { const c = burnt(cr, cg, cb, B[n ? P.HAND_R : P.HAND_L]); for (const i of hand) this.game.boxes.color(i, c[0], c[1], c[2]); });
   }
 
   _expression(dt) {
@@ -636,11 +652,15 @@ export class Human {
     for (let i = 0; i < PART_COUNT; i++) {
       const hex = this.cloth[i];
       if (hex < 0 || this.gone[i]) continue;
-      const q = Math.round(this.soak[i] * 10);
+      const fb = Math.round(this.h.burns[i] / 10);
+      const q = Math.round(this.soak[i] * 10) + fb * 16;
       if (q === this._soakQ[i]) continue;
       this._soakQ[i] = q;
-      const c = rgb(hex), k = Math.max(0, q / 10 - 0.25) * 0.55;
-      this.game.boxes.color(this.inst[i], lerp(c[0], 0.27, k), lerp(c[1], 0.03, k), lerp(c[2], 0.025, k));
+      const sq = Math.round(this.soak[i] * 10);
+      const c = rgb(hex), k = Math.max(0, sq / 10 - 0.25) * 0.55;
+      // cloth that has been in a fire is scorched brown, then black
+      const ch = clamp01(fb / 7);
+      this.game.boxes.color(this.inst[i], lerp(lerp(c[0], 0.27, k), 0.045, ch), lerp(lerp(c[1], 0.03, k), 0.035, ch), lerp(lerp(c[2], 0.025, k), 0.03, ch));
     }
   }
 

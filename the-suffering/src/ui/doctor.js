@@ -139,6 +139,14 @@ export class Doctor {
       add(`${w.name}, ${where}`, flow > 0.05 ? `${flow.toFixed(1)} ml/s${w.arterial ? ' artery' : ''}` : hh.alive ? 'closed' : 'still', w.arterial || flow > 8 ? 'bad' : flow > 0.5 ? 'warn' : '');
     }
     if (bruises) add(bruises > 1 ? `Bruises x${bruises}` : 'Bruise', '', '');
+    // burns, part by part, and how much of the skin in all
+    for (let i = 0; i < hh.burns.length; i++) {
+      const deg = hh.burnDegree(i);
+      if (deg) add(`Burn, ${['', 'first', 'second', 'third'][deg]} degree, ${PARTS[i].label}`, deg === 3 ? 'charred' : deg === 2 ? 'blistered' : 'red', deg >= 2 ? 'bad' : 'warn');
+    }
+    const ba = hh.burnArea;
+    if (ba > 0.01) add('Burnt in all', `${Math.round(ba * 100)}% of the skin`, ba > 0.2 ? 'bad' : 'warn');
+    if (h.fire && h.burning > 0.02) add('On fire', 'now', 'bad');
     if (hh.bleedIn > 0.3) add('Bleeding inside', `${hh.bleedIn.toFixed(1)} ml/s`, 'bad');
     if (hh.bleedOut > 0.05) add('Losing in all', `${(hh.bleedOut + hh.bleedIn).toFixed(1)} ml/s`, hh.bleedOut + hh.bleedIn > 10 ? 'bad' : 'warn');
     if (!ul.children.length) ul.appendChild(el('li', 'empty', 'No wounds.'));

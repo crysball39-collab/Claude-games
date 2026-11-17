@@ -120,6 +120,21 @@ export class Body {
     this.orient = null;
   }
 
+  /** A new size and mass for a box that has lost (or gained) some of itself. */
+  setBox(hx, hy, hz, mass = this.mass, dense = false) {
+    this.hx = hx; this.hy = hy; this.hz = hz;
+    this.mass = mass; this.invMass = 1 / mass;
+    const m3 = mass / 3, floor = 0.0025 * mass + 0.002;
+    this.iix = 1 / Math.max(floor, m3 * (hy * hy + hz * hz));
+    this.iiy = 1 / Math.max(floor, m3 * (hx * hx + hz * hz));
+    this.iiz = 1 / Math.max(floor, m3 * (hx * hx + hy * hy));
+    this.boundR = Math.hypot(hx, hy, hz);
+    this.pts = boxCorners(hx, hy, hz, 0.012);
+    this.sph = [0, 0, 0, Math.min(hx, hy, hz)];
+    this.bpts = dense ? boxSamples(hx, hy, hz, 0.012) : this.pts;
+    this._refresh();
+  }
+
   _refresh() {
     const live = !this.kinematic && !(this.island && this.island.sleeping);
     this.im = live ? this.invMass : 0;
@@ -336,6 +351,9 @@ export class Joint {
     this.twist = o.twist ?? Math.PI;
     this.limitCompliance = o.limitCompliance ?? 0.00015;
     this.compliance = o.compliance ?? 0;
+    /** A rope: the anchors may come as close as they like, but no further apart than this. 0 for an ordinary joint. */
+    this.rope = o.rope ?? 0;
+    this.force = 0;               // a rope's pull, newtons, the most it reached since it was last read
     this.enabled = true;
     this.limits = true;         // a shattered joint keeps its anchor and loses its limits
     // muscle: a target for the child's rotation relative to the parent
@@ -614,7 +632,7 @@ export class World {
        body is never drawn with a gap in it ---- */
     for (let i = 0; i < joints.length; i++) {
       const j = joints[i];
-      if (j.enabled && (j.a.im > 0 || j.b.im > 0)) this._solveAnchor(j, h);
+      if (j.enabled && (j.a.im > 0 || j.b.im > 0)) { if (j.rope > 0) this._solveRope(j, h); else this._solveAnchor(j, h); }
     }
     /* ---- velocities from positions ---- */
     const inv = 1 / h;
@@ -756,6 +774,7 @@ export class World {
   _solveJoint(j, h) {
     const A = j.a, B = j.b;
     if (A.im === 0 && B.im === 0) return;
+    if (j.rope > 0) { this._solveRope(j, h); return; }
     if (j.limits) {
       if (j.type === HINGE) {
         rot(A.qx, A.qy, A.qz, A.qw, 1, 0, 0); let ax = _x, ay = _y, az = _z;
@@ -819,6 +838,26 @@ export class World {
     const w = wA + wB;
     if (w <= 0) return;
     const l = C / (w + j.compliance / (h * h));
+    if (wA > 0) A._applyPos(nx * l, ny * l, nz * l, rax, ray, raz);
+    if (wB > 0) B._applyPos(-nx * l, -ny * l, -nz * l, rbx, rby, rbz);
+  }
+
+  /** A rope pulls only when it is stretched past its length, and stretches a little itself. */
+  _solveRope(j, h) {
+    const A = j.a, B = j.b;
+    rot(A.qx, A.qy, A.qz, A.qw, j.lax, j.lay, j.laz); const rax = _x, ray = _y, raz = _z;
+    rot(B.qx, B.qy, B.qz, B.qw, j.lbx, j.lby, j.lbz); const rbx = _x, rby = _y, rbz = _z;
+    const cx = (B.px + rbx) - (A.px + rax), cy = (B.py + rby) - (A.py + ray), cz = (B.pz + rbz) - (A.pz + raz);
+    const C = Math.sqrt(cx * cx + cy * cy + cz * cz);
+    if (C <= j.rope || C < 1e-9) return;
+    const nx = cx / C, ny = cy / C, nz = cz / C;
+    const wA = A.im > 0 ? A._wPos(nx, ny, nz, rax, ray, raz) : 0;
+    const wB = B.im > 0 ? B._wPos(nx, ny, nz, rbx, rby, rbz) : 0;
+    const w = wA + wB;
+    if (w <= 0) return;
+    const l = (C - j.rope) / (w + j.compliance / (h * h));
+    const f = l / (h * h);
+    if (f > j.force) j.force = f;
     if (wA > 0) A._applyPos(nx * l, ny * l, nz * l, rax, ray, raz);
     if (wB > 0) B._applyPos(-nx * l, -ny * l, -nz * l, rbx, rby, rbz);
   }

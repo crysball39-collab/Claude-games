@@ -17,12 +17,12 @@ import { onRoad } from '../world/city.js';
 import { clamp, rand, chance, wrapAngle, pick } from '../core/util.js';
 
 const _a = [0, 0, 0], _r = [0, 0];
-const WORD = { m1911: 'gun', ak47: 'rifle', m4a1: 'rifle', ar15: 'rifle', knife: 'knife', machete: 'machete', taser: 'taser' };
+const WORD = { m1911: 'gun', glock: 'gun', ak47: 'rifle', m4a1: 'rifle', ar15: 'rifle', knife: 'knife', machete: 'machete', taser: 'taser', flamethrower: 'flamethrower' };
 /** A real gun: anything that fires bullets. */
-const isGun = (id) => id === 'm1911' || id === 'ak47' || id === 'm4a1' || id === 'ar15';
+const isGun = (id) => id === 'm1911' || id === 'glock' || id === 'ak47' || id === 'm4a1' || id === 'ar15';
 const NOKIT = [];
 /** What a caller says once they have got through, by what they are calling about. */
-const CALL_LINE = { body: 'callBody', assault: 'callAssault', stabbing: 'callStabbing', shooting: 'callShooting', shots: 'callShots', murder: 'callMurder', menace: 'callMenace' };
+const CALL_LINE = { body: 'callBody', assault: 'callAssault', stabbing: 'callStabbing', shooting: 'callShooting', shots: 'callShots', murder: 'callMurder', menace: 'callMenace', burning: 'callBurning' };
 const WHAT_WORD = { body: 'a body', assault: 'an assault', stabbing: 'a stabbing', shooting: 'a shooting', shots: 'shots fired', murder: 'a killing', menace: 'a man with a weapon' };
 
 export class Brain {
@@ -63,6 +63,25 @@ export class Brain {
     if (!hh.alive) { m.doing = 'dead'; h.crawlDir = null; return; }
     if (!hh.conscious) { m.doing = 'unconscious'; h.crawlDir = null; return; }
 
+    // on fire: they run, screaming, and then, if they think of it, drop and roll
+    if (h.fire && h.burning > 0.15) {
+      if (h.state === ST.RAGDOLL) {
+        m.doing = h.rollT > 0 ? 'rolling on the ground to put out the flames' : 'on the ground, on fire';
+        h.crawlDir = null; h.stayDown = true;
+        if (this.sayT <= 0) { m.ask('onFire', 92); this.sayT = rand(1.1, 2.2); }
+        return;
+      }
+      if (h.state === ST.ANIM) {
+        this.burnT = (this.burnT || 0) + dt;
+        m.doing = 'on fire, running';
+        if (!this.burnDir || chance(dt * 0.7)) { const a = rand(Math.PI * 2); this.burnDir = [Math.sin(a), Math.cos(a)]; }
+        it.mx = this.burnDir[0]; it.mz = this.burnDir[1]; it.run = true;
+        if (this.sayT <= 0) { m.ask('onFire', 94); this.sayT = rand(1.1, 2); }
+        if (!this.burnAfter) this.burnAfter = rand(1.8, 4.5) + (1 - m.p.bravery) * 1.5;
+        if (this.burnT > this.burnAfter) { h.toRagdoll(); h.rollT = rand(3.5, 5.5); this.burnT = 0; this.burnAfter = 0; }
+        return;
+      }
+    } else { this.burnT = 0; this.burnAfter = 0; }
     if (h.tased > 0 || (h.state === ST.RAGDOLL && h.dazeT > 0)) { m.doing = h.tased > 0 ? 'rigid on the ground, every muscle locked by a taser' : 'lying stunned'; h.crawlDir = null; h.stayDown = false; return; }
     if (h.state === ST.RAGDOLL) {
       const t = m.threat;
@@ -844,7 +863,7 @@ export class Brain {
     // a crate in the way is something to go over; anything else, round
     let low = false;
     for (const o of g.props) {
-      if (o.kind !== 'crate') continue;
+      if (o.kind !== 'crate' && o.kind !== 'beam') continue;
       const b = o.body;
       if (Math.hypot(b.px - h.x, b.pz - h.z) < 1.3 && b.py + b.hy - h.y < 1.05 && (b.px - h.x) * it.mx + (b.pz - h.z) * it.mz > 0) { low = true; break; }
     }

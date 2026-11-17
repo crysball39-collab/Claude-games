@@ -163,14 +163,15 @@ export function skyTexture() {
 
 /* ------------------------------ decal atlas ------------------------------- */
 
-export const ATLAS_COLS = 8, ATLAS_ROWS = 5;
+export const ATLAS_COLS = 8, ATLAS_ROWS = 6;
 /** Where each decal lives in the atlas: [column, row]. */
 export const DECAL = {
   splat: [[0, 0], [1, 0], [2, 0], [3, 0]], pool: [[4, 0], [5, 0]], drip: [[6, 0], [7, 0]],
   entry: [0, 1], exit: [1, 1], cut: [2, 1], slash: [3, 1], stab: [4, 1], bruise: [5, 1], stump: [6, 1], scrape: [7, 1],
   hole: [0, 2], chip: [1, 2], smear: [[2, 2], [3, 2]], vomit: [4, 2], bruise2: [5, 2], mist: [6, 2], dot: [7, 2],
   shadow: [0, 3], ring: [1, 3], flash: [2, 3], smoke: [3, 3], streak: [[4, 3], [5, 3]], glow: [6, 3], white: [7, 3],
-  run: [[0, 4], [1, 4], [2, 4]], soak: [[3, 4], [4, 4]], soakDry: [5, 4],
+  run: [[0, 4], [1, 4], [2, 4]], soak: [[3, 4], [4, 4]], soakDry: [5, 4], exitWood: [6, 4], exitMetal: [7, 4],
+  scorch: [0, 5], flame: [[1, 5], [2, 5], [3, 5]], ember: [4, 5], soot: [5, 5], burn: [6, 5], crack: [7, 5],
 };
 
 const BLOOD = '#7d0606', BLOOD_DARK = '#4a0202', BLOOD_BRIGHT = '#a30c0c';
@@ -277,6 +278,81 @@ function drawSoak(x, rng, dry) {
   for (let i = 0; i < 26; i++) { const a = rng() * TAU, d = Math.pow(rng(), 0.8) * 44; x.beginPath(); x.ellipse(64 + Math.cos(a) * d, 64 + Math.sin(a) * d, 3 + rng() * 7, 2 + rng() * 5, rng() * TAU, 0, TAU); x.fill(); }
 }
 
+/** Where a round came out of something wooden: bigger than where it went in, the fibres torn outward round it. */
+function drawExitWood(x, rng) {
+  // pale raw wood showing round the hole, splinters standing out from it
+  x.fillStyle = 'rgba(214,176,118,0.95)'; blobPath(x, 64, 64, 30, 0.75, rng, 13); x.fill();
+  x.strokeStyle = 'rgba(232,198,140,0.95)'; x.lineCap = 'round';
+  for (let i = 0; i < 16; i++) {
+    const a = rng() * TAU, r0 = 12 + rng() * 8, r1 = r0 + 16 + rng() * 30;
+    x.lineWidth = 1.5 + rng() * 3.5;
+    x.beginPath(); x.moveTo(64 + Math.cos(a) * r0, 64 + Math.sin(a) * r0); x.lineTo(64 + Math.cos(a + (rng() - 0.5) * 0.3) * r1, 64 + Math.sin(a + (rng() - 0.5) * 0.3) * r1); x.stroke();
+  }
+  x.fillStyle = 'rgba(120,84,46,0.9)'; blobPath(x, 64, 64, 17, 0.6, rng, 11); x.fill();
+  x.fillStyle = '#0c0907'; blobPath(x, 64, 64, 11, 0.55, rng, 10); x.fill();
+}
+
+/** Where a round came out through sheet metal: the edge pushed outward in bright torn petals. */
+function drawExitMetal(x, rng) {
+  const g = x.createRadialGradient(64, 64, 8, 64, 64, 44);
+  g.addColorStop(0, 'rgba(40,40,42,0.9)'); g.addColorStop(0.5, 'rgba(70,70,74,0.5)'); g.addColorStop(1, 'rgba(70,70,74,0)');
+  x.fillStyle = g; x.beginPath(); x.arc(64, 64, 44, 0, TAU); x.fill();
+  const n = 5 + ((rng() * 3) | 0);
+  for (let i = 0; i < n; i++) {
+    const a = i / n * TAU + rng() * 0.4, len = 18 + rng() * 14, w = 0.32 + rng() * 0.2;
+    x.fillStyle = i % 2 ? '#d4d8dc' : '#aeb3b8';
+    x.beginPath(); x.moveTo(64 + Math.cos(a - w) * 9, 64 + Math.sin(a - w) * 9); x.lineTo(64 + Math.cos(a) * (9 + len), 64 + Math.sin(a) * (9 + len)); x.lineTo(64 + Math.cos(a + w) * 9, 64 + Math.sin(a + w) * 9); x.closePath(); x.fill();
+  }
+  x.fillStyle = '#060606'; blobPath(x, 64, 64, 10, 0.4, rng, 9); x.fill();
+}
+
+/** Black soot and scorched paint: where a fire has been against something. */
+function drawScorch(x, rng) {
+  const g = x.createRadialGradient(64, 64, 4, 64, 64, 62);
+  g.addColorStop(0, 'rgba(8,6,5,0.95)'); g.addColorStop(0.45, 'rgba(22,16,12,0.75)'); g.addColorStop(0.8, 'rgba(40,30,22,0.3)'); g.addColorStop(1, 'rgba(40,30,22,0)');
+  x.fillStyle = g; blobPath(x, 64, 64, 60, 0.4, rng, 16); x.fill();
+  for (let i = 0; i < 30; i++) { x.fillStyle = `rgba(${10 + rng() * 30},${8 + rng() * 14},${6 + rng() * 8},${0.3 + rng() * 0.4})`; const a = rng() * TAU, d = Math.pow(rng(), 0.7) * 50; x.beginPath(); x.arc(64 + Math.cos(a) * d, 64 + Math.sin(a) * d, 2 + rng() * 6, 0, TAU); x.fill(); }
+}
+
+/** One tongue of flame, white at the root, for additive drawing. */
+function drawFlame(x, rng) {
+  const g = x.createRadialGradient(64, 92, 2, 64, 70, 60);
+  g.addColorStop(0, 'rgba(255,250,220,1)'); g.addColorStop(0.25, 'rgba(255,214,110,0.95)'); g.addColorStop(0.55, 'rgba(255,128,30,0.7)'); g.addColorStop(1, 'rgba(200,40,10,0)');
+  x.fillStyle = g;
+  x.beginPath();
+  x.moveTo(64, 124);
+  const w = 30 + rng() * 10;
+  x.bezierCurveTo(64 - w * 1.2, 108, 64 - w * (0.5 + rng() * 0.4), 60, 64 + (rng() - 0.5) * 16, 6 + rng() * 14);
+  x.bezierCurveTo(64 + w * (0.5 + rng() * 0.4), 56, 64 + w * 1.2, 106, 64, 124);
+  x.fill();
+  // a second, smaller tongue licking up beside it
+  x.globalAlpha = 0.7;
+  x.beginPath(); const o = (rng() - 0.5) * 40;
+  x.moveTo(64 + o, 118); x.bezierCurveTo(64 + o - 16, 90, 64 + o - 6, 60, 64 + o + (rng() - 0.5) * 10, 34); x.bezierCurveTo(64 + o + 10, 60, 64 + o + 16, 92, 64 + o, 118); x.fill();
+  x.globalAlpha = 1;
+}
+
+/** A skin burn: angry red round the edge, blistered and white or black in the middle. */
+function drawBurn(x, rng) {
+  x.fillStyle = 'rgba(170,40,30,0.65)'; blobPath(x, 64, 64, 50, 0.5, rng, 15); x.fill();
+  x.fillStyle = 'rgba(120,28,22,0.75)'; blobPath(x, 64, 64, 36, 0.55, rng, 13); x.fill();
+  for (let i = 0; i < 10; i++) { x.fillStyle = 'rgba(236,214,190,0.7)'; const a = rng() * TAU, d = rng() * 26; x.beginPath(); x.ellipse(64 + Math.cos(a) * d, 64 + Math.sin(a) * d, 3 + rng() * 6, 2 + rng() * 5, rng() * TAU, 0, TAU); x.fill(); }
+  x.fillStyle = 'rgba(30,18,14,0.85)'; blobPath(x, 64, 64, 18, 0.7, rng, 11); x.fill();
+}
+
+/** Cracks running out from a point in glass. */
+function drawCrack(x, rng) {
+  x.strokeStyle = 'rgba(235,245,250,0.9)'; x.lineWidth = 1.2;
+  for (let i = 0; i < 11; i++) {
+    let a = rng() * TAU, px = 64, py = 64;
+    x.beginPath(); x.moveTo(px, py);
+    for (let k = 0; k < 5; k++) { a += (rng() - 0.5) * 0.6; const l = 6 + rng() * 10; px += Math.cos(a) * l; py += Math.sin(a) * l; x.lineTo(px, py); }
+    x.stroke();
+  }
+  x.beginPath(); x.arc(64, 64, 10 + rng() * 6, 0, TAU); x.stroke();
+  x.beginPath(); x.arc(64, 64, 24 + rng() * 6, 0, TAU); x.globalAlpha = 0.5; x.stroke(); x.globalAlpha = 1;
+}
+
 function drawStreak(x, rng) {
   x.fillStyle = BLOOD;
   x.beginPath(); x.ellipse(40, 64, 26, 13, 0, 0, TAU); x.fill();
@@ -303,6 +379,12 @@ function paintDecals(x) {
   DECAL.run.forEach((c, i) => cell(c, () => drawRun(x, mulberry(360 + i * 7))));
   DECAL.soak.forEach((c, i) => cell(c, () => drawSoak(x, mulberry(390 + i * 5), false)));
   cell(DECAL.soakDry, () => drawSoak(x, mulberry(397), true));
+  cell(DECAL.exitWood, () => drawExitWood(x, mulberry(411)));
+  cell(DECAL.exitMetal, () => drawExitMetal(x, mulberry(419)));
+  cell(DECAL.scorch, () => drawScorch(x, mulberry(431)));
+  DECAL.flame.forEach((c, i) => cell(c, () => drawFlame(x, mulberry(440 + i * 11))));
+  cell(DECAL.burn, () => drawBurn(x, mulberry(471)));
+  cell(DECAL.crack, () => drawCrack(x, mulberry(479)));
 
   cell(DECAL.entry, () => {
     const g = x.createRadialGradient(64, 64, 4, 64, 64, 26);
@@ -413,6 +495,8 @@ function paintDecals(x) {
   radial(DECAL.shadow, [[0, 'rgba(0,0,0,0.62)'], [0.55, 'rgba(0,0,0,0.38)'], [1, 'rgba(0,0,0,0)']]);
   radial(DECAL.glow, [[0, 'rgba(255,255,255,1)'], [0.3, 'rgba(255,255,255,0.55)'], [1, 'rgba(255,255,255,0)']]);
   radial(DECAL.smoke, [[0, 'rgba(210,210,210,0.75)'], [0.5, 'rgba(180,180,180,0.4)'], [1, 'rgba(160,160,160,0)']]);
+  radial(DECAL.soot, [[0, 'rgba(40,36,34,0.8)'], [0.5, 'rgba(30,28,26,0.45)'], [1, 'rgba(20,20,20,0)']]);
+  radial(DECAL.ember, [[0, 'rgba(255,240,200,1)'], [0.2, 'rgba(255,170,60,0.9)'], [0.55, 'rgba(230,80,20,0.35)'], [1, 'rgba(200,40,10,0)']]);
   cell(DECAL.ring, () => {
     x.strokeStyle = '#7fe9ff'; x.lineWidth = 7; x.beginPath(); x.arc(64, 64, 54, 0, TAU); x.stroke();
     x.strokeStyle = 'rgba(127,233,255,0.35)'; x.lineWidth = 14; x.beginPath(); x.arc(64, 64, 50, 0, TAU); x.stroke();

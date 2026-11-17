@@ -12,7 +12,10 @@
    goes back saying what it did. Time is run a little fast: a wound that would
    take minutes to kill takes most of one.
    ========================================================================== */
-import { P, PARTS } from './rig.js';
+import { P, PARTS, PART_COUNT } from './rig.js';
+
+/** Each part's share of the skin, near enough the rule of nines. */
+export const SKIN_AREA = [0.07, 0.13, 0.13, 0.02, 0.07, 0.04, 0.03, 0.025, 0.04, 0.03, 0.025, 0.095, 0.07, 0.035, 0.095, 0.07, 0.035];
 import { clamp, clamp01, lerp, rand, chance } from '../core/util.js';
 
 /* -------------------------------- anatomy --------------------------------- */
@@ -126,6 +129,7 @@ export class Health {
     this.stamina = 100;               // 0..100: spent running, jumping and fighting, back with rest
     this.poison = 0;                  // 0..100: toxin in the blood
     this.toxin = 0;                   // a dose still on its way in from where it was injected
+    this.burns = new Float32Array(PART_COUNT);   // 0..100 a part: how much of it is burnt, and how deep
     this.chestBlood = 0;              // ml pooled round the lungs
     this.vomitCooldown = 0;
     this.hypoxia = 0;
@@ -160,6 +164,24 @@ export class Health {
       - this.poison * 0.45 - Math.max(0, 92 - this.air) * 0.9 - Math.max(0, this.pain - 70) * 0.4 + this.adrenaline * 8;
     if (this.dazed) a -= 12;
     return clamp(a, 4, 100);
+  }
+
+  /** How much of the skin is burnt, 0..1, weighted by how deep. */
+  get burnArea() { let a = 0; for (let i = 0; i < PART_COUNT; i++) a += this.burns[i] / 100 * SKIN_AREA[i]; return a; }
+  /** 0 none, 1 first degree (red), 2 second (blistered, the worst pain), 3 third (charred, the nerves gone). */
+  burnDegree(part) { const b = this.burns[part]; return b < 3 ? 0 : b < 25 ? 1 : b < 65 ? 2 : 3; }
+
+  /**
+   * Fire on a part. Clothing takes the first of it, and then burns too. Flames
+   * round the face burn the airway, which swells, and that is what kills
+   * most people who die in a fire.
+   */
+  burn(part, amount, clothed = false) {
+    if (this.god || !this.alive || this.missing[part] || amount <= 0) return;
+    const before = this.burns[part];
+    this.burns[part] = Math.min(100, before + amount * (clothed && before < 15 ? 0.55 : 1));
+    if ((part === P.HEAD || part === P.NECK) && this.organs.airway > 0) this.organs.airway = Math.max(0, this.organs.airway - amount * 0.32);
+    this.trauma = Math.min(60, this.trauma + amount * 0.12);
   }
 
   /** Something hard done: a jump, a swing. */
@@ -226,7 +248,7 @@ export class Health {
     let hurt = 0;
     for (const w of this.wounds) hurt += w.type === 'bruise' ? 1.2 : w.type === 'stump' ? 14 : 5;
     for (const k in this.bones) if (this.bones[k] >= 0 && this.bones[k] < 67) hurt += this.bones[k] < 34 ? 7 : 4;
-    pct = clamp(pct - Math.min(45, hurt) - this.shock * 0.15 - this.poison * 0.7, 1, 100);
+    pct = clamp(pct - Math.min(45, hurt) - this.shock * 0.15 - this.poison * 0.7 - this.burnArea * 130, 1, 100);
     let label, tone;
     if (this.heartStopped) { label = 'DYING'; tone = 'dead'; pct = Math.min(pct, 4); }
     else if (pct < 22 || this.bloodPct < 55 || this.air < 50) { label = 'CRITICAL'; tone = 'bad'; }
@@ -503,7 +525,7 @@ export class Health {
     this.wounds = this.wounds.filter((w) => w.type === 'stump');
     for (const w of this.wounds) { w.bleed = 0; w.base = 0; w.pain = 0; w.pain0 = 0; w.dropped = false; }
     this.concussion = 0; this.ko = 0; this.faint = 0; this.trauma = 0; this.chestBlood = 0; this.hypoxia = 0;
-    this.stamina = 100; this.poison = 0; this.toxin = 0; this.adrenaline = 0; this.dizzy = 0;
+    this.stamina = 100; this.poison = 0; this.toxin = 0; this.adrenaline = 0; this.dizzy = 0; this.burns.fill(0);
     if (!this.missing[P.HEAD]) { this.alive = true; this.heartStopped = false; this.conscious = true; this.cause = ''; this.mechanism = ''; this.pulse = this.basePulse; this.arrestTime = 0; this.timeDead = 0; }
   }
 
@@ -518,7 +540,7 @@ export class Health {
     if (this.god && this.alive) {
       // whatever else is true, they are whole
       this.blood = this.bloodMax; this.air = 98; this.pain = 0; this.shock = 0; this.nausea = 0; this.dizzy = 0; this.concussion = 0; this.bleedOut = 0;
-      this.stamina = 100; this.poison = 0; this.toxin = 0;
+      this.stamina = 100; this.poison = 0; this.toxin = 0; this.burns.fill(0);
       this.conscious = true; this.dazed = false; this.heartStopped = false;
       return;
     }
@@ -576,6 +598,10 @@ export class Health {
       return;
     }
 
+    /* ---- burns: plasma weeps out through burnt skin, and the body loses heat through it ---- */
+    const burnt = this.burnArea;
+    if (burnt > 0.01) this.blood = Math.max(0, this.blood - burnt * 3.2 * dt);
+
     /* ---- poison: taken up from where it went in over most of a minute, cleared slowly by the liver ---- */
     // what it does is spread through the rest: sick, dizzy, weak, confused, and then the breathing fails
     if (this.toxin > 0) { const take = Math.min(this.toxin, dt * (0.8 + this.toxin * 0.03)); this.toxin -= take; this.poison = Math.min(100, this.poison + take); }
@@ -614,7 +640,7 @@ export class Health {
       this.pulse += (target - this.pulse) * (1 - Math.exp(-dt / 2.2));
       if (this.pulse < 24) {
         this.heartStopped = true; this.pulse = 0;
-        this.mechanism = this.mechanism || (this.poison > 60 ? 'Poisoning' : pct < 47 ? 'Blood loss' : this.air < 30 ? 'Asphyxia' : 'Cardiac arrest');
+        this.mechanism = this.mechanism || (this.poison > 60 ? 'Poisoning' : burnt > 0.18 ? 'Burns' : pct < 47 ? 'Blood loss' : this.air < 30 ? 'Asphyxia' : 'Cardiac arrest');
         this.events.push('arrest');
       }
     } else {
@@ -627,12 +653,14 @@ export class Health {
     if (o2 < 0.4 && O.brain > 0) {
       this.hypoxia += dt;
       O.brain = Math.max(0, O.brain - (0.4 - o2) * 16 * dt);
-      if (O.brain <= 0) { this._die(this.mechanism || (this.poison > 60 ? 'Poisoning' : pct < 56 ? 'Blood loss' : this.air < 50 ? 'Asphyxia' : 'Cardiac arrest')); return; }
+      if (O.brain <= 0) { this._die(this.mechanism || (this.poison > 60 ? 'Poisoning' : burnt > 0.18 ? 'Burns' : pct < 56 ? 'Blood loss' : this.air < 50 ? 'Asphyxia' : 'Cardiac arrest')); return; }
     }
 
     /* ---- pain ---- */
     let keep = 1, bonePain = 0;
     for (const w of this.wounds) keep *= 1 - clamp01(w.pain / 100);
+    // a burn hurts most where it is blistered; burnt right through, the nerves are gone, but never the edges
+    for (let i = 0; i < PART_COUNT; i++) { const b = this.burns[i]; if (b > 2) keep *= 1 - clamp01((b < 65 ? b * 1.35 : 88 - (b - 65) * 0.9) / 100) * (0.4 + SKIN_AREA[i] * 6); }
     for (const k in B) { const v = B[k]; if (v >= 0 && v < 67) bonePain += v < 34 ? 22 + moving * 14 : 10 + moving * 6; }
     let felt = 100 * (1 - keep * (1 - clamp01(bonePain / 100)));
     felt = Math.min(100, felt + this.poison * 0.12);                    // cramps
@@ -642,7 +670,7 @@ export class Health {
 
     /* ---- shock ---- */
     this.trauma = Math.max(0, this.trauma - dt * 1.3);
-    const shockTarget = clamp(clamp((86 - pct) * 2.6, 0, 100) + this.pain * 0.22 + Math.min(40, this.trauma) + (98 - this.air) * 0.25, 0, 100);
+    const shockTarget = clamp(clamp((86 - pct) * 2.6, 0, 100) + this.pain * 0.22 + Math.min(40, this.trauma) + (98 - this.air) * 0.25 + burnt * 120, 0, 100);
     this.shock += (shockTarget - this.shock) * (1 - Math.exp(-dt / (shockTarget > this.shock ? 4 : 50)));
 
     /* ---- nausea ---- */
@@ -660,7 +688,7 @@ export class Health {
     }
 
     /* ---- temperature ---- */
-    const tTarget = this.baseTemp + this.exertion * 1.0 + fear * 0.002 - this.shock * 0.021 - Math.max(0, 82 - pct) * 0.04;
+    const tTarget = this.baseTemp + this.exertion * 1.0 + fear * 0.002 - this.shock * 0.021 - Math.max(0, 82 - pct) * 0.04 - burnt * 2.5;
     this.temp += (tTarget - this.temp) * (1 - Math.exp(-dt / 22));
 
     /* ---- is anyone home ---- */
