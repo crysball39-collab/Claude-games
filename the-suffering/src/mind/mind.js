@@ -220,7 +220,7 @@ export class Mind {
           else if (!h.officer) {
             this.stir('fear', WEAPON_FEAR[armed] * 0.45 * falloff(d)); this.stir('surprise', 30);
             this._threaten(o, WEAPON_FEAR[armed] * 0.5 * falloff(d));
-            this.ask('sawWeapon', 62, { weapon: WEAPON_WORD[armed] });
+            this.ask('sawWeapon', 62, { weapon: WEAPON_WORD[armed], sex: o.look.sex });
           } else if (!o.officer) this._threaten(o, 40);
         }
       }
@@ -327,7 +327,7 @@ export class Mind {
         }
         if (h.officer && A.officer) break;
         this._threaten(A, sev * (0.45 + 0.55 * k) * (A.officer ? 0.6 : 1));
-        if (!h.officer) this.ask(ev.weapon === 'fists' ? 'sawFist' : isGun(ev.weapon) ? 'sawShot' : 'sawAttack', ev.weapon === 'fists' ? 52 : 72);
+        if (!h.officer) this.ask(ev.weapon === 'fists' ? 'sawFist' : isGun(ev.weapon) ? 'sawShot' : 'sawAttack', ev.weapon === 'fists' ? 52 : 72, { sex: A.look && A.look.sex });
         break;
       }
       case 'shot': {
@@ -370,7 +370,7 @@ export class Mind {
         } else if (!h.officer) this._wantCall({ kind: 'body', x: ev.x, z: ev.z, victim: V, suspect: null });
         this.stir('fear', 26 * k); this.stir('sadness', 38 * k); this.stir('surprise', 20 * k);
         h.h.disgust = Math.min(70, h.h.disgust + p.squeamish * 30 * k);
-        this.ask('sawDeath', 80, null, 0.5);
+        this.ask('sawDeath', 80, { sex: A && A.look ? A.look.sex : 'm' }, 0.5);
         this._know(V).state = 'dead';
         break;
       case 'dismember': {
@@ -509,7 +509,7 @@ export class Mind {
       }
     }
     const cat = attacker === 'a car' ? 'hitCar' : type === 'needle' ? 'injected' : vestTook === 'bullet' ? (armour === 'helmet' ? 'hitHelmet' : 'hitVest') : isHuman && !seen && chance(0.5) ? 'hitUnseen' : type === 'bullet' ? 'hitShot' : type === 'stab' ? 'hitStab' : type === 'cut' ? 'hitCut' : 'hitBlunt';
-    this.ask(cat, 95, { part: where });
+    this.ask(cat, 95, { part: where, sex: isHuman && attacker.look ? attacker.look.sex : 'm' });
     if (rep.bones.some((b) => b.state === 'broken')) this.ask('boneBreak', 78, { part: where.replace('left ', '').replace('right ', '') }, 1.4);
   }
 

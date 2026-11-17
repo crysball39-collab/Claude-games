@@ -51,7 +51,7 @@ export class Brain {
     if (mode === 'call') { this.callT = 0; this.callSaid = 0; }
     if (mode === 'search') { this.dest2 = null; this.lookT = 0; }
     if (mode === 'flee') { this.ducked = false; }
-    if (mode === 'wander' && (was === 'flee' || was === 'cower' || was === 'surrender')) { m.ask('relief', 46, null, rand(0.5, 2)); this.pause = rand(1, 3); }
+    if (mode === 'wander' && (was === 'flee' || was === 'cower' || was === 'surrender')) { m.ask('relief', 46, { sex: m.threat && m.threat.src && m.threat.src.look ? m.threat.src.look.sex : 'm' }, rand(0.5, 2)); this.pause = rand(1, 3); }
   }
 
   update(dt) {
@@ -162,8 +162,9 @@ export class Brain {
     if (d < 3.5) this._go(h.x - dx / d * 2, h.z - dz / d * 2, false, 0.5);
     if (t < 1.9) h.pose.phone = 1; else h.pose.call = 1;
     if (t > 2.3 && this.callSaid < 1) { this.callSaid = 1; m.ask('call911', 84); }
-    if (t > 5.2 && this.callSaid < 2) { this.callSaid = 2; m.ask(CALL_LINE[c.kind] || 'callBody', 84); }
-    if (t > 8.8 && this.callSaid < 3 && c.desc) { this.callSaid = 3; m.ask('callDesc', 84, { desc: c.desc }); }
+    const sex = c.suspect && c.suspect.look ? c.suspect.look.sex : 'm';
+    if (t > 5.2 && this.callSaid < 2) { this.callSaid = 2; m.ask(CALL_LINE[c.kind] || 'callBody', 84, { sex }); }
+    if (t > 8.8 && this.callSaid < 3 && c.desc) { this.callSaid = 3; m.ask('callDesc', 84, { desc: c.desc, sex }); }
     if (t > (c.desc ? 12.2 : 9.4)) {
       g.police?.report(h, c);
       m.called.add(c.key);
@@ -349,7 +350,8 @@ export class Brain {
     // someone with something to answer for, who is down or has stopped, is arrested
     const arrestable = (S.isPlayer ? wanted >= 1 : k.crime >= 1.9 || k.hurtMe) && S.h.alive && !!cuffs && (W.cuffable(S) || complying);
     // someone who will not stop, and has not got a gun, gets the taser
-    const stubborn = !lethal && !down && !complying && !sGun && (S.isPlayer ? wanted >= 1 || (sBlade && this.warned >= 2) : k.crime >= 1.9 || (sBlade && this.warned >= 2));
+    // (at one star you are told to stop first: running, fighting on, or ignoring them twice is what gets the taser)
+    const stubborn = !lethal && !down && !complying && !sGun && (S.isPlayer ? (wanted >= 1 && (S.speed > 1.6 || !!S.anim.action || this.warned >= 2)) || (sBlade && this.warned >= 2) : k.crime >= 1.9 || (sBlade && this.warned >= 2));
     // told again and again to put it down, and not doing it: that is resisting, and then it is an arrest
     if (S.isPlayer && sArmed && seen && this.warned >= (sGun ? 4 : 3)) this.g.police?.raise(sGun ? 2 : 1, sGun ? 'you would not put the gun down' : 'you would not put the weapon down', { x: S.x, z: S.z });
 
@@ -750,7 +752,7 @@ export class Brain {
       const dx = h.x - t.x, dz = h.z - t.z, d = Math.hypot(dx, dz) || 1;
       this._go(h.x + dx / d * 5, h.z + dz / d * 5, true, 1);
     }
-    if (this.sayT <= 0) { m.ask('flee', 54); this.sayT = rand(3, 7); }
+    if (this.sayT <= 0) { m.ask('flee', 54, { sex: m.threat && m.threat.src && m.threat.src.look ? m.threat.src.look.sex : 'm' }); this.sayT = rand(3, 7); }
   }
 
   _cower(dt) {

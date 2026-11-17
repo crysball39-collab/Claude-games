@@ -219,7 +219,7 @@ if (want('Doctor mode')) {
   await t.page.waitForFunction(() => { const e = document.querySelector('#doc-cond-label'); return e && e.textContent.trim().length > 2; }, { timeout: 8000 }).catch(() => {});
   const r = await run(() => {
     const txt = (s) => (document.querySelector(s) || {}).textContent || '';
-    return { picked: __game.selected === window.PT, name: txt('#doc-name'), cond: txt('#doc-cond-label'), vitals: txt('#doc-vitals').toUpperCase(), emo: txt('#doc-emotions').toUpperCase() };
+    return { picked: __game.selected === window.PT, name: txt('#doc-name'), cond: txt('#doc-cond-label'), vitals: (txt('#doc-vitals') + txt('#doc-state')).toUpperCase(), emo: txt('#doc-emotions').toUpperCase() };
   });
   check('tapping a person selects them', r.picked, r.name);
   check('shows their condition', r.cond.length > 2, r.cond);
@@ -504,7 +504,7 @@ if (want('Light vest')) {
     const mk = (z, vest) => { const h = V.still(g.spawnHuman(p.x + 4, p.z + z, -Math.PI / 2)); if (vest) h.wearVest(); return h; };
     const A = mk(-1, true), B = mk(1, false);
     g.advance(0.3);
-    const shoot = (h, part, weapon = 'm1911') => { const c = h.bodies[part]; return h.hit({ part, type: 'bullet', power: weapon === 'ak47' ? 1.4 : 1, point: [c.px - c.hx, c.py, c.pz], dir: [1, 0, 0], normal: [-1, 0, 0], impulse: 6, attacker: p, weapon, through: 0.2, hp: 32 }); };
+    const shoot = (h, part, weapon = 'm1911') => { const c = h.bodies[part]; return h.hit({ part, type: 'bullet', power: weapon === 'ak47' ? 1.4 : 1, point: [c.px - c.hx, c.py, c.pz], dir: [1, 0, 0], normal: [-1, 0, 0], impulse: 6, attacker: p, weapon, rifle: weapon !== 'm1911', through: 0.2, hp: 32 }); };
     const a1 = shoot(A, 2), a2 = shoot(A, 1), b1 = shoot(B, 2);
     g.advance(0.5);
     out.vested = { wounds: A.h.wounds.map((x) => x.type).join(','), bleed: A.h.bleedOut, stopped: a1.stopped && a2.stopped };
@@ -1004,6 +1004,276 @@ if (want('Solid bodies')) {
     return { worst, pair, rose };
   });
   check('getting up, the arms and legs turn at their joints instead of passing through the body', up.rose >= 4 && up.worst < 0.03, `${up.rose} got up; worst ${cm(up.worst)} ${up.pair}`);
+}
+
+/* -------------------------------- rifles -------------------------------- */
+head('Rifles');
+if (want('Rifles')) {
+  const r = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, out = {};
+    for (const type of ['m4a1', 'ar15']) {
+      V.stage();
+      const it = w.give(p, type, true); g.advance(0.9);
+      const o = out[type] = { name: it.def.name, mag: it.def.mag };
+      // the trigger held down for a second
+      const a0 = it.ammo;
+      T.press('attack');
+      for (let i = 0; i < 60; i++) g.advance(1 / 60);
+      T.release('attack');
+      o.held = a0 - it.ammo;
+      g.advance(0.6);
+      // somebody six metres off, shot once in the chest
+      const v = V.still(g.spawnHuman(p.x + Math.sin(g.camYaw) * 6, p.z + Math.cos(g.camYaw) * 6, g.camYaw + Math.PI)); v.h.tough = 95; g.advance(0.5);
+      for (let k = 0; k < 4; k++) { V.aimAt(v.bodies[2]); g.advance(1 / 60); }
+      w.fire(); g.advance(0.4);
+      o.hit = v.h.wounds.filter((x) => x.type === 'gunshot').length;
+      w.reload(); g.advance(3);
+      o.reloaded = it.ammo === it.def.mag;
+      w.holster(); g.advance(1.2);
+      o.slung = !p.weapon && w.inventory.includes(it);
+    }
+    g.paused = true;
+    return out;
+  });
+  const m = r.m4a1, a = r.ar15;
+  check('the M4A1 fires in bursts while the trigger is held', m.held >= 6, `${m.held} rounds in a second`);
+  check('the AR-15 fires once for each pull of the trigger', a.held === 1, `${a.held} round${a.held === 1 ? '' : 's'} in a second held`);
+  check('both hit what they are aimed at', m.hit > 0 && a.hit > 0, `M4A1 ${m.hit}, AR-15 ${a.hit} wounds`);
+  check('both take a 30-round magazine and reload', m.mag === 30 && a.mag === 30 && m.reloaded && a.reloaded);
+  check('both go on the back when put away', m.slung && a.slung);
+}
+
+/* ----------------------------- wanted level ----------------------------- */
+head('Wanted level');
+if (want('Wanted')) {
+  const r = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, P = g.police, out = {};
+    const stars = () => { g.ui.update(0.25); return document.querySelectorAll('#wanted .stars b.on').length; };
+    V.stage(); P.reset(); g.settings.cheatCops = false;
+    // the most there can be is two
+    P.raise(5, 'test'); out.max = P.wanted; out.maxStars = stars(); P.clear('test');
+    // nobody sees it: nobody knows
+    const q = V.still(T.dummy(1.0));
+    for (let i = 0; i < 40 && q.h.alive; i++) { if (!p.anim.busy) w.attack(i % 3); g.advance(0.3); if (i > 12) q.h.kill('test'); }
+    g.advance(3);
+    out.unseen = P.wanted;
+    // an officer sees a punch: one star, and they come to arrest
+    V.stage(); P.reset();
+    const o = g.spawnOfficer(p.x + Math.sin(g.camYaw + 0.5) * 7, p.z + Math.cos(g.camYaw + 0.5) * 7, g.camYaw + 0.5 + Math.PI);
+    g.advance(1.5);
+    const v = V.still(T.dummy(1.0));
+    // rounds fired, as against taser probes
+    let fires = 0, tasers = 0; const nf = w.npcFire.bind(w); w.npcFire = (h, aim, sk) => { const tz = !!(h.weapon && h.weapon.def.taser); const ok = nf(h, aim, sk); if (ok) { if (tz) tasers++; else fires++; } return ok; };
+    for (let i = 0; i < 12 && !P.wanted; i++) { if (!p.anim.busy) w.attack(i % 2); g.advance(0.35); }
+    out.punch = P.wanted; out.punchStars = stars();
+    let cuffed = -1, b0 = P.stats.busted;
+    for (let i = 0; i < 400; i++) { g.advance(0.1); if (p.cuffed) { cuffed = i / 10; break; } }
+    out.arrest = { cuffed, fires, tasers, wanted: P.wanted, mode: o.brain.mode, busted: P.stats.busted - b0 };
+    g.advance(0.5);
+    out.clearedStars = stars();
+    // an officer sees you shoot somebody: two stars, and they shoot
+    V.stage(); P.reset();
+    const o2 = g.spawnOfficer(p.x + Math.sin(g.camYaw - 0.6) * 9, p.z + Math.cos(g.camYaw - 0.6) * 9, g.camYaw - 0.6 + Math.PI);
+    g.advance(1.5);
+    const v2 = V.still(g.spawnHuman(p.x + Math.sin(g.camYaw) * 4, p.z + Math.cos(g.camYaw) * 4, g.camYaw + Math.PI)); v2.h.tough = 95;
+    w.give(p, 'm1911', true); g.advance(0.9);
+    for (let k = 0; k < 4; k++) { V.aimAt(v2.bodies[2]); g.advance(1 / 60); }
+    fires = 0; w.fire(); g.advance(0.3);
+    out.shoot = P.wanted; out.shootStars = stars();
+    w.holster();
+    for (let i = 0; i < 100 && !fires; i++) g.advance(0.1);
+    out.shotAt = { fires, mode: o2.brain.mode, hurt: p.h.wounds.length };
+    w.npcFire = nf;
+    // out of sight for long enough, the stars go out one at a time (with no more officers sent out to look)
+    V.stage(); P.reset();
+    const mp = g.maxPeople; g.maxPeople = 0;
+    P.raise(2, 'test'); g.advance(1);
+    const t0 = g.time; let one = -1, none = -1;
+    for (let i = 0; i < 2000 && none < 0; i++) { g.advance(0.1); if (one < 0 && P.wanted === 1) one = g.time - t0; if (P.wanted === 0) none = g.time - t0; }
+    g.maxPeople = mp;
+    out.cool = { one, none, why: P.log.slice(-2).map((l) => l.text).join(', ') };
+    g.paused = true;
+    return out;
+  });
+  check('two stars at most', r.max === 2 && r.maxStars === 2);
+  check('with nobody to see it, nobody knows', r.unseen === 0);
+  check('an officer who sees you hit someone gives you one star', r.punch === 1 && r.punchStars === 1);
+  check('at one star, standing still, you are told to stop and handcuffed: not shot, not tased', r.arrest.cuffed > 0 && r.arrest.fires === 0 && r.arrest.tasers === 0, r.arrest.cuffed > 0 ? `cuffed after ${r.arrest.cuffed.toFixed(1)}s, ${r.arrest.tasers} taser shots` : `not cuffed; officer ${r.arrest.mode}`);
+  check('being arrested clears the stars', r.arrest.wanted === 0 && r.arrest.busted === 1 && r.clearedStars === 0);
+  check('an officer who sees you shoot someone gives you two stars', r.shoot === 2 && r.shootStars === 2);
+  check('at two stars they shoot, even with your gun put away', r.shotAt.fires > 0, `${r.shotAt.fires} rounds, officer ${r.shotAt.mode}`);
+  check('out of their sight the stars go out one at a time', r.cool.one > 60 && r.cool.none > r.cool.one + 50, `one star after ${r.cool.one.toFixed(0)}s, none after ${r.cool.none.toFixed(0)}s (${r.cool.why})`);
+}
+
+/* ------------------------- 911 and fingerprints ------------------------- */
+head('911 calls and fingerprints');
+if (want('911')) {
+  const crime = async (weapon) => run((weapon) => {
+    const g = __game, p = g.player, w = g.weapons, P = g.police, out = { log: [] };
+    V.stage(); P.reset(); g.settings.cheatCops = false;
+    const m0 = P.stats.matches, sc0 = P.stats.scans;
+    p.reset(-30, -31, Math.PI / 2); g.camYaw = Math.PI / 2; g.camPitch = -0.05; g.advance(0.5);
+    g.staffStation(true); g.advance(0.5);
+    const v = V.still(T.dummy(1.0));
+    if (weapon !== 'fists') w.give(p, weapon, true);
+    g.advance(0.6);
+    for (let i = 0; i < 40 && v.h.alive; i++) { if (!p.anim.busy) w.attack(i % 3); g.advance(0.3); if (i > 14 && v.h.alive) v.h.kill('test'); }
+    w.holster(); g.advance(1);
+    out.prints = v.prints ? v.prints.has(p.id) : false;
+    out.after = P.wanted;
+    // away from it, and somebody comes along who finds the body
+    p.reset(-62, 62, 0); g.advance(0.5);
+    let f = null, tries = 0, scanT = -1;
+    const modes = [];
+    for (let i = 0; i < 3000; i++) {
+      if (!f || (i % 60 === 59 && !f.mind.toCall && f.brain.mode !== 'call' && !P.reports.length && tries < 8)) {
+        if (f) g.removeHuman(f);
+        f = g.spawnHuman(-27, -27, Math.PI); f.mind.p.empathy = 1; tries++;
+      }
+      g.advance(0.1);
+      if (i % 100 === 0) modes.push(`${(i / 10).toFixed(0)}s #${tries} ${f.brain.mode}${f.mind.toCall ? ' toCall ' + f.mind.toCall.kind : ''}`);
+      if (P.reports.length && !out.report) { const rp = P.reports[0]; out.report = { kind: rp.kind, suspect: !!rp.suspect, t: g.time }; out.wantedAtReport = P.wanted; }
+      if (P.stats.scans > sc0 && scanT < 0) { scanT = g.time; out.scan = { matches: P.stats.matches - m0, wanted: P.wanted }; }
+      if (scanT > 0 && g.time > scanT + 6) break;
+    }
+    out.calls = P.stats.calls; out.finders = tries;
+    out.modes = g.humans.filter((h) => h.officer).map((h) => h.brain.mode).join(',');
+    out.final = P.wanted;
+    out.policeLog = P.log.map((l) => l.text).join(' | ') + ' || finders: ' + modes.slice(0, 12).join(', ');
+    g.paused = true;
+    return out;
+  }, weapon);
+  const fist = await crime('fists');
+  check('someone who finds a body rings the police, who send officers', fist.calls > 0 && !!fist.report, fist.report ? `${fist.report.kind} reported by finder #${fist.finders}` : 'no report');
+  check('a caller who did not see it happen cannot say who did it', fist.report && !fist.report.suspect && fist.wantedAtReport === 0);
+  check('bare hands on the victim leave your fingerprints', fist.prints);
+  check('the officers scan the body, match your prints, and you are wanted', fist.scan && fist.scan.matches > 0 && fist.final >= 1, fist.scan ? `wanted ${fist.final}` : 'never scanned: ' + fist.policeLog);
+  check('then they search the city for you', /search/.test(fist.modes), fist.modes);
+  const knife = await crime('knife');
+  check('a knife leaves no prints, and the scan finds nothing', !knife.prints && knife.scan && knife.scan.matches === 0 && knife.final === 0, knife.scan ? `prints ${knife.prints}, matches ${knife.scan.matches}, wanted ${knife.final}` : 'never scanned: ' + knife.policeLog);
+}
+
+/* ------------------------ blood runs and soaking ------------------------ */
+head('Blood runs and soaking');
+if (want('Blood runs')) {
+  const r = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, G = g.gore, out = {};
+    V.stage(); g.settings.cheatCops = true;
+    // somebody with their back to a building wall, shot through the chest
+    const x0 = 0, z0 = -22, d = g.world.rayWorld(x0, 1.3, z0, 0, 0, -1, 9);
+    const vz = z0 - (d - 0.55);
+    p.reset(0, vz + 3.5, Math.PI); g.camYaw = Math.PI; g.advance(0.5);
+    const v = V.still(g.spawnHuman(0, vz, 0)); v.h.tough = 95; g.advance(0.5);
+    const s0 = { ...G.stats };
+    let walls = 0; const wr = G._wallRun.bind(G); G._wallRun = (...a) => { walls++; return wr(...a); };
+    w.give(p, 'm4a1', true); g.advance(0.9);
+    for (let k = 0; k < 6; k++) { V.aimAt(v.bodies[2]); g.advance(1 / 60); }
+    for (let i = 0; i < 2; i++) { w.fire(); g.advance(0.3); }
+    g.advance(15);
+    G._wallRun = wr;
+    const mine = G.bDecals.filter((x) => x.human === v);
+    out.wall = walls;
+    out.runs = mine.filter((x) => x.run).length;
+    out.chained = G.stats.chained - s0.chained;
+    out.drips = G.stats.drips - s0.drips;
+    out.soaks = mine.filter((x) => x.soak).length;
+    out.cloth = Math.max(...v.soak);
+    out.wound = v.h.wounds.filter((x) => x.type === 'gunshot').length;
+    // a blade that has been used drips
+    V.stage();
+    const q = V.still(T.dummy(1.0)); q.h.tough = 95;
+    w.give(p, 'knife', true); g.advance(0.8);
+    const b0 = G.stats.bladeDrips;
+    for (let i = 0; i < 6; i++) { if (!p.anim.busy) w.attack(i % 2); g.advance(0.4); }
+    g.advance(5);
+    out.blade = G.stats.bladeDrips - b0;
+    g.paused = true;
+    return out;
+  });
+  check('blood thrown on a wall runs down it', r.wall > 0, `${r.wall} runs down the wall`);
+  check('blood runs down the person from the wound, part to part', r.runs > 0 && r.chained > 0, `${r.runs} runs, ${r.chained} carried on to the part below`);
+  check('and drips off where it runs out', r.drips > 0, `${r.drips} drops`);
+  check('clothes round the wound soak it up and darken', r.soaks > 0 && r.cloth > 0.1, `${r.soaks} stains, most soaked part ${(r.cloth * 100).toFixed(0)}%`);
+  check('a bloody blade drips', r.blade > 0, `${r.blade} drops`);
+}
+
+/* ---------------------------- medical state ----------------------------- */
+head('Medical state');
+if (want('Medical')) {
+  const r = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, out = {};
+    V.stage();
+    // running down an open street until there is nothing left
+    p.reset(-62, -40, 0); g.camYaw = 0; g.advance(0.5);
+    __ts.input.move.x = 0; __ts.input.move.y = 1; g.advance(4);
+    out.fresh = p.speed;
+    g.advance(20);
+    out.tired = { stamina: p.h.stamina, speed: p.speed };
+    __ts.input.move.y = 0; g.advance(15);
+    out.rested = p.h.stamina;
+    g.ui.update(0.25);
+    out.bar = document.querySelector('#v-stam').style.width;
+    // a fright: adrenaline up in seconds
+    V.stage();
+    const a = V.still(g.spawnHuman(p.x + Math.sin(g.camYaw) * 4, p.z + Math.cos(g.camYaw) * 4, g.camYaw + Math.PI));
+    g.advance(1);
+    w.give(p, 'm1911', true); g.advance(0.9);
+    g.camPitch = 0.4; w.fire(); g.advance(3);
+    out.adrenaline = a.h.adrenaline;
+    // a knock on the head: dizzy, and less aware of what is going on
+    a.h.concussion = 50; a.h.dizzy = 20; g.advance(1.2);
+    out.dizzy = { dizziness: a.h.dizziness, awareness: a.h.awareness };
+    const far = (aw) => { a.mind.aware = aw; return a.mind.canSee(p.x, p.y + 1.5, p.z + 0.01, true, true); };
+    a.h.concussion = 0; a.h.dizzy = 0;
+    p.reset(a.x + Math.sin(a.yaw) * 40, a.z + Math.cos(a.yaw) * 40, a.yaw + Math.PI); g.advance(0.1);
+    out.sight = { clear: far(1), clouded: far(0.25) };
+    g.paused = true;
+    return out;
+  });
+  check('running uses up stamina until it is only a jog', r.fresh > 4.5 && r.tired.stamina < 25 && r.tired.speed < 3.5, `${r.fresh.toFixed(1)} m/s fresh, ${r.tired.speed.toFixed(1)} m/s with ${r.tired.stamina.toFixed(0)} stamina left`);
+  check('rest brings it back, and the bar shows it', r.rested > 90 && parseFloat(r.bar) > 90, `${r.rested.toFixed(0)} after 15s`);
+  check('a fright sends adrenaline up in seconds', r.adrenaline > 0.4, r.adrenaline.toFixed(2));
+  check('a knock on the head leaves someone dizzy and less aware', r.dizzy.dizziness > 40 && r.dizzy.awareness < 75, `dizziness ${r.dizzy.dizziness.toFixed(0)}, awareness ${r.dizzy.awareness.toFixed(0)}`);
+  check('somebody barely aware does not see as far', r.sight.clear > 0 && r.sight.clouded === 0, `at 40 m: ${r.sight.clear.toFixed(2)} alert, ${r.sight.clouded.toFixed(2)} clouded`);
+
+  await run(() => { V.stage(); __game.paused = false; });
+  await t.page.click('#btn-menu');
+  await t.page.click('[data-spawn="syringe"]');
+  await t.page.click('[data-close="sandbox"]');
+  const s = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, out = {};
+    g.advance(0.5);
+    const it = w.items.find((i) => i.type === 'syringe');
+    out.spawned = !!it;
+    if (it) { w.pickUp(it); g.advance(0.5); if (p.weapon !== it) w.draw?.(p, it); g.advance(0.6); }
+    out.inHand = !!(p.weapon && p.weapon.type === 'syringe');
+    const v = V.still(T.dummy(1.0)); g.advance(0.5);
+    const said = []; const ask = v.mind.ask.bind(v.mind); v.mind.ask = (k, ...x) => { said.push(k); return ask(k, ...x); };
+    out.injected = w.attack(0);
+    let sick = -1, down = -1, dead = -1;
+    for (let i = 0; i < 1500; i++) {
+      g.advance(0.1);
+      const tt = (i + 1) / 10;
+      if (sick < 0 && v.h.poison > 22) sick = tt;
+      if (down < 0 && v.state === 2) down = tt;
+      if (dead < 0 && !v.h.alive) { dead = tt; break; }
+    }
+    out.course = { sick, down, dead, cause: v.h.cause, said: [...new Set(said)].join(','), prints: v.prints ? v.prints.size : 0 };
+    // the doctor's view of somebody poisoned
+    const v2 = V.still(T.dummy(1.6, 0.8)); v2.h.inject(100); g.advance(25);
+    g.ui.toggleDoctor(true); g.ui.doctor.select(v2); g.ui.update(0.3);
+    out.rows = [...document.querySelectorAll('#doc-state .meter')].map((m) => m.querySelector('label').textContent + ' ' + m.querySelector('output').textContent);
+    g.ui.toggleDoctor(false);
+    g.paused = true;
+    return out;
+  });
+  check('a poison syringe can be spawned and picked up', s.spawned && s.inHand);
+  check('a jab with it: they know they have been stuck with something', s.injected && /injected/.test(s.course.said), s.course.said);
+  check('poison makes them sick within seconds and drops them within a minute', s.course.sick > 0 && s.course.sick < 15 && s.course.down > 15 && s.course.down < 60, `sick at ${s.course.sick}s, down at ${s.course.down}s`);
+  check('then their breathing fails and they die of it', s.course.dead > s.course.down && s.course.dead < 140 && s.course.cause === 'Poisoning', `dead at ${s.course.dead}s: ${s.course.cause}`);
+  check('a needle leaves no fingerprints', s.course.prints === 0);
+  const names = s.rows.map((x) => x.split(' ')[0].toLowerCase());
+  check('doctor mode shows awareness, dizziness, stamina, adrenaline, poison and shock', ['awareness', 'dizziness', 'stamina', 'adrenaline', 'poison', 'shock'].every((n) => names.includes(n)), s.rows.join(' / '));
 }
 
 /* --------------------------------- report ------------------------------- */

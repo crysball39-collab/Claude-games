@@ -297,7 +297,7 @@ export class Gore {
     const d = this._attach(b, this._runCorners(b, p, dir, face, width, 0.015), pick(UV.run), human, part, rand(0.72, 1));
     if (!d) return null;
     d.stain = true;
-    d.run = { lp: p, dir, face, w: width, len: 0.015, max, v: rand(0.1, 0.2), ml, depth, edge: want > edge, wound: w, human, part };
+    d.run = { lp: p, dir, face, w: width, len: 0.015, max, reach: edge, v: rand(0.1, 0.2), ml, depth, edge: want > edge, wound: w, human, part };
     this.stats.runs++;
     if (depth) this.stats.chained++;
     return d;
@@ -987,14 +987,16 @@ export class Gore {
       // a run of blood lengthens, slowing as it thins; one fed by an open wound keeps going
       if (d.run) {
         const r = d.run, dt = this.game.dt;
+        const fed = r.wound && r.wound.flow > 0.05 && !r.wound.gone;
+        // a wound that goes on bleeding goes on feeding the end of its run, on down to the edge of the cloth and over it
+        if (fed && !d.next && !r.edge && r.len >= r.max - 1e-4 && r.max < r.reach) r.max = Math.min(r.reach, r.max + r.wound.flow * dt * 0.006);
         if (r.len < r.max - 1e-4) {
-          const fed = r.wound && r.wound.flow > 0.05 && !r.wound.gone;
           r.v = fed ? Math.max(r.v, 0.05 + Math.min(0.25, r.wound.flow * 0.04)) : r.v * Math.exp(-dt * 0.45);
           if (r.v > 0.006) {
             r.len = Math.min(r.max, r.len + r.v * dt);
             d.c = this._runCorners(b, r.lp, r.dir, r.face, r.w, r.len);
             d.settled = false;
-            if (r.len >= r.max - 1e-4) this._runEnd(d);
+            if (r.len >= r.max - 1e-4) { if (r.max >= r.reach - 1e-4) r.edge = true; this._runEnd(d); }
           }
         }
       }

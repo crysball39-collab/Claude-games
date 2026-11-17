@@ -89,7 +89,7 @@ export const LINES = {
   boneBreak: ["It's broken! It's broken!", "I felt it snap. I felt it.", "I can't move my {part}!", "Don't touch it, don't touch it-", "That's not supposed to bend like that.",
     "AAH- it cracked- something cracked-", "Oh God, I can feel it moving."],
   lostLimb: ["My {part}. Where's my {part}?", "It's gone. It's GONE.", "That's mine. That's mine on the ground.", "I can't- where is it-",
-    "Put it back, put it back, put it back-", "No. No no no no no.", "I can still feel my fingers. How can I feel them?", "Oh God. Oh God oh God oh God."],
+    "Put it back, put it back, put it back-", "No. No no no no no.", "I can still feel it. How can I still feel it?", "Oh God. Oh God oh God oh God."],
   bleeding: ["I'm bleeding. I'm bleeding a lot.", "There's so much blood.", "It won't stop. It won't stop.", "I gotta press on it. Press on it.", "Is that all mine?",
     "Somebody get a towel. A shirt. Anything.", "It's everywhere. It's all over me.", "Why won't it stop?"],
   downPain: ["Help me...", "Please... somebody...", "It hurts. It hurts so much.", "Don't leave me here.", "I can't get up.", "Mom...", "Just... gimme a second.",
@@ -212,7 +212,15 @@ export function line(category, vars = {}) {
   let text = pick(list);
   for (let i = 0; i < 4 && _last.get(category) === text && list.length > 1; i++) text = pick(list);
   _last.set(category, text);
-  return text.replace(/\{(\w+)\}/g, (m, key) => (vars[key] != null ? vars[key] : key === 'weapon' ? 'weapon' : key === 'part' ? 'arm' : key === 'desc' ? 'some guy' : ''));
+  text = text.replace(/\{(\w+)\}/g, (m, key) => (vars[key] != null ? vars[key] : key === 'weapon' ? 'weapon' : key === 'part' ? 'arm' : key === 'desc' ? 'some guy' : ''));
+  // the lines say "he" of whoever did it; when it was a woman, so do they
+  return vars && vars.sex === 'f' ? herOf(text) : text;
+}
+
+const HER = { He: 'She', he: 'she', him: 'her', Him: 'Her', his: 'her', His: 'Her', guy: 'woman', Guy: 'Woman', himself: 'herself' };
+/** A line about a man, said about a woman instead. */
+export function herOf(text) {
+  return text.replace(/\b(He|he|him|Him|his|His|guy|Guy|himself)\b/g, (w) => HER[w]).replace(/\b([Aa]) man\b/g, '$1 woman');
 }
 
 /** A person's own habits of speech, laid over a stock line now and then. */

@@ -72,7 +72,8 @@ export class Police {
     let rep = null;
     for (const r of this.reports) {
       if (r.status === 'closed') continue;
-      const same = (info.victim && r.victim === info.victim) || (Math.hypot(r.x - info.x, r.z - info.z) < 22 && now - r.t < 120);
+      // two different victims are two different calls, wherever they are; otherwise near enough and soon enough is the same thing
+      const same = info.victim && r.victim ? r.victim === info.victim : Math.hypot(r.x - info.x, r.z - info.z) < 22 && now - r.t < 120;
       if (same) { rep = r; break; }
     }
     if (rep) {

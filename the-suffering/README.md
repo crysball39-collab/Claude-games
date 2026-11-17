@@ -52,14 +52,17 @@ button repeatedly for the combo, or slide off it to pick one.
 | Machete | chop | backhand | cleave | leg sweep |
 
 The M1911 holds seven rounds and fires as fast as you tap. The AK-47 holds thirty, fires
-automatically and goes through people. Bullets leave holes in walls, crates, cars and
+automatically and goes through people. The M4A1 is a black carbine that fires in fast
+bursts while the trigger is held; the AR-15 is its civilian cousin, with a longer barrel
+and a fixed stock, and fires once for each pull. Both take a 30-round magazine and their
+rounds go through a light vest. Bullets leave holes in walls, crates, cars and
 bodies, and exit wounds on the far side. Reloading is done by hand and takes as long as
 it looks: the gun comes in to the chest, the empty magazine drops to the ground, the left
 hand fetches a full one from the belt and seats it, and the action is racked. You cannot
 fire until it is finished.
 
 **Carrying.** Whatever you are not holding rides on you where it would: the pistol in a
-holster on the right hip, the knife in a sheath on the left, the machete and the rifle
+holster on the right hip, the knife in a sheath on the left, the machete and the rifles
 across your back. HOLSTER puts away what is in your hand and DRAW brings it back, with the
 reach that takes. People are frightened of a weapon in the hand, not one put away.
 
@@ -89,9 +92,16 @@ cuffs a person can walk and run, clumsily, and can neither hit anybody nor carry
 anything; what they were carrying is taken off them. PICK UP beside them takes the cuffs
 off again.
 
+**The poison syringe.** One lethal dose. INJECT puts it into whoever is within reach in
+front of you, in the arm or the shoulder. They know they have been stuck with something.
+The poison is taken up over most of a minute: sick and sweating within seconds, then
+dizzy, confused and staggering, then down, then out, and then their breathing slows and
+stops. A needle leaves no fingerprints.
+
 **The sandbox menu** spawns humans (one or five), police officers, crates, the light
-vest, the light helmet, handcuffs, the taser and the four weapons, and can clear away
-blood, bodies or objects, or patch you up.
+vest, the light helmet, handcuffs, the taser, the poison syringe and the six weapons
+(fists aside: the knife, the machete, the M1911, the AK-47, the M4A1 and the AR-15), and
+can clear away blood, bodies or objects, or patch you up.
 
 **Bodies.** Every person is seventeen rigid parts on sixteen limited joints, driven by
 muscles with real torque limits. Each hand has four fingers and a thumb, in two segments
@@ -130,11 +140,39 @@ as it swings. Blood lands on, and stays on, whatever is in its way: the ground, 
 crates, other people, the blade that did it and the hand that held it, a pistol on
 somebody's hip. Pools that grow into each other become one pool.
 
+Blood runs. From a wound that keeps bleeding it runs down whatever is below it, shirt
+to belt to trouser leg, part on to part, and drips off where it runs out; a wound that
+goes on bleeding goes on feeding it. Blood thrown on a wall runs down the wall. A blade
+that has been used drips from its tip. Clothing round a wound soaks the blood up in a
+stain that spreads with what has been lost, and clothing that lies in a pool soaks from
+underneath; cloth that has taken up a great deal goes dark all over.
+
+**State.** Alongside the injuries, the body keeps track of how it is doing.
+
+- *Stamina* is spent running, jumping and fighting and comes back with rest, more slowly
+  for someone who has lost blood, is in pain or cannot breathe. With little left a run
+  becomes a jog and a jump a hop. You have a STAMINA bar under BLOOD.
+- *Adrenaline* comes up within a second or two of a fright, a fight or an injury and
+  takes a minute or more to fade. It blunts pain, quickens the pulse and the breathing,
+  and lets a tired body push on a little longer.
+- *Poison* is taken up from where it was injected and cleared slowly by the liver. It
+  brings nausea and cramps, dizziness, confusion and weakness; enough of it and they
+  cannot stand, then lose consciousness, then stop breathing.
+- *Dizziness* comes from being spun about, a knock on the head, blood loss, too little
+  air and poison. Somebody very dizzy staggers and falls as they walk. When you are
+  dizzy the picture sways.
+- *Awareness* is how much of what is going on round someone they are taking in, dulled
+  by concussion, dizziness, blood loss, shock, poison and lack of air. Somebody barely
+  aware sees and hears much less of what is happening. When yours drops, the edges of
+  the picture darken.
+- *Shock* builds with blood loss and injury.
+
 **Doctor mode.** Tap anyone, or examine yourself.
 
-- STATUS: condition, an ECG, blood, air, pulse, pain, shock, nausea, temperature and
-  breathing; the six emotions (fear, anger, sadness, joy, surprise, boredom); every wound
-  and how fast it is bleeding.
+- STATUS: condition, an ECG, blood, air, pulse, pain, nausea, temperature and
+  breathing; their state (awareness, dizziness, stamina, adrenaline, poison and shock);
+  the six emotions (fear, anger, sadness, joy, surprise, boredom); every wound and how
+  fast it is bleeding.
 - X-RAY: their skeleton and organs, drawn from their own measurements, with fractures,
   breaks, damaged organs, wounds and missing parts marked.
 - MIND: who they are, what they are doing, exactly what they can see and hear and feel
@@ -155,9 +193,12 @@ What they perceive becomes memory and moves their six emotions, scaled by who th
 carry on, stare, run, cower, put their hands up when a gun is on them, fight back, or
 kneel by someone who is hurt.
 
-**Voices.** Everyone has about 530 scripted lines to draw on, chosen by what is
+**Voices.** Everyone has about 780 scripted lines to draw on, chosen by what is
 happening to them and coloured by their habits of speech, and they answer when you TALK
-to them. Connect them to Claude and they can say anything at all:
+to them. The lines are written the way people actually talk: short, broken, repeating
+themselves, swearing. Pain is mostly breath and noise and a word or two; somebody badly
+hurt asks the same thing twice and does not finish sentences; somebody on the phone to
+911 gives the street and what they saw. Connect them to Claude and they can say anything at all:
 
 - Open *Pause -> Voices* and paste a Claude API key. People then speak for themselves,
   unprompted, from an account of exactly what they see, hear, feel and remember. The
@@ -173,18 +214,38 @@ to them. Connect them to Claude and they can say anything at all:
 **The police.** The station is across the road from the far side of the park: a
 forecourt with two patrol cars, a lobby you can walk into with a front desk and a cell,
 and four officers, one at the desk, two at the door and one walking the beat. Each wears
-a vest and carries an M1911, a taser and a pair of handcuffs on their belt. They keep count of what they have seen each
-person do, and tell each other by radio. A weapon in your hand near them gets pistols
-drawn and orders shouted. Put it away and stand still, and they hold you there a while
-and then stand down. Somebody who keeps hitting people, or will not put a blade down, is
-warned ("Taser! Taser! Taser!") and tased. Anybody with something to answer for who is
-down, or has stopped, is handcuffed by one officer while the others cover; a prisoner is
-then walked back to the station and into the cell. (If the prisoner is you, they leave
-you where you are in cuffs. This is a sandbox: tap CUFFED in the weapon bar and they
-come off.) Use a weapon on a person, or keep a gun pointed at an officer, and they
-shoot; they stop when you are down, do not fire with a bystander in the way, and reload
-before they holster. A post left empty is filled again in time. An officer who is past
-caring can be relieved of their pistol.
+a vest and carries an M1911, a taser, a pair of handcuffs and a fingerprint scanner on
+their belt.
+
+They know nothing they have not seen or been told. What they know about you is your
+*wanted level*, shown under your vitals: at most two stars for now.
+
+- *One star*: they want you in handcuffs. You are told to stop; stand still, or put
+  your hands up, and one officer cuffs you while the others cover. Run, keep fighting or
+  ignore them and you are tased first.
+- *Two stars*: you have used a gun or a blade on someone, killed someone, or gone for
+  an officer. They shoot, and standing still does not stop them. Officers sent out at
+  two stars bring M4A1s.
+
+An officer who sees you do something gives you the stars for it there and then and tells
+the others by radio. Anybody else has to ring 911: a witness steps back, gets their phone
+out, and tells the station what happened, where, and, if they saw you do it, what you
+look like. Somebody who only comes across a body, or someone lying hurt, rings too, but
+cannot say who did it, and nobody comes looking for you. Officers are sent to every
+call. At a body they kneel and press a fingerprint scanner to the hands and skin, and if
+you touched the victim with your bare hands (a punch, a hand on them, taking something
+off them, handcuffing them), the prints are yours: one star, and every officer searches
+the city for you. A kick, a knife, a gun or a needle leaves nothing on the skin.
+
+Officers who lose sight of you search where you were last seen, and more come out of the
+station while you are wanted. Out of their sight for long enough, the stars go out one
+at a time. Being arrested clears them, and so does dying. (If the prisoner is you, they
+leave you where you are in cuffs. This is a sandbox: tap CUFFED in the weapon bar and
+they come off.) They stop shooting when you are down, do not fire with a bystander in
+the way, and reload before they holster. Somebody else they arrest is walked back to the
+station and into the cell. A post left empty is filled again in time. An officer who is
+past caring can be relieved of their pistol. *Pause -> Settings -> Cheats -> Police
+ignore you* turns all of it off.
 
 **Cheats.** *Pause -> Settings -> Cheats -> Infinite HP.* Nothing injures you: no
 wounds, no bleeding, nothing cut off, no dying, and whatever was wrong with you when you
