@@ -60,6 +60,7 @@ export class UI {
     for (const b of $$('[data-close]')) tap('[data-close="' + b.dataset.close + '"]', () => (b.dataset.close === 'doctor' ? this.toggleDoctor(false) : this.toggleSandbox(false)));
     for (const b of $$('[data-spawn]')) b.addEventListener('click', () => this.spawn(b.dataset.spawn));
     for (const b of $$('[data-clean]')) b.addEventListener('click', () => { g.cleanUp(b.dataset.clean); this.toast('Cleaned up: ' + b.textContent.toLowerCase()); this._count(); });
+    for (const b of $$('[data-wanted]')) b.addEventListener('click', () => { g.police?.clear('sandbox'); this.toast('Wanted level cleared'); });
     for (const b of $$('[data-heal]')) b.addEventListener('click', () => { this.healPlayer(); });
     for (const b of $$('#pause-tabs button')) b.addEventListener('click', () => this._ptab(b.dataset.ptab));
     $('#talk-bar').addEventListener('submit', (e) => { e.preventDefault(); const t = $('#talk-input'); if (this.speech.playerSay(t.value)) { t.value = ''; this.closeTalk(); } });
@@ -100,6 +101,7 @@ export class UI {
     bindSet('#set-invert', 'invert', 'check'); bindSet('#set-volume', 'volumePct', 'num');
     bindSet('#set-people', 'people', 'num'); bindSet('#set-cars', 'cars', 'num');
     bindSet('#set-cheat-hp', 'cheatHp', 'check', () => this.toast(s.cheatHp ? 'Infinite HP on' : 'Infinite HP off'));
+    bindSet('#set-cheat-cops', 'cheatCops', 'check', () => { if (s.cheatCops) g.police?.clear('ignored'); this.toast(s.cheatCops ? 'The police will ignore you' : 'The police are back to normal'); });
     bindSet('#set-key', 'aiKey', 'text', () => { this.voices.reset(); this._aiStatus(); });
     bindSet('#set-model', 'aiModel', 'text', () => this._aiStatus());
     bindSet('#set-live', 'aiLive', 'check', () => this._aiStatus());
@@ -270,6 +272,24 @@ export class UI {
   }
 
   /** The cheat has been switched: say so on the HUD, and mend whatever was wrong when it came on. */
+  /** The wanted level changed: the stars, and a word about why. */
+  wantedChanged(level, why) {
+    const was = this._wanted || 0;
+    this._wanted = level;
+    this._stars();
+    if (level > was) this.toast(`WANTED ${'\u2605'.repeat(level)} - ${why}`, 3.6);
+    else if (level > 0 && level < was) this.toast('They have lost sight of you. They are still looking.', 3);
+    else if (level === 0 && was > 0 && why === 'lost') this.toast('The police have stopped looking for you.', 3);
+  }
+
+  _stars() {
+    const P = this.g.police, n = P ? P.wanted : 0, box = $('#wanted');
+    if (!box) return;
+    box.querySelectorAll('b').forEach((b, i) => b.classList.toggle('on', i < n));
+    box.classList.toggle('searching', n > 0 && !P.seen);
+    box.classList.toggle('lethal', n >= 2);
+  }
+
   cheatChanged() {
     const on = !!this.settings.cheatHp, tag = $('#v-cheat');
     if (on && tag.hidden) { const p = this.g.player; if (!p.h.alive || p.h.missing.some((m) => m)) { this.g.respawn(false); $('#dead').hidden = true; this.deadT = 0; this.input.enabled = true; } else { const G = this.g.gore; for (let i = 0; i < G.N; i++) if (G.owner[i] === p) G.life[i] = 0; p.h.heal(); G.clearHuman(p); p.bloodied = 0; } }
@@ -359,6 +379,7 @@ export class UI {
       $('#v-blood').style.width = clamp(p.h.bloodPct, 0, 100) + '%';
       $('#btn-crouch').classList.toggle('on', !!g.crouchHeld);
       $('#doctor-hint').hidden = !g.doctor || !!g.selected;
+      this._stars();
       this._label();
       if (!$('#sandbox').hidden) this._count();
     }

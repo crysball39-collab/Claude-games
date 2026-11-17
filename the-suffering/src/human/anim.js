@@ -125,7 +125,7 @@ export class Animator {
     this.t = Math.random() * 10;
     this.phase = Math.random();
     this.run = 0; this.moving = 0; this.crouch = 0; this.air = 0; this.land = 0;
-    this.w = { guard: 0, blade: 0, pistol: 0, rifle: 0, cower: 0, handsUp: 0, hurt: 0, talk: 0, stagger: 0, writhe: 0, crawl: 0, brace: 0, phone: 0, kneel: 0, cuffed: 0, cuffing: 0 };
+    this.w = { guard: 0, blade: 0, pistol: 0, rifle: 0, cower: 0, handsUp: 0, hurt: 0, talk: 0, stagger: 0, writhe: 0, crawl: 0, brace: 0, phone: 0, kneel: 0, cuffed: 0, cuffing: 0, call: 0, scan: 0 };
     this.action = null;
     this.flinch = 0; this.flX = 0; this.flZ = 0;
     this.aim = 0; this.lookYaw = 0; this.lookPitch = 0;
@@ -311,8 +311,20 @@ export class Animator {
       const a = W.phone * (1 - m);
       this._to(CH.shR, 0.75, a); this._to(CH.shRIn, 0.5, a); this._to(CH.elR, 1.95, a); this._to(CH.headBend, 0.42, a); this._to(CH.neckBend, 0.14, a);
     }
+    if (W.call > 0.01) {
+      // the phone held to the right ear, the head leaning into it
+      const a = W.call;
+      this._to(CH.shR, 1.43, a); this._to(CH.shROut, 0.34, a); this._to(CH.shRIn, 0.01, a); this._to(CH.elR, 2.45, a); this._to(CH.wrR, 0.25, a);
+      ch[CH.headSide] -= 0.12 * a;
+    }
+    if (W.scan > 0.01) {
+      // reaching down to somebody on the ground with the scanner, eyes on its screen
+      const a = W.scan;
+      this._to(CH.shR, 0.8, a); this._to(CH.shROut, -0.06, a); this._to(CH.shRIn, 0.06, a); this._to(CH.elR, 0.3, a);
+      ch[CH.spineBend] += 0.3 * a; ch[CH.headBend] += 0.32 * a;
+    }
     if (W.talk > 0.01) {
-      const a = W.talk * (1 - Math.max(W.cower, W.handsUp));
+      const a = W.talk * (1 - Math.max(W.cower, W.handsUp, W.call));
       ch[CH.shR] += (0.35 + 0.25 * Math.sin(t * 5.1)) * a; ch[CH.elR] += (0.9 + 0.3 * Math.sin(t * 6.7)) * a; ch[CH.shROut] += 0.15 * a;
       ch[CH.shL] += (0.12 + 0.12 * Math.sin(t * 4.3 + 1)) * a; ch[CH.elL] += (0.5 + 0.2 * Math.sin(t * 5.9 + 2)) * a;
       ch[CH.headSide] += 0.06 * Math.sin(t * 3.3) * a; ch[CH.headBend] += 0.05 * Math.sin(t * 7.1) * a;

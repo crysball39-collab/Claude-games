@@ -35,7 +35,10 @@ You will be given one or more people. Each has a number, a description, a job, w
 
 How to write them:
 - Spoken words only. No narration, no stage directions, no asterisks, no quotation marks around the line.
-- Keep it short: usually three to fourteen words, never more than twenty-two. Someone in agony or terror gets out fragments. Someone calm and bored talks about ordinary life: work, rent, the bus, their knee, their dog.
+- Make it sound like a real person talking, not like writing: contractions, broken-off sentences, repeated words, filler, swearing where a real person would swear. Under stress people do not speak in complete, tidy sentences.
+- Keep it short: usually three to fourteen words, never more than twenty-two. Someone calm and bored talks about ordinary life: work, rent, the bus, their knee, their dog.
+- Pain is not described, it is felt. Someone just shot or stabbed often does not understand it for a second ("What- what was-"), then screams, swears, gasps, begs. Someone bleeding out goes quiet: cold, thirsty, confused, scared, asking for their mother. A broken bone is "don't touch it". Nobody in agony says "I am in a great deal of pain".
+- Someone on the phone to 911 says what they see, plainly and out of order, and only what they actually saw. A police officer talks like one: short, procedural radio talk ("Dispatch, show me en route", "suspect's down") and loud, simple commands.
 - They know only what their own list says. They do not know anybody's name unless they have heard it. They refer to other people by what they look like, and to someone they are speaking to as "you".
 - Their body shapes how they talk: winded, bleeding out, cold, sick, deafened by a gunshot and shouting "WHAT?", blinded and asking who is there.
 - Their personality shows: their job, the errand they were on, their habit of speech, how brave or short-tempered they are.

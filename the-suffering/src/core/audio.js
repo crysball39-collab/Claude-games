@@ -79,6 +79,7 @@ export class Sound {
     switch (name) {
       case 'pistol': this._n(d, t, 0.2, 1.1, 'lowpass', 3200, 500, 0.6); this._t(d, t, 0.13, 0.9, 'sine', 170, 48); this._n(d, t, 0.03, 0.6, 'highpass', 3000); this._n(d, t + 0.04, 0.5, 0.16, 'bandpass', 900, 300, 0.4); break;
       case 'rifle': this._n(d, t, 0.24, 1.2, 'lowpass', 4200, 600, 0.5); this._t(d, t, 0.14, 1.0, 'sine', 130, 40); this._n(d, t, 0.025, 0.8, 'highpass', 4000); this._n(d, t + 0.05, 0.6, 0.2, 'bandpass', 700, 250, 0.4); break;
+      case 'carbine': this._n(d, t, 0.19, 1.15, 'lowpass', 5400, 700, 0.5); this._t(d, t, 0.1, 0.8, 'sine', 165, 52); this._n(d, t, 0.02, 0.95, 'highpass', 5200); this._n(d, t + 0.04, 0.55, 0.18, 'bandpass', 950, 300, 0.4); break;
       case 'tasershot': this._n(d, t, 0.05, 0.8, 'highpass', 1800, 900, 1); this._t(d, t, 0.05, 0.3, 'square', 260, 90); this._n(d, t + 0.04, 0.2, 0.25, 'bandpass', 5200, 2600, 3); break;
       case 'taser': for (let i = 0; i < 9; i++) { this._n(d, t + i * 0.046 + rand(0, 0.006), 0.012, 0.8, 'highpass', 2600 + rand(0, 900)); this._t(d, t + i * 0.046, 0.014, 0.25, 'square', 1900, 700); } break;
       case 'cuff': for (let i = 0; i < 5; i++) this._n(d, t + i * 0.03, 0.012, 0.6, 'highpass', 3600 + i * 300); this._t(d, t + 0.17, 0.05, 0.3, 'triangle', 2300, 1500); break;

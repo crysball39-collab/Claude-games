@@ -114,6 +114,7 @@ export class Body {
     this.grounded = 0;
     this.touch = 0;                    // how many contacts with other bodies it had in the last step
     this.pen = 0;                      // and the deepest of them
+    this.touchOther = null;            // and the last body it touched
     this.sx = 0; this.sy = 0; this.sz = 0; this.sqx = 0; this.sqy = 0; this.sqz = 0; this.sqw = 1;   // where it was when the step began
     // an optional pull toward a world orientation (the "stay upright" reflex)
     this.orient = null;
@@ -500,7 +501,7 @@ export class World {
         if (b.px - r < minx) minx = b.px - r; if (b.px + r > maxx) maxx = b.px + r;
         if (b.py - r < miny) miny = b.py - r; if (b.py + r > maxy) maxy = b.py + r;
         if (b.pz - r < minz) minz = b.pz - r; if (b.pz + r > maxz) maxz = b.pz + r;
-        b.hit = 0; b.hitOther = null; b.grounded = 0; b.touch = 0; b.pen = 0;
+        b.hit = 0; b.hitOther = null; b.grounded = 0; b.touch = 0; b.pen = 0; b.touchOther = null;
         b.sx = b.px; b.sy = b.py; b.sz = b.pz; b.sqw = b.qw; b.sqx = b.qx; b.sqy = b.qy; b.sqz = b.qz;
       }
       isl.minx = minx; isl.miny = miny; isl.minz = minz; isl.maxx = maxx; isl.maxy = maxy; isl.maxz = maxz;
@@ -969,7 +970,7 @@ export class World {
     }
 
     A.touch++; if (pen > A.pen) A.pen = pen;
-    if (B) { B.touch++; if (pen > B.pen) B.pen = pen; }
+    if (B) { B.touch++; if (pen > B.pen) B.pen = pen; A.touchOther = B; B.touchOther = A; }
     // keep it for the velocity pass
     if (_cCount * 10 + 10 > _cN.length) { const n = new Float64Array(_cN.length * 2); n.set(_cN); _cN = n; }
     const o = _cCount * 10;

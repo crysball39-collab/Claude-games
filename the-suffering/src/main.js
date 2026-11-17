@@ -8,6 +8,7 @@ import { Sound } from './core/audio.js';
 import { Weapons } from './combat/weapons.js';
 import { Traffic } from './world/traffic.js';
 import { Minds } from './mind/mind.js';
+import { Police } from './mind/police.js';
 import { Brain, populate } from './mind/brain.js';
 import { Voices } from './mind/voices.js';
 import { Speech } from './mind/speech.js';
@@ -19,7 +20,7 @@ import { $, store, IS_TOUCH, clamp } from './core/util.js';
 
 const DEFAULTS = {
   quality: IS_TOUCH ? 'medium' : 'high', shadows: !IS_TOUCH, gore: true, sens: 110, fov: 64, invert: false, volumePct: 70,
-  people: IS_TOUCH ? 10 : 13, cars: 6, aiKey: '', aiModel: 'claude-opus-5-5', aiLive: true, aiPace: 4, tts: false, cheatHp: false,
+  people: IS_TOUCH ? 10 : 13, cars: 6, aiKey: '', aiModel: 'claude-opus-5-5', aiLive: true, aiPace: 4, tts: false, cheatHp: false, cheatCops: false,
 };
 const settings = Object.assign({}, DEFAULTS, store.get('settings', {}));
 const save = () => store.set('settings', settings);
@@ -47,6 +48,7 @@ async function boot() {
   const voices = new Voices(settings);
   game.audio = sound;
   game.minds = new Minds(game, (human, g) => new Brain(human, g));
+  game.police = new Police(game);
   game.traffic = new Traffic(game, settings.cars);
   game.weapons = new Weapons(game);
   game.speech = new Speech(game, voices);

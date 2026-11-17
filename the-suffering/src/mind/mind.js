@@ -19,13 +19,16 @@
    what gets handed to Claude when a person is given free rein to speak.
    ========================================================================== */
 import { rayBody } from '../physics/world.js';
+import { STARS } from './police.js';
 import { P, PARTS } from '../human/rig.js';
 import { ST } from '../human/human.js';
 import { clamp, clamp01, rand, chance, wrapAngle } from '../core/util.js';
 
 const _e = [0, 0, 0], _g = [0, 0, 0], _t = [0, 0, 0];
-const WEAPON_WORD = { fists: 'fists', knife: 'knife', machete: 'machete', m1911: 'pistol', ak47: 'rifle', taser: 'taser', cuffs: 'pair of handcuffs' };
-const WEAPON_FEAR = { fists: 22, knife: 60, machete: 76, m1911: 88, ak47: 94, taser: 44, cuffs: 0 };
+const WEAPON_WORD = { fists: 'fists', knife: 'knife', machete: 'machete', m1911: 'pistol', ak47: 'rifle', m4a1: 'rifle', ar15: 'rifle', taser: 'taser', cuffs: 'pair of handcuffs', scanner: 'fingerprint scanner' };
+const WEAPON_FEAR = { fists: 22, knife: 60, machete: 76, m1911: 88, ak47: 94, m4a1: 95, ar15: 93, taser: 44, cuffs: 0, scanner: 0 };
+/** Fires bullets. */
+export const isGun = (id) => id === 'm1911' || id === 'ak47' || id === 'm4a1' || id === 'ar15';
 export const EMOTIONS = ['fear', 'anger', 'sadness', 'joy', 'surprise', 'boredom'];
 
 export class Mind {
@@ -49,6 +52,9 @@ export class Mind {
     this.awaiting = false;
     this._scan = rand(0, 0.3); this._body = rand(0, 1);
     this.doing = 'walking';
+    // the police: what they mean to ring about, and what they have already rung about
+    this.toCall = null; this.callAt = 0; this.called = new Set(); this.callRolled = new Set();
+    this.culprit = new Map();          // victim id -> whoever this person saw hurt them
   }
 
   /* -------------------------------- memory -------------------------------- */
@@ -193,15 +199,18 @@ export class Mind {
           this.stir('fear', 22 * falloff(d)); this.stir('sadness', 30 * falloff(d));
           h.h.disgust = Math.min(60, h.h.disgust + this.p.squeamish * 34 * falloff(d));
           if (!this.threat || this.threat.level < 30) this.ask(headless ? 'sawHeadless' : 'sawCorpse', 58);
+          this._wantCall({ kind: this.culprit.has(o.id) ? 'murder' : 'body', x: o.x, z: o.z, victim: o, suspect: this.culprit.get(o.id) || null });
         } else if ((state === 'hurt' || state === 'down' || state === 'out') && k.state === 'ok') {
           this.note('saw', 'hurt', `saw ${this.name(o)} ${state === 'hurt' ? 'bleeding' : state === 'out' ? 'lying unconscious' : 'on the ground'}`, 0.5, { o });
           this.stir('fear', 8); this.stir('sadness', 12);
           if (!this.threat || this.threat.level < 25) this.ask('sawHurt', 40);
+          // somebody out cold, or bleeding badly, on the ground: that is a call too
+          if (state === 'out' || (state === 'down' && o.h.bleedOut > 3)) this._wantCall({ kind: this.culprit.has(o.id) ? (o.h.bleedOut > 3 ? 'stabbing' : 'assault') : 'body', x: o.x, z: o.z, victim: o, suspect: this.culprit.get(o.id) || null });
         }
         k.state = state;
       }
       // a weapon out in the street is an offence for as long as it stays out (unless it is an officer's)
-      if (detail && armed && armed !== 'fists' && !o.officer && o.h.alive && o.state === ST.ANIM) { k.crime = Math.max(k.crime, armed === 'm1911' || armed === 'ak47' ? 1.3 : 1); k.crimeT = now; }
+      if (detail && armed && armed !== 'fists' && !o.officer && o.h.alive && o.state === ST.ANIM) { k.crime = Math.max(k.crime, isGun(armed) ? 1.3 : 1); k.crimeT = now; }
       if (detail && armed !== k.armed) {
         k.armed = armed;
         if (armed && armed !== 'fists' && o.h.alive) {
@@ -240,6 +249,8 @@ export class Mind {
       this.stir('fear', 6);
       this._threaten(pl, 92);
       const kp = this._know(pl); kp.crime = Math.max(kp.crime, this.aimed > 1.4 ? 2.6 : 1.5); kp.crimeT = now;
+      if (h.officer && this.aimed > 1.4) g.police?.raise(STARS.officer, 'you pointed a gun at an officer', { x: pl.x, z: pl.z });
+      else if (!h.officer && this.aimed > 1.4) this._wantCall({ kind: 'menace', x: pl.x, z: pl.z, suspect: pl });
     } else this.aimed = Math.max(0, this.aimed - 0.6);
 
     // blood on the ground underfoot
@@ -256,6 +267,30 @@ export class Mind {
         }
       }
     } else if (this.flags.blood && now - this.flags.blood > 40) this.flags.blood = 0;
+  }
+
+  /**
+   * Something the police should hear about. Most people assume somebody else
+   * will ring; some do. A caller can only say who did it if they saw it done.
+   */
+  _wantCall(info) {
+    const h = this.h, g = this.game, now = g.time;
+    if (h.officer || h.isPlayer || h.cuffed || !h.h.alive || !g.police) return;
+    if ((info.victim === h && !info.self) || (info.suspect && (info.suspect === h || info.suspect.officer))) return;
+    const key = info.victim ? 'v' + info.victim.id : 'p' + Math.round(info.x / 18) + ',' + Math.round(info.z / 18);
+    if (this.called.has(key)) return;
+    const roll = key + (info.suspect ? '+' : '');
+    if (this.callRolled.has(roll)) return;
+    this.callRolled.add(roll);
+    const p = this.p, grave = info.kind === 'murder' || info.kind === 'shooting' || info.kind === 'stabbing';
+    if (!chance(clamp(0.28 + p.empathy * 0.3 + (grave ? 0.28 : info.kind === 'body' ? 0.18 : 0) - (info.kind === 'shots' ? 0.12 : 0), 0.1, 0.92))) return;
+    // the worst thing they know about is what they ring about
+    const cur = this.toCall;
+    if (cur && ((STARS[cur.kind] || 0) > (STARS[info.kind] || 0) || (cur.suspect && !info.suspect))) return;
+    info.key = key;
+    info.desc = info.suspect ? (info.suspect.isPlayer ? g.police.describe(info.suspect) : info.suspect.look.desc) : '';
+    this.toCall = info;
+    this.callAt = Math.max(this.callAt, now + rand(1.2, 3.5));
   }
 
   _threaten(src, level, x, z) {
@@ -282,16 +317,27 @@ export class Mind {
         // the law using force is not a crime, and neither is hitting back at someone who started it
         const vk = this.known.get(V.id), lawful = A.officer || (vk && vk.crime >= 1 && !V.officer);
         if (!lawful) { kn.hostile = 1; kn.crime = soft ? Math.max(kn.crime, Math.min(2.4, kn.crime + 1)) : Math.min(6, kn.crime + 3); kn.crimeT = this.game.time; }
+        if (!lawful && !A.officer) {
+          this.culprit.set(V.id, A);
+          const kind = isGun(ev.weapon) ? 'shooting' : ev.weapon === 'knife' || ev.weapon === 'machete' ? 'stabbing' : 'assault';
+          // an officer who sees it is the police; anyone else has to ring them
+          if (h.officer) { if (A.isPlayer) this.game.police?.raise(STARS[kind] || 1, `an officer saw you ${kind === 'assault' ? 'attack someone' : kind === 'shooting' ? 'shoot someone' : 'cut someone'}`, { x: A.x, z: A.z }); }
+          else this._wantCall({ kind, x: ev.x, z: ev.z, victim: V, suspect: A });
+        }
         if (h.officer && A.officer) break;
         this._threaten(A, sev * (0.45 + 0.55 * k) * (A.officer ? 0.6 : 1));
-        if (!h.officer) this.ask(ev.weapon === 'fists' ? 'sawFist' : ev.weapon === 'm1911' || ev.weapon === 'ak47' ? 'sawShot' : 'sawAttack', ev.weapon === 'fists' ? 52 : 72);
+        if (!h.officer) this.ask(ev.weapon === 'fists' ? 'sawFist' : isGun(ev.weapon) ? 'sawShot' : 'sawAttack', ev.weapon === 'fists' ? 52 : 72);
         break;
       }
       case 'shot': {
         if (A === h) return;
         const kn = this._know(A); kn.armed = ev.weapon;
         this.note('saw', 'shot', `saw ${this.name(A)} fire a ${WEAPON_WORD[ev.weapon]}`, 0.8, { o: A });
-        if (!A.officer) { kn.hostile = Math.max(kn.hostile, 0.8); kn.crime = Math.max(kn.crime, 2); kn.crimeT = this.game.time; }
+        if (!A.officer) {
+          kn.hostile = Math.max(kn.hostile, 0.8); kn.crime = Math.max(kn.crime, 2); kn.crimeT = this.game.time;
+          if (h.officer) { if (A.isPlayer && ev.weapon !== 'taser') this.game.police?.raise(STARS.shots, 'an officer saw you fire a gun', { x: A.x, z: A.z }); }
+          else if (ev.weapon !== 'taser') this._wantCall({ kind: 'shots', x: ev.x, z: ev.z, suspect: A });
+        }
         if (h.officer && A.officer) break;
         this._threaten(A, 86 * (0.4 + 0.6 * k) * (A.officer ? 0.6 : 1));
         break;
@@ -311,7 +357,16 @@ export class Mind {
         if (V === h) return;
         this.note('saw', 'death', `saw ${this.name(V)} die`, 1, { v: V });
         // whoever did it has killed someone, whatever they used
-        if (A && typeof A === 'object' && A.h && A !== h && !A.officer && A !== V) { const ka = this._know(A); if (!(this.known.get(V.id) || {}).crime || V.officer) { ka.crime = Math.max(ka.crime, 3); ka.crimeT = this.game.time; } }
+        if (A && typeof A === 'object' && A.h && A !== h && !A.officer && A !== V) {
+          const ka = this._know(A);
+          if (!(this.known.get(V.id) || {}).crime || V.officer) {
+            ka.crime = Math.max(ka.crime, 3); ka.crimeT = this.game.time;
+            // it was seen to be them only if this person saw them do it
+            const did = this.culprit.get(V.id) === A;
+            if (h.officer) { if (A.isPlayer && did) this.game.police?.raise(STARS.murder, 'an officer saw you kill someone', { x: A.x, z: A.z }); }
+            else this._wantCall({ kind: did ? 'murder' : 'body', x: ev.x, z: ev.z, victim: V, suspect: did ? A : null });
+          }
+        } else if (!h.officer) this._wantCall({ kind: 'body', x: ev.x, z: ev.z, victim: V, suspect: null });
         this.stir('fear', 26 * k); this.stir('sadness', 38 * k); this.stir('surprise', 20 * k);
         h.h.disgust = Math.min(70, h.h.disgust + p.squeamish * 30 * k);
         this.ask('sawDeath', 80, null, 0.5);
@@ -351,9 +406,10 @@ export class Mind {
     }
   }
 
-  _know(o) {
+  /** What this person knows about another, made if need be. `seen` is false when it is only being heard about, over the radio. */
+  _know(o, seen = true) {
     let k = this.known.get(o.id);
-    if (!k) { k = { first: this.game.time, last: this.game.time, state: 'ok', armed: null, hostile: 0, hurtMe: false, crime: 0, crimeT: 0, o }; this.known.set(o.id, k); }
+    if (!k) { const now = this.game.time; k = { first: now, last: seen ? now : -99, state: 'ok', armed: null, hostile: 0, hurtMe: false, crime: 0, crimeT: 0, o }; this.known.set(o.id, k); }
     return k;
   }
 
@@ -373,7 +429,7 @@ export class Mind {
       case 'gunshot': {
         text = `heard a gunshot ${w.text}`; sal = 0.9;
         this.stir('fear', clamp((level - 62) * 1.0, 6, 55)); this.stir('surprise', 55);
-        if (!knowSrc) this._threaten(null, clamp((level - 55) * 1.15, 25, 80), s.x, s.z);
+        if (!knowSrc) { this._threaten(null, clamp((level - 55) * 1.15, 25, 80), s.x, s.z); this._wantCall({ kind: 'shots', x: s.x + rand(-6, 6), z: s.z + rand(-6, 6), suspect: null }); }
         this.ask('gunshot', 64);
         if (level > 96) this.startle = Math.max(this.startle, 1);
         if (level > 126) {
@@ -444,6 +500,12 @@ export class Mind {
       if (!attacker.officer) { k.crime = type === 'blunt' && !vestTook ? Math.max(k.crime, Math.min(2.4, k.crime + 1.2)) : Math.min(6, k.crime + 3); k.crimeT = now; }
       if (seen) this._threaten(attacker, type === 'blunt' && !vestTook ? 70 : 96);
       else { this._threaten(null, 72, h.x - Math.sin(h.yaw) * 2, h.z - Math.cos(h.yaw) * 2); this.lookAt = { x: attacker.x, y: attacker.y + 1.5, z: attacker.z, until: now + 2 }; }
+      if (!attacker.officer) {
+        const kind = type === 'bullet' ? 'shooting' : type === 'stab' || type === 'cut' ? 'stabbing' : 'assault';
+        // an officer attacked is the police finding out for themselves; anyone else may ring them, later, and say who it was if they saw
+        if (h.officer) { if (attacker.isPlayer) this.game.police?.raise(type === 'blunt' && !weaponHurt(weapon) ? STARS.assault : STARS.officer, 'you attacked an officer', { x: attacker.x, z: attacker.z }); }
+        else this._wantCall({ kind, x: h.x, z: h.z, victim: h, suspect: seen ? attacker : null, self: true });
+      }
     }
     const cat = attacker === 'a car' ? 'hitCar' : vestTook === 'bullet' ? (armour === 'helmet' ? 'hitHelmet' : 'hitVest') : isHuman && !seen && chance(0.5) ? 'hitUnseen' : type === 'bullet' ? 'hitShot' : type === 'stab' ? 'hitStab' : type === 'cut' ? 'hitCut' : 'hitBlunt';
     this.ask(cat, 95, { part: where });
@@ -479,7 +541,7 @@ export class Mind {
     };
     if (h.pain > 70) list.push('agony'); else if (h.pain > 40) list.push('a lot of pain'); else if (h.pain > 12) list.push('some pain');
     on('bleeding', h.bleedOut > 4, 'blood is pouring out of me', 'bleeding', 60);
-    on('faint', h.bloodPct < 72, 'light-headed and weak', null, 0);
+    on('faint', h.bloodPct < 72, 'light-headed and weak', 'faint', 48);
     on('dying', h.bloodPct < 60 || h.shock > 78, 'I am fading', 'dying', 82);
     on('cold', h.temp < 35.6, 'freezing cold', 'cold', 44);
     on('air', h.air < 80, 'I cannot get enough air', 'cantBreathe', 76);
@@ -552,6 +614,9 @@ export class Mind {
     return best;
   }
 }
+
+/** Was it something worse than a bare fist, a boot or a taser? */
+function weaponHurt(w) { return !!w && w !== 'fists' && w !== 'taser'; }
 
 /** How much something matters with distance: all of it up close, a third at forty metres. */
 function falloff(d) { return clamp(1.1 - d / 45, 0.3, 1); }

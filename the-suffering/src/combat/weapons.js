@@ -23,6 +23,7 @@ import { DECAL, ATLAS_COLS, ATLAS_ROWS } from '../render/textures.js';
 import { clamp, clamp01, lerp, smooth, rand, chance, wrapAngle } from '../core/util.js';
 
 const STEEL = 0xc3c8cc, DARK = 0x26282c, WOOD = 0x7a4a26, GRIP = 0x3a2a1c, VEST = 0x121316, MAG = 0x15161a, YELLOW = 0xd8b614;
+const BLACK = 0x1c1d20, BLACK2 = 0x2a2c30, FDE = 0x8a7553;   // anodised black, the furniture, and flat dark earth
 const tilt = (a) => [Math.sin(a / 2), 0, 0, Math.cos(a / 2)];
 
 /** Box lists: x, y, z, width, height, length, colour, [rotation], [is blade], [is the magazine]. Barrel or blade toward +Z. */
@@ -48,7 +49,27 @@ export const WEAPONS = {
     boxes: [[0, 0, 0, 0.046, 0.07, 0.3, DARK], [0, 0.012, 0.38, 0.02, 0.02, 0.44, 0x1b1c1f], [0, 0.042, 0.27, 0.026, 0.026, 0.2, 0x303236], [0, 0.004, 0.25, 0.052, 0.05, 0.2, WOOD],
       [0, -0.02, -0.28, 0.04, 0.085, 0.27, WOOD, tilt(0.1)], [0, -0.085, -0.06, 0.035, 0.1, 0.042, WOOD, tilt(0.3)], [0, -0.095, 0.085, 0.03, 0.13, 0.06, 0x202124, tilt(-0.32), 0, 1],
       [0, -0.19, 0.135, 0.03, 0.08, 0.056, 0x202124, tilt(-0.62), 0, 1], [0, 0.045, 0.56, 0.01, 0.04, 0.012, DARK], [0, 0.05, 0.05, 0.02, 0.02, 0.03, DARK]],
-    slide: 9, magSize: [0.014, 0.09, 0.028],
+    slide: 9, magSize: [0.014, 0.09, 0.028], rifle: true,
+  },
+  /* 5.56: lighter and faster than the AK's round, flatter, with less kick; it tumbles and breaks up in a body */
+  m4a1: {
+    id: 'm4a1', name: 'M4A1', label: 'FIRE', hold: 'rifle', gun: true, mag: 30, auto: true, gap: 0.075, power: 1.3, hp: 40, impulse: 22, spread: 0.011, kick: 0.013, pierce: true,
+    reload: 2.1, loud: 160, mass: 3.0, half: [0.03, 0.1, 0.42], centre: 0.1, grip: [0, -0.07, -0.07], muzzle: [0, 0.01, 0.56], sound: 'carbine', rifle: true,
+    boxes: [[0, 0.01, 0, 0.044, 0.05, 0.26, BLACK], [0, -0.034, -0.02, 0.04, 0.042, 0.2, BLACK2], [0, 0.042, 0.04, 0.022, 0.012, 0.34, BLACK], [0, 0.07, -0.03, 0.03, 0.04, 0.07, BLACK],
+      [0, 0.008, 0.25, 0.052, 0.052, 0.2, BLACK2], [0, 0.01, 0.42, 0.018, 0.018, 0.2, BLACK], [0, 0.01, 0.535, 0.024, 0.024, 0.04, BLACK], [0, 0.046, 0.33, 0.012, 0.05, 0.016, BLACK],
+      [0, 0.004, -0.2, 0.027, 0.027, 0.17, BLACK], [0, 0.034, -0.12, 0.03, 0.012, 0.03, BLACK], [0, -0.012, -0.3, 0.038, 0.078, 0.12, BLACK2, tilt(0.04)],
+      [0, -0.076, -0.072, 0.03, 0.09, 0.04, BLACK, tilt(0.35)], [0, -0.057, -0.005, 0.008, 0.012, 0.07, BLACK], [0, -0.105, 0.058, 0.026, 0.13, 0.062, MAG, tilt(-0.16), 0, 1]],
+    slide: 9, magSize: [0.013, 0.085, 0.031],
+  },
+  /* the civilian rifle: the same round, one shot to a pull of the trigger, a longer barrel and a fixed stock */
+  ar15: {
+    id: 'ar15', name: 'AR-15', label: 'FIRE', hold: 'rifle', gun: true, mag: 30, auto: false, gap: 0.09, power: 1.35, hp: 41, impulse: 22, spread: 0.009, kick: 0.015, pierce: true,
+    reload: 2.2, loud: 161, mass: 3.4, half: [0.03, 0.1, 0.5], centre: 0.12, grip: [0, -0.07, -0.07], muzzle: [0, 0.01, 0.64], sound: 'carbine', rifle: true,
+    boxes: [[0, 0.01, 0, 0.044, 0.05, 0.26, BLACK], [0, -0.034, -0.02, 0.04, 0.042, 0.2, BLACK2], [0, 0.06, -0.02, 0.02, 0.034, 0.16, BLACK], [0, 0.058, -0.095, 0.03, 0.04, 0.02, BLACK],
+      [0, 0.008, 0.27, 0.056, 0.056, 0.25, FDE], [0, 0.01, 0.49, 0.017, 0.017, 0.24, BLACK], [0, 0.01, 0.62, 0.023, 0.023, 0.04, BLACK], [0, 0.05, 0.43, 0.012, 0.064, 0.016, BLACK],
+      [0, -0.02, -0.29, 0.042, 0.09, 0.25, FDE, tilt(0.06)], [0, 0.034, -0.12, 0.03, 0.012, 0.03, BLACK],
+      [0, -0.076, -0.072, 0.03, 0.09, 0.04, FDE, tilt(0.35)], [0, -0.057, -0.005, 0.008, 0.012, 0.07, BLACK], [0, -0.105, 0.058, 0.026, 0.13, 0.062, MAG, tilt(-0.16), 0, 1]],
+    slide: 9, magSize: [0.013, 0.085, 0.031],
   },
   /* two barbed probes on seven metres of wire: no wound to speak of, and five seconds in which no muscle answers */
   taser: {
@@ -62,6 +83,11 @@ export const WEAPONS = {
   cuffs: {
     id: 'cuffs', name: 'Handcuffs', tag: 'Cuffs', label: 'CUFF', hold: 'none', tool: true, cuffs: true, mass: 0.35, half: [0.085, 0.014, 0.04], centre: 0,
     boxes: [[0.045, 0, 0, 0.07, 0.016, 0.075, STEEL], [-0.045, 0, 0, 0.07, 0.016, 0.075, STEEL], [0, 0, 0, 0.03, 0.008, 0.014, 0x8d9197], [0.045, 0, 0, 0.04, 0.02, 0.045, 0x26282c], [-0.045, 0, 0, 0.04, 0.02, 0.045, 0x26282c]],
+  },
+  /* an officer's fingerprint scanner: a glass plate, a screen, a body; it reads prints off skin */
+  scanner: {
+    id: 'scanner', name: 'Fingerprint scanner', tag: 'Scanner', label: 'SCAN', hold: 'none', tool: true, scanner: true, mass: 0.3, half: [0.036, 0.013, 0.07], centre: 0,
+    boxes: [[0, 0, 0, 0.072, 0.024, 0.136, 0x1e2024], [0, 0.0125, 0.025, 0.052, 0.003, 0.058, 0x2f6f9c], [0, 0.0125, -0.04, 0.034, 0.003, 0.024, 0x9aa3ab], [0, -0.004, 0.072, 0.05, 0.012, 0.012, 0x15171a]],
   },
   helmet: {
     id: 'helmet', name: 'Light helmet', wear: 'helmet', mass: 1.2, half: [0.125, 0.085, 0.14], centre: 0,
@@ -95,8 +121,11 @@ export const MOUNT = {
   knife: { part: P.PELVIS, pos: [0.186, 0.03, 0.02], q: [H, 0, 0, H], reach: 'cross', dur: 0.52, word: 'sheath' },        // blade down on the left hip
   machete: { part: P.CHEST, pos: [-0.11, 0.12, -0.135], q: slant(0.5), reach: 'back', dur: 0.66, word: 'back' },          // across the back, handle at the right shoulder
   ak47: { part: P.CHEST, pos: [0.02, -0.02, -0.15], q: slantUp(0.62), reach: 'back', dur: 0.7, word: 'back' },            // slung, muzzle over the left shoulder
+  m4a1: { part: P.CHEST, pos: [0.02, -0.02, -0.15], q: slantUp(0.62), reach: 'back', dur: 0.7, word: 'back' },
+  ar15: { part: P.CHEST, pos: [0.02, -0.03, -0.15], q: slantUp(0.6), reach: 'back', dur: 0.72, word: 'back' },
   taser: { part: P.PELVIS, pos: [0.125, 0.035, 0.112], q: [H, 0, 0, H], reach: 'cross', dur: 0.5, word: 'holster' },      // cross-draw, front of the left hip
-  cuffs: { part: P.PELVIS, pos: [0.05, 0.03, -0.118], q: [H, 0, 0, H], reach: 'hip', dur: 0.4, word: 'belt' },            // on the belt at the back
+  cuffs: { part: P.PELVIS, pos: [0.05, 0.03, -0.118], q: [H, 0, 0, H], reach: 'hip', dur: 0.4, word: 'belt' },
+  scanner: { part: P.PELVIS, pos: [-0.118, 0.03, 0.112], q: [H, 0, 0, H], reach: 'hip', dur: 0.4, word: 'belt' },              // front of the right hip            // on the belt at the back
 };
 
 const _a = [0, 0, 0], _b = [0, 0, 0], _c = [0, 0, 0], _hit = [0, 0, 0, 0, 0, 0, 0], _n = [0, 0, 0];
@@ -260,7 +289,7 @@ export class Weapons {
     if (this.inventory.length >= 4) { g.ui?.toast('You are carrying all you can. Drop something first.'); return false; }
     // off the ground, or off somebody who is in no state to object
     const from = item.holder;
-    if (from) { const k = from.kit ? from.kit.indexOf(item) : -1; if (k >= 0) from.kit.splice(k, 1); if (from.weapon === item) from.weapon = null; }
+    if (from) { const k = from.kit ? from.kit.indexOf(item) : -1; if (k >= 0) from.kit.splice(k, 1); if (from.weapon === item) from.weapon = null; g.police?.touched(from, p); }
     this._offGround(item);
     this.inventory.push(item);
     this.current = this.inventory.length - 1;
@@ -342,6 +371,8 @@ export class Weapons {
     g.world.addJoint(joint);
     t.cuffed = { item, by, joint, t: g.time };
     t.pose.cuffed = 1;
+    g.police?.touched(t, by);
+    if (t.isPlayer && by.officer) g.police?.busted(by);
     g.audio?.at('cuff', t.x, t.y + 1, t.z, 0.8);
     t.mind?.note('felt', 'cuffed', `was handcuffed by ${t.mind.name(by)}`, 0.9, { by });
     t.mind?.stir('fear', 20); t.mind?.stir('anger', 14);
@@ -624,6 +655,8 @@ export class Weapons {
     const fx = Math.sin(attacker.yaw), fz = Math.cos(attacker.yaw);
     let ix = dx * 0.55 + fx * 0.45, iy = dy * 0.5, iz = dz * 0.55 + fz * 0.45;
     const l = Math.hypot(ix, iy, iz) || 1; ix /= l; iy /= l; iz /= l;
+    // skin on skin leaves prints; a boot or a blade does not
+    if (clip.limb === 'handL' || clip.limb === 'handR') g.police?.touched(t, attacker);
     const rep = t.hit({
       part: hit.part, type: clip.kind, power, point: [px, py, pz], dir: [ix, iy, iz], normal: hit.ln, impulse: J,
       lift: clip.up ? J * 0.9 : 0, chop: def.chops ? clip.chop || 1 : 0, attacker, weapon: def.id, through: 0.1,
@@ -952,7 +985,7 @@ export class Weapons {
 
     if (what === 4) {
       const t = ph.human, limb = ph.part >= P.UARM_L;
-      const rep = t.hit({ part: ph.part, type: 'bullet', power, point: [hx, hy, hz], dir: [dx, dy, dz], normal: ph.ln, impulse: d.impulse * power / d.power, through: ph.exit, hp: d.hp * power / d.power, attacker: shooter, weapon: d.id });
+      const rep = t.hit({ part: ph.part, type: 'bullet', power, point: [hx, hy, hz], dir: [dx, dy, dz], normal: ph.ln, impulse: d.impulse * power / d.power, through: ph.exit, hp: d.hp * power / d.power, attacker: shooter, weapon: d.id, rifle: !!d.rifle });
       g.audio?.at('flesh', hx, hy, hz, 0.8);
       if (depth === 0 && far < 1.5 && shooter.weapon && rep && !rep.stopped) g.gore.smear(shooter.weapon, far < 0.8 ? 2 : 1);
       g.minds?.witness({ kind: 'attack', actor: shooter, victim: t, weapon: d.id, part: ph.part, x: hx, y: hy, z: hz, rep });

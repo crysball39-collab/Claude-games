@@ -99,7 +99,9 @@ export class Human {
     this.blend = 0; this.blendDur = 0;
     this.balance = 1; this.stumbleT = 0; this.ragT = 0; this.stillT = 0; this.getT = 0;
     this.speed = 0;
-    this.pose = { cower: 0, handsUp: 0, hurt: 0, talk: 0, stagger: 0, writhe: 0, crawl: 0, brace: 0, phone: 0, kneel: 0, cuffed: 0, cuffing: 0 };
+    this.pose = { cower: 0, handsUp: 0, hurt: 0, talk: 0, stagger: 0, writhe: 0, crawl: 0, brace: 0, phone: 0, kneel: 0, cuffed: 0, cuffing: 0, call: 0, scan: 0 };
+    this.prints = null;                    // Map: who has touched this person with bare hands, and when
+    this.phoneIdx = -1;
     this.hold = 'none';
     this.aimPitch = 0; this.lookYaw = 0; this.lookPitch = 0; this.lowAim = 0;
     this.weapon = null;                    // what is in the right hand, if anything
@@ -143,6 +145,9 @@ export class Human {
     this.inst = [];
     this.sizes = [];
     this.skinParts = [];
+    this.cloth = [];                       // each part's cloth colour, or -1 where it is skin
+    this.soak = new Float32Array(PART_COUNT);   // how much blood each part's clothing has taken up, 0..1
+    this._soakQ = new Int8Array(PART_COUNT);
     for (let i = 0; i < PART_COUNT; i++) {
       const p = PARTS[i];
       const wide = i === P.HEAD || i === P.HAND_L || i === P.HAND_R || i === P.FOOT_L || i === P.FOOT_R || i === P.NECK ? 1 : L.build;
@@ -157,6 +162,7 @@ export class Human {
       if ((i === P.SHIN_L || i === P.SHIN_R) && L.shorts) { hex = L.skin; skin = true; }
       if (skin) this.skinParts.push(i);
       g.boxes.colorHex(idx, hex);
+      this.cloth[i] = skin ? -1 : hex;
     }
     this.clothed = PARTS.map((_, i) => !this.skinParts.includes(i));
     this.hair = hairBoxes(L.style).map((h) => {
@@ -621,6 +627,20 @@ export class Human {
     if (this.state === ST.ANIM && !h.canStand) this.toRagdoll();
     this.pose.hurt = h.conscious ? clamp01((h.pain - 28) / 50) * (this.state === ST.ANIM ? 1 : 0) : 0;
     this._tintSkin();
+    this._tintCloth();
+  }
+
+  /** Clothing that has soaked up a lot of blood goes dark with it, all over. */
+  _tintCloth() {
+    for (let i = 0; i < PART_COUNT; i++) {
+      const hex = this.cloth[i];
+      if (hex < 0 || this.gone[i]) continue;
+      const q = Math.round(this.soak[i] * 10);
+      if (q === this._soakQ[i]) continue;
+      this._soakQ[i] = q;
+      const c = rgb(hex), k = Math.max(0, q / 10 - 0.25) * 0.55;
+      this.game.boxes.color(this.inst[i], lerp(c[0], 0.27, k), lerp(c[1], 0.03, k), lerp(c[2], 0.025, k));
+    }
   }
 
   _died() {
@@ -1324,7 +1344,13 @@ export class Human {
       if (this.mind && power > 0.4) this.mind.feel(i, 'blunt', rep, other && other.kind === 'car' ? 'a car' : other ? 'something heavy' : 'the ground');
       if (rep.burst) this.burst(i, [b.vx, b.vy, b.vz]);
     }
-    if (this.state === ST.ANIM || this.state === ST.GETUP) { /* root is ours */ }
+    // bare hands on somebody else leave prints on them
+    if (this.isPlayer && g.police) for (let k = 0; k < 2; k++) {
+      const hand = k ? P.HAND_R : P.HAND_L;
+      if (this.gone[hand]) continue;
+      const o = this.bodies[hand].touchOther, who = o && o.owner;
+      if (who && who !== this && who.h && who.prints !== undefined) g.police.touched(who, this);
+    }
     this._faceT += dt;
     if (this._faceT > 0.12) { this._expression(this._faceT); this._faceT = 0; }
     this._hands(dt);
@@ -1343,6 +1369,13 @@ export class Human {
     }
     this._drawHand(P.HAND_L, 0, -1);
     this._drawHand(P.HAND_R, 1, 1);
+    // a phone in the right hand, to look at or held to the ear
+    const ph = Math.max(this.pose.phone, this.pose.call);
+    if (ph > 0.5 && !this.gone[P.HAND_R] && this.attached[P.HAND_R] && !this.weapon) {
+      if (this.phoneIdx < 0) { this.phoneIdx = bx.alloc(); bx.colorHex(this.phoneIdx, 0x15171b); }
+      const b = this.bodies[P.HAND_R], s = this.scale;
+      bx.setOn(this.phoneIdx, b.px, b.py, b.pz, b.qx, b.qy, b.qz, b.qw, 0.03 * s, -0.035 * s, 0.012 * s, 0.012 * s, 0.13 * s, 0.065 * s);
+    } else if (this.phoneIdx >= 0) bx.hide(this.phoneIdx);
     if (this.vest) for (const v of this.vest.boxes) {
       if (this.gone[v.part]) { bx.hide(v.idx); continue; }
       const b = this.bodies[v.part];
@@ -1467,7 +1500,7 @@ export class Human {
     if (this.vest && this.attached[part] && (part === P.CHEST || part === P.ABDOMEN)) {
       // a light vest: stops a pistol round and a slash, slows a rifle round and a point
       const was = type;
-      if (type === 'bullet') { if (info.weapon === 'ak47') { power *= 0.7; if (hp) hp *= 0.7; } else { type = 'blunt'; power *= 0.6; stopped = true; } }
+      if (type === 'bullet') { if (info.rifle) { power *= 0.7; if (hp) hp *= 0.7; } else { type = 'blunt'; power *= 0.6; stopped = true; } }
       else if (type === 'cut') { type = 'blunt'; power *= 0.3; stopped = true; }
       else if (type === 'stab') power *= 0.45;
       else if (type === 'blunt') power *= 0.8;
@@ -1480,7 +1513,7 @@ export class Human {
       const n0 = info.normal || faceOf([_a[0] / b.hx, _a[1] / b.hy, _a[2] / b.hz]);
       if (this._helmeted(_a, n0)) {
         // a light helmet: turns a blow and a slash, turns some pistol rounds, takes a little off a rifle round
-        if (type === 'bullet') { if (info.weapon === 'ak47') { power *= 0.9; } else if (chance(0.6)) { type = 'blunt'; power *= 0.8; stopped = true; } else { power *= 0.8; if (hp) hp *= 0.8; } }
+        if (type === 'bullet') { if (info.rifle) { power *= 0.9; } else if (chance(0.6)) { type = 'blunt'; power *= 0.8; stopped = true; } else { power *= 0.8; if (hp) hp *= 0.8; } }
         else if (type === 'cut') { type = 'blunt'; power *= 0.35; stopped = true; }
         else if (type === 'stab') power *= 0.5;
         else power *= 0.4;
@@ -1771,6 +1804,7 @@ export class Human {
     for (const i of this.inst) g.boxes.release(i);
     for (const h of this.hair) g.boxes.release(h.idx);
     for (const hand of this.fingers) for (const i of hand) g.boxes.release(i);
+    if (this.phoneIdx >= 0) { g.boxes.release(this.phoneIdx); this.phoneIdx = -1; }
     g.faceQuads.release(this.faceQuad); g.faces.release(this.faceCell);
     g.gore.clearHuman(this);
   }

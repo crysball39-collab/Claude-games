@@ -17,8 +17,13 @@ import { onRoad } from '../world/city.js';
 import { clamp, rand, chance, wrapAngle, pick } from '../core/util.js';
 
 const _a = [0, 0, 0], _r = [0, 0];
-const WORD = { m1911: 'gun', ak47: 'rifle', knife: 'knife', machete: 'machete', taser: 'taser' };
+const WORD = { m1911: 'gun', ak47: 'rifle', m4a1: 'rifle', ar15: 'rifle', knife: 'knife', machete: 'machete', taser: 'taser' };
+/** A real gun: anything that fires bullets. */
+const isGun = (id) => id === 'm1911' || id === 'ak47' || id === 'm4a1' || id === 'ar15';
 const NOKIT = [];
+/** What a caller says once they have got through, by what they are calling about. */
+const CALL_LINE = { body: 'callBody', assault: 'callAssault', stabbing: 'callStabbing', shooting: 'callShooting', shots: 'callShots', murder: 'callMurder', menace: 'callMenace' };
+const WHAT_WORD = { body: 'a body', assault: 'an assault', stabbing: 'a stabbing', shooting: 'a shooting', shots: 'shots fired', murder: 'a killing', menace: 'a man with a weapon' };
 
 export class Brain {
   constructor(human, game) {
@@ -28,6 +33,8 @@ export class Brain {
     this.post = null; this.suspect = null; this.sk = null; this.aimT = 0; this.calmT = 9; this.skill = rand(0.55, 0.85);
     this.dest = null; this.saidDown = false; this.saidReload = false; this.firedAt = false; this.strafe = 1;
     this.warned = 0; this.saidTaser = 0; this.detainee = null; this.leftT = 0;
+    this.callout = null; this.scanT = 0; this.sceneT = 0; this.saidScan = false; this.dest2 = null; this.lookT = 0; this.look0 = 0;
+    this.callT = 0; this.callSaid = 0;
     this.path = []; this.at = game.city.nearestNode(human.x, human.z); this.prev = this.at;
     this.side = rand(-0.75, 0.75);
     this.pause = rand(0, 2); this.phone = 0;
@@ -41,6 +48,8 @@ export class Brain {
   _enter(mode) {
     const m = this.m, was = this.mode;
     this.mode = mode; this.modeT = 0; this.path.length = 0; this.replan = 0; this.sayT = rand(0.6, 2);
+    if (mode === 'call') { this.callT = 0; this.callSaid = 0; }
+    if (mode === 'search') { this.dest2 = null; this.lookT = 0; }
     if (mode === 'flee') { this.ducked = false; }
     if (mode === 'wander' && (was === 'flee' || was === 'cower' || was === 'surrender')) { m.ask('relief', 46, null, rand(0.5, 2)); this.pause = rand(1, 3); }
   }
@@ -48,7 +57,7 @@ export class Brain {
   update(dt) {
     const h = this.h, m = this.m, hh = h.h, it = h.intent, g = this.g;
     it.mx = 0; it.mz = 0; it.run = false; it.crouch = false; it.face = null;
-    h.pose.cower = 0; h.pose.handsUp = 0; h.pose.phone = 0;
+    h.pose.cower = 0; h.pose.handsUp = 0; h.pose.phone = 0; h.pose.call = 0; h.pose.scan = 0;
     this.modeT += dt; this.sayT -= dt; this.attackT -= dt;
     if (h.state !== ST.ANIM) { h.aimYaw = null; }
     if (!hh.alive) { m.doing = 'dead'; h.crawlDir = null; return; }
@@ -83,6 +92,9 @@ export class Brain {
       case 'respond': this._respond(dt); break;
       case 'engage': this._engage(dt); break;
       case 'escort': this._escort(dt); break;
+      case 'callout': this._callout(dt); break;
+      case 'search': this._search(dt); break;
+      case 'call': this._call(dt); break;
       case 'flee': this._flee(dt); break;
       case 'cower': this._cower(dt); break;
       case 'surrender': this._surrender(dt); break;
@@ -103,13 +115,13 @@ export class Brain {
     if (t && danger > 18) {
       const d = Math.hypot(t.x - h.x, t.z - h.z);
       const src = t.src, k = src ? m.known.get(src.id) : null;
-      const gun = k && (k.armed === 'm1911' || k.armed === 'ak47');
+      const gun = k && isGun(k.armed);
       const blade = k && (k.armed === 'knife' || k.armed === 'machete');
       // anger and nerve on one side of the scales, fear on the other
       const urge = e.anger + p.bravery * 30 - e.fear * (blade ? 1.3 : 0.8);
       const willFight = src && src.h.alive && src.h.conscious && !gun && (!blade || p.bravery > 0.85) && p.bravery > 0.3 &&
         urge > (this.mode === 'fight' ? 8 : 20) && (k && (k.hurtMe || p.temper > 0.72)) && h.h.mobility > 0.55 && d < 16;
-      const calm = this.mode === 'wander' || this.mode === 'gawk' || this.mode === 'mourn';
+      const calm = this.mode === 'wander' || this.mode === 'gawk' || this.mode === 'mourn' || this.mode === 'call';
       if (willFight) mode = 'fight';
       // a gun pointed straight at you: most people stop where they are
       else if (m.aimed > 0 && d < 16 && (this.mode === 'surrender' || p.bravery < 0.72 || e.fear > 80)) mode = 'surrender';
@@ -121,7 +133,7 @@ export class Brain {
         else if (this.mode !== 'cower' && e.fear > 84 && d < 6 && p.bravery < 0.33 && chance(0.2)) mode = 'cower';
         else mode = 'flee';
       } else mode = d < 42 ? 'gawk' : 'wander';
-    } else if (this.mode !== 'wander' && this.mode !== 'mourn') mode = 'wander';
+    } else if (this.mode !== 'wander' && this.mode !== 'mourn' && this.mode !== 'call') mode = 'wander';
     else if (this.mode === 'wander' && p.empathy > 0.45 && this.modeT > 3 && chance(0.12)) {
       // someone needs help, and nobody is waving a weapon about
       for (const s of m.sees) {
@@ -129,7 +141,36 @@ export class Brain {
         if (s.o.state === ST.RAGDOLL && (!s.o.h.alive || !s.o.h.canStand)) { this.subject = s.o; mode = 'mourn'; break; }
       }
     }
+    // something they saw, or came across, is a matter for the police: once they are out of harm's way, they ring
+    if (m.toCall && this.g.time >= m.callAt && h.state === ST.ANIM && !h.cuffed) {
+      const safe = !t || danger < 34 || Math.hypot(t.x - h.x, t.z - h.z) > 20;
+      if (safe && (mode === 'wander' || mode === 'gawk' || mode === 'mourn' || mode === 'call')) mode = 'call';
+    } else if (mode === 'call' && !m.toCall) mode = 'wander';
     if (mode !== this.mode) this._enter(mode);
+  }
+
+  /** On the phone to the police: what has happened, what the one who did it looks like, where. */
+  _call(dt) {
+    const g = this.g, h = this.h, m = this.m, c = m.toCall;
+    if (!c) { this._enter('wander'); return; }
+    this.callT += dt;
+    const t = this.callT;
+    m.doing = t < 2 ? 'dialling 911' : 'on the phone to the police';
+    // facing where it happened, a few steps back from it
+    const dx = c.x - h.x, dz = c.z - h.z, d = Math.hypot(dx, dz) || 1;
+    h.intent.face = Math.atan2(dx, dz);
+    if (d < 3.5) this._go(h.x - dx / d * 2, h.z - dz / d * 2, false, 0.5);
+    if (t < 1.9) h.pose.phone = 1; else h.pose.call = 1;
+    if (t > 2.3 && this.callSaid < 1) { this.callSaid = 1; m.ask('call911', 84); }
+    if (t > 5.2 && this.callSaid < 2) { this.callSaid = 2; m.ask(CALL_LINE[c.kind] || 'callBody', 84); }
+    if (t > 8.8 && this.callSaid < 3 && c.desc) { this.callSaid = 3; m.ask('callDesc', 84, { desc: c.desc }); }
+    if (t > (c.desc ? 12.2 : 9.4)) {
+      g.police?.report(h, c);
+      m.called.add(c.key);
+      m.note('did', 'called', 'called the police and told them ' + (c.desc ? 'what happened and who did it' : 'what I found'), 0.6);
+      m.toCall = null;
+      this._enter(m.threat ? 'gawk' : 'wander');
+    }
   }
 
   /* ================================= officers ============================== */
@@ -142,6 +183,10 @@ export class Brain {
       if (!(k.crime > 0)) continue;
       const o = k.o;
       if (!o || o.removed || o.officer || !o.h.alive) { k.crime = 0; continue; }
+      // the stranger, wanted but out of sight: nowhere to go but where they were last seen, and that is a search
+      if (o.isPlayer && k.wanted && now - k.last > 1 && !(this.g.police && this.g.police.lastSeen && now - this.g.police.lastSeen.t < 12)) continue;
+      // nobody can be gone after who is not in sight and has never been seen anywhere
+      if (k.x == null && now - k.last > 1) continue;
       // time without a fresh offence, and the count comes down
       if (now - k.crimeT > 9) k.crime = Math.max(0, k.crime - 0.07);
       if (k.crime < 0.9) continue;
@@ -154,7 +199,9 @@ export class Brain {
     this.suspect = best; this.sk = bk;
     let t = m.threat;
     if (t && t.src && !best) { const k = m.known.get(t.src.id); if (t.src.officer || ((!k || k.crime < 0.9) && now - (k ? k.crimeT : 0) > 6)) { m.threat = null; t = null; } }
-    const mode = best ? 'engage' : t && t.level > 30 ? 'respond' : 'post';
+    const Pz = this.g.police, desk = this.post && this.post.kind === 'desk';
+    const mode = best ? 'engage' : this.mode === 'escort' && this.detainee ? 'escort' : this.callout && this.callout.status !== 'closed' ? 'callout'
+      : Pz && Pz.wanted && !desk ? 'search' : t && t.level > 30 ? 'respond' : 'post';
     if (mode !== this.mode) {
       const was = this.mode;
       this._enter(mode);
@@ -169,7 +216,7 @@ export class Brain {
     for (const o of this.g.humans) {
       if (o === h || !o.officer || !o.mind || !o.h.alive || !o.h.conscious) continue;
       if (Math.hypot(o.x - h.x, o.z - h.z) > 150) continue;
-      const k = o.mind._know(suspect);
+      const k = o.mind._know(suspect, false);
       if (k.crime >= crime) continue;
       k.crime = crime; k.crimeT = now; k.x = suspect.x; k.z = suspect.z;
       o.mind.note('heard', 'radio', `heard over the radio that ${o.mind.name(suspect)} ${crime >= 2.5 ? 'has attacked someone and is dangerous' : 'is causing trouble'}`, 0.7);
@@ -286,17 +333,25 @@ export class Brain {
     const tx = seen || k.x == null ? S.x : k.x, tz = seen || k.z == null ? S.z : k.z;
     const dx = tx - h.x, dz = tz - h.z, d = Math.hypot(dx, dz) || 1;
     const kit = h.kit || NOKIT;
-    const pistol = kit.find((i) => i.type === 'm1911') || kit.find((i) => i.def.gun && !i.def.taser), taser = kit.find((i) => i.def.taser), cuffs = kit.find((i) => i.def.cuffs);
+    // a rifle, if they were sent out with one, for anything that is going to need shooting
+    const rifle = kit.find((i) => i.def.rifle), pistol = kit.find((i) => i.type === 'm1911') || kit.find((i) => i.def.gun && !i.def.taser), taser = kit.find((i) => i.def.taser), cuffs = kit.find((i) => i.def.cuffs);
     const inHand = h.weapon, gun = !!(inHand && inHand.def.gun && !inHand.def.taser), tas = !!(inHand && inHand.def.taser);
     const sGun = !!(S.weapon && S.weapon.def.gun && !S.weapon.def.taser), sArmed = !!(S.weapon && !S.weapon.def.tool), sBlade = sArmed && !sGun;
     const down = S.state === ST.RAGDOLL || !S.h.conscious || S.tased > 0;
     const quiet = now - k.crimeT;
-    const complying = !down && ((!sArmed && !S.anim.action && quiet > 3.5 && S.speed < 1.2) || S.pose.handsUp > 0.5);
-    const lethal = k.crime >= 2.5 || (sGun && k.crime >= 1.6) || (sBlade && seen && d < 3.4 && k.crime >= 1) || (k.hurtMe && h.h.pain > 42 && !down);
+    // The stranger: whatever this officer has seen, the wanted level says what they are allowed to do. One star is an
+    // arrest; two is a fight for their lives, and standing still does not end it. (Anyone else is judged on what this
+    // officer knows of them.)
+    const wanted = S.isPlayer ? k.wanted || 0 : 0;
+    const complying = !down && wanted < 2 && ((!sArmed && !S.anim.action && quiet > 3.5 && S.speed < 1.2) || S.pose.handsUp > 0.5);
+    const lethal = S.isPlayer ? wanted >= 2 || (k.hurtMe && h.h.pain > 42 && !down) || (sBlade && seen && d < 2 && !!S.anim.action)
+      : k.crime >= 2.5 || (sGun && k.crime >= 1.6) || (sBlade && seen && d < 3.4 && k.crime >= 1) || (k.hurtMe && h.h.pain > 42 && !down);
     // someone with something to answer for, who is down or has stopped, is arrested
-    const arrestable = (k.crime >= 1.9 || k.hurtMe) && S.h.alive && !!cuffs && (W.cuffable(S) || complying);
+    const arrestable = (S.isPlayer ? wanted >= 1 : k.crime >= 1.9 || k.hurtMe) && S.h.alive && !!cuffs && (W.cuffable(S) || complying);
     // someone who will not stop, and has not got a gun, gets the taser
-    const stubborn = !lethal && !down && !complying && !sGun && (k.crime >= 1.9 || (sBlade && this.warned >= 2));
+    const stubborn = !lethal && !down && !complying && !sGun && (S.isPlayer ? wanted >= 1 || (sBlade && this.warned >= 2) : k.crime >= 1.9 || (sBlade && this.warned >= 2));
+    // told again and again to put it down, and not doing it: that is resisting, and then it is an arrest
+    if (S.isPlayer && sArmed && seen && this.warned >= (sGun ? 4 : 3)) this.g.police?.raise(sGun ? 2 : 1, sGun ? 'you would not put the gun down' : 'you would not put the weapon down', { x: S.x, z: S.z });
 
     // one officer makes the arrest; the rest cover
     if (arrestable && (down || complying)) {
@@ -321,7 +376,7 @@ export class Brain {
     }
 
     // what should be in the hand?
-    const want = lethal || sGun || !taser || (taser.ammo <= 0 && !taser.wire && !pistol) ? pistol : taser;
+    const want = lethal || sGun || !taser || (taser.ammo <= 0 && !taser.wire && !pistol) ? (lethal && rifle ? rifle : pistol) : taser;
     if (want && inHand !== want && !h.swap && !h.reload && !h.cuffing) W.draw(h, want);
     if (!want && !inHand) {
       // nothing on the belt: fists, or distance
@@ -408,6 +463,87 @@ export class Brain {
     t.arrestBy = null;
     m.ask('copCustody', 56, null, rand(0.8, 1.6));
     if (!t.isPlayer && g.city.police) { t.custody = { by: h, cell: false }; this.detainee = t; this._enter('escort'); }
+  }
+
+  /** The station sends this officer to something a caller reported. */
+  dispatch(r) {
+    const m = this.m;
+    this.callout = r; this.scanT = 0; this.sceneT = 0; this.saidScan = false;
+    this._enter('callout');
+    m.ask('copDispatch', 50, null, rand(0.5, 1.4));
+    m.note('heard', 'radio', `was sent to ${WHAT_WORD[r.kind] || 'a call'} reported ${m.where(r.x, r.z).text}`, 0.6);
+  }
+
+  /** Gets to where it was reported; if there is somebody lying there, reads their fingerprints. */
+  _callout(dt) {
+    const g = this.g, h = this.h, m = this.m, r = this.callout, W = g.weapons, kit = h.kit || NOKIT;
+    if (!r || r.status === 'closed') { this.callout = null; this._enter('post'); return; }
+    this.calmT = 0;
+    const v = r.victim && !r.victim.removed ? r.victim : null;
+    const vp = v ? v.bodies[P.PELVIS] : null;
+    const tx = vp ? vp.px : r.x, tz = vp ? vp.pz : r.z;
+    const dx = tx - h.x, dz = tz - h.z, d = Math.hypot(dx, dz);
+    h.aimYaw = null; h.aimPitch = h.weapon && h.weapon.def.gun ? -0.85 : 0;
+    const armed = r.kind === 'shooting' || r.kind === 'shots' || r.kind === 'murder' || r.kind === 'stabbing';
+    if (d > (v ? 1.15 : 3.5)) {
+      m.doing = `on the way to ${WHAT_WORD[r.kind] || 'a call'}`;
+      // somebody with a gun or a blade may still be there: the pistol comes out on the way
+      if (armed && d < 35 && !h.weapon && !h.swap) { const pistol = kit.find((i) => i.type === 'm1911'); if (pistol) W.draw(h, pistol); }
+      this._walkTo(tx, tz, d > 6);
+      return;
+    }
+    this.sceneT += dt;
+    if (!v) {
+      // nothing to examine: a look round, then back to it
+      m.doing = 'looking round where it was reported';
+      if (this.sceneT < 0.1) this.look0 = h.yaw;
+      h.intent.face = this.look0 + Math.sin(this.sceneT * 0.9) * 1.6;
+      if (this.sceneT > 8) { r.status = 'closed'; m.ask('copNothing', 46); this.callout = null; this._enter('post'); }
+      return;
+    }
+    // somebody lying there: down on one knee beside them, scanner to their hand
+    const scanner = kit.find((i) => i.def.scanner);
+    h.intent.face = Math.atan2(dx, dz);
+    h.intent.crouch = true;
+    if (!r.scanned && scanner) {
+      if (h.weapon !== scanner) { if (!h.swap && !h.reload) { if (h.weapon) W.putAway(h); else W.draw(h, scanner); } return; }
+      h.pose.scan = 1;
+      m.doing = `reading ${m.name(v)}'s fingerprints`;
+      if (!this.saidScan) { this.saidScan = true; m.ask('copScan', 56); }
+      this.scanT += dt;
+      if (this.scanT > 3.4) {
+        r.scanned = true;
+        const hit = g.police ? g.police.scan(h, v) : false;
+        m.ask(hit ? 'copPrintsHit' : 'copPrintsNone', 72, { desc: g.police.describe(g.player) }, 0.4);
+        m.note('did', 'scan', hit ? `found the stranger's fingerprints on ${m.name(v)}` : `found no prints on file on ${m.name(v)}`, 0.8);
+        r.status = hit ? 'identified' : 'scanned';
+        this.sceneT = 0;
+      }
+      return;
+    }
+    // done here: the scanner away, a moment over them, then back to it
+    if (h.weapon === scanner && !h.swap) W.putAway(h);
+    if (this.sceneT > 2.5) { if (r.status !== 'identified') r.status = 'closed'; this.callout = null; this.saidScan = false; this._enter('post'); }
+  }
+
+  /** The stranger is wanted and nobody can see them: go and look. */
+  _search(dt) {
+    const g = this.g, h = this.h, m = this.m, Pz = g.police, W = g.weapons, kit = h.kit || NOKIT;
+    if (!Pz || !Pz.wanted) { this._enter('post'); return; }
+    this.calmT = 0;
+    m.doing = 'searching for the stranger';
+    // whatever they were holding for the last job goes back on the belt
+    if (h.weapon && h.weapon.def.tool && !h.swap) { W.putAway(h); return; }
+    // at two stars it is in the hand: the rifle if there is one
+    if (Pz.wanted >= 2 && !h.weapon && !h.swap && !h.reload) { const gun = kit.find((i) => i.def.rifle) || kit.find((i) => i.type === 'm1911'); if (gun) W.draw(h, gun); }
+    h.aimYaw = null; h.aimPitch = h.weapon && h.weapon.def.gun ? -0.85 : 0;
+    if (!this.dest2 || this.lookT > rand(3.5, 5)) { this.dest2 = Pz.searchPoint(h); this.lookT = 0; this.look0 = h.yaw; }
+    const d = Math.hypot(this.dest2.x - h.x, this.dest2.z - h.z);
+    if (d > 1.6 && this.modeT < 120) { this._walkTo(this.dest2.x, this.dest2.z, Pz.wanted >= 2 || d > 30); this.look0 = h.yaw; return; }
+    // there: a good look round
+    this.lookT += dt;
+    h.intent.face = this.look0 + Math.sin(this.lookT * 1.2) * 1.9;
+    if (this.sayT <= 0) { m.ask('copSearch', 32); this.sayT = rand(9, 18); }
   }
 
   /** Walks a handcuffed prisoner back to the station and into the cell. */

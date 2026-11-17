@@ -92,7 +92,7 @@ export class Game {
     for (const c of this.city.crateSpots) this.spawnCrate(c[0], KERB + 0.41 + (c[2] ? 0.82 : 0), c[1]);
 
     // filled in by main once the rest is built
-    this.audio = null; this.weapons = null; this.traffic = null; this.minds = null; this.speech = null; this.ui = null;
+    this.audio = null; this.weapons = null; this.traffic = null; this.minds = null; this.speech = null; this.ui = null; this.police = null;
     this.resize();
   }
 
@@ -146,7 +146,7 @@ export class Game {
   spawnOfficer(x, z, yaw = 0, post = null) {
     const h = this.spawnHuman(x, z, yaw, officerLook());
     h.wearVest(true);
-    for (const kit of ['m1911', 'taser', 'cuffs']) this.weapons?.give(h, kit);
+    for (const kit of ['m1911', 'taser', 'cuffs', 'scanner']) this.weapons?.give(h, kit);
     if (h.brain) h.brain.post = post || { x, z, yaw, kind: 'spot' };
     return h;
   }
@@ -216,6 +216,7 @@ export class Game {
 
     this._control(dt);
     this.minds?.update(dt);
+    this.police?.update(dt);
     this.traffic?.update(dt);
     for (const h of this.humans) h.update(dt);
     this.weapons?.update(dt);
@@ -466,6 +467,7 @@ export class Game {
     if (this.selected === old) this.selected = p;
     this.weapons?.onRespawn(old, p);
     this.minds?.playerChanged(old, p);
+    this.police?.reset();
     return p;
   }
 }

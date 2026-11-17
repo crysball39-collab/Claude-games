@@ -28,6 +28,7 @@
       <div id="vitals" aria-label="Your condition">
         <div class="vrow"><i>YOU</i><div class="vbar"><div id="v-cond"></div></div></div>
         <div class="vrow"><i>BLOOD</i><div class="vbar blood"><div id="v-blood"></div></div></div>
+        <div class="vrow" id="wanted" aria-label="Wanted level"><i>WANTED</i><span class="stars"><b></b><b></b></span></div>
         <div id="v-cheat" hidden>INFINITE HP</div>
       </div>
     </div>
@@ -86,7 +87,9 @@
       <h3>Weapons</h3>
       <div class="grid">
         <button class="item" data-spawn="m1911"><i class="ic pistol"></i><b>M1911</b><small>.45 pistol, 7 rounds</small></button>
-        <button class="item" data-spawn="ak47"><i class="ic rifle"></i><b>AK-47</b><small>automatic rifle, 30 rounds</small></button>
+        <button class="item" data-spawn="ak47"><i class="ic rifle"></i><b>AK-47</b><small>automatic rifle, 7.62, 30 rounds</small></button>
+        <button class="item" data-spawn="m4a1"><i class="ic rifle"></i><b>M4A1</b><small>automatic carbine, 5.56, 30 rounds</small></button>
+        <button class="item" data-spawn="ar15"><i class="ic rifle"></i><b>AR-15</b><small>semi-automatic rifle, 5.56, 30 rounds</small></button>
         <button class="item" data-spawn="taser"><i class="ic taser"></i><b>Taser</b><small>two probes, seven metres, five seconds rigid</small></button>
         <button class="item" data-spawn="knife"><i class="ic knife"></i><b>Knife</b><small>slash, backhand, stab, plunge</small></button>
         <button class="item" data-spawn="machete"><i class="ic machete"></i><b>Machete</b><small>chop, backhand, cleave, sweep</small></button>
@@ -97,6 +100,7 @@
         <button class="chip" data-clean="bodies">Bodies</button>
         <button class="chip" data-clean="things">Objects</button>
         <button class="chip" data-clean="all">Everything</button>
+        <button class="chip" data-wanted="0">Wanted level</button>
         <button class="chip" data-heal="1">Heal me</button>
       </div>
       <p class="note" id="sandbox-count"></p>
@@ -181,6 +185,8 @@
           <h3 class="sub">Cheats</h3>
           <label class="set"><span>Infinite HP</span><input type="checkbox" id="set-cheat-hp" /></label>
           <p class="note">Nothing can injure you: no wounds, no bleeding, nothing cut off, no dying. You can still be knocked over, tased and handcuffed.</p>
+          <label class="set"><span>Police ignore you</span><input type="checkbox" id="set-cheat-cops" /></label>
+          <p class="note">You are never wanted. Officers still stop you waving a weapon in their faces.</p>
         </section>
         <section data-ppane="ai" hidden>
           <p class="note">Everyone in the city sees, hears and feels for themselves, and has plenty to say about it from their own stock of lines. Connect them to Claude and they can say anything at all.</p>

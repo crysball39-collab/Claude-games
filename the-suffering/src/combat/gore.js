@@ -11,6 +11,13 @@
 
    Wounds themselves are decals fixed to the body part they are on, and move
    with it.
+
+   Blood on anything that is not lying flat runs down it: down a wall to the
+   pavement, down the side of a crate and off its bottom edge, down a shirt
+   from a wound to the belt and on down the trouser leg, dripping from
+   wherever the run gives out. Cloth around a wound soaks it up, a stain that
+   spreads with every millilitre lost, and somebody lying in a pool soaks
+   from underneath. A wet blade drips.
    ========================================================================== */
 import * as THREE from 'three';
 import { Quads, cellUV } from '../render/quads.js';
@@ -50,6 +57,7 @@ export class Gore {
     this.gen = new Uint32Array(N);
     this.prevGen = new Uint32Array(N);
     this.owner = new Array(N).fill(null);
+    this.drip = new Uint8Array(N);          // 1: let go from the end of a run, falling clear of whoever it ran down
     this.head = 0;
     this.live = 0;
 
@@ -83,7 +91,9 @@ export class Gore {
     /* ---- lumps ---- */
     this.gibsList = [];
     this.maxGibs = 54;
-    this.stats = { emitted: 0, landed: 0, parted: 0, streams: 0, merged: 0, onWeapons: 0, onPeople: 0, satellites: 0 };
+    this.stats = { emitted: 0, landed: 0, parted: 0, streams: 0, merged: 0, onWeapons: 0, onPeople: 0, satellites: 0, runs: 0, chained: 0, drips: 0, soaks: 0, bladeDrips: 0 };
+    this.runs = [];                       // blood running down walls: { q, info, x, y, z, nx, nz, w, len, max, v, ml, floor }
+    this._soakT = 0;
     this._budget = 0;
     this._tintT = 0;
   }
@@ -99,6 +109,7 @@ export class Gore {
     this.life[i] = 6; this.age[i] = 0; this.ml[i] = ml; this.kind[i] = kind;
     this.rad[i] = clamp(0.007 + Math.cbrt(ml) * 0.0068, 0.009, 0.027);
     this.owner[i] = owner;
+    this.drip[i] = 0;
     if (link >= 0 && this.life[link] > 0) { this.prev[i] = link; this.prevGen[i] = this.gen[link]; } else this.prev[i] = -1;
     this.stats.emitted++;
     return i;
@@ -250,6 +261,183 @@ export class Gore {
     const ax = (ux * ca + vx * sa) * hw, ay = (uy * ca + vy * sa) * hw, az = (uz * ca + vz * sa) * hw;
     const bx = (-ux * sa + vx * ca) * hh, by = (-uy * sa + vy * ca) * hh, bz = (-uz * sa + vz * ca) * hh;
     return [ox - ax - bx, oy - ay - by, oz - az - bz, ox + ax - bx, oy + ay - by, oz + az - bz, ox + ax + bx, oy + ay + by, oz + az + bz, ox - ax + bx, oy - ay + by, oz - az + bz];
+  }
+
+  /* --------------------------------- runs -------------------------------- */
+
+  /**
+   * Blood starting to run down a body (a person's part, a crate) from a point
+   * on one of its faces. It goes the way that is downhill along that face,
+   * as the body lies now, and stops where the blood gives out or the face
+   * does; at the edge it carries on to whatever is below, or drips off.
+   * `w` is the wound that feeds it, if one does.
+   */
+  _bodyRun(human, part, b, lp, ln, ml, depth = 0, w = null) {
+    if (!this.enabled || (human && human.gone[part])) return null;
+    const face = [Math.abs(ln[0]) > 0.5 ? Math.sign(ln[0]) : 0, Math.abs(ln[1]) > 0.5 ? Math.sign(ln[1]) : 0, Math.abs(ln[2]) > 0.5 ? Math.sign(ln[2]) : 0];
+    // downhill along the face, in the body's own space
+    b.dirToLocal(0, -1, 0, _w);
+    const dn = _w[0] * face[0] + _w[1] * face[1] + _w[2] * face[2];
+    let dx = _w[0] - face[0] * dn, dy = _w[1] - face[1] * dn, dz = _w[2] - face[2] * dn;
+    const l = Math.hypot(dx, dy, dz);
+    if (l < 0.4) return null;            // near enough flat: it stays where it fell
+    dx /= l; dy /= l; dz /= l;
+    // from the point, as far as the face goes that way
+    const h = [b.hx, b.hy, b.hz], dir = [dx, dy, dz], p = [lp[0], lp[1], lp[2]];
+    let edge = Infinity;
+    for (let a = 0; a < 3; a++) {
+      if (face[a]) { p[a] = face[a] * h[a]; continue; }
+      p[a] = clamp(p[a], -h[a] * 0.95, h[a] * 0.95);
+      if (dir[a] > 1e-3) edge = Math.min(edge, (h[a] - p[a]) / dir[a]);
+      else if (dir[a] < -1e-3) edge = Math.min(edge, (-h[a] - p[a]) / dir[a]);
+    }
+    const want = clamp(0.07 + Math.cbrt(ml) * 0.075, 0.07, 0.5);
+    const max = Math.max(0.025, Math.min(want, edge));
+    const width = clamp(0.03 + Math.cbrt(ml) * 0.016, 0.034, 0.075) * (human ? human.scale : 1);
+    const d = this._attach(b, this._runCorners(b, p, dir, face, width, 0.015), pick(UV.run), human, part, rand(0.72, 1));
+    if (!d) return null;
+    d.stain = true;
+    d.run = { lp: p, dir, face, w: width, len: 0.015, max, v: rand(0.1, 0.2), ml, depth, edge: want > edge, wound: w, human, part };
+    this.stats.runs++;
+    if (depth) this.stats.chained++;
+    return d;
+  }
+
+  /** Four corners for a run: the far end (corners 0 and 1) carries the bead, the start (2 and 3) the head. */
+  _runCorners(b, p, dir, face, w, len) {
+    const lift = 0.0045;
+    const sx = p[0] + face[0] * lift, sy = p[1] + face[1] * lift, sz = p[2] + face[2] * lift;
+    const ex = sx + dir[0] * len, ey = sy + dir[1] * len, ez = sz + dir[2] * len;
+    // across the run: the face normal crossed with the way it runs
+    const ux = (face[1] * dir[2] - face[2] * dir[1]) * w * 0.5, uy = (face[2] * dir[0] - face[0] * dir[2]) * w * 0.5, uz = (face[0] * dir[1] - face[1] * dir[0]) * w * 0.5;
+    return [ex - ux, ey - uy, ez - uz, ex + ux, ey + uy, ez + uz, sx + ux, sy + uy, sz + uz, sx - ux, sy - uy, sz - uz];
+  }
+
+  /**
+   * Where the blood running from a wound leaves the body, in the world: the
+   * end of the last run in the chain, once it has got there. RUNNING while it
+   * is still on its way down; null if there is no run to speak of.
+   */
+  _tipOf(w) {
+    let d = w.runTip;
+    if (!d || !d.run || this.bDecals.indexOf(d) < 0) return null;
+    while (d.next && d.next.run && this.bDecals.indexOf(d.next) >= 0) d = d.next;
+    const r = d.run;
+    if (r.len < r.max - 1e-3) return RUNNING;
+    return d.body.toWorld(r.lp[0] + r.face[0] * 0.012 + r.dir[0] * r.len, r.lp[1] + r.face[1] * 0.012 + r.dir[1] * r.len, r.lp[2] + r.face[2] * 0.012 + r.dir[2] * r.len, _tip);
+  }
+
+  /** A run has gone as far as it will on this face: on to the part below, or off the edge. */
+  _runEnd(d) {
+    const r = d.run, b = d.body;
+    if (!r.edge) return;
+    const ex = r.lp[0] + r.dir[0] * r.len, ey = r.lp[1] + r.dir[1] * r.len, ez = r.lp[2] + r.dir[2] * r.len;
+    b.toWorld(ex + r.face[0] * 0.006, ey + r.face[1] * 0.006, ez + r.face[2] * 0.006, _v);
+    const wx = _v[0], wy = _v[1], wz = _v[2];
+    const left = r.ml * 0.6;
+    // on a person, it carries on to whatever part is below the edge it reached
+    const hm = r.human;
+    if (hm && r.depth < 4 && left > 0.8) {
+      b.dirToWorld(r.face[0], r.face[1], r.face[2], _n);
+      const nx = _n[0], ny = _n[1], nz = _n[2];
+      for (let i = 0; i < hm.bodies.length; i++) {
+        if (i === r.part || hm.gone[i] || !hm.attached[i]) continue;
+        const o = hm.bodies[i];
+        o.toLocal(wx, wy - 0.03, wz, _w);
+        if (Math.abs(_w[0]) > o.hx + 0.025 || Math.abs(_w[1]) > o.hy + 0.025 || Math.abs(_w[2]) > o.hz + 0.025) continue;
+        // the face of that part that looks the same way as the one it came down
+        o.dirToLocal(nx, ny, nz, _n);
+        const f = nearestAxis(_n);
+        const nd = this._bodyRun(hm, i, o, [_w[0], _w[1], _w[2]], f, left, r.depth + 1, r.wound);
+        if (nd) { d.next = nd; return; }
+      }
+    }
+    // nowhere further to run: it gathers at the end and drops off
+    const j = this._spawn(wx, wy - 0.01, wz, rand(-0.05, 0.05), -0.2, rand(-0.05, 0.05), Math.min(3, left), 0, hm || null);
+    this.drip[j] = 1;
+    this.stats.drips++;
+  }
+
+  /** Blood that hit a wall runs down it, a streak lengthening for a few seconds; one that reaches the pavement leaves a little there. */
+  _wallRun(x, y, z, nx, nz, ml) {
+    const room = y - groundHeight(x, z) - 0.01;
+    if (room < 0.06 || this.runs.length > 70) return;
+    const max = Math.min(room, clamp(0.12 + Math.cbrt(ml) * 0.17, 0.12, 1.0) * rand(0.7, 1.3));
+    const w = clamp(0.04 + Math.cbrt(ml) * 0.02, 0.045, 0.1);
+    const q = this._wallDecal(pick(UV.run), x, y, z, nx, nz, w, 0.02);
+    this.runs.push({ q, info: this.gInfo[q], x, y, z, nx, nz, w, len: 0.02, max, v: rand(0.16, 0.3), ml, floor: room - max < 0.03 });
+    this.stats.runs++;
+  }
+
+  _wallQuad(i, r) {
+    const tx = -r.nz, tz = r.nx, hw = r.w * 0.5, ox = r.x + r.nx * 0.013, oz = r.z + r.nz * 0.013, top = r.y, bot = r.y - r.len;
+    this.ground.corners(i, ox - tx * hw, bot, oz - tz * hw, ox + tx * hw, bot, oz + tz * hw, ox + tx * hw, top, oz + tz * hw, ox - tx * hw, top, oz - tz * hw);
+  }
+
+  /* ---------------------------------- soaking ------------------------------ */
+
+  /** The cloth round a bleeding wound takes the blood up: a stain that spreads with what has been lost. */
+  _soakWound(hm, b, w) {
+    const s = hm.scale, r = clamp(0.028 + Math.sqrt(w.lost) * 0.011, 0.032, 0.34) * s;
+    const sd = w.soakD;
+    if (sd && this.bDecals.indexOf(sd) >= 0) {
+      if (r < sd.r * 1.12) return;
+      sd.r = r;
+      sd.c = this._onFace(b, [w.x, w.y - r * 0.25, w.z], [w.nx, w.ny, w.nz], r * 2, r * 2.3, sd.ang, 0.0035);
+      sd.settled = false;
+      return;
+    }
+    const ang = rand(-0.3, 0.3);
+    const d = this._attach(b, this._onFace(b, [w.x, w.y - r * 0.25, w.z], [w.nx, w.ny, w.nz], r * 2, r * 2.3, ang, 0.0035), pick(UV.soak), hm, w.part, rand(0.85, 1), 0.95);
+    if (d) { d.soak = true; d.stain = true; d.r = r; d.ang = ang; w.soakD = d; this.stats.soaks++; }
+  }
+
+  /** Somebody lying in blood soaks from underneath: the faces of them that lie in it. */
+  _soakPools() {
+    const g = this.game;
+    for (const hm of g.humans) {
+      if (hm.removed || hm.state !== 2 || !hm.soak) continue;
+      for (let i = 0; i < hm.bodies.length; i++) {
+        if (hm.gone[i] || !hm.attached[i]) continue;
+        const b = hm.bodies[i], gy = groundHeight(b.px, b.pz);
+        if (b.py - b.boundR > gy + 0.06) continue;
+        let wet = false;
+        for (const p of this.pools) { if (Math.abs(p.y - gy) < 0.08 && Math.hypot(p.x - b.px, p.z - b.pz) < p.r * 0.9 + 0.04) { wet = true; break; } }
+        if (!wet) continue;
+        hm.soak[i] = Math.min(1, hm.soak[i] + (hm.clothed[i] ? 0.035 : 0.012));
+        // a stain on whichever face is underneath, spreading
+        if (!hm.clothed[i]) continue;
+        b.dirToLocal(0, -1, 0, _w);
+        const f = nearestAxis(_w), key = 'pool' + i;
+        const r = clamp(0.04 + hm.soak[i] * 0.16, 0.04, 0.2) * hm.scale;
+        let d = hm._poolSoak && hm._poolSoak[key];
+        if (d && this.bDecals.indexOf(d) >= 0 && d.body === b) {
+          if (r < d.r * 1.15) continue;
+          d.r = r; d.c = this._onFace(b, [0, 0, 0], f, r * 2.2, r * 2.2, d.ang, 0.0035); d.settled = false;
+        } else {
+          const ang = rand(TAU);
+          d = this._attach(b, this._onFace(b, [0, 0, 0], f, r * 2.2, r * 2.2, ang, 0.0035), pick(UV.soak), hm, i, rand(0.8, 1), 0.92);
+          if (d) { d.soak = true; d.stain = true; d.r = r; d.ang = ang; (hm._poolSoak || (hm._poolSoak = {}))[key] = d; this.stats.soaks++; }
+        }
+      }
+    }
+  }
+
+  /** A wet blade drips, from whichever end of it is lowest, until it has dried. */
+  _dripBlades(dt) {
+    const list = this.game.weapons ? this.game.weapons.items : NONE;
+    for (const it of list) {
+      if (!it.def.blade || !(it.bloody > 0.3) || !it.skin || !it.skin.length || (!it.shown && !it.body)) continue;
+      it.bloody = Math.max(0, it.bloody - dt * 0.0035);
+      it.dripT = (it.dripT || rand(0, 1)) - dt;
+      if (it.dripT > 0) continue;
+      it.dripT = rand(0.5, 1.6) / it.bloody;
+      const f = it.skin[0];
+      let low = null;
+      for (const sz of [-1, 1]) for (const sy of [-1, 1]) { f.toWorld(0, sy * f.hy, sz * f.hz, _v); if (!low || _v[1] < low[1]) low = [_v[0], _v[1], _v[2]]; }
+      this._spawn(low[0], low[1] - 0.006, low[2], 0, -0.12, 0, rand(0.25, 0.6), 0, it.holder || null);
+      this.stats.bladeDrips++;
+    }
   }
 
   /** Draws a wound the health model has just recorded. */
@@ -471,6 +659,8 @@ export class Gore {
 
   /** Everything blood has been spilled on, wiped clean. */
   clean() {
+    this.runs.length = 0;
+    for (const hm of this.game.humans) if (hm.soak) { hm.soak.fill(0); hm._poolSoak = null; for (const w of hm.h.wounds) { w.soakD = null; w.runTip = null; } }
     for (let i = 0; i < this.ground.capacity; i++) { this.ground.hide(i); this.gInfo[i] = null; }
     this.pools.length = 0; this.flowing.clear(); this.drains.length = 0;
     for (let i = 0; i < this.N; i++) this.life[i] = 0;
@@ -524,6 +714,21 @@ export class Gore {
     this._emit(dt, t);
     this._simulate(dt);
     this._flow(dt);
+    // blood running down walls
+    for (let i = this.runs.length - 1; i >= 0; i--) {
+      const r = this.runs[i];
+      if (this.gInfo[r.q] !== r.info) { this.runs.splice(i, 1); continue; }
+      r.len = Math.min(r.max, r.len + r.v * dt);
+      r.v *= Math.exp(-dt * 0.4);
+      this._wallQuad(r.q, r);
+      if (r.len >= r.max - 1e-3 || r.v < 0.008) {
+        if (r.floor) { this._spawn(r.x + r.nx * 0.03, r.y - r.len + 0.015, r.z + r.nz * 0.03, r.nx * 0.05, -0.1, r.nz * 0.05, Math.min(3, r.ml * 0.6)); this.stats.drips++; }
+        this.runs.splice(i, 1);
+      }
+    }
+    if (this.enabled) this._dripBlades(dt);
+    this._soakT += dt;
+    if (this._soakT > 0.5) { this._soakT = 0; if (this.enabled) this._soakPools(); }
     this._drawDrops();
     this._moveDecals();
 
@@ -613,15 +818,22 @@ export class Gore {
           }
           w.last = link; w.lastGen = this.gen[link];
         } else {
-          for (let k = 0; k < n; k++) this._spawn(_v[0], _v[1], _v[2], _w[0] + _n[0] * 0.25 + rand(-0.08, 0.08), _w[1] + _n[1] * 0.2, _w[2] + _n[2] * 0.25 + rand(-0.08, 0.08), ml, 0, hm);
+          // a slow bleed drips from wherever the blood running from it has got to
+          const tip = this._tipOf(w);
+          if (tip === RUNNING) { /* the blood is still running down them, not yet dripping off */ }
+          else if (tip) { for (let k = 0; k < n; k++) { const j = this._spawn(tip[0], tip[1], tip[2], _w[0] + rand(-0.03, 0.03), _w[1] - 0.15, _w[2] + rand(-0.03, 0.03), ml, 0, hm); this.drip[j] = 1; } this.stats.drips += n; }
+          else for (let k = 0; k < n; k++) this._spawn(_v[0], _v[1], _v[2], _w[0] + _n[0] * 0.25 + rand(-0.08, 0.08), _w[1] + _n[1] * 0.2, _w[2] + _n[2] * 0.25 + rand(-0.08, 0.08), ml, 0, hm);
           w.last = -1;
         }
-        // blood runs down from a wound that keeps bleeding
-        if (!w.runDone && w.age > 0.8 && w.type !== 'stump' && Math.abs(w.ny) < 0.5) {
+        // blood runs down from a wound that keeps bleeding, and the cloth round it soaks
+        w.lost = (w.lost || 0) + w.flow * dt;
+        if (!w.runDone && w.age > 0.6 && w.type !== 'stump') {
           w.runDone = true;
-          const d = this._attach(b, this._onFace(b, [w.x, w.y - 0.05, w.z], [w.nx, w.ny, w.nz], 0.07, 0.11, 0), pick(UV.drip), hm, w.part);
-          if (d) { d.grow = 1; d.wound = w; d.top = w.y; }
+          const d = this._bodyRun(hm, w.part, b, [w.x, w.y, w.z], [w.nx, w.ny, w.nz], 4 + w.flow * 3, 0, w);
+          if (d) w.runTip = d;
         }
+        if (hm.clothed[w.part] && w.lost > 0.6 && w.type !== 'stump') this._soakWound(hm, b, w);
+        if (hm.soak) hm.soak[w.part] = Math.min(1, hm.soak[w.part] + w.flow * dt / (hm.clothed[w.part] ? 140 : 400));
       }
     }
   }
@@ -668,6 +880,8 @@ export class Gore {
               else if (oz <= s.minz) { nz = -1; wz = s.minz; } else { nz = 1; wz = s.maxz; }
               const sz = clamp(0.1 + Math.cbrt(this.ml[i]) * 0.08, 0.1, 0.4);
               this._wallDecal(pick(Math.random() < 0.35 ? UV.drip : UV.splat), wx, y, wz, nx, nz, sz, sz * 1.25);
+              // and anything more than a speck runs down from there
+              if (this.ml[i] > 0.9) this._wallRun(wx, y - sz * 0.2, wz, nx, nz, this.ml[i]);
             }
           }
           this.life[i] = 0;
@@ -682,7 +896,7 @@ export class Gore {
         if (hm.removed) continue;
         const dx = hm.x - x, dz = hm.z - z;
         if (dx * dx + dz * dz > 1.7) continue;
-        if (this.owner[i] === hm && this.age[i] < 0.3) continue;
+        if (this.owner[i] === hm && (this.age[i] < 0.3 || this.drip[i])) continue;
         for (let pi = 0; pi < hm.bodies.length; pi++) {
           if (hm.gone[pi]) continue;
           const b = hm.bodies[pi];
@@ -693,6 +907,8 @@ export class Gore {
           if (this.kind[i] === 0 && Math.random() < 0.6) {
             const face = nearestFace(_v, b);
             this.mark(hm, pi, this.ml[i] > 4 ? 'splat' : 'dot', [_v[0], _v[1], _v[2]], face, clamp(0.035 + Math.cbrt(this.ml[i]) * 0.035, 0.04, 0.13));
+            if (this.ml[i] > 1.4 && this.owner[i] !== hm) this._bodyRun(hm, pi, b, [_v[0], _v[1], _v[2]], face, this.ml[i]);
+            if (hm.soak && hm.clothed[pi]) hm.soak[pi] = Math.min(1, hm.soak[pi] + this.ml[i] / 260);
             if (this.owner[i] !== hm) { hm.bloodied = Math.min(1, hm.bloodied + 0.02); hm.mind?.splashed(this.owner[i]); this.stats.onPeople++; }
           }
           hitSomething = true;
@@ -714,6 +930,7 @@ export class Gore {
             const face = nearestFace(_v, b);
             const d = this._attach(b, this._onFace(b, [_v[0], _v[1], _v[2]], face, 0.14, 0.14, rand(TAU)), pick(UV.splat), null, -1);
             if (d) d.stain = true;
+            if (this.ml[i] > 1.2) this._bodyRun(null, -1, b, [_v[0], _v[1], _v[2]], face, this.ml[i] * 1.4);
           }
           hitSomething = true;
           break;
@@ -767,13 +984,18 @@ export class Gore {
     for (let i = this.bDecals.length - 1; i >= 0; i--) {
       const d = this.bDecals[i], b = d.body, c = d.c;
       if (d.human && d.human.removed) { this._detach(i); continue; }
-      // a run of blood lengthens while the wound it comes from is still open
-      if (d.grow && d.wound) {
-        if (d.wound.flow > 0.05 && d.grow < 4) {
-          d.grow += this.game.dt * (0.25 + d.wound.flow * 0.05);
-          const w = d.wound, len = Math.min(0.11 * d.grow, w.y + b.hy);
-          if (len > 0.03) d.c = this._onFace(b, [w.x, w.y - len * 0.5, w.z], [w.nx, w.ny, w.nz], 0.05 + d.grow * 0.012, len, 0);
-          d.settled = false;
+      // a run of blood lengthens, slowing as it thins; one fed by an open wound keeps going
+      if (d.run) {
+        const r = d.run, dt = this.game.dt;
+        if (r.len < r.max - 1e-4) {
+          const fed = r.wound && r.wound.flow > 0.05 && !r.wound.gone;
+          r.v = fed ? Math.max(r.v, 0.05 + Math.min(0.25, r.wound.flow * 0.04)) : r.v * Math.exp(-dt * 0.45);
+          if (r.v > 0.006) {
+            r.len = Math.min(r.max, r.len + r.v * dt);
+            d.c = this._runCorners(b, r.lp, r.dir, r.face, r.w, r.len);
+            d.settled = false;
+            if (r.len >= r.max - 1e-4) this._runEnd(d);
+          }
         }
       }
       if (b.item && !b.item.shown) { if (!d.hidden) { B.hide(d.quad); d.hidden = true; } continue; }
@@ -788,6 +1010,17 @@ export class Gore {
       B.corners(d.quad, ax, ay, az, bx, by, bz, cx, cy, cz, _v[0], _v[1], _v[2]);
     }
   }
+}
+
+const _tip = [0, 0, 0];
+const RUNNING = [];
+
+/** The axis a direction lies nearest, as a unit face normal. */
+function nearestAxis(v) {
+  const ax = Math.abs(v[0]), ay = Math.abs(v[1]), az = Math.abs(v[2]);
+  if (ax >= ay && ax >= az) return [v[0] < 0 ? -1 : 1, 0, 0];
+  if (ay >= az) return [0, v[1] < 0 ? -1 : 1, 0];
+  return [0, 0, v[2] < 0 ? -1 : 1];
 }
 
 function nearestFace(l, b) {

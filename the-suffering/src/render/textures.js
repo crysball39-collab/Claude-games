@@ -163,13 +163,14 @@ export function skyTexture() {
 
 /* ------------------------------ decal atlas ------------------------------- */
 
-export const ATLAS_COLS = 8, ATLAS_ROWS = 4;
+export const ATLAS_COLS = 8, ATLAS_ROWS = 5;
 /** Where each decal lives in the atlas: [column, row]. */
 export const DECAL = {
   splat: [[0, 0], [1, 0], [2, 0], [3, 0]], pool: [[4, 0], [5, 0]], drip: [[6, 0], [7, 0]],
   entry: [0, 1], exit: [1, 1], cut: [2, 1], slash: [3, 1], stab: [4, 1], bruise: [5, 1], stump: [6, 1], scrape: [7, 1],
   hole: [0, 2], chip: [1, 2], smear: [[2, 2], [3, 2]], vomit: [4, 2], bruise2: [5, 2], mist: [6, 2], dot: [7, 2],
   shadow: [0, 3], ring: [1, 3], flash: [2, 3], smoke: [3, 3], streak: [[4, 3], [5, 3]], glow: [6, 3], white: [7, 3],
+  run: [[0, 4], [1, 4], [2, 4]], soak: [[3, 4], [4, 4]], soakDry: [5, 4],
 };
 
 const BLOOD = '#7d0606', BLOOD_DARK = '#4a0202', BLOOD_BRIGHT = '#a30c0c';
@@ -231,6 +232,51 @@ function drawDrip(x, rng) {
   x.fillStyle = BLOOD_DARK; x.globalAlpha = 0.45; blobPath(x, 64, 16, 6, 0.4, rng, 8); x.fill(); x.globalAlpha = 1;
 }
 
+/**
+ * One rivulet of blood running down a surface: top to bottom of the cell, a
+ * little wider where it started, wandering as it goes, and a bead where it
+ * has got to. Drawn to be stretched to any length.
+ */
+function drawRun(x, rng) {
+  const w0 = 17 + rng() * 5, w1 = 9 + rng() * 3;
+  const pts = [];
+  let cx = 64;
+  for (let i = 0; i <= 12; i++) { const y = 4 + i * 9.2; cx += (rng() - 0.5) * 4; cx = Math.max(52, Math.min(76, cx)); pts.push([cx, y, w0 + (w1 - w0) * (i / 12)]); }
+  x.fillStyle = BLOOD;
+  x.beginPath();
+  x.moveTo(pts[0][0] - pts[0][2], pts[0][1]);
+  for (const p of pts) x.lineTo(p[0] - p[2], p[1]);
+  for (let i = pts.length - 1; i >= 0; i--) x.lineTo(pts[i][0] + pts[i][2], pts[i][1]);
+  x.closePath(); x.fill();
+  // the head of it, where it started, and the bead at the end
+  x.beginPath(); x.ellipse(pts[0][0], 6, w0 + 2, 5, 0, 0, TAU); x.fill();
+  const e = pts[pts.length - 1];
+  x.beginPath(); x.ellipse(e[0], 118, w1 + 2.6, 7, 0, 0, TAU); x.fill();
+  // darker down the middle, where it is deepest
+  x.fillStyle = BLOOD_DARK; x.globalAlpha = 0.5;
+  x.beginPath();
+  for (const p of pts) x.lineTo(p[0] - p[2] * 0.35, p[1]);
+  for (let i = pts.length - 1; i >= 0; i--) x.lineTo(pts[i][0] + pts[i][2] * 0.35, pts[i][1]);
+  x.closePath(); x.fill();
+  x.globalAlpha = 1;
+  x.fillStyle = 'rgba(255,190,190,0.22)'; x.fillRect(e[0] - 1.5, 30, 1.2, 70);
+}
+
+/**
+ * Cloth soaked through: no edge to speak of, darker in the middle, mottled
+ * where the weave took it up unevenly. Laid over fabric it reads as wet.
+ */
+function drawSoak(x, rng, dry) {
+  const g = x.createRadialGradient(64, 64, 4, 64, 64, 62);
+  const core = dry ? 'rgba(52,14,10,0.92)' : 'rgba(78,4,4,0.9)', mid = dry ? 'rgba(60,18,12,0.7)' : 'rgba(96,8,8,0.68)';
+  g.addColorStop(0, core); g.addColorStop(0.55, mid); g.addColorStop(0.85, dry ? 'rgba(70,24,16,0.3)' : 'rgba(110,12,12,0.3)'); g.addColorStop(1, 'rgba(110,12,12,0)');
+  x.fillStyle = g;
+  blobPath(x, 64, 64, 58, 0.35, rng, 18); x.fill();
+  // the weave: blotches a shade darker
+  x.fillStyle = dry ? 'rgba(30,8,6,0.35)' : 'rgba(50,0,0,0.35)';
+  for (let i = 0; i < 26; i++) { const a = rng() * TAU, d = Math.pow(rng(), 0.8) * 44; x.beginPath(); x.ellipse(64 + Math.cos(a) * d, 64 + Math.sin(a) * d, 3 + rng() * 7, 2 + rng() * 5, rng() * TAU, 0, TAU); x.fill(); }
+}
+
 function drawStreak(x, rng) {
   x.fillStyle = BLOOD;
   x.beginPath(); x.ellipse(40, 64, 26, 13, 0, 0, TAU); x.fill();
@@ -254,6 +300,9 @@ function paintDecals(x) {
   DECAL.pool.forEach((c, i) => cell(c, () => drawPool(x, mulberry(200 + i * 5))));
   DECAL.drip.forEach((c, i) => cell(c, () => drawDrip(x, mulberry(300 + i * 3))));
   DECAL.streak.forEach((c, i) => cell(c, () => drawStreak(x, mulberry(330 + i * 3))));
+  DECAL.run.forEach((c, i) => cell(c, () => drawRun(x, mulberry(360 + i * 7))));
+  DECAL.soak.forEach((c, i) => cell(c, () => drawSoak(x, mulberry(390 + i * 5), false)));
+  cell(DECAL.soakDry, () => drawSoak(x, mulberry(397), true));
 
   cell(DECAL.entry, () => {
     const g = x.createRadialGradient(64, 64, 4, 64, 64, 26);
