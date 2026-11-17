@@ -122,7 +122,10 @@ export class Health {
     this.dizzy = 0;                   // from being spun about
     this.disgust = 0;                 // from what they have seen
     this.exertion = 0;                // 0..1
-    this.adrenaline = 0;              // 0..1, set from fear and anger
+    this.adrenaline = 0;              // 0..1: up in a second or two with fear, anger and pain, down over a minute
+    this.stamina = 100;               // 0..100: spent running, jumping and fighting, back with rest
+    this.poison = 0;                  // 0..100: toxin in the blood
+    this.toxin = 0;                   // a dose still on its way in from where it was injected
     this.chestBlood = 0;              // ml pooled round the lungs
     this.vomitCooldown = 0;
     this.hypoxia = 0;
@@ -143,6 +146,27 @@ export class Health {
   }
 
   get bloodPct() { return (this.blood / this.bloodMax) * 100; }
+
+  /** 0..100: the room going round. Being spun about, a knock on the head, blood loss, poison, too little air. */
+  get dizziness() {
+    if (!this.alive) return 0;
+    return clamp(this.dizzy * 1.6 + this.concussion * 0.5 + this.poison * 0.45 + Math.max(0, 82 - this.bloodPct) * 1.3 + Math.max(0, 90 - this.air) * 0.6, 0, 100);
+  }
+
+  /** 0..100: how much of what is going on round them they are taking in. Nothing at all out cold. */
+  get awareness() {
+    if (!this.alive || !this.conscious) return 0;
+    let a = 100 - this.concussion * 0.55 - this.dizziness * 0.3 - Math.max(0, 80 - this.bloodPct) * 1.4 - Math.max(0, this.shock - 25) * 0.55
+      - this.poison * 0.45 - Math.max(0, 92 - this.air) * 0.9 - Math.max(0, this.pain - 70) * 0.4 + this.adrenaline * 8;
+    if (this.dazed) a -= 12;
+    return clamp(a, 4, 100);
+  }
+
+  /** Something hard done: a jump, a swing. */
+  spend(n) { if (!this.god) this.stamina = Math.max(0, this.stamina - n); }
+
+  /** A dose of poison into a muscle, to be taken up over the next half minute or so. */
+  inject(dose) { if (!this.god && this.alive) this.toxin += dose; }
 
   /* --------------------------------- state -------------------------------- */
 
@@ -176,7 +200,7 @@ export class Health {
   }
   get canStand() {
     return this.alive && this.conscious && !this.paralysedLegs && this.legOk(1) && this.legOk(-1) &&
-      this.bloodPct > 56 && this.pain < 93 && this.shock < 86 && this.bones.pelvis >= 34;
+      this.bloodPct > 56 && this.pain < 93 && this.shock < 86 && this.bones.pelvis >= 34 && this.poison < 82;
   }
   /** 0..1: how well they can get about, for someone who is on their feet. */
   get mobility() {
@@ -184,6 +208,8 @@ export class Health {
     let m = 1 - Math.max(this.legLimp(1), this.legLimp(-1)) * 0.6;
     m *= 1 - clamp01((this.pain - 35) / 90);
     m *= clamp(0.45 + (this.bloodPct - 56) / 40, 0.45, 1);
+    m *= 1 - this.poison / 170;
+    m *= 1 - Math.max(0, this.dizziness - 40) / 160;
     if (this.dazed) m *= 0.7;
     return clamp(m, 0.2, 1);
   }
@@ -200,7 +226,7 @@ export class Health {
     let hurt = 0;
     for (const w of this.wounds) hurt += w.type === 'bruise' ? 1.2 : w.type === 'stump' ? 14 : 5;
     for (const k in this.bones) if (this.bones[k] >= 0 && this.bones[k] < 67) hurt += this.bones[k] < 34 ? 7 : 4;
-    pct = clamp(pct - Math.min(45, hurt) - this.shock * 0.15, 1, 100);
+    pct = clamp(pct - Math.min(45, hurt) - this.shock * 0.15 - this.poison * 0.7, 1, 100);
     let label, tone;
     if (this.heartStopped) { label = 'DYING'; tone = 'dead'; pct = Math.min(pct, 4); }
     else if (pct < 22 || this.bloodPct < 55 || this.air < 50) { label = 'CRITICAL'; tone = 'bad'; }
@@ -477,6 +503,7 @@ export class Health {
     this.wounds = this.wounds.filter((w) => w.type === 'stump');
     for (const w of this.wounds) { w.bleed = 0; w.base = 0; w.pain = 0; w.pain0 = 0; w.dropped = false; }
     this.concussion = 0; this.ko = 0; this.faint = 0; this.trauma = 0; this.chestBlood = 0; this.hypoxia = 0;
+    this.stamina = 100; this.poison = 0; this.toxin = 0; this.adrenaline = 0; this.dizzy = 0;
     if (!this.missing[P.HEAD]) { this.alive = true; this.heartStopped = false; this.conscious = true; this.cause = ''; this.mechanism = ''; this.pulse = this.basePulse; this.arrestTime = 0; this.timeDead = 0; }
   }
 
@@ -486,17 +513,20 @@ export class Health {
    * Runs the body forward. `fear` and `anger` are 0..100 from whoever is
    * doing their feeling for them; `moving` is 0 (still) to 1 (flat out).
    */
-  tick(dt, { fear = 0, anger = 0, moving = 0 } = {}) {
+  tick(dt, { fear = 0, anger = 0, moving = 0, running = 0 } = {}) {
     this.events.length = 0;
     if (this.god && this.alive) {
       // whatever else is true, they are whole
       this.blood = this.bloodMax; this.air = 98; this.pain = 0; this.shock = 0; this.nausea = 0; this.dizzy = 0; this.concussion = 0; this.bleedOut = 0;
+      this.stamina = 100; this.poison = 0; this.toxin = 0;
       this.conscious = true; this.dazed = false; this.heartStopped = false;
       return;
     }
     const O = this.organs, B = this.bones;
     this.exertion = lerp(this.exertion, moving, 1 - Math.exp(-dt / 6));
-    this.adrenaline = clamp01(fear * 0.008 + anger * 0.005);
+    // adrenaline: in fast, out slow
+    const adT = clamp01(fear * 0.009 + anger * 0.006 + this.pain * 0.004);
+    this.adrenaline += (adT - this.adrenaline) * (1 - Math.exp(-dt / (adT > this.adrenaline ? 1.5 : 45)));
     const pct = this.bloodPct;
 
     /* ---- bleeding ---- */
@@ -546,6 +576,15 @@ export class Health {
       return;
     }
 
+    /* ---- poison: taken up from where it went in over most of a minute, cleared slowly by the liver ---- */
+    // what it does is spread through the rest: sick, dizzy, weak, confused, and then the breathing fails
+    if (this.toxin > 0) { const take = Math.min(this.toxin, dt * (0.8 + this.toxin * 0.03)); this.toxin -= take; this.poison = Math.min(100, this.poison + take); }
+    if (this.poison > 0) this.poison = Math.max(0, this.poison - dt * 0.05 * (0.3 + 0.7 * (O.liver < 0 ? 0 : O.liver / 100)));
+
+    /* ---- stamina: spent running, back at rest, slowly if the body has nothing to give ---- */
+    const rec = clamp01((this.bloodPct - 45) / 45) * (1 - clamp01(this.pain / 160)) * clamp01(this.air / 90) * (1 + this.adrenaline * 0.6) * (1 - this.poison / 200);
+    this.stamina = clamp(this.stamina - running * 4.5 * (1 - this.adrenaline * 0.35) * dt + (1 - running) * (moving > 0.2 ? 3.5 : 7) * rec * dt, 0, 100);
+
     /* ---- breathing ---- */
     const lungs = ((O.lungL < 0 ? 0 : O.lungL) + (O.lungR < 0 ? 0 : O.lungR)) / 200;
     let vent = lungs * (1 - this.chestBlood / 2400);
@@ -553,17 +592,21 @@ export class Health {
     if (B.ribsL < 67 || B.ribsR < 67) vent *= 0.86;
     const drive = (O.brain > 8 ? 1 : 0) * (B.cspine < 0 ? 0 : B.cspine < 34 ? 0.2 : 1);
     vent *= drive;
+    // enough poison and the breathing slows, goes shallow, and stops
+    if (this.poison > 66) vent *= 1 - clamp01((this.poison - 66) / 30);
     // someone awake and frightened breathes harder and makes some of it back
     const effort = this.conscious ? 1.3 + this.exertion * 0.15 : 1.12;
     const airTarget = this.heartStopped ? 0 : clamp(vent * effort, 0, 1) * 98;
     if (airTarget < this.air) this.air -= Math.min(this.air - airTarget, (vent < 0.05 ? 4.2 : 1 + (this.air - airTarget) * 0.09) * dt);
     else this.air += (airTarget - this.air) * (1 - Math.exp(-dt / 5));
     this.breath = drive === 0 || this.heartStopped ? 0 :
-      clamp(14 + fear * 0.12 + this.exertion * 16 + (98 - this.air) * 0.5 + this.pain * 0.06 + (100 - pct) * 0.2, 6, 44);
+      clamp(14 + fear * 0.12 + this.exertion * 16 + (98 - this.air) * 0.5 * (1 - clamp01((this.poison - 60) / 30)) + this.pain * 0.06 + (100 - pct) * 0.2 + this.adrenaline * 6 + (100 - this.stamina) * 0.12
+        - Math.max(0, this.poison - 60) * 0.3, 4, 44);
 
     /* ---- the heart ---- */
     if (beating) {
-      let target = this.basePulse + fear * 0.55 + anger * 0.3 + this.pain * 0.3 + this.exertion * 62 + clamp((100 - pct) * 2.3, 0, 75);
+      let target = this.basePulse + fear * 0.55 + anger * 0.3 + this.pain * 0.3 + this.exertion * 62 + clamp((100 - pct) * 2.3, 0, 75)
+        + this.adrenaline * 35 + (100 - this.stamina) * 0.25 + Math.max(0, this.poison - 30) * 0.4;
       if (pct < 47) target -= (47 - pct) * 11;             // nothing left to pump
       if (this.air < 30) target -= (30 - this.air) * 4;
       if (O.heart < 60) target *= 0.5 + O.heart / 120;
@@ -571,7 +614,7 @@ export class Health {
       this.pulse += (target - this.pulse) * (1 - Math.exp(-dt / 2.2));
       if (this.pulse < 24) {
         this.heartStopped = true; this.pulse = 0;
-        this.mechanism = this.mechanism || (pct < 47 ? 'Blood loss' : this.air < 30 ? 'Asphyxia' : 'Cardiac arrest');
+        this.mechanism = this.mechanism || (this.poison > 60 ? 'Poisoning' : pct < 47 ? 'Blood loss' : this.air < 30 ? 'Asphyxia' : 'Cardiac arrest');
         this.events.push('arrest');
       }
     } else {
@@ -584,7 +627,7 @@ export class Health {
     if (o2 < 0.4 && O.brain > 0) {
       this.hypoxia += dt;
       O.brain = Math.max(0, O.brain - (0.4 - o2) * 16 * dt);
-      if (O.brain <= 0) { this._die(this.mechanism || (pct < 56 ? 'Blood loss' : this.air < 50 ? 'Asphyxia' : 'Cardiac arrest')); return; }
+      if (O.brain <= 0) { this._die(this.mechanism || (this.poison > 60 ? 'Poisoning' : pct < 56 ? 'Blood loss' : this.air < 50 ? 'Asphyxia' : 'Cardiac arrest')); return; }
     }
 
     /* ---- pain ---- */
@@ -592,6 +635,7 @@ export class Health {
     for (const w of this.wounds) keep *= 1 - clamp01(w.pain / 100);
     for (const k in B) { const v = B[k]; if (v >= 0 && v < 67) bonePain += v < 34 ? 22 + moving * 14 : 10 + moving * 6; }
     let felt = 100 * (1 - keep * (1 - clamp01(bonePain / 100)));
+    felt = Math.min(100, felt + this.poison * 0.12);                    // cramps
     felt *= 1 - this.adrenaline * 0.45;
     if (this.shock > 60) felt *= 1 - (this.shock - 60) / 110;         // too far gone to feel it
     this.pain += (felt - this.pain) * (1 - Math.exp(-dt / (felt > this.pain ? 0.35 : 6)));
@@ -607,7 +651,7 @@ export class Health {
     this.disgust = Math.max(0, this.disgust - dt * 2.2);
     this.vomitCooldown = Math.max(0, this.vomitCooldown - dt);
     const nTarget = clamp((O.stomach < 0 ? 0 : 100 - O.stomach) * 0.75 + (O.gut < 0 ? 0 : 100 - O.gut) * 0.35 + this.concussion * 0.85 +
-      Math.max(0, this.pain - 55) * 0.5 + this.shock * 0.32 + this.dizzy + this.disgust + (O.liver < 0 ? 0 : 100 - O.liver) * 0.2, 0, 100);
+      Math.max(0, this.pain - 55) * 0.5 + this.shock * 0.32 + this.dizzy + this.disgust + (O.liver < 0 ? 0 : 100 - O.liver) * 0.2 + this.poison * 0.7, 0, 100);
     this.nausea += (nTarget - this.nausea) * (1 - Math.exp(-dt / (nTarget > this.nausea ? 3.5 : 14)));
     if (this.nausea > 78 && this.conscious && this.vomitCooldown <= 0) {
       this.events.push('vomit');
@@ -622,9 +666,9 @@ export class Health {
     /* ---- is anyone home ---- */
     const wasAwake = this.conscious;
     this.ko = Math.max(0, this.ko - dt); this.faint = Math.max(0, this.faint - dt);
-    const out2 = O.brain < 30 || this.air < 46 || pct < 53 || this.shock > 91 || this.ko > 0 || this.faint > 0 || (this.heartStopped && this.arrestTime > 2.5);
+    const out2 = O.brain < 30 || this.air < 46 || pct < 53 || this.shock > 91 || this.ko > 0 || this.faint > 0 || (this.heartStopped && this.arrestTime > 2.5) || this.poison > 84;
     this.conscious = !out2;
-    this.dazed = this.conscious && (this.air < 66 || pct < 64 || this.shock > 72 || this.concussion > 34 || this.pain > 86);
+    this.dazed = this.conscious && (this.air < 66 || pct < 64 || this.shock > 72 || this.concussion > 34 || this.pain > 86 || this.poison > 55);
     if (wasAwake && !this.conscious) this.events.push('out');
     if (!wasAwake && this.conscious) this.events.push('wake');
   }

@@ -323,7 +323,11 @@ export class Game {
     this.shake = Math.max(0, this.shake - dt * 3.2);
     const sh = this.shake * this.shake * 0.05;
     cam.position.set(this.camPos.x + rand(-sh, sh), this.camPos.y + rand(-sh, sh), this.camPos.z + rand(-sh, sh));
-    cam.rotation.set(this.camPitch + rand(-sh, sh) * 0.6, this.camYaw + Math.PI, 0);
+    // dizzy: the picture tilts and drifts, slowly, never quite still
+    const dzz = p.h.alive ? p.h.dizziness / 100 : 0, t = this.time;
+    const roll = dzz * (Math.sin(t * 0.73) * 0.07 + Math.sin(t * 1.91) * 0.025);
+    const drift = dzz * (Math.sin(t * 0.51 + 1.3) * 0.035 + Math.sin(t * 1.37) * 0.012);
+    cam.rotation.set(this.camPitch + rand(-sh, sh) * 0.6 + drift, this.camYaw + Math.PI + dzz * Math.sin(t * 0.41 + 0.7) * 0.03, roll);
     this.camX = this.camPos.x; this.camZ = this.camPos.z;
     const a = this.aim;
     a.ox = cam.position.x; a.oy = cam.position.y; a.oz = cam.position.z; a.dx = dx; a.dy = dy; a.dz = dz;

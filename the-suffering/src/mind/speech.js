@@ -55,6 +55,9 @@ const NOW = {
   callMenace: 'they are on the phone to 911 telling the operator somebody is threatening people with a gun',
   callDesc: 'they are describing to the 911 operator the person who did it, and which way they went',
   faint: 'they have lost so much blood they feel faint and light-headed',
+  injected: 'somebody has just stuck a needle into them and they do not know what was in it',
+  poisoned: 'poison is working in them: sick, sweating, dizzy, weak, frightened, and they know something is very wrong',
+  winded: 'they have run until they cannot run any more and are gasping for breath',
   hitBlunt: 'they have just been struck and react', hitCut: 'they have just been cut and react', hitStab: 'they have just been stabbed and react',
   hitShot: 'they have just been shot and react', hitUnseen: 'something has just hurt them and they did not see what', hitCar: 'a car has just hit them',
   lostLimb: 'a part of their body has just been taken off', boneBreak: 'a bone has just broken', bleeding: 'they have noticed how much they are bleeding',
@@ -277,7 +280,9 @@ export class Speech {
       p.jumpy > 0.7 ? 'easily startled' : '', p.squeamish > 0.7 ? 'squeamish' : '', p.chatty > 0.7 ? 'talkative' : p.chatty < 0.35 ? 'quiet' : ''].filter(Boolean).join(', ') || 'unremarkable';
     const out = [];
     out.push(`#${h.id}: ${L.first}, ${L.age}, ${L.desc}. Works as: ${p.job}. Today: ${p.errand}. Habit: ${p.quirk}. Nature: ${traits}.`);
-    out.push(`Condition: ${c.label.toLowerCase()}, ${c.aware}. Pain ${Math.round(hh.pain)}/100, blood ${Math.round(hh.bloodPct)}%, pulse ${Math.round(hh.pulse)}. ${m.doing}.`);
+    const dz = Math.round(hh.dizziness), po = Math.round(hh.poison);
+    out.push(`Condition: ${c.label.toLowerCase()}, ${c.aware}. Pain ${Math.round(hh.pain)}/100, blood ${Math.round(hh.bloodPct)}%, pulse ${Math.round(hh.pulse)}, stamina ${Math.round(hh.stamina)}/100` +
+      `${dz > 20 ? `, dizziness ${dz}/100` : ''}${po > 5 ? `, poisoned ${po}/100` : ''}. ${m.doing}.`);
     out.push(`Feels: ${m.feels.join('; ') || 'fine'}.`);
     out.push(`Emotions: fear ${Math.round(e.fear)}, anger ${Math.round(e.anger)}, sadness ${Math.round(e.sadness)}, joy ${Math.round(e.joy)}, surprise ${Math.round(e.surprise)}, boredom ${Math.round(e.boredom)}.`);
     out.push('Sees: ' + (hh.blind >= 2 ? 'nothing; they are blind' : m.sees.length ? m.sees.slice(0, 5).map((s) => s.text).join('; ') : 'nobody nearby') + '.');

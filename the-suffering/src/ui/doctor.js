@@ -12,7 +12,11 @@ import { EMOTIONS } from '../mind/mind.js';
 import { $, $$, el, clamp, clamp01 } from '../core/util.js';
 
 const VITALS = [
-  ['blood', 'Blood'], ['air', 'Air'], ['pulse', 'Pulse'], ['pain', 'Pain'], ['shock', 'Shock'], ['nausea', 'Nausea'], ['temp', 'Temp'], ['breath', 'Breath'],
+  ['blood', 'Blood'], ['air', 'Air'], ['pulse', 'Pulse'], ['pain', 'Pain'], ['nausea', 'Nausea'], ['temp', 'Temp'], ['breath', 'Breath'],
+];
+/** How they are, as distinct from what their numbers are. */
+const STATE = [
+  ['aware', 'Awareness'], ['dizzy', 'Dizziness'], ['stamina', 'Stamina'], ['adrenaline', 'Adrenaline'], ['poison', 'Poison'], ['shock', 'Shock'],
 ];
 
 /* the X-ray is drawn from the rig's own measurements: 228 pixels to the metre */
@@ -33,6 +37,7 @@ export class Doctor {
       this.rows[key] = { row, f, o, cls: cls || '' };
     };
     for (const [k, label] of VITALS) mk($('#doc-vitals'), k, label);
+    for (const [k, label] of STATE) mk($('#doc-state'), k, label);
     for (const k of EMOTIONS) mk($('#doc-emotions'), 'e_' + k, k, 'emo');
     this.ecg = $('#doc-ecg').getContext('2d');
     this.xr = $('#doc-xray').getContext('2d');
@@ -93,7 +98,7 @@ export class Doctor {
     const label = $('#doc-cond-label');
     label.textContent = c.label; label.className = c.tone;
     $('#doc-cond-note').textContent = !hh.alive ? hh.cause + (hh.timeDead > 1 ? ` - ${fmtTime(hh.timeDead)} ago` : '')
-      : c.aware + (h.tased > 0 ? ' - every muscle locked by a taser' : '') + (hh.god ? ' - cannot be injured' : '') + (hh.heartStopped ? ' - heart stopped' + (hh.mechanism ? ': ' + hh.mechanism.toLowerCase() : '') : hh.mechanism ? ' - ' + hh.mechanism.toLowerCase() : '');
+      : c.aware + (h.tased > 0 ? ' - every muscle locked by a taser' : '') + (hh.poison > 12 ? ' - poisoned' : '') + (hh.god ? ' - cannot be injured' : '') + (hh.heartStopped ? ' - heart stopped' + (hh.mechanism ? ': ' + hh.mechanism.toLowerCase() : '') : hh.mechanism ? ' - ' + hh.mechanism.toLowerCase() : '');
   }
 
   _set(key, pct, text, tone) {
@@ -109,8 +114,14 @@ export class Doctor {
     this._set('air', hh.air, `${Math.round(hh.air)}%`, hh.air < 60 ? 'bad' : hh.air < 88 ? 'warn' : '');
     this._set('pulse', hh.pulse / 2, `${Math.round(hh.pulse)} bpm`, hh.pulse < 35 ? 'bad' : hh.pulse > 135 ? 'warn' : '');
     this._set('pain', hh.pain, `${Math.round(hh.pain)}`, hh.pain > 60 ? 'bad' : hh.pain > 25 ? 'warn' : '');
-    this._set('shock', hh.shock, `${Math.round(hh.shock)}`, hh.shock > 60 ? 'bad' : hh.shock > 25 ? 'warn' : '');
     this._set('nausea', hh.nausea, `${Math.round(hh.nausea)}`, hh.nausea > 70 ? 'bad' : hh.nausea > 40 ? 'warn' : '');
+    const aw = hh.awareness, dz = hh.dizziness, st = hh.stamina, ad = hh.adrenaline * 100, po = hh.poison;
+    this._set('aware', aw, !hh.alive ? 'none' : !hh.conscious ? 'out cold' : aw > 85 ? 'alert' : aw > 60 ? 'clouded' : aw > 30 ? 'confused' : 'fading', aw < 35 ? 'bad' : aw < 70 ? 'warn' : '');
+    this._set('dizzy', dz, `${Math.round(dz)}`, dz > 60 ? 'bad' : dz > 25 ? 'warn' : '');
+    this._set('stamina', st, `${Math.round(st)}`, st < 15 ? 'bad' : st < 40 ? 'warn' : '');
+    this._set('adrenaline', ad, `${Math.round(ad)}`, ad > 70 ? 'warn' : '');
+    this._set('poison', po, hh.toxin > 0.5 ? `${Math.round(po)} \u2191` : `${Math.round(po)}`, po > 50 ? 'bad' : po > 12 ? 'warn' : '');
+    this._set('shock', hh.shock, `${Math.round(hh.shock)}`, hh.shock > 60 ? 'bad' : hh.shock > 25 ? 'warn' : '');
     this._set('temp', (hh.temp - AMBIENT_TEMP) / (40 - AMBIENT_TEMP) * 100, `${hh.temp.toFixed(1)}°C`, hh.temp < 34 ? 'bad' : hh.temp < 35.6 ? 'cool' : hh.temp > 38.2 ? 'warn' : '');
     this._set('breath', hh.breath / 45 * 100, `${Math.round(hh.breath)}/min`, hh.breath < 6 ? 'bad' : hh.breath > 30 ? 'warn' : '');
     const emo = h.mind ? h.mind.emo : null;

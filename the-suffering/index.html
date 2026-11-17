@@ -21,6 +21,7 @@
 
   <!-- ================================ HUD ================================ -->
   <div id="hud" hidden>
+    <div id="haze" aria-hidden="true"></div>
     <div id="stick-zone"><div id="stick-base"><div id="stick-knob"></div></div></div>
 
     <div id="top-left">
@@ -28,6 +29,7 @@
       <div id="vitals" aria-label="Your condition">
         <div class="vrow"><i>YOU</i><div class="vbar"><div id="v-cond"></div></div></div>
         <div class="vrow"><i>BLOOD</i><div class="vbar blood"><div id="v-blood"></div></div></div>
+        <div class="vrow"><i>STAMINA</i><div class="vbar stamina"><div id="v-stam"></div></div></div>
         <div class="vrow" id="wanted" aria-label="Wanted level"><i>WANTED</i><span class="stars"><b></b><b></b></span></div>
         <div id="v-cheat" hidden>INFINITE HP</div>
       </div>
@@ -83,6 +85,7 @@
         <button class="item" data-spawn="vest"><i class="ic vest"></i><b>Light vest</b><small>black, covers chest and belly; stops a pistol round</small></button>
         <button class="item" data-spawn="helmet"><i class="ic helmet"></i><b>Light helmet</b><small>covers the skull, not the face; turns a blow</small></button>
         <button class="item" data-spawn="cuffs"><i class="ic cuffs"></i><b>Handcuffs</b><small>for someone who is down or has given up</small></button>
+        <button class="item" data-spawn="syringe"><i class="ic syringe"></i><b>Poison syringe</b><small>one lethal dose: sick in seconds, down within a minute</small></button>
       </div>
       <h3>Weapons</h3>
       <div class="grid">
@@ -123,6 +126,8 @@
         <div id="doc-cond"><b id="doc-cond-label">-</b><span id="doc-cond-note"></span></div>
         <canvas id="doc-ecg" width="320" height="54"></canvas>
         <div id="doc-vitals"></div>
+        <h3>State</h3>
+        <div id="doc-state"></div>
         <h3>Emotions</h3>
         <div id="doc-emotions"></div>
         <h3>Wounds</h3>

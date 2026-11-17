@@ -616,7 +616,8 @@ export class Human {
   _healthTick(dt) {
     const h = this.h, emo = this.mind ? this.mind.emo : null;
     const moving = this.state === ST.ANIM ? clamp01(this.speed / RUN) : 0;
-    h.tick(dt, { fear: emo ? emo.fear : 0, anger: emo ? emo.anger : 0, moving });
+    const running = this.state === ST.ANIM && this.grounded && this.speed > 3.3 ? 1 : 0;
+    h.tick(dt, { fear: emo ? emo.fear : 0, anger: emo ? emo.anger : 0, moving, running });
     this._tone();
     for (const ev of h.events) {
       if (ev === 'death') this._died();
@@ -666,6 +667,8 @@ export class Human {
     top *= (this.scale / 0.93) * lerp(0.4, 1, mob) * (this.anim.busy ? 0.3 : 1) * (this.cuffed ? 0.72 : 1) * (this.cuffing ? 0 : 1);
     if (this.cuffing) { this.crouching = !!this.cuffing.low && this.grounded; this.pose.cuffing = 1; } else this.pose.cuffing = 0;
     if (h.legLimp(1) > 0.3 || h.legLimp(-1) > 0.3) top = Math.min(top, 2.2);
+    // nothing left in the legs: a run is a jog, then a walk
+    if (it.run && h.stamina < 35) top = lerp(Math.min(top, WALK * 1.25 * (this.scale / 0.93)), top, h.stamina / 35);
     let tvx = 0, tvz = 0;
     if (mag > 0.01) { tvx = it.mx / mag * top; tvz = it.mz / mag * top; }
     if (this.cuffing) {
@@ -693,7 +696,7 @@ export class Human {
 
     // up and down
     if (it.jump && this.grounded && this.jumpCool <= 0 && h.legOk(1) && h.legOk(-1) && !this.anim.busy && !this.cuffing) {
-      this.vy = JUMP_V * lerp(0.6, 1, mob); this.grounded = false; this.jumpCool = 0.35;
+      this.vy = JUMP_V * lerp(0.6, 1, mob) * (h.stamina < 15 ? 0.75 : 1); this.grounded = false; this.jumpCool = 0.35; h.spend(7);
       g.audio?.at('step', this.x, this.y, this.z, 0.5);
     }
     it.jump = false;
@@ -717,6 +720,14 @@ export class Human {
     if (dt > 0) {
       this.gvx = damp(this.gvx, (nx - this.x) / dt, 16, dt); this.gvz = damp(this.gvz, (nz - this.z) / dt, 16, dt);
       this.gait = Math.hypot(this.gvx, this.gvz);
+    }
+    // the ground tilting under someone very dizzy
+    const dz = h.dizziness;
+    if (dz > 55 && this.speed > 0.8 && this.grounded && this.tripCool <= 0 && chance(dt * (dz - 55) / 90)) {
+      this.tripCool = 4; this.x = nx; this.z = nz; this.y = ny;
+      this.mind?.note('felt', 'reel', 'lost my balance, the street tilting', 0.5);
+      this.toStumble(20 + dz * 0.25, this.vx * 0.3, this.vz * 0.3);
+      return;
     }
     this.x = nx; this.z = nz; this.y = ny;
 

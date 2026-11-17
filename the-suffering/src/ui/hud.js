@@ -377,6 +377,8 @@ export class UI {
       bar.style.width = c.pct + '%';
       bar.style.background = c.tone === 'good' ? 'var(--ok)' : c.tone === 'warn' ? 'var(--warn)' : 'var(--bad)';
       $('#v-blood').style.width = clamp(p.h.bloodPct, 0, 100) + '%';
+      $('#v-stam').style.width = Math.round(p.h.stamina) + '%';
+      $('#haze').style.opacity = p.h.alive && p.h.conscious ? clamp((88 - p.h.awareness) / 70, 0, 0.9).toFixed(2) : '0';
       $('#btn-crouch').classList.toggle('on', !!g.crouchHeld);
       $('#doctor-hint').hidden = !g.doctor || !!g.selected;
       this._stars();

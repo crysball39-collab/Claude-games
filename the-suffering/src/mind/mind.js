@@ -25,8 +25,8 @@ import { ST } from '../human/human.js';
 import { clamp, clamp01, rand, chance, wrapAngle } from '../core/util.js';
 
 const _e = [0, 0, 0], _g = [0, 0, 0], _t = [0, 0, 0];
-const WEAPON_WORD = { fists: 'fists', knife: 'knife', machete: 'machete', m1911: 'pistol', ak47: 'rifle', m4a1: 'rifle', ar15: 'rifle', taser: 'taser', cuffs: 'pair of handcuffs', scanner: 'fingerprint scanner' };
-const WEAPON_FEAR = { fists: 22, knife: 60, machete: 76, m1911: 88, ak47: 94, m4a1: 95, ar15: 93, taser: 44, cuffs: 0, scanner: 0 };
+const WEAPON_WORD = { fists: 'fists', knife: 'knife', machete: 'machete', m1911: 'pistol', ak47: 'rifle', m4a1: 'rifle', ar15: 'rifle', taser: 'taser', cuffs: 'pair of handcuffs', scanner: 'fingerprint scanner', syringe: 'syringe' };
+const WEAPON_FEAR = { fists: 22, knife: 60, machete: 76, m1911: 88, ak47: 94, m4a1: 95, ar15: 93, taser: 44, cuffs: 0, scanner: 0, syringe: 52 };
 /** Fires bullets. */
 export const isGun = (id) => id === 'm1911' || id === 'ak47' || id === 'm4a1' || id === 'ar15';
 export const EMOTIONS = ['fear', 'anger', 'sadness', 'joy', 'surprise', 'boredom'];
@@ -110,7 +110,8 @@ export class Mind {
     h.eye(_e); h.gaze(_g);
     const vx = x - _e[0], vy = y - _e[1], vz = z - _e[2];
     const d = Math.hypot(vx, vy, vz);
-    if (d > 75) return 0;
+    // somebody barely taking anything in sees only what is close
+    if (d > 75 * (0.3 + 0.7 * (this.aware ?? 1))) return 0;
     if (d < 0.7) return 1;
     const c = (vx * _g[0] + vy * _g[1] + vz * _g[2]) / d;
     const ang = Math.acos(clamp(c, -1, 1));
@@ -309,9 +310,9 @@ export class Mind {
       case 'attack': {
         if (V === h || A === h) return;
         const word = WEAPON_WORD[ev.weapon] || 'weapon', sev = WEAPON_FEAR[ev.weapon] || 30;
-        const verb = ev.weapon === 'fists' ? 'hit' : ev.weapon === 'taser' ? 'fire a taser into' : ev.weapon === 'knife' ? (ev.rep && ev.rep.type === 'stab' ? 'stab' : 'slash') : ev.weapon === 'machete' ? 'hack at' : 'shoot';
+        const verb = ev.weapon === 'fists' ? 'hit' : ev.weapon === 'taser' ? 'fire a taser into' : ev.weapon === 'syringe' ? 'jab a needle into' : ev.weapon === 'knife' ? (ev.rep && ev.rep.type === 'stab' ? 'stab' : 'slash') : ev.weapon === 'machete' ? 'hack at' : 'shoot';
         const soft = ev.weapon === 'fists' || ev.weapon === 'taser';
-        this.note('saw', 'attack', `saw ${this.name(A)} ${verb} ${this.name(V)}${soft ? '' : ' with a ' + word}`, 0.9, { o: A, v: V });
+        this.note('saw', 'attack', `saw ${this.name(A)} ${verb} ${this.name(V)}${soft || ev.weapon === 'syringe' ? '' : ' with a ' + word}`, 0.9, { o: A, v: V });
         this.stir('fear', sev * 0.6 * k); this.stir('sadness', 14 * k); this.stir('anger', (ev.weapon === 'fists' ? 16 : 8) * k); this.stir('surprise', 35 * k);
         const kn = this._know(A); kn.armed = ev.weapon;
         // the law using force is not a crime, and neither is hitting back at someone who started it
@@ -486,8 +487,8 @@ export class Mind {
     }
     // something the vest stopped still lands like a hammer
     const how = vestTook === 'bullet' ? `was shot, and the ${armour} stopped it, in` : vestTook === 'cut' ? `felt a blade drag across the ${armour} over` :
-      type === 'bullet' ? 'was shot in' : type === 'stab' ? 'was stabbed in' : type === 'cut' ? 'was cut across' : type === 'crush' ? 'was crushed in' : 'took a blow to';
-    const by = isHuman ? (seen ? ' by ' + this.name(attacker) + (weapon && weapon !== 'fists' ? ' with a ' + WEAPON_WORD[weapon] : '') : ' by someone I did not see') : attacker ? ' by ' + attacker : '';
+      type === 'bullet' ? 'was shot in' : type === 'stab' ? 'was stabbed in' : type === 'cut' ? 'was cut across' : type === 'crush' ? 'was crushed in' : type === 'needle' ? 'had a needle jabbed into' : 'took a blow to';
+    const by = isHuman ? (seen ? ' by ' + this.name(attacker) + (weapon && weapon !== 'fists' && type !== 'needle' ? ' with a ' + WEAPON_WORD[weapon] : '') : ' by someone I did not see') : attacker ? ' by ' + attacker : '';
     this.note('felt', 'hit', `${how} the ${where}${by}`, clamp(0.4 + rep.pain / 50, 0.4, 1), { part, attacker: isHuman ? attacker : null });
     for (const b of rep.bones) if (b.state !== 'intact') this.note('felt', 'bone', `felt my ${boneWord(b.id)} ${b.state === 'broken' ? 'break' : 'crack'}`, 0.9);
     this.stir('fear', rep.pain * 0.8 + (type === 'blunt' && !vestTook ? 6 : 26));
@@ -507,7 +508,7 @@ export class Mind {
         else this._wantCall({ kind, x: h.x, z: h.z, victim: h, suspect: seen ? attacker : null, self: true });
       }
     }
-    const cat = attacker === 'a car' ? 'hitCar' : vestTook === 'bullet' ? (armour === 'helmet' ? 'hitHelmet' : 'hitVest') : isHuman && !seen && chance(0.5) ? 'hitUnseen' : type === 'bullet' ? 'hitShot' : type === 'stab' ? 'hitStab' : type === 'cut' ? 'hitCut' : 'hitBlunt';
+    const cat = attacker === 'a car' ? 'hitCar' : type === 'needle' ? 'injected' : vestTook === 'bullet' ? (armour === 'helmet' ? 'hitHelmet' : 'hitVest') : isHuman && !seen && chance(0.5) ? 'hitUnseen' : type === 'bullet' ? 'hitShot' : type === 'stab' ? 'hitStab' : type === 'cut' ? 'hitCut' : 'hitBlunt';
     this.ask(cat, 95, { part: where });
     if (rep.bones.some((b) => b.state === 'broken')) this.ask('boneBreak', 78, { part: where.replace('left ', '').replace('right ', '') }, 1.4);
   }
@@ -550,7 +551,11 @@ export class Mind {
     on('oneEye', h.blind === 1, 'one eye is gone', null, 0);
     on('legs', h.paralysedLegs, 'I cannot feel my legs', 'paralysed', 80);
     on('pulse', h.pulse > 150, 'my heart is hammering', null, 0);
-    on('dizzy', h.dizzy > 20 || h.concussion > 30, 'dizzy, head swimming', null, 0);
+    on('dizzy', h.dizziness > 30, 'dizzy, head swimming', null, 0);
+    on('poison', h.poison > 22, 'something is badly wrong inside me: sick, weak, sweating', 'poisoned', 72);
+    on('winded', h.stamina < 12 && this.h.state === ST.ANIM, 'completely out of breath', 'winded', 36);
+    on('rush', h.adrenaline > 0.65, 'heart pounding, hands shaking', null, 0);
+    this.aware = h.awareness / 100;
     if (this.deaf > 14) list.push('ears ringing');
     if (this.h.state === ST.RAGDOLL && h.conscious) list.push(h.canStand ? 'lying on the ground' : 'on the ground and cannot get up');
     if (!list.length) list.push('fine');
@@ -681,7 +686,7 @@ export class Minds {
       if (h === source || !h.h.conscious || h.removed) continue;
       const hd = h.bodies[P.HEAD];
       const d = Math.max(1, Math.hypot(x - hd.px, y - hd.py, z - hd.pz));
-      let level = dB - 20 * Math.log10(d) - m.deaf;
+      let level = dB - 20 * Math.log10(d) - m.deaf - (1 - (m.aware ?? 1)) * 14;
       if (level < 30) continue;
       // round a corner is quieter
       if (d > 4 && !g.world.lineClear(x, Math.max(y, 0.5), z, hd.px, hd.py, hd.pz)) level -= 9;

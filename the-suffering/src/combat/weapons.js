@@ -84,6 +84,12 @@ export const WEAPONS = {
     id: 'cuffs', name: 'Handcuffs', tag: 'Cuffs', label: 'CUFF', hold: 'none', tool: true, cuffs: true, mass: 0.35, half: [0.085, 0.014, 0.04], centre: 0,
     boxes: [[0.045, 0, 0, 0.07, 0.016, 0.075, STEEL], [-0.045, 0, 0, 0.07, 0.016, 0.075, STEEL], [0, 0, 0, 0.03, 0.008, 0.014, 0x8d9197], [0.045, 0, 0, 0.04, 0.02, 0.045, 0x26282c], [-0.045, 0, 0, 0.04, 0.02, 0.045, 0x26282c]],
   },
+  /* one dose of poison, in a syringe: a jab into somebody, and it goes to work over the next minute or two */
+  syringe: {
+    id: 'syringe', name: 'Poison syringe', tag: 'Syringe', label: 'INJECT', hold: 'none', tool: true, syringe: true, mass: 0.05, half: [0.01, 0.01, 0.08], centre: 0, mag: 1,
+    boxes: [[0, 0, 0, 0.018, 0.018, 0.075, 0xd9e2e6], [0, 0, 0.005, 0.012, 0.012, 0.06, 0x9ac93c], [0, 0, -0.05, 0.008, 0.008, 0.035, 0xeceff1], [0, 0, -0.07, 0.026, 0.006, 0.006, 0xeceff1],
+      [0, 0, 0.045, 0.006, 0.006, 0.014, 0xc8cdd0], [0, 0, 0.07, 0.0022, 0.0022, 0.04, 0xb8bec4]],
+  },
   /* an officer's fingerprint scanner: a glass plate, a screen, a body; it reads prints off skin */
   scanner: {
     id: 'scanner', name: 'Fingerprint scanner', tag: 'Scanner', label: 'SCAN', hold: 'none', tool: true, scanner: true, mass: 0.3, half: [0.036, 0.013, 0.07], centre: 0,
@@ -125,7 +131,8 @@ export const MOUNT = {
   ar15: { part: P.CHEST, pos: [0.02, -0.03, -0.15], q: slantUp(0.6), reach: 'back', dur: 0.72, word: 'back' },
   taser: { part: P.PELVIS, pos: [0.125, 0.035, 0.112], q: [H, 0, 0, H], reach: 'cross', dur: 0.5, word: 'holster' },      // cross-draw, front of the left hip
   cuffs: { part: P.PELVIS, pos: [0.05, 0.03, -0.118], q: [H, 0, 0, H], reach: 'hip', dur: 0.4, word: 'belt' },
-  scanner: { part: P.PELVIS, pos: [-0.118, 0.03, 0.112], q: [H, 0, 0, H], reach: 'hip', dur: 0.4, word: 'belt' },              // front of the right hip            // on the belt at the back
+  scanner: { part: P.PELVIS, pos: [-0.118, 0.03, 0.112], q: [H, 0, 0, H], reach: 'hip', dur: 0.4, word: 'belt' },              // front of the right hip
+  syringe: { part: P.PELVIS, pos: [-0.17, 0.06, 0.08], q: [H, 0, 0, H], reach: 'hip', dur: 0.35, word: 'pocket' },            // in a pocket
 };
 
 const _a = [0, 0, 0], _b = [0, 0, 0], _c = [0, 0, 0], _hit = [0, 0, 0, 0, 0, 0, 0], _n = [0, 0, 0];
@@ -414,6 +421,62 @@ export class Weapons {
     return this.cuff(p, t);
   }
 
+  /** The player, syringe in hand, jabs it into whoever is within reach in front of them. */
+  useSyringe() {
+    const g = this.game, p = g.player, it = this.equipped;
+    if (!it || !it.def.syringe || p.weapon !== it || p.swap) return false;
+    if (it.ammo <= 0) { g.ui?.toast('The syringe is empty.'); return false; }
+    const t = this._inFront(p, 1.45);
+    if (!t) { g.ui?.toast('Nobody within reach.'); return false; }
+    this.inject(p, t, it);
+    return true;
+  }
+
+  /**
+   * A needle into somebody: the upper arm or the shoulder nearest the one
+   * holding it, a sharp jab, and the dose goes in. Skin is not touched, so no
+   * fingerprints are left.
+   */
+  inject(by, t, it) {
+    const g = this.game;
+    it.ammo = 0;
+    this._paint(it);
+    // the jab itself: the stab, without a blade to land
+    if (by.anim.play('stab')) { by.anim.action.def = null; by.lunge = 0; }
+    const sideL = Math.sin(t.yaw) * (by.z - t.z) - Math.cos(t.yaw) * (by.x - t.x) < 0;
+    const part = t.attached[sideL ? P.UARM_L : P.UARM_R] ? (sideL ? P.UARM_L : P.UARM_R) : P.CHEST;
+    const b = t.bodies[part];
+    b.toWorld(0, 0.04 * t.scale, 0, _a);
+    t.h.inject(100);
+    g.audio?.at('stab', _a[0], _a[1], _a[2], 0.25);
+    t.mind?.feel(part, 'needle', { pain: 6, bones: [], ko: false }, by, 'syringe');
+    t.react?.(4, Math.sin(by.yaw), Math.cos(by.yaw), null);
+    g.minds?.witness({ kind: 'attack', actor: by, victim: t, weapon: 'syringe', part, x: _a[0], y: _a[1], z: _a[2], rep: { pain: 6, bones: [] } });
+    if (by.isPlayer) { g.ui?.toast('Injected.'); g.ui?.weaponsChanged(); }
+  }
+
+  /** A fingerprint scanner in the player's hand: whose prints are on the body in front of them? */
+  useScanner() {
+    const g = this.game, p = g.player;
+    const t = this._inFront(p, 1.8);
+    if (!t) { g.ui?.toast('Nobody within reach.'); return false; }
+    const mine = t.prints && t.prints.has(p.id);
+    g.ui?.toast(mine ? 'Fingerprints on them: yours.' : 'No prints on file.');
+    return true;
+  }
+
+  /** Whoever is nearest within `reach`, roughly where the player is facing. */
+  _inFront(p, reach) {
+    const g = this.game;
+    let t = null, best = reach;
+    for (const o of g.humans) {
+      if (o === p || o.removed) continue;
+      const d = Math.hypot(o.x - p.x, o.z - p.z);
+      if (d < best && Math.abs(wrapAngle(Math.atan2(o.x - p.x, o.z - p.z) - g.camYaw)) < 1.25) { best = d; t = o; }
+    }
+    return t;
+  }
+
   /* ---- for anyone: hand to holster and back ---- */
 
   /** Starts moving `to` into the hand (or the hand's contents away, for null). */
@@ -496,6 +559,8 @@ export class Weapons {
     const g = this.game, p = g.player, def = this.def;
     if (p.state !== ST.ANIM || !p.h.conscious || p.cuffed || p.cuffing) return false;
     if (def.gun) return this.fire();
+    if (def.syringe) return this.useSyringe();
+    if (def.scanner) return this.useScanner();
     if (def.tool) return this.useCuffs();
     if (p.anim.busy) { if (which >= 0) this.choice = which; else this.queued = true; return false; }
     const usesRight = def.id !== 'fists';
@@ -549,6 +614,7 @@ export class Weapons {
     }
     human.lowAim = clip.limb === 'footR' ? 0 : low;
     human.lunge = lunge;
+    human.h.spend(clip.limb === 'footR' ? 6 : def.blade ? 4.5 : 3.5);
     human.guardT = 5;
     human.anim.play(name);
     const act = human.anim.action;

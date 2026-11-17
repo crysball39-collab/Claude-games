@@ -66,12 +66,16 @@ h1, h2, h3, p { margin: 0; }
 .hb.on svg { stroke: var(--clinic); }
 .hb.on span { color: var(--clinic); }
 
-#vitals { width: 118px; padding: 6px 8px; border-radius: 8px; background: var(--glass); border: 1px solid rgba(233, 227, 215, 0.14); display: grid; gap: 5px; pointer-events: none; }
-.vrow { display: grid; grid-template-columns: 38px 1fr; align-items: center; gap: 6px; }
+#vitals { width: 126px; padding: 6px 8px; border-radius: 8px; background: var(--glass); border: 1px solid rgba(233, 227, 215, 0.14); display: grid; gap: 5px; pointer-events: none; }
+.vrow { display: grid; grid-template-columns: 44px 1fr; align-items: center; gap: 6px; }
 .vrow i { font: 700 8px/1 var(--display); letter-spacing: 0.1em; font-style: normal; color: var(--dim); }
 .vbar { height: 6px; border-radius: 3px; background: rgba(233, 227, 215, 0.14); overflow: hidden; }
 .vbar > div { height: 100%; width: 100%; background: var(--ok); border-radius: 3px; transition: width 0.25s; }
 .vbar.blood > div { background: var(--blood); }
+.vbar.stamina > div { background: #d9c46a; }
+/* the edges of the picture darken as the player stops taking things in */
+#hud > #haze { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.6s;
+  background: radial-gradient(ellipse 75% 70% at 50% 50%, rgba(6, 4, 4, 0) 40%, rgba(6, 4, 4, 0.55) 72%, rgba(4, 2, 2, 0.94) 100%); }
 /* the wanted level: two stars, lit gold when the police are after you, flashing while they have lost sight of you */
 #wanted .stars { display: flex; gap: 4px; }
 #wanted .stars b { width: 13px; height: 13px; display: block; background: rgba(233, 227, 215, 0.2);
@@ -203,6 +207,7 @@ h1, h2, h3, p { margin: 0; }
 .ic.officer { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e9e3d7'%3E%3Cpath d='M7 5l5-3 5 3v2H7z'/%3E%3Crect x='9' y='7' width='6' height='4'/%3E%3Crect x='8' y='12' width='8' height='6'/%3E%3Crect x='5' y='12' width='2' height='6'/%3E%3Crect x='17' y='12' width='2' height='6'/%3E%3Crect x='8' y='19' width='3' height='4'/%3E%3Crect x='13' y='19' width='3' height='4'/%3E%3Crect x='13' y='13' width='2' height='2' fill='%230e1114'/%3E%3C/svg%3E"); }
 .ic.helmet { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e9e3d7'%3E%3Cpath d='M3 15c0-6 4-10 9-10s9 4 9 10v2H11v-4H7v4H3z'/%3E%3Crect x='11' y='18' width='11' height='2'/%3E%3C/svg%3E"); }
 .ic.cuffs { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e9e3d7' stroke-width='2.4'%3E%3Ccircle cx='7' cy='14' r='4.5'/%3E%3Ccircle cx='17' cy='14' r='4.5'/%3E%3Cpath d='M10 9l2-3 2 3'/%3E%3C/svg%3E"); }
+.ic.syringe { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e9e3d7' stroke-width='2'%3E%3Cpath d='M15 3l6 6M17 5l-9 9-3 1 1-3 9-9M4 20l3-3M11 8l2 2M9 10l2 2'/%3E%3C/svg%3E"); }
 .ic.taser { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e9e3d7'%3E%3Cpath d='M2 8h14v5h-6l-1 2H7l-1 5H3l1-7H2z'/%3E%3Cpath d='M17 9l2-2 1 2 2-1-1 3 1 2-2-1-1 2-1-2z'/%3E%3C/svg%3E"); }
 .ic.pistol { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e9e3d7'%3E%3Cpath d='M2 7h19v5h-9l-1 2H9l-1 6H4l1-8H2z'/%3E%3C/svg%3E"); }
 .ic.rifle { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e9e3d7'%3E%3Cpath d='M1 9h13V8h4v1h5v2h-5v1h-3l1 6h-3l-1.5-5H9l-2 4H3l2-4H1z'/%3E%3C/svg%3E"); }
@@ -235,8 +240,8 @@ h1, h2, h3, p { margin: 0; }
 #doc-cond-label.good { color: var(--ok); } #doc-cond-label.warn { color: var(--warn); } #doc-cond-label.bad { color: var(--bad); } #doc-cond-label.dead { color: var(--dim); }
 #doc-cond-note { font-size: 11.5px; color: var(--dim); }
 #doc-ecg { width: 100%; height: 54px; display: block; border-radius: 6px; background: #0b1013; border: 1px solid var(--line); }
-#doc-vitals, #doc-emotions { display: grid; gap: 6px; margin-top: 10px; }
-.meter { display: grid; grid-template-columns: 62px 1fr 62px; align-items: center; gap: 8px; }
+#doc-vitals, #doc-emotions, #doc-state { display: grid; gap: 6px; margin-top: 10px; }
+.meter { display: grid; grid-template-columns: 80px 1fr 64px; align-items: center; gap: 8px; }
 .meter label { font: 700 10px/1 var(--display); letter-spacing: 0.12em; color: var(--dim); text-transform: uppercase; }
 .meter .track { height: 9px; border-radius: 5px; background: var(--ink); overflow: hidden; border: 1px solid var(--line); }
 .meter .fill { height: 100%; border-radius: 4px; background: var(--ok); transition: width 0.2s linear; }
@@ -302,12 +307,12 @@ h1, h2, h3, p { margin: 0; }
   #toast { top: calc(var(--gt) + 98px); }
   #top-right { gap: 5px; } #top-left { gap: 5px; }
   .hb { width: 46px; }
-  #vitals { width: 92px; }
-  .vrow { grid-template-columns: 30px 1fr; }
+  #vitals { width: 104px; }
+  .vrow { grid-template-columns: 44px 1fr; }
 }
 @media (max-width: 420px) {
   /* too narrow for one row: vitals drop to a second, weapons to a third */
-  #vitals { position: absolute; top: 54px; left: 0; width: 118px; }
+  #vitals { position: absolute; top: 54px; left: 0; width: 126px; }
   #weapon-bar { top: calc(var(--gt) + 100px); }
   #toast { top: calc(var(--gt) + 148px); }
 }

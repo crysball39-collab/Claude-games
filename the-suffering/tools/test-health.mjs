@@ -132,5 +132,44 @@ seed(1);
   h.heal();
   ok('healing restores them', h.canStand && h.bloodPct === 100 && h.wounds.length === 0);
 }
+{
+  seed(30);
+  const h = new Health();
+  run(h, 20, { moving: 1, running: 1 });
+  const tired = h.stamina;
+  run(h, 15, { moving: 0 });
+  ok('running uses up stamina and rest brings it back', tired < 30 && h.stamina > 90, `after 20s running ${tired.toFixed(0)}, after 15s rest ${h.stamina.toFixed(0)}`);
+}
+{
+  seed(31);
+  const h = new Health();
+  run(h, 3, { fear: 95 });
+  const up = h.adrenaline;
+  run(h, 30, { fear: 5 });
+  const later = h.adrenaline;
+  ok('fear brings adrenaline up in seconds and it lingers', up > 0.6 && later > 0.25 && later < up, `after 3s ${up.toFixed(2)}, 30s after the fright ${later.toFixed(2)}`);
+}
+{
+  seed(32);
+  const h = new Health();
+  h.inject(100);
+  let sick = -1, down = -1;
+  const t = { out: -1, dead: -1 };
+  for (let i = 0; i < 1800; i++) {
+    h.tick(0.1);
+    const now = (i + 1) / 10;
+    if (sick < 0 && h.nausea > 20 && h.dizziness > 10) sick = now;
+    if (down < 0 && !h.canStand) down = now;
+    if (t.out < 0 && !h.conscious) t.out = now;
+    if (t.dead < 0 && !h.alive) { t.dead = now; break; }
+  }
+  ok('a dose of poison makes them sick, drops them, and kills them', sick > 0 && sick < 20 && down > 20 && down < 60 && t.dead > down && t.dead < 150 && h.cause === 'Poisoning',
+    `sick ${sick}s, down ${down}s, out ${t.out}s, dead ${t.dead}s: ${h.cause}`);
+  const k = new Health();
+  k.concussion = 40; k.dizzy = 20;
+  ok('a knock on the head and a spin leave them dizzy and less aware', k.dizziness > 45 && k.awareness < 85, `dizziness ${k.dizziness.toFixed(0)}, awareness ${k.awareness.toFixed(0)}`);
+  k.heal();
+  ok('healing clears poison, dizziness and tiredness', k.dizziness === 0 && k.awareness === 100 && k.stamina === 100 && k.poison === 0);
+}
 console.log(fails ? `\n${fails} FAILED` : '\nall health checks passed');
 process.exit(fails ? 1 : 0);
