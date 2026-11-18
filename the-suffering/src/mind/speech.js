@@ -298,9 +298,9 @@ export class Speech {
       p.jumpy > 0.7 ? 'easily startled' : '', p.squeamish > 0.7 ? 'squeamish' : '', p.chatty > 0.7 ? 'talkative' : p.chatty < 0.35 ? 'quiet' : ''].filter(Boolean).join(', ') || 'unremarkable';
     const out = [];
     out.push(`#${h.id}: ${L.first}, ${L.age}, ${L.desc}. Works as: ${p.job}. Today: ${p.errand}. Habit: ${p.quirk}. Nature: ${traits}.`);
-    const dz = Math.round(hh.dizziness), po = Math.round(hh.poison);
+    const dz = Math.round(hh.dizziness), po = Math.round(hh.poison), bu = Math.round(hh.burnArea * 100);
     out.push(`Condition: ${c.label.toLowerCase()}, ${c.aware}. Pain ${Math.round(hh.pain)}/100, blood ${Math.round(hh.bloodPct)}%, pulse ${Math.round(hh.pulse)}, stamina ${Math.round(hh.stamina)}/100` +
-      `${dz > 20 ? `, dizziness ${dz}/100` : ''}${po > 5 ? `, poisoned ${po}/100` : ''}. ${m.doing}.`);
+      `${dz > 20 ? `, dizziness ${dz}/100` : ''}${po > 5 ? `, poisoned ${po}/100` : ''}${bu > 1 ? `, burns over ${bu}% of the skin` : ''}${h.fire && h.burning > 0.1 ? ', ON FIRE' : ''}. ${m.doing}.`);
     out.push(`Feels: ${m.feels.join('; ') || 'fine'}.`);
     out.push(`Emotions: fear ${Math.round(e.fear)}, anger ${Math.round(e.anger)}, sadness ${Math.round(e.sadness)}, joy ${Math.round(e.joy)}, surprise ${Math.round(e.surprise)}, boredom ${Math.round(e.boredom)}.`);
     out.push('Sees: ' + (hh.blind >= 2 ? 'nothing; they are blind' : m.sees.length ? m.sees.slice(0, 5).map((s) => s.text).join('; ') : 'nobody nearby') + '.');

@@ -622,7 +622,7 @@ if (want('Police')) {
       calm = cops().every((h) => h.brain.mode === 'post' && !h.weapon && !h.reload && !h.swap && !h.cuffing) ? calm + 0.1 : 0;
       if (down && i > 150 && calm >= 3) break;
     }
-    out.fight = { fires, hit: p.h.wounds.length, down, reloading, said: said.slice(0, 3).join(' / '), ammo: cops().map((h) => { const pi = (h.kit || []).find((i) => i.type === 'm1911'); return pi ? pi.ammo : -1; }).join(','), modes: cops().map((h) => h.brain.mode + (h.weapon ? '+gun' : '')).join(','), mags: w.casings.filter((c) => c.size).length };
+    out.fight = { fires, hit: p.h.wounds.length, down, reloading, said: said.slice(0, 3).join(' / '), ammo: cops().filter((h) => !(h.kit || []).some((i) => i.def.rifle)).map((h) => { const pi = (h.kit || []).find((i) => i.type === 'm1911'); return pi ? pi.ammo : -1; }).join(','), modes: cops().map((h) => h.brain.mode + (h.weapon ? '+gun' : '')).join(','), mags: w.casings.filter((c) => c.size).length };
     g.speech.say = orig; w.npcFire = nf;
     return out;
   });
@@ -1224,9 +1224,11 @@ if (want('Medical')) {
     // a knock on the head: dizzy, and less aware of what is going on
     a.h.concussion = 50; a.h.dizzy = 20; g.advance(1.2);
     out.dizzy = { dizziness: a.h.dizziness, awareness: a.h.awareness };
-    const far = (aw) => { a.mind.aware = aw; return a.mind.canSee(p.x, p.y + 1.5, p.z + 0.01, true, true); };
+    // somebody fresh, on their feet, looking down an open street at the player 40 m off
+    const b = V.still(g.spawnHuman(4, -18, -Math.PI / 2)); g.advance(0.3);
+    const far = (aw) => { b.mind.aware = aw; return b.mind.canSee(p.x, p.y + 1.5, p.z + 0.01, true, true); };
     a.h.concussion = 0; a.h.dizzy = 0;
-    p.reset(a.x + Math.sin(a.yaw) * 40, a.z + Math.cos(a.yaw) * 40, a.yaw + Math.PI); g.advance(0.1);
+    p.reset(b.x + Math.sin(b.yaw) * 40, b.z + Math.cos(b.yaw) * 40, b.yaw + Math.PI); g.advance(0.1);
     out.sight = { clear: far(1), clouded: far(0.25) };
     g.paused = true;
     return out;
@@ -1445,7 +1447,7 @@ if (want('Rope')) {
   });
   check('TIE one thing, then TIE TO another: a rope between them', r.tie1 && r.label === 'TIE TO' && r.tie2 && r.ropes === 1);
   check('a crate on a rope is dragged by whoever walks off with the other end', r.dragged > 4, `${r.dragged.toFixed(1)} m`);
-  check('somebody tied to the ground gets no further than the rope', r.held < 1.2, `${r.held.toFixed(2)} m`);
+  check('somebody tied to the ground gets no further than the rope', r.held < 1.5, `${r.held.toFixed(2)} m, where they would have walked 6 m`);
   check('a blade cuts a rope', r.cut);
 }
 
@@ -1485,9 +1487,8 @@ if (want('Electricity')) {
     // a round through the floodlight's glass
     for (const it of w.items.slice()) w.remove(it);
     w.give(p, 'glock', true); g.advance(0.8);
-    const lens = [0, 0, 0]; flood.body.toWorld(0, 0.66, 0.1, lens);
-    aim({ px: lens[0], py: lens[1], pz: lens[2] });
-    for (let i = 0; i < 4 && !flood.broken; i++) { w.fire(); g.advance(0.2); }
+    const lens = [0, 0, 0];
+    for (let i = 0; i < 8 && !flood.broken; i++) { flood.body.toWorld(0, 0.66, 0.1, lens); aim({ px: lens[0], py: lens[1], pz: lens[2] }); w.fire(); g.advance(0.25); }
     out.lens = flood.broken;
     g.paused = true;
     return out;

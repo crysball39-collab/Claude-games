@@ -595,6 +595,9 @@ export class Mind {
     on('poison', h.poison > 22, 'something is badly wrong inside me: sick, weak, sweating', 'poisoned', 72);
     on('winded', h.stamina < 12 && this.h.state === ST.ANIM, 'completely out of breath', 'winded', 36);
     on('rush', h.adrenaline > 0.65, 'heart pounding, hands shaking', null, 0);
+    if (this.h.fire && this.h.burning > 0.1) list.push('on fire, burning');
+    else if (h.burnArea > 0.03) list.push(h.burnArea > 0.2 ? 'badly burnt, the skin raw and stinging' : 'burnt, and it stings');
+    if (this.game.power && this.game.power.zaps.has(this.h)) list.push('electricity going through me, every muscle locked');
     this.aware = h.awareness / 100;
     if (this.deaf > 14) list.push('ears ringing');
     if (this.h.state === ST.RAGDOLL && h.conscious) list.push(h.canStand ? 'lying on the ground' : 'on the ground and cannot get up');
