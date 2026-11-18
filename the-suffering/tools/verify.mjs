@@ -30,6 +30,7 @@ await run(() => {
       if (p.cuffed) g.weapons.uncuff(p, null);
       p.tased = 0; p.dazeT = 0;
       for (const it of g.weapons.items.slice()) g.weapons.remove(it);
+      g.ropes?.clear(); g.fire?.clear(); g.power?.clear(); g.voxels?.clear(); if (g.daylight && g.daylight.mode !== 'day') g.daylight.set('day');
       p.h.heal(); p.reset(0, -18, Math.PI / 2);
       g.camYaw = Math.PI / 2; g.camPitch = -0.08; g.gore.clean();
       g.paused = false; g.advance(0.3);
@@ -1274,6 +1275,304 @@ if (want('Medical')) {
   check('a needle leaves no fingerprints', s.course.prints === 0);
   const names = s.rows.map((x) => x.split(' ')[0].toLowerCase());
   check('doctor mode shows awareness, dizziness, stamina, adrenaline, poison and shock', ['awareness', 'dizziness', 'stamina', 'adrenaline', 'poison', 'shock'].every((n) => names.includes(n)), s.rows.join(' / '));
+}
+
+/* ---------------------------- settings scroll ---------------------------- */
+head('Settings');
+if (want('Settings')) {
+  await t.page.setViewportSize({ width: 844, height: 390 });
+  await run(() => { __ts.ui.pause('settings'); });
+  await t.page.waitForTimeout(300);
+  const box = await run(() => { const c = document.querySelector('#pause .card').getBoundingClientRect(), s = document.querySelector('#pause .scroll'); return { bottom: c.bottom, vh: innerHeight, sh: s.scrollHeight, ch: s.clientHeight }; });
+  await t.page.mouse.move(420, 250); await t.page.mouse.wheel(0, 500); await t.page.waitForTimeout(300);
+  const top = await run(() => document.querySelector('#pause .scroll').scrollTop);
+  await run(() => { __ts.ui.resume(); });
+  await t.page.setViewportSize({ width: 1100, height: 600 });
+  await t.page.waitForTimeout(300);
+  check('on a short screen the settings fit and scroll', box.bottom <= box.vh + 1 && box.sh > box.ch && top > 100, `card ends at ${Math.round(box.bottom)} of ${box.vh}px; scrolled ${top}px`);
+}
+
+/* -------------------------------- glock 19 ------------------------------- */
+head('Glock-19');
+if (want('Glock')) {
+  const r = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, out = {};
+    V.stage();
+    const it = w.give(p, 'glock', true); g.advance(0.8);
+    out.mag = it.def.mag;
+    let fired = 0;
+    for (let i = 0; i < 20; i++) { if (w.fire()) fired++; g.advance(0.15); }
+    out.fired = fired;
+    w.reload(); g.advance(2.2);
+    out.full = it.ammo;
+    w.holster(); g.advance(1);
+    out.away = !p.weapon && w.inventory.includes(it);
+    g.paused = true;
+    return out;
+  });
+  check('fifteen rounds, then empty', r.mag === 15 && r.fired === 15, `${r.fired} fired from a ${r.mag}-round magazine`);
+  check('reloads, and goes in a shoulder holster', r.full === 15 && r.away);
+}
+
+/* ---------------------------- exit bullet holes --------------------------- */
+head('Exit holes');
+if (want('Exit holes')) {
+  const r = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, out = {};
+    V.stage();
+    const aim = (b) => { for (let k = 0; k < 6; k++) { V.aimAt(b); g.advance(1 / 60); } };
+    // a crate with somebody behind it
+    const c = g.spawnCrate(p.x + 3, 0.6, p.z); g.advance(1);
+    const v = V.still(g.spawnHuman(p.x + 4.4, p.z, -Math.PI / 2)); v.h.tough = 95; g.advance(0.5);
+    w.give(p, 'm1911', true); g.advance(0.8);
+    const e0 = w.stats.exits;
+    aim({ px: c.body.px, py: Math.min(c.body.py + c.body.hy - 0.06, v.bodies[11].py), pz: c.body.pz });
+    for (let i = 0; i < 3; i++) { w.fire(); g.advance(0.25); }
+    out.crate = { exits: w.stats.exits - e0, behind: v.h.wounds.filter((x) => x.type === 'gunshot').length };
+    // a car, broadside on
+    g.traffic.setCount(1); g.advance(0.2);
+    const car = g.traffic.cars[0];
+    if (car) {
+      const b = car.body, side = [Math.cos(car.yaw), 0, -Math.sin(car.yaw)];
+      const e1 = w.stats.exits;
+      w._bullet(p, w.def, b.px - side[0] * 3, b.py + 0.1, b.pz - side[2] * 3, side[0], 0, side[2], 1.3, 0);
+      out.car = w.stats.exits - e1;
+    }
+    g.traffic.setCount(0);
+    // a wooden wall
+    for (const o of g.props.slice()) g.removeProp(o);
+    const wall = g.voxels.wall('wood', p.x + 4, p.z, Math.PI / 2); g.advance(0.3);
+    const lost0 = wall.lost, x0 = g.voxels.exits;
+    aim({ px: wall.body.px, py: 1.2, pz: wall.body.pz });
+    for (let i = 0; i < 3; i++) { w.fire(); g.advance(0.25); }
+    out.wood = { lost: wall.lost - lost0, exits: g.voxels.exits - x0 };
+    g.paused = true;
+    return out;
+  });
+  check('a round goes through a crate and out of the far side, and hits whoever is behind it', r.crate.exits > 0 && r.crate.behind > 0, `${r.crate.exits} exit holes, ${r.crate.behind} wounds behind`);
+  check('through both sides of a car', r.car > 0, `${r.car} exit holes`);
+  check('through a wooden wall: a hole in, and a bigger one out', r.wood.lost > 3 && r.wood.exits > 0, `${r.wood.lost} cubes gone for 3 rounds, ${r.wood.exits} exit holes`);
+}
+
+/* --------------------------- walls and beams ---------------------------- */
+head('Walls and beams');
+if (want('Walls')) {
+  const r = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, Vx = g.voxels, out = {};
+    V.stage();
+    const aim = (x, y, z) => { for (let k = 0; k < 6; k++) { V.aimAt({ px: x, py: y, pz: z }); g.advance(1 / 60); } };
+    const steel = Vx.wall('sheet', p.x + 4, p.z, Math.PI / 2), beam = Vx.beam(true, p.x, p.z + 4, 0);
+    g.advance(1.5);
+    out.made = { steelFixed: steel.body.kinematic, beamFree: !beam.body.kinematic, beamKg: Math.round(beam.body.mass), cubes: steel.count + beam.count };
+    w.give(p, 'm1911', true); g.advance(0.8);
+    aim(steel.body.px, 1.3, steel.body.pz);
+    const s0 = steel.lost, t0 = w.stats.through;
+    w.fire(); g.advance(0.3);
+    out.pistol = { lost: steel.lost - s0, through: w.stats.through - t0 };
+    for (const it of w.items.slice()) w.remove(it);
+    w.give(p, 'm4a1', true); g.advance(0.9);
+    aim(steel.body.px, 0.9, steel.body.pz + 0.4);
+    const s1 = steel.lost, t1 = w.stats.through;
+    w.fire(); g.advance(0.3);
+    out.rifle = { lost: steel.lost - s1, through: w.stats.through - t1 };
+    // cut through the beam's middle, a slice at a time: two beams
+    const b0 = Vx.broken;
+    for (let k = 0; k < beam.nz; k++) for (let j = 0; j < beam.ny; j++) for (let i = 44; i <= 45; i++) beam.remove(beam.idx(i, j, k), 0, 0, 0, false);
+    g.advance(1);
+    out.split = { pieces: Vx.list.filter((x) => x.kind === 'beam').length, broken: Vx.broken - b0, free: Vx.list.filter((x) => x.kind === 'beam').every((x) => !x.anchored) };
+    // a wooden wall, chopped at with a machete, then cut through at the foot
+    for (const o of g.props.slice()) g.removeProp(o);
+    for (const it of w.items.slice()) w.remove(it);
+    const wood = Vx.wall('wood', p.x + 1.05, p.z, Math.PI / 2);
+    g.camYaw = Math.PI / 2; g.camPitch = -0.1;
+    w.give(p, 'machete', true); g.advance(0.8);
+    const c0 = w.stats.chops;
+    for (let i = 0; i < 8; i++) { if (!p.anim.busy) w.attack(i % 3); g.advance(0.45); }
+    out.chops = w.stats.chops - c0;
+    for (let k = 0; k < wood.nz; k++) for (let j = 0; j < 3; j++) for (let i = 0; i < wood.nx; i++) wood.remove(wood.idx(i, j, k), 0, 0, 0, false);
+    g.advance(0.2);
+    const fell = Vx.list.find((x) => x.kind === 'wall');
+    out.fell = fell ? { free: !fell.anchored } : null;
+    g.advance(3);
+    out.fellUp = fell ? (1 - 2 * (fell.body.qx ** 2 + fell.body.qz ** 2)).toFixed(2) : null;
+    g.paused = true;
+    return out;
+  });
+  check('walls stand where they are put, beams lie loose and heavy', r.made.steelFixed && r.made.beamFree && r.made.beamKg > 150, `large beam ${r.made.beamKg} kg; ${r.made.cubes} cubes`);
+  check('a pistol round dents steel; a rifle round goes through it', r.pistol.lost === 0 && r.pistol.through === 0 && r.rifle.lost > 0 && r.rifle.through > 0, `pistol: ${r.pistol.lost} cubes, rifle: ${r.rifle.lost} cube, ${r.rifle.through} through`);
+  check('cut through, a beam comes apart into two beams that fall as they will', r.split.pieces === 2 && r.split.broken >= 1 && r.split.free, `${r.split.pieces} pieces`);
+  check('a machete chops cubes out of wood', r.chops > 3, `${r.chops} cubes`);
+  check('a wall with its foot cut through is no longer held up, and falls', r.fell && r.fell.free && Number(r.fellUp) < 0.9, `upright ${r.fellUp} after 3 s`);
+}
+
+/* ----------------------------- rope and wire ----------------------------- */
+head('Rope and wire');
+if (want('Rope')) {
+  const r = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, R = g.ropes, out = {};
+    V.stage(); R.clear();
+    const aim = (b) => { for (let k = 0; k < 6; k++) { V.aimAt(b); g.advance(1 / 60); } };
+    g.camPitch = -0.3;
+    w.give(p, 'rope', true); g.advance(0.8);
+    const crate = g.spawnCrate(p.x + 1.6, 0.6, p.z); g.advance(1);
+    const v = V.still(g.spawnHuman(p.x + 2.2, p.z + 1.6, -Math.PI / 2)); g.advance(0.5);
+    aim({ px: crate.body.px, py: crate.body.py + 0.2, pz: crate.body.pz });
+    out.tie1 = w.attack(-1); out.label = document.querySelector('#attack-label').textContent;
+    aim(v.bodies[1]);
+    out.tie2 = w.attack(-1);
+    out.ropes = R.list.length;
+    v.brain = { update() { v.intent.mx = 0; v.intent.mz = 1; }, pause: 0, mode: 'wander' };
+    const c0 = [crate.body.px, crate.body.pz];
+    g.advance(6);
+    out.dragged = Math.hypot(crate.body.px - c0[0], crate.body.pz - c0[1]);
+    // tied to the ground: held there
+    R.clear();
+    const at = { kind: 'world', wp: [v.x, 0.02, v.z + 0.5] };
+    const rr = R.make({ kind: 'human', human: v, part: 2, body: v.bodies[2], wp: [v.bodies[2].px, v.bodies[2].py, v.bodies[2].pz], lp: [0, 0, 0] }, at, p);
+    const z0 = v.z; g.advance(6);
+    out.held = v.z - z0;
+    // a blade through a rope strung across at chest height, where a slash goes, with nobody in the way
+    R.clear(); g.removeHuman(v);
+    for (const it of w.items.slice()) w.remove(it);
+    p.reset(0, -18, Math.PI / 2); g.camYaw = Math.PI / 2; g.camPitch = -0.15; g.advance(0.3);
+    R.make({ kind: 'world', wp: [p.x + 0.8, 1.5, p.z - 0.8] }, { kind: 'world', wp: [p.x + 0.8, 1.5, p.z + 0.8] }, p);
+    g.advance(0.2);
+    w.give(p, 'knife', true); g.advance(0.8);
+    for (let i = 0; i < 10 && R.list.length; i++) { if (!p.anim.busy) w.attack(i % 2); g.advance(0.35); }
+    out.cut = R.list.length === 0;
+    g.paused = true;
+    return out;
+  });
+  check('TIE one thing, then TIE TO another: a rope between them', r.tie1 && r.label === 'TIE TO' && r.tie2 && r.ropes === 1);
+  check('a crate on a rope is dragged by whoever walks off with the other end', r.dragged > 4, `${r.dragged.toFixed(1)} m`);
+  check('somebody tied to the ground gets no further than the rope', r.held < 1.2, `${r.held.toFixed(2)} m`);
+  check('a blade cuts a rope', r.cut);
+}
+
+head('Electricity');
+if (want('Electricity')) {
+  const r = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, R = g.ropes, Pw = g.power, out = {};
+    V.stage(); R.clear();
+    const aim = (b) => { for (let k = 0; k < 6; k++) { V.aimAt(b); g.advance(1 / 60); } };
+    g.camPitch = -0.3;
+    const gen = g.things.spawn('generator', p.x + 1.8, p.z, 0);
+    const bulb = g.things.spawn('bulb', p.x + 1.9, p.z + 1.3, 0), bulb2 = g.things.spawn('bulb', p.x + 1.9, p.z - 1.3, 0);
+    const flood = g.things.spawn('flood', p.x + 3.4, p.z + 2.4, -Math.PI / 2);
+    g.advance(1);
+    w.give(p, 'wire', true); g.advance(0.8);
+    aim({ px: gen.body.px, py: gen.body.py + 0.1, pz: gen.body.pz });
+    out.wire1 = w.attack(-1); out.label = document.querySelector('#attack-label').textContent;
+    aim(bulb.body);
+    out.wire2 = w.attack(-1);
+    const end = (o) => ({ kind: 'prop', prop: o.prop, body: o.body, wp: [o.body.px, o.body.py, o.body.pz], lp: [0, 0, 0] });
+    R.make(end(bulb), end(flood), p, 'wire');
+    R.make(end(gen), end(bulb2), p, 'rope');
+    g.advance(0.3);
+    out.offLit = bulb.lit;
+    // START, by USE, standing beside it
+    p.reset(gen.body.px - 1.1, gen.body.pz, Math.PI / 2); g.advance(0.3);
+    out.useLabel = document.querySelector('#use-label').textContent;
+    w.pickUp(); g.advance(0.8);
+    out.on = { running: gen.running, bulb: bulb.lit, flood: flood.lit, roped: bulb2.lit, lights: g.lights.stats.assigned };
+    // somebody with a live wire on them
+    const v = V.still(g.spawnHuman(p.x + 3.2, p.z - 1.5, -Math.PI / 2)); g.advance(0.5);
+    R.make(end(gen), { kind: 'human', human: v, part: 7, body: v.bodies[7], wp: [v.bodies[7].px, v.bodies[7].py, v.bodies[7].pz], lp: [0, 0, 0] }, p, 'wire');
+    g.advance(2);
+    out.zap = { locked: v.tased > 0, down: v.state === 2, burn: v.h.burns[7], air: v.h.air };
+    g.things.use(gen); g.advance(1.2);
+    out.freed = v.tased <= 0 && !Pw.zaps.has(v);
+    // a round through the floodlight's glass
+    for (const it of w.items.slice()) w.remove(it);
+    w.give(p, 'glock', true); g.advance(0.8);
+    const lens = [0, 0, 0]; flood.body.toWorld(0, 0.66, 0.1, lens);
+    aim({ px: lens[0], py: lens[1], pz: lens[2] });
+    for (let i = 0; i < 4 && !flood.broken; i++) { w.fire(); g.advance(0.2); }
+    out.lens = flood.broken;
+    g.paused = true;
+    return out;
+  });
+  check('WIRE one thing, then WIRE TO another', r.wire1 && r.label === 'WIRE TO' && r.wire2);
+  check('START the generator, and lights wired to it come on, one through the other', r.useLabel === 'START' && r.on.running && r.on.bulb && r.on.flood && !r.offLit && r.on.lights > 0, `bulb ${r.on.bulb}, floodlight ${r.on.flood}, ${r.on.lights} real lights`);
+  check('a rope carries no power', !r.on.roped);
+  check('a live wire on somebody: locked rigid, burnt where it goes in, short of air', r.zap.locked && r.zap.down && r.zap.burn > 5 && r.zap.air < 97, `burn ${r.zap.burn.toFixed(0)}, air ${r.zap.air.toFixed(0)}`);
+  check('the generator off, and it lets them go', r.freed);
+  check('a round through a floodlight breaks the glass', r.lens);
+}
+
+/* ------------------------------- the flamethrower ------------------------ */
+head('Flamethrower and burns');
+if (want('Flamethrower')) {
+  const r = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, F = g.fire, out = {};
+    V.stage();
+    const aim = (b) => { for (let k = 0; k < 6; k++) { V.aimAt(b); g.advance(1 / 60); } };
+    const it = w.give(p, 'flamethrower', true); g.advance(1);
+    const v = g.spawnHuman(p.x + 4, p.z, -Math.PI / 2);
+    const said = []; const ask = v.mind.ask.bind(v.mind); v.mind.ask = (k, ...a) => { said.push(k); return ask(k, ...a); };
+    g.advance(0.6);
+    aim(v.bodies[2]);
+    T.press('attack'); for (let i = 0; i < 70; i++) g.advance(1 / 60); T.release('attack');
+    out.fuel = it.ammo;
+    out.lit = !!v.fire;
+    let ran = 0, rolled = false;
+    for (let i = 0; i < 40; i++) { g.advance(0.25); if (v.fire && v.state === 0 && v.speed > 2) ran++; if (v.rollT > 0) rolled = true; }
+    out.burn = { area: v.h.burnArea, worst: Math.max(...v.h.burns), out: !v.fire, said: [...new Set(said)].join(','), ran, rolled };
+    g.ui.toggleDoctor(true); g.ui.doctor.select(v); g.ui.update(0.3);
+    out.doctor = [...document.querySelectorAll('#doc-wounds li')].map((li) => li.textContent).filter((t) => /Burn/.test(t)).length;
+    g.ui.toggleDoctor(false);
+    w.reload(); g.advance(3);
+    out.refilled = it.ammo === it.def.mag;
+    // wood catches; a crate burns down
+    T.clear();
+    const wall = g.voxels.wall('wood', p.x + 4, p.z, Math.PI / 2); g.advance(0.3);
+    aim({ px: wall.body.px, py: 0.6, pz: wall.body.pz });
+    T.press('attack'); for (let i = 0; i < 60; i++) g.advance(1 / 60); T.release('attack');
+    let lit = 0;
+    for (let i = 0; i < 30; i++) { g.advance(0.1); lit = Math.max(lit, wall.burning.length); }
+    out.woodLit = lit;
+    const n0 = wall.count; g.advance(15);
+    out.woodGone = n0 - wall.count;
+    const crate = g.spawnCrate(p.x + 3, 0.6, p.z + 2.5); g.advance(1);
+    aim(crate.body);
+    T.press('attack'); for (let i = 0; i < 90; i++) g.advance(1 / 60); T.release('attack');
+    out.crateLit = !!crate.fire;
+    g.advance(36);
+    out.crateGone = !g.props.includes(crate);
+    g.paused = true;
+    return out;
+  });
+  check('the flamethrower uses fuel and sets people alight', r.lit && r.fuel < 95, `fuel left ${r.fuel}`);
+  check('somebody on fire runs, then drops and rolls, and it goes out', r.burn.ran > 0 && r.burn.rolled && r.burn.out, `ran for ${(r.burn.ran * 0.25).toFixed(2)} s; ${r.burn.said}`);
+  check('the burns are real: the medical model and the doctor show them', r.burn.area > 0.03 && r.burn.worst > 25 && r.doctor > 0, `${Math.round(r.burn.area * 100)}% of the skin, worst ${r.burn.worst.toFixed(0)}; ${r.doctor} burns listed`);
+  check('a new fuel canister on reload', r.refilled);
+  check('wood catches and burns away', r.woodLit > 0 && r.woodGone > 0, `${r.woodLit} cubes alight, ${r.woodGone} burnt away in 15 s`);
+  check('a crate burns down', r.crateLit && r.crateGone);
+}
+
+/* ------------------------------ time of day ------------------------------ */
+head('Time of day');
+if (want('Time of day')) {
+  const r = await run(() => {
+    const g = __game, out = {};
+    V.stage();
+    const sel = document.querySelector('#set-tod');
+    sel.value = 'night'; sel.dispatchEvent(new Event('input'));
+    g.advance(0.2);
+    out.night = { mode: g.daylight.mode, sun: g.sun.intensity, windows: g.city.facades[0].emissive.r, pools: g.daylight.pools.mesh.visible, lights: g.lights.stats.assigned };
+    sel.value = 'day'; sel.dispatchEvent(new Event('input'));
+    g.advance(0.2);
+    out.day = { mode: g.daylight.mode, sun: g.sun.intensity, windows: g.city.facades[0].emissive.r, pools: g.daylight.pools.mesh.visible };
+    g.paused = true;
+    return out;
+  });
+  check('night: a dim moon, windows lit from inside, street lamps lighting the street', r.night.mode === 'night' && r.night.sun < 0.5 && r.night.windows > 0.5 && r.night.pools && r.night.lights > 0, `${r.night.lights} real lights`);
+  check('and back to the afternoon', r.day.mode === 'day' && r.day.sun > 1.5 && r.day.windows === 0 && !r.day.pools);
+}
+
+head('More lines');
+if (want('More lines')) {
+  check('a bigger stock of lines', LINE_COUNT >= 1200, `${LINE_COUNT} lines`);
 }
 
 /* --------------------------------- report ------------------------------- */

@@ -115,6 +115,11 @@ export const WEAPONS = {
     id: 'rope', name: 'Rope', tag: 'Rope', label: 'TIE', hold: 'none', tool: true, rope: true, mass: 0.8, half: [0.08, 0.03, 0.08], centre: 0,
     boxes: [[0.0680, -0.012, 0.0000, 0.026, 0.024, 0.058, 0xa88a5c, [0, -0.00000, 0, 1.00000]], [0.0481, -0.012, 0.0481, 0.026, 0.024, 0.058, 0xa88a5c, [0, -0.38268, 0, 0.92388]], [0.0000, -0.012, 0.0680, 0.026, 0.024, 0.058, 0xa88a5c, [0, -0.70711, 0, 0.70711]], [-0.0481, -0.012, 0.0481, 0.026, 0.024, 0.058, 0xa88a5c, [0, -0.92388, 0, 0.38268]], [-0.0680, -0.012, 0.0000, 0.026, 0.024, 0.058, 0xa88a5c, [0, -1.00000, 0, 0.00000]], [-0.0481, -0.012, -0.0481, 0.026, 0.024, 0.058, 0xa88a5c, [0, -0.92388, 0, -0.38268]], [-0.0000, -0.012, -0.0680, 0.026, 0.024, 0.058, 0xa88a5c, [0, -0.70711, 0, -0.70711]], [0.0481, -0.012, -0.0481, 0.026, 0.024, 0.058, 0xa88a5c, [0, -0.38268, 0, -0.92388]], [0.0517, 0.012, 0.0214, 0.026, 0.024, 0.048, 0x9a7e52, [0, -0.19509, 0, 0.98079]], [0.0214, 0.012, 0.0517, 0.026, 0.024, 0.048, 0x9a7e52, [0, -0.55557, 0, 0.83147]], [-0.0214, 0.012, 0.0517, 0.026, 0.024, 0.048, 0x9a7e52, [0, -0.83147, 0, 0.55557]], [-0.0517, 0.012, 0.0214, 0.026, 0.024, 0.048, 0x9a7e52, [0, -0.98079, 0, 0.19509]], [-0.0517, 0.012, -0.0214, 0.026, 0.024, 0.048, 0x9a7e52, [0, -0.98079, 0, -0.19509]], [-0.0214, 0.012, -0.0517, 0.026, 0.024, 0.048, 0x9a7e52, [0, -0.83147, 0, -0.55557]], [0.0214, 0.012, -0.0517, 0.026, 0.024, 0.048, 0x9a7e52, [0, -0.55557, 0, -0.83147]], [0.0517, 0.012, -0.0214, 0.026, 0.024, 0.048, 0x9a7e52, [0, -0.19509, 0, -0.98079]], [0.06, -0.03, 0.06, 0.02, 0.02, 0.09, 0xa88a5c, [0, 0.38268, 0, 0.92388]]],
   },
+  /* a reel of extension cord: WIRE one thing, then another; whatever a running generator is wired to has power */
+  wire: {
+    id: 'wire', name: 'Wire', tag: 'Wire', label: 'WIRE', hold: 'none', tool: true, rope: true, wire: true, mass: 0.6, half: [0.075, 0.03, 0.075], centre: 0,
+    boxes: [[0.0620, -0.012, 0.0000, 0.018, 0.018, 0.052, 0xd36a1f, [0, -0.00000, 0, 1.00000]], [0.0438, -0.012, 0.0438, 0.018, 0.018, 0.052, 0xd36a1f, [0, -0.38268, 0, 0.92388]], [0.0000, -0.012, 0.0620, 0.018, 0.018, 0.052, 0xd36a1f, [0, -0.70711, 0, 0.70711]], [-0.0438, -0.012, 0.0438, 0.018, 0.018, 0.052, 0xd36a1f, [0, -0.92388, 0, 0.38268]], [-0.0620, -0.012, 0.0000, 0.018, 0.018, 0.052, 0xd36a1f, [0, -1.00000, 0, 0.00000]], [-0.0438, -0.012, -0.0438, 0.018, 0.018, 0.052, 0xd36a1f, [0, -0.92388, 0, -0.38268]], [-0.0000, -0.012, -0.0620, 0.018, 0.018, 0.052, 0xd36a1f, [0, -0.70711, 0, -0.70711]], [0.0438, -0.012, -0.0438, 0.018, 0.018, 0.052, 0xd36a1f, [0, -0.38268, 0, -0.92388]], [0.0480, 0.012, 0.0199, 0.018, 0.018, 0.044, 0xc25e18, [0, -0.19509, 0, 0.98079]], [0.0199, 0.012, 0.0480, 0.018, 0.018, 0.044, 0xc25e18, [0, -0.55557, 0, 0.83147]], [-0.0199, 0.012, 0.0480, 0.018, 0.018, 0.044, 0xc25e18, [0, -0.83147, 0, 0.55557]], [-0.0480, 0.012, 0.0199, 0.018, 0.018, 0.044, 0xc25e18, [0, -0.98079, 0, 0.19509]], [-0.0480, 0.012, -0.0199, 0.018, 0.018, 0.044, 0xc25e18, [0, -0.98079, 0, -0.19509]], [-0.0199, 0.012, -0.0480, 0.018, 0.018, 0.044, 0xc25e18, [0, -0.83147, 0, -0.55557]], [0.0199, 0.012, -0.0480, 0.018, 0.018, 0.044, 0xc25e18, [0, -0.55557, 0, -0.83147]], [0.0480, 0.012, -0.0199, 0.018, 0.018, 0.044, 0xc25e18, [0, -0.19509, 0, -0.98079]], [0, 0, 0, 0.05, 0.03, 0.05, 0x24262a], [0.07, 0, 0.05, 0.03, 0.02, 0.026, 0x1c1d20], [0.083, 0, 0.05, 0.006, 0.004, 0.016, 0xc9b061]],
+  },
   /* an officer's fingerprint scanner: a glass plate, a screen, a body; it reads prints off skin */
   scanner: {
     id: 'scanner', name: 'Fingerprint scanner', tag: 'Scanner', label: 'SCAN', hold: 'none', tool: true, scanner: true, mass: 0.3, half: [0.036, 0.013, 0.07], centre: 0,
@@ -160,6 +165,7 @@ export const MOUNT = {
   scanner: { part: P.PELVIS, pos: [-0.118, 0.03, 0.112], q: [H, 0, 0, H], reach: 'hip', dur: 0.4, word: 'belt' },              // front of the right hip
   syringe: { part: P.PELVIS, pos: [-0.17, 0.06, 0.08], q: [H, 0, 0, H], reach: 'hip', dur: 0.35, word: 'pocket' },            // in a pocket
   rope: { part: P.PELVIS, pos: [0.16, 0.0, -0.11], q: [H, 0, 0, H], reach: 'hip', dur: 0.4, word: 'belt' },                  // a coil hung on the belt
+  wire: { part: P.PELVIS, pos: [-0.16, 0.0, -0.11], q: [H, 0, 0, H], reach: 'hip', dur: 0.4, word: 'belt' },
   flamethrower: { part: P.CHEST, pos: [-0.01, -0.03, -0.17], q: slantUp(0.6), reach: 'back', dur: 0.8, word: 'back' },
 };
 
@@ -590,7 +596,7 @@ export class Weapons {
     if (p.state !== ST.ANIM || !p.h.conscious || p.cuffed || p.cuffing) return false;
     if (def.gun) return this.fire();
     if (def.syringe) return this.useSyringe();
-    if (def.rope) return which === 3 ? g.ropes?.undo() : g.ropes?.use();
+    if (def.rope) return which === 3 ? g.ropes?.undo() : g.ropes?.use(def.wire ? 'wire' : 'rope');
     if (def.scanner) return this.useScanner();
     if (def.tool) return this.useCuffs();
     if (p.anim.busy) { if (which >= 0) this.choice = which; else this.queued = true; return false; }
@@ -1182,6 +1188,7 @@ export class Weapons {
         const e = v._tEnd + 0.02;
         if (!wood) g.gore.puff('flash', ox + dx * v._tEnd, oy + dy * v._tEnd, oz + dz * v._tEnd, 0.16, 0.05, 1, 0.85, 0.5);
         this.stats.through++;
+        g.minds?.noise(ox + dx * e, oy + dy * e, oz + dz * e, 74, 'through', shooter);
         this._bullet(shooter, d, ox + dx * e, oy + dy * e, oz + dz * e, dx + rand(-0.02, 0.02), dy + rand(-0.02, 0.02), dz + rand(-0.02, 0.02), res.power, depth + 1);
       }
     } else if (what === 2 && prop.thing) {

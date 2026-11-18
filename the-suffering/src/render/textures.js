@@ -78,6 +78,9 @@ export const FACADE_COUNT = FACADES.length;
 export function facadeTexture(i) {
   const f = FACADES[i % FACADES.length];
   const c = canvas(256, 256), x = c.getContext('2d'), r = mulberry(40 + i * 7);
+  // and, for after dark, the windows with a light on behind them: on black, to be added on
+  const lc = canvas(256, 256), lx = lc.getContext('2d'), lr = mulberry(90 + i * 11);
+  lx.fillStyle = '#000'; lx.fillRect(0, 0, 256, 256);
   x.fillStyle = f.wall; x.fillRect(0, 0, 256, 256);
   if (f.brick) {
     x.strokeStyle = f.line; x.lineWidth = 1;
@@ -99,6 +102,13 @@ export function facadeTexture(i) {
     if (lit) { g.addColorStop(0, f.lit); g.addColorStop(1, '#b98f47'); }
     else { g.addColorStop(0, f.glass); g.addColorStop(1, '#141b22'); }
     x.fillStyle = g; x.fillRect(ox + m, oy + top, 64 - 2 * m, 64 - top - bot);
+    if (lit || lr() < 0.38) {
+      const lg = lx.createLinearGradient(0, oy + top, 0, oy + 64 - bot);
+      const warm = lr() < 0.75;
+      lg.addColorStop(0, warm ? '#f2c77a' : '#c9dcf2'); lg.addColorStop(1, warm ? '#a8743a' : '#7b93b0');
+      lx.fillStyle = lg; lx.fillRect(ox + m, oy + top, 64 - 2 * m, 64 - top - bot);
+      lx.fillStyle = '#000'; lx.fillRect(ox + 31, oy + top, 2, 64 - top - bot);
+    }
     // a reflection of the sky, a mullion, sometimes a blind half down
     x.fillStyle = 'rgba(190,205,220,0.13)';
     x.beginPath(); x.moveTo(ox + m, oy + top); x.lineTo(ox + m + 16, oy + top); x.lineTo(ox + m, oy + top + 22); x.fill();
@@ -110,7 +120,9 @@ export function facadeTexture(i) {
   x.globalAlpha = 0.1; x.fillStyle = '#000';
   for (let i2 = 0; i2 < 30; i2++) x.fillRect(r() * 256, r() * 256, 1.5, 10 + r() * 30);
   x.globalAlpha = 1;
-  return tex(c);
+  const t = tex(c);
+  t.userData.lit = tex(lc);
+  return t;
 }
 
 export function crateTexture() {

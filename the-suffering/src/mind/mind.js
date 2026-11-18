@@ -25,8 +25,8 @@ import { ST } from '../human/human.js';
 import { clamp, clamp01, rand, chance, wrapAngle } from '../core/util.js';
 
 const _e = [0, 0, 0], _g = [0, 0, 0], _t = [0, 0, 0];
-const WEAPON_WORD = { fists: 'fists', knife: 'knife', machete: 'machete', m1911: 'pistol', glock: 'pistol', flamethrower: 'flamethrower', rope: 'rope', ak47: 'rifle', m4a1: 'rifle', ar15: 'rifle', taser: 'taser', cuffs: 'pair of handcuffs', scanner: 'fingerprint scanner', syringe: 'syringe' };
-const WEAPON_FEAR = { fists: 22, knife: 60, machete: 76, m1911: 88, glock: 87, flamethrower: 98, rope: 8, ak47: 94, m4a1: 95, ar15: 93, taser: 44, cuffs: 0, scanner: 0, syringe: 52 };
+const WEAPON_WORD = { fists: 'fists', knife: 'knife', machete: 'machete', m1911: 'pistol', glock: 'pistol', flamethrower: 'flamethrower', rope: 'rope', wire: 'live wire', ak47: 'rifle', m4a1: 'rifle', ar15: 'rifle', taser: 'taser', cuffs: 'pair of handcuffs', scanner: 'fingerprint scanner', syringe: 'syringe' };
+const WEAPON_FEAR = { fists: 22, knife: 60, machete: 76, m1911: 88, glock: 87, flamethrower: 98, rope: 8, wire: 30, ak47: 94, m4a1: 95, ar15: 93, taser: 44, cuffs: 0, scanner: 0, syringe: 52 };
 /** Fires bullets. */
 export const isGun = (id) => id === 'm1911' || id === 'glock' || id === 'ak47' || id === 'm4a1' || id === 'ar15';
 export const EMOTIONS = ['fear', 'anger', 'sadness', 'joy', 'surprise', 'boredom'];
@@ -312,9 +312,9 @@ export class Mind {
       case 'attack': {
         if (V === h || A === h) return;
         const word = WEAPON_WORD[ev.weapon] || 'weapon', sev = WEAPON_FEAR[ev.weapon] || 30;
-        const verb = ev.weapon === 'fists' ? 'hit' : ev.weapon === 'taser' ? 'fire a taser into' : ev.weapon === 'syringe' ? 'jab a needle into' : ev.weapon === 'flamethrower' ? 'set fire to' : ev.weapon === 'knife' ? (ev.rep && ev.rep.type === 'stab' ? 'stab' : 'slash') : ev.weapon === 'machete' ? 'hack at' : 'shoot';
+        const verb = ev.weapon === 'fists' ? 'hit' : ev.weapon === 'taser' ? 'fire a taser into' : ev.weapon === 'syringe' ? 'jab a needle into' : ev.weapon === 'flamethrower' ? 'set fire to' : ev.weapon === 'wire' ? 'electrocute' : ev.weapon === 'knife' ? (ev.rep && ev.rep.type === 'stab' ? 'stab' : 'slash') : ev.weapon === 'machete' ? 'hack at' : 'shoot';
         const soft = ev.weapon === 'fists' || ev.weapon === 'taser';
-        this.note('saw', 'attack', `saw ${this.name(A)} ${verb} ${this.name(V)}${soft || ev.weapon === 'syringe' ? '' : ' with a ' + word}`, 0.9, { o: A, v: V });
+        this.note('saw', 'attack', `saw ${this.name(A)} ${verb} ${this.name(V)}${soft || ev.weapon === 'syringe' || ev.weapon === 'wire' ? '' : ' with a ' + word}`, 0.9, { o: A, v: V });
         if (ev.weapon === 'flamethrower') { this.stir('fear', 40 * k); this.stir('surprise', 30 * k); }
         this.stir('fear', sev * 0.6 * k); this.stir('sadness', 14 * k); this.stir('anger', (ev.weapon === 'fists' ? 16 : 8) * k); this.stir('surprise', 35 * k);
         const kn = this._know(A); kn.armed = ev.weapon;
@@ -323,14 +323,14 @@ export class Mind {
         if (!lawful) { kn.hostile = 1; kn.crime = soft ? Math.max(kn.crime, Math.min(2.4, kn.crime + 1)) : Math.min(6, kn.crime + 3); kn.crimeT = this.game.time; }
         if (!lawful && !A.officer) {
           this.culprit.set(V.id, A);
-          const kind = isGun(ev.weapon) ? 'shooting' : ev.weapon === 'knife' || ev.weapon === 'machete' ? 'stabbing' : ev.weapon === 'flamethrower' ? 'burning' : 'assault';
+          const kind = isGun(ev.weapon) ? 'shooting' : ev.weapon === 'knife' || ev.weapon === 'machete' ? 'stabbing' : ev.weapon === 'flamethrower' ? 'burning' : ev.weapon === 'wire' ? 'electrocution' : 'assault';
           // an officer who sees it is the police; anyone else has to ring them
-          if (h.officer) { if (A.isPlayer) this.game.police?.raise(STARS[kind] || 1, `an officer saw you ${kind === 'assault' ? 'attack someone' : kind === 'shooting' ? 'shoot someone' : kind === 'burning' ? 'set someone on fire' : 'cut someone'}`, { x: A.x, z: A.z }); }
+          if (h.officer) { if (A.isPlayer) this.game.police?.raise(STARS[kind] || 1, `an officer saw you ${kind === 'assault' ? 'attack someone' : kind === 'shooting' ? 'shoot someone' : kind === 'burning' ? 'set someone on fire' : kind === 'electrocution' ? 'electrocute someone' : 'cut someone'}`, { x: A.x, z: A.z }); }
           else this._wantCall({ kind, x: ev.x, z: ev.z, victim: V, suspect: A });
         }
         if (h.officer && A.officer) break;
         this._threaten(A, sev * (0.45 + 0.55 * k) * (A.officer ? 0.6 : 1));
-        if (!h.officer) this.ask(ev.weapon === 'fists' ? 'sawFist' : isGun(ev.weapon) ? 'sawShot' : ev.weapon === 'flamethrower' ? 'sawBurn' : 'sawAttack', ev.weapon === 'fists' ? 52 : 74, { sex: A.look && A.look.sex });
+        if (!h.officer) this.ask(ev.weapon === 'fists' ? 'sawFist' : isGun(ev.weapon) ? 'sawShot' : ev.weapon === 'flamethrower' ? 'sawBurn' : ev.weapon === 'wire' ? 'sawZap' : 'sawAttack', ev.weapon === 'fists' ? 52 : 74, { sex: A.look && A.look.sex });
         break;
       }
       case 'shot': {
@@ -357,10 +357,20 @@ export class Mind {
         this.ask('sawFire', 76, null, 0.3);
         break;
       }
+      case 'zap': {
+        // somebody locked rigid on a live wire: a horror, whoever did it
+        if (V === h) return;
+        this.note('saw', 'zap', `saw ${this.name(V)} being electrocuted`, 1, { v: V });
+        this.stir('fear', 42 * k); this.stir('surprise', 40 * k);
+        if (!h.officer && !this.culprit.has(V.id)) this._wantCall({ kind: 'electrocution', x: ev.x, z: ev.z, victim: V, suspect: null });
+        this.ask('sawZap', 74, null, 0.4);
+        break;
+      }
       case 'tie': {
         if (V === h || A === h) return;
-        this.note('saw', 'tie', `saw ${this.name(A)} tie a rope to ${this.name(V)}`, 0.7, { o: A, v: V });
+        this.note('saw', 'tie', `saw ${this.name(A)} ${ev.wire ? 'clip a wire to' : 'tie a rope to'} ${this.name(V)}`, 0.7, { o: A, v: V });
         this.stir('surprise', 30 * k); this.stir('fear', 18 * k);
+        if (!h.officer) this.ask('sawTied', 40, null, 0.6);
         const kn = this._know(A);
         if (!A.officer) { kn.crime = Math.max(kn.crime, 1.2); kn.crimeT = this.game.time; }
         if (h.officer && A.isPlayer) this.game.police?.raise(STARS.assault, 'an officer saw you tie somebody up', { x: A.x, z: A.z });
@@ -411,6 +421,7 @@ export class Mind {
         this.stir('fear', 24 * k); this.stir('surprise', 45 * k); this.stir('sadness', 12 * k);
         this.ask('sawCarHit', 70);
         break;
+      case 'spawnWall': if (w.d > 25) return; this.note('saw', 'spawn', `saw a wall appear ${w.text}`, 0.6); this.stir('surprise', 50 * k); this.ask('sawWall', 46, null, rand(0.3, 1.2)); break;
       case 'spawn':
         if (w.d > 16) return;
         this.note('saw', 'spawn', `saw ${ev.what} appear out of thin air`, 0.6);
@@ -472,6 +483,11 @@ export class Mind {
       case 'impact': if (w.d > 7) return; text = `a bullet struck something ${w.text}`; sal = 0.7; this.stir('fear', 24); this.startle = 1; break;
       case 'thud': if (w.d > 8) return; text = `heard something heavy hit the ground ${w.text}`; sal = 0.3; this.stir('surprise', 12); break;
       case 'vomit': if (w.d > 8) return; text = `heard someone being sick ${w.text}`; sal = 0.2; break;
+      case 'engine': if (w.d > 24) return; text = `heard a generator running ${w.text}`; sal = 0.12; if (w.d < 12 && chance(0.05) && !this.flags.engine) { this.flags.engine = now; this.ask('hearEngine', 24, null, rand(0.5, 2)); } break;
+      case 'glass': if (w.d > 18) return; text = `heard glass break ${w.text}`; sal = 0.35; this.stir('surprise', 24 * falloff(w.d)); if (w.d < 8) this.ask('hearGlass', 34, null, 0.4); break;
+      case 'flame': text = `heard the roar of fire ${w.text}`; sal = 0.8; this.stir('fear', 30 * falloff(w.d)); this.stir('surprise', 30); if (!knowSrc) this._threaten(null, 60, s.x, s.z); this.ask('hearFlame', 58, null, 0.3); break;
+      case 'through': if (w.d > 8) return; text = `a round came through a wall ${w.text}`; sal = 0.8; this.stir('fear', 34); this.startle = 1; this.ask('shotThrough', 66, null, 0.2); break;
+      case 'light': if (w.d > 12) return; text = `a light came on ${w.text}`; sal = 0.15; if (w.d < 8 && chance(0.4)) this.ask('lightsOn', 22, null, rand(0.4, 1.5)); break;
       case 'steps': if (w.d > 5 || w.dir !== 'behind me') return; text = 'heard running footsteps behind me'; sal = 0.3; this.stir('surprise', 10); break;
       case 'speech': {
         const who = src === h ? null : knowSrc ? this.name(src) : src && src.isPlayer ? 'someone (a voice ' + w.dir + ')' : 'someone ' + w.dir;

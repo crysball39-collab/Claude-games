@@ -51,19 +51,24 @@ button repeatedly for the combo, or slide off it to pick one.
 | Knife | slash | backhand slash | stab | overhand plunge |
 | Machete | chop | backhand | cleave | leg sweep |
 
-The M1911 holds seven rounds and fires as fast as you tap. The AK-47 holds thirty, fires
+The M1911 holds seven rounds and fires as fast as you tap; the Glock-19 holds fifteen
+rounds of 9 mm, hits a little less hard and comes back on target a little faster. The AK-47 holds thirty, fires
 automatically and goes through people. The M4A1 is a black carbine that fires in fast
 bursts while the trigger is held; the AR-15 is its civilian cousin, with a longer barrel
 and a fixed stock, and fires once for each pull. Both take a 30-round magazine and their
 rounds go through a light vest. Bullets leave holes in walls, crates, cars and
-bodies, and exit wounds on the far side. Reloading is done by hand and takes as long as
+bodies, and go on through what they can: out of the far side of a person (an exit wound),
+of a crate (a bigger hole, splintered outward) and of a car (two door skins, the far one
+torn out in bright petals), losing power each time, and on into whatever is behind.
+Reloading is done by hand and takes as long as
 it looks: the gun comes in to the chest, the empty magazine drops to the ground, the left
 hand fetches a full one from the belt and seats it, and the action is racked. You cannot
 fire until it is finished.
 
-**Carrying.** Whatever you are not holding rides on you where it would: the pistol in a
-holster on the right hip, the knife in a sheath on the left, the machete and the rifles
-across your back. HOLSTER puts away what is in your hand and DRAW brings it back, with the
+**Carrying.** Whatever you are not holding rides on you where it would: the M1911 in a
+holster on the right hip, the Glock in a shoulder holster under the left arm, the knife
+in a sheath on the left hip, the machete, the rifles and the flamethrower across your
+back, the rope and the wire hung on your belt. HOLSTER puts away what is in your hand and DRAW brings it back, with the
 reach that takes. People are frightened of a weapon in the hand, not one put away.
 
 **The light vest.** Black, over the chest and the belly. It stops a pistol round and a
@@ -98,10 +103,59 @@ The poison is taken up over most of a minute: sick and sweating within seconds, 
 dizzy, confused and staggering, then down, then out, and then their breathing slows and
 stops. A needle leaves no fingerprints.
 
-**The sandbox menu** spawns humans (one or five), police officers, crates, the light
-vest, the light helmet, handcuffs, the taser, the poison syringe and the six weapons
-(fists aside: the knife, the machete, the M1911, the AK-47, the M4A1 and the AR-15), and
-can clear away blood, bodies or objects, or patch you up.
+**The flamethrower.** A wand with a fuel canister under it and a pilot light at the
+nozzle, ten seconds of fire to a canister, seven metres. It throws a stream of burning
+fuel that arcs down as it goes, splashes where it lands and burns on the ground for a few
+seconds where it pools. Whatever it touches catches: people (see *Burns*), wood (a crate
+burns for half a minute and falls apart; a wooden wall catches, chars and burns away cube
+by cube, upward), and steel only gets hot, glowing orange. RELOAD swaps the canister.
+
+**Walls and beams.** A wooden wall (boards 10 cm thick), a steel wall (a ribbed plate),
+and a short and a large steel I-beam are each built of cubes a few centimetres across,
+and come apart a cube at a time. A round punches out the cubes it goes through and comes
+out of the far side of wood in a bigger, splintered hole, tearing out more on its way
+out than on its way in, and on into whatever is behind; a pistol round dents steel and
+only gets through where it hits the same place again, while a rifle round goes through
+the steel wall. A beam takes a couple of rounds to each cube. A machete chops cubes out
+of wood; fire burns them. When what is left falls into separate pieces, each is a thing
+of its own: walls stand where they are put, and so does any piece of one still standing
+on the ground, but a piece joined to the ground by nothing falls; a beam cut through is
+two beams. Walls and beams hide people from each other, except through the holes in them.
+
+**Rope.** TIE fastens one end to whatever is under the crosshair and within reach (a
+person, a crate, a wall, a beam, a lamp, a weapon lying about, the ground, the side of a
+building) and TIE TO fastens the other. It is as long as the gap was: slack, it hangs in
+a curve; pulled tight it goes straight and holds. A crate on a rope behind somebody is
+dragged along; somebody tied to a wall, a beam, a generator or the ground gets no further
+than the rope lets them, and is yanked off their feet if they run at the end of it; a
+body on the ground is held or dragged by the physics. Pulled too hard it snaps; a blade
+across it cuts it, and so, sometimes, does a round. The heavy attack unties the rope
+nearest the crosshair.
+
+**Wire, lights and the generator.** The generator is a petrol engine on a frame: walk up
+to it and START it, and it runs, puttering, smoking at the exhaust, until you STOP it or
+it is shot to pieces. Power goes from it along wire: WIRE one thing, WIRE TO another, an
+orange extension cord with plenty of slack (it pulls out of whatever it is plugged into
+long before a rope would break; the heavy attack unplugs it). A light bulb and a
+floodlight on its stand light when they are wired to a running generator, and pass the
+power on, so one generator can feed a string of them; the floodlight also has its own
+switch. Steel carries it too: a beam or a steel wall wired to a running generator is
+live. Wood and rope carry nothing. Glass breaks: a bulb dropped, kicked, trodden on, hit
+or shot is done for, and so is a floodlight's lens if a round finds it. The lights near
+you light the street for real.
+
+**Electricity.** Somebody with a live wire clipped to them, or a hand or a foot on live
+steel, is where it goes to earth. Every muscle locks: they cannot let go, they go over
+stiff and shaking and cannot breathe, it burns where it goes in, and the longer it lasts
+the likelier the heart is to lose its rhythm and stop. It ends when the generator stops,
+the wire comes off or is cut, or they fall clear of what they were touching.
+
+**The sandbox menu** spawns humans (one or five), police officers, crates, the wooden and
+the steel wall, the short and the large steel beam, a light bulb, a floodlight and a
+generator; the rope, the wire, the light vest, the light helmet, handcuffs and the poison
+syringe; the taser and eight weapons (fists aside: the knife, the machete, the M1911, the
+Glock-19, the AK-47, the M4A1, the AR-15 and the flamethrower). It can clear away blood,
+bodies or objects, or patch you up.
 
 **Bodies.** Every person is seventeen rigid parts on sixteen limited joints, driven by
 muscles with real torque limits. Each hand has four fingers and a thumb, in two segments
@@ -165,7 +219,16 @@ underneath; cloth that has taken up a great deal goes dark all over.
   by concussion, dizziness, blood loss, shock, poison and lack of air. Somebody barely
   aware sees and hears much less of what is happening. When yours drops, the edges of
   the picture darken.
-- *Shock* builds with blood loss and injury.
+- *Shock* builds with blood loss, injury and burns.
+
+**Burns.** Fire burns a person part by part, the clothes first and then the skin under
+them, and the flames creep from one part to the next. Somebody on fire runs, screaming,
+and then (if they think of it) drops and rolls, which puts it out fastest; otherwise it
+burns until the fuel on them is spent. A burn is first degree (red), second (blistered,
+the most painful) or third (charred: the nerves are gone, though never the edges).
+Plasma weeps out through burnt skin, burns bring on shock and cold, and flames round the
+face burn the airway, which swells shut. Doctor mode lists every burn by its degree and
+how much of the skin is burnt in all.
 
 **Doctor mode.** Tap anyone, or examine yourself.
 
@@ -193,7 +256,7 @@ What they perceive becomes memory and moves their six emotions, scaled by who th
 carry on, stare, run, cower, put their hands up when a gun is on them, fight back, or
 kneel by someone who is hurt.
 
-**Voices.** Everyone has about 780 scripted lines to draw on, chosen by what is
+**Voices.** Everyone has about 1,300 scripted lines to draw on, chosen by what is
 happening to them and coloured by their habits of speech, and they answer when you TALK
 to them. The lines are written the way people actually talk: short, broken, repeating
 themselves, swearing. Pain is mostly breath and noise and a word or two; somebody badly
@@ -246,6 +309,11 @@ the way, and reload before they holster. Somebody else they arrest is walked bac
 station and into the cell. A post left empty is filled again in time. An officer who is
 past caring can be relieved of their pistol. *Pause -> Settings -> Cheats -> Police
 ignore you* turns all of it off.
+
+**Time of day.** *Pause -> Settings -> Time of day*: the grey afternoon, dusk, or night.
+At night the sky goes dark, windows are lit from inside, and every street lamp throws a
+pool of light on the pavement under it; the lamps, the fires and the floodlights you put
+out yourself are what you see by.
 
 **Cheats.** *Pause -> Settings -> Cheats -> Infinite HP.* Nothing injures you: no
 wounds, no bleeding, nothing cut off, no dying, and whatever was wrong with you when you

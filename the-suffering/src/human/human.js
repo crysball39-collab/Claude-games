@@ -268,7 +268,7 @@ export class Human {
    * Current through the muscles for `secs`: every one of them contracts at
    * once, which is not something anybody stays standing through.
    */
-  tase(secs, by = null) {
+  tase(secs, by = null, how = 'taser') {
     if (this.removed || !this.h.alive) return;
     const fresh = this.tased <= 0;
     this.tased = Math.max(this.tased, secs);
@@ -290,9 +290,9 @@ export class Human {
       this.scream = Math.max(this.scream, 0.9);
       if (this.mind) {
         const m = this.mind, seen = by && typeof by === 'object' && (m.canSeeHuman(by) > 0 || (m.known.get(by.id) && g.time - m.known.get(by.id).last < 1.6));
-        m.note('felt', 'tased', `every muscle locked at once: a taser${seen ? ', fired by ' + m.name(by) : ''}`, 1, { attacker: by });
+        m.note('felt', 'tased', how === 'shock' ? 'electricity: every muscle locked at once and I could not let go' : `every muscle locked at once: a taser${seen ? ', fired by ' + m.name(by) : ''}`, 1, { attacker: by });
         m.stir('fear', 40); m.stir('surprise', 60); m.stir('anger', 12); m.stir('joy', -40);
-        if (by && typeof by === 'object') { const k = m._know(by); k.hurtMe = true; k.hostile = 1; k.armed = 'taser'; if (!by.officer) { k.crime = Math.max(k.crime, Math.min(2.4, k.crime + 1.2)); k.crimeT = g.time; } if (seen) m._threaten(by, 78); }
+        if (by && typeof by === 'object') { const k = m._know(by); k.hurtMe = true; k.hostile = 1; k.armed = how === 'shock' ? 'wire' : 'taser'; if (!by.officer) { k.crime = Math.max(k.crime, Math.min(2.4, k.crime + 1.2)); k.crimeT = g.time; } if (seen) m._threaten(by, 78); }
         m.ask('tased', 96);
       }
       if (this.isPlayer) g.shake = Math.max(g.shake, 1.1);

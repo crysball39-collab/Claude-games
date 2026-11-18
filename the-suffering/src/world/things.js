@@ -3,10 +3,10 @@
    light bulb, a floodlight on its stand, and a petrol generator to light them.
 
    A light needs power. Start the generator (walk up to it: START), then take
-   the rope to it and to the light: a rope from a generator to a light is a
-   cable, and while the generator runs, the light is on. Lights pass power
-   along, so one cable can feed a string of bulbs. A floodlight also has its
-   own switch.
+   the wire to it and to the light: WIRE one, WIRE TO the other. While the
+   generator runs, the light is on. Lights pass power along, so one generator
+   can feed a string of bulbs (power.js has the rest). A floodlight also has
+   its own switch.
 
    Glass breaks. A bulb dropped from any height, kicked, trodden on, hit or
    shot is done for, and so is a floodlight's lens if a round finds it. A
@@ -131,12 +131,12 @@ export class Things {
       if (t.broken) { g.ui?.toast('It is wrecked. It will not start.'); return true; }
       t.running = !t.running;
       g.audio?.at(t.running ? 'start' : 'stop', b.px, b.py, b.pz, 0.9);
-      g.ui?.toast(t.running ? 'Generator running. Run a cable from it to a light with the rope.' : 'Generator off.');
+      g.ui?.toast(t.running ? 'Generator running. WIRE it to a light, or to anything else.' : 'Generator off.');
       g.minds?.noise(b.px, b.py, b.pz, 74, 'engine', g.player);
     } else if (t.type === 'flood') {
       t.on = !t.on;
       g.audio?.at('switch', b.px, b.py + 0.6, b.pz, 0.7);
-      g.ui?.toast(!t.on ? 'Floodlight off.' : t.broken ? 'The lens is smashed.' : this._powered(t) ? 'Floodlight on.' : 'Switched on, but there is no power: run a cable to it from a running generator.');
+      g.ui?.toast(!t.on ? 'Floodlight off.' : t.broken ? 'The lens is smashed.' : this._powered(t) ? 'Floodlight on.' : 'Switched on, but there is no power: WIRE it to a running generator.');
     } else return false;
     this._paint(t);
     g.ui?.nearChanged();
@@ -191,43 +191,23 @@ export class Things {
 
   /* ---------------------------------- power --------------------------------- */
 
-  /** Whether a light is fed, right now, by a running generator, along cables and through other lights. */
-  _powered(t) { return this._feed().has(t); }
-
-  /** Everything a running generator reaches through cables. */
-  _feed() {
-    const fed = new Set(), ropes = this.g.ropes ? this.g.ropes.list : [];
-    const queue = this.list.filter((t) => t.type === 'generator' && t.running && !t.broken);
-    for (const s of queue) fed.add(s);
-    while (queue.length) {
-      const s = queue.pop();
-      for (const r of ropes) {
-        const ta = r.a.prop && r.a.prop.thing, tb = r.b.prop && r.b.prop.thing;
-        if (!ta || !tb) continue;
-        const o = ta === s ? tb : tb === s ? ta : null;
-        if (!o || fed.has(o)) continue;
-        fed.add(o);
-        // a light passes the power on; a broken one does too (the wiring is fine)
-        if (o.type !== 'generator') queue.push(o);
-      }
-    }
-    return fed;
-  }
+  /** Whether a light is fed, right now, by a running generator (power.js works out what is live). */
+  _powered(t) { const P = this.g.power; if (!P) return false; P._network(); return P.live.has(t.prop); }
 
   /* ---------------------------------- frame --------------------------------- */
 
   update(dt) {
     const g = this.g, p = g.player, L = g.lights, bx = g.boxes;
-    const fed = this._feed();
+    const live = g.power ? g.power.live : null;
     let lit = 0, powered = 0;
     let near = null, nd = 1.7;
     for (const t of this.list) {
       const b = t.body, def = t.def;
       const was = t.lit;
-      t.powered = def.light ? fed.has(t) : false;
+      t.powered = def.light && live ? live.has(t.prop) : false;
       t.lit = t.powered && !t.broken && (t.type !== 'flood' || t.on);
       if (t.powered) powered++;
-      if (t.lit !== was) { this._paint(t); if (t.lit) g.audio?.at('switch', b.px, b.py, b.pz, 0.25); }
+      if (t.lit !== was) { this._paint(t); if (t.lit) { g.audio?.at('switch', b.px, b.py, b.pz, 0.25); g.minds?.noise(b.px, b.py, b.pz, 62, 'light', null); } }
       // glass does not take knocks
       if ((t.type === 'bulb' && b.hit > 3.2 && g.time - t.born > 0.6) || (t.type === 'flood' && b.hit > 7 && g.time - t.born > 1)) this.hurt(t, 1, null, 'fall');
       // nor being trodden on

@@ -116,6 +116,7 @@ export class Sound {
       case 'switch': this._n(d, t, 0.012, 0.6, 'highpass', 3600); this._t(d, t, 0.018, 0.2, 'square', 1900); this._n(d, t + 0.05, 0.01, 0.4, 'highpass', 4200); break;
       case 'start': this._n(d, t, 0.22, 0.45, 'bandpass', 760, 300, 1.5, 0.02); this._n(d, t + 0.28, 0.2, 0.45, 'bandpass', 700, 280, 1.5, 0.02); for (let i = 0; i < 6; i++) this._t(d, t + 0.55 + i * 0.07, 0.06, 0.4, 'sawtooth', 74, 52); break;
       case 'stop': for (let i = 0; i < 5; i++) this._t(d, t + i * 0.11, 0.08, 0.35 - i * 0.05, 'sawtooth', 60 - i * 5, 40); break;
+      case 'zap': for (let i = 0; i < 6; i++) this._n(d, t + i * 0.012 + rand(0, 0.008), 0.02, 0.9, 'highpass', 2500 + rand(0, 3000)); this._t(d, t, 0.25, 0.4, 'sawtooth', 100, 98, 0.005); this._t(d, t, 0.2, 0.25, 'square', 200, 196, 0.005); break;
       case 'tie': this._n(d, t, 0.18, 0.35, 'bandpass', 1500, 700, 1.5, 0.03); this._n(d, t + 0.2, 0.12, 0.3, 'bandpass', 1100, 600, 1.5, 0.02); break;
       case 'screech': this._n(d, t, 0.7, 0.45, 'bandpass', 3100, 2300, 9, 0.05); this._n(d, t, 0.7, 0.2, 'bandpass', 1500, 1200, 5, 0.05); break;
       default: return false;
@@ -204,7 +205,7 @@ export class Sound {
     L.g.gain.setTargetAtTime(gain * L.base, t, 0.06);
     if (L.p) L.p.pan.setTargetAtTime(clamp(pan * 0.85, -1, 1), t, 0.06);
     // a fire crackles: now and then a snap of noise on top of the roar
-    if (kind === 'fire' && Math.random() < 0.3) this._n(L.g, t + rand(0, 0.03), rand(0.008, 0.03), rand(0.4, 1.2), 'highpass', rand(1500, 4500));
+    if ((kind === 'fire' && Math.random() < 0.3) || (kind === 'zap' && Math.random() < 0.6)) this._n(L.g, t + rand(0, 0.03), rand(0.008, 0.03), rand(0.4, 1.2), 'highpass', rand(1500, 4500));
   }
   _loop(kind) {
     const ctx = this.ctx, g = ctx.createGain();
@@ -233,6 +234,13 @@ export class Sound {
       noise('lowpass', 420, 0.6, 0.5);
       noise('bandpass', 1300, 0.8, 0.12);
       base = 0.5;
+    } else if (kind === 'zap') {
+      // mains hum through a body: a hard buzz, and crackling on top
+      const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 100;
+      const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 0.8;
+      o.connect(f); f.connect(g); o.start(); nodes.push(o);
+      noise('highpass', 3500, 0.7, 0.35);
+      base = 0.6;
     } else if (kind === 'buzz') {
       const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = 120; o.connect(g); o.start(); nodes.push(o);
       base = 0.04;

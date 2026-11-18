@@ -22,7 +22,7 @@ const WORD = { m1911: 'gun', glock: 'gun', ak47: 'rifle', m4a1: 'rifle', ar15: '
 const isGun = (id) => id === 'm1911' || id === 'glock' || id === 'ak47' || id === 'm4a1' || id === 'ar15';
 const NOKIT = [];
 /** What a caller says once they have got through, by what they are calling about. */
-const CALL_LINE = { body: 'callBody', assault: 'callAssault', stabbing: 'callStabbing', shooting: 'callShooting', shots: 'callShots', murder: 'callMurder', menace: 'callMenace', burning: 'callBurning' };
+const CALL_LINE = { body: 'callBody', assault: 'callAssault', stabbing: 'callStabbing', shooting: 'callShooting', shots: 'callShots', murder: 'callMurder', menace: 'callMenace', burning: 'callBurning', electrocution: 'callShock' };
 const WHAT_WORD = { body: 'a body', assault: 'an assault', stabbing: 'a stabbing', shooting: 'a shooting', shots: 'shots fired', murder: 'a killing', menace: 'a man with a weapon' };
 
 export class Brain {
@@ -66,6 +66,8 @@ export class Brain {
     // on fire: they run, screaming, and then, if they think of it, drop and roll
     if (h.fire && h.burning > 0.15) {
       if (h.state === ST.RAGDOLL) {
+        // down while still alight, however they got there: roll
+        if (!(h.rollT > 0) && hh.canStand) h.rollT = rand(2.5, 4);
         m.doing = h.rollT > 0 ? 'rolling on the ground to put out the flames' : 'on the ground, on fire';
         h.crawlDir = null; h.stayDown = true;
         if (this.sayT <= 0) { m.ask('onFire', 92); this.sayT = rand(1.1, 2.2); }

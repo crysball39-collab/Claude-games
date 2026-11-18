@@ -100,6 +100,7 @@ export class UI {
     bindSet('#set-gore', 'gore', 'check'); bindSet('#set-sens', 'sens', 'num'); bindSet('#set-fov', 'fov', 'num');
     bindSet('#set-invert', 'invert', 'check'); bindSet('#set-volume', 'volumePct', 'num');
     bindSet('#set-people', 'people', 'num'); bindSet('#set-cars', 'cars', 'num');
+    bindSet('#set-tod', 'tod', 'text');
     bindSet('#set-cheat-hp', 'cheatHp', 'check', () => this.toast(s.cheatHp ? 'Infinite HP on' : 'Infinite HP off'));
     bindSet('#set-cheat-cops', 'cheatCops', 'check', () => { if (s.cheatCops) g.police?.clear('ignored'); this.toast(s.cheatCops ? 'The police will ignore you' : 'The police are back to normal'); });
     bindSet('#set-key', 'aiKey', 'text', () => { this.voices.reset(); this._aiStatus(); });
@@ -119,6 +120,7 @@ export class UI {
     $('#set-quality').value = s.quality; $('#set-shadows').checked = !!s.shadows; $('#set-gore').checked = s.gore !== false;
     $('#set-sens').value = s.sens; $('#set-fov').value = s.fov; $('#set-invert').checked = !!s.invert; $('#set-volume').value = s.volumePct;
     $('#set-people').value = s.people; $('#set-cars').value = s.cars; $('#set-cheat-hp').checked = !!s.cheatHp;
+    $('#set-tod').value = s.tod || 'day';
     $('#set-key').value = s.aiKey || ''; $('#set-model').value = this.voices.model; $('#set-live').checked = s.aiLive !== false;
     $('#set-pace').value = String(s.aiPace || 4); $('#set-tts').checked = !!s.tts;
   }
@@ -259,7 +261,7 @@ export class UI {
       // stood on the ground a few paces off, its face to you
       const [x, z] = g.spotAhead(3.2, 0.05);
       g.voxels.wall(what === 'woodwall' ? 'wood' : 'sheet', x, z, g.camYaw);
-      g.minds.witness({ kind: 'spawn', what: 'a wall', x, y: 1, z });
+      g.minds.witness({ kind: 'spawnWall', x, y: 1, z });
       this.toast(what === 'woodwall' ? 'Wooden wall' : 'Steel wall');
     } else if (what === 'beam' || what === 'bigbeam') {
       // lying on the ground across the way you are looking
@@ -271,12 +273,12 @@ export class UI {
       const [x, z] = g.spotAhead(what === 'bulb' ? 1.6 : 2.6, 0.05);
       g.things.spawn(what, x, z, g.camYaw);
       g.minds.witness({ kind: 'spawn', what: what === 'generator' ? 'a generator' : 'a light', x, y: 0.5, z });
-      this.toast(what === 'generator' ? 'Generator - walk up to it and START it' : (what === 'bulb' ? 'Light bulb' : 'Floodlight') + ' - it needs a cable from a running generator: use the rope');
+      this.toast(what === 'generator' ? 'Generator - walk up to it and START it, then WIRE it to things' : (what === 'bulb' ? 'Light bulb' : 'Floodlight') + ' - WIRE it to a running generator');
     } else if (WEAPONS[what]) {
       const [x, z] = g.spotAhead(1.5, 0.1);
       this.weapons.spawn(what, x, groundHeight(x, z) + 1.1, z);
       const D = WEAPONS[what];
-      this.toast(D.name + (D.wear ? ' - walk up to it and put it on' : D.rope ? ' - pick it up, TIE one thing, then the other' : D.cuffs ? ' - pick them up, then CUFF someone who is down or has given up' : ' - walk up to it and pick it up'));
+      this.toast(D.name + (D.wear ? ' - walk up to it and put it on' : D.wire ? ' - pick it up, WIRE a generator, then WIRE TO whatever it should power' : D.rope ? ' - pick it up, TIE one thing, then the other' : D.cuffs ? ' - pick them up, then CUFF someone who is down or has given up' : ' - walk up to it and pick it up'));
     }
     this._count();
   }
@@ -341,7 +343,7 @@ export class UI {
   _label() {
     const w = this.weapons, d = w.def;
     const bound = !!this.g.player.cuffed;
-    $('#attack-label').textContent = bound ? 'CUFFED' : d.rope && this.g.ropes && this.g.ropes.pending ? 'TIE TO' : d.label;
+    $('#attack-label').textContent = bound ? 'CUFFED' : d.rope && this.g.ropes && this.g.ropes.pending ? (d.wire ? 'WIRE TO' : 'TIE TO') : d.label;
     $('#attack-next').textContent = bound || !d.melee ? '' : CLIPS[d.moves[(w.choice >= 0 ? w.choice : this.g.time - w.lastAttack > 1.15 ? 0 : w.combo) % 4]].label;
   }
 

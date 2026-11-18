@@ -86,13 +86,14 @@
         <button class="item" data-spawn="steelwall"><i class="ic steelwall"></i><b>Steel wall</b><small>a ribbed plate; pistols dent it, rifles go through</small></button>
         <button class="item" data-spawn="beam"><i class="ic beam"></i><b>Short steel beam</b><small>1.2 m I-beam, about 60 kg</small></button>
         <button class="item" data-spawn="bigbeam"><i class="ic beam"></i><b>Large steel beam</b><small>3.6 m I-beam; comes apart cube by cube</small></button>
-        <button class="item" data-spawn="bulb"><i class="ic bulb"></i><b>Light bulb</b><small>lights up when a cable from a generator reaches it</small></button>
-        <button class="item" data-spawn="flood"><i class="ic flood"></i><b>Floodlight</b><small>on a stand; needs power from a generator</small></button>
-        <button class="item" data-spawn="generator"><i class="ic generator"></i><b>Generator</b><small>petrol; START it, then run cables to lights</small></button>
+        <button class="item" data-spawn="bulb"><i class="ic bulb"></i><b>Light bulb</b><small>lights up when it is wired to a running generator</small></button>
+        <button class="item" data-spawn="flood"><i class="ic flood"></i><b>Floodlight</b><small>on a stand; wire it to a generator</small></button>
+        <button class="item" data-spawn="generator"><i class="ic generator"></i><b>Generator</b><small>petrol; START it, then wire things to it</small></button>
       </div>
       <h3>Gear</h3>
       <div class="grid">
-        <button class="item" data-spawn="rope"><i class="ic rope"></i><b>Rope</b><small>TIE one thing, then another; a cable from a generator</small></button>
+        <button class="item" data-spawn="rope"><i class="ic rope"></i><b>Rope</b><small>TIE one thing, then another: drag it, hold it, hang it</small></button>
+        <button class="item" data-spawn="wire"><i class="ic wire"></i><b>Wire</b><small>carries a generator's power: to lights, to steel, to people</small></button>
         <button class="item" data-spawn="vest"><i class="ic vest"></i><b>Light vest</b><small>black, covers chest and belly; stops a pistol round</small></button>
         <button class="item" data-spawn="helmet"><i class="ic helmet"></i><b>Light helmet</b><small>covers the skull, not the face; turns a blow</small></button>
         <button class="item" data-spawn="cuffs"><i class="ic cuffs"></i><b>Handcuffs</b><small>for someone who is down or has given up</small></button>
@@ -200,6 +201,7 @@
           <label class="set"><span>Sound</span><input type="range" id="set-volume" min="0" max="100" value="70" /></label>
           <label class="set"><span>People on the street</span><input type="range" id="set-people" min="0" max="20" value="12" /></label>
           <label class="set"><span>Cars on the street</span><input type="range" id="set-cars" min="0" max="10" value="6" /></label>
+          <label class="set"><span>Time of day</span><select id="set-tod"><option value="day">Afternoon</option><option value="dusk">Dusk</option><option value="night">Night</option></select></label>
           <h3 class="sub">Cheats</h3>
           <label class="set"><span>Infinite HP</span><input type="checkbox" id="set-cheat-hp" /></label>
           <p class="note">Nothing can injure you: no wounds, no bleeding, nothing cut off, no dying. You can still be knocked over, tased and handcuffed.</p>
@@ -222,13 +224,17 @@
             <h3>Touch</h3>
             <p>Left thumb moves. Drag anywhere else to look. JUMP and CROUCH sit by the right thumb.</p>
             <p>The big button attacks. Tap it again and again for a four move combo; slide your thumb off it left, right, up or down to choose the next move yourself.</p>
-            <p>SPAWN opens the sandbox: humans, police officers, crates, a light vest, a light helmet, handcuffs, a poison syringe, the M1911, the AK-47, the M4A1, the AR-15, the taser, the knife and the machete. Walk up to a weapon and PICK UP, or to the vest or the helmet and PUT ON.</p>
+            <p>SPAWN opens the sandbox: humans, police officers, crates, wooden and steel walls, steel beams, a light bulb, a floodlight, a generator, rope, wire, a light vest, a light helmet, handcuffs, a poison syringe, the M1911, the Glock-19, the AK-47, the M4A1, the AR-15, the flamethrower, the taser, the knife and the machete. Walk up to a weapon and PICK UP, or to the vest or the helmet and PUT ON.</p>
+            <p>Walls and beams are built of small cubes and come apart a cube at a time: rounds go through wood (out of the far side in a bigger hole) and through steel only from a rifle; a machete chops wood; fire burns it. A piece no longer joined to anything falls.</p>
+            <p>Rope: TIE one thing, then TIE TO another. Drag with it, hold somebody with it, hang things on it. A blade cuts it; the heavy attack unties it.</p>
+            <p>Wire carries a generator's power. START the generator (walk up to it), then WIRE it, and WIRE TO a light. Lights pass power on to the next. Steel wired to a running generator is live, and so is anybody you clip a live wire to: they lock rigid and cannot let go until the power stops.</p>
+            <p>The flamethrower throws burning fuel seven metres. People catch fire and burn until they put it out or it burns out; wood and crates catch and burn away. RELOAD for a new canister.</p>
             <p>The poison syringe holds one lethal dose: INJECT puts it into whoever is in reach in front of you. They are sick within seconds, down within a minute, and then their breathing fails. A needle leaves no fingerprints.</p>
             <p>The taser fires two probes on wires, good for seven metres. Whoever they land in is rigid on the ground for five seconds; press again while the wires are in for another five. Handcuffs go on someone who is down or has given up: select them and press CUFF. Someone on the ground is turned on to their front and their arms brought round behind them first. PICK UP beside someone in cuffs takes them off.</p>
             <p>HOLSTER puts away what is in your hand: the pistol on your hip, the knife in its sheath, the machete and the rifles across your back. DRAW brings back the last one. A weapon out in the street frightens people; one put away does not.</p>
             <p>Running uses up stamina (the STAMINA bar under BLOOD); with little left you can only jog. Stand or walk to get it back.</p>
             <p>The police know only what they see or are told. WANTED shows how much they know about you. One star: they come to arrest you; stand still or put your hands up and you are cuffed, run or fight and you are tased. Two stars (a gun or a blade used on someone, a killing, an attack on an officer): they shoot. Anyone who sees a crime, or finds a body, may ring 911; only someone who saw you do it can describe you. Officers sent to a body scan it for fingerprints, and if you touched the victim with your bare hands they match yours, you get a star and they search the city. Stay out of their sight and the stars go out one at a time. If they cuff you, tap CUFFED in the weapon bar to slip them.</p>
-            <p>Settings has a Cheats section: Infinite HP means nothing can injure you, and Police ignore you keeps the wanted level at nothing.</p>
+            <p>Settings has the time of day (afternoon, dusk or night) and a Cheats section: Infinite HP means nothing can injure you, and Police ignore you keeps the wanted level at nothing.</p>
             <p>DOCTOR lets you tap anyone to read their condition (blood, air, pulse, pain, nausea, temperature, breathing), their state (awareness, dizziness, stamina, adrenaline, poison and shock), their emotions and an X-ray of their bones and organs.</p>
             <p>TALK lets you say something. Whoever is close enough to hear it will answer.</p>
             <h3>Keyboard and mouse</h3>

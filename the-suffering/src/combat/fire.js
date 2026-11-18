@@ -74,7 +74,7 @@ export class Fire {
       const ox = dx + rand(-s, s), oy = dy + rand(-s, s), oz = dz + rand(-s, s);
       // spread along this frame's path so the stream is unbroken
       const back = (k / n) * dt * sp;
-      this._add(0, mx + ox * back, my + oy * back, mz + oz * back, ox * sp + (who ? who.vx : 0), oy * sp, oz * sp + (who ? who.vz : 0), rand(0.5, 0.68), 0.09, 0.95, who);
+      this._add(0, mx + ox * back, my + oy * back, mz + oz * back, ox * sp + (who ? who.vx : 0), oy * sp, oz * sp + (who ? who.vz : 0), rand(0.5, 0.68), 0.16, 1.25, who);
     }
   }
   /** A flame licking up off something burning. */
@@ -183,8 +183,8 @@ export class Fire {
           const b = h.bodies[p];
           b.toLocal(x, y, z, _a);
           if (Math.abs(_a[0]) > b.hx + 0.07 || Math.abs(_a[1]) > b.hy + 0.07 || Math.abs(_a[2]) > b.hz + 0.07) continue;
-          this.ignite(h, p, 0.18, who);
-          h.h.burn(p, 0.9, h.clothed[p]);
+          this.ignite(h, p, 0.22, who);
+          h.h.burn(p, 1.4, h.clothed[p]);
           hit = true;
           break;
         }
@@ -202,7 +202,7 @@ export class Fire {
           // which cube: the nearest solid one to the point
           const c = this._cellAt(v, _a);
           if (c < 0) continue;
-          v.heatUp(c, 0.35);
+          v.heatUp(c, 0.6);
           this.stats.wood += v.mat === 'wood' ? 1 : 0;
         } else if (o.kind === 'crate') this.igniteCrate(o, 0.05);
         else if (o.thing && o.thing.type === 'bulb' && chance(0.1)) g.things?.smash(o.thing);
@@ -247,7 +247,7 @@ export class Fire {
         const f = h.fire[p];
         if (f <= 0) continue;
         if (h.gone[p]) { h.fire[p] = 0; continue; }
-        h.h.burn(p, f * 8 * dt, h.clothed[p]);
+        h.h.burn(p, f * 14 * dt, h.clothed[p]);
         for (const q of NEXT[p]) if (!h.gone[q] && h.fire[q] < f && chance(dt * 0.55 * f)) h.fire[q] = Math.min(1, h.fire[q] + 0.3);
         h.fire[p] = Math.max(0, f - dt * (0.065 + roll * 0.45 + (down ? 0.03 : 0)));
         total += h.fire[p];
@@ -335,10 +335,17 @@ export class Fire {
         if (h.removed || Math.hypot(h.x - f.x, h.z - f.z) > f.r + 0.15 || Math.abs(h.y - f.y) > 0.5) continue;
         if (chance(dt * 2.5)) this.ignite(h, chance(0.5) ? P.FOOT_L : P.FOOT_R, 0.25, f.who);
       }
-      // crates and wood beside it
+      // crates and wood beside it: burning fuel against a wooden wall sets it alight from the bottom
       for (const o of g.props) {
-        if (o.kind !== 'crate' || Math.hypot(o.body.px - f.x, o.body.pz - f.z) > f.r + 0.5) continue;
-        this.igniteCrate(o, dt * 0.4);
+        const b = o.body;
+        if (Math.hypot(b.px - f.x, b.pz - f.z) > f.r + b.boundR + 0.3) continue;
+        if (o.kind === 'crate') { if (Math.hypot(b.px - f.x, b.pz - f.z) < f.r + 0.6) this.igniteCrate(o, dt * 0.4); continue; }
+        if (!o.vox || o.vox.mat !== 'wood' || !chance(dt * 6)) continue;
+        const px = f.x + rand(-f.r, f.r), pz = f.z + rand(-f.r, f.r);
+        b.toLocal(px, f.y + rand(0.04, 0.2), pz, _a);
+        if (Math.abs(_a[0]) > b.hx + 0.08 || Math.abs(_a[1]) > b.hy + 0.08 || Math.abs(_a[2]) > b.hz + 0.08) continue;
+        const c = this._cellAt(o.vox, _a);
+        if (c >= 0) o.vox.heatUp(c, 0.5);
       }
     }
     // one sound for all the little fires, at the nearest
@@ -372,7 +379,7 @@ export class Fire {
       // white-yellow when it leaves the nozzle, orange, then a dull red as it dies
       let cr, cg, cb, al;
       if (k === 2) { cr = 0.5; cg = 0.7; cb = 1; al = 0.8; }
-      else { const f = 1 - t; cr = 1; cg = 0.35 + 0.55 * f * f; cb = 0.08 + 0.4 * f * f * f; al = (k === 0 ? 0.85 : 0.7) * Math.pow(1 - t, 1.1) * Math.min(1, t * 8 + 0.3); }
+      else { const f = 1 - t; cr = 1; cg = 0.35 + 0.55 * f * f; cb = 0.08 + 0.4 * f * f * f; al = (k === 0 ? 1 : 0.7) * Math.pow(1 - t, k === 0 ? 0.8 : 1.1) * Math.min(1, t * 6 + (k === 0 ? 0.55 : 0.3)); }
       const cc = i * 16;
       for (let v = 0; v < 16; v += 4) { col[cc + v] = cr; col[cc + v + 1] = cg; col[cc + v + 2] = cb; col[cc + v + 3] = al; }
       if (k === 0 && s > biggest) { biggest = s; bx = x; by = y; bz = z; }

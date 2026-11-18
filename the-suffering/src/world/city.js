@@ -91,7 +91,8 @@ export class City {
     const grass = grassTexture(); grass.repeat.set(7, 7);
     this.grass = new THREE.MeshLambertMaterial({ map: grass });
     this.facades = [];
-    for (let i = 0; i < FACADE_COUNT; i++) this.facades.push(new THREE.MeshLambertMaterial({ map: facadeTexture(i) }));
+    // the windows lit from inside are an emissive map, dark by day and glowing after dark
+    for (let i = 0; i < FACADE_COUNT; i++) { const t = facadeTexture(i); this.facades.push(new THREE.MeshLambertMaterial({ map: t, emissiveMap: t.userData.lit, emissive: 0x000000 })); }
     this.roofs = [0x3a3c40, 0x4a4640, 0x2f3236, 0x55504a].map((c) => new THREE.MeshLambertMaterial({ color: c }));
     const sky = new THREE.Mesh(new THREE.SphereGeometry(320, 16, 12), new THREE.MeshBasicMaterial({ map: skyTexture(), side: THREE.BackSide, fog: false, depthWrite: false }));
     sky.renderOrder = -10;

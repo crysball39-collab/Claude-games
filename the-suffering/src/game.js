@@ -16,6 +16,8 @@ import { Things } from './world/things.js';
 import { Ropes } from './world/ropes.js';
 import { Lights } from './render/lights.js';
 import { Fire } from './combat/fire.js';
+import { Power } from './world/power.js';
+import { Daylight } from './world/daylight.js';
 import { clamp, clamp01, damp, lerp, rand, wrapAngle } from './core/util.js';
 
 export const QUALITY = {
@@ -48,7 +50,7 @@ export class Game {
     this.camera = new THREE.PerspectiveCamera(settings.fov || 64, 1, 0.08, 500);
     this.camera.rotation.order = 'YXZ';
 
-    scene.add(new THREE.HemisphereLight(0xb7c4d2, 0x4a4640, 1.25));
+    scene.add(this.hemi = new THREE.HemisphereLight(0xb7c4d2, 0x4a4640, 1.25));
     const sun = this.sun = new THREE.DirectionalLight(0xffe9cf, 1.9);
     sun.position.set(30, 55, 18);
     if (this.shadows) {
@@ -83,6 +85,9 @@ export class Game {
     this.ropes = new Ropes(this);
     this.lights = new Lights(this);
     this.fire = new Fire(this);
+    this.power = new Power(this);
+    this.daylight = new Daylight(this);
+    this.daylight.set(settings.tod || 'day');
 
     const sp = this.city.spawn;
     this.player = new Human(this, playerLook(), sp.x, sp.z, sp.yaw, { player: true });
@@ -256,6 +261,7 @@ export class Game {
     }
 
     this._camera(dt);
+    this.power.update(dt);
     this.things.update(dt);
     this.fire.update(dt);
     this.gore.update(dt, this.camera);
@@ -264,6 +270,7 @@ export class Game {
     this.ui?.update(dt);
     this.audio?.listen(this.camPos.x, this.camPos.y, this.camPos.z, this.camYaw);
 
+    this.daylight.update();
     this.lights.commit();
     this.boxes.commit(); this.crateBoxes.commit(); this.faceQuads.commit(); this.under.commit();
     this.faces.flush(this.time);
@@ -356,7 +363,8 @@ export class Game {
     if (this.shadows) {
       // the patch of city the sun casts shadows on follows the player
       const sx = Math.round(p.x / 2) * 2, sz = Math.round(p.z / 2) * 2;
-      this.sun.position.set(sx + 30, 55, sz + 18);
+      const at = this.daylight ? this.daylight.sunAt : [30, 55, 18];
+      this.sun.position.set(sx + at[0], at[1], sz + at[2]);
       this.sun.target.position.set(sx, 0, sz);
     }
   }
@@ -475,6 +483,7 @@ export class Game {
     if (what === 'things' || what === 'all') {
       this.ropes.clear();
       this.fire.clear();
+      this.power.clear();
       for (const o of this.props.slice()) this.removeProp(o);
       this.voxels.clear();
     }

@@ -42,8 +42,8 @@ export class Lights {
    * from; colour as a hex; intensity; how far it reaches; for a spot, the
    * way it points.
    */
-  ask(kind, x, y, z, color, intensity, dist, dx = 0, dy = -1, dz = 0) {
-    this.want.push({ kind, x, y, z, color, intensity, dist, dx, dy, dz });
+  ask(kind, x, y, z, color, intensity, dist, dx = 0, dy = -1, dz = 0, priority = 1) {
+    this.want.push({ kind, x, y, z, color, intensity, dist, dx, dy, dz, priority });
   }
 
   /** Hands the pool out to the requests nearest the camera. */
@@ -53,7 +53,8 @@ export class Lights {
     if (!w.length && !this.made) return;
     if (!this.made) this._make();
     const cx = this.g.camera.position.x, cy = this.g.camera.position.y, cz = this.g.camera.position.z;
-    for (const r of w) r.d = (r.x - cx) ** 2 + (r.y - cy) ** 2 + (r.z - cz) ** 2 - r.intensity * 2;
+    // what the player has lit themselves comes before the street lamps
+    for (const r of w) r.d = (r.x - cx) ** 2 + (r.y - cy) ** 2 + (r.z - cz) ** 2 - Math.min(r.intensity, 20) * 2 - r.priority * 1e6;
     w.sort((a, b) => a.d - b.d);
     let p = 0, s = 0;
     for (const r of w) {
