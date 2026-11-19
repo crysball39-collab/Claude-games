@@ -5,7 +5,7 @@
    ========================================================================== */
 import { clamp } from './util.js';
 
-const BUTTONS = ['jump', 'crouch', 'attack', 'alt', 'reload', 'use', 'drop', 'talk', 'holster'];
+const BUTTONS = ['jump', 'crouch', 'attack', 'alt', 'reload', 'use', 'drop', 'talk', 'holster', 'gas', 'brake', 'hand', 'steerL', 'steerR', 'horn'];
 
 export class Input {
   constructor() {

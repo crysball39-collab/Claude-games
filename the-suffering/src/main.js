@@ -134,7 +134,8 @@ async function boot() {
         if (stepT > 0.5) { stepT = 0; sound.play('step', 0.18); }
       }
       let near = 99, sp = 0;
-      for (const c of game.traffic.cars) { const d = Math.hypot(c.x - game.camX, c.z - game.camZ); if (d < near) { near = d; sp = c.speed; } }
+      if (p.car && p.car.drivable) { near = 0; sp = Math.abs(p.car.speed) + p.car.gas * 5; }
+      else for (const c of game.traffic.cars) { if (!c.drivable || !c.seats[0]) continue; const d = Math.hypot(c.x - game.camX, c.z - game.camZ); if (d < near) { near = d; sp = Math.abs(c.speed); } }
       sound.engine(near, sp);
     }
     requestAnimationFrame(loop);

@@ -17,7 +17,7 @@ export async function play(opts = {}) {
         return h;
       },
       /** Everyone but the player goes away, and the cars with them. */
-      clear() { for (const h of g.humans.slice()) if (!h.isPlayer) g.removeHuman(h); ts.settings.people = 0; g.traffic.setCount(0); },
+      clear() { if (g.player.car) g.traffic.exit(g.player); for (const h of g.humans.slice()) if (!h.isPlayer) g.removeHuman(h); ts.settings.people = 0; g.traffic.setCount(0); g.traffic.clearCars(); },
       press(name) { ts.input._press(name); },
       release(name) { ts.input._release(name); },
       state(h) { return ['ANIM', 'STUMBLE', 'RAGDOLL', 'GETUP'][h.state]; },

@@ -16,9 +16,9 @@ export function rgb(hex) {
 }
 
 export class Boxes {
-  constructor(scene, capacity, material, { shadows = true } = {}) {
+  constructor(scene, capacity, material, { shadows = true, geometry = null } = {}) {
     this.capacity = capacity;
-    this.mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), material, capacity);
+    this.mesh = new THREE.InstancedMesh(geometry || new THREE.BoxGeometry(1, 1, 1), material, capacity);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.frustumCulled = false;
     this.mesh.castShadow = shadows; this.mesh.receiveShadow = shadows;

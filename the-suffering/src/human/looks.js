@@ -106,6 +106,25 @@ export function officerLook() {
   return L;
 }
 
+/** A S.W.A.T. officer: black fatigues under the plate carrier and the helmet the game puts on them. */
+export function swatLook() {
+  const L = officerLook();
+  const f = L.sex === 'f';
+  L.age = Math.round(rand(25, 46));
+  L.swat = true;
+  L.top = 0x1c1f26; L.pants = 0x181b21; L.shoes = 0x0b0b0d;
+  L.style = f ? 'bun' : 'short'; L.hat = 0;
+  L.wears = 'S.W.A.T. gear';
+  L.desc = 'a S.W.A.T. officer';
+  L.noun = f ? 'woman, S.W.A.T. officer' : 'man, S.W.A.T. officer';
+  L.outfit = 'black S.W.A.T. fatigues';
+  const p = L.persona;
+  p.job = 'S.W.A.T. officer'; p.errand = pick(['on call with the team', 'on a callout', 'covering the night rota', 'back from a training day']);
+  p.bravery = rand(0.86, 0.99); p.temper = rand(0.2, 0.55); p.jumpy = rand(0.02, 0.2); p.patience = rand(0.6, 0.95); p.squeamish = rand(0, 0.2);
+  L.mass = Math.max(L.mass, f ? 64 : 82);
+  return L;
+}
+
 /** You. */
 export function playerLook() {
   return {

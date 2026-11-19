@@ -31,6 +31,8 @@ await run(() => {
       p.tased = 0; p.dazeT = 0;
       for (const it of g.weapons.items.slice()) g.weapons.remove(it);
       g.ropes?.clear(); g.fire?.clear(); g.power?.clear(); g.voxels?.clear(); if (g.daylight && g.daylight.mode !== 'day') g.daylight.set('day');
+      if (p.car) g.traffic.exit(p);
+      g.traffic?.clearCars();
       p.h.heal(); p.reset(0, -18, Math.PI / 2);
       g.camYaw = Math.PI / 2; g.camPitch = -0.08; g.gore.clean();
       g.paused = false; g.advance(0.3);
@@ -111,8 +113,10 @@ if (want('City')) {
     V.stage();
     __ts.settings.people = 14; g.traffic.setCount(8);
     for (let i = 0; i < 14; i++) { const s = city.randomPavement(); g.spawnHuman(s.x, s.z); }
-    const cars0 = g.traffic.cars.map((c) => [c.x, c.z]);
-    const ppl = g.humans.filter((h) => !h.isPlayer), p0 = ppl.map((h) => [h.x, h.z]);
+    // the traffic (not the cars parked about the city), and the people on foot (not the ones driving it)
+    const traffic = g.traffic.cars.filter((c) => c.traffic && c.mode === 'rail');
+    const cars0 = traffic.map((c) => [c.x, c.z]);
+    const ppl = g.humans.filter((h) => !h.isPlayer && !h.car), p0 = ppl.map((h) => [h.x, h.z]);
     let onRoad = 0, jay = 0, samples = 0, carsOff = 0;
     const R = [-54, -18, 18, 54];
     const roadAt = (x, z) => R.some((r) => Math.abs(x - r) < 4.5 || Math.abs(z - r) < 4.5);
@@ -120,15 +124,15 @@ if (want('City')) {
     const midBlock = (x, z) => (R.some((r) => Math.abs(x - r) < 3.9) && !R.some((r) => Math.abs(z - r) < 9)) || (R.some((r) => Math.abs(z - r) < 3.9) && !R.some((r) => Math.abs(x - r) < 9));
     for (let i = 0; i < 40; i++) {
       g.advance(0.5);
-      for (const h of ppl) { if (h.removed || h.state !== 0) continue; samples++; if (roadAt(h.x, h.z)) onRoad++; if (midBlock(h.x, h.z)) jay++; }
-      for (const c of g.traffic.cars) if (!roadAt(c.x, c.z)) carsOff++;
+      for (const h of ppl) { if (h.removed || h.state !== 0 || h.car) continue; samples++; if (roadAt(h.x, h.z)) onRoad++; if (midBlock(h.x, h.z)) jay++; }
+      for (const c of traffic) if (!roadAt(c.x, c.z)) carsOff++;
     }
-    const carMoved = g.traffic.cars.map((c, i) => Math.hypot(c.x - cars0[i][0], c.z - cars0[i][1]));
+    const carMoved = traffic.map((c, i) => Math.hypot(c.x - cars0[i][0], c.z - cars0[i][1]));
     const walked = ppl.map((h, i) => Math.hypot(h.x - p0[i][0], h.z - p0[i][1]));
     carMoved.sort((a, b) => a - b);
-    return { cars: g.traffic.cars.length, carMoved: carMoved[carMoved.length >> 1], slowest: carMoved[0], carsOff, walkers: walked.filter((d) => d > 3).length, people: ppl.length, pavement: 1 - onRoad / Math.max(1, samples), jay: jay / Math.max(1, samples), upright: ppl.filter((h) => h.state === 0).length };
+    return { cars: traffic.length, drivers: traffic.filter((c) => c.seats[0]).length, carMoved: carMoved[carMoved.length >> 1], slowest: carMoved[0], carsOff, walkers: walked.filter((d) => d > 3).length, people: ppl.length, pavement: 1 - onRoad / Math.max(1, samples), jay: jay / Math.max(1, samples), upright: ppl.filter((h) => h.state === 0).length };
   });
-  check('cars drive down the streets', r.cars >= 6 && r.carMoved > 40 && r.slowest > 2 && r.carsOff === 0, `${r.cars} cars; in 20 s the typical one covered ${r.carMoved.toFixed(0)} m and the slowest (held up at a crossing) ${r.slowest.toFixed(0)} m; never off the road`);
+  check('cars drive down the streets, somebody at every wheel', r.cars >= 6 && r.drivers === r.cars && r.carMoved > 40 && r.slowest > 2 && r.carsOff === 0, `${r.cars} cars, ${r.drivers} with drivers; in 20 s the typical one covered ${r.carMoved.toFixed(0)} m and the slowest (held up at a crossing) ${r.slowest.toFixed(0)} m; never off the road`);
   check('people walk on the pavements', r.walkers >= r.people * 0.6 && r.pavement > 0.6 && r.jay < 0.03, `${r.walkers}/${r.people} walked more than 3 m; ${(r.pavement * 100).toFixed(0)}% of the time on pavement, the rest on crossings at the corners; ${(r.jay * 100).toFixed(1)}% in the road mid-block`);
 }
 
@@ -779,6 +783,7 @@ if (want('Light helmet')) {
       return h.hit({ part: 4, type, power, point: pt, dir, normal: n, impulse: 2, attacker: p, weapon, through: 0.2, hp: 32 });
     };
     const A = mk(-2, true), B = mk(2, false);
+    A.h.tough = B.h.tough = 1;            // the same blow to the same skull, with and without
     g.advance(0.3);
     hit(A, 'blunt', 1.8, 'top', 'fists'); hit(B, 'blunt', 1.8, 'top', 'fists'); g.advance(0.6);
     out.blow = { helmet: { skull: A.h.bones.skull, conc: A.h.concussion, state: T.state(A) }, bare: { skull: B.h.bones.skull, conc: B.h.concussion, state: T.state(B) } };
@@ -1111,7 +1116,7 @@ head('911 calls and fingerprints');
 if (want('911')) {
   const crime = async (weapon) => run((weapon) => {
     const g = __game, p = g.player, w = g.weapons, P = g.police, out = { log: [] };
-    V.stage(); P.reset(); g.settings.cheatCops = false;
+    V.stage(); P.reset(); P.reports.length = 0; g.settings.cheatCops = false;
     const m0 = P.stats.matches, sc0 = P.stats.scans;
     p.reset(-30, -31, Math.PI / 2); g.camYaw = Math.PI / 2; g.camPitch = -0.05; g.advance(0.5);
     g.staffStation(true); g.advance(0.5);
@@ -1286,8 +1291,10 @@ if (want('Settings')) {
   await run(() => { __ts.ui.pause('settings'); });
   await t.page.waitForTimeout(300);
   const box = await run(() => { const c = document.querySelector('#pause .card').getBoundingClientRect(), s = document.querySelector('#pause .scroll'); return { bottom: c.bottom, vh: innerHeight, sh: s.scrollHeight, ch: s.clientHeight }; });
-  await t.page.mouse.move(420, 250); await t.page.mouse.wheel(0, 500); await t.page.waitForTimeout(300);
-  const top = await run(() => document.querySelector('#pause .scroll').scrollTop);
+  await t.page.mouse.move(420, 250); await t.page.mouse.wheel(0, 500);
+  // a slow (software) renderer can take a moment to get round to the wheel
+  let top = 0;
+  for (let i = 0; i < 20 && top <= 100; i++) { await t.page.waitForTimeout(150); top = await run(() => document.querySelector('#pause .scroll').scrollTop); }
   await run(() => { __ts.ui.resume(); });
   await t.page.setViewportSize({ width: 1100, height: 600 });
   await t.page.waitForTimeout(300);
@@ -1332,15 +1339,15 @@ if (want('Exit holes')) {
     for (let i = 0; i < 3; i++) { w.fire(); g.advance(0.25); }
     out.crate = { exits: w.stats.exits - e0, behind: v.h.wounds.filter((x) => x.type === 'gunshot').length };
     // a car, broadside on
-    g.traffic.setCount(1); g.advance(0.2);
-    const car = g.traffic.cars[0];
+    // a car parked across the line of fire: in through one door, out of the other (below the windows)
+    const car = g.traffic.spawnParked('sedan', p.x + 6, p.z + 4, 0); g.advance(0.2);
     if (car) {
-      const b = car.body, side = [Math.cos(car.yaw), 0, -Math.sin(car.yaw)];
+      const side = [Math.cos(car.yaw), 0, -Math.sin(car.yaw)];
       const e1 = w.stats.exits;
-      w._bullet(p, w.def, b.px - side[0] * 3, b.py + 0.1, b.pz - side[2] * 3, side[0], 0, side[2], 1.3, 0);
+      w._bullet(p, w.def, car.x - side[0] * 3, car.y + 0.55, car.z - side[2] * 3, side[0], 0, side[2], 1.3, 0);
       out.car = w.stats.exits - e1;
+      g.traffic.remove(car);
     }
-    g.traffic.setCount(0);
     // a wooden wall
     for (const o of g.props.slice()) g.removeProp(o);
     const wall = g.voxels.wall('wood', p.x + 4, p.z, Math.PI / 2); g.advance(0.3);
@@ -1574,6 +1581,337 @@ if (want('Time of day')) {
 head('More lines');
 if (want('More lines')) {
   check('a bigger stock of lines', LINE_COUNT >= 1200, `${LINE_COUNT} lines`);
+}
+
+/* ------------------------------ armour tiers ----------------------------- */
+head('Armour tiers');
+if (want('Armour tiers')) {
+  await run(() => { V.stage(); __game.paused = false; });
+  await t.page.click('#btn-menu');
+  const listed = await run(() => ['vestM', 'helmetM', 'vestS', 'helmetS', 'swat'].every((k) => !!document.querySelector(`[data-spawn="${k}"]`)));
+  await t.page.click('[data-spawn="vestS"]');
+  await t.page.click('[data-close="sandbox"]');
+  const r = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, out = {};
+    g.advance(1.2);
+    const it = w.items.find((i) => i.type === 'vestS');
+    out.spawned = !!it;
+    if (it) { p.reset(it.body.px - 0.5, it.body.pz, Math.PI / 2); g.advance(0.4); out.label = document.querySelector('#use-label').textContent; w.pickUp(); g.advance(0.3); }
+    out.worn = p.vest && p.vest.kind;
+    out.parts = p.vest ? [...new Set(p.vest.boxes.map((b) => b.part))].sort((a, b) => a - b).join(',') : '';
+    out.chip = [...document.querySelectorAll('#weapon-bar .slot')].some((b) => b.textContent === 'SWAT VEST');
+    // swapped for a medium one: the S.W.A.T. vest is left where the medium one was
+    const m = w.spawn('vestM', p.x + 0.4, 1, p.z); g.advance(0.6); w.pickUp(m); g.advance(0.3);
+    out.swapped = p.vest && p.vest.kind === 'medium' && w.items.some((i) => i.type === 'vestS' && i.body);
+    w.shedVest(); g.advance(0.5);
+    for (const i of w.items.slice()) w.remove(i);
+    // what each one does, shot by shot
+    const mk = (vest, helm) => { const h = V.still(g.spawnHuman(p.x + 4, p.z, -Math.PI / 2)); if (vest) h.wearVest(vest); if (helm) h.wearHelmet(helm); g.advance(0.05); return h; };
+    const shoot = (h, part, rifle, face = 'front', y = 0) => {
+      const c = h.bodies[part], n = face === 'front' ? [0, 0, 1] : [1, 0, 0], pt = [0, 0, 0], dir = [0, 0, 0];
+      c.toWorld(n[0] * c.hx, y, n[2] * c.hz, pt); c.dirToWorld(-n[0], -n[1], -n[2], dir);
+      const rep = h.hit({ part, type: 'bullet', power: rifle ? 1.4 : 1, point: pt, dir, normal: n, impulse: 4, attacker: p, weapon: rifle ? 'm4a1' : 'glock', rifle, through: 0.2, hp: 32 });
+      g.removeHuman(h);
+      return rep.stopped;
+    };
+    out.lightPelvis = shoot(mk('light'), 0, false);
+    out.mediumPelvis = shoot(mk('medium'), 0, false);
+    out.mediumRifle = shoot(mk('medium'), 2, true);
+    out.plateRifle = shoot(mk('swat'), 2, true);
+    out.sideRifle = shoot(mk('swat'), 2, true, 'side');
+    out.collar = shoot(mk('swat'), 3, false);
+    let ear = 0, earLight = 0;
+    for (let i = 0; i < 10; i++) { if (shoot(mk(null, 'medium'), 4, false, 'side', -0.04)) ear++; if (shoot(mk(null, 'light'), 4, false, 'side', -0.04)) earLight++; }
+    out.ear = ear; out.earLight = earLight;
+    const V2 = mk(null, 'swat'), vis = [];
+    for (let i = 0; i < 4; i++) { const c = V2.bodies[4], pt = [0, 0, 0], dir = [0, 0, 0]; c.toWorld(0, -0.02, c.hz, pt); c.dirToWorld(0, 0, -1, dir); vis.push(V2.hit({ part: 4, type: 'bullet', power: 1, point: pt, dir, normal: [0, 0, 1], impulse: 1, attacker: p, weapon: 'glock', rifle: false, through: 0.2, hp: 32 }).stopped); }
+    out.visor = { first: vis[0], crazed: V2.helmet.visor >= 3, last: vis[3], glass: V2.helmet.boxes.some((b) => b.glass) };
+    g.removeHuman(V2);
+    g.paused = true;
+    return out;
+  });
+  check('medium and S.W.A.T. vests and helmets are in the spawn menu, and go on', listed && r.spawned && r.worn === 'swat' && r.label === 'PUT ON' && r.chip, `${r.label}, worn: ${r.worn}`);
+  check('a S.W.A.T. vest covers chest, belly, hips, neck and shoulders', r.parts === '0,1,2,3,5,8', 'parts ' + r.parts);
+  check('putting on another vest swaps it for the one you had', r.swapped);
+  check('the medium vest covers the whole torso: a pistol round to the hips is stopped (not by a light one)', r.mediumPelvis && !r.lightPelvis);
+  check('soft armour does not stop a rifle round; a S.W.A.T. plate does, front and back but not at the side', !r.mediumRifle && r.plateRifle && !r.sideRifle);
+  check('the S.W.A.T. collar stops a pistol round to the neck', r.collar);
+  check('a medium helmet comes down over the ears; a light one does not', r.ear >= 7 && r.earLight === 0, `${r.ear}/10 against ${r.earLight}/10`);
+  check('the S.W.A.T. visor is glass you can see through, it stops a pistol round, and after three it is crazed and stops nothing', r.visor.glass && r.visor.first && r.visor.crazed && !r.visor.last);
+}
+
+/* -------------------------------- S.W.A.T. -------------------------------- */
+head('S.W.A.T.');
+if (want('S.W.A.T')) {
+  await run(() => { V.stage(); __game.paused = false; });
+  await t.page.click('#btn-menu');
+  await t.page.click('[data-spawn="swat"]');
+  await t.page.click('[data-close="sandbox"]');
+  const r = await run(() => {
+    const g = __game, out = {};
+    g.advance(0.6);
+    const team = g.humans.filter((h) => h.swat);
+    out.n = team.length;
+    out.kit = team.map((h) => ({ officer: h.officer, vest: h.vest && h.vest.kind, helm: h.helmet && h.helmet.kind, kit: (h.kit || []).map((i) => i.type).sort().join(','), dark: h.look.top === 0x1c1f26 }));
+    // at two stars, the reinforcements that come out of the station are S.W.A.T.
+    T.clear(); g.police.reset(); g.staffStation(true); g.advance(0.3);
+    g.police.raise(2, 'test', { x: g.player.x, z: g.player.z });
+    let swat = 0;
+    for (let i = 0; i < 40; i++) { g.advance(0.5); swat = g.humans.filter((h) => h.swat).length; if (swat) break; }
+    out.reinforced = swat;
+    g.police.reset();
+    g.paused = true;
+    return out;
+  });
+  check('the sandbox sends a team of four', r.n === 4, `${r.n}`);
+  check('each in black, with a S.W.A.T. vest and helmet, an M4A1, a Glock, a taser and cuffs', r.kit.length === 4 && r.kit.every((k) => k.officer && k.vest === 'swat' && k.helm === 'swat' && k.kit === 'cuffs,glock,m4a1,taser' && k.dark), JSON.stringify(r.kit[0]));
+  check('at two stars it is the S.W.A.T. team that comes out of the station', r.reinforced > 0, `${r.reinforced}`);
+}
+
+/* ---------------------------------- cars ---------------------------------- */
+head('Cars');
+if (want('Cars')) {
+  const traffic = await run(() => {
+    const g = __game, out = {};
+    V.stage(); g.traffic.setCount(6); g.advance(2);
+    const live = g.traffic.cars.filter((c) => c.mode === 'rail');
+    out.n = live.length; out.drivers = live.filter((c) => c.seats[0] && c.seats[0].car === c).length;
+    const c = live[0];
+    out.glass = c ? c.glassMesh.material.transparent && c.glassMesh.geometry.attributes.color.itemSize === 4 && c.glassMesh.geometry.attributes.color.array[3] < 0.5 : false;
+    out.interior = c ? c.innerMesh.geometry.attributes.position.count > 100 : false;
+    // a driver can be seen through the windscreen (a car stopped in an empty street, somebody standing in front of it)
+    const sc = g.traffic.spawnParked('sedan', -40, -18, Math.PI / 2);
+    const sd = V.still(g.spawnHuman(-40, -15, 0)); g.traffic.seat(sd, sc, 0, true);
+    const o = V.still(g.spawnHuman(-33, -18, -Math.PI / 2)); g.advance(0.1);
+    out.seen = o.mind.canSeeHuman(sd) > 0;
+    // and not through the door below the window
+    const lo = [0, 0, 0]; sc.toWorld(0, 0.5, 0, lo);
+    out.door = o.mind.canSee(lo[0] - 0.9, 0.5, lo[2], false, false) === 0;
+    g.removeHuman(o); g.removeHuman(sd); g.traffic.remove(sc);
+    out.parked = g.traffic.cars.filter((c) => c.home).length;
+    g.traffic.setCount(0);
+    g.paused = true;
+    return out;
+  });
+  check('traffic has somebody at the wheel of every car', traffic.n >= 5 && traffic.drivers === traffic.n, `${traffic.drivers}/${traffic.n}`);
+  check('the windows are see-through glass, with seats, a dashboard and a wheel behind them', traffic.glass && traffic.interior);
+  check('and the people in the street can see the driver through it', traffic.seen);
+  check('the cars parked about the city are real cars too', traffic.parked >= 6, `${traffic.parked}`);
+
+  // the player drives: walk up, DRIVE, the pedals, the arrows, the handbrake, the door
+  const drive = await run(() => {
+    const g = __game, p = g.player, out = {};
+    V.stage(); g.paused = false;
+    // a long straight stretch of empty road, heading east
+    p.reset(-46, -21, Math.PI / 2); g.advance(0.2);
+    const c = g.traffic.spawnParked('sedan', -46, -18, Math.PI / 2);
+    g.advance(0.3);
+    const sp = c.seatAt[0], a = [0, 0, 0]; c.toWorld(sp[0] + 0.9, 0, sp[2] + 0.1, a);
+    p.reset(a[0], a[2], c.yaw + Math.PI); g.advance(0.4);
+    out.label = document.querySelector('#use-label').textContent;
+    T.press('use'); g.advance(0.05); T.release('use'); g.advance(0.7);
+    out.in = p.car === c && p.pose.sit === 1;
+    const vis = (s) => { const e = document.querySelector(s); if (!e) return false; const b = e.getBoundingClientRect(); return b.width > 20 && b.height > 20; };
+    out.controls = ['#btn-gas', '#btn-brake', '#btn-hand', '#btn-left', '#btn-right', '#btn-exit', '#speedo'].every(vis) && !vis('#stick-base') && !vis('#btn-attack');
+    const x0 = c.x, z0 = c.z, y0 = c.yaw;
+    T.press('gas'); g.advance(3); out.speed = c.speed; out.kmh = Number(document.querySelector('#speedo-v').textContent);
+    out.ahead = (c.x - x0) * Math.sin(y0) + (c.z - z0) * Math.cos(y0);
+    T.press('steerR'); g.advance(0.6); T.release('steerR'); T.release('gas');
+    out.turned = wrapA(c.yaw - y0);
+    T.press('brake'); let stopT = 0; for (let i = 0; i < 120 && c.speed > 0.3; i++) { g.advance(1 / 30); stopT += 1 / 30; } out.stopT = stopT;
+    g.advance(1.5); out.rev = c.speed; out.gear = document.querySelector('#speedo-g').textContent; T.release('brake');
+    T.press('gas'); g.advance(1.5); T.release('gas'); T.press('hand'); const s0 = c.speed; g.advance(1); out.hand = [s0, c.speed]; T.release('hand');
+    T.press('use'); g.advance(0.05); T.release('use'); g.advance(0.8);
+    out.out = !p.car && T.state(p) === 'ANIM' && Math.hypot(p.x - c.x, p.z - c.z) > 1.1;
+    out.hudBack = !document.querySelector('#hud').classList.contains('driving');
+    function wrapA(a) { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; }
+    g.paused = true;
+    return out;
+  });
+  check('walk up to a car and DRIVE gets you in behind the wheel', drive.label === 'DRIVE' && drive.in, drive.label);
+  check('in the car the controls are two pedals, a handbrake, arrows to steer and a door, and a speedometer', drive.controls);
+  check('GAS drives it forward', drive.speed > 8 && drive.ahead > 12 && drive.kmh > 25, `${drive.speed.toFixed(1)} m/s (${drive.kmh} km/h) after 3 s, ${drive.ahead.toFixed(0)} m`);
+  check('the right arrow turns it right', drive.turned < -0.15, `${drive.turned.toFixed(2)} rad`);
+  check('BRAKE stops it, and held at a standstill backs it up', drive.stopT < 2.5 && drive.rev < -1 && drive.gear === 'R', `stopped in ${drive.stopT.toFixed(1)} s; then ${drive.rev.toFixed(1)} m/s, gear ${drive.gear}`);
+  check('the handbrake brings it down', drive.hand[1] < drive.hand[0] - 3, `${drive.hand[0].toFixed(1)} -> ${drive.hand[1].toFixed(1)} m/s`);
+  check('EXIT puts you back on your feet beside it', drive.out && drive.hudBack);
+
+  const jack = await run(() => {
+    const g = __game, p = g.player, out = {};
+    V.stage(); g.paused = false; g.police.reset();
+    const c = g.traffic.spawnParked('taxi', p.x + 4, p.z, Math.PI / 2);
+    const d = g.spawnHuman(c.x, c.z + 3, 0); g.traffic.seat(d, c, 0, true);
+    const w = V.still(g.spawnHuman(c.x - 2, c.z + 6, Math.PI)); g.advance(0.3);
+    const sp = c.seatAt[0], a = [0, 0, 0]; c.toWorld(sp[0] + 0.9, 0, sp[2] + 0.1, a);
+    p.reset(a[0], a[2], c.yaw + Math.PI); g.advance(0.4);
+    out.label = document.querySelector('#use-label').textContent;
+    T.press('use'); g.advance(0.05); T.release('use'); g.advance(2.5);
+    out.in = p.car === c; out.out = !d.car; out.hurt = d.h.wounds.length; out.alive = d.h.alive;
+    out.fear = Math.round(d.mind.emo.fear); out.anger = Math.round(d.mind.emo.anger);
+    out.knows = d.mind.memory.some((m) => /dragged out of my own car/.test(m.text));
+    out.saw = w.mind.memory.some((m) => /out of their car/.test(m.text));
+    g.traffic.exit(p);
+    g.paused = true;
+    return out;
+  });
+  check('a car with somebody at the wheel: CARJACK pulls them out and you are in', jack.label === 'CARJACK' && jack.in && jack.out, jack.label);
+  check('they come out of it frightened and angry, not hurt', jack.alive && jack.hurt === 0 && jack.fear > 30 && jack.anger > 25 && jack.knows, `fear ${jack.fear}, anger ${jack.anger}, ${jack.hurt} wounds`);
+  check('and whoever saw it knows what they saw', jack.saw);
+
+  // crashes: the same wall at different speeds
+  const crash = await run(() => {
+    const g = __game, W = g.world, out = {};
+    V.stage(); g.paused = false;
+    for (const [v, k] of [[4.2, 15], [8.3, 30], [13.9, 50], [25, 90]]) {
+      const c = g.traffic.spawnParked('sedan', 0, 18, Math.PI / 2);
+      c.mode = 'loose'; c.hand = 0;
+      const d0 = W.rayWorld(c.x, 0.8, c.z, 1, 0, 0, 80);
+      c.x += d0 - 6.5; c.vx = v; c.vz = 0; c.place(0);
+      for (let i = 0; i < 150; i++) g.advance(1 / 60);
+      const pos = c.shellMesh.geometry.attributes.position.array, base = c.base; let m = 0;
+      for (let i = 0; i < pos.length; i += 3) m = Math.max(m, Math.hypot(pos[i] - base[i], pos[i + 1] - base[i + 1], pos[i + 2] - base[i + 2]));
+      out[k] = { hp: Math.round(c.hp), smoke: c.smoke, fire: c.fire >= 0, dent: +m.toFixed(2), glass: c.windows.filter((w) => w && (w.broken || w.cracks > 0)).length };
+      if (k === 50) { const grey = []; for (const h of [80, 60, 40, 10]) { c.hp = h; grey.push(c.smoke); } out.levels = grey.join(','); }
+      if (k === 90) { out.boom = c.boomT; g.advance(c.boomT + 0.5); out.wreck = c.wreck && !c.drivable; }
+      g.traffic.remove(c);
+    }
+    g.paused = true;
+    return out;
+  });
+  check('a knock at 15 km/h is a dent in the bumper and nothing more', crash[15].dent > 0.02 && crash[15].dent < 0.2 && crash[15].hp > 95 && crash[15].smoke === 0, JSON.stringify(crash[15]));
+  check('at 50 km/h the front is crushed half a metre and the engine smokes', crash[50].dent > 0.4 && crash[50].smoke >= 2 && !crash[50].fire, JSON.stringify(crash[50]));
+  check('smoke: light grey when lightly damaged, grey when worse, dark grey when nearly done', crash.levels === '0,1,2,3', crash.levels);
+  check('at 90 km/h it is finished: it catches fire, then goes up, and is a wreck nobody can drive', crash[90].fire && crash.wreck, JSON.stringify(crash[90]));
+
+  // gunfire: through the windscreen into the driver; the engine until it burns and goes up
+  const guns = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, out = {};
+    V.stage(); g.paused = false;
+    const c = g.traffic.spawnParked('sedan', p.x + 8, p.z, -Math.PI / 2);
+    const d = V.still(g.spawnHuman(c.x, c.z + 3, 0)); g.traffic.seat(d, c, 0, true); g.advance(0.3);
+    const head = d.bodies[4], dir = [head.px - p.x, head.py - 1.5, head.pz - p.z], l = Math.hypot(...dir);
+    w._bullet(p, { id: 'glock', power: 1, impulse: 3, hp: 32 }, p.x, 1.5, p.z, dir[0] / l, dir[1] / l, dir[2] / l, 1, 0);
+    g.advance(0.3);
+    out.screen = c.windows[0].cracks > 0; out.driverHit = d.h.wounds.length > 0;
+    out.stillSeated = d.car === c;
+    // the engine, a rifle round at a time
+    const by = V.still(g.spawnHuman(c.x + 2, c.z + 3.5, 0)); g.advance(0.1);
+    let n = 0;
+    while (c.fire < 0 && n < 80) { const a = [0, 0, 0]; c.toWorld(0, 0.7, 1.7, a); w._bullet(p, { id: 'ak47', rifle: true, power: 1.4, impulse: 6, hp: 40, pierce: true }, a[0], 3, a[2] + 0.01, 0, -1, 0, 1.4, 0); n++; }
+    out.rounds = n; out.burning = c.fire >= 0;
+    g.advance(c.boomT - c.fire + 0.4);
+    out.wreck = c.wreck; out.free = !c.body.kinematic;
+    out.thrown = T.state(by) === 'RAGDOLL'; out.blastHurt = by.h.wounds.length;
+    out.driverOut = !d.car;
+    out.wanted = g.police.wanted;
+    g.advance(2);
+    out.debris = g.traffic.debris.length;
+    g.police.reset();
+    g.paused = true;
+    return out;
+  });
+  check('a round through the windscreen stars the glass and hits the driver behind it, who stays in the seat', guns.screen && guns.driverHit && guns.stillSeated);
+  check('rounds into the engine set it on fire', guns.burning && guns.rounds < 60, `${guns.rounds} rifle rounds`);
+  check('then it explodes: a free wreck, pieces everywhere, the bystander thrown and hurt, the body in it thrown out', guns.wreck && guns.free && guns.debris > 3 && guns.thrown && guns.blastHurt > 0 && guns.driverOut, `${guns.debris} pieces, bystander ${guns.blastHurt} wounds`);
+  check('blowing up a car makes you wanted', guns.wanted >= 2, `${guns.wanted} stars`);
+
+  const road = await run(() => {
+    const g = __game, out = {};
+    V.stage(); g.paused = false;
+    const v = V.still(g.spawnHuman(-17.14, -33, Math.PI / 2)); g.advance(0.1); v.h.ko = 90; v.toRagdoll(); g.advance(1.5);
+    const pel = v.bodies[0];
+    const c = g.traffic.spawnParked('sedan', pel.px - 0.86, pel.pz - 8, 0); c.mode = 'loose'; c.hand = 0; c.vz = 7; c.place(0);
+    const r0 = g.traffic.stats.runOver;
+    for (let i = 0; i < 150; i++) g.advance(1 / 60);
+    out.crushed = g.traffic.stats.runOver - r0; out.wounds = v.h.wounds.length;
+    out.broken = Object.values(v.h.bones).filter((b) => b < 60).length;
+    // a standing person, hit at 40 km/h
+    const s = V.still(g.spawnHuman(5, 18, 0)); g.advance(0.2);
+    const c2 = g.traffic.spawnParked('sedan', -6, 18, Math.PI / 2); c2.mode = 'loose'; c2.hand = 0; c2.vx = 11; c2.place(0);
+    for (let i = 0; i < 90; i++) g.advance(1 / 60);
+    out.struck = T.state(s) !== 'ANIM'; out.struckWounds = s.h.wounds.length; out.dented = c2.dents > 0;
+    // a traffic driver knocked off the rails gets back into the traffic
+    g.traffic.setCount(3); g.advance(1);
+    const t = g.traffic.cars.find((c) => c.mode === 'rail' && c.seats[0]);
+    g.traffic.loosen(t); t.vx += Math.cos(t.yaw) * 3; t.vz -= Math.sin(t.yaw) * 3;
+    let back = -1; for (let i = 0; i < 60; i++) { g.advance(0.5); if (t.mode === 'rail') { back = i * 0.5; break; } }
+    out.rejoined = back;
+    g.traffic.setCount(0);
+    g.paused = true;
+    return out;
+  });
+  check('anyone lying in the road is driven over: crushed, with bones broken', road.crushed > 0 && road.wounds > 2 && road.broken > 0, `${road.crushed} times under a wheel, ${road.wounds} wounds, ${road.broken} bones broken`);
+  check('somebody standing in the road is knocked down, and dents the car', road.struck && road.struckWounds > 0 && road.dented);
+  check('a driver knocked off the lane stops, then drives back into the traffic', road.rejoined > 0 && road.rejoined < 40, `back in ${road.rejoined} s`);
+
+  const flee = await run(() => {
+    const g = __game, p = g.player, out = {};
+    V.stage(); g.paused = false;
+    const c = g.traffic.spawnParked('sedan', p.x + 4, p.z - 4, Math.PI / 2);
+    const h = g.spawnHuman(p.x + 4, p.z - 1.5, 0); g.advance(0.3);
+    h.mind.p.bravery = 0.5; h.mind.p.temper = 0.1;      // somebody who runs: not brave enough to fight, not so timid they freeze
+    h.mind.stir('fear', 90); h.mind._threaten(p, 90); h.brain.mode = 'flee'; h.brain.modeT = 2; h.brain.carLook = 0;
+    let t0 = -1;
+    for (let i = 0; i < 80; i++) { g.advance(0.25); if (h.car === c && t0 < 0) t0 = i * 0.25; if (h.car && Math.abs(c.speed) > 2) break; }
+    out.took = t0; out.driving = h.car === c && Math.abs(c.speed) > 2;
+    g.paused = true;
+    return out;
+  });
+  check('someone running for their life gets into an empty car and drives it away', flee.took >= 0 && flee.driving, `in after ${flee.took} s`);
+
+  await run(() => { V.stage(); __game.paused = false; });
+  await t.page.click('#btn-menu');
+  const carsListed = await run(() => ['car', 'policecar', 'van'].every((k) => !!document.querySelector(`[data-spawn="${k}"]`)));
+  await t.page.click('[data-spawn="policecar"]');
+  await t.page.click('[data-close="sandbox"]');
+  const spawned = await run(() => { const g = __game; g.advance(0.3); const c = g.traffic.cars.find((c) => c.spawned); const out = { kind: c && c.kind }; g.cleanUp('cars'); out.cleaned = !g.traffic.cars.some((c) => c.spawned); g.paused = true; return out; });
+  check('cars, a police car and a van are in the spawn menu, and clean up', carsListed && spawned.kind === 'police' && spawned.cleaned);
+}
+
+/* ---------------------------------- gore ---------------------------------- */
+head('Gore');
+if (want('Gore')) {
+  const r = await run(() => {
+    const g = __game, p = g.player, out = {};
+    V.stage(); g.paused = false;
+    const v = V.still(T.dummy(1.6)); g.advance(0.2);
+    v.sever(6, [0, 1, 0]); g.advance(0.3);
+    out.caps = (v.caps || []).length;
+    out.capsOn = v.caps ? [...new Set(v.caps.map((c) => c.part))].sort().join(',') : '';
+    const cols = (v.caps || []).map((c) => [g.boxes.c[c.idx * 3], g.boxes.c[c.idx * 3 + 1], g.boxes.c[c.idx * 3 + 2]]);
+    out.bone = cols.some((c) => c[0] > 0.7 && c[1] > 0.65 && c[2] > 0.5);
+    // a burst head: bone and brain among the pieces
+    const n0 = g.gore.gibsList.length;
+    v.burst(4, [0, 2, 0]); g.advance(0.1);
+    const pieces = g.gore.gibsList.slice(n0).map((o) => g.boxes.c[o.idx * 3] * 1000 | 0);
+    out.gibs = pieces.length; out.mixed = new Set(pieces).size;
+    // dragged along the ground, bleeding: a smear behind
+    const u = V.still(T.dummy(2.5, 2)); g.advance(0.2);
+    u.h.hit({ part: 1, type: 'cut', power: 2.5, lp: [0, 0, 0.09], ln: [0, 0, 1], ld: [0, 0, -1] });
+    u.toRagdoll(); g.advance(1);
+    const t0 = g.gore.stats.trails || 0;
+    for (let i = 0; i < 60; i++) { for (const b of u.bodies) { b.vx = 2.2; b.vz = 0; } g.advance(1 / 30); }
+    out.trails = (g.gore.stats.trails || 0) - t0;
+    // blood thrown on to a car lands on it
+    const c = g.traffic.spawnParked('sedan', p.x + 3, p.z - 4, 0); g.advance(0.2);
+    const k0 = g.gore.stats.onCars || 0;
+    g.gore.burst(c.x + 1.6, 1.0, c.z, -1, 0.2, 0, 40, 4, 0.3); g.advance(1.5);
+    out.onCar = (g.gore.stats.onCars || 0) - k0;
+    // and pools dry dark
+    const G = g.gore, i = G._groundDecal(G.constructor && DECAL_SPLAT(), p.x, 0, p.z, 0.4, 0.4, 0);
+    G.gInfo[i].born -= 400; G._dry();
+    out.dry = G.ground.col ? G.ground.col[i * 16 + 1] : (G.gInfo[i].dry || 0);
+    out.dryK = G.gInfo[i].dry || 0;
+    g.traffic.remove(c);
+    g.paused = true;
+    return out;
+    function DECAL_SPLAT() { return [0, 0, 0.1, 0.1]; }
+  });
+  check('a severed stump has a ring of flesh and the end of the bone standing proud of it, on both sides of the cut', r.caps >= 6 && r.capsOn === '5,6' && r.bone, `${r.caps} pieces on parts ${r.capsOn}`);
+  check('a head that bursts throws bone and brain with the blood', r.gibs >= 8 && r.mixed >= 6, `${r.gibs} pieces, ${r.mixed} kinds`);
+  check('somebody bleeding who is dragged along the ground leaves a smear the way they went', r.trails > 2, `${r.trails} smears`);
+  check('blood that lands on a car stays on the car', r.onCar > 2, `${r.onCar} marks`);
+  check('blood on the ground goes dark as it dries', r.dryK > 0.9, `${r.dryK}`);
 }
 
 /* --------------------------------- report ------------------------------- */

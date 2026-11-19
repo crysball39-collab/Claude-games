@@ -25,12 +25,13 @@ import { ST } from '../human/human.js';
 import { clamp, clamp01, rand, chance, wrapAngle } from '../core/util.js';
 
 const _e = [0, 0, 0], _g = [0, 0, 0], _t = [0, 0, 0];
-const WEAPON_WORD = { fists: 'fists', knife: 'knife', machete: 'machete', m1911: 'pistol', glock: 'pistol', flamethrower: 'flamethrower', rope: 'rope', wire: 'live wire', ak47: 'rifle', m4a1: 'rifle', ar15: 'rifle', taser: 'taser', cuffs: 'pair of handcuffs', scanner: 'fingerprint scanner', syringe: 'syringe' };
-const WEAPON_FEAR = { fists: 22, knife: 60, machete: 76, m1911: 88, glock: 87, flamethrower: 98, rope: 8, wire: 30, ak47: 94, m4a1: 95, ar15: 93, taser: 44, cuffs: 0, scanner: 0, syringe: 52 };
+const WEAPON_WORD = { fists: 'fists', knife: 'knife', machete: 'machete', m1911: 'pistol', glock: 'pistol', flamethrower: 'flamethrower', rope: 'rope', wire: 'live wire', ak47: 'rifle', m4a1: 'rifle', ar15: 'rifle', taser: 'taser', cuffs: 'pair of handcuffs', scanner: 'fingerprint scanner', syringe: 'syringe', car: 'car', carjack: 'bare hands', explosion: 'bomb', shrapnel: 'bomb' };
+const WEAPON_FEAR = { fists: 22, knife: 60, machete: 76, m1911: 88, glock: 87, flamethrower: 98, rope: 8, wire: 30, ak47: 94, m4a1: 95, ar15: 93, taser: 44, cuffs: 0, scanner: 0, syringe: 52, car: 80, carjack: 30, explosion: 99, shrapnel: 99 };
 /** Fires bullets. */
 export const isGun = (id) => id === 'm1911' || id === 'glock' || id === 'ak47' || id === 'm4a1' || id === 'ar15';
 export const EMOTIONS = ['fear', 'anger', 'sadness', 'joy', 'surprise', 'boredom'];
 
+const _sight = { lp: [0, 0, 0], ln: [0, 0, 0], xn: [0, 0, 0], tag: '', piece: 0, exit: 0, glass: -1 };
 export class Mind {
   constructor(human, minds) {
     this.h = human; this.minds = minds; this.game = minds.game;
@@ -137,11 +138,13 @@ export class Mind {
       if (along < 0.3 || along > d - 0.4) continue;
       if (rayBody(b, _e[0], _e[1], _e[2], ix, iy, iz, d - 0.35, null) >= 0) return 0;
     }
+    // a car is in the way only where it is metal: through its windows, or where they were, is seen
     if (g.traffic) for (const car of g.traffic.cars) {
       const b = car.body, ex = b.px - _e[0], ez = b.pz - _e[2];
       const along = ex * ix + ez * iz;
-      if (along < 0.5 || along > d - 0.5) continue;
-      if (rayBody(b, _e[0], _e[1], _e[2], ix, iy, iz, d - 0.4, null) >= 0) return 0;
+      if (along < -2.5 || along > d + 2.5 || (ex - ix * along) ** 2 + (ez - iz * along) ** 2 > 9) continue;
+      const t = car.ray ? car.ray(_e[0], _e[1], _e[2], ix, iy, iz, d - 0.3, _sight) : rayBody(b, _e[0], _e[1], _e[2], ix, iy, iz, d - 0.4, null);
+      if (t >= 0 && (!car.ray || _sight.glass === -1)) return 0;
     }
     return acuity;
   }
@@ -312,9 +315,11 @@ export class Mind {
       case 'attack': {
         if (V === h || A === h) return;
         const word = WEAPON_WORD[ev.weapon] || 'weapon', sev = WEAPON_FEAR[ev.weapon] || 30;
-        const verb = ev.weapon === 'fists' ? 'hit' : ev.weapon === 'taser' ? 'fire a taser into' : ev.weapon === 'syringe' ? 'jab a needle into' : ev.weapon === 'flamethrower' ? 'set fire to' : ev.weapon === 'wire' ? 'electrocute' : ev.weapon === 'knife' ? (ev.rep && ev.rep.type === 'stab' ? 'stab' : 'slash') : ev.weapon === 'machete' ? 'hack at' : 'shoot';
-        const soft = ev.weapon === 'fists' || ev.weapon === 'taser';
-        this.note('saw', 'attack', `saw ${this.name(A)} ${verb} ${this.name(V)}${soft || ev.weapon === 'syringe' || ev.weapon === 'wire' ? '' : ' with a ' + word}`, 0.9, { o: A, v: V });
+        const verb = ev.weapon === 'carjack' ? 'drag' : ev.weapon === 'car' ? 'run down' : ev.weapon === 'fists' ? 'hit' : ev.weapon === 'taser' ? 'fire a taser into' : ev.weapon === 'syringe' ? 'jab a needle into' : ev.weapon === 'flamethrower' ? 'set fire to' : ev.weapon === 'wire' ? 'electrocute' : ev.weapon === 'knife' ? (ev.rep && ev.rep.type === 'stab' ? 'stab' : 'slash') : ev.weapon === 'machete' ? 'hack at' : 'shoot';
+        const soft = ev.weapon === 'fists' || ev.weapon === 'taser' || ev.weapon === 'carjack';
+        this.note('saw', 'attack', `saw ${this.name(A)} ${verb} ${this.name(V)}${ev.weapon === 'carjack' ? ' out of their car' : soft || ev.weapon === 'syringe' || ev.weapon === 'wire' ? '' : ' with a ' + word}`, 0.9, { o: A, v: V });
+        if (ev.weapon === 'car') this.ask('runOver', 84, null, rand(0.1, 0.5));
+        if (ev.weapon === 'carjack' && V !== h) this.ask('sawAttack', 60, { sex: A.look && A.look.sex }, rand(0.3, 0.9));
         if (ev.weapon === 'flamethrower') { this.stir('fear', 40 * k); this.stir('surprise', 30 * k); }
         this.stir('fear', sev * 0.6 * k); this.stir('sadness', 14 * k); this.stir('anger', (ev.weapon === 'fists' ? 16 : 8) * k); this.stir('surprise', 35 * k);
         const kn = this._know(A); kn.armed = ev.weapon;
@@ -415,6 +420,27 @@ export class Mind {
         this.ask(what === 'head' ? 'sawHeadless' : 'sawDismember', 90, null, 0.3);
         break;
       }
+      case 'crash':
+        if (w.d > 30) return;
+        this.note('saw', 'crash', `saw a car crash ${w.text}`, 0.8);
+        this.stir('surprise', 50 * k); this.stir('fear', 14 * k);
+        if (ev.car && ev.car.seats.includes(h)) { this.ask('crashed', 80, null, rand(0.5, 1.5)); break; }
+        if (w.d < 20) this.ask('sawCrash', 62, null, rand(0.3, 1));
+        break;
+      case 'carFire':
+        if (w.d > 35) return;
+        this.note('saw', 'carFire', `saw a car catch fire ${w.text}`, 0.9);
+        this.stir('fear', 30 * k); this.stir('surprise', 40 * k);
+        if (w.d < 14) this._threaten(null, 52, ev.x, ev.z);
+        this.ask(w.d < 10 ? 'carFire' : 'sawCarFire', 76, null, rand(0.2, 0.8));
+        break;
+      case 'explosion':
+        this.note('saw', 'explosion', `saw a car blow up ${w.text}`, 1);
+        this.stir('fear', 70 * k + 20); this.stir('surprise', 90);
+        this._threaten(ev.by && ev.by.h ? ev.by : null, 85, ev.x, ev.z);
+        this.startle = 1;
+        this.ask('sawExplosion', 92, null, rand(0.4, 1.2));
+        break;
       case 'carhit':
         if (V === h) return;
         this.note('saw', 'carhit', `saw a car hit ${this.name(V)}`, 0.9, { v: V });
@@ -477,6 +503,12 @@ export class Mind {
       case 'crackle': if (w.d > 30) return; text = `heard a sharp electric crackling ${w.text}`; sal = 0.45; this.stir('surprise', 18 * falloff(w.d)); break;
       case 'scream': text = `heard someone scream ${w.text}`; sal = 0.5; this.stir('fear', 12 * falloff(w.d)); this.stir('surprise', 16); break;
       case 'blow': if (w.d > 9) return; text = `heard a blow land ${w.text}`; sal = 0.3; this.stir('surprise', 10); break;
+      case 'explosion':
+        text = `heard an explosion ${w.text}`; sal = 1;
+        this.stir('fear', clamp(70 - w.d * 0.6, 20, 70)); this.stir('surprise', 80); this.startle = 1;
+        if (!knowSrc && w.d < 45) this._threaten(null, clamp(90 - w.d, 40, 85), s.x, s.z);
+        if (w.d < 60) { this.ask('hearExplosion', 80, null, rand(0.3, 1)); this._wantCall({ kind: 'shots', x: s.x + rand(-5, 5), z: s.z + rand(-5, 5), suspect: null }); }
+        break;
       case 'crash': text = `heard something crash ${w.text}`; sal = 0.35; this.stir('surprise', 22 * falloff(w.d)); if (w.d < 5) this.ask('crate', 38); break;
       case 'horn': text = `heard a car horn ${w.text}`; sal = 0.3; this.stir('surprise', 16); if (w.d < 9) { this.ask('horn', 40); this.hurry = now + 3; } break;
       case 'screech': text = `heard tyres screech ${w.text}`; sal = 0.4; this.stir('surprise', 26); this.stir('fear', 8); break;

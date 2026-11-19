@@ -13,7 +13,7 @@ import {
   asphaltTexture, pavementTexture, grassTexture, facadeTexture, skyTexture, signTexture, FACADE_COUNT,
 } from '../render/textures.js';
 import {
-  buildCar, addLamp, addTree, addBench, addBin, addHydrant, propMaterial, glowMaterial, CAR, CAR_PAINT,
+  addLamp, addTree, addBench, addBin, addHydrant, propMaterial, glowMaterial, CAR_PAINT,
 } from './models.js';
 
 export const ROADS = [-54, -18, 18, 54];
@@ -217,16 +217,13 @@ export class City {
     const r = this.rng;
     // a row of bays along the far side, a few of them taken
     for (let k = 0; k <= 6; k++) this.marks.flat(x0 + 1.5 + k * 3, KERB + 0.03, z1 - 3.1, 0.12, 5.2, 0xd8d8d2);
+    // (the cars in them are real cars, made by the traffic: they can be got into and driven away)
     const kinds = ['sedan', 'van', 'sedan', 'taxi', 'sedan'];
     [0, 1, 3, 4, 5].forEach((bay, k) => {
       if (k === 2 && r() < 0.5) return;
       const x = x0 + 3 + bay * 3, z = z1 - 3.1, yaw = r() < 0.5 ? 0 : Math.PI;
-      const car = buildCar(CAR_PAINT[(r() * CAR_PAINT.length) | 0], kinds[k]);
-      car.position.set(x, KERB, z); car.rotation.y = yaw;
-      car.traverse((o) => { o.matrixAutoUpdate = false; o.updateMatrix(); if (o.isMesh) { o.castShadow = this.shadows; } });
-      this.group.add(car);
-      this._solid(x - CAR.halfW, 0, z - CAR.halfL, x + CAR.halfW, KERB + 1.38, z + CAR.halfL, 'car', true);
-      this.parked.push({ x, z, yaw });
+      const paint = kinds[k] === 'taxi' ? 0xe0b021 : CAR_PAINT[(r() * CAR_PAINT.length) | 0];
+      this.parked.push({ x, z, yaw, kind: kinds[k], paint });
     });
     // a low wall with a gap in it
     this.props.box(x0 + 5.5, KERB + 0.45, z0 + 0.3, 11, 0.9, 0.4, 0x7b7c78);
@@ -313,12 +310,7 @@ export class City {
     this.patrol = [];
     for (const k of [0, 1]) {
       const x = x0 + 2.9 + k * 3, z = z0 + 2.6;
-      const car = buildCar(0xf0f0ec, 'police');
-      car.position.set(x, KERB, z); car.rotation.y = Math.PI;
-      car.traverse((o) => { o.matrixAutoUpdate = false; o.updateMatrix(); if (o.isMesh) o.castShadow = this.shadows; });
-      this.group.add(car);
-      this._solid(x - CAR.halfW, 0, z - CAR.halfL, x + CAR.halfW, KERB + 1.38, z + CAR.halfL, 'car', true);
-      this.parked.push({ x, z, yaw: Math.PI });
+      this.parked.push({ x, z, yaw: Math.PI, kind: 'police', paint: 0xf0f0ec });
       this.patrol.push({ x, z });
     }
     // where the officers stand, and how they get in and out

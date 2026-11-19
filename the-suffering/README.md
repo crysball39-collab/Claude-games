@@ -39,6 +39,10 @@ npm start            # python3 -m http.server 8080, from the repository root
 | Say something | TALK | T |
 | First or third person | VIEW | V |
 | Pause | PAUSE | Esc or P |
+| Get into a car | DRIVE (or CARJACK) at a front door | E |
+| Drive | GAS and BRAKE pedals; BRAKE held at a standstill reverses | W / up, S / down |
+| Steer | the left and right arrows | A / D, left / right |
+| Handbrake / horn / out | HANDBRAKE, HORN, EXIT | Space, H, E |
 
 ## What is in it
 
@@ -79,6 +83,56 @@ stab, and only slows a rifle round. It covers nothing else.
 a blow to the head, or a fall on to it; turns a slash; turns rather more than half of
 the pistol rounds that hit it, and takes a little off a rifle round. A shot in the face
 is a shot in the face.
+
+**Medium and S.W.A.T. armour.** The medium vest is olive drab and covers the whole
+torso, hips and groin included, with stab panels: it stops pistol rounds and slashes
+anywhere on the trunk, stops some stabs, and a rifle round still goes through it. The
+medium helmet is a ballistic shell down over the ears and the nape: it stops nearly every
+pistol round, sometimes a rifle round at an angle. The S.W.A.T. vest is a 9.5 kg plate
+carrier: plates front and back over the chest and belly stop rifle rounds (you are left
+with the bruise and maybe a broken rib), soft armour at the sides does not, and a
+collar, shoulder pads and a groin flap stop pistol rounds where they are. The S.W.A.T.
+helmet adds a clear visor over the face: it stops most pistol rounds, stars with each
+one, and after three is crazed glass that stops nothing. Put on one of a kind you are
+already wearing and you swap it, leaving the old one where the new one lay. A vest or
+helmet that is not thin stops taser probes.
+
+**The S.W.A.T. team.** Four of them from the sandbox, in black: plate carriers,
+visored helmets, an M4A1, a Glock-19, a taser and cuffs each. They are police, and
+behave as police, but go for the rifle first. At two stars it is the S.W.A.T. team that
+comes out of the station.
+
+**Cars.** Every car in the city is a real one: the traffic, the cars parked in the lot
+and the patrol cars outside the station, plus any you spawn. The windows are glass you
+can see through, at the seats, the dashboard, the steering wheel and whoever is sitting
+there: every car in the traffic has a driver, sometimes a passenger. Walk up to either
+front door and DRIVE gets you in; if somebody is at the wheel it is CARJACK, and they
+are dragged out, frightened and angry, and somebody calls the police. Inside, the
+controls are the two pedals (GAS; BRAKE, which once you have stopped reverses), the
+HANDBRAKE, which locks the back wheels and lets the tail step out, the left and right
+arrows, the HORN (which, in a police car, also works the lights and the siren) and the
+door. At speed, getting out is a fall onto the road.
+
+A car hits walls, posts, other cars and people, and every impact is a change of speed
+at the point of contact; that is what decides the damage. At 15 km/h the bumper dents.
+At 50 the front folds up half a metre, the bonnet buckles, the windscreen stars and the
+engine is badly hurt. Damage shows as smoke from the engine: light grey when it is
+lightly damaged, grey when worse, dark grey when it is nearly finished and running rough.
+At 80 or 90 there is nothing left: the engine bay catches fire, and a few seconds later
+it explodes. Bullets hole the metal and go on through (into whoever is in the seats),
+star the windscreen, burst the side windows and the tyres; enough rounds in the engine
+set it alight; a flamethrower sets it alight. An explosion throws the wreck into the
+air, scatters burning pieces, blows out windows nearby, and throws, burns, cuts and
+sometimes dismembers anyone close; other cars near it take it too, and may go up in turn.
+A wreck cannot be driven.
+
+People are knocked down by a car coming at them, dent it, and at speed come up over the
+bonnet into the windscreen. Anyone lying in the road is driven over: a wheel carries a
+third of a tonne, and that breaks what it crosses. A driver knocked off their lane stops,
+looks at the damage, and either drives back into the traffic or gets out; someone
+running for their life may get into an empty car and drive it away. Drivers who are shot
+or knocked out stay slumped in their seats, and can be pulled out. Wreckage is cleared
+from *Clean up -> Cars*. After dark, headlights light the road.
 
 **The taser.** Two barbed probes on wires, good for seven metres, two cartridges before
 a reload. Whoever they land in has every muscle contract at once: they go over stiff as
@@ -150,12 +204,13 @@ stiff and shaking and cannot breathe, it burns where it goes in, and the longer 
 the likelier the heart is to lose its rhythm and stop. It ends when the generator stops,
 the wire comes off or is cut, or they fall clear of what they were touching.
 
-**The sandbox menu** spawns humans (one or five), police officers, crates, the wooden and
-the steel wall, the short and the large steel beam, a light bulb, a floodlight and a
-generator; the rope, the wire, the light vest, the light helmet, handcuffs and the poison
-syringe; the taser and eight weapons (fists aside: the knife, the machete, the M1911, the
-Glock-19, the AK-47, the M4A1, the AR-15 and the flamethrower). It can clear away blood,
-bodies or objects, or patch you up.
+**The sandbox menu** spawns humans (one or five), police officers, a S.W.A.T. team,
+crates, the wooden and the steel wall, the short and the large steel beam, a light bulb,
+a floodlight and a generator, a car, a police car and a van; the rope, the wire, the
+light, medium and S.W.A.T. vests and helmets, handcuffs and the poison syringe; the taser
+and eight weapons (fists aside: the knife, the machete, the M1911, the Glock-19, the
+AK-47, the M4A1, the AR-15 and the flamethrower). It can clear away blood, bodies,
+objects or cars, or patch you up.
 
 **Bodies.** Every person is seventeen rigid parts on sixteen limited joints, driven by
 muscles with real torque limits. Each hand has four fingers and a thumb, in two segments
@@ -191,8 +246,13 @@ streams that break up into separate drops as they fall, mark whatever they land 
 gather into pools. A drop that lands hard throws smaller ones on ahead of it; a bullet
 leaves a fine spray out of the far side; a wet blade flings a line of drops off its tip
 as it swings. Blood lands on, and stays on, whatever is in its way: the ground, walls,
-crates, other people, the blade that did it and the hand that held it, a pistol on
-somebody's hip. Pools that grow into each other become one pool.
+crates, cars (paint and glass), other people, the blade that did it and the hand that
+held it, a pistol on somebody's hip. Pools that grow into each other become one pool, and
+over the next few minutes the blood on the ground goes dark as it dries. Somebody
+bleeding who is dragged, or crawls, leaves a smear the way they went. Where a part came
+off, the stump is a ring of torn muscle standing proud of the cut with the end of the
+bone in it, on both sides of the cut; a head or a trunk that bursts throws bone, brain,
+gut and rib with the blood.
 
 Blood runs. From a wound that keeps bleeding it runs down whatever is below it, shirt
 to belt to trouser leg, part on to part, and drips off where it runs out; a wound that
@@ -256,7 +316,7 @@ What they perceive becomes memory and moves their six emotions, scaled by who th
 carry on, stare, run, cower, put their hands up when a gun is on them, fight back, or
 kneel by someone who is hurt.
 
-**Voices.** Everyone has about 1,300 scripted lines to draw on, chosen by what is
+**Voices.** Everyone has about 1,380 scripted lines to draw on, chosen by what is
 happening to them and coloured by their habits of speech, and they answer when you TALK
 to them. The lines are written the way people actually talk: short, broken, repeating
 themselves, swearing. Pain is mostly breath and noise and a word or two; somebody badly
@@ -286,9 +346,9 @@ They know nothing they have not seen or been told. What they know about you is y
 - *One star*: they want you in handcuffs. You are told to stop; stand still, or put
   your hands up, and one officer cuffs you while the others cover. Run, keep fighting or
   ignore them and you are tased first.
-- *Two stars*: you have used a gun or a blade on someone, killed someone, or gone for
-  an officer. They shoot, and standing still does not stop them. Officers sent out at
-  two stars bring M4A1s.
+- *Two stars*: you have used a gun or a blade on someone, killed someone, gone for an
+  officer, or blown up a car. They shoot, and standing still does not stop them. At two
+  stars it is the S.W.A.T. team that comes out of the station.
 
 An officer who sees you do something gives you the stars for it there and then and tells
 the others by radio. Anybody else has to ring 911: a witness steps back, gets their phone
@@ -336,10 +396,10 @@ node tools/overlap.mjs   # how far body parts get inside each other, scenario by
 | | |
 | --- | --- |
 | `src/physics/world.js` | the rigid body engine: XPBD, joints with limits, muscles, sleeping islands |
-| `src/human/` | the rig, the animation and attack clips, the medical model, the human itself |
+| `src/human/` | the rig, the animation and attack clips, the medical model, armour, the human itself |
 | `src/mind/` | senses, memory and emotion; behaviour; scripted lines; speech; the Claude connection |
 | `src/combat/` | weapons and ballistics; blood, wounds and dismemberment |
-| `src/world/` | the city, its pavement network, the traffic |
+| `src/world/` | the city, its pavement network; cars (`car.js`: the model, glass, dents, damage) and everything with wheels (`traffic.js`: driving, collisions, crashes, explosions) |
 | `src/render/` | instanced boxes, decal batches, procedural textures |
 | `src/ui/` | the HUD, the sandbox menu, doctor mode |
 | `tools/` | tests, the browser harness, the swing solver, the build |

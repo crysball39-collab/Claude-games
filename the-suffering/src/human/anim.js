@@ -125,7 +125,7 @@ export class Animator {
     this.t = Math.random() * 10;
     this.phase = Math.random();
     this.run = 0; this.moving = 0; this.crouch = 0; this.air = 0; this.land = 0;
-    this.w = { guard: 0, blade: 0, pistol: 0, rifle: 0, cower: 0, handsUp: 0, hurt: 0, talk: 0, stagger: 0, writhe: 0, crawl: 0, brace: 0, phone: 0, kneel: 0, cuffed: 0, cuffing: 0, call: 0, scan: 0 };
+    this.w = { guard: 0, blade: 0, pistol: 0, rifle: 0, cower: 0, handsUp: 0, hurt: 0, talk: 0, stagger: 0, writhe: 0, crawl: 0, brace: 0, phone: 0, kneel: 0, cuffed: 0, cuffing: 0, call: 0, scan: 0, sit: 0, drive: 0, slump: 0 };
     this.action = null;
     this.flinch = 0; this.flX = 0; this.flZ = 0;
     this.aim = 0; this.lookYaw = 0; this.lookPitch = 0;
@@ -409,6 +409,32 @@ export class Animator {
       this._to(CH.shR, -0.71, a); this._to(CH.shROut, -0.3, a); this._to(CH.shRIn, -0.12, a); this._to(CH.elR, 0.36, a);
       this._to(CH.wrR, 0, a); this._to(CH.wrRSide, 0, a);
       ch[CH.spineBend] += 0.06 * a;
+    }
+
+    /* ---- sitting: in a car seat, hands on the wheel or in the lap, or slumped if out cold ---- */
+    if (W.sit > 0.01) {
+      const a = W.sit, dr = W.drive * a, sl = W.slump * a;
+      ch[CH.rootY] *= 1 - a; ch[CH.rootX] *= 1 - a; ch[CH.rootZ] *= 1 - a; ch[CH.rootRoll] *= 1 - a;
+      this._to(CH.rootPitch, -0.14, a);
+      this._to(CH.hipL, 1.55, a); this._to(CH.hipR, 1.55, a); this._to(CH.hipLOut, 0.1, a); this._to(CH.hipROut, 0.1, a);
+      this._to(CH.hipLTwist, 0, a); this._to(CH.hipRTwist, 0, a);
+      this._to(CH.kneeL, 0.72, a); this._to(CH.kneeR, 0.72, a); this._to(CH.ankleL, -0.45, a); this._to(CH.ankleR, -0.45, a);
+      this._to(CH.waistBend, 0.05, a); this._to(CH.spineBend, 0.05, a); this._to(CH.waistSide, 0, a); this._to(CH.spineSide, 0, a);
+      // hands in the lap...
+      this._to(CH.shL, 0.5, a); this._to(CH.shR, 0.5, a); this._to(CH.elL, 1.05, a); this._to(CH.elR, 1.05, a);
+      this._to(CH.shLOut, 0.06, a); this._to(CH.shROut, 0.06, a); this._to(CH.shLIn, 0.14, a); this._to(CH.shRIn, 0.14, a);
+      // ...or on the wheel, at ten to two
+      if (dr > 0.01) {
+        this._to(CH.shL, 1.2, dr); this._to(CH.shR, 1.2, dr); this._to(CH.elL, 0.38, dr); this._to(CH.elR, 0.38, dr);
+        this._to(CH.shLIn, 0.2, dr); this._to(CH.shRIn, 0.2, dr); this._to(CH.shLOut, 0.04, dr); this._to(CH.shROut, 0.04, dr);
+        this._to(CH.wrL, -0.25, dr); this._to(CH.wrR, -0.25, dr);
+      }
+      // out cold: forward against the belt, the head hanging, the arms gone slack
+      if (sl > 0.01) {
+        this._to(CH.spineBend, 0.38, sl); this._to(CH.neckBend, 0.42, sl); this._to(CH.headBend, 0.32, sl); this._to(CH.headSide, 0.3, sl);
+        this._to(CH.shL, 0.12, sl); this._to(CH.shR, 0.12, sl); this._to(CH.elL, 0.35, sl); this._to(CH.elR, 0.35, sl);
+        this._to(CH.shLOut, 0.18, sl); this._to(CH.shROut, 0.18, sl); this._to(CH.shLIn, 0, sl); this._to(CH.shRIn, 0, sl);
+      }
     }
 
     /* ---- the head goes where the eyes want ---- */

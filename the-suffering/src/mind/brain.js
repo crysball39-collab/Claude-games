@@ -19,6 +19,7 @@ import { clamp, rand, chance, wrapAngle, pick } from '../core/util.js';
 const _a = [0, 0, 0], _r = [0, 0];
 const WORD = { m1911: 'gun', glock: 'gun', ak47: 'rifle', m4a1: 'rifle', ar15: 'rifle', knife: 'knife', machete: 'machete', taser: 'taser', flamethrower: 'flamethrower' };
 /** A real gun: anything that fires bullets. */
+const _door = [0, 0, 0], _door2 = [0, 0, 0];
 const isGun = (id) => id === 'm1911' || id === 'glock' || id === 'ak47' || id === 'm4a1' || id === 'ar15';
 const NOKIT = [];
 /** What a caller says once they have got through, by what they are calling about. */
@@ -62,6 +63,7 @@ export class Brain {
     if (h.state !== ST.ANIM) { h.aimYaw = null; }
     if (!hh.alive) { m.doing = 'dead'; h.crawlDir = null; return; }
     if (!hh.conscious) { m.doing = 'unconscious'; h.crawlDir = null; return; }
+    if (h.car) { this._inCar(dt); return; }
 
     // on fire: they run, screaming, and then, if they think of it, drop and roll
     if (h.fire && h.burning > 0.15) {
@@ -365,7 +367,8 @@ export class Brain {
     // arrest; two is a fight for their lives, and standing still does not end it. (Anyone else is judged on what this
     // officer knows of them.)
     const wanted = S.isPlayer ? k.wanted || 0 : 0;
-    const complying = !down && wanted < 2 && ((!sArmed && !S.anim.action && quiet > 3.5 && S.speed < 1.2) || S.pose.handsUp > 0.5);
+    // (nobody in a car is complying: they are in a car)
+    const complying = !down && !S.car && wanted < 2 && ((!sArmed && !S.anim.action && quiet > 3.5 && S.speed < 1.2) || S.pose.handsUp > 0.5);
     const lethal = S.isPlayer ? wanted >= 2 || (k.hurtMe && h.h.pain > 42 && !down) || (sBlade && seen && d < 2 && !!S.anim.action)
       : k.crime >= 2.5 || (sGun && k.crime >= 1.6) || (sBlade && seen && d < 3.4 && k.crime >= 1) || (k.hurtMe && h.h.pain > 42 && !down);
     // someone with something to answer for, who is down or has stopped, is arrested
@@ -399,7 +402,7 @@ export class Brain {
     }
 
     // what should be in the hand?
-    const want = lethal || sGun || !taser || (taser.ammo <= 0 && !taser.wire && !pistol) ? (lethal && rifle ? rifle : pistol) : taser;
+    const want = lethal || sGun || !taser || (taser.ammo <= 0 && !taser.wire && !pistol) ? ((lethal || h.swat) && rifle ? rifle : pistol) : taser;
     if (want && inHand !== want && !h.swap && !h.reload && !h.cuffing) W.draw(h, want);
     if (!want && !inHand) {
       // nothing on the belt: fists, or distance
@@ -745,6 +748,7 @@ export class Brain {
     const g = this.g, h = this.h, m = this.m, t = m.threat, city = g.city;
     if (!t) return;
     m.doing = 'running from ' + (t.src ? m.name(t.src) : 'the shooting');
+    if (this.duck <= 0 && this.modeT > 1 && this._toCar(dt)) return;
     // the first reaction to a bang is to duck
     if (m.startle > 0.4 && !this.ducked) { this.ducked = true; this.duck = rand(0.35, 0.9); if (m.p.jumpy > 0.55 && chance(0.5)) h.intent.jump = true; m.ask('startle', 50); }
     if (this.duck > 0) { this.duck -= dt; h.intent.crouch = true; h.pose.cower = 0.6; return; }
@@ -774,6 +778,78 @@ export class Brain {
       this._go(h.x + dx / d * 5, h.z + dz / d * 5, true, 1);
     }
     if (this.sayT <= 0) { m.ask('flee', 54, { sex: m.threat && m.threat.src && m.threat.src.look ? m.threat.src.look.sex : 'm' }); this.sayT = rand(3, 7); }
+  }
+
+  /** Sitting in a car: driving it, riding in it, or getting out of it. */
+  _inCar(dt) {
+    const h = this.h, m = this.m, g = this.g, car = h.car, T = g.traffic, t = m.threat;
+    const it = h.intent; it.mx = 0; it.mz = 0; it.face = null; it.run = false;
+    const driver = car.seats[0] === h, sp = Math.hypot(car.vx, car.vz);
+    // the car is burning, or they are: out, now
+    if ((h.fire && h.burning > 0.1) || car.fire >= 0 || !car.drivable) {
+      if (!driver || sp < 3) {
+        T.unseat(h);
+        m.stir('fear', 60);
+        if (car.fire >= 0) { m.ask('carFire', 84, null, rand(0.2, 0.7)); m.note('felt', 'carFire', 'got out of a car that was on fire', 1); }
+        this.mode = 'flee'; this.modeT = 0;
+        m.threat = m.threat || { x: car.x, z: car.z, level: 70, src: null };
+        return;
+      }
+      m.doing = 'trying to stop a burning car';
+      return;
+    }
+    if (driver) m.doing = car.mode === 'rail' ? (car.panic > 0 ? 'driving away fast' : 'driving') : car.ai && car.ai.state === 'stop' ? 'sitting at the wheel, shaken' : car.ai && car.ai.state === 'flee' ? 'driving away as fast as the car will go' : 'driving';
+    else m.doing = 'riding in a car';
+    // somebody dangerous close by: a driver puts their foot down; a passenger in a car that is not going anywhere gets out and runs
+    const near = t && Math.hypot(t.x - h.x, t.z - h.z) < 14;
+    if (driver && near && t.level > 30) car.panic = Math.max(car.panic || 0, 3);
+    if (!driver && near && t.level > 45 && sp < 1 && chance(dt * 0.9)) { T.unseat(h); this.mode = 'flee'; this.modeT = 0; m.stir('fear', 30); return; }
+    if (this.sayT <= 0 && near && t.level > 55 && chance(0.4)) { m.ask('flee', 44, { sex: t.src && t.src.look ? t.src.look.sex : 'm' }); this.sayT = rand(4, 8); }
+    this._look();
+  }
+
+  /** Running away, an empty car close by: get in it and drive. Returns true while that is the plan. */
+  _toCar(dt) {
+    const g = this.g, h = this.h, T = g.traffic;
+    if (!T || h.officer || h.cuffed || h.isPlayer) return false;
+    let c = this.carGoal;
+    if (c && (!c.drivable || c.seats[0] || c.removed || !T.cars.includes(c))) { c = this.carGoal = null; }
+    if (!c) {
+      this.carLook = (this.carLook || 0) - dt;
+      if (this.carLook > 0) return false;
+      this.carLook = rand(1.5, 3);
+      const t = this.m.threat;
+      let best = null, bd = 10;
+      for (const o of T.cars) {
+        if (!o.drivable || o.seats[0] || o.hp < 40) continue;
+        const d = Math.hypot(o.x - h.x, o.z - h.z);
+        // not toward whatever they are running from
+        if (t && Math.hypot(o.x - t.x, o.z - t.z) < Math.hypot(h.x - t.x, h.z - t.z) - 1) continue;
+        if (d < bd) { bd = d; best = o; }
+      }
+      // one right there is the obvious way out; one further off, they may not think of
+      if (!best || (bd > 6 && chance(0.45))) return false;
+      c = this.carGoal = best;
+    }
+    // whichever front door is on this side of it (from the far one, they climb across)
+    const sp = c.seatAt[0];
+    c.toWorld(sp[0] + 0.85, 0, sp[2] + 0.1, _door);
+    c.toWorld(-sp[0] - 0.85, 0, sp[2] + 0.1, _door2);
+    if (Math.hypot(_door2[0] - h.x, _door2[2] - h.z) < Math.hypot(_door[0] - h.x, _door[2] - h.z)) { _door[0] = _door2[0]; _door[2] = _door2[2]; }
+    const d = Math.hypot(_door[0] - h.x, _door[2] - h.z);
+    if (d < 0.9) {
+      this.carGoal = null;
+      if (T.seat(h, c, 0)) {
+        c.mode = 'loose'; c.traffic = false; c.hand = 0;
+        c.ai = { state: 'flee', t: 0, stuck: 0 };
+        this.m.note('felt', 'tookCar', 'got into an empty car and drove off', 0.8);
+        return true;
+      }
+      return false;
+    }
+    this.m.doing = 'running for a car';
+    this._go(_door[0], _door[2], true, 1);
+    return true;
   }
 
   _cower(dt) {

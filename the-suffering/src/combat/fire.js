@@ -209,7 +209,19 @@ export class Fire {
         hit = true;
         break;
       }
-      if (hit) { this.kind[i] = 1; this.vx[i] *= -0.1; this.vz[i] *= -0.1; this.vy[i] = 0.6; this.life[i] = Math.min(this.life[i], 0.35); }
+      if (hit) { this.kind[i] = 1; this.vx[i] *= -0.1; this.vz[i] *= -0.1; this.vy[i] = 0.6; this.life[i] = Math.min(this.life[i], 0.35); continue; }
+      // a car: burning fuel on the paint, and in through a broken window; enough of it and the car is alight
+      if (g.traffic) for (const c of g.traffic.cars) {
+        if ((c.x - x) ** 2 + (c.z - z) ** 2 > 7) continue;
+        c.toLocal(x, y, z, _a);
+        if (Math.abs(_a[0]) > 0.95 || Math.abs(_a[2]) > 2.2 || _a[1] < 0.2 || _a[1] > (c.van ? 1.65 : 1.55)) continue;
+        g.traffic.heat(c, 0.012, who);
+        // whoever is sitting inside catches too, if the glass is not there to keep it off
+        for (const h of c.seats) if (h && chance(0.08) && c.windows.some((w) => w && w.broken)) this.ignite(h, (Math.random() * PART_COUNT) | 0, 0.15, who);
+        hit = true;
+        break;
+      }
+      if (hit) { this.kind[i] = 1; this.vx[i] *= -0.1; this.vz[i] *= -0.1; this.vy[i] = 0.7; this.life[i] = Math.min(this.life[i], 0.4); }
     }
   }
 

@@ -283,8 +283,9 @@ export class Police {
       this.reinT = 4;
       const nearDoor = Math.hypot(p.x - S.door.x, p.z - S.door.z) < 12;
       const at = nearDoor ? S.inside : S.door;
-      const o = g.spawnOfficer(at.x + rand(-0.6, 0.6), at.z + rand(-0.3, 0.3), Math.PI, { x: at.x, z: at.z, yaw: Math.PI, kind: 'beat' });
-      if (this.wanted >= 2) g.weapons?.give(o, 'm4a1');
+      // at two stars, it is the S.W.A.T. team that comes out of the station
+      const post = { x: at.x, z: at.z, yaw: Math.PI, kind: 'beat' };
+      const o = this.wanted >= 2 && g.spawnSwat ? g.spawnSwat(at.x + rand(-0.6, 0.6), at.z + rand(-0.3, 0.3), Math.PI, post) : g.spawnOfficer(at.x + rand(-0.6, 0.6), at.z + rand(-0.3, 0.3), Math.PI, post);
       this.extra.add(o);
       this.stats.reinforcements++;
       this.note('reinforcement');

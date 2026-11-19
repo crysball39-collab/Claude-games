@@ -60,6 +60,17 @@
       <div id="ammo" hidden></div>
     </div>
 
+    <div id="drive" hidden>
+      <div id="speedo" aria-label="Speed"><b id="speedo-v">0</b><small>KM/H</small><i id="speedo-g">N</i><div id="car-hp" aria-label="Car condition"><div></div></div></div>
+      <button id="btn-left" class="db steer" aria-label="Steer left"><svg viewBox="0 0 24 24"><path d="M15 4l-8 8 8 8"/></svg></button>
+      <button id="btn-right" class="db steer" aria-label="Steer right"><svg viewBox="0 0 24 24"><path d="M9 4l8 8-8 8"/></svg></button>
+      <button id="btn-brake" class="db pedal brake"><b>BRAKE</b><small>hold to reverse</small></button>
+      <button id="btn-gas" class="db pedal gas"><b>GAS</b></button>
+      <button id="btn-hand" class="db hand"><b>HAND<br />BRAKE</b></button>
+      <button id="btn-horn" class="db small"><b>HORN</b></button>
+      <button id="btn-exit" class="db small exit"><b>EXIT</b></button>
+    </div>
+
     <div id="bubbles"></div>
 
     <form id="talk-bar" hidden autocomplete="off">
@@ -78,6 +89,7 @@
         <button class="item" data-spawn="human"><i class="ic human"></i><b>Human</b><small>a stranger with a mind of their own</small></button>
         <button class="item" data-spawn="crowd"><i class="ic crowd"></i><b>Five humans</b><small>a small crowd</small></button>
         <button class="item" data-spawn="officer"><i class="ic officer"></i><b>Police officer</b><small>vest, holstered M1911, a duty to act</small></button>
+        <button class="item" data-spawn="swat"><i class="ic swat"></i><b>S.W.A.T. team</b><small>four of them: plate carriers, visored helmets, M4A1s</small></button>
       </div>
       <h3>Objects</h3>
       <div class="grid">
@@ -89,6 +101,9 @@
         <button class="item" data-spawn="bulb"><i class="ic bulb"></i><b>Light bulb</b><small>lights up when it is wired to a running generator</small></button>
         <button class="item" data-spawn="flood"><i class="ic flood"></i><b>Floodlight</b><small>on a stand; wire it to a generator</small></button>
         <button class="item" data-spawn="generator"><i class="ic generator"></i><b>Generator</b><small>petrol; START it, then wire things to it</small></button>
+        <button class="item" data-spawn="car"><i class="ic car"></i><b>Car</b><small>an empty saloon, keys in it: DRIVE it, crash it, shoot it</small></button>
+        <button class="item" data-spawn="policecar"><i class="ic car police"></i><b>Police car</b><small>heavier and faster; HORN works the lights</small></button>
+        <button class="item" data-spawn="van"><i class="ic car van"></i><b>Van</b><small>two tonnes and a bit; slow to stop</small></button>
       </div>
       <h3>Gear</h3>
       <div class="grid">
@@ -96,6 +111,10 @@
         <button class="item" data-spawn="wire"><i class="ic wire"></i><b>Wire</b><small>carries a generator's power: to lights, to steel, to people</small></button>
         <button class="item" data-spawn="vest"><i class="ic vest"></i><b>Light vest</b><small>black, covers chest and belly; stops a pistol round</small></button>
         <button class="item" data-spawn="helmet"><i class="ic helmet"></i><b>Light helmet</b><small>covers the skull, not the face; turns a blow</small></button>
+        <button class="item" data-spawn="vestM"><i class="ic vestm"></i><b>Medium vest</b><small>the whole torso, hips and groin too; stops pistol rounds and slashes</small></button>
+        <button class="item" data-spawn="helmetM"><i class="ic helmetm"></i><b>Medium helmet</b><small>ballistic, down over the ears; stops nearly every pistol round</small></button>
+        <button class="item" data-spawn="vestS"><i class="ic vests"></i><b>S.W.A.T. vest</b><small>rifle plates front and back, collar, shoulders, groin; 9.5 kg</small></button>
+        <button class="item" data-spawn="helmetS"><i class="ic helmets"></i><b>S.W.A.T. helmet</b><small>ballistic, with a visor over the face that holds a few rounds</small></button>
         <button class="item" data-spawn="cuffs"><i class="ic cuffs"></i><b>Handcuffs</b><small>for someone who is down or has given up</small></button>
         <button class="item" data-spawn="syringe"><i class="ic syringe"></i><b>Poison syringe</b><small>one lethal dose: sick in seconds, down within a minute</small></button>
       </div>
@@ -116,6 +135,7 @@
         <button class="chip" data-clean="blood">Blood</button>
         <button class="chip" data-clean="bodies">Bodies</button>
         <button class="chip" data-clean="things">Objects</button>
+        <button class="chip" data-clean="cars">Cars</button>
         <button class="chip" data-clean="all">Everything</button>
         <button class="chip" data-wanted="0">Wanted level</button>
         <button class="chip" data-heal="1">Heal me</button>
@@ -224,7 +244,9 @@
             <h3>Touch</h3>
             <p>Left thumb moves. Drag anywhere else to look. JUMP and CROUCH sit by the right thumb.</p>
             <p>The big button attacks. Tap it again and again for a four move combo; slide your thumb off it left, right, up or down to choose the next move yourself.</p>
-            <p>SPAWN opens the sandbox: humans, police officers, crates, wooden and steel walls, steel beams, a light bulb, a floodlight, a generator, rope, wire, a light vest, a light helmet, handcuffs, a poison syringe, the M1911, the Glock-19, the AK-47, the M4A1, the AR-15, the flamethrower, the taser, the knife and the machete. Walk up to a weapon and PICK UP, or to the vest or the helmet and PUT ON.</p>
+            <p>SPAWN opens the sandbox: humans, police officers, a S.W.A.T. team, crates, wooden and steel walls, steel beams, a light bulb, a floodlight, a generator, a car, a police car, a van, rope, wire, light, medium and S.W.A.T. vests and helmets, handcuffs, a poison syringe, the M1911, the Glock-19, the AK-47, the M4A1, the AR-15, the flamethrower, the taser, the knife and the machete. Walk up to a weapon and PICK UP, or to a vest or a helmet and PUT ON.</p>
+            <p>Armour: a light vest covers the chest and the belly; a medium one the whole torso; a S.W.A.T. vest has plates front and back that stop rifle rounds. A medium helmet comes down over the ears; a S.W.A.T. helmet has a visor that stops a few pistol rounds before it is crazed.</p>
+            <p>Cars: walk up to a front door and DRIVE (or CARJACK, if somebody is driving it). GAS and BRAKE are the pedals (hold BRAKE once stopped to reverse), the arrows steer, HANDBRAKE locks the back wheels, EXIT gets out. In a police car HORN also works the lights and the siren. Cars dent where they are hit, as hard as they were hit; a damaged engine smokes light grey, then grey, then dark grey; a finished one catches fire and explodes. Bullets go through the doors and the glass into whoever is inside. Anyone lying in the road is driven over.</p>
             <p>Walls and beams are built of small cubes and come apart a cube at a time: rounds go through wood (out of the far side in a bigger hole) and through steel only from a rifle; a machete chops wood; fire burns it. A piece no longer joined to anything falls.</p>
             <p>Rope: TIE one thing, then TIE TO another. Drag with it, hold somebody with it, hang things on it. A blade cuts it; the heavy attack unties it.</p>
             <p>Wire carries a generator's power. START the generator (walk up to it), then WIRE it, and WIRE TO a light. Lights pass power on to the next. Steel wired to a running generator is live, and so is anybody you clip a live wire to: they lock rigid and cannot let go until the power stops.</p>
@@ -239,6 +261,7 @@
             <p>TALK lets you say something. Whoever is close enough to hear it will answer.</p>
             <h3>Keyboard and mouse</h3>
             <p>WASD move (Shift walks) &middot; mouse looks (click to capture) &middot; Space jump &middot; C crouch &middot; left click or F attack &middot; right click or Q heavy attack &middot; R reload &middot; E pick up &middot; G drop &middot; H holster or draw &middot; 1-5 weapons &middot; Tab sandbox &middot; X doctor &middot; T talk &middot; V view &middot; Esc pause</p>
+            <p>In a car: W or up is the gas &middot; S or down brakes, then reverses &middot; A / D or left / right steer &middot; Space handbrake &middot; H horn (and siren) &middot; E gets out</p>
           </div>
         </section>
       </div>

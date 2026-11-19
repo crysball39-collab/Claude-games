@@ -133,6 +133,28 @@ export const WEAPONS = {
     id: 'vest', name: 'Light vest', wear: 'vest', mass: 2.4, half: [0.2, 0.06, 0.25], centre: 0,
     boxes: [[0, 0, 0.08, 0.38, 0.1, 0.3, VEST], [0, 0, -0.15, 0.31, 0.09, 0.16, VEST], [0.13, 0.03, 0.2, 0.07, 0.05, 0.1, 0x1c1e22], [-0.13, 0.03, 0.2, 0.07, 0.05, 0.1, 0x1c1e22]],
   },
+  /* olive drab, long enough to come down over the hips */
+  vestM: {
+    id: 'vestM', name: 'Medium vest', wear: 'vest', armour: 'medium', mass: 4.2, half: [0.21, 0.065, 0.3], centre: 0,
+    boxes: [[0, 0, 0.06, 0.4, 0.11, 0.34, 0x3d4232], [0, 0, -0.2, 0.36, 0.1, 0.17, 0x3d4232], [0.13, 0.035, 0.24, 0.08, 0.05, 0.1, 0x31352a], [-0.13, 0.035, 0.24, 0.08, 0.05, 0.1, 0x31352a],
+      [0, 0.057, 0.12, 0.3, 0.008, 0.014, 0x55513f], [0, 0.057, 0.06, 0.3, 0.008, 0.014, 0x55513f], [0, 0.057, 0, 0.3, 0.008, 0.014, 0x55513f], [0, 0.03, -0.13, 0.41, 0.06, 0.03, 0x55513f]],
+  },
+  /* a black plate carrier: heavy, with the plates in it */
+  vestS: {
+    id: 'vestS', name: 'S.W.A.T. vest', wear: 'vest', armour: 'swat', mass: 9.5, half: [0.22, 0.08, 0.3], centre: 0,
+    boxes: [[0, 0, 0.04, 0.4, 0.12, 0.36, 0x15171a], [0, 0.07, 0.06, 0.26, 0.03, 0.27, 0x22252a], [-0.08, 0.075, -0.17, 0.065, 0.045, 0.11, 0x22252a], [0, 0.075, -0.17, 0.065, 0.045, 0.11, 0x22252a],
+      [0.08, 0.075, -0.17, 0.065, 0.045, 0.11, 0x22252a], [0, 0, -0.22, 0.34, 0.1, 0.14, 0x15171a], [0.06, 0.087, 0.15, 0.1, 0.006, 0.03, 0xe9e9e4]],
+  },
+  helmetM: {
+    id: 'helmetM', name: 'Medium helmet', wear: 'helmet', armour: 'medium', mass: 1.5, half: [0.13, 0.09, 0.145], centre: 0,
+    boxes: [[0, 0.03, 0, 0.25, 0.1, 0.27, 0x3d4232], [0, -0.04, -0.12, 0.25, 0.1, 0.03, 0x3d4232], [0.115, -0.04, -0.016, 0.026, 0.1, 0.22, 0x3d4232], [-0.115, -0.04, -0.016, 0.026, 0.1, 0.22, 0x3d4232],
+      [0, 0, 0.135, 0.23, 0.03, 0.05, 0x3d4232], [0, -0.005, 0, 0.26, 0.018, 0.278, 0x31352a]],
+  },
+  helmetS: {
+    id: 'helmetS', name: 'S.W.A.T. helmet', wear: 'helmet', armour: 'swat', mass: 2.3, half: [0.13, 0.09, 0.15], centre: 0,
+    boxes: [[0, 0.035, 0, 0.25, 0.1, 0.27, 0x15171a], [0, -0.035, -0.12, 0.25, 0.1, 0.03, 0x15171a], [0.115, -0.03, -0.02, 0.024, 0.08, 0.2, 0x15171a], [-0.115, -0.03, -0.02, 0.024, 0.08, 0.2, 0x15171a],
+      [0.13, -0.06, -0.006, 0.034, 0.06, 0.074, 0x2a2c30], [-0.13, -0.06, -0.006, 0.034, 0.06, 0.074, 0x2a2c30], [0, -0.05, 0.145, 0.236, 0.16, 0.01, 0x8fa6b8], [0, 0.04, 0.14, 0.064, 0.036, 0.022, 0x22252a]],
+  },
 };
 
 /** Turns three perpendicular unit vectors (where a thing's own X, Y and Z end up) into a rotation. */
@@ -315,16 +337,24 @@ export class Weapons {
       // nothing to pick up, but somebody in cuffs within reach: take them off
       if (this.nearCuffed && !p.cuffed) { this.uncuff(this.nearCuffed, null); g.ui?.toast('Cuffs off'); return true; }
       if (g.things && g.things.near && !p.cuffed) return g.things.use();
+      if (g.traffic && g.traffic.near && !p.cuffed) return g.traffic.enter(p, g.traffic.near);
       return false;
     }
     if (item.holder === p || p.cuffed) return false;
     if (item.def.wear) {
-      const helmet = item.def.wear === 'helmet';
-      if (helmet ? p.helmet : p.vest) { g.ui?.toast('You are already wearing one.'); return false; }
-      this.remove(item);
-      if (helmet) p.wearHelmet(); else p.wearVest();
+      const helmet = item.def.wear === 'helmet', kind = item.def.armour || 'light';
+      const on = helmet ? p.helmet : p.vest;
+      if (p.state !== ST.ANIM) return false;
+      // already wearing one: the old one comes off and is left where the new one was
+      if (on) {
+        const id = on.def.item, x = item.body.px, y = item.body.py + 0.1, z = item.body.pz;
+        if (helmet) p.removeHelmet(); else p.removeVest();
+        this.remove(item);
+        this.spawn(id, x, y, z);
+      } else this.remove(item);
+      if (helmet) p.wearHelmet(kind); else p.wearVest(kind);
       g.audio?.play('pickup', 0.5);
-      g.ui?.toast(helmet ? 'Light helmet on' : 'Light vest on');
+      g.ui?.toast(item.def.name + ' on' + (on ? ', ' + on.def.name.toLowerCase() + ' off' : ''));
       g.ui?.weaponsChanged();
       return true;
     }
@@ -367,9 +397,12 @@ export class Weapons {
   _shed(what) {
     const p = this.game.player;
     if (p.state !== ST.ANIM || p.cuffed) return;
-    if (what === 'helmet') { if (!p.helmet) return; p.removeHelmet(); } else { if (!p.vest) return; p.removeVest(); }
-    this.spawn(what, p.x + Math.sin(p.yaw) * 0.5, p.y + (what === 'helmet' ? 1.5 : 1.0), p.z + Math.cos(p.yaw) * 0.5);
-    this.game.ui?.toast(what === 'helmet' ? 'Helmet off' : 'Vest off');
+    const on = what === 'helmet' ? p.helmet : p.vest;
+    if (!on) return;
+    const id = on.def.item, name = on.def.name;
+    if (what === 'helmet') p.removeHelmet(); else p.removeVest();
+    this.spawn(id, p.x + Math.sin(p.yaw) * 0.5, p.y + (what === 'helmet' ? 1.5 : 1.0), p.z + Math.cos(p.yaw) * 0.5);
+    this.game.ui?.toast(name + ' off');
     this.game.ui?.weaponsChanged();
   }
 
@@ -377,7 +410,7 @@ export class Weapons {
 
   /** Can this person be handcuffed as they are? Down, out cold, locked rigid by a taser, or given up. */
   cuffable(t) {
-    if (!t || t.removed || t.cuffed || !t.h.alive) return false;
+    if (!t || t.removed || t.cuffed || !t.h.alive || t.car) return false;
     for (const i of [P.FARM_L, P.FARM_R, P.HAND_L, P.HAND_R]) if (t.gone[i] || !t.attached[i]) return false;
     if (t.state !== ST.ANIM || t.tased > 0 || !t.h.conscious) return true;
     return t.pose.handsUp > 0.5 || t.pose.cower > 0.5;
@@ -973,6 +1006,8 @@ export class Weapons {
     let far = d.range;
     const wall = g.world.rayWorld(m[0], m[1], m[2], dx, dy, dz, far);
     if (wall >= 0) far = wall;
+    // a car's glass and its doors stop the probes (unless the window is already gone)
+    if (g.traffic) for (const c of g.traffic.cars) { const t = c.ray(m[0], m[1], m[2], dx, dy, dz, far, _ch); if (t >= 0 && t < far && _ch.glass !== -2) far = t; }
     const ph = g.rayPeople(m[0], m[1], m[2], dx, dy, dz, far, h, 0.04);
     h.anim.recoil = 0.35;
     g.audio?.at('tasershot', m[0], m[1], m[2], 0.9);
@@ -981,8 +1016,9 @@ export class Weapons {
     const fx = g.gore.fx;
     if (ph) {
       const t = ph.human;
-      // the probes skate off a helmet
-      const stopped = ph.part === P.HEAD && t.helmet && !t.gone[P.HEAD];
+      // the probes skate off a helmet, and stick in a vest without reaching the skin (a thin one, only sometimes)
+      const am = t.gone[ph.part] ? null : t.armourAt(ph.part, ph.lp, ph.ln);
+      const stopped = !!am && (am !== 'soft2' || chance(0.5));
       e.wire = { target: t, part: ph.part, lp: ph.lp.slice(), ln: ph.ln.slice(), life: stopped ? 0.5 : 24, zap: stopped ? 0 : d.cycle, hit: !stopped, q: [fx.alloc(), fx.alloc()], spark: 0, buzz: 0 };
       if (!stopped) {
         t.tase(d.cycle, h);
@@ -1127,7 +1163,7 @@ export class Weapons {
   }
 
   /** Follows one round until it stops. */
-  _bullet(shooter, d, ox, oy, oz, dx, dy, dz, power, depth) {
+  _bullet(shooter, d, ox, oy, oz, dx, dy, dz, power, depth, inCar = null) {
     const g = this.game;
     let far = 240, what = 0, prop = null, car = null;
     const wn = this._wn || (this._wn = [0, 1, 0]);
@@ -1144,9 +1180,14 @@ export class Weapons {
       const t = rayBody(o.body, ox, oy, oz, dx, dy, dz, far, _hit);
       if (t >= 0 && t < far) { far = t; what = 2; prop = o; _c[0] = _hit[3]; _c[1] = _hit[4]; _c[2] = _hit[5]; _b[0] = _hit[0]; _b[1] = _hit[1]; _b[2] = _hit[2]; }
     }
+    // a round already inside a car goes until it comes out of the far side of it
+    if (inCar) { const t = inCar.exitT(ox, oy, oz, dx, dy, dz, _cx); if (t > 0 && t < far) { far = t; what = 5; } }
     if (g.traffic) for (const c of g.traffic.cars) {
-      const t = rayBody(c.body, ox, oy, oz, dx, dy, dz, far, _hit);
-      if (t >= 0 && t < far) { far = t; what = 3; car = c; _c[0] = _hit[3]; _c[1] = _hit[4]; _c[2] = _hit[5]; _b[0] = _hit[0]; _b[1] = _hit[1]; _b[2] = _hit[2]; }
+      if (c === inCar) continue;
+      const ex = c.x - ox, ez = c.z - oz, along = ex * dx + ez * dz;
+      if (along < -3 || along > far + 3 || (ex - dx * along) ** 2 + (ez - dz * along) ** 2 > 9) continue;
+      const t = c.ray(ox, oy, oz, dx, dy, dz, far, _ch);
+      if (t >= 0 && t < far) { far = t; what = 3; car = c; _chHit.lp = _ch.lp.slice(); _chHit.ln = _ch.ln.slice(); _chHit.glass = _ch.glass; _chHit.tag = _ch.tag; }
     }
     const ph = g.rayPeople(ox, oy, oz, dx, dy, dz, far, depth === 0 ? shooter : null, 0.012);
     if (ph) { far = ph.t; what = 4; }
@@ -1210,14 +1251,13 @@ export class Weapons {
       // a crate is planks: the round goes on through, and out of the far side in a spray of splinters
       if (prop.wood || prop.kind === 'weapon') this._through(shooter, d, b, ox, oy, oz, dx, dy, dz, far, power, depth, prop.wood ? 0.42 : 0, 'wood');
     } else if (what === 3) {
-      const b = car.body;
-      const dcl = g.gore._attach(b, g.gore._onFace(b, [_b[0], _b[1], _b[2]], [_c[0], _c[1], _c[2]], 0.13, 0.13, rand(6.28)), HOLE_UV(), null, -1);
-      if (dcl) dcl.stain = true;
-      g.gore.puff('flash', hx, hy, hz, 0.22, 0.07, 1, 0.9, 0.6);
-      g.audio?.at('ricochet', hx, hy, hz, 0.8);
-      g.traffic.shotAt(car, shooter);
-      // two door skins and what is between them: a rifle round goes through, a pistol round often does
-      this._through(shooter, d, b, ox, oy, oz, dx, dy, dz, far, power, depth, 0.55, 'metal');
+      // into a car: glass, or a door skin; on into whoever is inside, and out of the far side
+      const keep = g.traffic.shot(car, _chHit, shooter, d, power, hx, hy, hz);
+      g.minds?.noise(hx, hy, hz, 84, 'impact', shooter);
+      if (keep * power > 0.1 && depth < 5) this._bullet(shooter, d, hx + dx * 0.02, hy + dy * 0.02, hz + dz * 0.02, dx + rand(-0.015, 0.015), dy + rand(-0.015, 0.015), dz + rand(-0.015, 0.015), power * keep, depth + 1, car);
+    } else if (what === 5) {
+      const keep = g.traffic.shotOut(inCar, _cx, hx, hy, hz);
+      if (keep * power > 0.1 && depth < 5) this._bullet(shooter, d, hx + dx * 0.03, hy + dy * 0.03, hz + dz * 0.03, dx + rand(-0.02, 0.02), dy + rand(-0.02, 0.02), dz + rand(-0.02, 0.02), power * keep, depth + 1, null);
     }
   }
 
@@ -1278,7 +1318,7 @@ export class Weapons {
     for (const it of this.items) if (it.cool > 0) it.cool -= dt;
     for (const h of g.humans) if (h.swap || h.reload || h.cuffing) this._hands(h, dt);
     // the player's hands
-    if (g.doctor == null && p.state === ST.ANIM) {
+    if (g.doctor == null && p.state === ST.ANIM && !p.car) {
       const def = this.def;
       if (p.swap) { this.queued = false; this.choice = -1; }
       else if (def.gun) { if (def.auto ? inp.down.attack : inp.pressed.attack) this.fire(); }
@@ -1458,6 +1498,8 @@ let _exW = null, _exM = null;
 function EXIT_WOOD_UV() { return _exW || (_exW = cellUV(DECAL.exitWood[0], DECAL.exitWood[1], ATLAS_COLS, ATLAS_ROWS)); }
 function EXIT_METAL_UV() { return _exM || (_exM = cellUV(DECAL.exitMetal[0], DECAL.exitMetal[1], ATLAS_COLS, ATLAS_ROWS)); }
 const CHIP_WOOD = [0.03, 0.012, 0.012], CHIP_METAL = [0.012, 0.004, 0.012];
+const _ch = { lp: [0, 0, 0], ln: [0, 0, 0], xn: [0, 0, 0], tag: '', piece: 0, exit: 0, glass: -1 }, _chHit = { lp: null, ln: null, glass: -1, tag: '' };
+const _cx = { lp: [0, 0, 0], ln: [0, 0, 0], tag: '', piece: 0, glass: -1 };
 const CHIP_WOOD_COL = [0.62, 0.45, 0.26], CHIP_METAL_COL = [0.78, 0.8, 0.82];
 function WHITE_UV() { return _white || (_white = cellUV(DECAL.white[0], DECAL.white[1], ATLAS_COLS, ATLAS_ROWS, 0.03)); }
 

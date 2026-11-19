@@ -93,7 +93,9 @@ export class Doctor {
     // what they have on and about them is part of the picture
     const kit = (h.isPlayer ? this.g.weapons.inventory : h.kit || []).map((i) => i.def.name + (h.weapon === i ? ' in hand' : ''));
     const hits = (n) => (n ? ` (hit ${n} time${n === 1 ? '' : 's'})` : '');
-    const extra = (h.vest ? ', light vest' + hits(h.vest.hits) : '') + (h.helmet ? ', light helmet' + hits(h.helmet.hits) : '') + (h.cuffed ? ', in handcuffs' : '') + (kit.length ? ', carrying ' + kit.join(' and ') : '');
+    const visor = h.helmet && h.helmet.visor >= 3 ? ', its visor crazed' : h.helmet && h.helmet.visor > 0 ? ', its visor starred' : '';
+    const nm = (d) => (d.name.startsWith('S.W.A.T.') ? d.name : d.name.toLowerCase());
+    const extra = (h.vest ? ', ' + nm(h.vest.def) + hits(h.vest.hits) : '') + (h.helmet ? ', ' + nm(h.helmet.def) + hits(h.helmet.hits) + visor : '') + (h.cuffed ? ', in handcuffs' : '') + (kit.length ? ', carrying ' + kit.join(' and ') : '');
     $('#doc-sub').textContent = (h.isPlayer ? `${L.outfit}` : `${L.age}, ${L.noun}, ${L.outfit}`) + extra;
     const label = $('#doc-cond-label');
     label.textContent = c.label; label.className = c.tone;

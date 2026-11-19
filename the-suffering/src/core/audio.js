@@ -119,6 +119,18 @@ export class Sound {
       case 'zap': for (let i = 0; i < 6; i++) this._n(d, t + i * 0.012 + rand(0, 0.008), 0.02, 0.9, 'highpass', 2500 + rand(0, 3000)); this._t(d, t, 0.25, 0.4, 'sawtooth', 100, 98, 0.005); this._t(d, t, 0.2, 0.25, 'square', 200, 196, 0.005); break;
       case 'tie': this._n(d, t, 0.18, 0.35, 'bandpass', 1500, 700, 1.5, 0.03); this._n(d, t + 0.2, 0.12, 0.3, 'bandpass', 1100, 600, 1.5, 0.02); break;
       case 'screech': this._n(d, t, 0.7, 0.45, 'bandpass', 3100, 2300, 9, 0.05); this._n(d, t, 0.7, 0.2, 'bandpass', 1500, 1200, 5, 0.05); break;
+      case 'crash':
+        // a car into something: the thump of the mass, crumpling sheet, and the ring of it
+        this._t(d, t, 0.32, 1.2, 'sine', 72, 28); this._n(d, t, 0.5, 1.1, 'lowpass', 2600, 240, 0.7);
+        for (let i = 0; i < 7; i++) this._n(d, t + i * 0.028 + rand(0, 0.02), 0.05 + rand(0, 0.05), 0.7, 'bandpass', 1300 + rand(0, 2600), 800, 2);
+        this._t(d, t + 0.02, 0.55, 0.16, 'sine', 930, 880, 0.002); this._t(d, t + 0.02, 0.4, 0.1, 'sine', 1410, 1370, 0.002);
+        break;
+      case 'explosion':
+        this._n(d, t, 1.7, 1.7, 'lowpass', 1100, 55, 0.6, 0.004); this._t(d, t, 0.95, 1.5, 'sine', 64, 22);
+        this._n(d, t, 0.14, 1.3, 'highpass', 1400); this._n(d, t + 0.08, 2.4, 0.55, 'lowpass', 420, 70, 0.5, 0.25);
+        for (let i = 0; i < 5; i++) this._n(d, t + 0.15 + rand(0, 0.9), 0.04, 0.3, 'bandpass', 2000 + rand(0, 2500), 1200, 2);
+        break;
+      case 'door': this._t(d, t, 0.09, 0.6, 'sine', 150, 70); this._n(d, t, 0.07, 0.6, 'lowpass', 1300, 420); this._n(d, t + 0.012, 0.03, 0.3, 'highpass', 2600); break;
       default: return false;
     }
     return true;
@@ -241,6 +253,14 @@ export class Sound {
       o.connect(f); f.connect(g); o.start(); nodes.push(o);
       noise('highpass', 3500, 0.7, 0.35);
       base = 0.6;
+    } else if (kind === 'siren') {
+      // a wail that climbs and falls, through a horn
+      const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 760;
+      const lfo = ctx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 0.32; const lg = ctx.createGain(); lg.gain.value = 330;
+      lfo.connect(lg); lg.connect(o.frequency);
+      const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1150; f.Q.value = 0.7;
+      o.connect(f); f.connect(g); o.start(); lfo.start(); nodes.push(o, lfo);
+      base = 0.22;
     } else if (kind === 'buzz') {
       const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = 120; o.connect(g); o.start(); nodes.push(o);
       base = 0.04;

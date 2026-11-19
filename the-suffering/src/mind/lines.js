@@ -352,6 +352,22 @@ const MORE = {
   lightsOn: ["Whoa, bright.", "Who put a light out here?", "Huh. Nice light.", "That's blinding."],
   sawWall: ["Who built a wall here?", "That wasn't there a second ago.", "Is that a wall? In the middle of the street?"],
   shotThrough: ["They're shooting through the wall!", "Get away from the wall!", "It's not stopping bullets!"],
+
+  /* cars: taken, crashed, burning, blown up */
+  carjacked: ["Hey! HEY! That's my car!", "Get out of my car!", "What are you doing?! Get your hands off me!", "You can't- that's MY CAR!", "Somebody stop him! He's taking my car!",
+    "My keys- my bag's in there!", "Are you insane?!", "Call the police! He took my car!", "Okay, okay! Take it! Just take it!", "Not the car, man, not the car-",
+    "I just made the last payment on that!", "You son of a- GET OUT!"],
+  crashed: ["Oh God. Oh God, the car.", "Is everyone okay? Is everyone okay?", "My neck- I can't turn my neck.", "Where did that come from?!", "I didn't- I was braking, I was BRAKING-",
+    "The airbag... my face.", "Is that smoke? Is that smoke coming out?", "My chest. The belt- my chest.", "Okay. Okay. Breathe.", "I can smell petrol."],
+  carFire: ["Get away from it! It's going to go!", "The car's on fire! MOVE!", "Get back! GET BACK!", "It's burning! Get everybody back!", "Fire! Fire! Somebody get an extinguisher!",
+    "Get out of the car! GET OUT!", "Is anyone still in there?!", "Run! It's gonna blow!"],
+  sawCrash: ["Oh, that's a crash. That's a bad crash.", "Did you hear that?! Somebody's hit!", "Call an ambulance! There's been a crash!", "Is anybody hurt?!", "That car's totalled.",
+    "Oh no, oh no, they hit hard.", "Somebody check the driver!", "He came out of nowhere!"],
+  sawCarFire: ["That car's on fire!", "Look at the smoke! It's burning!", "Is somebody in it?!", "Stay back from it!", "Somebody call the fire department!", "It's gonna blow up!"],
+  sawExplosion: ["WHAT WAS THAT?!", "Get down! GET DOWN!", "Oh my God, it exploded!", "Is anybody- was anybody near it?!", "It's raining glass!", "I can't hear- I can't hear anything!",
+    "It just went up! It just WENT UP!", "Get away! There might be another one!"],
+  hearExplosion: ["Was that a bomb?!", "What the hell was that?!", "That was an explosion!", "Something just blew up!", "Did you feel that?!", "Oh God. Oh God, what was that."],
+  runOver: ["He ran them over! He RAN THEM OVER!", "Stop the car! STOP THE CAR!", "There's someone under the car!", "Oh God, the wheels-", "He drove right over them!"],
 };
 for (const k in MORE) LINES[k] = [...new Set((LINES[k] || []).concat(MORE[k]))];
 

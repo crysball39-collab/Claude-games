@@ -8,7 +8,7 @@ import { Boxes } from './render/boxes.js';
 import { Quads, cellUV } from './render/quads.js';
 import { decalAtlas, FaceAtlas, crateTexture, DECAL, ATLAS_COLS, ATLAS_ROWS } from './render/textures.js';
 import { Human, ST } from './human/human.js';
-import { playerLook, randomLook, officerLook } from './human/looks.js';
+import { playerLook, randomLook, officerLook, swatLook } from './human/looks.js';
 import { P } from './human/rig.js';
 import { Gore } from './combat/gore.js';
 import { Voxels } from './world/voxels.js';
@@ -18,7 +18,7 @@ import { Lights } from './render/lights.js';
 import { Fire } from './combat/fire.js';
 import { Power } from './world/power.js';
 import { Daylight } from './world/daylight.js';
-import { clamp, clamp01, damp, lerp, rand, wrapAngle } from './core/util.js';
+import { clamp, clamp01, damp, dampAngle, lerp, rand, wrapAngle } from './core/util.js';
 
 export const QUALITY = {
   low: { ratio: 1, shadows: false, substeps: 6, particles: 450, antialias: false, people: 8, cars: 5 },
@@ -70,6 +70,9 @@ export class Game {
     this.faces = new FaceAtlas();
     this.boxes = new Boxes(scene, 4096, new THREE.MeshLambertMaterial({ color: 0xffffff }), { shadows: this.shadows });
     this.crateBoxes = new Boxes(scene, 96, new THREE.MeshLambertMaterial({ map: crateTexture() }), { shadows: this.shadows });
+    // see-through boxes: visors, and anything else made of glass that rides on a person
+    this.glass = new Boxes(scene, 64, new THREE.MeshPhongMaterial({ color: 0xffffff, transparent: true, opacity: 0.42, shininess: 120, specular: 0xc8d8e8, depthWrite: false }), { shadows: false });
+    this.glass.mesh.renderOrder = 5;
     this.faceQuads = new Quads(scene, 64, this.faces.texture, { offset: -2, renderOrder: 4, alphaTest: 0.08 });
     this.under = new Quads(scene, 96, this.atlas, { offset: -1, renderOrder: 0, alphaTest: 0.005 });
 
@@ -160,10 +163,30 @@ export class Game {
   /** A police officer: uniform, light vest, an M1911 on the hip. `post` is where they stand when nothing is happening. */
   spawnOfficer(x, z, yaw = 0, post = null) {
     const h = this.spawnHuman(x, z, yaw, officerLook());
-    h.wearVest(true);
+    h.wearVest('light', true);
     for (const kit of ['m1911', 'taser', 'cuffs', 'scanner']) this.weapons?.give(h, kit);
     if (h.brain) h.brain.post = post || { x, z, yaw, kind: 'spot' };
     return h;
+  }
+
+  /** A S.W.A.T. officer: plate carrier, visored helmet, an M4A1 at the ready, a Glock, a taser and cuffs. */
+  spawnSwat(x, z, yaw = 0, post = null) {
+    const h = this.spawnHuman(x, z, yaw, swatLook());
+    h.swat = true;
+    h.wearVest('swat'); h.wearHelmet('swat');
+    for (const kit of ['m4a1', 'glock', 'taser', 'cuffs']) this.weapons?.give(h, kit);
+    if (h.brain) h.brain.post = post || { x, z, yaw, kind: 'spot' };
+    return h;
+  }
+
+  /** Four of them, in a stack, a pace apart. */
+  spawnSwatTeam(x, z, yaw = 0) {
+    const out = [], fx = Math.sin(yaw), fz = Math.cos(yaw);
+    for (let i = 0; i < 4; i++) {
+      const ox = x - fx * i * 1.0 + fz * (i % 2 ? 0.45 : -0.45), oz = z - fz * i * 1.0 - fx * (i % 2 ? 0.45 : -0.45);
+      out.push(this.spawnSwat(ox, oz, yaw, { x: ox, z: oz, yaw, kind: 'spot' }));
+    }
+    return out;
   }
 
   /** Mans the station: one officer to each post that has nobody. */
@@ -272,7 +295,7 @@ export class Game {
 
     this.daylight.update();
     this.lights.commit();
-    this.boxes.commit(); this.crateBoxes.commit(); this.faceQuads.commit(); this.under.commit();
+    this.boxes.commit(); this.crateBoxes.commit(); this.glass.commit(); this.faceQuads.commit(); this.under.commit();
     this.faces.flush(this.time);
     if (!this.headless) this.renderer.render(this.scene, this.camera);
   }
@@ -290,6 +313,7 @@ export class Game {
     const [lx, ly] = inp.takeLook();
     this.camYaw = wrapAngle(this.camYaw - lx);
     this.camPitch = clamp(this.camPitch - ly, -1.2, 1.25);
+    if (p.car) { this._drive(dt, lx, ly); return; }
     const sy = Math.sin(this.camYaw), cy = Math.cos(this.camYaw);
     const mx = inp.move.x, my = inp.move.y;
     const it = p.intent;
@@ -311,6 +335,30 @@ export class Game {
     } else p.crawlDir = null;
   }
 
+  /** At the wheel: the pedals, the steering, the handbrake, the horn, the door. */
+  _drive(dt, lx, ly) {
+    const inp = this.input, p = this.player, car = p.car, it = p.intent;
+    it.mx = 0; it.mz = 0; it.jump = false; it.crouch = false; this.crouchHeld = false;
+    const mx = inp.move.x, my = inp.move.y;
+    car.gas = inp.down.gas ? 1 : Math.max(0, my);
+    car.brake = inp.down.brake ? 1 : Math.max(0, -my);
+    car.steerIn = clamp(mx + (inp.down.steerR ? 1 : 0) - (inp.down.steerL ? 1 : 0), -1, 1);
+    car.hand = inp.down.hand || inp.down.jump ? 1 : 0;
+    if ((inp.pressed.horn || inp.pressed.holster) && this.traffic) { this.traffic._honk(car); if (car.kind === 'police') car.siren = !car.siren; }
+    if (inp.pressed.use && this.traffic) { this.traffic.exit(p); inp.pressed.use = false; return; }
+    // the view swings round behind the car again when it is not being looked about with
+    if (Math.abs(lx) + Math.abs(ly) > 1e-5) this.lookIdle = 0; else this.lookIdle = (this.lookIdle || 0) + dt;
+    const sp = Math.hypot(car.vx, car.vz);
+    if (this.lookIdle > 1.1 && (sp > 1.5 || this.lookIdle > 3)) {
+      const want = car.reversing && sp > 1 ? car.yaw : car.yaw;
+      this.camYaw = dampAngle(this.camYaw, want, 2.6, dt);
+      if (!this.firstPerson) this.camPitch = damp(this.camPitch, -0.2, 2, dt);
+    }
+    p.lookYaw = clamp(wrapAngle(this.camYaw - p.yaw), -1.2, 1.2);
+    p.lookPitch = clamp(this.camPitch, -0.5, 0.4);
+    p.aimPitch = 0;
+  }
+
   _camera(dt) {
     const p = this.player, cam = this.camera;
     const cp = Math.cos(this.camPitch), sp = Math.sin(this.camPitch);
@@ -324,6 +372,19 @@ export class Game {
       tx = _v[0]; ty = _v[1]; tz = _v[2];
       this.pivot.set(tx, ty, tz);
       this.camPos.set(tx, ty, tz);
+    } else if (p.car) {
+      // behind the car, over its roof, looking past it
+      const car = p.car;
+      tx = car.x; ty = car.y + 1.5; tz = car.z;
+      const k = 1 - Math.exp(-dt * 12);
+      this.pivot.x += (tx - this.pivot.x) * k; this.pivot.y += (ty - this.pivot.y) * k; this.pivot.z += (tz - this.pivot.z) * k;
+      let dist = 6.4 + Math.min(2.5, Math.abs(car.speed) * 0.05);
+      const hit = this.world.rayWorld(this.pivot.x, this.pivot.y, this.pivot.z, -dx, -dy, -dz, dist + 0.3);
+      if (hit >= 0) dist = Math.max(1.2, hit - 0.3);
+      this.camDistNow = damp(this.camDistNow ?? dist, dist, dist < (this.camDistNow ?? dist) ? 30 : 4, dt);
+      this.camPos.set(this.pivot.x - dx * this.camDistNow, this.pivot.y - dy * this.camDistNow, this.pivot.z - dz * this.camDistNow);
+      const gy = groundHeight(this.camPos.x, this.camPos.z) + 0.3;
+      if (this.camPos.y < gy) this.camPos.y = gy;
     } else {
       const down = p.state === ST.RAGDOLL;
       tx = chest.px; tz = chest.pz;
@@ -480,6 +541,7 @@ export class Game {
       for (const h of this.humans) for (const pc of h.pieces.slice()) h.dropPiece(pc.island);
       this.pieces.length = 0;
     }
+    if (what === 'cars' || what === 'all') this.traffic?.clearCars();
     if (what === 'things' || what === 'all') {
       this.ropes.clear();
       this.fire.clear();

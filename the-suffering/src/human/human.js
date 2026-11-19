@@ -19,6 +19,7 @@ import {
 } from './rig.js';
 import { Animator, CLIPS } from './anim.js';
 import { Health } from './health.js';
+import { VESTS, HELMETS, vestBoxes, helmetBoxes, vestCover, helmetCover, throughArmour } from './armour.js';
 import { Island, newGroup, GRAVITY, rayBody } from '../physics/world.js';
 import { groundHeight, LIMIT } from '../world/city.js';
 import { rgb } from '../render/boxes.js';
@@ -120,6 +121,7 @@ export class Human {
     this.reload = null;                    // a magazine change in progress
     this.aimYaw = null; this.gunLow = 0;   // where a gun in this hand points, and how far it is lowered
     this.vest = null; this.helmet = null;
+    this.car = null; this.seat = -1;      // a car they are sitting in, and which seat
     this.tased = 0; this.dazeT = 0;        // seconds of a taser's cycle left; seconds of being no use to anyone after it
     this.cuffed = null;                    // { item, by, joint } while in handcuffs
     this.cuffing = null;                   // { target, item, t, dur } while putting them on somebody
@@ -204,26 +206,18 @@ export class Human {
     return o;
   }
 
-  /* ---- the vest: black, over the chest and the belly ---- */
+  /* ---- armour: a vest, a helmet (see armour.js for what each kind covers and stops) ---- */
 
-  /** Puts a light vest on. `police` adds the white patches front and back. */
-  wearVest(police = false) {
+  /** Puts a vest on: 'light', 'medium' or 'swat'. `police` adds white patches to a light one. */
+  wearVest(kind = 'light', police = false) {
     if (this.vest) return;
-    const g = this.game, s = this.scale, c = this.sizes[P.CHEST], a = this.sizes[P.ABDOMEN];
-    const mk = (part, l, z, hex) => { const idx = g.boxes.alloc(); g.boxes.colorHex(idx, hex); return { idx, part, l, z }; };
-    const BLACK = 0x121316, TRIM = 0x1d2024;
-    const boxes = [
-      mk(P.CHEST, [0, -0.012 * s, 0], [c[0] + 0.04 * s, c[1] * 0.94, c[2] + 0.055 * s], BLACK),
-      mk(P.ABDOMEN, [0, 0.008 * s, 0], [a[0] + 0.045 * s, a[1] + 0.02 * s, a[2] + 0.055 * s], BLACK),
-      mk(P.CHEST, [0.115 * s, c[1] * 0.5 + 0.004 * s, 0], [0.07 * s, 0.03 * s, c[2] + 0.03 * s], TRIM),
-      mk(P.CHEST, [-0.115 * s, c[1] * 0.5 + 0.004 * s, 0], [0.07 * s, 0.03 * s, c[2] + 0.03 * s], TRIM),
-      mk(P.CHEST, [0, -0.05 * s, c[2] * 0.5 + 0.034 * s], [0.2 * s, 0.11 * s, 0.022 * s], TRIM),
-    ];
-    if (police) {
-      boxes.push(mk(P.CHEST, [0.07 * s, 0.07 * s, c[2] * 0.5 + 0.03 * s], [0.11 * s, 0.035 * s, 0.006 * s], 0xe9e9e4));
-      boxes.push(mk(P.CHEST, [0, 0.04 * s, -(c[2] * 0.5 + 0.03 * s)], [0.24 * s, 0.06 * s, 0.006 * s], 0xe9e9e4));
-    }
-    this.vest = { boxes, hits: 0, police, lift: 0.03 * s };
+    if (kind === true) { kind = 'light'; police = true; }
+    const def = VESTS[kind] || VESTS.light, g = this.game, s = this.scale;
+    const boxes = vestBoxes(def.kind, this.sizes, s, police).map(([part, l, z, hex]) => {
+      const idx = g.boxes.alloc(); g.boxes.colorHex(idx, hex);
+      return { idx, part, l, z };
+    });
+    this.vest = { kind: def.kind, def, boxes, hits: 0, police, lift: def.lift * s };
   }
   removeVest() {
     if (!this.vest) return;
@@ -231,35 +225,31 @@ export class Human {
     this.vest = null;
   }
 
-  /* ---- the helmet: a black shell over the skull, open at the face ---- */
-
-  wearHelmet() {
+  /** Puts a helmet on: 'light', 'medium' or 'swat' (with a visor). */
+  wearHelmet(kind = 'light') {
     if (this.helmet) return;
-    const g = this.game, s = this.scale;
-    const mk = (l, z, hex) => { const idx = g.boxes.alloc(); g.boxes.colorHex(idx, hex); return { idx, part: P.HEAD, l: [l[0] * s, l[1] * s, l[2] * s], z: [z[0] * s, z[1] * s, z[2] * s] }; };
-    const BLACK = 0x121316, TRIM = 0x1d2024;
-    this.helmet = {
-      hits: 0, lift: 0.022 * s,
-      boxes: [
-        mk([0, 0.1, -0.006], [0.246, 0.085, 0.262], BLACK),            // crown
-        mk([0, 0.03, -0.124], [0.246, 0.15, 0.03], BLACK),             // back, down to the nape
-        mk([0.118, 0.035, -0.02], [0.022, 0.11, 0.2], BLACK), mk([-0.118, 0.035, -0.02], [0.022, 0.11, 0.2], BLACK),
-        mk([0, 0.066, 0.138], [0.2, 0.02, 0.04], TRIM),                // a stub of a brim
-        mk([0.112, -0.06, 0.03], [0.012, 0.1, 0.014], TRIM), mk([-0.112, -0.06, 0.03], [0.012, 0.1, 0.014], TRIM),
-      ],
-    };
+    const def = HELMETS[kind] || HELMETS.light, g = this.game, s = this.scale;
+    const boxes = [];
+    for (const [l, z, hex, glass] of helmetBoxes(def.kind)) {
+      const set = glass ? g.glass : g.boxes;
+      const idx = set.alloc(); set.colorHex(idx, hex);
+      boxes.push({ idx, glass: !!glass, part: P.HEAD, l: [l[0] * s, l[1] * s, l[2] * s], z: [z[0] * s, z[1] * s, z[2] * s] });
+    }
+    this.helmet = { kind: def.kind, def, hits: 0, visor: def.kind === 'swat' ? 0 : -1, lift: def.lift * s, boxes };
   }
   removeHelmet() {
     if (!this.helmet) return;
-    for (const b of this.helmet.boxes) this.game.boxes.release(b.idx);
+    for (const b of this.helmet.boxes) (b.glass ? this.game.glass : this.game.boxes).release(b.idx);
     this.helmet = null;
   }
+  /** A visor still in one piece: it holds three rounds, give or take, and then it is crazed glass. */
+  get visorUp() { return !!this.helmet && this.helmet.visor >= 0 && this.helmet.visor < 3; }
 
-  /** Is a point on the head (in the head's own space) under the helmet? Everything but the face and the jaw. */
-  _helmeted(lp, ln) {
-    const s = this.scale;
-    if (lp[1] < -0.035 * s) return false;
-    return !(ln[2] > 0.5 && lp[1] < 0.05 * s);
+  /** What armour, if any, is between a blow and the body at a point on a part (in the part's own space): a material, or null. */
+  armourAt(part, lp, ln) {
+    if (!this.attached[part]) return null;
+    if (part === P.HEAD) return this.helmet ? helmetCover(this.helmet.kind, lp, ln, this.scale, this.visorUp) : null;
+    return this.vest ? vestCover(this.vest.kind, part, lp, ln, this.scale) : null;
   }
 
   /* ---- a taser ---- */
@@ -623,7 +613,8 @@ export class Human {
     if (!this.h.alive) this.deadFor += dt;
     this.pose.talk = this.talkT > 0 && this.h.conscious ? 1 : 0;
 
-    if (this.state === ST.ANIM) this._animated(dt);
+    if (this.car) this._seated(dt);
+    else if (this.state === ST.ANIM) this._animated(dt);
     else if (this.state === ST.STUMBLE) this._stumbling(dt);
     else if (this.state === ST.RAGDOLL) this._ragdolling(dt);
     else this._gettingUp(dt);
@@ -670,6 +661,66 @@ export class Human {
     this.island.canSleep = true;
     this.talkT = 0; this.scream = 0;
     this.game.onDeath?.(this);
+  }
+
+  /* ---- in a car ---- */
+
+  /** Into a seat: whoever is driving takes the wheel, anyone else sits back. */
+  enterCar(car, seat, instant = false) {
+    if (this.state !== ST.ANIM) this.recover();
+    this.car = car; this.seat = seat;
+    this.vx = 0; this.vz = 0; this.vy = 0; this.grounded = true; this.crouching = false;
+    this.anim.action = null; this.cuffing = null; this.lunge = 0;
+    const it = this.intent; it.mx = 0; it.mz = 0; it.face = null; it.run = false; it.jump = false;
+    this.pose.sit = 1; this.pose.drive = seat === 0 ? 1 : 0; this.pose.slump = 0;
+    if (instant) { this.anim.w.sit = 1; this.anim.w.drive = seat === 0 ? 1 : 0; this.blendDur = 0; this._seated(0); }
+    else { this._snapshot(); this.blend = 0; this.blendDur = 0.55; }
+    // a gun is no use to somebody with both hands on the wheel
+    const W = this.game.weapons;
+    if (W && seat === 0) { if (this.isPlayer) { if (W.current >= 0) W.select(-1); } else if (this.weapon && W.putAway) W.putAway(this); }
+  }
+
+  /** Out of the seat, standing at (x, z). `raw`: thrown out, not climbing out. */
+  leaveCar(x, z, yaw, car = null, raw = false) {
+    this.car = null; this.seat = -1;
+    this.x = x; this.z = z; this.y = groundHeight(x, z); this.yaw = yaw;
+    this.vx = 0; this.vz = 0; this.vy = 0; this.grounded = true;
+    this.pose.sit = 0; this.pose.drive = 0; this.pose.slump = 0;
+    this.anim.w.sit = 0; this.anim.w.drive = 0; this.anim.w.slump = 0;
+    if (this.state !== ST.ANIM) this.recover();
+    const fit = this.h.alive && this.h.conscious && this.h.canStand;
+    if (raw || !fit) {
+      // straight to where they now are; whoever cannot stand falls there
+      this.blendDur = 0;
+      this._solve(0); this._apply(0);
+      if (!fit) this.toRagdoll();
+    } else { this._snapshot(); this.blend = 0; this.blendDur = 0.42; this._fromCar = car; }
+  }
+
+  /** Sitting: carried along by the car, the pose the seat gives them. */
+  _seated(dt) {
+    const car = this.car, h = this.h, sp = car.seatAt[this.seat];
+    car.toWorld(sp[0], sp[1], sp[2], _a);
+    this.x = _a[0]; this.z = _a[2]; this.y = _a[1] - PELVIS_HEIGHT * this.scale;
+    this.yaw = car.yaw;
+    this.vx = car.vx; this.vz = car.vz; this.vy = 0; this.speed = 0; this.gait = 0; this.gvx = this.gvz = 0;
+    this.grounded = true; this.crouching = false;
+    const awake = h.alive && h.conscious;
+    this.pose.sit = 1;
+    this.pose.drive = awake && this.seat === 0 && car.drivable ? 1 : 0;
+    this.pose.slump = awake ? 0 : 1;
+    this.pose.hurt = awake ? clamp01((h.pain - 28) / 50) : 0;
+    this.pose.cower = awake && this.seat > 0 && this.mind && this.mind.emo.fear > 70 ? 0.6 : 0;
+    this.hold = 'none';
+    this.footLift[0] = this.footLift[1] = 0;
+    this._dt = dt || 1 / 60;
+    this._solve(dt, this.x, this.y, this.z, this.yaw);
+    if (this.blendDur > 0) {
+      this.blend += dt;
+      const w = smooth(this.blend / this.blendDur);
+      this._apply(this._dt, w);
+      if (w >= 1) this.blendDur = 0;
+    } else this._apply(this._dt);
   }
 
   /* ---- on their feet, under the animation's control ---- */
@@ -917,7 +968,7 @@ export class Human {
       nx += ex * (R - d); nz += ez * (R - d);
       // how fast is the car coming at us along that line?
       const closing = (b.vx - this.vx) * ex + (b.vz - this.vz) * ez;
-      if (closing > 2.2) { this.x = nx; this.z = nz; this.struckByCar(car, closing); return [nx, nz]; }
+      if (closing > 2.2 && b.vx * ex + b.vz * ez > 1.8) { this.x = nx; this.z = nz; this.struckByCar(car, closing); return [nx, nz]; }
     }
     // somebody lying in the way, or in the middle of getting up: their trunk and their head are gone round, not walked through
     for (const o of g.humans) {
@@ -951,7 +1002,7 @@ export class Human {
     // other people on their feet: nobody stands inside anybody else
     // (someone staggering is in the way too: walk on into them and they are squeezed against whoever is behind)
     for (const o of g.humans) {
-      if (o === this || o.removed || o.state === ST.RAGDOLL) continue;
+      if (o === this || o.removed || o.state === ST.RAGDOLL || o.car) continue;
       let dx = nx - o.x, dz = nz - o.z;
       // shoulder to shoulder with a hand's width to spare; a blow in progress, or a pair of handcuffs, comes in closer than that
       const close = this.anim.action || o.anim.action || this.cuffing || o.cuffing ? 0.82 : 1;
@@ -1027,6 +1078,7 @@ export class Human {
 
   toStumble(force = 40, vx = 0, vz = 0) {
     if (this.state === ST.RAGDOLL || this.removed) return;
+    if (this.car) { this.anim.kick(0, -1, Math.min(1.2, force / 50)); return; }
     if (!this.h.canStand) { this.toRagdoll(); return; }
     const was = this.state;
     this.state = ST.STUMBLE;
@@ -1039,6 +1091,9 @@ export class Human {
   }
 
   _release() {
+    // still on the way out of a car: finish getting out first, or the physics finds them inside its body
+    if (this._fromCar && this.blendDur > 0) { this.blendDur = 0; this._solve(0); this._apply(0); }
+    this._fromCar = null;
     for (let i = 0; i < PART_COUNT; i++) if (this.attached[i]) this.bodies[i].setKinematic(false);
     this.island.mover = false;
     this.island.wake();
@@ -1109,6 +1164,8 @@ export class Human {
 
   toRagdoll() {
     if (this.state === ST.RAGDOLL || this.removed) return;
+    // somebody in a seat slumps in it: they are not going anywhere until somebody gets them out
+    if (this.car) { this.anim.action = null; return; }
     this.state = ST.RAGDOLL;
     this.ragT = 0; this.stillT = 0;
     this._release();
@@ -1358,7 +1415,7 @@ export class Human {
       if (b.kinematic && !(other && other.im > 0 && other.mass > 4 && other.preSpeed > 4)) continue;
       const speed = b.hit;
       const heavy = car ? 1.9 : other && other.mass > 15 ? 1.25 : 1;
-      const power = clamp((speed - 3.6) / 5.2, 0, 3.4) * heavy * (i === P.HEAD ? (this.helmet ? 0.5 : 1.25) : 1);
+      const power = clamp((speed - 3.6) / 5.2, 0, 3.4) * heavy * (i === P.HEAD ? (this.helmet ? this.helmet.def.fall : 1.25) : 1);
       this.partCool[i] = 0.35;
       if (power < 0.25 || !this.attached[i]) { if (speed > 4) g.audio?.at('thud', b.px, b.py, b.pz, clamp01(speed / 10)); continue; }
       b.toLocal(b.hitX, b.hitY, b.hitZ, _a);
@@ -1407,6 +1464,11 @@ export class Human {
       const b = this.bodies[P.HAND_R], s = this.scale;
       bx.setOn(this.phoneIdx, b.px, b.py, b.pz, b.qx, b.qy, b.qz, b.qw, 0.03 * s, -0.035 * s, 0.012 * s, 0.012 * s, 0.13 * s, 0.065 * s);
     } else if (this.phoneIdx >= 0) bx.hide(this.phoneIdx);
+    if (this.caps) for (const c of this.caps) {
+      if (this.gone[c.part]) { bx.hide(c.idx); continue; }
+      const b = this.bodies[c.part];
+      bx.setOn(c.idx, b.px, b.py, b.pz, b.qx, b.qy, b.qz, b.qw, c.l[0], c.l[1], c.l[2], c.z[0], c.z[1], c.z[2]);
+    }
     if (this.vest) for (const v of this.vest.boxes) {
       if (this.gone[v.part]) { bx.hide(v.idx); continue; }
       const b = this.bodies[v.part];
@@ -1416,8 +1478,9 @@ export class Human {
     const hd = this.bodies[P.HEAD];
     const lid = this.helmet ? 0.085 * this.scale : 9;
     if (this.helmet) for (const v of this.helmet.boxes) {
-      if (hide) { bx.hide(v.idx); continue; }
-      bx.setOn(v.idx, hd.px, hd.py, hd.pz, hd.qx, hd.qy, hd.qz, hd.qw, v.l[0], v.l[1], v.l[2], v.z[0], v.z[1], v.z[2]);
+      const set = v.glass ? g.glass : bx;
+      if (hide) { set.hide(v.idx); continue; }
+      set.setOn(v.idx, hd.px, hd.py, hd.pz, hd.qx, hd.qy, hd.qz, hd.qw, v.l[0], v.l[1], v.l[2], v.z[0], v.z[1], v.z[2]);
     }
     for (const h of this.hair) {
       if (hide || h.l[1] > lid) bx.hide(h.idx);
@@ -1528,28 +1591,29 @@ export class Human {
     let type = info.type, power = info.power, hp = info.hp, stopped = false;
     const b = this.bodies[part];
     if (this.gone[part]) return null;
-    if (this.vest && this.attached[part] && (part === P.CHEST || part === P.ABDOMEN)) {
-      // a light vest: stops a pistol round and a slash, slows a rifle round and a point
-      const was = type;
-      if (type === 'bullet') { if (info.rifle) { power *= 0.7; if (hp) hp *= 0.7; } else { type = 'blunt'; power *= 0.6; stopped = true; } }
-      else if (type === 'cut') { type = 'blunt'; power *= 0.3; stopped = true; }
-      else if (type === 'stab') power *= 0.45;
-      else if (type === 'blunt') power *= 0.8;
-      this.vest.hits++;
-      this.vestHit = { was, stopped, t: g.time };
-    }
-    let armour = stopped ? 'vest' : '';
-    if (this.helmet && part === P.HEAD && this.attached[part]) {
+    let armour = '', mat = null;
+    if ((this.vest || this.helmet) && this.attached[part] && type !== 'needle' && type !== 'burn') {
       b.toLocal(info.point[0], info.point[1], info.point[2], _a);
       const n0 = info.normal || faceOf([_a[0] / b.hx, _a[1] / b.hy, _a[2] / b.hz]);
-      if (this._helmeted(_a, n0)) {
-        // a light helmet: turns a blow and a slash, turns some pistol rounds, takes a little off a rifle round
-        if (type === 'bullet') { if (info.rifle) { power *= 0.9; } else if (chance(0.6)) { type = 'blunt'; power *= 0.8; stopped = true; } else { power *= 0.8; if (hp) hp *= 0.8; } }
-        else if (type === 'cut') { type = 'blunt'; power *= 0.35; stopped = true; }
-        else if (type === 'stab') power *= 0.5;
-        else power *= 0.4;
-        this.helmet.hits++;
-        if (stopped) armour = 'helmet';
+      mat = this.armourAt(part, _a, n0);
+      if (mat) {
+        const was = type, r = throughArmour(mat, type, !!info.rifle, power, hp);
+        type = r.type; power = r.power; hp = r.hp; stopped = r.stopped;
+        if (part === P.HEAD) {
+          this.helmet.hits++;
+          if (mat === 'visor' && was === 'bullet') {
+            // every round that lands on the visor stars it; enough of them and there is no seeing through it, or trusting it
+            this.helmet.visor++;
+            const vb = this.helmet.boxes.find((v) => v.glass);
+            if (vb) g.glass.colorHex(vb.idx, this.helmet.visor >= 3 ? 0xe4e8ea : 0xc3cfd6);
+            if (this.helmet.visor >= 3) g.audio?.at('glass', info.point[0], info.point[1], info.point[2], 0.5);
+          }
+          if (stopped) armour = 'helmet';
+        } else {
+          this.vest.hits++;
+          this.vestHit = { was, stopped, t: g.time, mat };
+          if (stopped) armour = 'vest';
+        }
       }
     }
     b.toLocal(info.point[0], info.point[1], info.point[2], _a);
@@ -1571,7 +1635,7 @@ export class Human {
     rep.stopped = stopped;
     if (stopped) {
       // what the vest took shows on the vest
-      g.gore.mark(this, part, info.type === 'bullet' ? 'entry' : 'slash', lp, ln, info.type === 'bullet' ? 0.045 : 0.09, armour === 'helmet' ? this.helmet.lift : this.vest.lift);
+      g.gore.mark(this, part, info.type === 'bullet' ? (mat === 'visor' ? 'crack' : 'entry') : 'slash', lp, ln, info.type === 'bullet' ? (mat === 'visor' ? 0.07 : 0.045) : 0.09, armour === 'helmet' ? (mat === 'visor' ? 0.036 * this.scale : this.helmet.lift) : mat === 'plate' ? this.vest.lift + 0.012 * this.scale : this.vest.lift);
       g.gore.puff('smoke', info.point[0], info.point[1], info.point[2], 0.16, 0.35, 0.3, 0.3, 0.3);
     }
     this.lastAttacker = info.attacker || this.lastAttacker;
@@ -1649,6 +1713,7 @@ export class Human {
       if (this.mind) this.mind.feel(part, 'blunt', rep, 'a car');
     }
     g.audio?.at('carhit', this.x, this.y + 1, this.z, clamp01(closing / 9));
+    g.traffic?.struck?.(car, this, closing);
     g.onCarHit?.(this, car, closing, dir);
   }
 
@@ -1700,6 +1765,33 @@ export class Human {
     return isl;
   }
 
+  /**
+   * The raw end where a part came away: a ring of torn muscle standing a
+   * little proud of the cut, and the bone in the middle of it standing
+   * further. (lp, ln: the joint on the part's face, and which face; w, d:
+   * the size of the cut across that face.)
+   */
+  capStump(part, lp, ln, w, d, lost = -1) {
+    const g = this.game, s = this.scale;
+    if (!this.caps) this.caps = [];
+    const hx = this.bodies[part].hx, hy = this.bodies[part].hy, hz = this.bodies[part].hz;
+    const side = Math.abs(ln[0]) > 0.5;
+    const sg = side ? Math.sign(ln[0]) : Math.sign(ln[1]);
+    // on the face, not out where the joint was
+    const cx = side ? sg * hx : clamp(lp[0], -hx * 0.6, hx * 0.6), cy = side ? clamp(lp[1], -hy * 0.6, hy * 0.6) : sg * hy, cz = clamp(lp[2], -hz * 0.5, hz * 0.5);
+    const along = (k) => (side ? [cx + sg * k, cy, cz] : [cx, cy + sg * k, cz]);
+    const across = (a, b, t) => (side ? [t, b, a] : [a, t, b]);
+    const thin = 0.02 * s;
+    const meat = g.boxes.alloc(), bone = g.boxes.alloc(), fat = g.boxes.alloc();
+    g.boxes.colorHex(meat, 0x741010); g.boxes.colorHex(bone, 0xe8dfca); g.boxes.colorHex(fat, 0xd9b48a);
+    const bw = clamp(Math.min(w, d) * 0.3, 0.022 * s, 0.05 * s);
+    // the head gone: what is left at the top of the neck is the spine and the windpipe
+    const neck = part === P.NECK;
+    this.caps.push({ idx: fat, part, l: along(thin * 0.3), z: across(w * 0.92, d * 0.92, thin * 0.6) });
+    this.caps.push({ idx: meat, part, l: along(thin * 0.7), z: across(w * 0.78, d * 0.78, thin * 1.1) });
+    this.caps.push({ idx: bone, part, l: neck ? along(thin * 1.4).map((v, k) => (k === 2 ? v - 0.025 * s : v)) : along(thin * 1.8), z: across(bw, bw, thin * 2.6) });
+  }
+
   /** The part is destroyed outright; whatever hung from it drops. */
   burst(part, vel = [0, 2, 0]) {
     if (this.h.god) return;
@@ -1732,7 +1824,8 @@ export class Human {
     if (wasAttached) stump = this.h.lose(part, [part], true).stump;
     const parent = PARTS[part].parent;
     if (!this.gone[parent]) g.gore.stump(this, parent, PARTS[part].la, part, stump);
-    g.gore.gibs(b.px, b.py, b.pz, vel, this.sizes[part], this.look.skin, this.clothed[part] ? partCloth(this.look, part) : this.look.skin);
+    g.gore.gibs(b.px, b.py, b.pz, vel, this.sizes[part], this.look.skin, this.clothed[part] ? partCloth(this.look, part) : this.look.skin, part);
+    for (const c of this.caps || []) if (c.part === part) g.boxes.hide(c.idx);
     g.gore.burst(b.px, b.py, b.pz, 0, 1, 0, part === P.HEAD ? 90 : 55, 6, 1.4);
     g.audio?.at('burst', b.px, b.py, b.pz, 1);
     if (wasAttached) {
@@ -1825,8 +1918,9 @@ export class Human {
 
   remove() {
     if (this.removed) return;
-    this.removed = true;
     const g = this.game;
+    if (this.car) { const c = this.car; if (c.seats[this.seat] === this) c.seats[this.seat] = null; this.car = null; this.seat = -1; }
+    this.removed = true;
     if (this.isPlayer) g.weapons?.dropFrom(this); else g.weapons?.forget(this);
     this.removeVest(); this.removeHelmet();
     for (const p of this.pieces.slice()) this.dropPiece(p.island);
@@ -1834,6 +1928,7 @@ export class Human {
     g.world.removeIsland(this.island);
     for (const i of this.inst) g.boxes.release(i);
     for (const h of this.hair) g.boxes.release(h.idx);
+    if (this.caps) { for (const c of this.caps) g.boxes.release(c.idx); this.caps = null; }
     for (const hand of this.fingers) for (const i of hand) g.boxes.release(i);
     if (this.phoneIdx >= 0) { g.boxes.release(this.phoneIdx); this.phoneIdx = -1; }
     g.faceQuads.release(this.faceQuad); g.faces.release(this.faceCell);

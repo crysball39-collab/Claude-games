@@ -33,6 +33,14 @@ export class UI {
     inp.bind($('#btn-use'), 'use');
     inp.bind($('#btn-drop'), 'drop');
     inp.bind($('#btn-holster'), 'holster');
+    // in a car: two pedals, a handbrake, a wheel to turn either way, a horn, a door
+    inp.bind($('#btn-gas'), 'gas');
+    inp.bind($('#btn-brake'), 'brake');
+    inp.bind($('#btn-hand'), 'hand');
+    inp.bind($('#btn-left'), 'steerL');
+    inp.bind($('#btn-right'), 'steerR');
+    inp.bind($('#btn-horn'), 'horn');
+    inp.bind($('#btn-exit'), 'use');
     inp.bind($('#btn-attack'), 'attack', {
       onDown: () => { if (w.def.melee && !g.player.cuffed) { this._hints(true); } if (g.doctor) this._pickCentre(); },
       onUp: () => this._hints(false),
@@ -247,11 +255,23 @@ export class UI {
         if (h.mind) { h.mind.note('felt', 'arrive', 'found myself standing in the street with no idea how I got here', 0.6); h.mind.stir('surprise', 50); h.mind.ask('sawSpawn', 40, null, rand(0.6, 2)); }
       }
       this.toast(n > 1 ? 'Five people' : 'A person');
+    } else if (what === 'swat') {
+      const [x, z] = g.spotAhead(4.2, 0.2);
+      const team = g.spawnSwatTeam(x, z, Math.atan2(p.x - x, p.z - z));
+      for (const h of team) g.minds.witness({ kind: 'spawn', what: h.look.desc, x: h.x, y: h.y + 1.4, z: h.z });
+      this.toast('A S.W.A.T. team');
     } else if (what === 'officer') {
       const [x, z] = g.spotAhead(3.2, 0.3);
       const h = g.spawnOfficer(x, z, Math.atan2(p.x - x, p.z - z));
       g.minds.witness({ kind: 'spawn', what: h.look.desc, x, y: h.y + 1.4, z });
       this.toast('A police officer');
+    } else if (what === 'car' || what === 'policecar' || what === 'van') {
+      // across the way you are looking, a few metres off, with nobody in it
+      const [x, z] = g.spotAhead(5.2, 0.05);
+      const kind = what === 'policecar' ? 'police' : what;
+      g.traffic.spawnParked(kind, x, z, g.camYaw + Math.PI / 2);
+      g.minds.witness({ kind: 'spawn', what: what === 'van' ? 'a van' : what === 'car' ? 'a car' : 'a police car', x, y: 1, z });
+      this.toast((what === 'van' ? 'Van' : what === 'car' ? 'Car' : 'Police car') + ' - walk up to the driver\'s door and DRIVE');
     } else if (what === 'crate') {
       const [x, z] = g.spotAhead(2.6, 0.15);
       g.spawnCrate(x, groundHeight(x, z) + 1.3, z);
@@ -360,8 +380,9 @@ export class UI {
     // worn, not held: tapping one takes it off
     const worn = (name, cls, fn) => { const b = el('button', 'slot ' + cls, name); b.addEventListener('pointerdown', (e) => { e.stopPropagation(); e.preventDefault(); fn(); }); bar.appendChild(b); };
     const pl = this.g.player;
-    if (pl.vest) worn('VEST', 'worn', () => w.shedVest());
-    if (pl.helmet) worn('HELMET', 'worn', () => w.shedHelmet());
+    const tier = (a) => (a.kind === 'swat' ? 'SWAT ' : a.kind === 'medium' ? 'MED ' : '');
+    if (pl.vest) worn(tier(pl.vest) + 'VEST', 'worn', () => w.shedVest());
+    if (pl.helmet) worn(tier(pl.helmet) + 'HELMET', 'worn', () => w.shedHelmet());
     // in a sandbox, handcuffs are only as locked as you want them to be
     if (pl.cuffed) worn('CUFFED', 'bound', () => { w.uncuff(pl, null); this.toast('You slip the cuffs'); });
     const d = w.def;
@@ -378,11 +399,19 @@ export class UI {
     if (!a.hidden) { a.textContent = `${e.ammo} / ${e.def.mag}`; a.classList.toggle('low', e.ammo <= Math.ceil(e.def.mag * 0.2)); }
   }
   nearChanged() {
-    const n = this.weapons.near, c = this.weapons.nearCuffed, t = this.g.things && this.g.things.near;
-    $('#btn-use').hidden = !n && !c && !t;
+    const n = this.weapons.near, c = this.weapons.nearCuffed, t = this.g.things && this.g.things.near, car = this.g.traffic && this.g.traffic.near;
+    $('#btn-use').hidden = !n && !c && !t && !car;
     if (n) $('#use-label').textContent = n.def.wear ? 'PUT ON' : n.holder ? 'TAKE' : 'PICK UP';
     else if (c) $('#use-label').textContent = 'UNCUFF';
     else if (t) $('#use-label').textContent = this.g.things.label(t);
+    else if (car) { const d = car.seats[0]; $('#use-label').textContent = !d ? 'DRIVE' : d.h.alive && d.h.conscious ? 'CARJACK' : 'PULL OUT'; }
+  }
+  /** Into a car, or out of one: the controls change over. */
+  drivingChanged(on) {
+    $('#hud').classList.toggle('driving', !!on);
+    $('#drive').hidden = !on;
+    this.input.reset();
+    this.nearChanged();
   }
 
   update(dt) {
@@ -402,6 +431,15 @@ export class UI {
       $('#v-stam').style.width = Math.round(p.h.stamina) + '%';
       $('#haze').style.opacity = p.h.alive && p.h.conscious ? clamp((88 - p.h.awareness) / 70, 0, 0.9).toFixed(2) : '0';
       $('#btn-crouch').classList.toggle('on', !!g.crouchHeld);
+      if (!!p.car !== $('#hud').classList.contains('driving')) this.drivingChanged(!!p.car);
+      if (p.car) {
+        const car = p.car, sp = Math.round(Math.abs(car.speed) * 3.6);
+        $('#speedo-v').textContent = sp;
+        $('#speedo-g').textContent = !car.drivable ? '!' : car.reversing ? 'R' : car.speed > 0.3 || car.gas > 0 ? 'D' : 'N';
+        const hp = $('#car-hp').firstElementChild;
+        hp.style.width = Math.round(car.hp) + '%';
+        hp.style.background = car.hp > 75 ? 'var(--ok)' : car.hp > 40 ? 'var(--warn)' : 'var(--bad)';
+      }
       $('#doctor-hint').hidden = !g.doctor || !!g.selected;
       this._stars();
       this._label();

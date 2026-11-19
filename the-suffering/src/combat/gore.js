@@ -26,12 +26,14 @@ import { Body, Island } from '../physics/world.js';
 import { groundHeight } from '../world/city.js';
 import { P, PARTS } from '../human/rig.js';
 import { rgb } from '../render/boxes.js';
+import { carDecal } from '../world/car.js';
 import { clamp, clamp01, rand, pick, TAU, chance } from '../core/util.js';
 
 const uv = (c) => cellUV(c[0], c[1], ATLAS_COLS, ATLAS_ROWS);
 const UV = {};
 for (const k in DECAL) UV[k] = Array.isArray(DECAL[k][0]) ? DECAL[k].map(uv) : uv(DECAL[k]);
 
+const _carHit = { lp: [0, 0, 0], ln: [0, 0, 0], xn: [0, 0, 0], tag: '', piece: 0, exit: 0, glass: -1 };
 const BREAK = 0.17;            // a stream stretched past this parts
 const _v = [0, 0, 0], _w = [0, 0, 0], _n = [0, 0, 0];
 const NONE = [];
@@ -465,7 +467,7 @@ export class Gore {
   mark(human, part, kind, lp, ln, size, lift = 0.004) {
     if (!this.enabled || human.gone[part]) return;
     const b = human.bodies[part];
-    const cell = kind === 'entry' ? UV.entry : kind === 'bruise' ? UV.bruise : kind === 'slash' ? UV.slash : kind === 'dot' ? UV.dot : pick(UV.splat);
+    const cell = kind === 'entry' ? UV.entry : kind === 'crack' ? UV.crack : kind === 'bruise' ? UV.bruise : kind === 'slash' ? UV.slash : kind === 'dot' ? UV.dot : pick(UV.splat);
     const d = this._attach(b, this._onFace(b, lp, ln, size, size, rand(TAU), lift), cell, human, part);
     if (d && (kind === 'dot' || kind === 'splat')) d.stain = true;
   }
@@ -481,6 +483,7 @@ export class Gore {
     const ref = lostPart >= 0 ? PARTS[lostPart].size : PARTS[part].size;
     const wide = Math.min(ref[0], PARTS[part].size[ln[0] ? 2 : 0]) * s * 1.02, deep = Math.min(ref[2], PARTS[part].size[2]) * s * 1.02;
     this._attach(b, this._onFace(b, lp, ln, wide, ln[0] ? ref[1] * s * 0.5 : deep, 0, 0.003), UV.stump, human, part);
+    human.capStump?.(part, lp, ln, wide, ln[0] ? ref[1] * s * 0.5 : deep, lostPart);
     // and it runs down from there
     if (ln[1] >= 0 && part <= P.HEAD) {
       const d = this._attach(b, this._onFace(b, [lp[0], lp[1] - 0.02, b.hz], [0, 0, 1], 0.12 * s, 0.16 * s, 0), pick(UV.drip), human, part);
@@ -521,7 +524,7 @@ export class Gore {
     this.ground.flat(i, x, y + 0.012 + (i % 7) * 0.0008, z, w, d, rot);
     this.ground.uvRect(i, cell[0], cell[1], cell[2], cell[3]);
     this.ground.tint(i, 1, 1, 1, alpha);
-    this.gInfo[i] = { born: this.game.time, alpha, pool: null, x, y, z, rot, wall: false };
+    this.gInfo[i] = { born: this.game.time, alpha, pool: null, x, y, z, rot, wall: false, blood: cell !== UV.vomit && cell !== UV.hole && cell !== UV.chip && cell !== UV.scorch && cell !== UV.soot };
     return i;
   }
 
@@ -536,7 +539,7 @@ export class Gore {
     this.ground.corners(i, ox - tx * hw, y - hh, oz - tz * hw, ox + tx * hw, y - hh, oz + tz * hw, ox + tx * hw, y + hh, oz + tz * hw, ox - tx * hw, y + hh, oz - tz * hw);
     this.ground.uvRect(i, cell[0], cell[1], cell[2], cell[3]);
     this.ground.tint(i, 1, 1, 1, 1);
-    this.gInfo[i] = { born: this.game.time, alpha: 1, pool: null, wall: true };
+    this.gInfo[i] = { born: this.game.time, alpha: 1, pool: null, wall: true, blood: cell !== UV.hole && cell !== UV.chip && cell !== UV.scorch && cell !== UV.soot };
     return i;
   }
 
@@ -680,14 +683,20 @@ export class Gore {
 
   /* ---------------------------------- lumps ------------------------------- */
 
-  gibs(x, y, z, vel, size, skinHex, clothHex) {
+  gibs(x, y, z, vel, size, skinHex, clothHex, part = -1) {
     const g = this.game, n = 5 + ((Math.random() * 4) | 0);
-    const colours = [0x7a0e0e, 0x5c0808, 0x8f1818, skinHex, clothHex, 0xe9e2d0, 0x7a0e0e];
-    for (let i = 0; i < n; i++) {
+    // what comes out depends on what it was: skull and brain, ribs and lung, gut, or bone and muscle
+    const inside = part === P.HEAD ? [0xb48c88, 0xa07a76, 0xe9e2d0, 0xf2eee4] : part === P.CHEST ? [0xe9e2d0, 0xb25b5b, 0x8f1818] : part === P.ABDOMEN || part === P.PELVIS ? [0x9a5a52, 0xb0706a, 0x7a3a34] : [0xe9e2d0, 0x8f1818];
+    const colours = [0x7a0e0e, 0x5c0808, 0x8f1818, skinHex, clothHex, ...inside];
+    for (let i = 0; i < n + inside.length; i++) {
       while (this.gibsList.length >= this.maxGibs) this._dropGib(0);
-      const s = rand(0.035, 0.085);
+      const hex = colours[i % colours.length];
+      const bone = hex === 0xe9e2d0 || hex === 0xf2eee4, gut = hex === 0x9a5a52 || hex === 0xb0706a || hex === 0x7a3a34;
+      const s = bone ? rand(0.02, 0.05) : rand(0.035, 0.085);
+      // bone splinters long and thin, gut in ropes, the rest in lumps
+      const long = bone || gut ? rand(2.2, 3.6) : 1;
       const b = new Body({
-        hx: s * rand(0.6, 1.3), hy: s * rand(0.5, 1), hz: s * rand(0.6, 1.3), mass: 0.25,
+        hx: s * rand(0.6, 1.3) * (bone ? 0.5 : 1), hy: s * rand(0.5, 1) * (bone ? 0.5 : 1), hz: s * rand(0.6, 1.3) * long, mass: 0.25,
         x: x + rand(-1, 1) * size[0] * 0.4, y: y + rand(-1, 1) * size[1] * 0.4, z: z + rand(-1, 1) * size[2] * 0.4,
         kind: 'gib', friction: 0.9, linDamp: 0.1, angDamp: 1.2, inertiaFloor: 0.0006,
       });
@@ -696,8 +705,8 @@ export class Gore {
       const isl = new Island(null); isl.add(b);
       g.world.addIsland(isl);
       const idx = g.boxes.alloc();
-      g.boxes.colorHex(idx, colours[i % colours.length]);
-      this.gibsList.push({ body: b, island: isl, idx, born: g.time, bled: 0 });
+      g.boxes.colorHex(idx, hex);
+      this.gibsList.push({ body: b, island: isl, idx, born: g.time, bled: bone ? 2 : 0 });
     }
   }
   _dropGib(i) {
@@ -740,6 +749,10 @@ export class Gore {
     if (this.enabled) this._dripBlades(dt);
     this._soakT += dt;
     if (this._soakT > 0.5) { this._soakT = 0; if (this.enabled) this._soakPools(); }
+    this._trailT = (this._trailT || 0) + dt;
+    if (this._trailT > 0.15) { this._trailT = 0; if (this.enabled) this._trails(); }
+    this._dryT = (this._dryT || 0) + dt;
+    if (this._dryT > 2) { this._dryT = 0; this._dry(); }
     this._drawDrops();
     this._moveDecals();
 
@@ -947,9 +960,69 @@ export class Gore {
           break;
         }
       }
+      // a car: blood on the paint, or the glass, wherever on it the drop actually lands
+      if (!hitSomething && g.traffic) {
+        const vv = Math.hypot(this.vx[i], this.vy[i], this.vz[i]) || 1, reach = vv * dt * 2 + 0.06;
+        for (const c of g.traffic.cars) {
+          if ((c.x - x) ** 2 + (c.z - z) ** 2 > 8) continue;
+          const t = c.ray(x - this.vx[i] * dt * 2, y - this.vy[i] * dt * 2, z - this.vz[i] * dt * 2, this.vx[i] / vv, this.vy[i] / vv, this.vz[i] / vv, reach, _carHit);
+          if (t < 0 || _carHit.glass === -2) continue;
+          if (this.kind[i] === 0 && Math.random() < 0.7) {
+            const sz = clamp(0.06 + Math.cbrt(this.ml[i]) * 0.06, 0.06, 0.3);
+            const d = this._attach(c.body, carDecal(c, _carHit.lp, _carHit.ln, sz, sz, rand(TAU), 0.008 + Math.random() * 0.004), pick(_carHit.ln[1] < 0.5 && Math.random() < 0.4 ? UV.drip : UV.splat), null, -1);
+            if (d) d.stain = true;
+            this.stats.onCars = (this.stats.onCars || 0) + 1;
+          }
+          hitSomething = true;
+          break;
+        }
+      }
       if (hitSomething) this.life[i] = 0;
     }
     this.live = live;
+  }
+
+  /** Somebody bleeding, dragged or crawling along the ground, leaves a smear the way they went. */
+  _trails() {
+    const g = this.game;
+    for (const hm of g.humans) {
+      if (hm.removed || hm.state !== 2 || hm.h.god || !(hm.h.bleedOut > 0.35)) continue;
+      // the lowest part that is bleeding
+      let b = null;
+      for (const w of hm.h.wounds) { if (w.flow > 0.05 && !w.gone && !hm.gone[w.part]) { const pb = hm.bodies[w.part]; if (!b || pb.py < b.py) b = pb; } }
+      if (!b) continue;
+      const gy = groundHeight(b.px, b.pz);
+      if (b.py - gy > b.boundR + 0.05) { hm._trail = null; continue; }
+      const last = hm._trail;
+      if (!last) { hm._trail = { x: b.px, z: b.pz }; continue; }
+      const dx = b.px - last.x, dz = b.pz - last.z, d = Math.hypot(dx, dz);
+      if (d < 0.26) continue;
+      const lx = last.x, lz = last.z;
+      last.x = b.px; last.z = b.pz;
+      if (d > 2.5) continue;                       // flung, not dragged
+      // an unbroken smear from where they were to where they are now
+      const a = clamp(hm.h.bleedOut / 5, 0.35, 0.9), n = Math.ceil(d / 0.4), rot = Math.atan2(-dx, dz);
+      for (let k = 0; k < n; k++) {
+        const u = (k + 0.5) / n;
+        this._groundDecal(pick(UV.smear), lx + dx * u, gy, lz + dz * u, rand(0.22, 0.32), (d / n) * 1.5 + 0.08, rot + rand(-0.12, 0.12), a * rand(0.8, 1));
+        this.stats.trails = (this.stats.trails || 0) + 1;
+      }
+    }
+  }
+
+  /** Blood on the ground goes dark as it dries: brown-black at the edges first, in a few minutes all of it. */
+  _dry() {
+    const now = this.game.time, G = this.ground;
+    for (let i = 0; i < G.count; i++) {
+      const info = this.gInfo[i];
+      if (!info || !info.blood) continue;
+      const age = now - info.born;
+      if (age < 25) continue;
+      const k = clamp((age - 25) / 200, 0, 1);
+      if (Math.abs(k - (info.dry || 0)) < 0.04) continue;
+      info.dry = k;
+      G.tint(i, 1 - 0.5 * k, 1 - 0.62 * k, 1 - 0.6 * k, info.alpha);
+    }
   }
 
   _drawDrops() {
