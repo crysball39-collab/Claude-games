@@ -1914,6 +1914,39 @@ if (want('Gore')) {
   check('blood on the ground goes dark as it dries', r.dryK > 0.9, `${r.dryK}`);
 }
 
+/* --------------------------------- pushing -------------------------------- */
+head('Pushing people');
+if (want('Pushing people')) {
+  const r = await run(() => {
+    const g = __game, p = g.player, inp = __ts.input, out = {};
+    V.stage(); g.paused = false;
+    // somebody standing in the road, and you walk into them and keep walking
+    const h = V.still(g.spawnHuman(1.2, -18, -Math.PI / 2)); g.advance(0.3);
+    const x0 = h.x, said0 = h.mind.want.length;
+    inp.move.y = 0.4;
+    let asked = false;
+    for (let i = 0; i < 12; i++) { g.advance(0.25); if (h.mind.want.some((w) => w.kind === 'bump') || h.mind.memory.some((m) => m.kind === 'pushed')) asked = true; }
+    inp.move.y = 0;
+    out.pushed = h.x - x0; out.gap = Math.hypot(p.x - h.x, p.z - h.z); out.upright = T.state(h) === 'ANIM'; out.noticed = asked;
+    out.faceErr = Math.abs(((Math.atan2(p.x - h.x, p.z - h.z) - h.yaw + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+    out.facing = out.faceErr < 0.6;
+    out.mem = h.mind.memory.slice(-3).map((m) => m.kind).join(',');
+    // and run into somebody: they go over, or stagger
+    V.stage(); g.paused = false;
+    const k = V.still(g.spawnHuman(5, -18, -Math.PI / 2)); g.advance(0.3);
+    inp.move.y = 1;
+    let knocked = false;
+    for (let i = 0; i < 25 && !knocked; i++) { g.advance(0.1); knocked = T.state(k) !== 'ANIM'; }
+    inp.move.y = 0;
+    out.knocked = knocked;
+    g.paused = true;
+    return out;
+  });
+  check('walk into somebody and keep walking: you push them back as you go', r.pushed > 1.2 && r.gap < 1.2 && r.upright, `${r.pushed.toFixed(2)} m in 3 s, still on their feet`);
+  check('they face whoever is pushing them, and mind it', r.facing && r.noticed, `facing off by ${r.faceErr.toFixed(2)} rad; noticed ${r.noticed} (${r.mem})`);
+  check('run into somebody and they are knocked off their feet', r.knocked);
+}
+
 /* --------------------------------- report ------------------------------- */
 const errors = t.logs.filter((l) => !/401|Failed to load resource|willReadFrequently/.test(l));
 head('Console');

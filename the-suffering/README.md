@@ -221,6 +221,11 @@ and it is a ragdoll, which gets up again if it can, crawls if it cannot walk, an
 still if it cannot do either. People crouch, jump, duck at gunshots, vault crates and
 leap out of the way of cars.
 
+**Pushing.** Walk into somebody and keep walking and you push them back ahead of you,
+a step at a time, a little slower than you walk; they keep facing you and tell you what
+they think of it, and kept up long enough it takes their feet from under them. Run into
+somebody and they are knocked over, or at least sent staggering.
+
 **Solid.** Bodies do not pass through each other, or through themselves. Lying,
 falling or heaped on each other, every part of every body collides with every other part
 it is not jointed to. On their feet, an arm the animation would put into the body (a

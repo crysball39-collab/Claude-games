@@ -742,6 +742,19 @@ export class Human {
     if (it.run && h.stamina < 35) top = lerp(Math.min(top, WALK * 1.25 * (this.scale / 0.93)), top, h.stamina / 35);
     let tvx = 0, tvz = 0;
     if (mag > 0.01) { tvx = it.mx / mag * top; tvz = it.mz / mag * top; }
+    // being pushed: whatever they meant to do, they go back the way they are pushed
+    const pv = this.pushV, pushed = !!pv && g.time - pv.t < 0.12;
+    if (pushed) {
+      tvx = tvx * 0.25 + pv.x; tvz = tvz * 0.25 + pv.z;
+      // shoved along long enough, or hard enough, and their feet go from under them
+      const hard = Math.hypot(pv.x, pv.z);
+      if (this.tripCool <= 0 && this.grounded && ((g.time - pv.since > 3 && chance(dt * 0.4)) || (hard > 2.6 && chance(dt * 1.5)))) {
+        this.tripCool = 2.5;
+        this.mind?.note('felt', 'pushed', 'was pushed off my feet', 0.7, { by: pv.by });
+        this.toStumble(30 + hard * 6, pv.x * 0.5, pv.z * 0.5);
+        return;
+      }
+    }
     if (this.cuffing) {
       const ct = this.cuffing.target, cdx = ct.x - this.x, cdz = ct.z - this.z, cd = Math.hypot(cdx, cdz);
       if (cd > 0.95) { tvx = cdx / cd * 1.7; tvz = cdz / cd * 1.7; }
@@ -759,8 +772,9 @@ export class Human {
     }
     this.speed = Math.hypot(this.vx, this.vz);
 
-    // which way to face
-    let face = it.face;
+    // which way to face (somebody being pushed, or just pushed, keeps their eyes on whoever did it)
+    const wary = !!pv && !!pv.by && g.time - pv.t < 1.5 && !pv.by.removed;
+    let face = wary ? Math.atan2(pv.by.x - this.x, pv.by.z - this.z) : it.face;
     if (this.cuffing) { const ct = this.cuffing.target; face = Math.atan2(ct.x - this.x, ct.z - this.z); }
     if (face == null && this.speed > 0.25) face = Math.atan2(this.vx, this.vz);
     if (face != null) this.yaw = turnToward(this.yaw, face, (it.face != null ? 13 : 9) * dt);
@@ -1021,13 +1035,22 @@ export class Human {
       // two people who find themselves on the same spot ease apart; they do not jump
       if (rr - d > 0.22) push = Math.min(push, 3.5 * this._dt);
       nx += dx / d * push; nz += dz / d * push;
-      // and whoever walks into somebody stops walking into them, and slides along instead of pressing on
+      // how fast this one is coming at them (measured before anything is done about it)
       const into = -(this.vx * dx + this.vz * dz) / d;
-      if (into > 0) { this.vx += dx / d * into; this.vz += dz / d * into; }
-      // barging into someone at a run knocks them about
-      if (o.state === ST.ANIM && this.speed > 3.6 && !o.isPlayer && (this.vx * -dx + this.vz * -dz) / d > 3 && o.tripCool <= 0) {
+      // you barging into someone at a run knocks them about, harder the faster
+      // (people on their own business swerve round each other instead)
+      if (this.isPlayer && o.state === ST.ANIM && this.speed > 3.2 && into > 2.6 && o.tripCool <= 0) {
         o.tripCool = 1.5;
-        o.shove(this.vx * 0.5, this.vz * 0.5, 34, this);
+        o.shove(-dx / d * into * 0.6, -dz / d * into * 0.6, 28 + into * 4.5, this);
+      } else if (into > 0) {
+        if (this.isPlayer && o.state === ST.ANIM && into > 0.2 && !o.cuffing && !this.cuffing && !this.cuffed && !this.anim.action) {
+          // you, leaning on them: they are pushed back as fast as you walk into them, and you go with them
+          // (the room each keeps from the other is what holds you to their pace)
+          o.pushedBy(this, -dx / d * into * 0.95, -dz / d * into * 0.95);
+        } else {
+          // anybody else walking into somebody stops walking into them, and slides along instead of pressing on
+          this.vx += dx / d * into; this.vz += dz / d * into;
+        }
       }
     }
     const lim = LIMIT - R;
@@ -1686,6 +1709,27 @@ export class Human {
     const s = Math.sin(this.yaw), c = Math.cos(this.yaw);
     this.anim.kick(dx * c - dz * s, dx * s + dz * c, force / 36);
     this.guardT = 4;
+  }
+
+  /**
+   * Somebody leaning into them at (vx, vz): they give way and are pushed
+   * along, facing whoever is doing it. Kept up long enough, it takes their
+   * feet from under them.
+   */
+  pushedBy(by, vx, vz) {
+    const now = this.game.time;
+    const p = this.pushV || (this.pushV = { x: 0, z: 0, t: -9, since: 0, by: null });
+    if (now - p.t > 0.5) {
+      // a new push: they notice, and they mind
+      p.since = now;
+      const m = this.mind;
+      if (m) {
+        m.note('felt', 'pushed', `was pushed by ${by.isPlayer ? 'the stranger' : 'someone'}`, 0.5, { by });
+        m.stir('surprise', 28); m.stir('anger', 10 + m.p.temper * 14);
+        m.ask('bump', 48, null, rand(0.1, 0.4));
+      }
+    }
+    p.x = vx; p.z = vz; p.t = now; p.by = by;
   }
 
   /** A push with no wound: being barged, or shoved. */
