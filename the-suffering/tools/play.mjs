@@ -3,7 +3,10 @@ import { open } from './harness.mjs';
 
 export async function play(opts = {}) {
   const t = await open(opts);
-  await t.page.waitForFunction(() => window.__game, { timeout: 90000 });
+  await t.page.waitForFunction(() => window.__game, null, { timeout: 180000 });
+  // nobody signed in on a fresh browser: the account screen comes first
+  t.authAtStart = await t.page.isVisible('#auth');
+  if (t.authAtStart) await t.page.click('#auth-guest');
   await t.page.click('#btn-play');
   await t.ev(() => {
     const g = window.__game, ts = window.__ts;

@@ -77,7 +77,6 @@ export class Powers {
     this.cast = null;              // fireballs still to come
     this.maul = null;
     this.leapT = 0;
-    this.kickers = new Set();      // people other than you in the middle of a Tempest Kick (a bot server's host)
     // things that glow: drawn unlit and added on to whatever is behind them
     this.glow = new Boxes(game.scene, 360, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending }), { shadows: false });
     this.leo = null;               // the leopard's boxes
@@ -95,7 +94,7 @@ export class Powers {
   get big() { return this.form === 'hybrid' ? 1.5 : 1; }
 
   choose(id) {
-    if (!this.has(id)) return false;
+    if (!this.has(id) || !this.g.auth || !this.g.auth.admin) return false;
     this.selected = id;
     this.g.ui?.abilitiesChanged();
     return true;
@@ -105,8 +104,8 @@ export class Powers {
   use(id = this.selected) {
     const g = this.g, p = g.player, a = ABILITY[id];
     if (!a) return false;
-    // on somebody else's server only its host has abilities
-    if (g.mp?.guest) { g.ui?.toast(`Only the host (${g.mp.hostName}) can use abilities on this server.`); return false; }
+    // abilities are the admin's, and nobody else's, single player or not
+    if (!g.auth || !g.auth.admin) { g.ui?.toast('Abilities are only for the admin account.'); return false; }
     if (!this.has(id)) { g.ui?.toast('That comes from the Cat-Cat Fruit. Eat it first (ABILITIES).'); return false; }
     if (p.state !== ST.ANIM || p.car || p.cuffed || !p.h.alive || !p.h.conscious || this.eating || this.maul || g.doctor != null) return false;
     // a form is put on, and taken off again, with the same button
@@ -128,32 +127,12 @@ export class Powers {
     return ok;
   }
 
-  /**
-   * Somebody other than you does the Tempest Kick: on somebody else's server,
-   * its host. Aimed at `target` if there is one. True if the kick has begun.
-   */
-  botKick(h, target = null) {
-    const g = this.g;
-    if (!h || h.isPlayer || h.removed || h.state !== ST.ANIM || h.car || h.cuffed || !h.h.alive || !h.h.conscious) return false;
-    if (h.anim.busy || h.swap || h.reload || !h.h.legOk(1) || !h.h.legOk(-1) || !h.grounded) return false;
-    if ((h.kickReady || 0) > g.time) return false;
-    const t = target && !target.removed && target !== h ? target : null;
-    if (t) h.intent.face = Math.atan2(t.x - h.x, t.z - h.z);
-    g.weapons._swing(h, 'tempestKick', DEF.tempest, t);
-    const act = h.anim.action;
-    if (!act) return false;
-    act.power = 'tempestKick';
-    h.kickReady = g.time + ABILITY.tempest.cool;
-    this.kickers.add(h);
-    return true;
-  }
-
   /* ---------------------------------- eating ---------------------------------- */
 
   /** The fruit: brought to the mouth three times, and then you are not quite what you were. */
   eat() {
     const g = this.g, p = g.player;
-    if (g.mp?.guest) { g.ui?.toast(`Only the host (${g.mp.hostName}) can use abilities on this server.`); return false; }
+    if (!g.auth || !g.auth.admin) { g.ui?.toast('Abilities are only for the admin account.'); return false; }
     if (this.fruit) { g.ui?.toast('You have already eaten it. Its power is yours.'); return false; }
     if (p.state !== ST.ANIM || p.car || p.cuffed || !p.h.alive || this.eating) return false;
     if (!p.attached[P.HAND_L] || !p.h.armOk(1)) { g.ui?.toast('You need a hand to eat it with.'); return false; }
@@ -240,10 +219,15 @@ export class Powers {
     const g = this.g, s = h.scale, big = h.isPlayer ? this.big : 1, [dx, dy, dz] = this._dir(h);
     const foot = h.bodies[P.FOOT_R];
     const x = h.x + dx * 0.55, y = clamp(foot.py, h.y + 0.75 * s, h.y + 1.55 * s), z = h.z + dz * 0.55;
-    const o = { kind: 'slash', x, y, z, dx, dy, dz, v: 30, t: 0, life: 1.05, w: 1.7 * big * s, power: 2.0 * big, by: h, hits: new Set(), stuck: new Set(), tilt: rand(-0.3, 0.3), inst: [] };
+    this._addSlash(h, x, y, z, dx, dy, dz, big, false);
+    if (h.isPlayer) g.mp?.powerFx('slash', [x, y, z], [dx, dy, dz], big);
+  }
+  _addSlash(h, x, y, z, dx, dy, dz, big, ghost) {
+    const g = this.g, s = h.scale;
+    const o = { kind: 'slash', x, y, z, dx, dy, dz, v: 30, t: 0, life: 1.05, w: 1.7 * big * s, power: 2.0 * big, by: h, hits: new Set(), stuck: new Set(), tilt: rand(-0.3, 0.3), inst: [], ghost };
     for (let i = 0; i < 18; i++) { const k = this.glow.alloc(); this.glow.color(k, i < 9 ? 0.5 : 0.14, i < 9 ? 1.0 : 0.55, i < 9 ? 0.55 : 0.2); o.inst.push(k); }
     this.shots.push(o);
-    this.stats.tempest++;
+    if (!ghost) this.stats.tempest++;
     g.audio?.at('tempest', x, y, z, 1);
     g.minds?.noise(x, y, z, 92, 'blow', h);
     g.minds?.witness({ kind: 'power', actor: h, power: 'tempest', x, y, z });
@@ -253,10 +237,15 @@ export class Powers {
   _ring(h) {
     const g = this.g, s = h.scale, big = h.isPlayer ? this.big : 1, [dx, dy, dz] = this._dir(h);
     const x = h.x + dx * 0.6, y = h.y + 1.05 * s, z = h.z + dz * 0.6;
-    const o = { kind: 'ring', x, y, z, dx, dy, dz, v: 17, t: 0, life: 1.15, R: 0.5 * big * s, power: 1.3 * big, by: h, spin: 0, inst: [] };
+    this._addRing(h, x, y, z, dx, dy, dz, big, false);
+    if (h.isPlayer) g.mp?.powerFx('ring', [x, y, z], [dx, dy, dz], big);
+  }
+  _addRing(h, x, y, z, dx, dy, dz, big, ghost) {
+    const g = this.g, s = h.scale;
+    const o = { kind: 'ring', x, y, z, dx, dy, dz, v: 17, t: 0, life: 1.15, R: 0.5 * big * s, power: 1.3 * big, by: h, spin: 0, inst: [], ghost };
     for (let i = 0; i < 20; i++) { const k = this.glow.alloc(); this.glow.color(k, 0.62, 0.66, 0.72); o.inst.push(k); }
     this.shots.push(o);
-    this.stats.swirls++;
+    if (!ghost) this.stats.swirls++;
     g.audio?.at('swirl', x, y, z, 1);
     g.minds?.witness({ kind: 'power', actor: h, power: 'swirl', x, y, z });
   }
@@ -354,10 +343,15 @@ export class Powers {
     if (target) { const b = target.bodies[P.CHEST]; dx = b.px - x; dy = b.py - y; dz = b.pz - z; }
     else { const a = g.aim; dx = a.dx; dy = a.dy; dz = a.dz; }
     const l = Math.hypot(dx, dy, dz) || 1;
-    const o = { kind: 'fire', x, y, z, dx: dx / l, dy: dy / l, dz: dz / l, v: 21, t: 0, life: 2.4, r: 0.15 * big, power: 1.2 * big, by: h, target, inst: [] };
+    this._addFire(h, x, y, z, dx / l, dy / l, dz / l, big, target, false);
+    if (h.isPlayer) g.mp?.powerFx('fire', [x, y, z], [dx / l, dy / l, dz / l], big);
+  }
+  _addFire(h, x, y, z, dx, dy, dz, big, target, ghost) {
+    const g = this.g;
+    const o = { kind: 'fire', x, y, z, dx, dy, dz, v: 21, t: 0, life: 2.4, r: 0.15 * big, power: 1.2 * big, by: h, target, inst: [], ghost };
     for (let i = 0; i < 3; i++) { const k = this.glow.alloc(); this.glow.color(k, [1, 1, 0.9][i], [0.9, 0.55, 0.2][i], [0.55, 0.12, 0.04][i]); o.inst.push(k); }
     this.shots.push(o);
-    this.stats.fireballs++;
+    if (!ghost) this.stats.fireballs++;
     g.audio?.at('fireball', x, y, z, 0.7);
     g.minds?.witness({ kind: 'power', actor: h, power: 'flame', x, y, z });
   }
@@ -476,12 +470,6 @@ export class Powers {
       if (act.power === 'tempestKick' && u >= 0.42) { act.fired = true; this._slash(p); }
       if (act.power === 'swirlKick' && u >= 0.5) { act.fired = true; this._ring(p); }
     }
-    // a host bot's Tempest Kick lets go of its slash the same way
-    for (const h of this.kickers) {
-      const a = h.anim.action;
-      if (h.removed || !a || a.power !== 'tempestKick' || h.state !== ST.ANIM) { this.kickers.delete(h); continue; }
-      if (!a.fired && a.t / a.clip.dur >= 0.42) { a.fired = true; this.kickers.delete(h); this._slash(h); }
-    }
     // a pointing finger goes back into the fist when the thrust is over
     if (!act || (act.name !== 'fingerPistol' && act.name !== 'fingerPistolL' && act.name !== 'doubleFinger')) { if (!this.later.length) p.point[0] = p.point[1] = 0; }
     if (this.leapT > 0) this._leapCheck();
@@ -501,7 +489,7 @@ export class Powers {
       o.t += dt;
       const alive = o.kind === 'slash' ? this._flySlash(o, dt) : o.kind === 'fire' ? this._flyFire(o, dt) : this._flyRing(o, dt);
       if (!alive || o.t > o.life) {
-        if (alive && o.kind === 'ring') this._burst(o.x, o.y, o.z, o.power * 0.8, o.by);
+        if (alive && o.kind === 'ring') this._burst(o.x, o.y, o.z, o.power * 0.8, o.by, o.ghost);
         if (alive && o.kind === 'fire') this._fizz(o);
         for (const k of o.inst) this.glow.release(k);
         this.shots.splice(i, 1);
@@ -515,6 +503,13 @@ export class Powers {
     }
     this._drawLeopard(dt);
     this._drawHybrid(dt);
+    // other players in a form
+    for (const h of g.humans) {
+      const c = h.costume;
+      if (!c || !c.form || h.removed) continue;
+      c.formT += dt;
+      if (c.form === 'leopard') this._drawLeopard(dt, c, h); else this._drawHybrid(dt, c, h);
+    }
     this.glow.commit();
   }
 
@@ -536,6 +531,7 @@ export class Powers {
       const sx = o.x + ux * f + o.dx * bow, sy = o.y + uy * f, sz = o.z + uz * f + o.dz * bow;
       // people: cut, and it goes on through
       const ph = g.rayPeople(sx, sy, sz, o.dx, o.dy, o.dz, stop, o.by, 0.03);
+      if (ph && !o.hits.has(ph.human) && o.ghost) { o.hits.add(ph.human); g.gore.puff('flash', sx + o.dx * ph.t, sy + o.dy * ph.t, sz + o.dz * ph.t, 0.3, 0.08, 0.4, 1, 0.5); }
       if (ph && !o.hits.has(ph.human)) {
         o.hits.add(ph.human);
         const t = ph.human, hx = sx + o.dx * ph.t, hy = sy + o.dy * ph.t, hz = sz + o.dz * ph.t;
@@ -634,7 +630,8 @@ export class Powers {
     const ph = g.rayPeople(o.x, o.y, o.z, o.dx, o.dy, o.dz, tw >= 0 ? tw : far, o.by, o.r);
     if (ph) {
       const hx = o.x + o.dx * ph.t, hy = o.y + o.dy * ph.t, hz = o.z + o.dz * ph.t;
-      this._fireHit(o, ph.human, ph.part, hx, hy, hz, ph.ln);
+      if (o.ghost) this._splash(hx, hy, hz, 0.8 * o.power, o.by, true);
+      else this._fireHit(o, ph.human, ph.part, hx, hy, hz, ph.ln);
       return false;
     }
     for (const pr of g.props) {
@@ -682,9 +679,11 @@ export class Powers {
   }
 
   /** A fireball going out where it lands: a splash of flame, a flash. */
-  _splash(x, y, z, k, by) {
+  _splash(x, y, z, k, by, ghost = false) {
     const g = this.g;
-    if (g.fire) for (let i = 0; i < 14; i++) g.fire._add(1, x, y, z, rand(-2.5, 2.5) * k, rand(0.5, 3) * k, rand(-2.5, 2.5) * k, rand(0.3, 0.7), rand(0.25, 0.5) * k, 1.6, by);
+    // a picture of somebody else's: flame that sets nothing alight here
+    if (g.fire && !ghost) for (let i = 0; i < 14; i++) g.fire._add(1, x, y, z, rand(-2.5, 2.5) * k, rand(0.5, 3) * k, rand(-2.5, 2.5) * k, rand(0.3, 0.7), rand(0.25, 0.5) * k, 1.6, by);
+    if (ghost) g.gore.puff('flash', x, y + 0.2, z, 0.7 * k, 0.3, 1, 0.55, 0.2);
     g.gore.puff('flash', x, y, z, 0.9 * k, 0.12, 1, 0.7, 0.3);
     g.gore.puff('smoke', x, y + 0.2, z, 0.7 * k, 1.2, 0.2, 0.18, 0.16);
     g.audio?.at('whump', x, y, z, 0.6);
@@ -703,21 +702,21 @@ export class Powers {
     for (let k = -1; k <= 1; k++) {
       const sx = o.x - o.dz * k * R * 0.7, sz = o.z + o.dx * k * R * 0.7;
       const ph = g.rayPeople(sx, o.y, sz, o.dx, o.dy, o.dz, tw >= 0 ? tw : far, o.by, R * 0.5);
-      if (ph) { o.x = sx + o.dx * ph.t; o.y += o.dy * ph.t; o.z = sz + o.dz * ph.t; this._burst(o.x, o.y, o.z, o.power, o.by); return false; }
+      if (ph) { o.x = sx + o.dx * ph.t; o.y += o.dy * ph.t; o.z = sz + o.dz * ph.t; this._burst(o.x, o.y, o.z, o.power, o.by, o.ghost); return false; }
     }
     for (const pr of g.props) {
       const tt = pr.vox ? pr.vox.ray(o.x, o.y, o.z, o.dx, o.dy, o.dz, far) : rayBody(pr.body, o.x, o.y, o.z, o.dx, o.dy, o.dz, far, null, R * 0.5);
-      if (tt >= 0) { o.x += o.dx * tt; o.y += o.dy * tt; o.z += o.dz * tt; this._burst(o.x, o.y, o.z, o.power, o.by); return false; }
+      if (tt >= 0) { o.x += o.dx * tt; o.y += o.dy * tt; o.z += o.dz * tt; this._burst(o.x, o.y, o.z, o.power, o.by, o.ghost); return false; }
     }
     if (g.traffic) for (const car of g.traffic.cars) {
       if (Math.hypot(car.x - o.x, car.z - o.z) > 5) continue;
       const tt = car.ray(o.x, o.y, o.z, o.dx, o.dy, o.dz, far, _ch);
-      if (tt >= 0) { o.x += o.dx * tt; o.y += o.dy * tt; o.z += o.dz * tt; this._burst(o.x, o.y, o.z, o.power, o.by); return false; }
+      if (tt >= 0) { o.x += o.dx * tt; o.y += o.dy * tt; o.z += o.dz * tt; this._burst(o.x, o.y, o.z, o.power, o.by, o.ghost); return false; }
     }
-    if (tw >= 0) { o.x += o.dx * tw; o.y += o.dy * tw; o.z += o.dz * tw; this._burst(o.x, o.y, o.z, o.power, o.by); return false; }
+    if (tw >= 0) { o.x += o.dx * tw; o.y += o.dy * tw; o.z += o.dz * tw; this._burst(o.x, o.y, o.z, o.power, o.by, o.ghost); return false; }
     o.x += o.dx * step; o.y += o.dy * step; o.z += o.dz * step;
     const gy = groundHeight(o.x, o.z);
-    if (o.y < gy + 0.2) { this._burst(o.x, gy + 0.2, o.z, o.power, o.by); return false; }
+    if (o.y < gy + 0.2) { this._burst(o.x, gy + 0.2, o.z, o.power, o.by, o.ghost); return false; }
     // drawn: a ring of white air, edge on to the way it goes, spinning; an inner swirl spinning the other way
     const fx = o.dx, fz = o.dz, sx = -fz, sz = fx;
     for (let i = 0; i < 20; i++) {
@@ -738,7 +737,7 @@ export class Powers {
   }
 
   /** The ring bursting into flame: everyone close is thrown down and set alight. */
-  _burst(x, y, z, power, by) {
+  _burst(x, y, z, power, by, ghost = false) {
     const g = this.g, R = 2.7 * power;
     this.stats.bursts++;
     g.audio?.at('whump', x, y, z, 1);
@@ -747,7 +746,7 @@ export class Powers {
     g.minds?.witness({ kind: 'explosion', x, y, z, by });
     const cam = Math.hypot(g.camX - x, g.camZ - z);
     g.shake = Math.max(g.shake, clamp(1.4 - cam / 12, 0.15, 1.4));
-    if (g.fire) for (let k = 0; k < 46; k++) {
+    if (g.fire && !ghost) for (let k = 0; k < 46; k++) {
       const a = rand(TAU), u = rand(0.1, 0.7), sp = rand(1.5, 5) * power;
       g.fire._add(1, x + Math.cos(a) * u, y + rand(-0.3, 0.5), z + Math.sin(a) * u, Math.cos(a) * sp, rand(1, 4.5) * power, Math.sin(a) * sp, rand(0.45, 0.95), rand(0.4, 0.8) * power, rand(1.6, 2.3), by);
     }
@@ -756,15 +755,21 @@ export class Powers {
     for (let k = 0; k < 6; k++) g.gore.puff('smoke', x + rand(-0.6, 0.6), y + rand(-0.2, 0.6), z + rand(-0.6, 0.6), rand(0.8, 1.3) * power, rand(0.5, 0.9), 0.95, 0.95, 0.97);
     this.glows.push({ x, y, z, c: 0xff9040, i: 34 * power, d: 14, t: 0, life: 0.45 });
     const gy = groundHeight(x, z);
-    if (g.fire && y - gy < 1.5) g.fire.patch(x, gy, z, 0.55 * power, rand(3, 5), by);
-    // people
-    for (const h of g.humans) {
+    if (g.fire && !ghost && y - gy < 1.5) g.fire.patch(x, gy, z, 0.55 * power, rand(3, 5), by);
+    // people (a picture of somebody else's burst hurts nobody here: whoever it caught has been told by its owner)
+    for (const h of ghost ? [] : g.humans) {
       if (h.removed || h === by || h.car) continue;
       const c = h.bodies[P.CHEST];
       const dx = c.px - x, dy = c.py - y, dz = c.pz - z, d = Math.hypot(dx, dy, dz);
       if (d > R) continue;
       const f = (1 - d / R) ** 1.5;
       const ux = dx / (d || 1), uy = dy / (d || 1), uz = dz / (d || 1);
+      if (h.puppet) {
+        // another player: thrown down and set alight on their own screen, by blows from you
+        h.hit({ part: P.CHEST, type: 'blunt', power: f * 2.4, point: [c.px - ux * 0.1, c.py - uy * 0.1, c.pz - uz * 0.1], dir: [ux, uy, uz], impulse: f * 150, lift: f * 90, attacker: by, weapon: 'swirl' });
+        if (g.fire) g.fire.ignite(h, P.CHEST, 0.35 + f * 0.6, by, 'swirl');
+        continue;
+      }
       if (h.h.god) continue;
       if (h.state !== ST.RAGDOLL && f > 0.22) h.toRagdoll();
       else if (h.state === ST.ANIM && f > 0.06) h.toStumble(40 + f * 60, ux * 4 * f, uz * 4 * f);
@@ -780,7 +785,7 @@ export class Powers {
       g.minds?.witness({ kind: 'attack', actor: by, victim: h, weapon: 'swirl', part: P.CHEST, x: c.px, y: c.py, z: c.pz, rep: { pain: 30, bones: [] } });
     }
     // things
-    for (const pr of g.props) {
+    for (const pr of ghost ? [] : g.props) {
       const b = pr.body;
       const dx = b.px - x, dy = b.py - y, dz = b.pz - z, d = Math.hypot(dx, dy, dz);
       if (d > R + 0.5) continue;
@@ -873,15 +878,15 @@ export class Powers {
   /* --------------------------------- drawing ---------------------------------- */
 
   /** A leopard: built once from boxes, and posed every frame where the player is. */
-  _drawLeopard(dt) {
-    const g = this.g, p = g.player, bx = g.boxes;
-    if (this.form !== 'leopard' || p.removed) return;
-    if (!this.leo) this.leo = this._buildLeopard();
-    const L = this.leo, s = p.scale * 1.05;
+  _drawLeopard(dt, c = this, p = this.g.player) {
+    const g = this.g, bx = g.boxes;
+    if (c.form !== 'leopard' || p.removed) return;
+    if (!c.leo) c.leo = this._buildLeopard();
+    const L = c.leo, s = p.scale * 1.05;
     const sp = Math.hypot(p.vx, p.vz);
-    this.phase = (this.phase + dt * sp / 1.9) % 1;
-    const run = clamp01(sp / 4), ph = this.phase * TAU;
-    const m = this.maul, mt = m ? m.t : 0;
+    c.phase = (c.phase + dt * sp / 1.9) % 1;
+    const run = clamp01(sp / 4), ph = c.phase * TAU;
+    const m = c.maul, mt = m ? m.t : 0;
     // the whole body: crouched and reaching while mauling, bounding while running
     const pitch = m ? 0.28 + Math.sin(mt * 18) * 0.05 : Math.sin(ph * 2) * 0.07 * run;
     const lift = m ? -0.12 : Math.abs(Math.sin(ph)) * 0.08 * run;
@@ -899,7 +904,7 @@ export class Powers {
       bx.set(i, ox + _a[0], oy + 0.6 * s + _a[1], oz + _a[2], q[0], q[1], q[2], q[3], sx * s, sy * s, sz * s);
     };
     const B = L.b;
-    const fp = g.firstPerson;
+    const fp = p.isPlayer && g.firstPerson;
     put(B.trunk, 0, 0.62, -0.02, 0.34, 0.34, 0.98);
     put(B.chest, 0, 0.6, 0.33, 0.37, 0.42, 0.4);
     put(B.belly, 0, 0.46, 0.02, 0.27, 0.1, 0.78);
@@ -935,7 +940,7 @@ export class Powers {
     // the tail: low, and curling up at the end, swinging with the stride
     let tx = 0, ty = 0.66, tz = -0.5, ta = 0.5;
     for (let i = 0; i < 6; i++) {
-      const sw = Math.sin(this.formT * 3 + i * 0.7) * 0.18 + Math.sin(ph) * 0.1 * run;
+      const sw = Math.sin(c.formT * 3 + i * 0.7) * 0.18 + Math.sin(ph) * 0.1 * run;
       ta += i < 3 ? 0.12 : -0.18;
       const seg = 0.14, ny = ty - Math.cos(ta) * seg * 0.2 + (i > 3 ? 0.04 : -0.02), nz = tz - seg;
       const nx = tx + sw * 0.05 * (i + 1);
@@ -970,11 +975,11 @@ export class Powers {
   }
 
   /** The hybrid: spots on the fur, a leopard's head over the face, a tail. */
-  _drawHybrid() {
-    const g = this.g, p = g.player, bx = g.boxes;
-    if (this.form !== 'hybrid' || p.removed) return;
-    if (!this.hyb) this.hyb = this._buildHybrid(p);
-    const H = this.hyb, s = p.scale;
+  _drawHybrid(dt, c = this, p = this.g.player) {
+    const g = this.g, bx = g.boxes;
+    if (c.form !== 'hybrid' || p.removed) return;
+    if (!c.hyb) c.hyb = this._buildHybrid(p);
+    const H = c.hyb, s = p.scale;
     // the front of the jacket: a white shirt, a black tie, the lapels, a red square in the pocket
     const ch = p.bodies[P.CHEST], cz = p.sizes[P.CHEST], fz = cz[2] * 0.5 * p.bulk / s;
     const suit = (i, lx, ly, lz, sx, sy, sz) => { if (p.gone[P.CHEST]) bx.hide(i); else bx.setOn(i, ch.px, ch.py, ch.pz, ch.qx, ch.qy, ch.qz, ch.qw, lx * s, ly * s, lz * s, sx * s, sy * s, sz * s); };
@@ -989,7 +994,7 @@ export class Powers {
       const b = p.bodies[sp.part], z = p.sizes[sp.part], k = p.bulk;
       bx.setOn(sp.i, b.px, b.py, b.pz, b.qx, b.qy, b.qz, b.qw, sp.u * z[0] * 0.5 * k, sp.v * z[1] * 0.5, sp.w * z[2] * 0.5 * k, sp.sx * s, sp.sy * s, sp.sz * s);
     }
-    const hd = p.bodies[P.HEAD], hz = p.sizes[P.HEAD], show = !p.gone[P.HEAD] && !(g.firstPerson);
+    const hd = p.bodies[P.HEAD], hz = p.sizes[P.HEAD], show = !p.gone[P.HEAD] && !(p.isPlayer && g.firstPerson);
     const on = (i, lx, ly, lz, sx, sy, sz) => { if (!show) bx.hide(i); else bx.setOn(i, hd.px, hd.py, hd.pz, hd.qx, hd.qy, hd.qz, hd.qw, lx * s, ly * s, lz * s, sx * s, sy * s, sz * s); };
     const f = hz[2] / s * 0.5;
     on(H.head.snout, 0, -0.045, f + 0.045, 0.12, 0.085, 0.09);
@@ -1007,7 +1012,7 @@ export class Powers {
     const pel = p.bodies[P.PELVIS], pz = p.sizes[P.PELVIS];
     let tx = 0, ty = -0.02, tz = -pz[2] / s * 0.5, ang = 0.9;
     for (let i = 0; i < 6; i++) {
-      const sw = Math.sin(this.formT * 2.6 + i * 0.6) * 0.06 * (i + 1);
+      const sw = Math.sin(c.formT * 2.6 + i * 0.6) * 0.06 * (i + 1);
       ang -= 0.17;
       const seg = 0.13, nx = sw, ny = ty - Math.cos(ang) * seg, nz = tz - Math.sin(ang) * seg;
       if (p.gone[P.PELVIS]) bx.hide(H.tail[i]);
@@ -1045,6 +1050,29 @@ export class Powers {
     return { spots, head, hat, suit, tail, all };
   }
 
+  /**
+   * Another player in a form, as their own game says: the hybrid's suit,
+   * claws and leopard's head on them, or the leopard drawn in their place.
+   * null takes it off again.
+   */
+  dress(h, form) {
+    const bx = this.g.boxes, c = h.costume || (h.costume = { form: null, leo: null, hyb: null, phase: 0, formT: 0, maul: null });
+    if (c.form === form) return;
+    if (c.form === 'hybrid') { h.setCoat(null); h.setClaws(false); h.beast = false; h.bulk = 1; }
+    if (c.form === 'leopard') h.hidden = false;
+    for (const set of [c.leo, c.hyb]) if (set) for (const i of set.all) bx.release(i);
+    c.leo = null; c.hyb = null; c.form = form; c.formT = 0;
+    if (form === 'hybrid') { h.setCoat(HYBRID_COAT); h.setClaws(true); h.beast = true; h.bulk = 1.06; }
+    if (form === 'leopard') h.hidden = true;
+  }
+
+  /** Another player's slash, ring or fireball, as it looks from here: it flies and bursts, and hurts nobody. */
+  ghost(kind, by, m, d, big = 1) {
+    if (kind === 'slash') this._addSlash(by, m[0], m[1], m[2], d[0], d[1], d[2], big, true);
+    else if (kind === 'ring') this._addRing(by, m[0], m[1], m[2], d[0], d[1], d[2], big, true);
+    else if (kind === 'fire') this._addFire(by, m[0], m[1], m[2], d[0], d[1], d[2], big, null, true);
+  }
+
   /** Back to the start: everything in flight gone, any form undone. */
   clear() {
     for (const o of this.shots) for (const k of o.inst) this.glow.release(k);
@@ -1052,7 +1080,6 @@ export class Powers {
     if (this.eating) this._stopEating(false);
     if (this.form) this.revert(true);
     this.cast = null; this.maul = null; this.leapT = 0;
-    this.kickers.clear();
   }
   /** The player has been put back together: a form does not survive it, the fruit does. */
   onRespawn() {

@@ -489,4 +489,36 @@ h1, h2, h3, p { margin: 0; }
   .srv.head { font-size: 8px; letter-spacing: 0.06em; }
 }
 
+/* -------------------------------- accounts -------------------------------- */
+#auth { z-index: 26; }
+.authcard { width: min(100%, 380px); text-align: left; max-height: 100%; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+@media (max-height: 460px) { .authcard .title.small { font-size: 26px; } .authcard { gap: 8px; padding: 14px 18px; } .field input { height: 34px; } }
+.authcard .title.small { text-align: center; }
+.authcard .tabs { padding: 0; justify-content: center; }
+#auth-form { display: grid; gap: 10px; }
+.field { display: grid; gap: 5px; font: 600 12px var(--body); color: var(--dim); }
+.field input { height: 40px; border-radius: 6px; border: 1px solid var(--line); background: var(--ink); color: var(--bone); padding: 0 10px; font: 14px var(--body); -webkit-user-select: text; user-select: text; touch-action: auto; }
+.auth-err { min-height: 16px; color: var(--bad); font: 600 12px/1.3 var(--body); }
+#auth-guest { justify-self: center; }
+.account-line { display: flex; align-items: center; justify-content: center; gap: 10px; font: 600 12.5px var(--body); color: var(--dim); }
+.account-line b { color: var(--bone); }
+.badge { display: inline-block; padding: 2px 6px; border-radius: 4px; background: #e8c25a; color: #1a1406; font: 800 9px/1 var(--display); letter-spacing: 0.12em; vertical-align: 1px; margin-left: 4px; }
+#cheats-locked { margin-top: 14px; }
+
+/* -------------------------------- admin menu ------------------------------ */
+#admin { border-color: #e8c25a; }
+#admin h2 { color: #e8c25a; }
+#ad-sub { font-size: 11.5px; color: var(--dim); margin-top: 3px; }
+#btn-admin { border-color: rgba(232, 194, 90, 0.6); }
+#btn-admin svg { stroke: #e8c25a; }
+.targets { display: grid; gap: 4px; }
+.tg { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 6px; background: var(--slate-2); border: 1px solid transparent; text-align: left; font: 600 12.5px var(--body); }
+.tg small { color: var(--dim); font: 600 10.5px var(--mono); }
+.tg.on { border-color: #e8c25a; background: rgba(120, 90, 20, 0.28); }
+.chip.go { border-color: var(--ok); }
+.chip.warn { border-color: var(--warn); }
+.chip.bad { border-color: var(--bad); }
+#ad-msg { min-height: 16px; }
+.list li .unban { padding: 4px 8px; font-size: 10px; }
+
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }

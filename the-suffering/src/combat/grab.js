@@ -54,7 +54,7 @@ export class Grab {
   /** Somebody who can be taken hold of: on the ground and past resisting, or a part of somebody that has come off. */
   _takesHuman(h, part) {
     const p = this.g.player;
-    if (!h || h === p || h.removed || h.gone[part]) return false;
+    if (!h || h === p || h.removed || h.gone[part] || h.puppet) return false;
     if (!h.attached[part]) return true;
     return h.state === ST.RAGDOLL && !h.car && (!h.h.alive || !h.h.conscious);
   }

@@ -88,7 +88,7 @@ export class UI {
     // each ability has a key of its own as well as POWER
     inp.onAbilityKey = (letter) => {
       if (!this.playing || g.paused) return;
-      if (g.mp?.guest) { this.toast(`Only the host (${g.mp.hostName}) can use abilities on this server.`); return; }
+      if (!g.auth || !g.auth.admin) { this.toast('Abilities are only for the admin account.'); return; }
       const a = ABILITIES.find((x) => x.key === letter);
       if (!a) return;
       if (!g.powers.has(a.id)) { this.toast(a.name + ' comes from the Cat-Cat Fruit. Eat it first (ABILITIES, or M).'); return; }
@@ -97,12 +97,13 @@ export class UI {
     inp.onCycle = (d) => w.cycle(d);
     inp.onKey = (k) => {
       if (!this.playing) return;
-      if (k === 'pause') { if (g.paused) this.resume(); else if (!$('#sandbox').hidden) this.toggleSandbox(false); else if (!$('#abilities').hidden) this.toggleAbilities(false); else if (!$('#players').hidden) this.mpui?.toggleList(false); else if (g.doctor) this.toggleDoctor(false); else this.pause('main'); }
+      if (k === 'pause') { if (g.paused) this.resume(); else if (!$('#sandbox').hidden) this.toggleSandbox(false); else if (!$('#abilities').hidden) this.toggleAbilities(false); else if (!$('#players').hidden) this.mpui?.toggleList(false); else if (!$('#admin').hidden) this.adminui?.toggle(false); else if (g.doctor) this.toggleDoctor(false); else this.pause('main'); }
       else if (g.paused) return;
       else if (k === 'menu') this.toggleSandbox();
       else if (k === 'abilities') this.toggleAbilities();
       else if (k === 'doctor') this.toggleDoctor();
       else if (k === 'players') this.mpui?.toggleList();
+      else if (k === 'admin') this.adminui?.toggle();
       else if (k === 'view') $('#btn-view').click();
       else if (k === 'talk') this.openTalk();
     };
@@ -175,6 +176,9 @@ export class UI {
     this.sound.suspend(true);
   }
   play() {
+    const g = this.g;
+    // signed in or out since the last time: you are who you are now
+    if (!g.mp?.on && (g.player.look.seed || 0) !== (g.lookSeed || 0)) g.respawn(true);
     $('#menu').hidden = true; $('#hud').hidden = false;
     this.playing = true;
     this.g.paused = false; this.input.enabled = true; this.input.reset(); this.input.enabled = true;
@@ -208,8 +212,8 @@ export class UI {
     const p = $('#sandbox');
     const show = on === undefined ? p.hidden : on;
     // on somebody else's server the sandbox is the host's
-    if (show && this.g.mp?.guest) { this.toast(`Only the host (${this.g.mp.hostName}) can spawn things on this server.`); return; }
-    if (show) { this.toggleDoctor(false); this.toggleAbilities(false); this.mpui?.toggleList(false); }
+    if (show && this.g.mp?.on && !this.g.mp.isHost) { this.toast(`Only the host (${this.g.mp.hostName}) spawns things on this server.`); return; }
+    if (show) { this.toggleDoctor(false); this.toggleAbilities(false); this.mpui?.toggleList(false); this.adminui?.toggle(false); }
     p.hidden = !show;
     $('#btn-menu').classList.toggle('on', show);
     if (show) { this.input.exitLock(); this._count(); }
@@ -220,8 +224,8 @@ export class UI {
     const p = $('#abilities');
     if (!p) return;
     const show = on === undefined ? p.hidden : on;
-    if (show && this.g.mp?.guest) { this.toast(`Only the host (${this.g.mp.hostName}) can use abilities on this server.`); return; }
-    if (show) { this.mpui?.toggleList(false); }
+    if (show && !(this.g.auth && this.g.auth.admin)) { this.toast('Abilities are only for the admin account.'); return; }
+    if (show) { this.mpui?.toggleList(false); this.adminui?.toggle(false); }
     if (show) { this.toggleDoctor(false); $('#sandbox').hidden = true; $('#btn-menu').classList.toggle('on', false); this.input.exitLock(); this._abilities(); }
     p.hidden = !show;
     $('#btn-abilities').classList.toggle('on', show);
@@ -272,14 +276,14 @@ export class UI {
     const P = this.g.powers, b = $('#btn-power');
     if (!P || !b) return;
     const a = ABILITY[P.selected];
-    b.hidden = !a || !P.has(a.id) || !!this.g.player.car || !!this.g.mp?.guest;
+    b.hidden = !a || !P.has(a.id) || !!this.g.player.car || !(this.g.auth && this.g.auth.admin);
     if (b.hidden) return;
     $('#power-label').textContent = a.form && P.form === a.id ? 'TURN BACK' : a.short;
     b.style.setProperty('--cd', P.coolFrac(a.id).toFixed(3));
   }
   toggleDoctor(on) {
     const show = on === undefined ? !this.g.doctor : on;
-    if (show) { $('#sandbox').hidden = true; $('#btn-menu').classList.toggle('on', false); $('#abilities').hidden = true; $('#btn-abilities').classList.toggle('on', false); $('#players').hidden = true; $('#mp-chip').classList.remove('on'); this.input.exitLock(); }
+    if (show) { $('#sandbox').hidden = true; $('#btn-menu').classList.toggle('on', false); $('#abilities').hidden = true; $('#btn-abilities').classList.toggle('on', false); $('#players').hidden = true; $('#mp-chip').classList.remove('on'); $('#admin').hidden = true; $('#btn-admin').classList.remove('on'); this.input.exitLock(); }
     this.doctor.open(show);
     $('#btn-doctor').classList.toggle('on', show);
     $('#doctor-hint').hidden = !show || !!this.g.selected;
@@ -287,7 +291,7 @@ export class UI {
   }
   /** Panels cover the thumb buttons on their side of the screen. */
   _layout() {
-    const doc = !!this.g.doctor || !$('#players').hidden, box = !$('#sandbox').hidden || !$('#abilities').hidden;
+    const doc = !!this.g.doctor || !$('#players').hidden, box = !$('#sandbox').hidden || !$('#abilities').hidden || !$('#admin').hidden;
     const portrait = window.innerHeight > window.innerWidth;
     $('#buttons').style.visibility = doc || (box && portrait) ? 'hidden' : '';
     $('#stick-zone').style.visibility = (box && !portrait) || ((doc || box) && portrait) ? 'hidden' : '';
@@ -328,7 +332,7 @@ export class UI {
   spawn(what) {
     const g = this.g, p = g.player;
     this.sound.unlock();
-    if (g.mp?.guest) { this.toast(`Only the host (${g.mp.hostName}) can spawn things on this server.`); return; }
+    if (g.mp?.on && !g.mp.isHost) { this.toast(`Only the host (${g.mp.hostName}) spawns things on this server.`); return; }
     if (what === 'human' || what === 'crowd') {
       const n = what === 'crowd' ? 5 : 1;
       for (let i = 0; i < n; i++) {
@@ -414,10 +418,23 @@ export class UI {
   }
 
   cheatChanged() {
-    const on = !!this.settings.cheatHp, tag = $('#v-cheat');
+    const on = !!this.settings.cheatHp && !!(this.g.auth && this.g.auth.admin), tag = $('#v-cheat');
     if (on && tag.hidden) { const p = this.g.player; if (!p.h.alive || p.h.missing.some((m) => m)) { this.g.respawn(false); $('#dead').hidden = true; this.deadT = 0; this.input.enabled = true; } else { const G = this.g.gore; for (let i = 0; i < G.N; i++) if (G.owner[i] === p) G.life[i] = 0; p.h.heal(); G.clearHuman(p); p.bloodied = 0; } }
     tag.hidden = !on;
     this.g.player.h.god = on;
+  }
+
+  /** Signed in or out: the abilities, the cheats and the admin menu follow who you are. */
+  authChanged() {
+    const g = this.g, admin = !!(g.auth && g.auth.admin);
+    const ab = $('#btn-abilities');
+    ab.classList.toggle('locked', !admin);
+    ab.title = admin ? '' : 'Abilities are only for the admin account';
+    if (!admin) { if (!$('#abilities').hidden) this.toggleAbilities(false); g.powers?.revert(true); }
+    $('#cheats').hidden = !admin; $('#cheats-locked').hidden = admin;
+    this.cheatChanged();
+    this.apply?.();
+    this._power();
   }
 
   _count() {
@@ -516,6 +533,7 @@ export class UI {
     if (this.hitT > 0 && (this.hitT -= dt) <= 0) $('#crosshair').classList.remove('hit');
     this.doctor.update(dt);
     this.mpui?.update(dt);
+    this.adminui?.update(dt);
     this.slow += dt;
     if (this.slow > 0.2) {
       this.slow = 0;

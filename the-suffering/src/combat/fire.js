@@ -89,6 +89,8 @@ export class Fire {
   /** A part of somebody catches (or burns harder). */
   ignite(h, part, amount, who = null, weapon = 'flamethrower') {
     if (!h || h.removed || h.gone[part]) return;
+    // another player: theirs to catch fire, on their own screen
+    if (h.puppet) { this.g.mp?.burnRemote(h, part, amount, who, weapon); return; }
     if (h.h.god) return;
     if (!h.fire) { h.fire = new Float32Array(PART_COUNT); h.burning = 0; }
     const first = !this.people.has(h);

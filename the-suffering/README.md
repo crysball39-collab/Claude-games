@@ -34,7 +34,7 @@ npm start            # python3 -m http.server 8080, from the repository root
 | Pick up / drop / reload | PICK UP, DROP, RELOAD | E, G, R |
 | Holster or draw | HOLSTER / DRAW | H |
 | Grab, drag or let go | GRAB (DRAG, LET GO); ATTACK throws what you carry | Z |
-| Special abilities menu | ABILITIES (beside SPAWN) | M |
+| Special abilities menu (the admin) | ABILITIES (beside SPAWN) | M |
 | Use the chosen ability | POWER | B, or each ability's own key: J K L U I O Y |
 | Weapon slots | tap a slot | 1 to 5 |
 | Sandbox menu | SPAWN | Tab |
@@ -42,6 +42,7 @@ npm start            # python3 -m http.server 8080, from the repository root
 | Say something | TALK | T |
 | First or third person | VIEW | V |
 | Players on a server | the chip at the top right | N |
+| Admin menu (the admin) | ADMIN (beside ABILITIES) | \` |
 | Pause | PAUSE | Esc or P |
 | Get into a car | DRIVE (or CARJACK) at a front door | E |
 | Drive | GAS and BRAKE pedals; BRAKE held at a standstill reverses | W / up, S / down |
@@ -97,7 +98,7 @@ from under the barrel and driven down it three times, put back, and the pan prim
 the lock cocked. The left hand goes to the muzzle and to the lock exactly, wherever the
 gun is. When you aim one, the left hand holds it out along the stock.
 
-**Special abilities.** ABILITIES, beside SPAWN, opens a menu of them. Tap one and the
+**Special abilities** (the admin account's alone; see *The admin* below). ABILITIES, beside SPAWN, opens a menu of them. Tap one and the
 POWER button uses it; on a keyboard B does, and each also has a key of its own. POWER
 sweeps dark while it gets ready again.
 
@@ -418,39 +419,59 @@ hurt asks the same thing twice and does not finish sentences; somebody on the ph
 - With neither, everyone keeps to their own lines. Reflex cries are always scripted, so
   nobody waits on a network to scream.
 
-**Multiplayer (bots only, for now).** MULTIPLAYER on the title screen opens a list of
-servers, each with its name, its mode and region, how many players are on it and its
-ping. JOIN one, or HOST your own (a name, up to 12 players, how many bots). Every other
-player on a server is a bot: a person in the city with a gamertag and a health bar over
-its head, a playstyle (aggressive, friendly, chaotic, a roleplayer, new to the game, a
-griefer, a camper) and the same body, weapons and senses as anyone. Bots walk, run and
-jump, pick up weapons and put on armour, draw, reload, holster and drop, fight with fists,
-blades and guns, take cars and drive off, and talk; they hear you when you TALK, by your
-name. A kill feed and chat run down the right of the screen; the chip at the top right
-(or N) lists the players with their kills, deaths and pings. A bot that dies is back six
-seconds later somewhere else.
+**Accounts.** The game opens on SIGN IN / SIGN UP: an email address (a Gmail address is
+fine), a password and, for a new account, the name other players see; or PLAY AS A GUEST.
+Gmail ignores dots, capitals and anything after a plus in an address, and so does the
+game. Neither the address nor the password is kept as typed: an account is filed under a
+SHA-256 hash of its address, and the password only as a salted PBKDF2 hash. On claude.ai
+an account is kept in your own private part of the page's store (nobody else can read it,
+the page's owner included); for someone the page lets read but not write, and in a copy of
+the game opened on its own, it is kept in that browser. Nothing sends email, so a
+forgotten password cannot be reset. The title screen says who is signed in, with SIGN OUT.
 
-- **Only the host spawns things and uses abilities.** On your own server that is you,
-  and the bots cannot. On somebody else's server the host is a bot: it can spawn things
-  (crates, people, officers, a car, weapons, armour) and do the Tempest Kick, and SPAWN,
-  ABILITIES and POWER are locked for you. The host can KICK bots from the players list.
-- **Bot brains.** With a Claude API key (*Pause -> Voices*), every bot's decisions are
-  made by Claude Haiku 5.5 at medium effort: every few seconds, and at once when you talk
-  to it or it is hurt, it is told what it can see (people, with what they hold and how they
-  are, items on the ground, cars), what it has heard and felt, what it carries and how its
-  last action went, and answers with one action and anything it wants to say, as JSON in a
-  fixed shape. Two requests are in flight at most. Each decision is billed to your key:
-  Haiku 5.5 is $0.10 / $0.50 per million input / output tokens, a decision sends about a
-  thousand tokens (the standing instructions are cached) and gets back at most 4,000
-  (thinking included), so each costs at most a fifth of a cent and usually far less. The
-  players list shows the decisions so far and what they cost by the API's own token
-  counts. Without a key, if a
-  request fails or is declined, or with Claude switched off on the multiplayer screen,
-  bots decide for themselves by their playstyle. Opened inside the Claude app, the page
-  may not contact the API, so there bots always use their own brains.
-- **What is not real (yet).** There is no network play: the servers, the other players
-  and their pings are made up on this device, and everything runs in this one page.
-  Joining a server gives you a fresh city; leaving it gives you a fresh city back.
+**The admin.** One account is the admin: the page owner's. It alone has the special
+abilities and the cheats, in single player too; for everyone else ABILITIES, POWER, the
+ability keys and the fruit are locked, and the Settings cheats are hidden and do nothing.
+The admin also has an ADMIN menu (the button beside ABILITIES, or the \` key): choose
+anyone on your server (you are at the top), then
+- **APPLY** a speed (0.25x to 4x), a max HP (100 is anybody; 400 loses blood four times
+  more slowly and takes a quarter of the punishment), a toughness (how hard they are to
+  knock over, 0.25x to 10x) and a wanted level (none, one star, two);
+- **KICK** them off the server (they may come back after a minute);
+- **BAN** them with a mod note they are shown and a length (10 minutes to for good); the
+  banned list underneath lifts a ban.
+
+What the admin sets on you lasts through a respawn. The admin's address is in the code
+only as a hash. On claude.ai only the page's owner can be the admin: anybody else is
+refused that address, the owner's platform id is written into the shared store (which
+only the owner can write), and every player's game believes an admin command only when
+the platform says it came from that id. Bans live in the store too, where only the owner
+can write them. In a copy of the game opened on its own there is nobody to check with, so
+whoever makes the admin account on that device has it, for that device's game.
+
+**Multiplayer.** MULTIPLAYER on the title screen, when the game is open on claude.ai, lists
+the servers people are hosting right now, each with its name, how many players are on it,
+and your ping to it (a real round trip, measured); JOIN one, or HOST your own (a name, up
+to 16 players). Everyone on a server is a real person with the game open, playing through
+the page's live room on claude.ai, so the people you play with are the people the page is
+shared with.
+
+- **Shared:** every player, exactly: their own game sends where each part of their body is,
+  fifteen times a second, with what they hold and wear, their armour, their form (the
+  hybrid, the leopard) and how they are, and the others draw a stand-in that follows it.
+  Blows, rounds, flames, tasers, cars and powers that land on a stand-in are sent to the
+  player it stands for, whose own game takes them; what that does to them comes back with
+  their body. Gunshots and powers are seen and heard by everyone. Cars go with whoever
+  drives them. What anybody says (TALK) shows over them and in the chat; deaths go in the
+  kill feed with who did it and with what. A name and a health bar over every other
+  player; the chip at the top right (or N) lists the players with kills, deaths and pings.
+- **The host** is whoever has been on the server longest, and only the host spawns things
+  there. When the host leaves, the next player in line hosts it and it stays in the list.
+- **Not shared, for now:** the city's own people, the police, the traffic and parked cars,
+  and anything spawned or lying about: each player has their own. Fights with your own
+  city's people happen only on your screen.
+- **Not here:** a copy of the game opened on its own has no room to play through, so it is
+  single player.
 
 **The police.** The station is across the road from the far side of the park: a
 forecourt with two patrol cars, a lobby you can walk into with a front desk and a cell,
@@ -493,7 +514,7 @@ At night the sky goes dark, windows are lit from inside, and every street lamp t
 pool of light on the pavement under it; the lamps, the fires and the floodlights you put
 out yourself are what you see by.
 
-**Cheats.** *Pause -> Settings -> Cheats -> Infinite HP.* Nothing injures you: no
+**Cheats** (the admin account's alone). *Pause -> Settings -> Cheats -> Infinite HP.* Nothing injures you: no
 wounds, no bleeding, nothing cut off, no dying, and whatever was wrong with you when you
 switched it on is mended. You can still be knocked over, tased and handcuffed.
 
@@ -515,10 +536,10 @@ node tools/overlap.mjs   # how far body parts get inside each other, scenario by
 | --- | --- |
 | `src/physics/world.js` | the rigid body engine: XPBD, joints with limits, muscles, sleeping islands |
 | `src/human/` | the rig, the animation and attack clips, the medical model, armour, the human itself |
-| `src/mind/` | senses, memory and emotion; behaviour; scripted lines; speech; the Claude connection; bot players (`botbrain.js`: what a bot sees and does; `botminds.js`: its decisions from Claude Haiku 5.5) |
-| `src/net/` | bot servers: the server list, hosting and joining, the bots on a server, the scoreboard |
+| `src/mind/` | senses, memory and emotion; behaviour; scripted lines; speech; the Claude connection |
+| `src/net/` | accounts (`accounts.js`); multiplayer over the claude.ai room (`multiplayer.js`: the server list, hosting and joining, other players' stand-ins, hits sent to their owners, the admin's commands and bans); a body's pose in a few hundred characters (`pose.js`) |
 | `src/combat/` | weapons and ballistics; blood, wounds and dismemberment |
 | `src/world/` | the city, its pavement network; cars (`car.js`: the model, glass, dents, damage) and everything with wheels (`traffic.js`: driving, collisions, crashes, explosions) |
 | `src/render/` | instanced boxes, decal batches, procedural textures |
-| `src/ui/` | the HUD, the sandbox menu, doctor mode, the multiplayer screens (`mpui.js`) |
+| `src/ui/` | the HUD, the sandbox menu, doctor mode, signing in (`authui.js`), the admin menu (`admin.js`), the multiplayer screens (`mpui.js`) |
 | `tools/` | tests, the browser harness, the swing solver, the build |

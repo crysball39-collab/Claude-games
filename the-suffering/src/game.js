@@ -149,7 +149,7 @@ export class Game {
     while (this.humans.length >= this.maxPeople) {
       let worst = null, score = -1;
       for (const h of this.humans) {
-        if (h.isPlayer || h === this.selected || (h.bot && h.h.alive)) continue;
+        if (h.isPlayer || h === this.selected || h.puppet) continue;
         const d = Math.hypot(h.x - this.player.x, h.z - this.player.z);
         const s = (h.h.alive ? 0 : 500 + h.deadFor) + d;
         if (s > score) { score = s; worst = h; }
@@ -546,7 +546,7 @@ export class Game {
   cleanUp(what) {
     if (what === 'blood' || what === 'all') this.gore.clean();
     if (what === 'bodies' || what === 'all') {
-      for (const h of this.humans.slice()) if (!h.isPlayer && !(h.bot && h.h.alive) && (!h.h.alive || what === 'all')) this.removeHuman(h);
+      for (const h of this.humans.slice()) if (!h.isPlayer && !h.puppet && (!h.h.alive || what === 'all')) this.removeHuman(h);
       for (const h of this.humans) for (const pc of h.pieces.slice()) h.dropPiece(pc.island);
       this.pieces.length = 0;
     }
@@ -570,13 +570,14 @@ export class Game {
     const i = this.humans.indexOf(old);
     old.remove();
     this.pieces = this.pieces.filter((pc) => pc.human !== old);
-    const p = this.player = new Human(this, playerLook(), x, z, this.camYaw, { player: true });
+    const p = this.player = new Human(this, playerLook(this.lookSeed || 0, this.playerName || ''), x, z, this.camYaw, { player: true });
     this.humans[i] = p;
     if (this.selected === old) this.selected = p;
     this.weapons?.onRespawn(old, p);
     this.powers?.onRespawn();
     this.minds?.playerChanged(old, p);
     this.police?.reset();
+    this.mp?.reapply();
     return p;
   }
 }

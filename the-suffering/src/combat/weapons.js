@@ -319,33 +319,6 @@ export class Weapons {
     return item;
   }
 
-  /**
-   * Somebody who is not the player picks a thing up off the ground: a weapon
-   * goes on to them, put away; armour is put on, and any they had on is left
-   * where the new one was.
-   */
-  takeFor(h, item) {
-    const g = this.game;
-    if (!h || h.isPlayer || h.removed || !item || !item.body || item.holder || h.cuffed || h.cuffing || h.state !== ST.ANIM) return false;
-    if (item.def.wear) {
-      const helmet = item.def.wear === 'helmet', kind = item.def.armour || 'light', on = helmet ? h.helmet : h.vest;
-      const x = item.body.px, y = item.body.py + 0.1, z = item.body.pz;
-      this.remove(item);
-      if (on) { const id = on.def.item; if (helmet) h.removeHelmet(); else h.removeVest(); if (id) this.spawn(id, x, y, z); }
-      if (helmet) h.wearHelmet(kind); else h.wearVest(kind);
-      g.audio?.at('pickup', h.x, h.y + 1, h.z, 0.4);
-      return true;
-    }
-    if (!h.h.armOk(-1)) return false;
-    const kit = h.kit || (h.kit = []);
-    if (kit.length >= 4) return false;
-    this._offGround(item);
-    item.holder = h;
-    kit.push(item);
-    g.audio?.at('pickup', h.x, h.y + 1, h.z, 0.4);
-    return true;
-  }
-
   /** Everything this person has on them. */
   kit(human) { return human.isPlayer ? this.inventory : human.kit || NONE; }
 
@@ -490,7 +463,7 @@ export class Weapons {
 
   /** Can this person be handcuffed as they are? Down, out cold, locked rigid by a taser, or given up. */
   cuffable(t) {
-    if (!t || t.removed || t.cuffed || !t.h.alive || t.car) return false;
+    if (!t || t.removed || t.cuffed || !t.h.alive || t.car || t.puppet) return false;
     for (const i of [P.FARM_L, P.FARM_R, P.HAND_L, P.HAND_R]) if (t.gone[i] || !t.attached[i]) return false;
     if (t.state !== ST.ANIM || t.tased > 0 || !t.h.conscious) return true;
     return t.pose.handsUp > 0.5 || t.pose.cower > 0.5;
@@ -619,7 +592,7 @@ export class Weapons {
     const g = this.game;
     let t = null, best = reach;
     for (const o of g.humans) {
-      if (o === p || o.removed) continue;
+      if (o === p || o.removed || o.puppet) continue;
       const d = Math.hypot(o.x - p.x, o.z - p.z);
       if (d < best && Math.abs(wrapAngle(Math.atan2(o.x - p.x, o.z - p.z) - g.camYaw)) < 1.25) { best = d; t = o; }
     }
@@ -773,6 +746,20 @@ export class Weapons {
     act.def = def; act.hits = new Set(); act.prev = null; act.landed = 0;
     g.audio?.at(def.blade ? 'swish' : 'whoosh', human.x, human.y + 1.2, human.z, 0.5);
     g.minds?.witness({ kind: 'swing', actor: human, weapon: def.id, x: human.x, y: human.y + 1.2, z: human.z });
+  }
+
+  /** Another player's shot, as it looks and sounds from here: the flash, the bang, and rounds that mark what they meet. */
+  ghostShot(h, type, m, dir) {
+    const g = this.game, d = WEAPONS[type];
+    if (!d || !d.gun || d.taser || d.flame) return;
+    for (let i = 0, n = d.pellets || 1; i < n; i++) {
+      let ex = dir[0], ey = dir[1], ez = dir[2];
+      if (d.pelletSpread) { ex += rand(-1, 1) * d.pelletSpread; ey += rand(-1, 1) * d.pelletSpread; ez += rand(-1, 1) * d.pelletSpread; const k = Math.hypot(ex, ey, ez) || 1; ex /= k; ey /= k; ez /= k; }
+      this._bullet(h, d, m[0], m[1], m[2], ex, ey, ez, d.power, i ? 1 : 0);
+    }
+    this._muzzle(m, dir[0], dir[1], dir[2], d);
+    g.audio?.at(d.sound, m[0], m[1], m[2], 1);
+    g.minds?.noise(m[0], m[1], m[2], d.loud, 'gunshot', h);
   }
 
   /** Someone who is not the player throws a punch. */
@@ -1317,6 +1304,7 @@ export class Weapons {
       if (ps) { const r = Math.sqrt(Math.random()) * ps, th = rand(0, 6.283); ex += Math.cos(th) * r * dz; ey += Math.sin(th) * r; ez -= Math.cos(th) * r * dx; const k = Math.hypot(ex, ey, ez); ex /= k; ey /= k; ez /= k; }
       this._bullet(p, d, m[0], m[1], m[2], ex, ey, ez, d.power, i ? 1 : 0);
     }
+    g.mp?.gunFx(d.id, [m[0], m[1], m[2]], [dx, dy, dz]);
     // what the shooter feels and sees
     p.anim.recoil = 1;
     g.camPitch += d.kick * rand(0.8, 1.2); g.camYaw += d.kick * rand(-0.45, 0.45);
@@ -1414,6 +1402,8 @@ export class Weapons {
 
     if (what === 4) {
       const t = ph.human, limb = ph.part >= P.UARM_L;
+      // another player's round, seen from here: it marks, it hurts nobody (whoever it hit has been told by its owner)
+      if (shooter.puppet) { g.gore.burst(hx, hy, hz, -dx, 0.4, -dz, 6, 2); g.audio?.at('flesh', hx, hy, hz, 0.6); return; }
       const rep = t.hit({ part: ph.part, type: 'bullet', power, point: [hx, hy, hz], dir: [dx, dy, dz], normal: ph.ln, impulse: d.impulse * power / d.power, through: ph.exit, hp: d.hp * power / d.power, attacker: shooter, weapon: d.id, rifle: !!d.rifle, ball: !!d.ball, shot: !!d.shot });
       g.audio?.at('flesh', hx, hy, hz, 0.8);
       if (depth === 0 && far < 1.5 && shooter.weapon && rep && !rep.stopped) g.gore.smear(shooter.weapon, far < 0.8 ? 2 : 1);

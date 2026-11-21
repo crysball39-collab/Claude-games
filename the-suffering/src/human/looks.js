@@ -1,5 +1,5 @@
 /* Who someone is: what they look like, what they are called, what they are like. */
-import { pick, rand, chance } from '../core/util.js';
+import { pick, rand, chance, mulberry } from '../core/util.js';
 
 const SKIN = [0xf1c9a5, 0xe4b48a, 0xd09a6a, 0xb07c4c, 0x8a5a32, 0x5f3d22];
 const HAIR = [
@@ -125,13 +125,28 @@ export function swatLook() {
   return L;
 }
 
-/** You. */
-export function playerLook() {
-  return {
+/**
+ * You. With a `seed` (each account has one), the same body in clothes, skin
+ * and hair of its own, the same on every screen: how other players know you.
+ */
+export function playerLook(seed = 0, name = '') {
+  const L = {
     sex: 'm', age: 30, name: 'You', first: 'You', scale: 0.94, build: 1.02, skin: 0xd9a676, hair: 0x241a14, hairName: 'dark', style: 'short', hat: 0,
     top: 0x23252a, pants: 0x2b3345, shoes: 0x141416, longSleeve: true, shorts: false,
     eye: '#3b2a1e', brow: 'rgb(26,18,14)', browW: 3, lip: 'rgb(150,100,80)', skinShade: 'rgb(150,112,80)', stubble: true,
     noun: 'man', wears: 'black hoodie', desc: 'a man in a black hoodie', outfit: 'black hoodie and dark jeans', pitch: 0.9, mass: 80,
     persona: { job: '', errand: '', quirk: '', bravery: 1, temper: 0.5, empathy: 0.5, cheer: 0.5, jumpy: 0, patience: 1, squeamish: 0, chatty: 0 },
   };
+  if (!seed) return L;
+  const r = mulberry(seed >>> 0), one = (a) => a[Math.floor(r() * a.length) % a.length];
+  L.seed = seed;
+  L.skin = one(SKIN); L.skinShade = darker(L.skin, 0.72); L.lip = darker(L.skin, 0.62);
+  [L.hair, L.hairName] = one(HAIR.slice(0, 5)); L.brow = darker(L.hair, 0.7);
+  L.style = one(['short', 'short', 'medium', 'bald', 'cap', 'beanie']);
+  const [top, topName] = one(TOPS), garment = one(GARMENT_LONG);
+  L.top = top; L.pants = one(BOTTOMS)[0]; L.shoes = one(SHOES); L.eye = one(EYES); L.stubble = r() < 0.5;
+  L.hat = L.style === 'cap' || L.style === 'beanie' ? one(TOPS)[0] : 0;
+  L.wears = topName + ' ' + garment; L.desc = `a man in ${/^[aeiou]/.test(topName) ? 'an' : 'a'} ${topName} ${garment}`;
+  if (name) { L.name = name; L.first = name; }
+  return L;
 }

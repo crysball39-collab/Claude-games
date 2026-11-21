@@ -203,6 +203,7 @@ export class Input {
       case 'Tab': if (isDown) this.onKey?.('menu'); break;
       case 'KeyX': if (isDown) this.onKey?.('doctor'); break;
       case 'KeyN': if (isDown) this.onKey?.('players'); break;
+      case 'Backquote': if (isDown) this.onKey?.('admin'); break;
       case 'KeyV': if (isDown) this.onKey?.('view'); break;
       case 'Escape': case 'KeyP': if (isDown) this.onKey?.('pause'); break;
       default:

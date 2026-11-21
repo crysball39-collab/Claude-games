@@ -27,6 +27,7 @@
     <div id="top-left">
       <button id="btn-menu" class="hb" aria-label="Sandbox menu"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>SPAWN</span></button>
       <button id="btn-abilities" class="hb wide" aria-label="Special abilities"><svg viewBox="0 0 24 24"><path d="M12 3l2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4z"/></svg><span>ABILITIES</span></button>
+      <button id="btn-admin" class="hb" aria-label="Admin menu" hidden><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg><span>ADMIN</span></button>
       <div id="vitals" aria-label="Your condition">
         <div class="vrow"><i>YOU</i><div class="vbar"><div id="v-cond"></div></div></div>
         <div class="vrow"><i>BLOOD</i><div class="vbar blood"><div id="v-blood"></div></div></div>
@@ -91,6 +92,29 @@
   <aside id="abilities" class="panel left" hidden>
     <header><h2>ABILITIES</h2><button class="x" data-close="abilities" aria-label="Close">&times;</button></header>
     <div class="scroll" id="abilities-body"></div>
+  </aside>
+
+  <!-- ============================== ADMIN MENU ============================ -->
+  <aside id="admin" class="panel left" hidden>
+    <header><div><h2>ADMIN</h2><div id="ad-sub"></div></div><button class="x" id="ad-close" aria-label="Close">&times;</button></header>
+    <div class="scroll">
+      <h3>Who</h3>
+      <div id="ad-targets" class="targets"></div>
+      <h3>Set</h3>
+      <label class="set"><span>Speed <output id="ad-speed-n">1x</output></span><input type="range" id="ad-speed" min="0.25" max="4" step="0.25" value="1" /></label>
+      <label class="set"><span>Max HP <output id="ad-hp-n">100</output></span><input type="range" id="ad-hp" min="25" max="1000" step="25" value="100" /></label>
+      <label class="set"><span>Toughness <output id="ad-tough-n">1x</output></span><input type="range" id="ad-tough" min="0.25" max="10" step="0.25" value="1" /></label>
+      <p class="note">Toughness is how hard they are to knock over. Max HP 100 is anybody; 200 takes twice the punishment.</p>
+      <label class="set"><span>Wanted level</span><select id="ad-wanted"><option value="0">None</option><option value="1">&#9733;</option><option value="2">&#9733;&#9733;</option></select></label>
+      <div class="row"><button class="chip go" id="ad-apply">APPLY</button><button class="chip warn" id="ad-kick">KICK</button></div>
+      <h3>Ban</h3>
+      <label class="set"><span>Mod note</span><input type="text" id="ad-note" maxlength="200" placeholder="Why, for them to read" autocomplete="off" /></label>
+      <label class="set"><span>Length</span><select id="ad-length"><option value="600000">10 minutes</option><option value="3600000" selected>1 hour</option><option value="86400000">1 day</option><option value="604800000">7 days</option><option value="2592000000">30 days</option><option value="0">For good</option></select></label>
+      <div class="row"><button class="chip bad" id="ad-ban">BAN</button></div>
+      <p class="note" id="ad-msg"></p>
+      <h3>Banned</h3>
+      <ul id="ad-bans" class="list"></ul>
+    </div>
   </aside>
 
   <!-- ============================ SANDBOX MENU ============================ -->
@@ -255,11 +279,14 @@
           <label class="set"><span>People on the street</span><input type="range" id="set-people" min="0" max="20" value="12" /></label>
           <label class="set"><span>Cars on the street</span><input type="range" id="set-cars" min="0" max="10" value="6" /></label>
           <label class="set"><span>Time of day</span><select id="set-tod"><option value="day">Afternoon</option><option value="dusk">Dusk</option><option value="night">Night</option></select></label>
-          <h3 class="sub">Cheats</h3>
+          <div id="cheats">
+          <h3 class="sub">Cheats <span class="badge">ADMIN</span></h3>
           <label class="set"><span>Infinite HP</span><input type="checkbox" id="set-cheat-hp" /></label>
           <p class="note">Nothing can injure you: no wounds, no bleeding, nothing cut off, no dying. You can still be knocked over, tased and handcuffed.</p>
           <label class="set"><span>Police ignore you</span><input type="checkbox" id="set-cheat-cops" /></label>
           <p class="note">You are never wanted. Officers still stop you waving a weapon in their faces.</p>
+          </div>
+          <p class="note" id="cheats-locked">Cheats are only for the admin account.</p>
         </section>
         <section data-ppane="ai" hidden>
           <p class="note">Everyone in the city sees, hears and feels for themselves, and has plenty to say about it from their own stock of lines. Connect them to Claude and they can say anything at all.</p>
@@ -278,7 +305,7 @@
             <p>Left thumb moves. Drag anywhere else to look. JUMP and CROUCH sit by the right thumb.</p>
             <p>The big button attacks. Tap it again and again for a four move combo; slide your thumb off it left, right, up or down to choose the next move yourself.</p>
             <p>SPAWN opens the sandbox: humans, police officers, a S.W.A.T. team, crates, wooden and steel walls, steel beams, a light bulb, a floodlight, a generator, a car, a police car, a van, rope, wire, light, medium and S.W.A.T. vests and helmets, handcuffs, a poison syringe, the M1911, the Glock-19, the AK-47, the M4A1, the AR-15, the musket, the arquebus, the blunderbuss, the flamethrower, the taser, the knife, the machete, the sword and the crowbar. Walk up to a weapon and PICK UP, or to a vest or a helmet and PUT ON.</p>
-            <p>ABILITIES, beside SPAWN: choose one and POWER uses it. Tempest Kick sends a green slash flying from your kick. Eat the Cat-Cat Fruit, Model: Leopard, for six more: Finger Pistol, Leo's Flame (five fireballs at the nearest person), Swirling Kick (a ring of air that bursts into flame), Full Leopard (run into somebody to maul them), Leopard Leap and Hybrid Transform (claws; every attack bigger, stronger and faster). A form is turned off with the same button.</p>
+            <p>ABILITIES, beside SPAWN (the admin account only): choose one and POWER uses it. Tempest Kick sends a green slash flying from your kick. Eat the Cat-Cat Fruit, Model: Leopard, for six more: Finger Pistol, Leo's Flame (five fireballs at the nearest person), Swirling Kick (a ring of air that bursts into flame), Full Leopard (run into somebody to maul them), Leopard Leap and Hybrid Transform (claws; every attack bigger, stronger and faster). A form is turned off with the same button.</p>
             <p>GRAB takes hold of what is in front of you: a crate, a lamp, a loose beam, a severed limb, or somebody lying on the ground out cold or dead. Your arm reaches for it and your hand closes on it. Light things are carried (ATTACK throws them); heavy things and people are dragged as you walk, as slowly as their weight makes you. GRAB again lets go.</p>
             <p>The musket, the arquebus and the blunderbuss are black powder, one shot each: the priming flashes, then the charge goes off in a cloud of smoke. Sometimes it only flashes in the pan; fire again. RELOAD is the whole drill: powder and ball down the muzzle, the ramrod, the pan primed. The blunderbuss throws a spread of shot.</p>
             <p>Armour: a light vest covers the chest and the belly; a medium one the whole torso; a S.W.A.T. vest has plates front and back that stop rifle rounds. A medium helmet comes down over the ears; a S.W.A.T. helmet has a visor that stops a few pistol rounds before it is crazed.</p>
@@ -296,9 +323,11 @@
             <p>Settings has the time of day (afternoon, dusk or night) and a Cheats section: Infinite HP means nothing can injure you, and Police ignore you keeps the wanted level at nothing.</p>
             <p>DOCTOR lets you tap anyone to read their condition (blood, air, pulse, pain, nausea, temperature, breathing), their state (awareness, dizziness, stamina, adrenaline, poison and shock), their emotions and an X-ray of their bones and organs.</p>
             <p>TALK lets you say something. Whoever is close enough to hear it will answer.</p>
-            <p>MULTIPLAYER, on the title screen: bot servers only, for now. Pick a server from the list (its name, how many players are on it, its ping) and JOIN, or HOST one of your own. Every other player is a bot with a name over its head. With a Claude API key (Settings, VOICES) each bot's decisions are made by Claude Haiku 5.5 at medium effort, from what it can see, hear and feel: it walks, runs and drives, picks up weapons and armour, fights, talks back. Without a key the bots use brains of their own. Only the host can spawn things and use abilities: on your own server that is you; on somebody else's it is their host, and SPAWN and ABILITIES are locked for you. The chip at the top right (or N) lists the players with their kills, deaths and ping; the host can KICK. The servers and pings are simulated on this device: there is no online play yet.</p>
+            <p>Accounts: SIGN UP with an email address (a Gmail address is fine) and a password, or play as a guest. Passwords are kept only as a salted hash; on claude.ai your account is kept privately with your Claude account for this game, anywhere else in this browser.</p>
+            <p>MULTIPLAYER, on the title screen, when the game is open on claude.ai: a list of the servers people are hosting right now, with each one's name, how many players are on it and your ping to it. JOIN one, or HOST your own. Everyone on a server is a real person: you see each other move, fight (blows, rounds, flames and powers land on the other player's own game), talk and drive. The chip at the top right (or N) lists the players with their kills, deaths and ping. The city's own people, the police, the traffic and anything spawned are still each player's own. Only the host spawns things on a server.</p>
+            <p>The admin account alone has the special abilities and the cheats, single player too, and an ADMIN menu (or the ` key): choose anyone on your server (you are at the top), then APPLY a speed, max HP, toughness (how hard they are to knock over) and wanted level, KICK them, or BAN them for a time with a note they are shown.</p>
             <h3>Keyboard and mouse</h3>
-            <p>WASD move (Shift walks) &middot; mouse looks (click to capture) &middot; Space jump &middot; C crouch &middot; left click or F attack &middot; right click or Q heavy attack &middot; R reload &middot; E pick up &middot; G drop &middot; H holster or draw &middot; Z grab, drag or let go &middot; M abilities &middot; B use the chosen ability (or J K L U I O Y for each) &middot; 1-5 weapons &middot; Tab sandbox &middot; X doctor &middot; T talk &middot; V view &middot; N players (on a server) &middot; Esc pause</p>
+            <p>WASD move (Shift walks) &middot; mouse looks (click to capture) &middot; Space jump &middot; C crouch &middot; left click or F attack &middot; right click or Q heavy attack &middot; R reload &middot; E pick up &middot; G drop &middot; H holster or draw &middot; Z grab, drag or let go &middot; M abilities &middot; B use the chosen ability (or J K L U I O Y for each) &middot; 1-5 weapons &middot; Tab sandbox &middot; X doctor &middot; T talk &middot; V view &middot; N players (on a server) &middot; ` admin (the admin) &middot; Esc pause</p>
             <p>In a car: W or up is the gas &middot; S or down brakes, then reverses &middot; A / D or left / right steer &middot; Space handbrake &middot; H horn (and siren) &middot; E gets out</p>
           </div>
         </section>
@@ -310,20 +339,33 @@
     <div class="card wide mpcard">
       <h1>MULTIPLAYER</h1>
       <div class="scroll">
-        <p class="note top">Bot multiplayer only, for now: every other player on a server is a bot. The servers, the players on them and their pings are made up on this device; there is no online play yet.</p>
-        <label class="set"><span>Your name</span><input type="text" id="mp-name" maxlength="16" autocomplete="off" spellcheck="false" /></label>
-        <div id="mp-brain" class="status"></div>
-        <label class="set"><span>Bots think with Claude Haiku 5.5 (medium effort)</span><input type="checkbox" id="mp-claude" checked /></label>
+        <div id="mp-status" class="status"></div>
         <div class="mp-head"><h3>Servers</h3><button class="chip" id="mp-refresh">REFRESH</button></div>
         <div class="srv head"><span>SERVER</span><span>PLAYERS</span><span>PING</span><span></span></div>
         <div id="mp-servers" class="servers"></div>
         <h3>Host a server</h3>
         <label class="set"><span>Server name</span><input type="text" id="mp-host-name" maxlength="40" autocomplete="off" spellcheck="false" /></label>
-        <label class="set"><span>Players</span><select id="mp-max"><option>4</option><option>6</option><option selected>8</option><option>10</option><option>12</option></select></label>
-        <label class="set"><span>Bots <output id="mp-bots-n">5</output></span><input type="range" id="mp-bots" min="1" max="7" value="5" /></label>
-        <p class="note">On your own server you are the host, and only the host can spawn things and use abilities: the bots that join cannot. Join somebody else's server and its host is a bot, who can, and you cannot.</p>
+        <label class="set"><span>Players</span><select id="mp-max"><option>2</option><option>4</option><option>6</option><option selected>8</option><option>12</option><option>16</option></select></label>
+        <p class="note">Everyone on a server is a real person with the game open. You see each other, fight each other (the hits are real on both sides), talk, and see each other's cars. The city's own people, the police, the traffic and anything spawned are still each player's own. The host is whoever has been on the server longest; only the host can spawn things there.</p>
         <div class="col mp-go"><button class="mb primary" id="mp-host">HOST</button><button class="mb" id="mp-back">BACK</button></div>
       </div>
+    </div>
+  </div>
+
+  <div id="auth" class="overlay solid" hidden>
+    <div class="card authcard">
+      <h1 class="title small">THE SUFFERING</h1>
+      <nav class="tabs" id="auth-tabs"><button data-atab="in" class="on">SIGN IN</button><button data-atab="up">SIGN UP</button></nav>
+      <form id="auth-form" autocomplete="on">
+        <label class="field" id="auth-name-row" hidden><span>Name other players see</span><input type="text" id="auth-name" maxlength="16" autocomplete="nickname" spellcheck="false" /></label>
+        <label class="field"><span>Email (Gmail)</span><input type="email" id="auth-email" maxlength="254" autocomplete="email" placeholder="you@gmail.com" spellcheck="false" /></label>
+        <label class="field"><span>Password</span><input type="password" id="auth-pass" maxlength="200" autocomplete="current-password" /></label>
+        <label class="field" id="auth-confirm-row" hidden><span>Password again</span><input type="password" id="auth-confirm" maxlength="200" autocomplete="new-password" /></label>
+        <p class="auth-err" id="auth-err" role="alert"></p>
+        <button class="mb primary" id="auth-go" type="submit">SIGN IN</button>
+      </form>
+      <button class="chip" id="auth-guest">PLAY AS A GUEST</button>
+      <p class="note" id="auth-note"></p>
     </div>
   </div>
 
@@ -337,6 +379,7 @@
         <button class="mb" id="btn-settings">SETTINGS</button>
         <button class="mb" id="btn-help">HOW TO PLAY</button>
       </div>
+      <div id="menu-account" class="account-line"><span id="menu-who"></span><button class="chip" id="btn-account">SIGN IN</button></div>
       <p class="menu-foot">Works best turned sideways. Contains a great deal of blood.</p>
     </div>
   </div>

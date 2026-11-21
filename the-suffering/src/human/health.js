@@ -96,6 +96,7 @@ export class Health {
   constructor(o = {}) {
     this.mass = o.mass ?? 72;
     this.tough = o.tough ?? 1;
+    this.hpMul = 1;                    // the admin's max HP, over 100: this many times as much takes them as anybody
     this.scale = o.scale ?? 1;         // how big they are next to the rig, for where things sit inside them
     this.bloodMax = Math.round(this.mass * 70);
     this.blood = this.bloodMax;
@@ -312,7 +313,7 @@ export class Health {
     const out = { part, type, pain: 0, wound: null, exit: null, bones: [], organs: [], severed: -1, burst: false, arterial: false, killed: false, ko: false, bled: 0 };
     if (!this.alive && type === 'blunt') { this._structural(part, power * 4, out, false); return out; }
     if (this.missing[part] || this.god) return out;
-    const p = power / this.tough;
+    const p = power / (this.tough * this.hpMul);
     const head = part === P.HEAD, neck = part === P.NECK, chest = part === P.CHEST, belly = part === P.ABDOMEN, hips = part === P.PELVIS;
     const torso = chest || belly || hips;
     const limb = LIMB_BONE[part];
@@ -589,7 +590,8 @@ export class Health {
     this.chestBlood = Math.min(1800, this.chestBlood + lungBleed * pressure * dt);
     this.bleedOut = out; this.bleedIn = inside;
     if (this.blood > 0) {
-      const lost = Math.min(this.blood, (out + inside) * dt);
+      // the admin's max HP: somebody with more of it loses blood that many times more slowly
+      const lost = Math.min(this.blood, (out + inside) * dt / this.hpMul);
       this.blood -= lost;
       this.spilled += Math.min(lost, out * dt);
     }

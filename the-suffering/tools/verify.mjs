@@ -3,6 +3,7 @@
    supposed to do. Run with: npm run verify
    ========================================================================== */
 import { play } from './play.mjs';
+import { openMany, TEST_ADMIN } from './harness.mjs';
 import { installOV } from './overlap.mjs';
 import { LINE_COUNT } from '../src/mind/lines.js';
 
@@ -43,8 +44,18 @@ await run(() => {
     give(type) { const p = g.player; const it = g.weapons.spawn(type, p.x + 0.3, 1, p.z); g.advance(0.3); g.weapons.pickUp(it); g.advance(0.3); return it; },
     aimAt(b) { const a = g.aim; const dx = b.px - a.ox, dy = b.py - a.oy, dz = b.pz - a.oz; g.camYaw = Math.atan2(dx, dz); g.camPitch = Math.atan2(dy, Math.hypot(dx, dz)); },
     still(h) { h.brain = { update() {}, pause: 0, mode: 'wander' }; return h; },
+    /** Signed in as the test admin (whose address the test pages are told is the admin's). */
+    async admin() {
+      const a = ts.auth;
+      if (a.admin) return;
+      let r = await a.signIn({ email: 'admin@test.invalid', password: 'admin-pass-1' });
+      if (r.error) r = await a.signUp({ email: 'admin@test.invalid', password: 'admin-pass-1', confirm: 'admin-pass-1', name: 'Admin' });
+    },
   };
 });
+
+/* the suite plays as the admin (the abilities and the cheats are the admin's); the account and admin sections sign out to check everybody else */
+await run(() => V.admin());
 
 /* ------------------------------- the page ------------------------------- */
 head('Page');
@@ -1178,6 +1189,11 @@ if (want('Blood runs')) {
     w.give(p, 'm4a1', true); g.advance(0.9);
     for (let k = 0; k < 6; k++) { V.aimAt(v.bodies[2]); g.advance(1 / 60); }
     for (let i = 0; i < 2; i++) { w.fire(); g.advance(0.3); }
+    // as tough as this, a round comes out of the back only half the time: a few more until one has
+    for (let i = 0; i < 4 && !v.h.wounds.some((x) => x.type === 'exit'); i++) {
+      for (let k = 0; k < 4; k++) { V.aimAt(v.bodies[2]); g.advance(1 / 60); }
+      w.fire(); g.advance(0.3);
+    }
     g.advance(15);
     G._wallRun = wr;
     const mine = G.bDecals.filter((x) => x.human === v);
@@ -1196,6 +1212,7 @@ if (want('Blood runs')) {
     for (let i = 0; i < 6; i++) { if (!p.anim.busy) w.attack(i % 2); g.advance(0.4); }
     g.advance(5);
     out.blade = G.stats.bladeDrips - b0;
+    g.settings.cheatCops = false;
     g.paused = true;
     return out;
   });
@@ -1657,7 +1674,8 @@ if (want('S.W.A.T')) {
     out.n = team.length;
     out.kit = team.map((h) => ({ officer: h.officer, vest: h.vest && h.vest.kind, helm: h.helmet && h.helmet.kind, kit: (h.kit || []).map((i) => i.type).sort().join(','), dark: h.look.top === 0x1c1f26 }));
     // at two stars, the reinforcements that come out of the station are S.W.A.T.
-    T.clear(); g.police.reset(); g.staffStation(true); g.advance(0.3);
+    // (an earlier section leaves the police-ignore-you cheat on, and the suite plays as the admin, for whom it works)
+    T.clear(); g.settings.cheatCops = false; g.police.reset(); g.staffStation(true); g.advance(0.3);
     g.police.raise(2, 'test', { x: g.player.x, z: g.player.z });
     let swat = 0;
     for (let i = 0; i < 40; i++) { g.advance(0.5); swat = g.humans.filter((h) => h.swat).length; if (swat) break; }
@@ -2162,7 +2180,7 @@ if (want('Grab and drag')) {
 
 head('Special abilities');
 if (want('Special abilities')) {
-  await run(() => { V.stage(); __game.paused = false; __game.powers.forget(); });
+  await run(async () => { await V.admin(); V.stage(); __game.paused = false; __game.powers.forget(); });
   await t.page.click('#btn-abilities');
   const menu = await run(() => {
     const a = document.querySelector('#btn-abilities').getBoundingClientRect(), b = document.querySelector('#btn-menu').getBoundingClientRect();
@@ -2251,6 +2269,7 @@ if (want('Special abilities')) {
 /* ------------------------------ the hybrid's suit ------------------------------ */
 head('Hybrid suit');
 if (want('Hybrid suit')) {
+  await run(() => V.admin());
   const r = await run(() => {
     V.stage();
     const g = __game, p = g.player, P = g.powers, bx = g.boxes, out = {};
@@ -2279,165 +2298,251 @@ if (want('Hybrid suit')) {
   check('turning back undoes all of it', r.back);
 }
 
+/* ---------------------------------- accounts ---------------------------------- */
+head('Accounts');
+if (want('Accounts')) {
+  const r = await run(async () => {
+    const a = __ts.auth, out = {};
+    a.signOut();
+    const up = await a.signUp({ email: 'Some.Body+games@Gmail.com', password: 'pass-word-1', confirm: 'pass-word-1', name: 'Somebody' });
+    out.up = !!up.ok; out.name = a.name; out.hint = a.hint; out.notAdmin = !a.admin;
+    // what is kept: neither the address nor the password, as typed
+    const kept = JSON.stringify(localStorage);
+    out.noAddress = !/some\.?body[^"\\]*@/i.test(kept) && !/rusty|screen\.user/i.test(kept); out.noPassword = !kept.includes('pass-word-1');
+    out.session = !!JSON.parse(localStorage.getItem('suffering.session') || 'null');
+    a.signOut(); out.out = !a.signedIn;
+    out.wrong = (await a.signIn({ email: 'somebody@gmail.com', password: 'nope' })).error || '';
+    // Gmail reads capitals, dots and +labels as the same inbox: so does signing in
+    out.sameInbox = !!(await a.signIn({ email: 'SOMEBODY@gmail.com', password: 'pass-word-1' })).ok;
+    out.dup = (await a.signUp({ email: 'some.body@gmail.com', password: 'x1x1x1', confirm: 'x1x1x1', name: 'Again' })).error || '';
+    out.short = (await a.signUp({ email: 'other@gmail.com', password: '123', confirm: '123', name: 'Other' })).error || '';
+    out.mismatch = (await a.signUp({ email: 'other@gmail.com', password: '123456', confirm: '654321', name: 'Other' })).error || '';
+    out.bad = (await a.signUp({ email: 'not an address', password: '123456', confirm: '123456', name: 'Other' })).error || '';
+    a.signOut();
+    return out;
+  });
+  check('a fresh browser is asked to SIGN IN or SIGN UP, or play as a guest', t.authAtStart);
+  check('SIGN UP with an email address and a password, SIGN IN again later (Gmail dots, capitals and +labels are the same inbox)', r.up && r.out && r.sameInbox && r.name === 'Somebody', `shown as ${r.hint}`);
+  check('a wrong password, a taken address, a short password, two different passwords and a non-address are refused', /not the password/.test(r.wrong) && /already/.test(r.dup) && /6 characters/.test(r.short) && /not the same/.test(r.mismatch) && /not an email/.test(r.bad));
+  check('neither the address nor the password is kept as typed; you stay signed in on this device', r.noAddress && r.noPassword && r.session);
+  // the screen itself
+  await run(() => { __ts.ui.showMenu(); __ts.ui.authui.open('up'); });
+  await t.page.fill('#auth-name', 'Screen'); await t.page.fill('#auth-email', 'screen.user@gmail.com');
+  await t.page.fill('#auth-pass', 'screen-pass'); await t.page.fill('#auth-confirm', 'screen-pass');
+  await t.page.click('#auth-go');
+  await t.page.waitForFunction(() => document.querySelector('#auth').hidden, { timeout: 10000 }).catch(() => {});
+  const s = await run(() => ({ closed: document.querySelector('#auth').hidden, who: document.querySelector('#menu-who').textContent, btn: document.querySelector('#btn-account').textContent }));
+  await t.page.click('#btn-account');
+  const s2 = await run(() => ({ who: document.querySelector('#menu-who').textContent, btn: document.querySelector('#btn-account').textContent }));
+  check('the sign-up screen works, and the title screen says who you are, with SIGN OUT', s.closed && /Signed in as Screen/.test(s.who) && s.btn === 'SIGN OUT' && /guest/.test(s2.who) && s2.btn === 'SIGN IN', `${s.who} / ${s2.who}`);
+  await run(() => { __ts.ui.play(); __game.paused = true; });
+}
+
+/* ------------------------------------ admin ------------------------------------ */
+head('Admin');
+if (want('Admin')) {
+  const r = await run(async () => {
+    const a = __ts.auth, g = __game, ui = __ts.ui, out = {};
+    V.stage(); a.signOut();
+    // anybody else: no abilities, no cheats, no admin menu (single player too)
+    ui.toggleAbilities(true); out.gAbil = document.querySelector('#abilities').hidden;
+    out.gUse = !g.powers.use('tempest') && !g.powers.eat();
+    ui.input.onAbilityKey('J'); out.gKey = /only for the admin/.test(document.querySelector('#toast').textContent);
+    out.gBtn = document.querySelector('#btn-admin').hidden && document.querySelector('#btn-abilities').classList.contains('locked');
+    __ts.settings.cheatHp = true; ui.apply(); out.gGod = g.player.h.god; __ts.settings.cheatHp = false; ui.apply();
+    __ts.settings.cheatCops = true; out.gIgnored = g.police.ignored; __ts.settings.cheatCops = false;
+    ui.pause('settings'); out.gCheats = document.querySelector('#cheats').hidden && !document.querySelector('#cheats-locked').hidden; ui.resume();
+    ui.adminui.toggle(true); out.gMenu = document.querySelector('#admin').hidden;
+    // the admin
+    await V.admin(); g.paused = false;
+    out.admin = a.admin;
+    out.aBtn = !document.querySelector('#btn-admin').hidden && !document.querySelector('#btn-abilities').classList.contains('locked');
+    for (const k in g.powers.cool) g.powers.cool[k] = 0;
+    out.aUse = g.powers.use('tempest'); g.advance(1.2);
+    __ts.settings.cheatHp = true; ui.apply(); out.aGod = g.player.h.god; __ts.settings.cheatHp = false; ui.apply();
+    __ts.settings.cheatCops = true; out.aIgnored = g.police.ignored; __ts.settings.cheatCops = false;
+    ui.pause('settings'); out.aCheats = !document.querySelector('#cheats').hidden; ui.resume(); g.paused = false;
+    // the admin menu, on yourself: speed, max HP, toughness, wanted
+    ui.adminui.toggle(true); out.aMenu = !document.querySelector('#admin').hidden;
+    out.targets = Array.from(document.querySelectorAll('#ad-targets .tg')).map((e) => e.firstChild.textContent);
+    const run = (secs) => { const p = g.player, x0 = p.x, z0 = p.z; __ts.input.move.y = 1; g.advance(secs); __ts.input.move.y = 0; g.advance(0.4); return Math.hypot(p.x - x0, p.z - z0); };
+    const shot = () => { const p = g.player, c = p.bodies[2], pt = [0, 0, 0], dir = [0, 0, 0]; c.toWorld(0, 0, c.hz, pt); c.dirToWorld(0, 0, -1, dir); const b0 = p.h.bloodPct; p.hit({ part: 2, type: 'bullet', power: 1.2, point: pt, dir, normal: [0, 0, 1], impulse: 0, attacker: null, weapon: 'm1911', through: 0.2, hp: 32 }); g.advance(4); return b0 - p.h.bloodPct; };
+    const shove = () => { const p = g.player; p.h.heal(); p.reset(p.x, p.z, p.yaw); g.advance(0.6); p.react(150, 1, 0, null); g.advance(0.5); const down = p.state === 2; p.h.heal(); p.reset(p.x, p.z, p.yaw); g.advance(0.5); return down; };
+    V.stage(); g.paused = false; g.camYaw = g.player.yaw;
+    const set = (sp, hp, tg, wl) => { document.querySelector('#ad-speed').value = String(sp); document.querySelector('#ad-hp').value = String(hp); document.querySelector('#ad-tough').value = String(tg); document.querySelector('#ad-wanted').value = String(wl); document.querySelector('#ad-apply').click(); };
+    set(1, 100, 1, 0); out.run1 = run(1.6); out.bled1 = shot(); g.player.h.heal(); out.down1 = shove();
+    V.stage(); g.paused = false; g.camYaw = g.player.yaw; ui.adminui.toggle(true);
+    set(2, 400, 6, 2); out.msg = document.querySelector('#ad-msg').textContent;
+    out.wanted = g.police.wanted; out.run2 = run(1.6); out.bled2 = shot(); g.player.h.heal(); out.down2 = shove();
+    // through a respawn, what was set stays
+    g.respawn(false); g.advance(0.3); out.kept = g.player.boost === 2 && g.player.knock === 6 && g.player.h.hpMul === 4;
+    set(1, 100, 1, 0); out.cleared = g.police.wanted === 0 && g.player.boost === 1;
+    out.kickOff = document.querySelector('#ad-kick').disabled; out.banOff = document.querySelector('#ad-ban').disabled;
+    ui.adminui.toggle(false); g.paused = true;
+    return out;
+  });
+  check('anybody but the admin: no abilities (menu, POWER, keys or fruit), single player too', r.gAbil && r.gUse && r.gKey && r.gBtn);
+  check('anybody but the admin: the cheats are hidden and do nothing; no admin menu', !r.gGod && !r.gIgnored && r.gCheats && r.gMenu);
+  check('the admin account: the abilities, the cheats and the ADMIN menu', r.admin && r.aBtn && r.aUse && r.aGod && r.aIgnored && r.aCheats && r.aMenu);
+  check('the admin menu lists whoever you can choose, you at the top', r.targets.length >= 1 && /\(you\)/.test(r.targets[0]), JSON.stringify(r.targets));
+  check('APPLY on yourself: speed, max HP, toughness and wanted level all take', r.run2 > r.run1 * 1.6 && r.bled2 < r.bled1 * 0.6 && r.down1 && !r.down2 && r.wanted === 2,
+    `ran ${r.run1.toFixed(1)} m then ${r.run2.toFixed(1)} m; bled ${r.bled1.toFixed(2)}% then ${r.bled2.toFixed(2)}%; knocked down ${r.down1} then ${r.down2}; wanted ${r.wanted}`);
+  check('what the admin set lasts through a respawn, and can be set back', r.kept && r.cleared);
+  check('in single player there is nobody to kick, and bans need claude.ai', r.kickOff && r.banOff);
+}
+
 /* --------------------------------- multiplayer --------------------------------- */
 head('Multiplayer');
 if (want('Multiplayer')) {
-  // the server list
-  const list = await run(() => {
-    V.stage();
-    const { ui, mp } = __ts;
-    ui.showMenu();
-    const title = !!document.querySelector('#btn-mp') && !document.querySelector('#menu').hidden;
-    document.querySelector('#btn-mp').click();
-    const rows = Array.from(document.querySelectorAll('#mp-servers .srv'));
-    const parsed = rows.map((r) => ({ name: r.querySelector('.srv-name b').textContent, n: r.querySelector('.srv-n').textContent, ping: r.querySelector('.srv-ping').textContent }));
-    const before = mp.servers.map((s) => s.ping).join();
-    document.querySelector('#mp-refresh').click();
-    const after = mp.servers.map((s) => s.ping).join();
-    return { title, open: !document.querySelector('#mp').hidden, rows: parsed.length, ok: parsed.every((p) => p.name && /^\d+\/\d+$/.test(p.n) && /^\d+ ms$/.test(p.ping)), sample: parsed[0], refreshed: before !== after, note: /only/i.test(document.querySelector('#mp .note.top').textContent) && /made up/i.test(document.querySelector('#mp .note.top').textContent) };
-  });
-  check('MULTIPLAYER on the title screen lists servers, each with its name, players and ping', list.title && list.open && list.rows >= 8 && list.ok, `${list.rows} servers, e.g. ${JSON.stringify(list.sample)}`);
-  check('REFRESH updates the list; the screen says it is bot multiplayer only, simulated here', list.refreshed && list.note);
-
-  // hosting
-  const host = await run(() => {
-    const { mp, ui } = __ts, g = __game;
-    document.querySelector('#mp-max').value = '8'; document.querySelector('#mp-max').dispatchEvent(new Event('change'));
-    document.querySelector('#mp-bots').value = '4'; document.querySelector('#mp-bots').dispatchEvent(new Event('input'));
-    document.querySelector('#mp-host').click();
-    g.paused = false;
-    const out = { on: mp.on, host: mp.isHost, playing: !document.querySelector('#hud').hidden && document.querySelector('#mp').hidden };
-    const starts = new Map();
-    g.advance(9);
-    out.joined = mp.present.length; out.players = mp.players.length;
-    for (const b of mp.bots) starts.set(b, [b.human.x, b.human.z]);
-    ui.mpui._tags(0.3);
-    out.tags = document.querySelectorAll('#tags .tag').length;
-    out.joinFeed = Array.from(document.querySelectorAll('#feed .fe')).some((e) => / joined$/.test(e.textContent));
-    out.chip = document.querySelector('#mp-chip-n').textContent;
-    g.advance(24);
-    let moved = 0;
-    for (const b of mp.bots) { const s = starts.get(b), h = b.human; if (s && h && Math.hypot(h.x - s[0], h.z - s[1]) > 4) moved++; }
-    out.moved = moved; out.decided = mp.stats.self; out.said = mp.bots.filter((b) => b.said).length;
-    // on your own server the sandbox and the abilities are yours, and nobody else's
-    ui.toggleSandbox(true); out.sandbox = !document.querySelector('#sandbox').hidden; ui.toggleSandbox(false);
-    out.power = g.powers.use('tempest'); g.advance(1.2);
-    const bot = mp.bots.find((b) => b.human && b.human.h.alive && b.human.h.conscious);
-    const crates = g.props.filter((p) => p.kind === 'crate').length;
-    bot.brain.setPlan({ action: 'spawn', target: '', x: 0, z: 0, run: false, weapon: '', spawn: 'crate', say: '' }, 'test');
-    out.botSpawn = bot.brain.result; out.botCrates = g.props.filter((p) => p.kind === 'crate').length - crates;
-    bot.brain.setPlan({ action: 'tempest_kick', target: '', x: 0, z: 0, run: false, weapon: '', spawn: '', say: '' }, 'test');
-    out.botKick = bot.brain.result;
-    // the list of players, and a kick
-    ui.mpui.toggleList(true);
-    out.rows = document.querySelectorAll('#pl-rows .pl:not(.head)').length; out.kickButtons = document.querySelectorAll('#pl-rows .kick').length;
-    const victim = mp.bots[mp.bots.length - 1];
-    out.kicked = mp.kick(victim) && !victim.human && mp.players.length === out.players - 1;
-    ui.mpui.toggleList(false);
-    // a kill: on the board and in the feed; and the one killed is back a few seconds later
-    const b2 = mp.bots.find((b) => b.human && b.human.h.alive);
-    const k0 = mp.you.kills, d0 = b2.deaths, old = b2.human;
-    old.lastAttacker = g.player; old.h.alive = false; old._died();
-    out.scored = mp.you.kills === k0 + 1 && b2.deaths === d0 + 1;
-    out.killFeed = Array.from(document.querySelectorAll('#feed .fe.kill')).some((e) => e.textContent.includes(mp.you.name) && e.textContent.includes(b2.name));
-    g.advance(7.5);
-    out.respawned = b2.human && b2.human !== old && b2.human.h.alive && !old.bot;
-    g.paused = true;
+  // a copy of the game on its own: nothing to play through
+  const solo = await run(async () => {
+    V.stage(); const ui = __ts.ui, mp = __ts.mp;
+    ui.showMenu(); document.querySelector('#btn-mp').click();
+    const out = { open: !document.querySelector('#mp').hidden, status: document.querySelector('#mp-status').textContent, servers: mp.servers.length, host: (await mp.host({ name: 'x' })).error || '' };
+    ui.mpui.close(); ui.play(); __game.paused = true;
     return out;
   });
-  check('HOST starts your own server; bots join it one after another, each with a name over its head', host.on && host.host && host.playing && host.joined === 4 && host.players === 5 && host.tags >= 1 && host.joinFeed && host.chip === '5/8', JSON.stringify({ joined: host.joined, tags: host.tags, chip: host.chip }));
-  check('bots move about, decide for themselves and talk (built-in brains, with no key)', host.moved >= 2 && host.decided >= 8 && host.said >= 1, `${host.moved} moved, ${host.decided} decisions, ${host.said} spoke`);
-  check('on your own server you spawn and use abilities; a bot that joined cannot', host.sandbox && host.power && /only the host/.test(host.botSpawn) && host.botCrates === 0 && /only the host/.test(host.botKick));
-  check('the players list shows everyone; the host can KICK a bot', host.rows === host.players && host.kickButtons === host.players - 1 && host.kicked, `${host.rows} rows, ${host.kickButtons} kick buttons`);
-  check('a kill goes on the scoreboard and in the feed; a dead bot respawns', host.scored && host.killFeed && host.respawned);
+  check('opened on its own, MULTIPLAYER says it needs claude.ai, and there are no servers', solo.open && /claude\.ai/.test(solo.status) && solo.servers === 0 && /claude\.ai/.test(solo.host));
 
-  // joining somebody else's
-  const guest = await run(() => {
-    const { mp, ui } = __ts, g = __game;
-    mp.leave(true);
-    const s = mp.servers.filter((x) => x.players < x.max).sort((a, b) => b.players - a.players)[0];
-    ui.showMenu(); ui.mpui.open();
-    ui.mpui._join(s);
-    g.paused = false; g.advance(1);
-    const out = { guest: mp.guest, hostBot: mp.bots.filter((b) => b.host).length === 1 && mp.hostName === s.host, count: mp.players.length === s.players };
-    out.locked = ['#btn-menu', '#btn-abilities'].every((id) => document.querySelector(id).classList.contains('locked'));
-    ui.toggleSandbox(true); out.noSandbox = document.querySelector('#sandbox').hidden && /Only the host/.test(document.querySelector('#toast').textContent);
-    ui.toggleAbilities(true); out.noAbilities = document.querySelector('#abilities').hidden;
-    out.noPower = !g.powers.use('tempest') && !g.powers.eat() && document.querySelector('#btn-power').hidden;
-    const crates = g.props.filter((p) => p.kind === 'crate').length;
-    ui.spawn('crate'); out.noSpawn = g.props.filter((p) => p.kind === 'crate').length === crates;
-    // the host bot can
-    const hb = mp.bots.find((b) => b.host);
-    hb.brain.setPlan({ action: 'spawn', target: '', x: 0, z: 0, run: false, weapon: '', spawn: 'crate', say: '' }, 'test');
-    out.hostSpawn = g.props.filter((p) => p.kind === 'crate').length === crates + 1;
-    // nothing else on its mind for a moment, and on its feet
-    hb.wantThink = () => {}; hb.thinkT = 99;
-    if (hb.human.car) g.traffic.exit(hb.human);
-    hb.brain.setPlan({ action: 'wait', target: '', x: 0, z: 0, run: false, weapon: '', spawn: '', say: '' }, 'test');
-    for (let i = 0; i < 8 && (hb.human.state !== 0 || hb.human.anim.busy || !hb.human.grounded); i++) g.advance(0.5);
-    const t0 = g.powers.stats.tempest;
-    hb.brain.setPlan({ action: 'tempest_kick', target: '', x: 0, z: 0, run: false, weapon: '', spawn: '', say: '' }, 'test');
-    out.kickRes = hb.brain.result;
-    g.advance(1.2);
-    out.hostKick = g.powers.stats.tempest === t0 + 1;
-    g.paused = true;
+  // two players in one browser, each their own claude.ai viewer: A owns the page and is the admin; B is a friend
+  const M = await openMany([{ uid: 'u_owner', owner: true }, { uid: 'u_friend' }], { width: 900, height: 540 });
+  const [A, B] = M.pages;
+  for (const x of [A, B]) await x.page.waitForFunction(() => window.__game && window.__ts.mp, null, { timeout: 180000 });
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const step = async (secs, dt = 0.1) => { for (let s = 0; s < secs; s += dt) { for (const x of [A, B]) await x.ev((dt) => { const g = window.__game; g.paused = false; g.advance(dt); g.paused = true; }, dt); await sleep(12); } };
+  const enter = (x, email, name) => x.ev(async ([email, name]) => {
+    const a = window.__ts.auth; await a.ready;
+    const res = await a.signUp({ email, password: 'secret-12', confirm: 'secret-12', name });
+    document.querySelector('#auth').hidden = true; await window.__ts.mp.ready; window.__ts.ui.play(); window.__game.paused = true;
+    return { ok: !!res.ok, admin: a.admin, err: res.error || '' };
+  }, [email, name]);
+  const reserved = await B.ev(async (email) => { const a = window.__ts.auth; await a.ready; return (await a.signUp({ email, password: 'secret-12', confirm: 'secret-12', name: 'Fake' })).error || ''; }, TEST_ADMIN);
+  const ea = await enter(A, TEST_ADMIN, 'Boss'), eb = await enter(B, 'friend.player@gmail.com', 'Friend');
+  check('on claude.ai the admin address is the page owner’s alone: anybody else is refused it', ea.admin && !eb.admin && /reserved/.test(reserved), reserved);
+  await step(0.5);
+  const store = await B.ev(async () => { const db = await window.claude.use('db'); const s = await db.doc('config/admin').get(); let forged = false; try { await db.doc('config/admin').set({ id: 'u_friend' }); forged = true; } catch { forged = false; } return { id: s.exists ? s.data().id : null, forged }; });
+  check('the admin’s platform id is in the shared store, and nobody else can write it', store.id === 'u_owner' && !store.forged);
+
+  await A.ev(async () => { await window.__ts.mp.host({ name: 'Test City', max: 8 }); window.__game.paused = true; });
+  await step(1.2);
+  const list = await B.ev(() => { const ui = window.__ts.ui; ui.showMenu(); document.querySelector('#btn-mp').click(); const rows = Array.from(document.querySelectorAll('#mp-servers .srv')).map((r) => ({ name: r.querySelector('.srv-name b').textContent, n: r.querySelector('.srv-n').textContent, ping: r.querySelector('.srv-ping').textContent })); return { rows, servers: window.__ts.mp.servers }; });
+  check('HOST puts a server in everyone’s list, with its name, players and a measured ping', list.rows.length === 1 && list.rows[0].name === 'Test City' && list.rows[0].n === '1/8' && /^\d+ ms$/.test(list.rows[0].ping), JSON.stringify(list.rows));
+  await B.ev(async () => { await window.__ts.ui.mpui._join(window.__ts.mp.servers[0].id); window.__game.paused = true; });
+  await step(2.5);
+  const seen = await Promise.all([A, B].map((x) => x.ev(() => { const mp = window.__ts.mp, r = [...mp.remotes.values()][0]; window.__ts.ui.mpui._tags(0.3); return { on: mp.on, count: mp.count, host: mp.isHost, other: r ? r.name : null, puppet: !!(r && r.h && r.h.puppet), tags: document.querySelectorAll('#tags .tag').length, chip: document.querySelector('#mp-chip-n').textContent, ping: mp.you.ping }; })));
+  check('JOIN: both are on the server and see each other, a name over each', seen[0].on && seen[1].on && seen[0].other === 'Friend' && seen[1].other === 'Boss' && seen[0].puppet && seen[1].puppet && seen[0].tags === 1 && seen[1].tags === 1 && seen[0].host && !seen[1].host && seen[1].chip === '2/8', JSON.stringify(seen));
+  check('the player who joined measures their ping to the host', seen[1].ping > 0, `${seen[1].ping} ms`);
+  // B walks; A's stand-in for B follows
+  await B.ev(() => { window.__ts.input.move.y = 1; }); await step(1.5); await B.ev(() => { window.__ts.input.move.y = 0; }); await step(0.6);
+  const bAt = await B.ev(() => [window.__game.player.x, window.__game.player.z]);
+  const aSees = await A.ev(() => { const r = [...window.__ts.mp.remotes.values()][0]; return [r.h.x, r.h.z]; });
+  const gap = Math.hypot(bAt[0] - aSees[0], bAt[1] - aSees[1]);
+  check('a player who moves is drawn where they are on everybody else’s screen', gap < 0.15, `${(gap * 100).toFixed(1)} cm apart`);
+  const face = async (d) => {
+    const a = await A.ev(() => { const g = window.__game, p = g.player; return [p.x, p.z, g.camYaw]; });
+    await B.ev(([x, z, yaw, d]) => { const p = window.__game.player; p.h.heal(); p.reset(x + Math.sin(yaw) * d, z + Math.cos(yaw) * d, yaw + Math.PI); p.h.tough = 1; }, [...a, d]);
+    await step(1);
+  };
+  const aim = () => A.ev(() => { const g = window.__game, r = [...window.__ts.mp.remotes.values()][0], c = r.h.bodies[2], a = g.aim; g.camYaw = Math.atan2(c.px - a.ox, c.pz - a.oz); g.camPitch = Math.atan2(c.py - a.oy, Math.hypot(c.px - a.ox, c.pz - a.oz)); });
+  // blows: A punches B on A's screen; B's own game takes them
+  await face(1.0);
+  for (let i = 0; i < 5; i++) { await A.ev((i) => { const g = window.__game; g.paused = false; g.weapons.attack(i % 3); g.advance(0.05); g.paused = true; }, i); await step(0.6); }
+  await step(1);
+  const punched = await B.ev(() => { const p = window.__game.player; return { wounds: p.h.wounds.length, pain: Math.round(p.h.pain), by: p.lastAttacker && p.lastAttacker.remote ? p.lastAttacker.remote.name : null }; });
+  check('a punch on another player lands in their own game, put down to whoever threw it', punched.wounds >= 1 && punched.by === 'Boss', JSON.stringify(punched));
+  // rounds
+  await face(6);
+  await A.ev(() => { const g = window.__game; g.weapons.give(g.player, 'm1911', true); g.paused = false; g.advance(0.8); g.paused = true; });
+  for (let i = 0; i < 3; i++) { await aim(); await A.ev(() => { const g = window.__game; g.paused = false; g.advance(0.15); g.weapons.fire(); g.advance(0.05); g.paused = true; }); await step(0.5); }
+  await step(1);
+  const shotB = await B.ev(() => { const p = window.__game.player; return { holes: p.h.wounds.filter((w) => w.type === 'gunshot').length, weapon: p.lastWeapon }; });
+  check('so does a round; and everybody else sees and hears the shot', shotB.holes >= 1 && shotB.weapon === 'm1911', JSON.stringify(shotB));
+  // the admin's Tempest Kick, at B: B's game takes the cut, and B's screen shows the slash
+  await face(5);
+  await A.ev(() => { const g = window.__game; g.weapons.select(-1); g.paused = false; g.advance(0.8); g.paused = true; });
+  await aim();
+  await A.ev(() => { const g = window.__game; g.camPitch = -0.02; g.paused = false; for (const k in g.powers.cool) g.powers.cool[k] = 0; window.__k = g.powers.use('tempest'); g.advance(0.05); g.paused = true; });
+  let ghost = 0;
+  for (let i = 0; i < 12; i++) { await step(0.1); ghost = Math.max(ghost, await B.ev(() => window.__game.powers.shots.filter((o) => o.ghost).length)); }
+  await step(1);
+  const kicked = await B.ev(() => { const p = window.__game.player; return { cuts: p.h.wounds.filter((w) => w.type === 'slash' || w.type === 'cut' || w.type === 'stump').length, weapon: p.lastWeapon }; });
+  check('the admin’s Tempest Kick cuts another player, who sees the slash come', (await A.ev(() => window.__k)) && ghost >= 1 && kicked.cuts >= 1 && kicked.weapon === 'tempest', `ghost slashes ${ghost}, ${JSON.stringify(kicked)}`);
+  // a kill: the feed on both screens, and the score
+  await face(5);
+  await A.ev(() => { const g = window.__game; g.weapons.give(g.player, 'ak47', true); g.paused = false; g.advance(0.8); g.paused = true; });
+  await B.ev(() => { window.__game.player.h.tough = 0.3; });
+  for (let i = 0; i < 14; i++) {
+    await aim(); await A.ev(() => { const g = window.__game, r = [...window.__ts.mp.remotes.values()][0], c = r.h.bodies[4], a = g.aim; g.camYaw = Math.atan2(c.px - a.ox, c.pz - a.oz); g.camPitch = Math.atan2(c.py - a.oy, Math.hypot(c.px - a.ox, c.pz - a.oz)); g.paused = false; g.advance(0.12); g.weapons.fire(); g.advance(0.05); g.paused = true; });
+    await step(0.25);
+    if (!(await B.ev(() => window.__game.player.h.alive))) break;
+  }
+  await step(1.5);
+  const score = await Promise.all([A, B].map((x) => x.ev(() => ({ kills: window.__ts.mp.you.kills, deaths: window.__ts.mp.you.deaths, feed: Array.from(document.querySelectorAll('#feed .fe.kill')).map((e) => e.textContent) }))));
+  check('a kill goes in the feed on both screens, and on the scoreboard', score[0].kills === 1 && score[1].deaths === 1 && score[0].feed.some((f) => /Boss.*AK-47.*Friend/.test(f)) && score[1].feed.some((f) => /Boss.*AK-47.*Friend/.test(f)), JSON.stringify(score));
+  // B gets up again: a new stand-in
+  await A.ev(() => { window.__oldH = [...window.__ts.mp.remotes.values()][0].h; });
+  await B.ev(() => document.querySelector('#btn-respawn').click());
+  await step(1.5);
+  const back = await A.ev(() => { const r = [...window.__ts.mp.remotes.values()][0]; return { fresh: r.h !== window.__oldH && window.__oldH.removed && r.h.h.alive }; });
+  check('a player who gets up again is a fresh stand-in on everybody else’s screen', back.fresh);
+  // talk
+  await B.ev(() => window.__game.speech.playerSay('hello boss!'));
+  await step(0.6);
+  const heard = await A.ev(() => ({ feed: Array.from(document.querySelectorAll('#feed .fe.chat')).map((e) => e.textContent), bubble: Array.from(document.querySelectorAll('#bubbles .bubble')).some((b) => b.textContent === 'hello boss!') }));
+  check('what a player says is heard: a bubble over them and a line in the chat', heard.feed.includes('Friend: hello boss!') && heard.bubble, JSON.stringify(heard.feed));
+  // a car
+  await B.ev(() => { const g = window.__game, p = g.player; const car = g.traffic.spawnParked('sedan', p.x + 3, p.z, 0); g.traffic.enter(p, car); window.__ts.input._press('gas'); });
+  await step(2); await B.ev(() => window.__ts.input._release('gas')); await step(0.5);
+  const cars = await Promise.all([B.ev(() => { const c = window.__game.player.car; return c ? [c.x, c.z] : null; }), A.ev(() => { const c = [...window.__ts.mp.remotes.values()][0].car; return c ? [c.x, c.z] : null; })]);
+  check('a car somebody drives goes with them, on everybody’s screen', cars[0] && cars[1] && Math.hypot(cars[0][0] - cars[1][0], cars[0][1] - cars[1][1]) < 1.0, JSON.stringify(cars));
+  await B.ev(() => { const g = window.__game; g.traffic.exit(g.player); }); await step(1);
+  // the admin's menu on B
+  const applied = await A.ev(() => {
+    const ui = window.__ts.ui, mp = window.__ts.mp; ui.adminui.toggle(true);
+    const rows = Array.from(document.querySelectorAll('#ad-targets .tg'));
+    const out = { rows: rows.map((e) => e.firstChild.textContent) };
+    rows[1].click();
+    document.querySelector('#ad-speed').value = '2'; document.querySelector('#ad-hp').value = '300'; document.querySelector('#ad-tough').value = '4'; document.querySelector('#ad-wanted').value = '1';
+    document.querySelector('#ad-apply').click(); out.msg = document.querySelector('#ad-msg').textContent;
     return out;
   });
-  check('JOIN somebody else’s server: its host is a bot, and the players are there', guest.guest && guest.hostBot && guest.count);
-  check('as a guest, SPAWN and ABILITIES are locked and refused', guest.locked && guest.noSandbox && guest.noAbilities && guest.noPower && guest.noSpawn);
-  check('their host bot spawns things and does the Tempest Kick', guest.hostSpawn && guest.hostKick, guest.kickRes);
-
-  // Claude: what a bot's decision asks for, with a stand-in client (no network, no key)
-  const claude = await run(async () => {
-    const { mp, voices, settings, botMinds } = __ts, g = __game;
-    const keep = { key: settings.aiKey, client: voices._clientFor };
-    settings.aiKey = 'sk-ant-test-not-a-real-key'; botMinds.reset();
-    let params = null;
-    voices._clientFor = () => ({ messages: { create: async (p) => {
-      params = p;
-      const me = mp.bots.find((b) => b.asking), other = mp.bots.find((b) => b !== me && b.human && b.human.h.alive);
-      return { stop_reason: 'end_turn', content: [{ type: 'thinking', thinking: '', signature: 's' }, { type: 'text', text: JSON.stringify({ action: 'follow', target: 'p' + other.human.id, x: 0, z: 0, run: false, weapon: '', spawn: '', say: 'wait up ' + other.name }) }], usage: { input_tokens: 650, output_tokens: 150, cache_read_input_tokens: 0, cache_creation_input_tokens: 900 } };
-    } } });
-    const b = mp.bots.find((x) => x.human && x.human.h.alive && x.human.h.conscious && !x.host) || mp.bots.find((x) => x.human && x.human.h.alive);
-    for (const x of mp.bots) { x.thinkT = 99; x.wantThink = () => {}; }
-    b.thinkT = 0;
-    g.paused = false; g.advance(0.05); g.paused = true;
-    await new Promise((r) => setTimeout(r, 30));
-    const out = {
-      model: params && params.model, effort: params && params.output_config.effort, format: params && params.output_config.format.type,
-      required: params && params.output_config.format.schema.required.join(','), cached: !!(params && params.system[0].cache_control),
-      sees: !!params && params.messages[0].content.includes('You are ' + b.name) && /People you can see|Nobody in sight/.test(params.messages[0].content) && /Holding:/.test(params.messages[0].content),
-      plan: b.brain.plan.action, from: b.brain.plan.from, said: !!(b.said && /^wait up/.test(b.said.text)),
-      status: botMinds.status().text,
-    };
-    // declined: the bot decides for itself
-    voices._clientFor = () => ({ messages: { create: async () => ({ stop_reason: 'refusal', stop_details: { category: 'general_harms' }, content: [], usage: { input_tokens: 600, output_tokens: 3 } }) } });
-    const c = mp.bots.find((x) => x !== b && x.human && x.human.h.alive && x.human.h.conscious) || b;
-    c.brain.plan.idle = true; c.thinkT = 0;
-    const s0 = c.self;
-    g.paused = false; g.advance(0.05); g.paused = true;
-    await new Promise((r) => setTimeout(r, 30));
-    out.refused = botMinds.stats.refused >= 1 && c.self === s0 + 1;
-    // switched off: built-in brains
-    settings.botAi = false;
-    out.off = !botMinds.usable && /built in/.test(botMinds.status().text);
-    settings.botAi = true; settings.aiKey = keep.key; voices._clientFor = keep.client; botMinds.reset();
-    return out;
-  });
-  check('with a Claude API key, each bot decision goes to Claude Haiku 5.5 at medium effort, as JSON in a fixed shape, and is carried out', claude.model === 'claude-haiku-5-5' && claude.effort === 'medium' && claude.format === 'json_schema' && claude.cached && claude.sees && claude.plan === 'follow' && claude.from === 'claude' && claude.said, `${claude.model}, effort ${claude.effort}, ${claude.format} [${claude.required}], cached ${claude.cached}, sees ${claude.sees}, plan ${claude.plan} from ${claude.from}, said ${claude.said}`);
-  check('a decision Claude declines falls back to the bot’s own brain; Claude can be switched off', claude.refused && claude.off);
-
-  // leaving
-  const left = await run(() => {
-    const { mp, ui } = __ts, g = __game;
-    ui.pause('main');
-    const shown = !document.querySelector('#btn-leave').hidden;
-    document.querySelector('#btn-leave').click();
-    g.paused = false; g.advance(0.3); g.paused = true;
-    return { shown, off: !mp.on, noBots: !g.humans.some((h) => h.bot), unlocked: !document.querySelector('#btn-menu').classList.contains('locked'), chip: document.querySelector('#mp-chip').hidden };
-  });
-  check('LEAVE SERVER: back to your own city, the bots gone, SPAWN unlocked', left.shown && left.off && left.noBots && left.unlocked && left.chip);
-  await run(() => { const g = __game; __ts.ui.play(); g.paused = true; });
+  await step(0.8);
+  const onB = await B.ev(() => { const g = window.__game, p = g.player; return { boost: p.boost, hpMul: p.h.hpMul, knock: p.knock, wanted: g.police.wanted }; });
+  check('the admin menu lists everyone on the server, you first; APPLY sets their speed, max HP, toughness and wanted level', applied.rows.length === 2 && /you/.test(applied.rows[0]) && applied.rows[1] === 'Friend' && onB.boost === 2 && onB.hpMul === 3 && onB.knock === 4 && onB.wanted === 1, JSON.stringify(onB));
+  // somebody else trying it: nothing happens
+  await B.ev(() => { const mp = window.__ts.mp; mp._emit('adm', [...mp.remotes.keys()][0], { op: 'kick', note: 'ha' }); mp._emit('adm', [...mp.remotes.keys()][0], { op: 'set', sp: 5, hp: 1, tg: 0.1, wl: 2 }); });
+  await step(0.8);
+  const forged = await A.ev(() => ({ on: window.__ts.mp.on, boost: window.__game.player.boost, refused: window.__ts.mp.stats.refused }));
+  check('an admin command from anybody but the admin is ignored', forged.on && forged.boost === 1 && forged.refused >= 2, JSON.stringify(forged));
+  // KICK
+  await A.ev(() => { document.querySelector('#ad-note').value = 'cool it'; document.querySelector('#ad-kick').click(); });
+  await step(1);
+  const kick = await B.ev(async () => { const mp = window.__ts.mp; const again = await mp.join((mp.servers[0] || {}).id); return { on: mp.on, toast: document.querySelector('#toast').textContent, again: again.error || 'joined' }; });
+  check('KICK: they are off the server, told why, and cannot come straight back', !kick.on && /kicked/.test(kick.toast) && /cool it/.test(kick.toast) && /kicked/.test(kick.again), kick.toast);
+  // BAN, with a note and a length; then lifted
+  await B.ev(async () => { const mp = window.__ts.mp; mp.kickedFrom.clear(); await mp.join(mp.servers[0].id); window.__game.paused = true; });
+  await step(2);
+  await A.ev(() => { const ui = window.__ts.ui; ui.adminui.render(); const rows = document.querySelectorAll('#ad-targets .tg'); rows[1].click(); document.querySelector('#ad-note').value = 'griefing'; document.querySelector('#ad-length').value = '3600000'; });
+  await A.ev(async () => { await window.__ts.ui.adminui.ban(); });
+  await step(1.5);
+  const ban = await B.ev(async () => { const mp = window.__ts.mp; return { on: mp.on, banned: !!mp.banned, text: mp.banText(), join: (await mp.join((mp.servers[0] || {}).id)).error || '', host: (await mp.host({ name: 'x' })).error || '' }; });
+  const listed = await A.ev(() => Array.from(document.querySelectorAll('#ad-bans li')).map((e) => e.textContent));
+  check('BAN: off the server, told the note and until when, and cannot join or host', !ban.on && ban.banned && /griefing/.test(ban.text) && /until/.test(ban.text) && /banned/.test(ban.join) && /banned/.test(ban.host), ban.text);
+  check('the admin sees the ban in the list, and can lift it', listed.some((l) => /Friend/.test(l) && /griefing/.test(l)), JSON.stringify(listed));
+  await A.ev(async () => { const b = window.__ts.mp.banList[0]; await window.__ts.mp.adminUnban(b.id); });
+  await step(0.6);
+  const lifted = await B.ev(() => !window.__ts.mp.banned);
+  check('UNBAN: they may play again', lifted);
+  // the host leaves: whoever has been on longest hosts it now
+  await B.ev(async () => { const mp = window.__ts.mp; await mp.join(mp.servers[0].id); window.__game.paused = true; });
+  await step(2);
+  await A.ev(async () => { await window.__ts.mp.leave(true); });
+  await step(2);
+  const moved = await B.ev(() => ({ host: window.__ts.mp.isHost, list: window.__ts.mp.servers.map((s) => s.name + '/' + s.host) }));
+  check('when the host leaves, the server carries on with a new host', moved.host && moved.list.includes('Test City/Friend'), JSON.stringify(moved));
+  const errs = [...A.logs, ...B.logs].filter((l) => !/401|Failed to load resource|willReadFrequently/.test(l));
+  check('no errors on either player’s page', errs.length === 0, errs.slice(0, 3).join(' | '));
+  await M.close();
 }
 
 /* --------------------------------- report ------------------------------- */

@@ -54,7 +54,7 @@ export class Police {
   }
 
   get now() { return this.g.time; }
-  get ignored() { return !!this.g.settings.cheatCops; }
+  get ignored() { return !!this.g.settings.cheatCops && !!(this.g.auth && this.g.auth.admin); }
 
   note(text) {
     this.log.push({ t: this.now, text });
@@ -120,6 +120,15 @@ export class Police {
       // everyone on the net hears it
       this._sync(true);
     }
+  }
+
+  /** The admin says how wanted you are: up to two stars, or none. */
+  setWanted(level, why = 'admin') {
+    level = Math.max(0, Math.min(MAX_WANTED, level | 0));
+    if (level === 0) { this.clear(why); return; }
+    const p = this.g.player;
+    if (level > this.wanted) { this.raise(level, 'an admin says so', { x: p.x, z: p.z }); return; }
+    if (level < this.wanted) { this.wanted = level; this.g.ui?.wantedChanged(level, why); }
   }
 
   /** An officer has you in sight. */

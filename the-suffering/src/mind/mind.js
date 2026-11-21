@@ -96,8 +96,6 @@ export class Mind {
   name(o) {
     if (!o) return 'someone';
     if (o === this.h) return 'me';
-    // a bot on a server knows the other players by their names
-    if (this.h.bot && this.game.mp && (o.isPlayer || o.bot)) return this.game.mp.label(o);
     if (o.isPlayer) return 'the stranger';
     return o.look.desc;
   }

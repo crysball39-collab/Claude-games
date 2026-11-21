@@ -121,6 +121,10 @@ export class Human {
     this.beast = false;                    // an animal's head on them instead of a face and hair
     this.powerMul = 1; this.reachMul = 1;  // blows land harder, and reach further
     this.sturdy = 1;                       // this much harder to knock off their feet
+    this.boost = 1; this.knock = 1;        // what the admin has set: speed, and how hard they are to knock down
+    this.puppet = false;                   // a stand-in for another player, moved by what their game sends
+    this.remote = null;                    // ...and which player
+    this.lastWeapon = null;                // what the last blow to land was dealt with
     this.coat = null;                      // a colour for each part, over whatever they wear: a suit, fur
     this.footLift = [0, 0];                // how far each foot is standing up on something that is not the floor: a body
     this.gait = 0;                         // how fast the feet are actually covering ground
@@ -279,6 +283,7 @@ export class Human {
    * once, which is not something anybody stays standing through.
    */
   tase(secs, by = null, how = 'taser') {
+    if (this.puppet) { this.game.mp?.taseRemote(this, secs, by, how); return; }
     if (this.removed || !this.h.alive) return;
     const fresh = this.tased <= 0;
     this.tased = Math.max(this.tased, secs);
@@ -719,6 +724,8 @@ export class Human {
   /** Before physics: decide where the body should be, or what it should try for. */
   update(dt) {
     if (this.removed) return;
+    // another player: their own game moves them; nothing here decides anything about them
+    if (this.puppet) { this.talkT = Math.max(0, this.talkT - dt); this.pose.talk = this.talkT > 0 ? 1 : 0; if (!this.h.alive) this.deadFor += dt; return; }
     this._hAcc += dt;
     if (this._hAcc >= 0.1) { this._hAcc -= 0.1; this._healthTick(0.1); }
     this.talkT = Math.max(0, this.talkT - dt); this.scream = Math.max(0, this.scream - dt);
@@ -739,9 +746,11 @@ export class Human {
     const h = this.h, emo = this.mind ? this.mind.emo : null;
     const moving = this.state === ST.ANIM ? clamp01(this.speed / RUN) : 0;
     const running = this.state === ST.ANIM && this.grounded && this.speed > 3.3 ? 1 : 0;
+    // what happened since the last tick (a blow that kills outright lands between ticks), then this tick's own
+    const between = h.events.length ? h.events.slice() : null;
     h.tick(dt, { fear: emo ? emo.fear : 0, anger: emo ? emo.anger : 0, moving, running });
     this._tone();
-    for (const ev of h.events) {
+    for (const ev of between ? between.concat(h.events) : h.events) {
       if (ev === 'death') this._died();
       else if (ev === 'out' || ev === 'faint') { if (this.state !== ST.RAGDOLL) this.toRagdoll(); this.mind?.note('felt', 'blackout', 'everything went dark', 1); }
       else if (ev === 'vomit') this.game.gore.vomit(this);
@@ -854,7 +863,7 @@ export class Human {
     if (this.cuffing) { this.crouching = !!this.cuffing.low && this.grounded; this.pose.cuffing = 1; } else this.pose.cuffing = 0;
     if (h.legLimp(1) > 0.3 || h.legLimp(-1) > 0.3) top = Math.min(top, 2.2);
     if (this.dragMax < top) top = this.dragMax;                 // hauling something heavy
-    top *= this.speedMul;
+    top *= this.speedMul * this.boost;
     // nothing left in the legs: a run is a jog, then a walk
     if (it.run && h.stamina < 35) top = lerp(Math.min(top, WALK * 1.25 * (this.scale / 0.93)), top, h.stamina / 35);
     let tvx = 0, tvz = 0;
@@ -1235,7 +1244,7 @@ export class Human {
   /* ---- staggering ---- */
 
   toStumble(force = 40, vx = 0, vz = 0) {
-    if (this.state === ST.RAGDOLL || this.removed) return;
+    if (this.state === ST.RAGDOLL || this.removed || this.puppet) return;
     if (this.car) { this.anim.kick(0, -1, Math.min(1.2, force / 50)); return; }
     if (!this.h.canStand) { this.toRagdoll(); return; }
     const was = this.state;
@@ -1324,7 +1333,7 @@ export class Human {
   /* ---- down ---- */
 
   toRagdoll() {
-    if (this.state === ST.RAGDOLL || this.removed) return;
+    if (this.state === ST.RAGDOLL || this.removed || this.puppet) return;
     // somebody in a seat slumps in it: they are not going anywhere until somebody gets them out
     if (this.car) { this.anim.action = null; return; }
     this.state = ST.RAGDOLL;
@@ -1564,8 +1573,8 @@ export class Human {
   late(dt) {
     if (this.removed) return;
     const g = this.game;
-    // knocks taken from the world: the ground, a crate, a bumper
-    for (let i = 0; i < PART_COUNT; i++) {
+    // knocks taken from the world: the ground, a crate, a bumper (another player's are theirs to take)
+    for (let i = 0; i < PART_COUNT && !this.puppet; i++) {
       if (this.gone[i]) continue;
       const b = this.bodies[i];
       if (b.hit < 3.2 || this.partCool[i] > 0) continue;
@@ -1823,6 +1832,8 @@ export class Human {
    * Returns the health report, with what became of the body added.
    */
   hit(info) {
+    // another player: the hit is theirs to take, on their own screen
+    if (this.puppet) return this.game.mp ? this.game.mp.hitRemote(this, info) : null;
     const { part } = info, g = this.game;
     let type = info.type, power = info.power, hp = info.hp, stopped = false;
     const b = this.bodies[part];
@@ -1875,6 +1886,7 @@ export class Human {
       g.gore.puff('smoke', info.point[0], info.point[1], info.point[2], 0.16, 0.35, 0.3, 0.3, 0.3);
     }
     this.lastAttacker = info.attacker || this.lastAttacker;
+    if (info.weapon) this.lastWeapon = info.weapon;
     if (rep.wound) g.gore.wound(this, rep.wound);
     if (rep.exit) {
       g.gore.wound(this, rep.exit);
@@ -1913,7 +1925,7 @@ export class Human {
   react(force, dx, dz, rep, part = P.CHEST) {
     if (this.state !== ST.ANIM && this.state !== ST.GETUP) { if (this.state === ST.STUMBLE) this.balance -= force / 120; return; }
     const h = this.h;
-    let firm = (this.crouching ? 1.35 : 1) * (0.55 + 0.45 * h.mobility) * (this.isPlayer ? 1.25 : 1) * (this.speed > 3.5 ? 0.8 : 1) * this.sturdy;
+    let firm = (this.crouching ? 1.35 : 1) * (0.55 + 0.45 * h.mobility) * (this.isPlayer ? 1.25 : 1) * (this.speed > 3.5 ? 0.8 : 1) * this.sturdy * this.knock;
     if (this.state === ST.GETUP) firm *= 0.5;
     if (part === P.HEAD) force *= 1.2;
     if (part >= P.THIGH_L) force *= 1.15;
@@ -1947,12 +1959,14 @@ export class Human {
 
   /** A push with no wound: being barged, or shoved. */
   shove(vx, vz, force, by) {
+    if (this.puppet) { this.game.mp?.shoveRemote(this, vx, vz, force, by); return; }
     if (this.state !== ST.ANIM) return;
     this.mind?.note('felt', 'shove', by ? 'was barged into by ' + (by.isPlayer ? 'the stranger' : 'someone') : 'was shoved', 0.5, { by });
     this.toStumble(force, vx, vz);
   }
 
   struckByCar(car, closing) {
+    if (this.puppet) { this.game.mp?.carRemote(this, car, closing); return; }
     const b = car.body, g = this.game;
     this.toRagdoll();
     const up = clamp(closing * 0.28, 0.8, 4);
