@@ -254,7 +254,8 @@ export class Game {
 
   frame(realDt) {
     const dt = this.dt = clamp(realDt, 1 / 144, 1 / 30);
-    if (this.paused) { this.renderer.render(this.scene, this.camera); return; }
+    // paused (a menu is open) stops this city, not the others: the servers, and your place on one, go on
+    if (this.paused) { this.mp?.update(dt); this.renderer.render(this.scene, this.camera); return; }
     this.time += dt;
     const inp = this.input, p = this.player;
     inp.begin();

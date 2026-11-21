@@ -119,8 +119,11 @@ export class Multiplayer {
   get on() { return !!this.server; }
   get isHost() { return !!this.server && this.hostPeer === this.myPeer; }
   get hostName() { if (!this.server) return ''; if (this.isHost) return this._name(); const r = this.remotes.get(this.hostPeer); return r ? r.name : ''; }
-  /** Is this peer the admin, by the platform's own word for who sent it? */
-  isAdminPeer(p) { return !!(p && p.by && this.adminId && p.by === this.adminId); }
+  /**
+   * Is this peer the admin? The platform's own word for who sent it (the owner's id, written where only the owner can write),
+   * and signed in to the admin's account on that page: the owner's other pages, under other accounts, are not.
+   */
+  isAdminPeer(p) { return !!(p && p.by && this.adminId && p.by === this.adminId && p.presence && p.presence.ad === 1); }
   /** The admin's commands from this page will be believed by everyone else's. */
   get adminVerified() { return !!(this.auth.admin && this.uid && this.adminId === this.uid); }
   _name() { return cleanName(this.auth.name || this.guestName || (this.guestName = 'Guest' + ((Math.random() * 9000) | 0) + 1000)); }
@@ -143,7 +146,7 @@ export class Multiplayer {
       if (!s || typeof s !== 'object' || typeof s.id !== 'string' || !/^[a-z0-9]{4,16}$/.test(s.id) || ids.has(s.id)) continue;
       if (this._activeBan(p.by)) continue;
       ids.add(s.id);
-      out.push({ id: s.id, name: cleanText(s.name, 40) || 'Server', max: num(s.max, 2, MAX_PLAYERS, 8) | 0, n: num(s.n, 1, 99, 1) | 0, host: cleanName(pr.nm), hostPeer: p.peer, ping: p.isMe ? 0 : this.pings.get(p.peer) ?? null, mine: p.isMe, admin: this.isAdminPeer(p) });
+      out.push({ id: s.id, name: cleanText(s.name, 40) || 'Server', max: num(s.max, 2, MAX_PLAYERS, 8) | 0, n: num(s.n, 1, 99, 1) | 0, host: cleanName(pr.nm), hostPeer: p.peer, ping: p.sameTab ? 0 : this.pings.get(p.peer) ?? null, mine: p.sameTab, admin: this.isAdminPeer(p) });
     }
     return out.sort((a, b) => b.n - a.n || a.name.localeCompare(b.name));
   }
@@ -221,7 +224,7 @@ export class Multiplayer {
   _lobbyTick(dt) {
     const room = this.room, now = performance.now(), me = this._me(room);
     // a ping out to every host every two seconds, and their answers
-    if (now - this.lping.at > 2000) { this.lping.n = 1 + ((Math.random() * 1e9) | 0); this.lping.at = now; this.lping.seen.clear(); }
+    if (now - this.lping.at > 2000) { this.lping.n = 1 + ((Math.random() * 1e9) | 0); this.lping.at = now; this.lping.seen.clear(); this.lobbyT = 0; }
     const peers = room.peers();
     for (const p of peers) {
       const pr = p.presence, pk = pr && pr.pk;
@@ -230,7 +233,7 @@ export class Multiplayer {
     }
     // your own presence in the lobby: who you are, the server you host, and answers to others' pings
     const host = this.server && this.isHost;
-    const pres = { v: V, nm: this._name(), pg: this.lping.n, srv: host ? { id: this.server.id, name: this.server.name, max: this.server.max, n: this.count } : null, pk: null };
+    const pres = { v: V, nm: this._name(), ad: this.auth.admin ? 1 : 0, pg: this.lping.n, srv: host ? { id: this.server.id, name: this.server.name, max: this.server.max, n: this.count } : null, pk: null };
     if (host) {
       const pk = {}; let n = 0;
       for (const p of peers) { const pg = p.presence && p.presence.pg; if (!p.sameTab && typeof pg === 'number' && n++ < 48) pk[p.peer] = pg; }
@@ -249,7 +252,7 @@ export class Multiplayer {
     const order = [];
     for (const p of peers) {
       const jt = p.sameTab ? s.jt : p.presence && p.presence.v === V && typeof p.presence.jt === 'number' ? p.presence.jt : null;
-      if (jt != null && !(p.by && !p.isMe && this._activeBan(p.by))) order.push([jt, p.peer]);
+      if (jt != null && !(p.by && !p.sameTab && this._activeBan(p.by))) order.push([jt, p.peer]);
     }
     order.sort((a, b) => a[0] - b[0] || (a[1] < b[1] ? -1 : 1));
     this.hostPeer = order.length ? order[0][1] : this.myPeer;

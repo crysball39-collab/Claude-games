@@ -235,7 +235,7 @@ if (want('Doctor mode')) {
   // where they are on the screen now that the camera has settled and a frame has been drawn
   const pos = await run(() => { const h = window.PT, o = []; __game.toScreen(h.bodies[2].px, h.bodies[2].py, h.bodies[2].pz, o); return { x: o[0], y: o[1] }; });
   await t.page.mouse.click(pos.x, pos.y);
-  await t.page.waitForFunction(() => { const e = document.querySelector('#doc-cond-label'); return e && e.textContent.trim().length > 2; }, { timeout: 8000 }).catch(() => {});
+  await t.page.waitForFunction(() => { const e = document.querySelector('#doc-cond-label'); return e && e.textContent.trim().length > 2; }, null, { timeout: 8000 }).catch(() => {});
   const r = await run(() => {
     const txt = (s) => (document.querySelector(s) || {}).textContent || '';
     return { picked: __game.selected === window.PT, name: txt('#doc-name'), cond: txt('#doc-cond-label'), vitals: (txt('#doc-vitals') + txt('#doc-state')).toUpperCase(), emo: txt('#doc-emotions').toUpperCase() };
@@ -2336,11 +2336,12 @@ if (want('Accounts')) {
   await t.page.fill('#auth-name', 'Screen'); await t.page.fill('#auth-email', 'screen.user@gmail.com');
   await t.page.fill('#auth-pass', 'screen-pass'); await t.page.fill('#auth-confirm', 'screen-pass');
   await t.page.click('#auth-go');
-  await t.page.waitForFunction(() => document.querySelector('#auth').hidden, { timeout: 10000 }).catch(() => {});
-  const s = await run(() => ({ closed: document.querySelector('#auth').hidden, who: document.querySelector('#menu-who').textContent, btn: document.querySelector('#btn-account').textContent }));
-  await t.page.click('#btn-account');
+  await t.page.waitForFunction(() => document.querySelector('#auth').hidden, null, { timeout: 20000 }).catch(() => {});
+  const s = await run(() => ({ closed: document.querySelector('#auth').hidden, err: document.querySelector('#auth-err').textContent, who: document.querySelector('#menu-who').textContent, btn: document.querySelector('#btn-account').textContent }));
+  // (should the screen still be up, the check below says why, and the run goes on)
+  if (s.closed) await t.page.click('#btn-account'); else await run(() => { __ts.ui.authui.close(); });
   const s2 = await run(() => ({ who: document.querySelector('#menu-who').textContent, btn: document.querySelector('#btn-account').textContent }));
-  check('the sign-up screen works, and the title screen says who you are, with SIGN OUT', s.closed && /Signed in as Screen/.test(s.who) && s.btn === 'SIGN OUT' && /guest/.test(s2.who) && s2.btn === 'SIGN IN', `${s.who} / ${s2.who}`);
+  check('the sign-up screen works, and the title screen says who you are, with SIGN OUT', s.closed && /Signed in as Screen/.test(s.who) && s.btn === 'SIGN OUT' && /guest/.test(s2.who) && s2.btn === 'SIGN IN', `${s.who} / ${s2.who}${s.closed ? '' : ' / still open: ' + (s.err || 'no error shown')}`);
   await run(() => { __ts.ui.play(); __game.paused = true; });
 }
 
@@ -2556,6 +2557,48 @@ if (want('Multiplayer')) {
   const errs = [...A.logs, ...B.logs].filter((l) => !/401|Failed to load resource|willReadFrequently/.test(l));
   check('no errors on either player’s page', errs.length === 0, errs.slice(0, 3).join(' | '));
   await M.close();
+
+  // one person with the game open twice (two tabs, or a phone and a computer): the platform calls both pages theirs, and each is still a player
+  const M2 = await openMany([{ uid: 'u_owner', owner: true }, { uid: 'u_owner', owner: true }], { width: 900, height: 540 });
+  const [C, D] = M2.pages;
+  for (const x of [C, D]) await x.page.waitForFunction(() => window.__game && window.__ts.mp, null, { timeout: 180000 });
+  const step2 = async (secs, dt = 0.1) => { for (let s = 0; s < secs; s += dt) { for (const x of [C, D]) await x.ev((dt) => { const g = window.__game; g.paused = false; g.advance(dt); g.paused = true; }, dt); await sleep(12); } };
+  const enter2 = (x, email, name) => x.ev(async ([email, name]) => {
+    const a = window.__ts.auth; await a.ready;
+    let r = await a.signIn({ email, password: 'secret-12' });
+    if (r.error) r = await a.signUp({ email, password: 'secret-12', confirm: 'secret-12', name });
+    document.querySelector('#auth').hidden = true; await window.__ts.mp.ready; window.__ts.ui.play(); window.__game.paused = true;
+    return { admin: a.admin, err: r.error || '' };
+  }, [email, name]);
+  const ec = await enter2(C, TEST_ADMIN, 'Boss'), ed = await enter2(D, 'second.tab@gmail.com', 'Alt');
+  await step2(0.5);
+  await C.ev(async () => { await window.__ts.mp.host({ name: 'Two Tabs', max: 8 }); window.__game.paused = true; });
+  await step2(0.5);
+  // the other page looks at the list from the menu (the game paused behind it), and nothing is advanced: the list and the pings go on anyway
+  await D.ev(() => { window.__ts.ui.showMenu(); document.querySelector('#btn-mp').click(); });
+  await sleep(3000);
+  const row = await D.ev(() => {
+    window.__ts.ui.mpui._servers();
+    const r = document.querySelector('#mp-servers .srv'), s = window.__ts.mp.servers[0];
+    return r ? { name: r.querySelector('.srv-name b').textContent, host: r.querySelector('.srv-name small').textContent, ping: r.querySelector('.srv-ping').textContent, join: !r.querySelector('button.join').disabled, mine: s.mine, paused: window.__game.paused } : null;
+  });
+  check('the same person on two pages: each page is a player, and can join the other’s server', ec.admin && !ed.admin && row && row.name === 'Two Tabs' && row.join && !row.mine, JSON.stringify(row));
+  check('in the server list (the game paused behind it) the ping is measured, and the host shown as they are', row && row.paused && /^[1-9]\d* ms$/.test(row.ping) && /Boss \(admin\)/.test(row.host), JSON.stringify(row));
+  await D.page.click('#mp-servers .srv button.join');
+  await step2(2.5);
+  const both = await Promise.all([C, D].map((x) => x.ev(() => { const mp = window.__ts.mp, r = [...mp.remotes.values()][0]; return { on: mp.on, other: r ? r.name : null, otherAdmin: r ? r.admin : null }; })));
+  check('on it, they see each other: the page signed in as the admin is the admin, the other page nobody special', both[0].on && both[1].on && both[0].other === 'Alt' && both[1].other === 'Boss' && both[1].otherAdmin === true && both[0].otherAdmin === false, JSON.stringify(both));
+  // leaving from a menu: the server list follows at once, with nothing advanced
+  await D.ev(async () => { await window.__ts.mp.leave(true); window.__game.paused = true; });
+  await sleep(1500);
+  const n1 = await D.ev(() => (window.__ts.mp.servers.find((s) => s.name === 'Two Tabs') || {}).n ?? null);
+  await C.ev(async () => { await window.__ts.mp.leave(true); window.__game.paused = true; });
+  await sleep(1500);
+  const gone = await D.ev(() => window.__ts.mp.servers.length);
+  check('players leaving with the game paused: the server’s count, then the server itself, go from the list at once', n1 === 1 && gone === 0, `count ${n1}, then ${gone} servers`);
+  const errs2 = [...C.logs, ...D.logs].filter((l) => !/401|Failed to load resource|willReadFrequently/.test(l));
+  check('no errors on either page', errs2.length === 0, errs2.slice(0, 3).join(' | '));
+  await M2.close();
 }
 
 /* --------------------------------- report ------------------------------- */
