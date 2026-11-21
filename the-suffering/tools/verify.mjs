@@ -1962,6 +1962,8 @@ if (want('Black-powder guns')) {
       const d = it.def, keep = d.misfire; d.misfire = 0;
       const o = out[gun] = { held: p.weapon === it, ammo: it.ammo };
       const h = V.still(g.spawnHuman(p.x + 3.2, p.z, -Math.PI / 2)); g.advance(0.3);
+      // (turning the camera moves it, so aim, let it settle, and aim again)
+      for (let i = 0; i < 3; i++) { V.aimAt(h.bodies[2]); g.advance(1 / 60); }
       V.aimAt(h.bodies[2]);
       const fx0 = g.gore.fxList.length;
       o.fired = W.fire(); o.lit = !!W.lockT;
