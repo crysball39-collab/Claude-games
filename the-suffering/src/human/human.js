@@ -756,6 +756,8 @@ export class Human {
       else if (ev === 'vomit') this.game.gore.vomit(this);
       else if (ev === 'wake') this.mind?.note('felt', 'wake', 'came round on the ground', 0.8);
     }
+    // all of it heard, once: whatever lands before the next tick is the news then
+    h.events.length = 0;
     if (this.state === ST.ANIM && !h.canStand) this.toRagdoll();
     this.pose.hurt = h.conscious ? clamp01((h.pain - 28) / 50) * (this.state === ST.ANIM ? 1 : 0) : 0;
     this._tintSkin();
