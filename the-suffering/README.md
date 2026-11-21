@@ -41,6 +41,7 @@ npm start            # python3 -m http.server 8080, from the repository root
 | Doctor mode | DOCTOR, then tap a person | X, then click a person |
 | Say something | TALK | T |
 | First or third person | VIEW | V |
+| Players on a server | the chip at the top right | N |
 | Pause | PAUSE | Esc or P |
 | Get into a car | DRIVE (or CARJACK) at a front door | E |
 | Drive | GAS and BRAKE pedals; BRAKE held at a standstill reverses | W / up, S / down |
@@ -120,10 +121,14 @@ sweeps dark while it gets ready again.
     maul, and then you are a person again. The same button turns you back sooner.
   - *Leopard Leap* (O): a long, low bound; whoever it comes down on takes a finger from
     each hand, a double Finger Pistol.
-  - *Hybrid Transform* (Y): half leopard, half person, upright: golden spotted fur, a
-    leopard's head, a tail and claws on every finger. Every attack is bigger, harder and
-    faster: punches become claw rakes, slashes and fireballs are half as big again, and
-    everything is ready again sooner. The same button turns you back.
+  - *Hybrid Transform* (Y): half leopard, half person, upright and a head taller (1.3
+    times your size): a leopard's head, neck and hands, a tail and claws on every finger,
+    in a black suit (white shirt, black tie, a red square in the pocket) and a black top
+    hat with a red band. It takes two and a half times the punishment and is nearly three
+    times as hard to knock off its feet. Every attack is bigger, harder and faster:
+    punches become claw rakes (reaching down to people smaller than it), slashes and
+    fireballs are half as big again, and everything is ready again sooner. The same
+    button turns you back, to your own size.
 
 Nobody watching takes any of it calmly, and the police treat it like any other attack.
 
@@ -413,6 +418,40 @@ hurt asks the same thing twice and does not finish sentences; somebody on the ph
 - With neither, everyone keeps to their own lines. Reflex cries are always scripted, so
   nobody waits on a network to scream.
 
+**Multiplayer (bots only, for now).** MULTIPLAYER on the title screen opens a list of
+servers, each with its name, its mode and region, how many players are on it and its
+ping. JOIN one, or HOST your own (a name, up to 12 players, how many bots). Every other
+player on a server is a bot: a person in the city with a gamertag and a health bar over
+its head, a playstyle (aggressive, friendly, chaotic, a roleplayer, new to the game, a
+griefer, a camper) and the same body, weapons and senses as anyone. Bots walk, run and
+jump, pick up weapons and put on armour, draw, reload, holster and drop, fight with fists,
+blades and guns, take cars and drive off, and talk; they hear you when you TALK, by your
+name. A kill feed and chat run down the right of the screen; the chip at the top right
+(or N) lists the players with their kills, deaths and pings. A bot that dies is back six
+seconds later somewhere else.
+
+- **Only the host spawns things and uses abilities.** On your own server that is you,
+  and the bots cannot. On somebody else's server the host is a bot: it can spawn things
+  (crates, people, officers, a car, weapons, armour) and do the Tempest Kick, and SPAWN,
+  ABILITIES and POWER are locked for you. The host can KICK bots from the players list.
+- **Bot brains.** With a Claude API key (*Pause -> Voices*), every bot's decisions are
+  made by Claude Haiku 5.5 at medium effort: every few seconds, and at once when you talk
+  to it or it is hurt, it is told what it can see (people, with what they hold and how they
+  are, items on the ground, cars), what it has heard and felt, what it carries and how its
+  last action went, and answers with one action and anything it wants to say, as JSON in a
+  fixed shape. Two requests are in flight at most. Each decision is billed to your key:
+  Haiku 5.5 is $0.10 / $0.50 per million input / output tokens, a decision sends about a
+  thousand tokens (the standing instructions are cached) and gets back at most 4,000
+  (thinking included), so each costs at most a fifth of a cent and usually far less. The
+  players list shows the decisions so far and what they cost by the API's own token
+  counts. Without a key, if a
+  request fails or is declined, or with Claude switched off on the multiplayer screen,
+  bots decide for themselves by their playstyle. Opened inside the Claude app, the page
+  may not contact the API, so there bots always use their own brains.
+- **What is not real (yet).** There is no network play: the servers, the other players
+  and their pings are made up on this device, and everything runs in this one page.
+  Joining a server gives you a fresh city; leaving it gives you a fresh city back.
+
 **The police.** The station is across the road from the far side of the park: a
 forecourt with two patrol cars, a lobby you can walk into with a front desk and a cell,
 and four officers, one at the desk, two at the door and one walking the beat. Each wears
@@ -476,9 +515,10 @@ node tools/overlap.mjs   # how far body parts get inside each other, scenario by
 | --- | --- |
 | `src/physics/world.js` | the rigid body engine: XPBD, joints with limits, muscles, sleeping islands |
 | `src/human/` | the rig, the animation and attack clips, the medical model, armour, the human itself |
-| `src/mind/` | senses, memory and emotion; behaviour; scripted lines; speech; the Claude connection |
+| `src/mind/` | senses, memory and emotion; behaviour; scripted lines; speech; the Claude connection; bot players (`botbrain.js`: what a bot sees and does; `botminds.js`: its decisions from Claude Haiku 5.5) |
+| `src/net/` | bot servers: the server list, hosting and joining, the bots on a server, the scoreboard |
 | `src/combat/` | weapons and ballistics; blood, wounds and dismemberment |
 | `src/world/` | the city, its pavement network; cars (`car.js`: the model, glass, dents, damage) and everything with wheels (`traffic.js`: driving, collisions, crashes, explosions) |
 | `src/render/` | instanced boxes, decal batches, procedural textures |
-| `src/ui/` | the HUD, the sandbox menu, doctor mode |
+| `src/ui/` | the HUD, the sandbox menu, doctor mode, the multiplayer screens (`mpui.js`) |
 | `tools/` | tests, the browser harness, the swing solver, the build |

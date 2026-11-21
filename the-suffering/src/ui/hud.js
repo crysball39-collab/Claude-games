@@ -60,6 +60,7 @@ export class UI {
     tap('#btn-resume', () => this.resume());
     tap('#btn-restart', () => { g.respawn(true); this.resume(); });
     tap('#btn-quit', () => { this.pauseOff(); this.showMenu(); });
+    tap('#btn-leave', () => { this.g.mp?.leave(); this.resume(); });
     tap('#btn-fullscreen', () => this._fullscreen());
     tap('#btn-respawn', () => { $('#dead').hidden = true; this.deadT = 0; g.respawn(false); inp.enabled = true; });
     tap('#btn-play', () => this.play());
@@ -87,6 +88,7 @@ export class UI {
     // each ability has a key of its own as well as POWER
     inp.onAbilityKey = (letter) => {
       if (!this.playing || g.paused) return;
+      if (g.mp?.guest) { this.toast(`Only the host (${g.mp.hostName}) can use abilities on this server.`); return; }
       const a = ABILITIES.find((x) => x.key === letter);
       if (!a) return;
       if (!g.powers.has(a.id)) { this.toast(a.name + ' comes from the Cat-Cat Fruit. Eat it first (ABILITIES, or M).'); return; }
@@ -95,11 +97,12 @@ export class UI {
     inp.onCycle = (d) => w.cycle(d);
     inp.onKey = (k) => {
       if (!this.playing) return;
-      if (k === 'pause') { if (g.paused) this.resume(); else if (!$('#sandbox').hidden) this.toggleSandbox(false); else if (!$('#abilities').hidden) this.toggleAbilities(false); else if (g.doctor) this.toggleDoctor(false); else this.pause('main'); }
+      if (k === 'pause') { if (g.paused) this.resume(); else if (!$('#sandbox').hidden) this.toggleSandbox(false); else if (!$('#abilities').hidden) this.toggleAbilities(false); else if (!$('#players').hidden) this.mpui?.toggleList(false); else if (g.doctor) this.toggleDoctor(false); else this.pause('main'); }
       else if (g.paused) return;
       else if (k === 'menu') this.toggleSandbox();
       else if (k === 'abilities') this.toggleAbilities();
       else if (k === 'doctor') this.toggleDoctor();
+      else if (k === 'players') this.mpui?.toggleList();
       else if (k === 'view') $('#btn-view').click();
       else if (k === 'talk') this.openTalk();
     };
@@ -124,7 +127,7 @@ export class UI {
     bindSet('#set-tod', 'tod', 'text');
     bindSet('#set-cheat-hp', 'cheatHp', 'check', () => this.toast(s.cheatHp ? 'Infinite HP on' : 'Infinite HP off'));
     bindSet('#set-cheat-cops', 'cheatCops', 'check', () => { if (s.cheatCops) g.police?.clear('ignored'); this.toast(s.cheatCops ? 'The police will ignore you' : 'The police are back to normal'); });
-    bindSet('#set-key', 'aiKey', 'text', () => { this.voices.reset(); this._aiStatus(); });
+    bindSet('#set-key', 'aiKey', 'text', () => { this.voices.reset(); this.g.mp?.minds.reset(); this._aiStatus(); });
     bindSet('#set-model', 'aiModel', 'text', () => this._aiStatus());
     bindSet('#set-live', 'aiLive', 'check', () => this._aiStatus());
     bindSet('#set-pace', 'aiPace', 'text'); bindSet('#set-tts', 'tts', 'check');
@@ -164,6 +167,7 @@ export class UI {
   /* ------------------------------ screens --------------------------------- */
 
   showMenu() {
+    if (this.g.mp?.on) this.g.mp.leave(true);
     this.playing = false;
     $('#menu').hidden = false; $('#hud').hidden = true; $('#dead').hidden = true;
     this.toggleSandbox(false); this.toggleDoctor(false);
@@ -183,6 +187,7 @@ export class UI {
     $('#pause').hidden = false;
     $('#pause-title').textContent = fromMenu ? (tab === 'help' ? 'HOW TO PLAY' : 'SETTINGS') : 'PAUSED';
     $$('#pause-tabs button')[0].hidden = fromMenu;
+    $('#btn-leave').hidden = fromMenu || !this.g.mp?.on;
     this._ptab(tab);
     this.closeTalk();
     this.sound.suspend(true);
@@ -202,7 +207,9 @@ export class UI {
   toggleSandbox(on) {
     const p = $('#sandbox');
     const show = on === undefined ? p.hidden : on;
-    if (show) { this.toggleDoctor(false); this.toggleAbilities(false); }
+    // on somebody else's server the sandbox is the host's
+    if (show && this.g.mp?.guest) { this.toast(`Only the host (${this.g.mp.hostName}) can spawn things on this server.`); return; }
+    if (show) { this.toggleDoctor(false); this.toggleAbilities(false); this.mpui?.toggleList(false); }
     p.hidden = !show;
     $('#btn-menu').classList.toggle('on', show);
     if (show) { this.input.exitLock(); this._count(); }
@@ -213,6 +220,8 @@ export class UI {
     const p = $('#abilities');
     if (!p) return;
     const show = on === undefined ? p.hidden : on;
+    if (show && this.g.mp?.guest) { this.toast(`Only the host (${this.g.mp.hostName}) can use abilities on this server.`); return; }
+    if (show) { this.mpui?.toggleList(false); }
     if (show) { this.toggleDoctor(false); $('#sandbox').hidden = true; $('#btn-menu').classList.toggle('on', false); this.input.exitLock(); this._abilities(); }
     p.hidden = !show;
     $('#btn-abilities').classList.toggle('on', show);
@@ -263,14 +272,14 @@ export class UI {
     const P = this.g.powers, b = $('#btn-power');
     if (!P || !b) return;
     const a = ABILITY[P.selected];
-    b.hidden = !a || !P.has(a.id) || !!this.g.player.car;
+    b.hidden = !a || !P.has(a.id) || !!this.g.player.car || !!this.g.mp?.guest;
     if (b.hidden) return;
     $('#power-label').textContent = a.form && P.form === a.id ? 'TURN BACK' : a.short;
     b.style.setProperty('--cd', P.coolFrac(a.id).toFixed(3));
   }
   toggleDoctor(on) {
     const show = on === undefined ? !this.g.doctor : on;
-    if (show) { $('#sandbox').hidden = true; $('#btn-menu').classList.toggle('on', false); $('#abilities').hidden = true; $('#btn-abilities').classList.toggle('on', false); this.input.exitLock(); }
+    if (show) { $('#sandbox').hidden = true; $('#btn-menu').classList.toggle('on', false); $('#abilities').hidden = true; $('#btn-abilities').classList.toggle('on', false); $('#players').hidden = true; $('#mp-chip').classList.remove('on'); this.input.exitLock(); }
     this.doctor.open(show);
     $('#btn-doctor').classList.toggle('on', show);
     $('#doctor-hint').hidden = !show || !!this.g.selected;
@@ -278,11 +287,11 @@ export class UI {
   }
   /** Panels cover the thumb buttons on their side of the screen. */
   _layout() {
-    const doc = !!this.g.doctor, box = !$('#sandbox').hidden || !$('#abilities').hidden;
+    const doc = !!this.g.doctor || !$('#players').hidden, box = !$('#sandbox').hidden || !$('#abilities').hidden;
     const portrait = window.innerHeight > window.innerWidth;
     $('#buttons').style.visibility = doc || (box && portrait) ? 'hidden' : '';
     $('#stick-zone').style.visibility = (box && !portrait) || ((doc || box) && portrait) ? 'hidden' : '';
-    $('#crosshair').style.visibility = doc ? 'hidden' : '';
+    $('#crosshair').style.visibility = this.g.doctor ? 'hidden' : '';
     $('#weapon-bar').style.visibility = doc || box ? 'hidden' : '';
   }
 
@@ -319,6 +328,7 @@ export class UI {
   spawn(what) {
     const g = this.g, p = g.player;
     this.sound.unlock();
+    if (g.mp?.guest) { this.toast(`Only the host (${g.mp.hostName}) can spawn things on this server.`); return; }
     if (what === 'human' || what === 'crowd') {
       const n = what === 'crowd' ? 5 : 1;
       for (let i = 0; i < n; i++) {
@@ -505,6 +515,7 @@ export class UI {
     if (this.moveT > 0 && (this.moveT -= dt) <= 0) $('#move-name').classList.remove('show');
     if (this.hitT > 0 && (this.hitT -= dt) <= 0) $('#crosshair').classList.remove('hit');
     this.doctor.update(dt);
+    this.mpui?.update(dt);
     this.slow += dt;
     if (this.slow > 0.2) {
       this.slow = 0;

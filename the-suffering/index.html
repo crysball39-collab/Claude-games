@@ -74,7 +74,11 @@
       <button id="btn-exit" class="db small exit"><b>EXIT</b></button>
     </div>
 
+    <div id="tags" aria-hidden="true"></div>
     <div id="bubbles"></div>
+
+    <button id="mp-chip" hidden aria-label="Players on this server"><i></i><b id="mp-chip-name"></b><span id="mp-chip-n"></span><span id="mp-chip-ping"></span></button>
+    <div id="feed" aria-live="polite"></div>
 
     <form id="talk-bar" hidden autocomplete="off">
       <input id="talk-input" type="text" maxlength="140" placeholder="Say something to whoever can hear you" enterkeyhint="send" />
@@ -158,6 +162,20 @@
     </div>
   </aside>
 
+  <!-- ============================ PLAYERS ON A SERVER ======================= -->
+  <aside id="players" class="panel right" hidden>
+    <header>
+      <div><h2 id="pl-server">SERVER</h2><div id="pl-sub"></div></div>
+      <button class="x" id="pl-close" aria-label="Close">&times;</button>
+    </header>
+    <div class="scroll">
+      <div id="pl-rows" class="players"></div>
+      <div id="pl-brain" class="status"></div>
+      <p class="note" id="pl-stats"></p>
+      <div class="row"><button class="chip" id="pl-leave">LEAVE SERVER</button></div>
+    </div>
+  </aside>
+
   <!-- ============================= DOCTOR MODE ============================ -->
   <aside id="doctor" class="panel right" hidden>
     <header>
@@ -221,6 +239,7 @@
             <button class="mb primary" id="btn-resume">RESUME</button>
             <button class="mb" id="btn-restart">BACK TO THE PARK</button>
             <button class="mb" id="btn-fullscreen">FULL SCREEN</button>
+            <button class="mb" id="btn-leave" hidden>LEAVE SERVER</button>
             <button class="mb" id="btn-quit">MAIN MENU</button>
           </div>
         </section>
@@ -277,11 +296,33 @@
             <p>Settings has the time of day (afternoon, dusk or night) and a Cheats section: Infinite HP means nothing can injure you, and Police ignore you keeps the wanted level at nothing.</p>
             <p>DOCTOR lets you tap anyone to read their condition (blood, air, pulse, pain, nausea, temperature, breathing), their state (awareness, dizziness, stamina, adrenaline, poison and shock), their emotions and an X-ray of their bones and organs.</p>
             <p>TALK lets you say something. Whoever is close enough to hear it will answer.</p>
+            <p>MULTIPLAYER, on the title screen: bot servers only, for now. Pick a server from the list (its name, how many players are on it, its ping) and JOIN, or HOST one of your own. Every other player is a bot with a name over its head. With a Claude API key (Settings, VOICES) each bot's decisions are made by Claude Haiku 5.5 at medium effort, from what it can see, hear and feel: it walks, runs and drives, picks up weapons and armour, fights, talks back. Without a key the bots use brains of their own. Only the host can spawn things and use abilities: on your own server that is you; on somebody else's it is their host, and SPAWN and ABILITIES are locked for you. The chip at the top right (or N) lists the players with their kills, deaths and ping; the host can KICK. The servers and pings are simulated on this device: there is no online play yet.</p>
             <h3>Keyboard and mouse</h3>
-            <p>WASD move (Shift walks) &middot; mouse looks (click to capture) &middot; Space jump &middot; C crouch &middot; left click or F attack &middot; right click or Q heavy attack &middot; R reload &middot; E pick up &middot; G drop &middot; H holster or draw &middot; Z grab, drag or let go &middot; M abilities &middot; B use the chosen ability (or J K L U I O Y for each) &middot; 1-5 weapons &middot; Tab sandbox &middot; X doctor &middot; T talk &middot; V view &middot; Esc pause</p>
+            <p>WASD move (Shift walks) &middot; mouse looks (click to capture) &middot; Space jump &middot; C crouch &middot; left click or F attack &middot; right click or Q heavy attack &middot; R reload &middot; E pick up &middot; G drop &middot; H holster or draw &middot; Z grab, drag or let go &middot; M abilities &middot; B use the chosen ability (or J K L U I O Y for each) &middot; 1-5 weapons &middot; Tab sandbox &middot; X doctor &middot; T talk &middot; V view &middot; N players (on a server) &middot; Esc pause</p>
             <p>In a car: W or up is the gas &middot; S or down brakes, then reverses &middot; A / D or left / right steer &middot; Space handbrake &middot; H horn (and siren) &middot; E gets out</p>
           </div>
         </section>
+      </div>
+    </div>
+  </div>
+
+  <div id="mp" class="overlay solid" hidden>
+    <div class="card wide mpcard">
+      <h1>MULTIPLAYER</h1>
+      <div class="scroll">
+        <p class="note top">Bot multiplayer only, for now: every other player on a server is a bot. The servers, the players on them and their pings are made up on this device; there is no online play yet.</p>
+        <label class="set"><span>Your name</span><input type="text" id="mp-name" maxlength="16" autocomplete="off" spellcheck="false" /></label>
+        <div id="mp-brain" class="status"></div>
+        <label class="set"><span>Bots think with Claude Haiku 5.5 (medium effort)</span><input type="checkbox" id="mp-claude" checked /></label>
+        <div class="mp-head"><h3>Servers</h3><button class="chip" id="mp-refresh">REFRESH</button></div>
+        <div class="srv head"><span>SERVER</span><span>PLAYERS</span><span>PING</span><span></span></div>
+        <div id="mp-servers" class="servers"></div>
+        <h3>Host a server</h3>
+        <label class="set"><span>Server name</span><input type="text" id="mp-host-name" maxlength="40" autocomplete="off" spellcheck="false" /></label>
+        <label class="set"><span>Players</span><select id="mp-max"><option>4</option><option>6</option><option selected>8</option><option>10</option><option>12</option></select></label>
+        <label class="set"><span>Bots <output id="mp-bots-n">5</output></span><input type="range" id="mp-bots" min="1" max="7" value="5" /></label>
+        <p class="note">On your own server you are the host, and only the host can spawn things and use abilities: the bots that join cannot. Join somebody else's server and its host is a bot, who can, and you cannot.</p>
+        <div class="col mp-go"><button class="mb primary" id="mp-host">HOST</button><button class="mb" id="mp-back">BACK</button></div>
       </div>
     </div>
   </div>
@@ -292,6 +333,7 @@
       <h1 class="title">THE<br />SUFFERING</h1>
       <div class="col">
         <button class="mb primary" id="btn-play">PLAY</button>
+        <button class="mb" id="btn-mp">MULTIPLAYER</button>
         <button class="mb" id="btn-settings">SETTINGS</button>
         <button class="mb" id="btn-help">HOW TO PLAY</button>
       </div>

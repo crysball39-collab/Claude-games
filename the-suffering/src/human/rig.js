@@ -303,6 +303,28 @@ const SPHERES = {
   footR: (hx, hy, hz) => [0, 0, -hz * 0.6, hy * 1.1, 0, 0, 0, hy * 1.1, 0, 0, hz * 0.6, hy * 1.1],
 };
 
+/** The spheres for part `i` at half-sizes (hx, hy, hz). */
+export function partSpheres(i, hx, hy, hz) {
+  const name = PARTS[i].name;
+  return SPHERES[name] ? SPHERES[name](hx, hy, hz) : TORSO[name] ? slabSpheres(hx, hy, hz) : limbSpheres(hx, hy, hz);
+}
+
+/**
+ * Makes a ragdoll `k` times the size it is, where it stands: every box, its
+ * spheres, its mass (with the cube of the size), and every joint's anchors.
+ */
+export function rescaleRagdoll(bodies, joints, k) {
+  for (let i = 0; i < bodies.length; i++) {
+    const b = bodies[i];
+    b.setBox(b.hx * k, b.hy * k, b.hz * k, b.mass * k * k * k);
+    b.sph = partSpheres(i, b.hx, b.hy, b.hz);
+  }
+  for (const j of joints) {
+    j.lax *= k; j.lay *= k; j.laz *= k;
+    j.lbx *= k; j.lby *= k; j.lbz *= k;
+  }
+}
+
 /**
  * Pairs inside one body that can collide with each other: every pair of parts
  * that is not joined at a joint. (Parts that are joined overlap at the joint by

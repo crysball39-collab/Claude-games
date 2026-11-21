@@ -967,7 +967,7 @@ export class Brain {
 /** Keeps the pavements populated: new faces arrive where you are not looking. */
 export function populate(game, target) {
   let living = 0;
-  for (const h of game.humans) if (!h.isPlayer && h.h.alive && !h.officer) living++;
+  for (const h of game.humans) if (!h.isPlayer && h.h.alive && !h.officer && !h.bot) living++;
   if (living >= target || game.humans.length >= game.maxPeople) return null;
   const p = game.player;
   for (let i = 0; i < 12; i++) {

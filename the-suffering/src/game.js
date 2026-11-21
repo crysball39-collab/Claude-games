@@ -149,7 +149,7 @@ export class Game {
     while (this.humans.length >= this.maxPeople) {
       let worst = null, score = -1;
       for (const h of this.humans) {
-        if (h.isPlayer || h === this.selected) continue;
+        if (h.isPlayer || h === this.selected || (h.bot && h.h.alive)) continue;
         const d = Math.hypot(h.x - this.player.x, h.z - this.player.z);
         const s = (h.h.alive ? 0 : 500 + h.deadFor) + d;
         if (s > score) { score = s; worst = h; }
@@ -261,6 +261,7 @@ export class Game {
 
     this._control(dt);
     this.minds?.update(dt);
+    this.mp?.update(dt);
     this.police?.update(dt);
     this.traffic?.update(dt);
     this.grab.update(dt);
@@ -545,7 +546,7 @@ export class Game {
   cleanUp(what) {
     if (what === 'blood' || what === 'all') this.gore.clean();
     if (what === 'bodies' || what === 'all') {
-      for (const h of this.humans.slice()) if (!h.isPlayer && (!h.h.alive || what === 'all')) this.removeHuman(h);
+      for (const h of this.humans.slice()) if (!h.isPlayer && !(h.bot && h.h.alive) && (!h.h.alive || what === 'all')) this.removeHuman(h);
       for (const h of this.humans) for (const pc of h.pieces.slice()) h.dropPiece(pc.island);
       this.pieces.length = 0;
     }

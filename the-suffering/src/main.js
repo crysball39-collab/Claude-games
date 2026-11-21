@@ -12,8 +12,11 @@ import { Police } from './mind/police.js';
 import { Brain, populate } from './mind/brain.js';
 import { Voices } from './mind/voices.js';
 import { Speech } from './mind/speech.js';
+import { BotMinds } from './mind/botminds.js';
+import { Multiplayer } from './net/multiplayer.js';
 import { Doctor } from './ui/doctor.js';
 import { UI } from './ui/hud.js';
+import { MPUI } from './ui/mpui.js';
 import { ST } from './human/human.js';
 import { P } from './human/rig.js';
 import { $, store, IS_TOUCH, clamp } from './core/util.js';
@@ -21,6 +24,7 @@ import { $, store, IS_TOUCH, clamp } from './core/util.js';
 const DEFAULTS = {
   quality: IS_TOUCH ? 'medium' : 'high', shadows: !IS_TOUCH, gore: true, sens: 110, fov: 64, invert: false, volumePct: 70,
   people: IS_TOUCH ? 10 : 13, cars: 6, aiKey: '', aiModel: 'claude-opus-5-5', aiLive: true, aiPace: 4, tts: false, cheatHp: false, cheatCops: false, tod: 'day',
+  botAi: true, mpName: '',
 };
 const settings = Object.assign({}, DEFAULTS, store.get('settings', {}));
 const save = () => store.set('settings', settings);
@@ -68,6 +72,10 @@ async function boot() {
   };
   const ui = new UI(game, { input, weapons: game.weapons, speech: game.speech, voices, doctor, sound, settings, save, apply });
   game.ui = ui;
+  // bot servers: the bots' decisions (Claude, on the player's key, or their own), the servers, and the screens for them
+  const botMinds = new BotMinds(game, voices, settings);
+  const mp = game.mp = new Multiplayer(game, botMinds, settings, save);
+  ui.mpui = new MPUI(game, ui, mp, botMinds);
   apply();
 
   /* what the rest of the city gets to know about */
@@ -75,6 +83,7 @@ async function boot() {
   game.onDeath = (h) => {
     const c = h.bodies[P.CHEST];
     minds.witness({ kind: 'death', victim: h, actor: h.lastAttacker, x: c.px, y: c.py + 0.2, z: c.pz });
+    game.mp?.onDeath(h);
   };
   game.onDismember = (h, part, burst) => {
     const b = h.bodies[part];
@@ -94,7 +103,7 @@ async function boot() {
     minds.noise(h.x, h.y + 1.2, h.z, 64, 'vomit', h);
     if (h.mind) h.mind.ask('afterVomit', 40, null, 1.6);
   };
-  game.onHit = (h, info, rep) => { if (h.isPlayer) game.shake = Math.max(game.shake, 0.5 + rep.pain * 0.02); };
+  game.onHit = (h, info, rep) => { if (h.isPlayer) game.shake = Math.max(game.shake, 0.5 + rep.pain * 0.02); game.mp?.onHit(h, info); };
 
   await stage('Filling the streets', 70);
   input.attach({ viewport: $('#viewport'), stickZone: $('#stick-zone'), stickBase: $('#stick-base'), stickKnob: $('#stick-knob') });
@@ -148,7 +157,7 @@ async function boot() {
 
   // for the test scripts, and for the curious
   window.__game = game;
-  window.__ts = { game, ui, input, sound, voices, doctor, settings };
+  window.__ts = { game, ui, input, sound, voices, doctor, settings, mp, botMinds };
 }
 
 boot();

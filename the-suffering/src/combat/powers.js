@@ -54,6 +54,11 @@ const DEF = {
 const SLASH_HIT = { def: { blade: true, blunt: true, hitSound: 'clang' }, clip: { power: 2.4, limb: 'blade' } };
 
 const FUR = 0xc98f2e, FUR_D = 0x9c6a1c, SPOT = 0x2a1c0e, CREAM = 0xeedcb4, NOSE = 0x2b1a14, EYE = 0xd8d84a, WHITE = 0xf3eee0;
+const SUIT = 0x17181c, LAPEL = 0x25272d, SHOE = 0x0b0b0d, HAT = 0x111114, BAND = 0xb3121a, TIE = 0x0c0c0e;
+/** The hybrid's colours, part by part: a black suit and shoes, and leopard where it shows (the head, the neck, the hands). */
+const HYBRID_COAT = Array.from({ length: PART_COUNT }, (_, i) => (i === P.HEAD || i === P.NECK || i === P.HAND_L || i === P.HAND_R ? FUR : i === P.FOOT_L || i === P.FOOT_R ? SHOE : SUIT));
+/** How much bigger the hybrid stands, and how much more it takes. */
+const HYBRID_SIZE = 1.3, HYBRID_TOUGH = 2.6, HYBRID_STURDY = 2.8;
 const _a = [0, 0, 0], _b = [0, 0, 0], _q = [0, 0, 0, 1];
 const _ch = { lp: [0, 0, 0], ln: [0, 0, 0], xn: [0, 0, 0], tag: '', piece: 0, exit: 0, glass: -1 };
 
@@ -72,6 +77,7 @@ export class Powers {
     this.cast = null;              // fireballs still to come
     this.maul = null;
     this.leapT = 0;
+    this.kickers = new Set();      // people other than you in the middle of a Tempest Kick (a bot server's host)
     // things that glow: drawn unlit and added on to whatever is behind them
     this.glow = new Boxes(game.scene, 360, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending }), { shadows: false });
     this.leo = null;               // the leopard's boxes
@@ -99,6 +105,8 @@ export class Powers {
   use(id = this.selected) {
     const g = this.g, p = g.player, a = ABILITY[id];
     if (!a) return false;
+    // on somebody else's server only its host has abilities
+    if (g.mp?.guest) { g.ui?.toast(`Only the host (${g.mp.hostName}) can use abilities on this server.`); return false; }
     if (!this.has(id)) { g.ui?.toast('That comes from the Cat-Cat Fruit. Eat it first (ABILITIES).'); return false; }
     if (p.state !== ST.ANIM || p.car || p.cuffed || !p.h.alive || !p.h.conscious || this.eating || this.maul || g.doctor != null) return false;
     // a form is put on, and taken off again, with the same button
@@ -120,11 +128,32 @@ export class Powers {
     return ok;
   }
 
+  /**
+   * Somebody other than you does the Tempest Kick: on somebody else's server,
+   * its host. Aimed at `target` if there is one. True if the kick has begun.
+   */
+  botKick(h, target = null) {
+    const g = this.g;
+    if (!h || h.isPlayer || h.removed || h.state !== ST.ANIM || h.car || h.cuffed || !h.h.alive || !h.h.conscious) return false;
+    if (h.anim.busy || h.swap || h.reload || !h.h.legOk(1) || !h.h.legOk(-1) || !h.grounded) return false;
+    if ((h.kickReady || 0) > g.time) return false;
+    const t = target && !target.removed && target !== h ? target : null;
+    if (t) h.intent.face = Math.atan2(t.x - h.x, t.z - h.z);
+    g.weapons._swing(h, 'tempestKick', DEF.tempest, t);
+    const act = h.anim.action;
+    if (!act) return false;
+    act.power = 'tempestKick';
+    h.kickReady = g.time + ABILITY.tempest.cool;
+    this.kickers.add(h);
+    return true;
+  }
+
   /* ---------------------------------- eating ---------------------------------- */
 
   /** The fruit: brought to the mouth three times, and then you are not quite what you were. */
   eat() {
     const g = this.g, p = g.player;
+    if (g.mp?.guest) { g.ui?.toast(`Only the host (${g.mp.hostName}) can use abilities on this server.`); return false; }
     if (this.fruit) { g.ui?.toast('You have already eaten it. Its power is yours.'); return false; }
     if (p.state !== ST.ANIM || p.car || p.cuffed || !p.h.alive || this.eating) return false;
     if (!p.attached[P.HAND_L] || !p.h.armOk(1)) { g.ui?.toast('You need a hand to eat it with.'); return false; }
@@ -208,7 +237,7 @@ export class Powers {
 
   /** TEMPEST KICK: the green crescent comes off the foot at the top of the kick. */
   _slash(h) {
-    const g = this.g, s = h.scale, big = this.big, [dx, dy, dz] = this._dir(h);
+    const g = this.g, s = h.scale, big = h.isPlayer ? this.big : 1, [dx, dy, dz] = this._dir(h);
     const foot = h.bodies[P.FOOT_R];
     const x = h.x + dx * 0.55, y = clamp(foot.py, h.y + 0.75 * s, h.y + 1.55 * s), z = h.z + dz * 0.55;
     const o = { kind: 'slash', x, y, z, dx, dy, dz, v: 30, t: 0, life: 1.05, w: 1.7 * big * s, power: 2.0 * big, by: h, hits: new Set(), stuck: new Set(), tilt: rand(-0.3, 0.3), inst: [] };
@@ -222,7 +251,7 @@ export class Powers {
 
   /** SWIRLING KICK: the ring of air leaves the foot as it comes round. */
   _ring(h) {
-    const g = this.g, s = h.scale, big = this.big, [dx, dy, dz] = this._dir(h);
+    const g = this.g, s = h.scale, big = h.isPlayer ? this.big : 1, [dx, dy, dz] = this._dir(h);
     const x = h.x + dx * 0.6, y = h.y + 1.05 * s, z = h.z + dz * 0.6;
     const o = { kind: 'ring', x, y, z, dx, dy, dz, v: 17, t: 0, life: 1.15, R: 0.5 * big * s, power: 1.3 * big, by: h, spin: 0, inst: [] };
     for (let i = 0; i < 20; i++) { const k = this.glow.alloc(); this.glow.color(k, 0.62, 0.66, 0.72); o.inst.push(k); }
@@ -392,9 +421,13 @@ export class Powers {
       p.hidden = true; p.speedMul = 2.35;
       g.ui?.toast('Full Leopard. Run into somebody to pounce on them. FULL LEOPARD again turns you back.', 3.5);
     } else {
-      p.setFur(FUR); p.setClaws(true); p.beast = true; p.bulk = 1.13;
+      // a leopard in a black suit and a black top hat with a red band: bigger, and very hard to put down
+      this.was = { scale: p.scale, tough: p.h.tough };
+      p.setScale(p.scale * HYBRID_SIZE);
+      p.h.tough = this.was.tough * HYBRID_TOUGH; p.sturdy = HYBRID_STURDY;
+      p.setCoat(HYBRID_COAT); p.setClaws(true); p.beast = true; p.bulk = 1.06;
       p.powerMul = 1.75; p.reachMul = 1.35; p.anim.speedUp = 1.45; p.speedMul = 1.15;
-      g.ui?.toast('Hybrid. Your attacks are bigger, stronger and faster; your hands are claws.', 3.5);
+      g.ui?.toast('Hybrid. Bigger and far tougher; your attacks are bigger, stronger and faster; your hands are claws.', 3.5);
     }
     g.ui?.abilitiesChanged();
     return true;
@@ -407,7 +440,10 @@ export class Powers {
     this.form = null;
     if (!p.removed) {
       p.hidden = false; p.speedMul = 1; p.stoop = 0;
-      if (was === 'hybrid') { p.setFur(null); p.setClaws(false); p.beast = false; p.bulk = 1; p.powerMul = 1; p.reachMul = 1; p.anim.speedUp = 1; }
+      if (was === 'hybrid') {
+        p.setCoat(null); p.setClaws(false); p.beast = false; p.bulk = 1; p.powerMul = 1; p.reachMul = 1; p.anim.speedUp = 1; p.sturdy = 1;
+        if (this.was) { p.setScale(this.was.scale); p.h.tough = this.was.tough; this.was = null; }
+      }
       if (!quiet) {
         for (let i = 0; i < 6; i++) g.gore.puff('smoke', p.x + rand(-0.4, 0.4), p.y + rand(0.3, 1.5), p.z + rand(-0.4, 0.4), rand(0.4, 0.8), rand(0.5, 0.9), 0.8, 0.72, 0.5);
         g.audio?.at('whump', p.x, p.y + 1, p.z, 0.4);
@@ -439,6 +475,12 @@ export class Powers {
       const u = act.t / act.clip.dur;
       if (act.power === 'tempestKick' && u >= 0.42) { act.fired = true; this._slash(p); }
       if (act.power === 'swirlKick' && u >= 0.5) { act.fired = true; this._ring(p); }
+    }
+    // a host bot's Tempest Kick lets go of its slash the same way
+    for (const h of this.kickers) {
+      const a = h.anim.action;
+      if (h.removed || !a || a.power !== 'tempestKick' || h.state !== ST.ANIM) { this.kickers.delete(h); continue; }
+      if (!a.fired && a.t / a.clip.dur >= 0.42) { a.fired = true; this.kickers.delete(h); this._slash(h); }
     }
     // a pointing finger goes back into the fist when the thrust is over
     if (!act || (act.name !== 'fingerPistol' && act.name !== 'fingerPistolL' && act.name !== 'doubleFinger')) { if (!this.later.length) p.point[0] = p.point[1] = 0; }
@@ -933,6 +975,15 @@ export class Powers {
     if (this.form !== 'hybrid' || p.removed) return;
     if (!this.hyb) this.hyb = this._buildHybrid(p);
     const H = this.hyb, s = p.scale;
+    // the front of the jacket: a white shirt, a black tie, the lapels, a red square in the pocket
+    const ch = p.bodies[P.CHEST], cz = p.sizes[P.CHEST], fz = cz[2] * 0.5 * p.bulk / s;
+    const suit = (i, lx, ly, lz, sx, sy, sz) => { if (p.gone[P.CHEST]) bx.hide(i); else bx.setOn(i, ch.px, ch.py, ch.pz, ch.qx, ch.qy, ch.qz, ch.qw, lx * s, ly * s, lz * s, sx * s, sy * s, sz * s); };
+    suit(H.suit.shirt, 0, 0.075, fz + 0.002, 0.075, 0.15, 0.005);
+    suit(H.suit.tie, 0, 0.055, fz + 0.005, 0.026, 0.15, 0.005);
+    suit(H.suit.knot, 0, 0.13, fz + 0.006, 0.034, 0.024, 0.008);
+    suit(H.suit.lapelL, 0.055, 0.06, fz + 0.004, 0.03, 0.17, 0.006);
+    suit(H.suit.lapelR, -0.055, 0.06, fz + 0.004, 0.03, 0.17, 0.006);
+    suit(H.suit.pocket, 0.1, 0.07, fz + 0.004, 0.04, 0.018, 0.006);
     for (const sp of H.spots) {
       if (p.gone[sp.part]) { bx.hide(sp.i); continue; }
       const b = p.bodies[sp.part], z = p.sizes[sp.part], k = p.bulk;
@@ -946,9 +997,12 @@ export class Powers {
     on(H.head.mouth, 0, -0.085, f + 0.07, 0.07, 0.012, 0.02);
     on(H.head.eyeL, 0.05, 0.03, f + 0.004, 0.04, 0.022, 0.01);
     on(H.head.eyeR, -0.05, 0.03, f + 0.004, 0.04, 0.022, 0.01);
-    on(H.head.earL, 0.075, 0.14, -0.02, 0.06, 0.07, 0.025);
-    on(H.head.earR, -0.075, 0.14, -0.02, 0.06, 0.07, 0.025);
     on(H.head.brow, 0, 0.06, f + 0.002, 0.17, 0.02, 0.008);
+    // a black top hat with a red band, set square on the head; the ears are under it
+    const top = hz[1] / s * 0.5;
+    on(H.hat.brim, 0, top + 0.01, 0, 0.3, 0.018, 0.3);
+    on(H.hat.crown, 0, top + 0.019 + 0.11, 0, 0.2, 0.22, 0.2);
+    on(H.hat.band, 0, top + 0.019 + 0.026, 0, 0.206, 0.046, 0.206);
     // the tail, out of the small of the back, swinging
     const pel = p.bodies[P.PELVIS], pz = p.sizes[P.PELVIS];
     let tx = 0, ty = -0.02, tz = -pz[2] / s * 0.5, ang = 0.9;
@@ -972,19 +1026,23 @@ export class Powers {
     const spots = [];
     let r = 11;
     const rnd = () => { r = (r * 16807) % 2147483647; return r / 2147483647; };
-    const parts = [P.CHEST, P.CHEST, P.CHEST, P.CHEST, P.ABDOMEN, P.ABDOMEN, P.PELVIS, P.UARM_L, P.UARM_R, P.FARM_L, P.FARM_R, P.THIGH_L, P.THIGH_R, P.SHIN_L, P.SHIN_R, P.THIGH_L, P.THIGH_R, P.UARM_L, P.UARM_R];
+    // only where the fur shows: the head, the neck, the backs of the hands
+    const parts = [P.HEAD, P.HEAD, P.HEAD, P.NECK, P.NECK, P.HAND_L, P.HAND_R];
     for (let k = 0; k < 2; k++) for (const part of parts) {
-      // on one of the four sides of the part, somewhere along it
-      const face = (rnd() * 4) | 0;
+      // on one of the four sides of the part, somewhere along it (not over the face)
+      let face = (rnd() * 4) | 0;
+      if (part === P.HEAD && face === 2) face = 3;
       const u = face === 0 ? 1.03 : face === 1 ? -1.03 : (rnd() - 0.5) * 1.4;
       const w = face === 2 ? 1.03 : face === 3 ? -1.03 : (rnd() - 0.5) * 1.4;
       const v = (rnd() - 0.5) * 1.6;
       const thinX = face < 2;
       spots.push({ i: box(SPOT), part, u, v, w, sx: thinX ? 0.006 : 0.04, sy: 0.036, sz: thinX ? 0.04 : 0.006 });
     }
-    const head = { snout: box(CREAM), nose: box(NOSE), mouth: box(NOSE), eyeL: box(EYE), eyeR: box(EYE), earL: box(FUR_D), earR: box(FUR_D), brow: box(FUR_D) };
+    const head = { snout: box(CREAM), nose: box(NOSE), mouth: box(NOSE), eyeL: box(EYE), eyeR: box(EYE), brow: box(FUR_D) };
+    const hat = { brim: box(HAT), crown: box(HAT), band: box(BAND) };
+    const suit = { shirt: box(WHITE), tie: box(TIE), knot: box(TIE), lapelL: box(LAPEL), lapelR: box(LAPEL), pocket: box(BAND) };
     const tail = [0, 1, 2, 3, 4, 5].map((i) => box(i === 5 ? SPOT : FUR));
-    return { spots, head, tail, all };
+    return { spots, head, hat, suit, tail, all };
   }
 
   /** Back to the start: everything in flight gone, any form undone. */
@@ -994,10 +1052,11 @@ export class Powers {
     if (this.eating) this._stopEating(false);
     if (this.form) this.revert(true);
     this.cast = null; this.maul = null; this.leapT = 0;
+    this.kickers.clear();
   }
   /** The player has been put back together: a form does not survive it, the fruit does. */
   onRespawn() {
-    this.form = null; this.maul = null; this.cast = null; this.eating = null; this.leapT = 0;
+    this.form = null; this.maul = null; this.cast = null; this.eating = null; this.leapT = 0; this.was = null;
     if (this.leo) for (const i of this.leo.all) this.g.boxes.hide(i);
     if (this.hyb) for (const i of this.hyb.all) this.g.boxes.hide(i);
     this.g.ui?.abilitiesChanged();

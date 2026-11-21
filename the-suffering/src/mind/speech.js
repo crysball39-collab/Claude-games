@@ -200,6 +200,8 @@ export class Speech {
       for (const w of m.want) if (w.at <= now && (!best || w.pri > best.pri)) best = w;
       if (!best) continue;
       const reflex = best.pri >= 90, asked = best.kind === 'reply';
+      // a bot player chooses its own words; only a cry of pain comes out of it unbidden
+      if (h.bot) { m.want.splice(m.want.indexOf(best), 1); if (reflex && /^(hit|onFire|lostLimb|tased|injected)/.test(best.kind) && now - m.saidAt >= 0.8) this._scripted(m, best); continue; }
       if (m.speakCool > 0 && !reflex && !asked) continue;
       if (reflex && now - m.saidAt < 0.8) continue;
       m.want.splice(m.want.indexOf(best), 1);
@@ -324,6 +326,7 @@ export class Speech {
     if (!text) return false;
     const pl = g.player;
     this.say(pl, text, { you: true, shout: isShout(text) });
+    g.mp?.onSpeech(pl, text);
     // what the words themselves do to whoever heard them
     const cat = classify(text), now = g.time;
     for (const m of g.minds ? g.minds.list : []) {

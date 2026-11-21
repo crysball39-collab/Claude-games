@@ -21,6 +21,7 @@ await run(() => {
   window.V = {
     /** An empty stretch of road, the player facing along it. */
     stage() {
+      if (ts.mp && ts.mp.on) ts.mp.leave(true);
       T.clear();
       for (const o of g.props.slice()) g.removeProp(o);
       const p = g.player;
@@ -2210,13 +2211,13 @@ if (want('Special abilities')) {
     // Hybrid
     fresh(); h = dummy(1.0);
     P.use('hybrid'); g.advance(0.5);
-    out.hybrid = P.form === 'hybrid' && p.fur != null && p.claws && p.beast && p.anim.speedUp > 1 && p.powerMul > 1;
+    out.hybrid = P.form === 'hybrid' && p.coat != null && p.claws && p.beast && p.anim.speedUp > 1 && p.powerMul > 1;
     const cut = (w) => w.type === 'slash' || w.type === 'cut';
     for (let i = 0; i < 4 && !h.h.wounds.some(cut); i++) { g.weapons.attack(i % 3); g.advance(0.6); }
     out.clawed = h.h.wounds.some(cut);
     out.hybridWounds = h.h.wounds.map((w) => w.type).join(',') + ' d=' + Math.hypot(h.x - p.x, h.z - p.z).toFixed(2) + ' ' + T.state(h);
     P.cool.hybrid = 0; P.use('hybrid'); g.advance(0.3);
-    out.hybridOff = !P.form && p.fur == null && !p.claws && p.powerMul === 1;
+    out.hybridOff = !P.form && p.coat == null && !p.claws && p.powerMul === 1;
     // Full Leopard, with somebody watching
     fresh(); h = dummy(7);
     const w = V.still(g.spawnHuman(p.x + 2, p.z + 6, Math.PI)); g.advance(0.3);
@@ -2245,6 +2246,198 @@ if (want('Special abilities')) {
   check('Hybrid: fur, claws, a leopard\u2019s head; harder and faster; punches become claws; and back again', r.hybrid && r.clawed && r.hybridOff, `form ${r.hybrid}, clawed ${r.clawed}, back ${r.hybridOff}, wounds ${r.hybridWounds}`);
   check('Full Leopard: fast on all fours; pounces on whoever it runs into, mauls them, turns back', r.leopard && r.leopardSpeed > 6 && r.mauled && r.bitten >= 3 && r.turnedBack, `top speed ${r.leopardSpeed.toFixed(1)} m/s, ${r.bitten} bites and rakes`);
   check('somebody watching remembers it', r.seen);
+}
+
+/* ------------------------------ the hybrid's suit ------------------------------ */
+head('Hybrid suit');
+if (want('Hybrid suit')) {
+  const r = await run(() => {
+    V.stage();
+    const g = __game, p = g.player, P = g.powers, bx = g.boxes, out = {};
+    P.fruit = true; for (const k in P.cool) P.cool[k] = 0;
+    const s0 = p.scale, tough0 = p.h.tough, head0 = p.bodies[4].py - p.y;
+    P.use('hybrid'); g.advance(0.6);
+    const H = P.hyb, hd = p.bodies[4];
+    const vis = (i) => bx.m[i * 16 + 15] === 1;
+    const col = (i) => [bx.c[i * 3], bx.c[i * 3 + 1], bx.c[i * 3 + 2]];
+    const band = col(H.hat.band), crown = col(H.hat.crown), chest = col(p.inst[2]);
+    out.hat = vis(H.hat.brim) && vis(H.hat.crown) && vis(H.hat.band) && bx.m[H.hat.crown * 16 + 13] > hd.py;
+    out.band = band[0] > 0.3 && band[0] > band[1] * 3 && band[0] > band[2] * 3;   // red (colours are kept linear)
+    out.black = crown.every((v) => v < 0.12) && chest.every((v) => v < 0.15);
+    out.shirt = vis(H.suit.shirt) && vis(H.suit.tie);
+    out.bigger = p.scale / s0; out.taller = (p.bodies[4].py - p.y) / head0;
+    out.tougher = p.h.tough / tough0; out.sturdy = p.sturdy;
+    // a shove that floors anybody else leaves the hybrid on its feet
+    p.react(70, 1, 0, null); g.advance(0.4); out.standing = T.state(p) !== 'RAGDOLL';
+    P.cool.hybrid = 0; P.use('hybrid'); g.advance(0.4);
+    out.back = Math.abs(p.scale - s0) < 1e-6 && p.h.tough === tough0 && p.sturdy === 1 && !vis(H.hat.band) && p.coat == null;
+    g.paused = true;
+    return out;
+  });
+  check('Hybrid wears a black suit (white shirt, black tie) and a black top hat with a red band', r.hat && r.band && r.black && r.shirt, JSON.stringify({ hat: r.hat, band: r.band, black: r.black, shirt: r.shirt }));
+  check('Hybrid is bigger and far tougher, and a hard shove does not floor it', r.bigger > 1.25 && r.taller > 1.25 && r.tougher > 2.5 && r.sturdy > 2 && r.standing, `size x${r.bigger.toFixed(2)}, height x${r.taller.toFixed(2)}, toughness x${r.tougher.toFixed(2)}, standing ${r.standing}`);
+  check('turning back undoes all of it', r.back);
+}
+
+/* --------------------------------- multiplayer --------------------------------- */
+head('Multiplayer');
+if (want('Multiplayer')) {
+  // the server list
+  const list = await run(() => {
+    V.stage();
+    const { ui, mp } = __ts;
+    ui.showMenu();
+    const title = !!document.querySelector('#btn-mp') && !document.querySelector('#menu').hidden;
+    document.querySelector('#btn-mp').click();
+    const rows = Array.from(document.querySelectorAll('#mp-servers .srv'));
+    const parsed = rows.map((r) => ({ name: r.querySelector('.srv-name b').textContent, n: r.querySelector('.srv-n').textContent, ping: r.querySelector('.srv-ping').textContent }));
+    const before = mp.servers.map((s) => s.ping).join();
+    document.querySelector('#mp-refresh').click();
+    const after = mp.servers.map((s) => s.ping).join();
+    return { title, open: !document.querySelector('#mp').hidden, rows: parsed.length, ok: parsed.every((p) => p.name && /^\d+\/\d+$/.test(p.n) && /^\d+ ms$/.test(p.ping)), sample: parsed[0], refreshed: before !== after, note: /only/i.test(document.querySelector('#mp .note.top').textContent) && /made up/i.test(document.querySelector('#mp .note.top').textContent) };
+  });
+  check('MULTIPLAYER on the title screen lists servers, each with its name, players and ping', list.title && list.open && list.rows >= 8 && list.ok, `${list.rows} servers, e.g. ${JSON.stringify(list.sample)}`);
+  check('REFRESH updates the list; the screen says it is bot multiplayer only, simulated here', list.refreshed && list.note);
+
+  // hosting
+  const host = await run(() => {
+    const { mp, ui } = __ts, g = __game;
+    document.querySelector('#mp-max').value = '8'; document.querySelector('#mp-max').dispatchEvent(new Event('change'));
+    document.querySelector('#mp-bots').value = '4'; document.querySelector('#mp-bots').dispatchEvent(new Event('input'));
+    document.querySelector('#mp-host').click();
+    g.paused = false;
+    const out = { on: mp.on, host: mp.isHost, playing: !document.querySelector('#hud').hidden && document.querySelector('#mp').hidden };
+    const starts = new Map();
+    g.advance(9);
+    out.joined = mp.present.length; out.players = mp.players.length;
+    for (const b of mp.bots) starts.set(b, [b.human.x, b.human.z]);
+    ui.mpui._tags(0.3);
+    out.tags = document.querySelectorAll('#tags .tag').length;
+    out.joinFeed = Array.from(document.querySelectorAll('#feed .fe')).some((e) => / joined$/.test(e.textContent));
+    out.chip = document.querySelector('#mp-chip-n').textContent;
+    g.advance(24);
+    let moved = 0;
+    for (const b of mp.bots) { const s = starts.get(b), h = b.human; if (s && h && Math.hypot(h.x - s[0], h.z - s[1]) > 4) moved++; }
+    out.moved = moved; out.decided = mp.stats.self; out.said = mp.bots.filter((b) => b.said).length;
+    // on your own server the sandbox and the abilities are yours, and nobody else's
+    ui.toggleSandbox(true); out.sandbox = !document.querySelector('#sandbox').hidden; ui.toggleSandbox(false);
+    out.power = g.powers.use('tempest'); g.advance(1.2);
+    const bot = mp.bots.find((b) => b.human && b.human.h.alive && b.human.h.conscious);
+    const crates = g.props.filter((p) => p.kind === 'crate').length;
+    bot.brain.setPlan({ action: 'spawn', target: '', x: 0, z: 0, run: false, weapon: '', spawn: 'crate', say: '' }, 'test');
+    out.botSpawn = bot.brain.result; out.botCrates = g.props.filter((p) => p.kind === 'crate').length - crates;
+    bot.brain.setPlan({ action: 'tempest_kick', target: '', x: 0, z: 0, run: false, weapon: '', spawn: '', say: '' }, 'test');
+    out.botKick = bot.brain.result;
+    // the list of players, and a kick
+    ui.mpui.toggleList(true);
+    out.rows = document.querySelectorAll('#pl-rows .pl:not(.head)').length; out.kickButtons = document.querySelectorAll('#pl-rows .kick').length;
+    const victim = mp.bots[mp.bots.length - 1];
+    out.kicked = mp.kick(victim) && !victim.human && mp.players.length === out.players - 1;
+    ui.mpui.toggleList(false);
+    // a kill: on the board and in the feed; and the one killed is back a few seconds later
+    const b2 = mp.bots.find((b) => b.human && b.human.h.alive);
+    const k0 = mp.you.kills, d0 = b2.deaths, old = b2.human;
+    old.lastAttacker = g.player; old.h.alive = false; old._died();
+    out.scored = mp.you.kills === k0 + 1 && b2.deaths === d0 + 1;
+    out.killFeed = Array.from(document.querySelectorAll('#feed .fe.kill')).some((e) => e.textContent.includes(mp.you.name) && e.textContent.includes(b2.name));
+    g.advance(7.5);
+    out.respawned = b2.human && b2.human !== old && b2.human.h.alive && !old.bot;
+    g.paused = true;
+    return out;
+  });
+  check('HOST starts your own server; bots join it one after another, each with a name over its head', host.on && host.host && host.playing && host.joined === 4 && host.players === 5 && host.tags >= 1 && host.joinFeed && host.chip === '5/8', JSON.stringify({ joined: host.joined, tags: host.tags, chip: host.chip }));
+  check('bots move about, decide for themselves and talk (built-in brains, with no key)', host.moved >= 2 && host.decided >= 8 && host.said >= 1, `${host.moved} moved, ${host.decided} decisions, ${host.said} spoke`);
+  check('on your own server you spawn and use abilities; a bot that joined cannot', host.sandbox && host.power && /only the host/.test(host.botSpawn) && host.botCrates === 0 && /only the host/.test(host.botKick));
+  check('the players list shows everyone; the host can KICK a bot', host.rows === host.players && host.kickButtons === host.players - 1 && host.kicked, `${host.rows} rows, ${host.kickButtons} kick buttons`);
+  check('a kill goes on the scoreboard and in the feed; a dead bot respawns', host.scored && host.killFeed && host.respawned);
+
+  // joining somebody else's
+  const guest = await run(() => {
+    const { mp, ui } = __ts, g = __game;
+    mp.leave(true);
+    const s = mp.servers.filter((x) => x.players < x.max).sort((a, b) => b.players - a.players)[0];
+    ui.showMenu(); ui.mpui.open();
+    ui.mpui._join(s);
+    g.paused = false; g.advance(1);
+    const out = { guest: mp.guest, hostBot: mp.bots.filter((b) => b.host).length === 1 && mp.hostName === s.host, count: mp.players.length === s.players };
+    out.locked = ['#btn-menu', '#btn-abilities'].every((id) => document.querySelector(id).classList.contains('locked'));
+    ui.toggleSandbox(true); out.noSandbox = document.querySelector('#sandbox').hidden && /Only the host/.test(document.querySelector('#toast').textContent);
+    ui.toggleAbilities(true); out.noAbilities = document.querySelector('#abilities').hidden;
+    out.noPower = !g.powers.use('tempest') && !g.powers.eat() && document.querySelector('#btn-power').hidden;
+    const crates = g.props.filter((p) => p.kind === 'crate').length;
+    ui.spawn('crate'); out.noSpawn = g.props.filter((p) => p.kind === 'crate').length === crates;
+    // the host bot can
+    const hb = mp.bots.find((b) => b.host);
+    hb.brain.setPlan({ action: 'spawn', target: '', x: 0, z: 0, run: false, weapon: '', spawn: 'crate', say: '' }, 'test');
+    out.hostSpawn = g.props.filter((p) => p.kind === 'crate').length === crates + 1;
+    // nothing else on its mind for a moment, and on its feet
+    hb.wantThink = () => {}; hb.thinkT = 99;
+    if (hb.human.car) g.traffic.exit(hb.human);
+    hb.brain.setPlan({ action: 'wait', target: '', x: 0, z: 0, run: false, weapon: '', spawn: '', say: '' }, 'test');
+    for (let i = 0; i < 8 && (hb.human.state !== 0 || hb.human.anim.busy || !hb.human.grounded); i++) g.advance(0.5);
+    const t0 = g.powers.stats.tempest;
+    hb.brain.setPlan({ action: 'tempest_kick', target: '', x: 0, z: 0, run: false, weapon: '', spawn: '', say: '' }, 'test');
+    out.kickRes = hb.brain.result;
+    g.advance(1.2);
+    out.hostKick = g.powers.stats.tempest === t0 + 1;
+    g.paused = true;
+    return out;
+  });
+  check('JOIN somebody else’s server: its host is a bot, and the players are there', guest.guest && guest.hostBot && guest.count);
+  check('as a guest, SPAWN and ABILITIES are locked and refused', guest.locked && guest.noSandbox && guest.noAbilities && guest.noPower && guest.noSpawn);
+  check('their host bot spawns things and does the Tempest Kick', guest.hostSpawn && guest.hostKick, guest.kickRes);
+
+  // Claude: what a bot's decision asks for, with a stand-in client (no network, no key)
+  const claude = await run(async () => {
+    const { mp, voices, settings, botMinds } = __ts, g = __game;
+    const keep = { key: settings.aiKey, client: voices._clientFor };
+    settings.aiKey = 'sk-ant-test-not-a-real-key'; botMinds.reset();
+    let params = null;
+    voices._clientFor = () => ({ messages: { create: async (p) => {
+      params = p;
+      const me = mp.bots.find((b) => b.asking), other = mp.bots.find((b) => b !== me && b.human && b.human.h.alive);
+      return { stop_reason: 'end_turn', content: [{ type: 'thinking', thinking: '', signature: 's' }, { type: 'text', text: JSON.stringify({ action: 'follow', target: 'p' + other.human.id, x: 0, z: 0, run: false, weapon: '', spawn: '', say: 'wait up ' + other.name }) }], usage: { input_tokens: 650, output_tokens: 150, cache_read_input_tokens: 0, cache_creation_input_tokens: 900 } };
+    } } });
+    const b = mp.bots.find((x) => x.human && x.human.h.alive && x.human.h.conscious && !x.host) || mp.bots.find((x) => x.human && x.human.h.alive);
+    for (const x of mp.bots) { x.thinkT = 99; x.wantThink = () => {}; }
+    b.thinkT = 0;
+    g.paused = false; g.advance(0.05); g.paused = true;
+    await new Promise((r) => setTimeout(r, 30));
+    const out = {
+      model: params && params.model, effort: params && params.output_config.effort, format: params && params.output_config.format.type,
+      required: params && params.output_config.format.schema.required.join(','), cached: !!(params && params.system[0].cache_control),
+      sees: !!params && params.messages[0].content.includes('You are ' + b.name) && /People you can see|Nobody in sight/.test(params.messages[0].content) && /Holding:/.test(params.messages[0].content),
+      plan: b.brain.plan.action, from: b.brain.plan.from, said: !!(b.said && /^wait up/.test(b.said.text)),
+      status: botMinds.status().text,
+    };
+    // declined: the bot decides for itself
+    voices._clientFor = () => ({ messages: { create: async () => ({ stop_reason: 'refusal', stop_details: { category: 'general_harms' }, content: [], usage: { input_tokens: 600, output_tokens: 3 } }) } });
+    const c = mp.bots.find((x) => x !== b && x.human && x.human.h.alive && x.human.h.conscious) || b;
+    c.brain.plan.idle = true; c.thinkT = 0;
+    const s0 = c.self;
+    g.paused = false; g.advance(0.05); g.paused = true;
+    await new Promise((r) => setTimeout(r, 30));
+    out.refused = botMinds.stats.refused >= 1 && c.self === s0 + 1;
+    // switched off: built-in brains
+    settings.botAi = false;
+    out.off = !botMinds.usable && /built in/.test(botMinds.status().text);
+    settings.botAi = true; settings.aiKey = keep.key; voices._clientFor = keep.client; botMinds.reset();
+    return out;
+  });
+  check('with a Claude API key, each bot decision goes to Claude Haiku 5.5 at medium effort, as JSON in a fixed shape, and is carried out', claude.model === 'claude-haiku-5-5' && claude.effort === 'medium' && claude.format === 'json_schema' && claude.cached && claude.sees && claude.plan === 'follow' && claude.from === 'claude' && claude.said, `${claude.model}, effort ${claude.effort}, ${claude.format} [${claude.required}], cached ${claude.cached}, sees ${claude.sees}, plan ${claude.plan} from ${claude.from}, said ${claude.said}`);
+  check('a decision Claude declines falls back to the bot’s own brain; Claude can be switched off', claude.refused && claude.off);
+
+  // leaving
+  const left = await run(() => {
+    const { mp, ui } = __ts, g = __game;
+    ui.pause('main');
+    const shown = !document.querySelector('#btn-leave').hidden;
+    document.querySelector('#btn-leave').click();
+    g.paused = false; g.advance(0.3); g.paused = true;
+    return { shown, off: !mp.on, noBots: !g.humans.some((h) => h.bot), unlocked: !document.querySelector('#btn-menu').classList.contains('locked'), chip: document.querySelector('#mp-chip').hidden };
+  });
+  check('LEAVE SERVER: back to your own city, the bots gone, SPAWN unlocked', left.shown && left.off && left.noBots && left.unlocked && left.chip);
+  await run(() => { const g = __game; __ts.ui.play(); g.paused = true; });
 }
 
 /* --------------------------------- report ------------------------------- */

@@ -319,6 +319,33 @@ export class Weapons {
     return item;
   }
 
+  /**
+   * Somebody who is not the player picks a thing up off the ground: a weapon
+   * goes on to them, put away; armour is put on, and any they had on is left
+   * where the new one was.
+   */
+  takeFor(h, item) {
+    const g = this.game;
+    if (!h || h.isPlayer || h.removed || !item || !item.body || item.holder || h.cuffed || h.cuffing || h.state !== ST.ANIM) return false;
+    if (item.def.wear) {
+      const helmet = item.def.wear === 'helmet', kind = item.def.armour || 'light', on = helmet ? h.helmet : h.vest;
+      const x = item.body.px, y = item.body.py + 0.1, z = item.body.pz;
+      this.remove(item);
+      if (on) { const id = on.def.item; if (helmet) h.removeHelmet(); else h.removeVest(); if (id) this.spawn(id, x, y, z); }
+      if (helmet) h.wearHelmet(kind); else h.wearVest(kind);
+      g.audio?.at('pickup', h.x, h.y + 1, h.z, 0.4);
+      return true;
+    }
+    if (!h.h.armOk(-1)) return false;
+    const kit = h.kit || (h.kit = []);
+    if (kit.length >= 4) return false;
+    this._offGround(item);
+    item.holder = h;
+    kit.push(item);
+    g.audio?.at('pickup', h.x, h.y + 1, h.z, 0.4);
+    return true;
+  }
+
   /** Everything this person has on them. */
   kit(human) { return human.isPlayer ? this.inventory : human.kit || NONE; }
 
@@ -730,8 +757,10 @@ export class Weapons {
       if (human.isPlayer) { g.camYaw += clamp(wrapAngle(yaw - g.camYaw), -0.35, 0.35) * 0.6; human.intent.face = yaw; } else human.intent.face = yaw;
       human.yaw += clamp(wrapAngle(yaw - human.yaw), -0.9, 0.9);
       const c = target.bodies[P.CHEST];
-      // someone on the ground has to be reached down to
+      // someone on the ground has to be reached down to; so does somebody far smaller (the hybrid stands a head taller than anyone)
       low = clamp01((0.85 - (c.py - human.y)) / 0.6);
+      const big = human.scale / (target.scale || 1);
+      if (big > 1.18) low = Math.max(low, clamp01((big - 1.04) * 1.5));
       // step in far enough for this particular move to connect
       lunge = clamp(d - clip.reach * human.scale * human.reachMul, 0, 0.85);
     }

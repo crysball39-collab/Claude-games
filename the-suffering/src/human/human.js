@@ -15,7 +15,7 @@
    enough is simply gone, and what hung from it falls.
    ========================================================================== */
 import {
-  P, PARTS, PART_COUNT, CH, CHANNELS, SUBTREE, CHILDREN, channelsToLocal, solvePose, solveArm, buildRagdoll, MUSCLE_TORQUE, PELVIS_HEIGHT,
+  P, PARTS, PART_COUNT, CH, CHANNELS, SUBTREE, CHILDREN, channelsToLocal, solvePose, solveArm, buildRagdoll, rescaleRagdoll, MUSCLE_TORQUE, PELVIS_HEIGHT,
 } from './rig.js';
 import { Animator, CLIPS } from './anim.js';
 import { Health } from './health.js';
@@ -120,6 +120,8 @@ export class Human {
     this.fur = null;                       // fur all over instead of skin and clothes, as a colour
     this.beast = false;                    // an animal's head on them instead of a face and hair
     this.powerMul = 1; this.reachMul = 1;  // blows land harder, and reach further
+    this.sturdy = 1;                       // this much harder to knock off their feet
+    this.coat = null;                      // a colour for each part, over whatever they wear: a suit, fur
     this.footLift = [0, 0];                // how far each foot is standing up on something that is not the floor: a body
     this.gait = 0;                         // how fast the feet are actually covering ground
     this.gvx = 0; this.gvz = 0;            // and which way
@@ -320,11 +322,12 @@ export class Human {
     this._pallor = q; this._burnKey = bk;
     const base = rgb(this.fur ?? this.look.skin), grey = rgb(0xb9bdb6), k = this.fur != null ? 0 : q / 10 * 0.72;
     const cr = lerp(base[0], grey[0], k), cg = lerp(base[1], grey[1], k), cb = lerp(base[2], grey[2], k);
+    const coat = this.coat, cc = (i) => { if (!coat) return [cr, cg, cb]; const v = rgb(coat[i]); return v; };
     for (const i of this.skinParts) {
-      const c = burnt(cr, cg, cb, B[i]);
+      const b0 = cc(i), c = burnt(b0[0], b0[1], b0[2], B[i]);
       this.game.boxes.color(this.inst[i], c[0], c[1], c[2]);
     }
-    this.fingers.forEach((hand, n) => { const c = burnt(cr, cg, cb, B[n ? P.HAND_R : P.HAND_L]); for (const i of hand) this.game.boxes.color(i, c[0], c[1], c[2]); });
+    this.fingers.forEach((hand, n) => { const part = n ? P.HAND_R : P.HAND_L, b0 = cc(part), c = burnt(b0[0], b0[1], b0[2], B[part]); for (const i of hand) this.game.boxes.color(i, c[0], c[1], c[2]); });
   }
 
   _expression(dt) {
@@ -753,7 +756,7 @@ export class Human {
   /** Clothing that has soaked up a lot of blood goes dark with it, all over. */
   _tintCloth() {
     for (let i = 0; i < PART_COUNT; i++) {
-      const hex = this.cloth[i] < 0 ? -1 : this.fur ?? this.cloth[i];
+      const hex = this.cloth[i] < 0 ? -1 : this.coat ? this.coat[i] : this.fur ?? this.cloth[i];
       if (hex < 0 || this.gone[i]) continue;
       const fb = Math.round(this.h.burns[i] / 10);
       const q = Math.round(this.soak[i] * 10) + fb * 16;
@@ -1676,6 +1679,33 @@ export class Human {
     if (this.helmet) for (const v of this.helmet.boxes) (v.glass ? g.glass : bx).hide(v.idx);
   }
 
+  /**
+   * Makes them `s` (the scale they were made at being 1 for an ordinary
+   * adult) where they stand: the body that collides and the body that is
+   * drawn, and everything that rides on it.
+   */
+  setScale(s) {
+    const k = s / this.scale;
+    if (Math.abs(k - 1) < 1e-4) return;
+    rescaleRagdoll(this.bodies, this.joints, k);
+    const mul = (a) => { for (let i = 0; i < a.length; i++) a[i] *= k; };
+    for (const z of this.sizes) mul(z);
+    for (const h of this.hair) { mul(h.l); mul(h.s); }
+    if (this.vest) { for (const v of this.vest.boxes) { mul(v.l); mul(v.z); } this.vest.lift *= k; }
+    if (this.helmet) { for (const v of this.helmet.boxes) { mul(v.l); mul(v.z); } this.helmet.lift *= k; }
+    if (this.caps) for (const c of this.caps) { mul(c.l); mul(c.z); }
+    this.scale = s; this.h.scale = s;
+    this.repose();
+  }
+
+  /** A colour for every part over whatever they wear (a suit, fur), or null for their own again. */
+  setCoat(coat) {
+    this.coat = coat;
+    this._pallor = -1; this._burnKey = -1; this._soakQ.fill(-1);
+    for (let i = 0; i < PART_COUNT; i++) if (!this.gone[i]) this.game.boxes.colorHex(this.inst[i], coat ? coat[i] : this.cloth[i] >= 0 ? this.cloth[i] : this.look.skin);
+    this._tintSkin(); this._tintCloth();
+  }
+
   /** Claws grown out of the ends of the fingers (on), or gone again (off). */
   setClaws(on) {
     const bx = this.game.boxes;
@@ -1883,7 +1913,7 @@ export class Human {
   react(force, dx, dz, rep, part = P.CHEST) {
     if (this.state !== ST.ANIM && this.state !== ST.GETUP) { if (this.state === ST.STUMBLE) this.balance -= force / 120; return; }
     const h = this.h;
-    let firm = (this.crouching ? 1.35 : 1) * (0.55 + 0.45 * h.mobility) * (this.isPlayer ? 1.25 : 1) * (this.speed > 3.5 ? 0.8 : 1);
+    let firm = (this.crouching ? 1.35 : 1) * (0.55 + 0.45 * h.mobility) * (this.isPlayer ? 1.25 : 1) * (this.speed > 3.5 ? 0.8 : 1) * this.sturdy;
     if (this.state === ST.GETUP) firm *= 0.5;
     if (part === P.HEAD) force *= 1.2;
     if (part >= P.THIGH_L) force *= 1.15;
