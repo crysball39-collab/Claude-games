@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<!--artifact-head-->
+<title>Horde Survivor</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Survive 15 minutes in the Abandoned City against zombies, zombie butterflies, beetles and three bosses.">
+<meta name="theme-color" content="#17121f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@700;800;900&display=swap">
+<link rel="stylesheet" href="style.css">
+<!--/artifact-head-->
+</head>
+<body>
+<!--artifact-body-->
+<div id="app">
+  <canvas id="game" aria-label="Horde Survivor game view"></canvas>
+  <div class="vignette"></div>
+  <div class="hurt-fx" id="hurtFx"></div>
+  <div class="flash-fx" id="flashFx"></div>
+
+  <!-- ============================== in a run ============================== -->
+  <div class="hud" id="hud" hidden>
+    <div class="hud-top" id="hudTop">
+      <div class="xp"><div class="xp-fill" id="xpFill"></div><span class="xp-lv" id="xpLv">Lv 1</span></div>
+      <div class="hud-row">
+        <div class="hud-stat"><img alt="Kills" data-icon="skull"><span id="hudKills">0</span></div>
+        <div class="hud-timer" id="hudTimer">00:00</div>
+        <div class="hud-stat right"><img alt="Gold" data-icon="coin"><span id="hudGold">0</span></div>
+      </div>
+      <div class="bossbar" id="bossBar" hidden>
+        <div class="bossbar-name" id="bossName">Boss</div>
+        <div class="bossbar-track"><div class="bossbar-fill" id="bossFill"></div></div>
+      </div>
+    </div>
+    <button class="pause-btn" id="btnPause" aria-label="Pause"><img alt="" data-icon="pause"></button>
+    <div class="banner" id="banner" hidden></div>
+    <div class="warning" id="warning" hidden>
+      <div class="warning-band"><span>WARNING</span></div>
+      <div class="warning-name" id="warningName"></div>
+    </div>
+  </div>
+
+  <!-- ================================ menus =============================== -->
+  <div class="menu" id="menu">
+    <header class="topbar band">
+      <div class="column">
+        <div class="currency" title="Gold"><img alt="Gold" data-icon="coin"><span id="menuGold">0</span></div>
+        <div class="currency" title="Gems"><img alt="Gems" data-icon="gem"><span id="menuGems">0</span></div>
+        <div class="spacer"></div>
+        <button class="icon-btn" id="btnSettings" aria-label="Settings"><img alt="" data-icon="gear"></button>
+      </div>
+    </header>
+
+    <main class="tabs">
+      <!-- Main -->
+      <section class="tab band" id="tab-main">
+        <div class="column">
+          <div class="logo outlined">
+            <span class="logo-top">HORDE</span>
+            <span class="logo-bot">SURVIVOR</span>
+          </div>
+          <div class="chapter-card">
+            <canvas class="chapter-art" id="chapterArt" width="640" height="300"></canvas>
+            <div class="chapter-info">
+              <div class="chapter-num">Chapter 1</div>
+              <h2 class="chapter-name outlined">Abandoned City</h2>
+              <div class="chapter-meta"><span>Survive <b>15:00</b></span><span id="chapterBest">Best <b>--:--</b></span></div>
+            </div>
+            <div class="chapter-cleared" id="chapterCleared" hidden>Cleared</div>
+          </div>
+          <ol class="boss-track" id="bossTrack"></ol>
+          <div class="reward-line">Finish the chapter for <img alt="Gold" data-icon="coin"><b>500</b><img alt="Gems" data-icon="gem"><b>120</b></div>
+          <button class="btn-play" id="btnPlay">PLAY</button>
+        </div>
+      </section>
+
+      <!-- Equipment -->
+      <section class="tab band" id="tab-equip" hidden>
+        <div class="column">
+          <div class="equip-stage">
+            <div class="slot-col" id="slotsLeft"></div>
+            <div class="hero">
+              <canvas id="heroCanvas" width="320" height="400"></canvas>
+              <div class="hero-plinth"></div>
+              <div class="hero-stats">
+                <div class="stat-pill atk">ATK <b id="statAtk">10</b></div>
+                <div class="stat-pill hp">HP <b id="statHp">100</b></div>
+              </div>
+              <div class="set-line" id="setLine"></div>
+            </div>
+            <div class="slot-col" id="slotsRight"></div>
+          </div>
+          <div class="section-head"><h3 class="outlined">Inventory</h3><span id="invCount">0 items</span></div>
+          <div class="inv-grid" id="invGrid"></div>
+        </div>
+      </section>
+
+      <!-- Shop -->
+      <section class="tab band" id="tab-shop" hidden>
+        <div class="column">
+          <h2 class="shop-title outlined">Chests</h2>
+          <div class="chest-card">
+            <div class="chest-ribbon outlined">Normal Chest</div>
+            <img class="chest-img" alt="A blue Normal Chest" data-icon="chestBig">
+            <p class="chest-text" id="chestText"></p>
+            <div class="chest-pool" id="chestPool"></div>
+            <div class="odds">Drop rate: <b>Common 100%</b></div>
+            <button class="btn gold btn-buy" id="btnBuyChest"><img alt="Gems" data-icon="gem"><span id="chestCost">80</span></button>
+          </div>
+          <p class="shop-note">You earn gems by finishing chapters.</p>
+        </div>
+      </section>
+    </main>
+
+    <nav class="bottomnav band" aria-label="Sections">
+      <div class="column">
+        <button class="nav-btn active" data-tab="main"><img alt="" data-icon="swords"><span>Main</span></button>
+        <button class="nav-btn" data-tab="equip"><img alt="" data-icon="torn_helmet"><span>Equipment</span></button>
+        <button class="nav-btn" data-tab="shop"><img alt="" data-icon="chest"><span>Shop</span></button>
+      </div>
+    </nav>
+  </div>
+
+  <!-- =============================== overlays ============================= -->
+  <div class="overlay" id="levelUp" hidden>
+    <div class="lu-wrap">
+      <div class="lu-title outlined">LEVEL UP!</div>
+      <div class="lu-sub">Pick one</div>
+      <div class="lu-choices" id="luChoices"></div>
+      <div class="owned">
+        <div class="owned-label">Abilities</div>
+        <div class="owned-row" id="luAbilities"></div>
+        <div class="owned-label">Buffs</div>
+        <div class="owned-row" id="luBuffs"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="pause" hidden>
+    <div class="panel">
+      <h2 class="outlined">Paused</h2>
+      <div class="pause-stats">
+        <div><span>Time</span><b id="pTime">00:00</b></div>
+        <div><span>Kills</span><b id="pKills">0</b></div>
+        <div><span>Level</span><b id="pLevel">1</b></div>
+      </div>
+      <div class="owned">
+        <div class="owned-label">Abilities</div>
+        <div class="owned-row" id="pAbilities"></div>
+        <div class="owned-label">Buffs</div>
+        <div class="owned-row" id="pBuffs"></div>
+      </div>
+      <div class="row-actions">
+        <button class="btn danger" id="btnQuit">Quit</button>
+        <button class="btn gold" id="btnResume">Resume</button>
+      </div>
+      <div class="confirm" id="quitConfirm" hidden>
+        <div>Leave this run? You keep the gold you picked up.</div>
+        <div class="row-actions">
+          <button class="btn" id="btnQuitNo">Keep playing</button>
+          <button class="btn danger" id="btnQuitYes">Leave run</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="results" hidden>
+    <div class="panel results-panel" id="resPanel">
+      <div class="results-title outlined" id="resTitle">Defeated</div>
+      <div class="results-sub">Chapter 1 · Abandoned City</div>
+      <div class="results-grid">
+        <div><span>Survived</span><b id="resTime">00:00</b></div>
+        <div><span>Kills</span><b id="resKills">0</b></div>
+        <div><span>Level</span><b id="resLevel">1</b></div>
+      </div>
+      <div class="new-best" id="resBest" hidden>New best time!</div>
+      <div class="rewards" id="resRewards"></div>
+      <button class="btn gold big" id="btnResults">Continue</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="itemModal" hidden>
+    <div class="panel">
+      <button class="close-x" data-close="itemModal" aria-label="Close">×</button>
+      <div class="item-head">
+        <div class="item-icon"><img id="imIcon" alt=""></div>
+        <div>
+          <span class="rarity-chip" id="imRarity">Common</span>
+          <h3 class="item-name outlined" id="imName">Item</h3>
+          <div class="item-sub" id="imSub"></div>
+        </div>
+      </div>
+      <div class="item-stat"><span id="imStatLabel">ATK</span><b id="imStat">+0</b></div>
+      <div class="item-stat"><span id="imLevel">Lv 1 / 10</span><span class="next" id="imNext"></span></div>
+      <p class="item-note" id="imNote"></p>
+      <div class="item-actions">
+        <button class="btn" id="imEquip">Equip</button>
+        <button class="btn gold" id="imUpgrade"><span>Upgrade</span><img alt="Gold" data-icon="coin"><span id="imCost">100</span></button>
+      </div>
+      <button class="btn-link" id="imSalvage">Salvage</button>
+    </div>
+  </div>
+
+  <div class="overlay chest-overlay" id="chestModal" hidden>
+    <div class="chest-stage" id="chestStage">
+      <div class="rays"></div>
+      <img class="chest-anim" id="chestAnim" alt="" data-icon="chestBig">
+      <div class="loot-card" id="lootCard" hidden>
+        <div class="item-icon"><img id="lootIcon" alt=""></div>
+        <span class="rarity-chip">Common</span>
+        <h3 class="outlined" id="lootName">Item</h3>
+        <div class="loot-stat" id="lootStat"></div>
+        <div class="item-sub" id="lootSub"></div>
+      </div>
+      <div class="row-actions" id="lootButtons" hidden>
+        <button class="btn" id="lootEquip">Equip</button>
+        <button class="btn gold" id="lootOk">OK</button>
+      </div>
+      <div class="tap-hint" id="tapHint">Opening…</div>
+    </div>
+  </div>
+
+  <div class="overlay" id="settings" hidden>
+    <div class="panel">
+      <button class="close-x" data-close="settings" aria-label="Close">×</button>
+      <h2 class="outlined">Settings</h2>
+      <label class="toggle" for="setSound"><span>Sound</span><input type="checkbox" id="setSound"></label>
+      <label class="toggle" for="setNumbers"><span>Damage numbers</span><input type="checkbox" id="setNumbers"></label>
+      <p class="help">Touch and drag anywhere to move. Your weapons fire on their own. On a keyboard, use WASD or the arrow keys, and Esc to pause.</p>
+      <button class="btn danger" id="btnReset">Reset progress</button>
+      <div class="confirm" id="resetConfirm" hidden>
+        <div>Erase all gold, gems, gear and records? This cannot be undone.</div>
+        <div class="row-actions">
+          <button class="btn" id="btnResetNo">Keep it</button>
+          <button class="btn danger" id="btnResetYes">Erase</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" hidden></div>
+</div>
+
+<script src="src/data.js"></script>
+<script src="src/core.js"></script>
+<script src="src/sprites.js"></script>
+<script src="src/icons.js"></script>
+<script src="src/ground.js"></script>
+<script src="src/run.js"></script>
+<script src="src/boss.js"></script>
+<script src="src/render.js"></script>
+<script src="src/ui.js"></script>
+<script src="src/main.js"></script>
+<!--/artifact-body-->
+</body>
+</html>
