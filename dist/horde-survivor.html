@@ -2551,6 +2551,7 @@ function updateRun(dt) {
 function updatePlayer(dt) {
   const R = run, P = R.p, ax = Input.axis();
   P.moving = ax.m > 0.05;
+  if (P.moving) R.moved = true;
   P.x += ax.x * BASE.speed * dt;
   P.y += ax.y * BASE.speed * dt;
   if (ax.x > 0.15) P.face = 1; else if (ax.x < -0.15) P.face = -1;
@@ -4117,17 +4118,45 @@ function drawArenaFence(A, clock) {
 
 /* ------------------------------- joystick -------------------------------- */
 
+const TOUCH_SCREEN = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || 'ontouchstart' in window;
+
+function drawStick(ox, oy, kx, ky, alpha) {
+  const R = Input.JOY_R;
+  ctx.beginPath(); ctx.arc(ox, oy, R, 0, TAU);
+  ctx.fillStyle = `rgba(255,255,255,${0.12 * alpha})`; ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = `rgba(255,255,255,${0.35 * alpha})`; ctx.stroke();
+  ctx.beginPath(); ctx.arc(ox + kx, oy + ky, R * 0.45, 0, TAU);
+  ctx.fillStyle = `rgba(255,255,255,${0.45 * alpha})`; ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = `rgba(30,20,40,${0.5 * alpha})`; ctx.stroke();
+}
+
 function drawJoystick() {
   const j = Input.joy;
-  if (!j.active) return;
-  const R = Input.JOY_R;
-  const dx = j.x - j.ox, dy = j.y - j.oy, d = Math.hypot(dx, dy), k = d > R ? R / d : 1;
-  ctx.beginPath(); ctx.arc(j.ox, j.oy, R, 0, TAU);
-  ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.fill();
-  ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.stroke();
-  ctx.beginPath(); ctx.arc(j.ox + dx * k, j.oy + dy * k, R * 0.45, 0, TAU);
-  ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.fill();
-  ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(30,20,40,0.5)'; ctx.stroke();
+  if (j.active) {
+    const R = Input.JOY_R;
+    const dx = j.x - j.ox, dy = j.y - j.oy, d = Math.hypot(dx, dy), k = d > R ? R / d : 1;
+    drawStick(j.ox, j.oy, dx * k, dy * k, 1);
+    return;
+  }
+  if (!run || run.state !== 'play' || run.p.dead) return;
+  // At rest: a faint stick near the bottom shows where to put your thumb
+  // (it follows your finger wherever you touch), plus a hint until you move.
+  const x = VIEW.cssW / 2, y = VIEW.cssH - clamp(VIEW.cssH * 0.16, 90, 150);
+  const hint = !run.moved;
+  if (TOUCH_SCREEN) {
+    const wob = hint ? Math.sin(run.clock * 3) * Input.JOY_R * 0.35 : 0;
+    drawStick(x, y, wob, 0, hint ? 0.9 : 0.45);
+  }
+  if (hint) {
+    const text = TOUCH_SCREEN ? 'Drag anywhere to move' : 'Move with WASD or the arrow keys';
+    ctx.font = '20px "Lilita One", "Arial Black", sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    ctx.globalAlpha = 0.75 + 0.25 * Math.sin(run.clock * 4);
+    const ty = TOUCH_SCREEN ? y - Input.JOY_R - 22 : y;
+    ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(15,10,20,0.9)'; ctx.strokeText(text, x, ty);
+    ctx.fillStyle = '#fff3c0'; ctx.fillText(text, x, ty);
+    ctx.globalAlpha = 1;
+  }
 }
 
 /* ---- src/ui.js ---- */

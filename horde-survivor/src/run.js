@@ -140,6 +140,7 @@ function updateRun(dt) {
 function updatePlayer(dt) {
   const R = run, P = R.p, ax = Input.axis();
   P.moving = ax.m > 0.05;
+  if (P.moving) R.moved = true;
   P.x += ax.x * BASE.speed * dt;
   P.y += ax.y * BASE.speed * dt;
   if (ax.x > 0.15) P.face = 1; else if (ax.x < -0.15) P.face = -1;
