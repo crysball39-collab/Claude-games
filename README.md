@@ -1,5 +1,8 @@
 # GOREBOX
 
+> Also in this repo: **[Horde Survivor](horde-survivor/README.md)**, a top-down survivor game.
+> Play it from `dist/horde-survivor.html`.
+
 A 3D, first person, mobile-first physics sandbox that runs in a browser. Landscape
 orientation, touch controls, no install, no build step, no assets on disk — every
 texture in the game is drawn procedurally onto a canvas at load time.
