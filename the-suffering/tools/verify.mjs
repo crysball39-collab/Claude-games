@@ -2182,7 +2182,7 @@ if (want('Special abilities')) {
     out.tempestUsed = P.use('tempest'); g.advance(0.45);
     out.slashFlying = P.shots.some((o) => o.kind === 'slash');
     g.advance(1.2);
-    out.tempestCut = h.h.wounds.some((w) => w.type === 'slash' || w.type === 'stump');
+    out.tempestCut = h.h.wounds.some((w) => w.type === 'slash' || w.type === 'cut' || w.type === 'stump');
     out.fruitLocked = !P.use('finger');
     // the fruit
     fresh();
@@ -2211,8 +2211,10 @@ if (want('Special abilities')) {
     fresh(); h = dummy(1.0);
     P.use('hybrid'); g.advance(0.5);
     out.hybrid = P.form === 'hybrid' && p.fur != null && p.claws && p.beast && p.anim.speedUp > 1 && p.powerMul > 1;
-    for (let i = 0; i < 4 && !h.h.wounds.some((w) => w.type === 'slash'); i++) { g.weapons.attack(i % 3); g.advance(0.6); }
-    out.clawed = h.h.wounds.some((w) => w.type === 'slash');
+    const cut = (w) => w.type === 'slash' || w.type === 'cut';
+    for (let i = 0; i < 4 && !h.h.wounds.some(cut); i++) { g.weapons.attack(i % 3); g.advance(0.6); }
+    out.clawed = h.h.wounds.some(cut);
+    out.hybridWounds = h.h.wounds.map((w) => w.type).join(',') + ' d=' + Math.hypot(h.x - p.x, h.z - p.z).toFixed(2) + ' ' + T.state(h);
     P.cool.hybrid = 0; P.use('hybrid'); g.advance(0.3);
     out.hybridOff = !P.form && p.fur == null && !p.claws && p.powerMul === 1;
     // Full Leopard, with somebody watching
@@ -2225,7 +2227,7 @@ if (want('Special abilities')) {
     __ts.input.move.y = 0;
     out.leopardSpeed = top; out.mauled = mauled;
     g.advance(2.2);
-    out.bitten = h.h.wounds.filter((x) => x.type === 'stab' || x.type === 'slash').length;
+    out.bitten = h.h.wounds.filter((x) => x.type === 'stab' || x.type === 'slash' || x.type === 'cut').length;
     out.turnedBack = !P.form && !p.hidden;
     out.seen = w.mind.memory.some((m) => m.kind === 'power');
     g.paused = true;
@@ -2240,7 +2242,7 @@ if (want('Special abilities')) {
   check('Leo\u2019s Flame: five fireballs at the nearest person, who catches fire', r.fireballs === 5 && r.fireHits >= 3 && r.alight, `${r.fireballs} thrown, ${r.fireHits} hit`);
   check('Swirling Kick: a ring of air flies out and bursts into flame', r.ring && r.burst >= 1 && r.swirlDown && r.swirlFire);
   check('Leopard Leap: a bound, and a finger from each hand into whoever it lands on', r.airborne && r.leapHit >= 1 && r.leapHoles >= 2, `${r.leapHoles} holes`);
-  check('Hybrid: fur, claws, a leopard\u2019s head; harder and faster; punches become claws; and back again', r.hybrid && r.clawed && r.hybridOff);
+  check('Hybrid: fur, claws, a leopard\u2019s head; harder and faster; punches become claws; and back again', r.hybrid && r.clawed && r.hybridOff, `form ${r.hybrid}, clawed ${r.clawed}, back ${r.hybridOff}, wounds ${r.hybridWounds}`);
   check('Full Leopard: fast on all fours; pounces on whoever it runs into, mauls them, turns back', r.leopard && r.leopardSpeed > 6 && r.mauled && r.bitten >= 3 && r.turnedBack, `top speed ${r.leopardSpeed.toFixed(1)} m/s, ${r.bitten} bites and rakes`);
   check('somebody watching remembers it', r.seen);
 }
