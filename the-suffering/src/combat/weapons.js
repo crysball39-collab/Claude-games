@@ -733,7 +733,7 @@ export class Weapons {
       // someone on the ground has to be reached down to
       low = clamp01((0.85 - (c.py - human.y)) / 0.6);
       // step in far enough for this particular move to connect
-      lunge = clamp(d - clip.reach * human.scale, 0, 0.85);
+      lunge = clamp(d - clip.reach * human.scale * human.reachMul, 0, 0.85);
     }
     human.lowAim = clip.limb === 'footR' ? 0 : low;
     human.lunge = lunge;
@@ -759,6 +759,13 @@ export class Weapons {
   /** Where the striking surface is right now: writes n points into `out`, returns n. */
   _points(human, act, out) {
     const clip = act.clip, s = human.scale;
+    if (clip.limb === 'fingerL' || clip.limb === 'fingerR') {
+      // the tip of a straight index finger, and the knuckle behind it
+      const b = human.bodies[clip.limb === 'fingerL' ? P.HAND_L : P.HAND_R];
+      b.toWorld(0, -0.085 * s, 0.033 * s, _a); out[0] = _a[0]; out[1] = _a[1]; out[2] = _a[2];
+      b.toWorld(0, -0.04 * s, 0.033 * s, _a); out[3] = _a[0]; out[4] = _a[1]; out[5] = _a[2];
+      return 2;
+    }
     if (clip.limb === 'handL' || clip.limb === 'handR') {
       const b = human.bodies[clip.limb === 'handL' ? P.HAND_L : P.HAND_R];
       b.toWorld(0, -0.045 * s, 0, _a); out[0] = _a[0]; out[1] = _a[1]; out[2] = _a[2];
@@ -804,7 +811,7 @@ export class Weapons {
       if (len < 0.004) continue;
       dx /= len; dy /= len; dz /= len;
       if (def.blade && !def.blunt && g.ropes && g.ropes.list.length && g.ropes.cutBy(ox, oy, oz, ox + dx * (len + 0.03), oy + dy * (len + 0.03), oz + dz * (len + 0.03)) && human.isPlayer) g.ui?.toast('Cut through the rope.');
-      const hit = g.rayPeople(ox, oy, oz, dx, dy, dz, len + 0.03, human, def.blade ? 0.03 : 0.055);
+      const hit = g.rayPeople(ox, oy, oz, dx, dy, dz, len + 0.03, human, (def.blade || def.pierce ? 0.03 : 0.055) * human.reachMul);
       if (hit && !act.hits.has(hit.human)) {
         act.hits.add(hit.human); act.landed++;
         this._land(human, act, hit, ox + dx * hit.t, oy + dy * hit.t, oz + dz * hit.t, dx, dy, dz, len / dt);
@@ -877,9 +884,12 @@ export class Weapons {
 
   _land(attacker, act, hit, px, py, pz, dx, dy, dz, speed) {
     const g = this.game, clip = act.clip, def = act.def, t = hit.human;
-    const strength = (attacker.isPlayer ? 1.1 : 0.72) * clamp(0.6 + attacker.h.mobility * 0.4, 0.5, 1) * rand(0.9, 1.1);
+    const strength = (attacker.isPlayer ? 1.1 : 0.72) * clamp(0.6 + attacker.h.mobility * 0.4, 0.5, 1) * rand(0.9, 1.1) * attacker.powerMul;
     const power = clip.power * strength * (act.soft || 1);
-    let J = clip.kind === 'blunt' ? (clip.push ? 50 : 8 + clip.power * 18) : clip.kind === 'stab' ? 13 : def.chops ? 30 : 10;
+    // a finger driven in like a round makes a round's hole; a hand with claws on it rakes instead of punching
+    const hand = clip.limb === 'handL' || clip.limb === 'handR';
+    const kind = def.pierce ? 'bullet' : attacker.claws && hand && def.id === 'fists' ? 'cut' : clip.kind;
+    let J = kind === 'blunt' ? (clip.push ? 50 : 8 + clip.power * 18) : kind === 'stab' ? 13 : kind === 'bullet' ? 16 : def.chops ? 30 : 10;
     J *= strength;
     // a blow lands along the way the fist was travelling, biased the way the attacker faces
     const fx = Math.sin(attacker.yaw), fz = Math.cos(attacker.yaw);
@@ -888,10 +898,11 @@ export class Weapons {
     // skin on skin leaves prints; a boot or a blade does not
     if (clip.limb === 'handL' || clip.limb === 'handR') g.police?.touched(t, attacker);
     const rep = t.hit({
-      part: hit.part, type: clip.kind, power, point: [px, py, pz], dir: [ix, iy, iz], normal: hit.ln, impulse: J,
-      lift: clip.up ? J * 0.9 : 0, chop: def.chops ? clip.chop || 1 : 0, attacker, weapon: def.id, through: 0.1,
+      part: hit.part, type: kind, power, point: [px, py, pz], dir: [ix, iy, iz], normal: hit.ln, impulse: J,
+      lift: clip.up ? J * 0.9 : 0, chop: def.chops ? clip.chop || 1 : kind === 'cut' ? 0.3 : 0, attacker, weapon: kind === 'cut' && attacker.claws && def.id === 'fists' ? 'claws' : def.id,
+      through: def.pierce ? 0.24 : 0.1, hp: def.pierce ? 32 * power : undefined,
     });
-    const snd = def.hitSound && clip.kind === 'blunt' ? def.hitSound : clip.kind === 'blunt' ? 'punch' : clip.kind === 'stab' ? 'stab' : def.chops ? 'chop' : 'slash';
+    const snd = def.pierce ? 'stab' : def.hitSound && kind === 'blunt' ? def.hitSound : kind === 'blunt' ? 'punch' : kind === 'stab' ? 'stab' : def.chops ? 'chop' : 'slash';
     g.audio?.at(snd, px, py, pz, clamp01(0.5 + power * 0.3));
     g.minds?.noise(px, py, pz, clip.kind === 'blunt' ? 72 : 66, 'blow', attacker);
     g.minds?.witness({ kind: 'attack', actor: attacker, victim: t, weapon: def.id, part: hit.part, x: px, y: py, z: pz, rep });
@@ -904,7 +915,7 @@ export class Weapons {
     }
     // and on the hand that held it
     if (rep && !rep.stopped && (rep.wound && rep.wound.bleed > 0.5 || clip.kind !== 'blunt') && !attacker.gone[P.HAND_R]) {
-      const part = clip.limb === 'handL' ? P.HAND_L : clip.limb === 'footR' ? P.FOOT_R : P.HAND_R;
+      const part = clip.limb === 'handL' || clip.limb === 'fingerL' ? P.HAND_L : clip.limb === 'footR' ? P.FOOT_R : P.HAND_R;
       if (!attacker.gone[part]) g.gore.mark(attacker, part, 'dot', [rand(-0.02, 0.02), rand(-0.04, 0.02), rand(-0.03, 0.03)], [chance(0.5) ? 1 : -1, 0, 0], rand(0.03, 0.06));
       attacker.bloodied = Math.min(1, attacker.bloodied + 0.04);
     }
@@ -1587,7 +1598,8 @@ export class Weapons {
         // the box round a weapon is centred on its middle, the model on its grip
         b.toWorld(0, 0, -d.centre, _a); px = _a[0]; py = _a[1]; pz = _a[2];
         if (b.py < -10) { b.teleport(p.x, 2, p.z); b.vx = b.vy = b.vz = 0; }
-      } else if (h && !h.removed && h.weapon === it && !h.gone[P.HAND_R] && h.attached[P.HAND_R]) {
+      } else if (h && h.hidden) show = false;
+      else if (h && !h.removed && h.weapon === it && !h.gone[P.HAND_R] && h.attached[P.HAND_R]) {
         // in the hand, lying in the curl of the fingers
         const hand = h.bodies[P.HAND_R], s = h.scale;
         if (d.gun && h.state === ST.ANIM) {

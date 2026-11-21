@@ -15,6 +15,7 @@ import { Voxels } from './world/voxels.js';
 import { Things } from './world/things.js';
 import { Ropes } from './world/ropes.js';
 import { Grab } from './combat/grab.js';
+import { Powers } from './combat/powers.js';
 import { Lights } from './render/lights.js';
 import { Fire } from './combat/fire.js';
 import { Power } from './world/power.js';
@@ -88,6 +89,7 @@ export class Game {
     this.things = new Things(this);
     this.ropes = new Ropes(this);
     this.grab = new Grab(this);
+    this.powers = new Powers(this);
     this.lights = new Lights(this);
     this.fire = new Fire(this);
     this.power = new Power(this);
@@ -262,6 +264,7 @@ export class Game {
     this.police?.update(dt);
     this.traffic?.update(dt);
     this.grab.update(dt);
+    this.powers.update(dt);
     for (const h of this.humans) h.update(dt);
     this.ropes.tether();
     this.weapons?.update(dt);
@@ -272,6 +275,7 @@ export class Game {
     this.voxels.update(dt);
     this.ropes.update(dt);
     this.grab.late(dt);
+    this.powers.late(dt);
 
     // crates
     for (const o of this.props) {
@@ -569,6 +573,7 @@ export class Game {
     this.humans[i] = p;
     if (this.selected === old) this.selected = p;
     this.weapons?.onRespawn(old, p);
+    this.powers?.onRespawn();
     this.minds?.playerChanged(old, p);
     this.police?.reset();
     return p;

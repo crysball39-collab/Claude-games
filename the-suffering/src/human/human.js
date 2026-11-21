@@ -111,6 +111,15 @@ export class Human {
     this.grabFace = null;                  // a way to face while reaching for something
     this.grabStep = null;                  // { x, z, d }: a spot to step up to within d of, to reach it
     this.holdBody = null;                  // what they have hold of, which they do not walk into
+    this.speedMul = 1;                     // faster than a person can run: a leopard
+    this.leap = null;                      // { vx, vy, vz, t }: in the air on a leap
+    this.point = [0, 0];                   // an index finger held out straight, each hand, 0..1
+    this.claws = false;                    // claws at the ends of the fingers
+    this.hidden = false;                   // not drawn at all: something else is being drawn in their place
+    this.bulk = 1;                         // drawn this much broader than they are
+    this.fur = null;                       // fur all over instead of skin and clothes, as a colour
+    this.beast = false;                    // an animal's head on them instead of a face and hair
+    this.powerMul = 1; this.reachMul = 1;  // blows land harder, and reach further
     this.footLift = [0, 0];                // how far each foot is standing up on something that is not the floor: a body
     this.gait = 0;                         // how fast the feet are actually covering ground
     this.gvx = 0; this.gvz = 0;            // and which way
@@ -309,7 +318,7 @@ export class Human {
     for (const i of this.skinParts) bk = bk * 7 + Math.round(B[i] / 15);
     if (q === this._pallor && bk === this._burnKey) return;
     this._pallor = q; this._burnKey = bk;
-    const base = rgb(this.look.skin), grey = rgb(0xb9bdb6), k = q / 10 * 0.72;
+    const base = rgb(this.fur ?? this.look.skin), grey = rgb(0xb9bdb6), k = this.fur != null ? 0 : q / 10 * 0.72;
     const cr = lerp(base[0], grey[0], k), cg = lerp(base[1], grey[1], k), cb = lerp(base[2], grey[2], k);
     for (const i of this.skinParts) {
       const c = burnt(cr, cg, cb, B[i]);
@@ -744,7 +753,7 @@ export class Human {
   /** Clothing that has soaked up a lot of blood goes dark with it, all over. */
   _tintCloth() {
     for (let i = 0; i < PART_COUNT; i++) {
-      const hex = this.cloth[i];
+      const hex = this.cloth[i] < 0 ? -1 : this.fur ?? this.cloth[i];
       if (hex < 0 || this.gone[i]) continue;
       const fb = Math.round(this.h.burns[i] / 10);
       const q = Math.round(this.soak[i] * 10) + fb * 16;
@@ -842,6 +851,7 @@ export class Human {
     if (this.cuffing) { this.crouching = !!this.cuffing.low && this.grounded; this.pose.cuffing = 1; } else this.pose.cuffing = 0;
     if (h.legLimp(1) > 0.3 || h.legLimp(-1) > 0.3) top = Math.min(top, 2.2);
     if (this.dragMax < top) top = this.dragMax;                 // hauling something heavy
+    top *= this.speedMul;
     // nothing left in the legs: a run is a jog, then a walk
     if (it.run && h.stamina < 35) top = lerp(Math.min(top, WALK * 1.25 * (this.scale / 0.93)), top, h.stamina / 35);
     let tvx = 0, tvz = 0;
@@ -863,13 +873,21 @@ export class Human {
       const ct = this.cuffing.target, cdx = ct.x - this.x, cdz = ct.z - this.z, cd = Math.hypot(cdx, cdz);
       if (cd > 0.95) { tvx = cdx / cd * 1.7; tvz = cdz / cd * 1.7; }
     }
+    if (this.leap) {
+      // off the ground in one bound, and nothing to be done about the way until it comes down again
+      const L = this.leap;
+      if (L.t === 0) { this.vy = L.vy; this.grounded = false; this.vx = L.vx; this.vz = L.vz; this.jumpCool = 0.6; }
+      L.t += dt;
+      tvx = L.vx; tvz = L.vz;
+      if ((this.grounded && L.t > 0.12) || L.t > 2.5) this.leap = null;
+    }
     if (this.grabStep) {
       // up to whatever the hands are going for, or back a little from something underfoot
       const gs = this.grabStep, gx = gs.x - this.x, gz = gs.z - this.z, gd = Math.hypot(gx, gz) || 1;
       const v = gd > gs.d ? Math.min(1.5, (gd - gs.d) * 5 + 0.25) : gd < gs.d * 0.55 ? -0.7 : 0;
       tvx = gx / gd * v; tvz = gz / gd * v;
     }
-    const acc = this.grounded ? 11 : 4;
+    const acc = this.leap ? 30 : this.grounded ? 11 : 4;
     this.vx = damp(this.vx, tvx, acc, dt); this.vz = damp(this.vz, tvz, acc, dt);
 
     // an attack carries the body a little way forward
@@ -1236,6 +1254,7 @@ export class Human {
     this.island.wake();
     this.reachT[0] = this.reachT[1] = null; this.reachW[0] = this.reachW[1] = 0; this.reachD[0].fill(0); this.reachD[1].fill(0);
     this.grasp[0] = this.grasp[1] = -1; this.stoop = 0; this.grabFace = null; this.grabStep = null; this.dragMax = Infinity;
+    this.leap = null; this.point[0] = this.point[1] = 0;
   }
 
   _stumbling(dt) {
@@ -1588,11 +1607,13 @@ export class Human {
 
   _draw() {
     const g = this.game, bx = g.boxes;
+    if (this.hidden) { this._hideAll(); return; }
+    const bk = this.bulk;
     for (let i = 0; i < PART_COUNT; i++) {
       if (this.gone[i]) continue;
       if (i === P.HAND_L || i === P.HAND_R) continue;
       const b = this.bodies[i], s = this.sizes[i];
-      bx.set(this.inst[i], b.px, b.py, b.pz, b.qx, b.qy, b.qz, b.qw, s[0], s[1], s[2]);
+      bx.set(this.inst[i], b.px, b.py, b.pz, b.qx, b.qy, b.qz, b.qw, s[0] * bk, s[1] * (1 + (bk - 1) * 0.3), s[2] * bk);
     }
     this._drawHand(P.HAND_L, 0, -1);
     this._drawHand(P.HAND_R, 1, 1);
@@ -1615,6 +1636,8 @@ export class Human {
     }
     const hide = this.gone[P.HEAD] || (this.isPlayer && g.firstPerson && this.attached[P.HEAD]);
     const hd = this.bodies[P.HEAD];
+    // an animal's head (drawn by whatever gave them it): no hair, no face
+    if (this.beast) { for (const h of this.hair) bx.hide(h.idx); if (this.faceQuad >= 0) g.faceQuads.hide(this.faceQuad); if (this.helmet) for (const v of this.helmet.boxes) (v.glass ? g.glass : bx).hide(v.idx); return; }
     const lid = this.helmet ? 0.085 * this.scale : 9;
     if (this.helmet) for (const v of this.helmet.boxes) {
       const set = v.glass ? g.glass : bx;
@@ -1639,6 +1662,36 @@ export class Human {
     }
   }
 
+  /** Nothing of them drawn: hidden away while something else stands in for them. */
+  _hideAll() {
+    const g = this.game, bx = g.boxes;
+    for (const i of this.inst) bx.hide(i);
+    for (const hand of this.fingers) for (const i of hand) bx.hide(i);
+    if (this.clawIdx) for (const hand of this.clawIdx) for (const i of hand) bx.hide(i);
+    for (const h of this.hair) bx.hide(h.idx);
+    if (this.faceQuad >= 0) g.faceQuads.hide(this.faceQuad);
+    if (this.phoneIdx >= 0) bx.hide(this.phoneIdx);
+    if (this.caps) for (const c of this.caps) bx.hide(c.idx);
+    if (this.vest) for (const v of this.vest.boxes) bx.hide(v.idx);
+    if (this.helmet) for (const v of this.helmet.boxes) (v.glass ? g.glass : bx).hide(v.idx);
+  }
+
+  /** Claws grown out of the ends of the fingers (on), or gone again (off). */
+  setClaws(on) {
+    const bx = this.game.boxes;
+    this.claws = on;
+    if (on && !this.clawIdx) { this.clawIdx = [[], []]; for (let h = 0; h < 2; h++) for (let f = 0; f < 4; f++) { const i = bx.alloc(); bx.colorHex(i, 0xf1ead8); this.clawIdx[h].push(i); } }
+    else if (!on && this.clawIdx) { for (const hand of this.clawIdx) for (const i of hand) bx.release(i); this.clawIdx = null; }
+  }
+
+  /** Fur all over, of colour `hex`, in place of skin and clothes; null for their own again. */
+  setFur(hex) {
+    this.fur = hex;
+    this._pallor = -1; this._burnKey = -1; this._soakQ.fill(-1);
+    for (let i = 0; i < PART_COUNT; i++) if (this.cloth[i] >= 0 && !this.gone[i]) this.game.boxes.colorHex(this.inst[i], hex ?? this.cloth[i]);
+    this._tintSkin(); this._tintCloth();
+  }
+
   /**
    * A hand: a palm, four fingers and a thumb. Each finger is two segments that
    * turn at the knuckle and at the middle joint, toward the palm; `palm` is
@@ -1656,7 +1709,7 @@ export class Human {
     for (let f = 0; f < 4; f++) {
       const fl = FINGERS[f];
       // the index finger of a hand on a gun lies along it until it is wanted
-      const cf = hnd === 1 && f === 0 ? this.trigger : c * fl[3];
+      const cf = hnd === 1 && f === 0 ? this.trigger : hnd === 0 && f === 0 && this.point[0] > 0.5 ? 0 : c * fl[3];
       const a1 = palm * cf * 1.38, a2 = a1 + palm * cf * 1.5;
       const l1 = fl[1] * s, l2 = fl[2] * s, z0 = fl[0] * s, w = 0.0195 * s, fan = sp * FAN[f];
       const s1 = Math.sin(a1), c1 = Math.cos(a1), s2 = Math.sin(a2), c2 = Math.cos(a2);
@@ -1666,6 +1719,13 @@ export class Human {
       const ex = s1 * l1, ey = knuckle - c1 * l1, ez = z0 + fan * l1;
       _fq[2] = Math.sin(a2 / 2); _fq[3] = Math.cos(a2 / 2);
       bx.setOn(idx[f * 2 + 1], px, py, pz, qx, qy, qz, qw, ex + s2 * l2 * 0.5, ey - c2 * l2 * 0.5, ez + fan * l2 * 0.5, 0.019 * s, l2, w * 0.92, _fq);
+      // a claw out of the end of each finger, curving on the way the finger does
+      if (this.clawIdx) {
+        const cl = 0.032 * s, a3 = a2 + palm * 0.5;
+        _fq[2] = Math.sin(a3 / 2); _fq[3] = Math.cos(a3 / 2);
+        const tx = ex + s2 * l2, ty = ey - c2 * l2, tz = ez + fan * l2;
+        bx.setOn(this.clawIdx[hnd][f], px, py, pz, qx, qy, qz, qw, tx + Math.sin(a3) * cl * 0.5, ty - Math.cos(a3) * cl * 0.5, tz, 0.012 * s, cl, 0.01 * s, _fq);
+      }
     }
     // the thumb leaves the front edge of the palm, pointing down and forward, and closes across it
     const ct = c;
@@ -1700,6 +1760,10 @@ export class Human {
       r = lerp(r, 0.8, w.phone);
       l = lerp(l, 0.75, Math.max(w.pistol, w.rifle));      // the hand that steadies the gun
       if (this.handFull > 0) l = lerp(l, 0.9, this.handFull);   // a magazine in the left hand
+      // a finger held out straight (the rest in a fist), and a leopard's half-closed claw
+      if (this.claws) { if (!this.point[0] && this.grasp[0] < 0) l = Math.min(l, 0.55); if (!this.point[1] && this.grasp[1] < 0) r = Math.min(r, 0.55); }
+      if (this.point[0] > 0) l = lerp(l, 1, this.point[0]);
+      if (this.point[1] > 0 && !this.weapon) { r = lerp(r, 1, this.point[1]); trig = 0; }
       // a hand taking hold of something opens for it, then closes round it
       if (this.grasp[0] >= 0) { l = lerp(0.03, 0.97, this.grasp[0]); sl = (1 - this.grasp[0]) * 0.6; }
       if (this.grasp[1] >= 0 && !this.weapon) { r = lerp(0.03, 0.97, this.grasp[1]); sr = (1 - this.grasp[1]) * 0.6; }

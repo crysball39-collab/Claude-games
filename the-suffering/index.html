@@ -26,6 +26,7 @@
 
     <div id="top-left">
       <button id="btn-menu" class="hb" aria-label="Sandbox menu"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>SPAWN</span></button>
+      <button id="btn-abilities" class="hb wide" aria-label="Special abilities"><svg viewBox="0 0 24 24"><path d="M12 3l2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4z"/></svg><span>ABILITIES</span></button>
       <div id="vitals" aria-label="Your condition">
         <div class="vrow"><i>YOU</i><div class="vbar"><div id="v-cond"></div></div></div>
         <div class="vrow"><i>BLOOD</i><div class="vbar blood"><div id="v-blood"></div></div></div>
@@ -58,6 +59,7 @@
       <button id="btn-drop" class="ab small" hidden><b>DROP</b></button>
       <button id="btn-holster" class="ab small" hidden><b id="holster-label">HOLSTER</b></button>
       <button id="btn-grab" class="ab small" hidden><i class="ic grab"></i><b id="grab-label">GRAB</b></button>
+      <button id="btn-power" class="ab power" hidden><b id="power-label">TEMPEST</b><small>POWER</small></button>
       <div id="ammo" hidden></div>
     </div>
 
@@ -80,6 +82,12 @@
       <button type="button" id="talk-cancel" aria-label="Cancel">&times;</button>
     </form>
   </div>
+
+  <!-- =========================== SPECIAL ABILITIES ========================= -->
+  <aside id="abilities" class="panel left" hidden>
+    <header><h2>ABILITIES</h2><button class="x" data-close="abilities" aria-label="Close">&times;</button></header>
+    <div class="scroll" id="abilities-body"></div>
+  </aside>
 
   <!-- ============================ SANDBOX MENU ============================ -->
   <aside id="sandbox" class="panel left" hidden>
@@ -251,6 +259,7 @@
             <p>Left thumb moves. Drag anywhere else to look. JUMP and CROUCH sit by the right thumb.</p>
             <p>The big button attacks. Tap it again and again for a four move combo; slide your thumb off it left, right, up or down to choose the next move yourself.</p>
             <p>SPAWN opens the sandbox: humans, police officers, a S.W.A.T. team, crates, wooden and steel walls, steel beams, a light bulb, a floodlight, a generator, a car, a police car, a van, rope, wire, light, medium and S.W.A.T. vests and helmets, handcuffs, a poison syringe, the M1911, the Glock-19, the AK-47, the M4A1, the AR-15, the musket, the arquebus, the blunderbuss, the flamethrower, the taser, the knife, the machete, the sword and the crowbar. Walk up to a weapon and PICK UP, or to a vest or a helmet and PUT ON.</p>
+            <p>ABILITIES, beside SPAWN: choose one and POWER uses it. Tempest Kick sends a green slash flying from your kick. Eat the Cat-Cat Fruit, Model: Leopard, for six more: Finger Pistol, Leo's Flame (five fireballs at the nearest person), Swirling Kick (a ring of air that bursts into flame), Full Leopard (run into somebody to maul them), Leopard Leap and Hybrid Transform (claws; every attack bigger, stronger and faster). A form is turned off with the same button.</p>
             <p>GRAB takes hold of what is in front of you: a crate, a lamp, a loose beam, a severed limb, or somebody lying on the ground out cold or dead. Your arm reaches for it and your hand closes on it. Light things are carried (ATTACK throws them); heavy things and people are dragged as you walk, as slowly as their weight makes you. GRAB again lets go.</p>
             <p>The musket, the arquebus and the blunderbuss are black powder, one shot each: the priming flashes, then the charge goes off in a cloud of smoke. Sometimes it only flashes in the pan; fire again. RELOAD is the whole drill: powder and ball down the muzzle, the ramrod, the pan primed. The blunderbuss throws a spread of shot.</p>
             <p>Armour: a light vest covers the chest and the belly; a medium one the whole torso; a S.W.A.T. vest has plates front and back that stop rifle rounds. A medium helmet comes down over the ears; a S.W.A.T. helmet has a visor that stops a few pistol rounds before it is crazed.</p>
@@ -269,7 +278,7 @@
             <p>DOCTOR lets you tap anyone to read their condition (blood, air, pulse, pain, nausea, temperature, breathing), their state (awareness, dizziness, stamina, adrenaline, poison and shock), their emotions and an X-ray of their bones and organs.</p>
             <p>TALK lets you say something. Whoever is close enough to hear it will answer.</p>
             <h3>Keyboard and mouse</h3>
-            <p>WASD move (Shift walks) &middot; mouse looks (click to capture) &middot; Space jump &middot; C crouch &middot; left click or F attack &middot; right click or Q heavy attack &middot; R reload &middot; E pick up &middot; G drop &middot; H holster or draw &middot; Z grab, drag or let go &middot; 1-5 weapons &middot; Tab sandbox &middot; X doctor &middot; T talk &middot; V view &middot; Esc pause</p>
+            <p>WASD move (Shift walks) &middot; mouse looks (click to capture) &middot; Space jump &middot; C crouch &middot; left click or F attack &middot; right click or Q heavy attack &middot; R reload &middot; E pick up &middot; G drop &middot; H holster or draw &middot; Z grab, drag or let go &middot; M abilities &middot; B use the chosen ability (or J K L U I O Y for each) &middot; 1-5 weapons &middot; Tab sandbox &middot; X doctor &middot; T talk &middot; V view &middot; Esc pause</p>
             <p>In a car: W or up is the gas &middot; S or down brakes, then reverses &middot; A / D or left / right steer &middot; Space handbrake &middot; H horn (and siren) &middot; E gets out</p>
           </div>
         </section>

@@ -31,6 +31,7 @@ await run(() => {
       p.tased = 0; p.dazeT = 0;
       for (const it of g.weapons.items.slice()) g.weapons.remove(it);
       g.grab?.clear();
+      g.powers?.clear();
       g.ropes?.clear(); g.fire?.clear(); g.power?.clear(); g.voxels?.clear(); if (g.daylight && g.daylight.mode !== 'day') g.daylight.set('day');
       if (p.car) g.traffic.exit(p);
       g.traffic?.clearCars();
@@ -2156,6 +2157,92 @@ if (want('Grab and drag')) {
   check('a crate is dragged along the ground, not lifted', r.crateHeld && r.crateMoved > 1 && r.crateHigh < 0.6 && r.crateStill, `${r.crateMoved.toFixed(2)} m, never higher than ${r.crateHigh.toFixed(2)}`);
   check('something light is carried in front, and ATTACK throws it', r.carry && r.carryY > 0.6 && r.throwLabel === 'THROW' && r.thrown, `carried at ${r.carryY.toFixed(2)} m, button "${r.throwLabel}", thrown ${r.thrown}`);
   check('somebody watching remembers a body being dragged', r.witness);
+}
+
+head('Special abilities');
+if (want('Special abilities')) {
+  await run(() => { V.stage(); __game.paused = false; __game.powers.forget(); });
+  await t.page.click('#btn-abilities');
+  const menu = await run(() => {
+    const a = document.querySelector('#btn-abilities').getBoundingClientRect(), b = document.querySelector('#btn-menu').getBoundingClientRect();
+    return { open: !document.querySelector('#abilities').hidden, beside: Math.abs(a.top - b.top) < 4 && a.left > b.left && a.left - b.right < 20,
+      tempest: !!document.querySelector('#abilities [data-ability="tempest"]'), fruit: !!document.querySelector('#abilities .item.fruit') };
+  });
+  await t.page.click('#abilities [data-ability="tempest"]');
+  const r = await run(() => {
+    const g = __game, p = g.player, P = g.powers, out = {};
+    out.power = !document.querySelector('#btn-power').hidden && document.querySelector('#power-label').textContent === 'TEMPEST' && document.querySelector('#abilities').hidden;
+    const dummy = (d, side = 0) => { const h = V.still(g.spawnHuman(p.x + d, p.z + side, -Math.PI / 2)); h.h.tough = 1; g.advance(0.3); return h; };
+    const fresh = () => { V.stage(); g.paused = false; P.clear(); for (const k in P.cool) P.cool[k] = 0; };
+    const holes = (h) => h.h.wounds.filter((w) => w.type === 'gunshot').length;
+    const alight = (h) => !!(h.fire && Array.from(h.fire).some((v) => v > 0)) || h.h.burns.some((b) => b > 0);
+    // Tempest Kick needs no fruit
+    fresh();
+    let h = dummy(6); g.camPitch = -0.02;
+    out.tempestUsed = P.use('tempest'); g.advance(0.45);
+    out.slashFlying = P.shots.some((o) => o.kind === 'slash');
+    g.advance(1.2);
+    out.tempestCut = h.h.wounds.some((w) => w.type === 'slash' || w.type === 'stump');
+    out.fruitLocked = !P.use('finger');
+    // the fruit
+    fresh();
+    out.eating = P.eat(); g.advance(1.0); out.handUp = !!(p.reachT[0] && p.reachT[0].eat);
+    g.advance(2); out.fruit = P.fruit; out.label = document.querySelector('#power-label').textContent;
+    // Finger Pistol
+    fresh(); h = dummy(1.15);
+    P.use('finger'); g.advance(0.12); out.pointing = p.point[1] > 0.5 || p.point[0] > 0.5; g.advance(0.8);
+    out.fingerHole = holes(h) >= 1;
+    // Leo's Flame
+    fresh(); h = dummy(8);
+    const fb0 = P.stats.fireballs, fh0 = P.stats.fireHits;
+    P.use('flame'); g.advance(3);
+    out.fireballs = P.stats.fireballs - fb0; out.fireHits = P.stats.fireHits - fh0; out.alight = alight(h);
+    // Swirling Kick
+    fresh(); h = dummy(7); g.camPitch = -0.02;
+    const b0 = P.stats.bursts;
+    P.use('swirl'); g.advance(0.6); out.ring = P.shots.some((o) => o.kind === 'ring'); g.advance(1.2);
+    out.burst = P.stats.bursts - b0; out.swirlDown = T.state(h) !== 'ANIM'; out.swirlFire = alight(h);
+    // Leopard Leap
+    fresh(); h = dummy(4.2);
+    const l0 = P.stats.leapHits;
+    P.use('leap'); g.advance(0.2); out.airborne = !p.grounded; g.advance(1.2);
+    out.leapHit = P.stats.leapHits - l0; out.leapHoles = holes(h);
+    // Hybrid
+    fresh(); h = dummy(1.0);
+    P.use('hybrid'); g.advance(0.5);
+    out.hybrid = P.form === 'hybrid' && p.fur != null && p.claws && p.beast && p.anim.speedUp > 1 && p.powerMul > 1;
+    for (let i = 0; i < 4 && !h.h.wounds.some((w) => w.type === 'slash'); i++) { g.weapons.attack(i % 3); g.advance(0.6); }
+    out.clawed = h.h.wounds.some((w) => w.type === 'slash');
+    P.cool.hybrid = 0; P.use('hybrid'); g.advance(0.3);
+    out.hybridOff = !P.form && p.fur == null && !p.claws && p.powerMul === 1;
+    // Full Leopard, with somebody watching
+    fresh(); h = dummy(7);
+    const w = V.still(g.spawnHuman(p.x + 2, p.z + 6, Math.PI)); g.advance(0.3);
+    P.use('leopard'); g.advance(0.4);
+    out.leopard = P.form === 'leopard' && p.hidden;
+    __ts.input.move.y = 1; let mauled = false, top = 0;
+    for (let i = 0; i < 40 && !mauled; i++) { g.advance(0.05); top = Math.max(top, p.speed); mauled = !!P.maul; }
+    __ts.input.move.y = 0;
+    out.leopardSpeed = top; out.mauled = mauled;
+    g.advance(2.2);
+    out.bitten = h.h.wounds.filter((x) => x.type === 'stab' || x.type === 'slash').length;
+    out.turnedBack = !P.form && !p.hidden;
+    out.seen = w.mind.memory.some((m) => m.kind === 'power');
+    g.paused = true;
+    return out;
+  });
+  check('an ABILITIES button beside SPAWN opens the abilities menu', menu.open && menu.beside && menu.tempest && menu.fruit, JSON.stringify(menu));
+  check('choosing an ability puts it on the POWER button', r.power);
+  check('Tempest Kick: a green slash flies off the kick and cuts whoever it reaches', r.tempestUsed && r.slashFlying && r.tempestCut);
+  check('the fruit\u2019s abilities need the fruit', r.fruitLocked);
+  check('eating the Cat-Cat Fruit: the hand goes to the mouth, and its powers are yours', r.eating && r.handUp && r.fruit, `power button "${r.label}"`);
+  check('Finger Pistol: a straight finger, and a hole like a round\u2019s', r.pointing && r.fingerHole);
+  check('Leo\u2019s Flame: five fireballs at the nearest person, who catches fire', r.fireballs === 5 && r.fireHits >= 3 && r.alight, `${r.fireballs} thrown, ${r.fireHits} hit`);
+  check('Swirling Kick: a ring of air flies out and bursts into flame', r.ring && r.burst >= 1 && r.swirlDown && r.swirlFire);
+  check('Leopard Leap: a bound, and a finger from each hand into whoever it lands on', r.airborne && r.leapHit >= 1 && r.leapHoles >= 2, `${r.leapHoles} holes`);
+  check('Hybrid: fur, claws, a leopard\u2019s head; harder and faster; punches become claws; and back again', r.hybrid && r.clawed && r.hybridOff);
+  check('Full Leopard: fast on all fours; pounces on whoever it runs into, mauls them, turns back', r.leopard && r.leopardSpeed > 6 && r.mauled && r.bitten >= 3 && r.turnedBack, `top speed ${r.leopardSpeed.toFixed(1)} m/s, ${r.bitten} bites and rakes`);
+  check('somebody watching remembers it', r.seen);
 }
 
 /* --------------------------------- report ------------------------------- */

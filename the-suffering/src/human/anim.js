@@ -99,6 +99,75 @@ export const CLIPS = {
     ],
   },
 
+  /* ---- special techniques (see combat/powers.js) ---- */
+  // a high sweeping kick, fast enough that the air it cuts goes on without it
+  tempestKick: {
+    label: 'TEMPEST KICK', dur: 0.72, hit: [0.3, 0.6], limb: 'footR', lunge: 0.06, reach: 1.1, power: 1.4, kind: 'blunt', push: true,
+    keys: [
+      k(0, { ...GUARD, hipR: 0, kneeR: 0.05, ankleR: 0, hipROut: 0, hipL: 0, kneeL: 0.05, rootYaw: 0, rootRoll: 0, spineSide: 0 }),
+      k(0.24, { ...GUARD, shLOut: 0.8, shROut: 0.8, hipR: 1.15, kneeR: 1.95, ankleR: 0.3, hipROut: 0.35, hipL: -0.1, kneeL: 0.2, rootYaw: -0.45, spineTwist: -0.25, rootRoll: 0.05, spineSide: 0 }),
+      k(0.44, { ...GUARD, shLOut: 1.15, shROut: 0.95, elL: 0.9, elR: 1.1, hipR: 1.8, kneeR: 0.04, ankleR: 0.45, hipROut: 0.65, hipL: -0.2, kneeL: 0.12, rootYaw: 0.55, spineTwist: 0.2, rootRoll: -0.16, spineSide: 0.28, spineBend: 0.05, rootZ: 0.06 }),
+      k(0.6, { ...GUARD, shLOut: 1.1, shROut: 0.9, elL: 1.0, elR: 1.1, hipR: 1.55, kneeR: 0.2, ankleR: 0.3, hipROut: 0.75, hipL: -0.15, kneeL: 0.12, rootYaw: 0.95, spineTwist: 0.3, rootRoll: -0.12, spineSide: 0.22, rootZ: 0.04 }),
+      k(0.8, { ...GUARD, hipR: 0.8, kneeR: 1.4, ankleR: 0, hipROut: 0.3, hipL: -0.05, kneeL: 0.1, rootYaw: 0.35, rootRoll: 0, spineSide: 0.05 }),
+      k(1, { ...GUARD, hipR: 0, kneeR: 0.05, ankleR: 0, hipROut: 0, hipL: 0, kneeL: 0.05, rootYaw: 0, rootRoll: 0, spineSide: 0 }),
+    ],
+  },
+  // wound up the other way, then whipped round: a spinning hook kick
+  swirlKick: {
+    label: 'SWIRLING KICK', dur: 0.76, hit: [0.36, 0.62], limb: 'footR', lunge: 0.06, reach: 1.1, power: 1.3, kind: 'blunt', push: true,
+    keys: [
+      k(0, { ...GUARD, hipR: 0, kneeR: 0.05, ankleR: 0, hipROut: 0, hipL: 0, kneeL: 0.05, rootYaw: 0, rootRoll: 0, spineSide: 0 }),
+      k(0.28, { ...GUARD, shLOut: 0.9, shROut: 0.6, elL: 1.4, hipR: 0.9, kneeR: 1.7, ankleR: 0.2, hipROut: 0.5, hipL: 0.05, kneeL: 0.3, rootYaw: -1.15, spineTwist: -0.45, rootRoll: 0.1, spineSide: -0.1, rootY: -0.06 }),
+      k(0.5, { ...GUARD, shLOut: 1.3, shROut: 1.2, elL: 0.5, elR: 0.6, hipR: 1.35, kneeR: 0.1, ankleR: 0.4, hipROut: 1.05, hipL: -0.15, kneeL: 0.15, rootYaw: 0.7, spineTwist: 0.45, rootRoll: -0.22, spineSide: 0.35, rootZ: 0.05 }),
+      k(0.66, { ...GUARD, shLOut: 1.2, shROut: 1.1, elL: 0.7, elR: 0.8, hipR: 1.1, kneeR: 0.3, ankleR: 0.3, hipROut: 1.0, hipL: -0.1, kneeL: 0.15, rootYaw: 1.25, spineTwist: 0.4, rootRoll: -0.15, spineSide: 0.25 }),
+      k(0.84, { ...GUARD, hipR: 0.5, kneeR: 1.2, hipROut: 0.4, hipL: 0, kneeL: 0.1, rootYaw: 0.5, rootRoll: 0, spineSide: 0.05 }),
+      k(1, { ...GUARD, hipR: 0, kneeR: 0.05, ankleR: 0, hipROut: 0, hipL: 0, kneeL: 0.05, rootYaw: 0, rootRoll: 0, spineSide: 0 }),
+    ],
+  },
+  // one finger, straight, driven in like a round: the right hand, or the left if the right is holding something
+  fingerPistol: {
+    label: 'FINGER PISTOL', dur: 0.32, hit: [0.24, 0.62], limb: 'fingerR', lunge: 0.28, reach: 0.92, power: 1.0, kind: 'stab',
+    keys: [k(0, GUARD), k(0.18, { ...GUARD, shR: 0.45, elR: 2.0, spineTwist: -0.32, rootZ: -0.02 }),
+      k(0.42, { ...GUARD, shR: 1.62, shROut: 0.04, shRIn: -0.12, elR: 0.02, wrR: 0.1, spineTwist: 0.42, waistTwist: 0.16, spineBend: 0.12, rootZ: 0.16 }),
+      k(0.62, { ...GUARD, shR: 1.6, shROut: 0.04, shRIn: -0.12, elR: 0.05, wrR: 0.1, spineTwist: 0.4, waistTwist: 0.16, spineBend: 0.12, rootZ: 0.16 }), k(1, GUARD)],
+  },
+  fingerPistolL: {
+    label: 'FINGER PISTOL', dur: 0.32, hit: [0.24, 0.62], limb: 'fingerL', lunge: 0.28, reach: 0.92, power: 1.0, kind: 'stab',
+    keys: [k(0, GUARD), k(0.18, { ...GUARD, shL: 0.45, elL: 2.0, spineTwist: 0.32, rootZ: -0.02 }),
+      k(0.42, { ...GUARD, shL: 1.62, shLOut: 0.04, shLIn: -0.12, elL: 0.02, wrL: 0.1, spineTwist: -0.42, waistTwist: -0.16, spineBend: 0.12, rootZ: 0.16 }),
+      k(0.62, { ...GUARD, shL: 1.6, shLOut: 0.04, shLIn: -0.12, elL: 0.05, wrL: 0.1, spineTwist: -0.4, waistTwist: -0.16, spineBend: 0.12, rootZ: 0.16 }), k(1, GUARD)],
+  },
+  // both hands at once, the fingers straight, into whoever a leap lands on
+  doubleFinger: {
+    label: 'DOUBLE FINGER PISTOL', dur: 0.5, hit: [0.3, 0.6], lunge: 0, reach: 0.8, power: 1.0, kind: 'stab',
+    keys: [k(0, GUARD), k(0.2, { ...GUARD, shL: 0.5, shR: 0.5, elL: 2.0, elR: 2.0, shLIn: 0.1, shRIn: 0.1, spineBend: 0.05, rootZ: -0.03 }),
+      k(0.4, { ...GUARD, shL: 1.55, shR: 1.55, shLOut: 0.0, shROut: 0.0, shLIn: 0.22, shRIn: 0.22, elL: 0.03, elR: 0.03, spineBend: 0.2, rootZ: 0.14 }),
+      k(0.66, { ...GUARD, shL: 1.5, shR: 1.5, shLOut: 0.0, shROut: 0.0, shLIn: 0.22, shRIn: 0.22, elL: 0.08, elR: 0.08, spineBend: 0.2, rootZ: 0.14 }), k(1, GUARD)],
+  },
+  // a palm thrust from each hand in turn, a fireball off each
+  flameCast: {
+    label: "LEO'S FLAME", dur: 1.0, hit: [0, 0], lunge: 0, reach: 1, power: 0, kind: 'blunt',
+    keys: [k(0, GUARD),
+      k(0.1, { ...GUARD, shR: 1.5, shROut: 0.05, shRIn: 0.05, elR: 0.15, wrR: -0.9, spineTwist: 0.35, rootZ: 0.06 }),
+      k(0.25, { ...GUARD, shL: 1.5, shLOut: 0.05, shLIn: 0.05, elL: 0.15, wrL: -0.9, shR: 0.6, elR: 1.9, spineTwist: -0.35, rootZ: 0.06 }),
+      k(0.4, { ...GUARD, shR: 1.5, shROut: 0.05, shRIn: 0.05, elR: 0.15, wrR: -0.9, shL: 0.6, elL: 1.9, spineTwist: 0.35, rootZ: 0.06 }),
+      k(0.55, { ...GUARD, shL: 1.5, shLOut: 0.05, shLIn: 0.05, elL: 0.15, wrL: -0.9, shR: 0.6, elR: 1.9, spineTwist: -0.35, rootZ: 0.06 }),
+      k(0.7, { ...GUARD, shR: 1.5, shROut: 0.05, shRIn: 0.05, elR: 0.15, wrR: -0.9, shL: 0.6, elL: 1.9, spineTwist: 0.35, rootZ: 0.06 }),
+      k(0.86, GUARD), k(1, GUARD)],
+  },
+  // a leopard's leap: crouched, launched, stretched out at full length, and down again
+  leap: {
+    label: 'LEOPARD LEAP', dur: 0.95, hit: [0, 0], lunge: 0, reach: 1, power: 0, kind: 'blunt',
+    keys: [
+      k(0, { ...GUARD, hipL: 0, hipR: 0, kneeL: 0.05, kneeR: 0.05, rootY: 0, spineBend: 0.08, rootPitch: 0 }),
+      k(0.12, { ...GUARD, shL: -0.4, shR: -0.4, elL: 0.6, elR: 0.6, hipL: 0.9, hipR: 0.9, kneeL: 1.5, kneeR: 1.5, rootY: -0.25, spineBend: 0.45, rootPitch: 0.2 }),
+      k(0.35, { ...GUARD, shL: 2.4, shR: 2.4, shLOut: 0.2, shROut: 0.2, elL: 0.25, elR: 0.25, hipL: -0.35, hipR: -0.2, kneeL: 0.9, kneeR: 1.0, rootY: 0, spineBend: -0.1, rootPitch: -0.35 }),
+      k(0.75, { ...GUARD, shL: 1.9, shR: 1.9, shLOut: 0.2, shROut: 0.2, elL: 0.4, elR: 0.4, hipL: 0.7, hipR: 0.8, kneeL: 1.1, kneeR: 1.2, rootY: 0, spineBend: 0.2, rootPitch: 0.1 }),
+      k(0.9, { ...GUARD, hipL: 0.6, hipR: 0.6, kneeL: 1.0, kneeR: 1.0, rootY: -0.2, spineBend: 0.3, rootPitch: 0.1 }),
+      k(1, { ...GUARD, hipL: 0, hipR: 0, kneeL: 0.05, kneeR: 0.05, rootY: 0, spineBend: 0.08, rootPitch: 0 }),
+    ],
+  },
+
   /* ---- knife. These, and the machete's, are solved from hand positions by
      tools/pose-solve.mjs: the carry, the swing, and back to the carry ---- */
   slash: { label: 'SLASH', dur: 0.4, hit: [0.22, 0.62], limb: 'blade', lunge: 0.14, reach: 0.9, power: 1.0, kind: 'cut', keys: swing('slash') },
@@ -477,7 +546,7 @@ export class Animator {
     /* ---- an attack takes over the channels it names ---- */
     const act = this.action;
     if (act) {
-      act.t += dt;
+      act.t += dt * (this.speedUp || 1);
       const c = act.clip, u = act.t / c.dur;
       if (u >= 1) this.action = null;
       else {

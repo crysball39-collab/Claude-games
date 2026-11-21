@@ -87,7 +87,7 @@ export class Fire {
   /* -------------------------------- catching -------------------------------- */
 
   /** A part of somebody catches (or burns harder). */
-  ignite(h, part, amount, who = null) {
+  ignite(h, part, amount, who = null, weapon = 'flamethrower') {
     if (!h || h.removed || h.gone[part]) return;
     if (h.h.god) return;
     if (!h.fire) { h.fire = new Float32Array(PART_COUNT); h.burning = 0; }
@@ -100,8 +100,8 @@ export class Fire {
       const b = h.bodies[part];
       this.g.audio?.at('whump', b.px, b.py, b.pz, 0.7);
       // the moment it catches: pain, terror, and anyone watching sees it
-      if (h.mind) h.mind.feel(part, 'burn', { pain: 30, bones: [], ko: false }, who && who !== h ? who : null, 'flamethrower');
-      if (who && who !== h) this.g.minds?.witness({ kind: 'attack', actor: who, victim: h, weapon: 'flamethrower', part, x: b.px, y: b.py, z: b.pz, rep: { pain: 30, bones: [] } });
+      if (h.mind) h.mind.feel(part, 'burn', { pain: 30, bones: [], ko: false }, who && who !== h ? who : null, weapon);
+      if (who && who !== h) this.g.minds?.witness({ kind: 'attack', actor: who, victim: h, weapon, part, x: b.px, y: b.py, z: b.pz, rep: { pain: 30, bones: [] } });
       this.g.minds?.witness({ kind: 'fire', victim: h, x: b.px, y: b.py, z: b.pz });
     }
   }

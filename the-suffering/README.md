@@ -34,6 +34,8 @@ npm start            # python3 -m http.server 8080, from the repository root
 | Pick up / drop / reload | PICK UP, DROP, RELOAD | E, G, R |
 | Holster or draw | HOLSTER / DRAW | H |
 | Grab, drag or let go | GRAB (DRAG, LET GO); ATTACK throws what you carry | Z |
+| Special abilities menu | ABILITIES (beside SPAWN) | M |
+| Use the chosen ability | POWER | B, or each ability's own key: J K L U I O Y |
 | Weapon slots | tap a slot | 1 to 5 |
 | Sandbox menu | SPAWN | Tab |
 | Doctor mode | DOCTOR, then tap a person | X, then click a person |
@@ -93,6 +95,37 @@ bitten open, the powder and the ball are poured down the muzzle, the ramrod is d
 from under the barrel and driven down it three times, put back, and the pan primed and
 the lock cocked. The left hand goes to the muzzle and to the lock exactly, wherever the
 gun is. When you aim one, the left hand holds it out along the stock.
+
+**Special abilities.** ABILITIES, beside SPAWN, opens a menu of them. Tap one and the
+POWER button uses it; on a keyboard B does, and each also has a key of its own. POWER
+sweeps dark while it gets ready again.
+
+- *Tempest Kick* (J), which anybody can do: a high sweeping kick so fast that the air it
+  cuts goes on without it, a green crescent that flies on past where the foot reached and
+  cuts through whatever it meets: people (it takes limbs off), boards and beams, crates,
+  rope, car glass and panels. A building stops it.
+- The *Cat-Cat Fruit, Model: Leopard*: a strange swirled fruit, in the same menu. Eat it
+  (three bites, and it tastes terrible) and six more are yours, until you choose to lose
+  them again:
+  - *Finger Pistol* (K): one finger, held straight, driven into somebody so hard it goes in
+    like a round, an entry hole and often an exit. With a gun in your right hand, the left
+    does it.
+  - *Leo's Flame* (L): five fireballs, a palm thrust from each hand in turn, at whoever is
+    nearest; they bend toward them in flight, and whoever they hit catches fire.
+  - *Swirling Kick* (U): a spinning kick that sends a white ring of air spinning forward;
+    whatever it touches (or where it runs out) it bursts into flame, knocking down and
+    setting alight everyone close.
+  - *Full Leopard* (I): you become a leopard on all fours, spotted, with a tail, more than
+    twice as fast as you can run. The first person you run into you pounce on, bite and
+    maul, and then you are a person again. The same button turns you back sooner.
+  - *Leopard Leap* (O): a long, low bound; whoever it comes down on takes a finger from
+    each hand, a double Finger Pistol.
+  - *Hybrid Transform* (Y): half leopard, half person, upright: golden spotted fur, a
+    leopard's head, a tail and claws on every finger. Every attack is bigger, harder and
+    faster: punches become claw rakes, slashes and fireballs are half as big again, and
+    everything is ready again sooner. The same button turns you back.
+
+Nobody watching takes any of it calmly, and the police treat it like any other attack.
 
 **Grabbing and dragging.** GRAB (Z) takes hold of whatever is under the crosshair and in
 reach, or the nearest such thing in front of you: a crate, a lamp, a generator, a wall or

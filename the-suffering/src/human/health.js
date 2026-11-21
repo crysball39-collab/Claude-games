@@ -499,7 +499,8 @@ export class Health {
 
   _checkDeath(type, weapon, out) {
     if (!this.alive) return;
-    const how = type === 'bullet' ? 'gunshot' : type === 'stab' ? 'stab wound' : type === 'cut' ? 'blade' : 'blunt trauma';
+    const how = weapon === 'fingerpistol' ? 'pierced by a finger' : weapon === 'tempest' ? 'cut by a blade of air' : weapon === 'leopard' ? 'mauled' : weapon === 'claws' ? 'clawed'
+      : type === 'bullet' ? 'gunshot' : type === 'stab' ? 'stab wound' : type === 'cut' ? 'blade' : 'blunt trauma';
     if (this.organs.brain >= 0 && this.organs.brain <= 0) { this._die('Brain destroyed (' + how + ')'); out.killed = true; return; }
     if (this.organs.heart >= 0 && this.organs.heart < 25 && !this.heartStopped) {
       this.heartStopped = true; this.mechanism = 'Heart destroyed (' + how + ')'; this.events.push('arrest');

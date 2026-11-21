@@ -334,6 +334,8 @@ const MORE = {
   tied: ["Hey! What are you doing?!", "Get this off me!", "Untie me! Right now!", "What is this, a rope? Are you serious?", "Let me go!", "What are you tying me to?!",
     "This isn't funny!", "Somebody help, he's tying me up!", "I can't get it off!", "Why are you doing this?"],
   untied: ["Finally.", "Okay. Okay, I'm loose.", "Thank God.", "Never do that again.", "My wrist's raw."],
+  sawPower: ["What the hell was that?!", "Did you see that? Did you SEE that?", "That's not possible. That's not possible.", "How did he do that?!", "Run! Just run!", "Oh my God. Oh my God, what is he?"],
+  sawTransform: ["He turned into an animal!", "That's a leopard! That's a LEOPARD!", "What is he? What IS he?!", "Somebody call somebody, he's not human!", "Get away from it! Get away!", "I'm dreaming. I have to be dreaming."],
   sawDrag: ["Why is he dragging that guy?", "Is that person okay? Why are you dragging them?", "Put him down! What are you doing?", "Oh my God, is that a body?", "Somebody call someone. He's dragging a person."],
   sawTied: ["Why is that guy tied up?", "Is that a rope? What's going on?", "Somebody untie that person!", "This is some sick stuff."],
 

@@ -4,6 +4,7 @@
    ========================================================================== */
 import { ST } from '../human/human.js';
 import { WEAPONS } from '../combat/weapons.js';
+import { ABILITIES, ABILITY } from '../combat/powers.js';
 import { CLIPS } from '../human/anim.js';
 import { MODELS } from '../mind/voices.js';
 import { LINE_COUNT } from '../mind/lines.js';
@@ -50,6 +51,8 @@ export class UI {
     });
     const tap = (id, fn) => { const b = $(id); b.addEventListener('pointerdown', (e) => e.stopPropagation()); b.addEventListener('click', (e) => { e.preventDefault(); this.sound.unlock(); fn(e); b.blur(); }); };
     tap('#btn-menu', () => this.toggleSandbox());
+    tap('#btn-abilities', () => this.toggleAbilities());
+    inp.bind($('#btn-power'), 'power');
     tap('#btn-doctor', () => this.toggleDoctor());
     tap('#btn-talk', () => this.openTalk());
     tap('#btn-view', () => { g.firstPerson = !g.firstPerson; $('#btn-view').classList.toggle('on', g.firstPerson); this.toast(g.firstPerson ? 'First person' : 'Third person'); });
@@ -66,7 +69,7 @@ export class UI {
     tap('#doc-me', () => this.doctor.select(g.player));
     tap('#ai-test', () => this._aiTest());
     tap('#talk-cancel', () => this.closeTalk());
-    for (const b of $$('[data-close]')) tap('[data-close="' + b.dataset.close + '"]', () => (b.dataset.close === 'doctor' ? this.toggleDoctor(false) : this.toggleSandbox(false)));
+    for (const b of $$('[data-close]')) tap('[data-close="' + b.dataset.close + '"]', () => (b.dataset.close === 'doctor' ? this.toggleDoctor(false) : b.dataset.close === 'abilities' ? this.toggleAbilities(false) : this.toggleSandbox(false)));
     for (const b of $$('[data-spawn]')) b.addEventListener('click', () => this.spawn(b.dataset.spawn));
     for (const b of $$('[data-clean]')) b.addEventListener('click', () => { g.cleanUp(b.dataset.clean); this.toast('Cleaned up: ' + b.textContent.toLowerCase()); this._count(); });
     for (const b of $$('[data-wanted]')) b.addEventListener('click', () => { g.police?.clear('sandbox'); this.toast('Wanted level cleared'); });
@@ -81,12 +84,21 @@ export class UI {
       if (h) { this.doctor.select(h); this.sound.play('pickup', 0.3); }
     };
     inp.onSlot = (i) => w.select(i - 1);
+    // each ability has a key of its own as well as POWER
+    inp.onAbilityKey = (letter) => {
+      if (!this.playing || g.paused) return;
+      const a = ABILITIES.find((x) => x.key === letter);
+      if (!a) return;
+      if (!g.powers.has(a.id)) { this.toast(a.name + ' comes from the Cat-Cat Fruit. Eat it first (ABILITIES, or M).'); return; }
+      g.powers.use(a.id);
+    };
     inp.onCycle = (d) => w.cycle(d);
     inp.onKey = (k) => {
       if (!this.playing) return;
-      if (k === 'pause') { if (g.paused) this.resume(); else if (!$('#sandbox').hidden) this.toggleSandbox(false); else if (g.doctor) this.toggleDoctor(false); else this.pause('main'); }
+      if (k === 'pause') { if (g.paused) this.resume(); else if (!$('#sandbox').hidden) this.toggleSandbox(false); else if (!$('#abilities').hidden) this.toggleAbilities(false); else if (g.doctor) this.toggleDoctor(false); else this.pause('main'); }
       else if (g.paused) return;
       else if (k === 'menu') this.toggleSandbox();
+      else if (k === 'abilities') this.toggleAbilities();
       else if (k === 'doctor') this.toggleDoctor();
       else if (k === 'view') $('#btn-view').click();
       else if (k === 'talk') this.openTalk();
@@ -190,15 +202,75 @@ export class UI {
   toggleSandbox(on) {
     const p = $('#sandbox');
     const show = on === undefined ? p.hidden : on;
-    if (show) this.toggleDoctor(false);
+    if (show) { this.toggleDoctor(false); this.toggleAbilities(false); }
     p.hidden = !show;
     $('#btn-menu').classList.toggle('on', show);
     if (show) { this.input.exitLock(); this._count(); }
     this._layout();
   }
+  /** The special abilities: the one technique, the fruit, and what the fruit gives. */
+  toggleAbilities(on) {
+    const p = $('#abilities');
+    if (!p) return;
+    const show = on === undefined ? p.hidden : on;
+    if (show) { this.toggleDoctor(false); $('#sandbox').hidden = true; $('#btn-menu').classList.toggle('on', false); this.input.exitLock(); this._abilities(); }
+    p.hidden = !show;
+    $('#btn-abilities').classList.toggle('on', show);
+    this._layout();
+  }
+  _abilities() {
+    const g = this.g, P = g.powers, box = $('#abilities-body');
+    if (!box || !P) return;
+    box.textContent = '';
+    box.appendChild(el('p', 'note', 'Choose one, and POWER uses it (B on a keyboard). Each also has a key of its own.'));
+    const card = (a) => {
+      const b = el('button', 'item ability' + (P.selected === a.id ? ' on' : ''));
+      b.dataset.ability = a.id;
+      b.appendChild(el('i', 'ic ab-' + a.id));
+      b.appendChild(el('b', '', a.name + (P.form === a.id ? ' (on)' : '')));
+      b.appendChild(el('small', '', a.desc + '  [' + a.key + ']'));
+      b.addEventListener('click', () => { this.sound.unlock(); P.choose(a.id); this.toast('POWER: ' + a.name); this.toggleAbilities(false); });
+      return b;
+    };
+    box.appendChild(el('h3', '', 'Technique'));
+    const t = el('div', 'grid one'); t.appendChild(card(ABILITY.tempest)); box.appendChild(t);
+    box.appendChild(el('h3', '', 'Cat-Cat Fruit, Model: Leopard'));
+    if (!P.fruit) {
+      const f = el('button', 'item fruit');
+      f.appendChild(el('i', 'ic ab-fruit'));
+      f.appendChild(el('b', '', P.eating ? 'Eating it...' : 'Eat the fruit'));
+      f.appendChild(el('small', '', 'A strange swirled fruit. Eat it and the leopard\u2019s powers are yours: Finger Pistol, Leo\u2019s Flame, Swirling Kick, Full Leopard, Leopard Leap, Hybrid Transform. It tastes terrible.'));
+      f.addEventListener('click', () => { this.sound.unlock(); if (g.powers.eat()) this.toggleAbilities(false); });
+      box.appendChild(f);
+    } else {
+      const grid = el('div', 'grid one');
+      for (const a of ABILITIES) if (a.fruit) grid.appendChild(card(a));
+      box.appendChild(grid);
+      const row = el('div', 'row');
+      const lose = el('button', 'chip', 'Lose the fruit\u2019s power');
+      lose.addEventListener('click', () => { P.forget(); this.toast('The power has left you.'); });
+      row.appendChild(lose); box.appendChild(row);
+    }
+  }
+  /** Something about the abilities changed: what is chosen, what is had, a form put on or off. */
+  abilitiesChanged() {
+    const P = this.g.powers;
+    if (!P) return;
+    if (!$('#abilities').hidden) this._abilities();
+    this._power();
+  }
+  _power() {
+    const P = this.g.powers, b = $('#btn-power');
+    if (!P || !b) return;
+    const a = ABILITY[P.selected];
+    b.hidden = !a || !P.has(a.id) || !!this.g.player.car;
+    if (b.hidden) return;
+    $('#power-label').textContent = a.form && P.form === a.id ? 'TURN BACK' : a.short;
+    b.style.setProperty('--cd', P.coolFrac(a.id).toFixed(3));
+  }
   toggleDoctor(on) {
     const show = on === undefined ? !this.g.doctor : on;
-    if (show) { $('#sandbox').hidden = true; $('#btn-menu').classList.remove('on'); this.input.exitLock(); }
+    if (show) { $('#sandbox').hidden = true; $('#btn-menu').classList.toggle('on', false); $('#abilities').hidden = true; $('#btn-abilities').classList.toggle('on', false); this.input.exitLock(); }
     this.doctor.open(show);
     $('#btn-doctor').classList.toggle('on', show);
     $('#doctor-hint').hidden = !show || !!this.g.selected;
@@ -206,7 +278,7 @@ export class UI {
   }
   /** Panels cover the thumb buttons on their side of the screen. */
   _layout() {
-    const doc = !!this.g.doctor, box = !$('#sandbox').hidden;
+    const doc = !!this.g.doctor, box = !$('#sandbox').hidden || !$('#abilities').hidden;
     const portrait = window.innerHeight > window.innerWidth;
     $('#buttons').style.visibility = doc || (box && portrait) ? 'hidden' : '';
     $('#stick-zone').style.visibility = (box && !portrait) || ((doc || box) && portrait) ? 'hidden' : '';
@@ -428,6 +500,7 @@ export class UI {
 
   update(dt) {
     const g = this.g, p = g.player;
+    this._power();
     if (this.toastT > 0 && (this.toastT -= dt) <= 0) $('#toast').classList.remove('show');
     if (this.moveT > 0 && (this.moveT -= dt) <= 0) $('#move-name').classList.remove('show');
     if (this.hitT > 0 && (this.hitT -= dt) <= 0) $('#crosshair').classList.remove('hit');
