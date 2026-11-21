@@ -1903,9 +1903,11 @@ if (want('Gore')) {
     out.bone = cols.some((c) => c[0] > 0.7 && c[1] > 0.65 && c[2] > 0.5);
     // a burst head: bone and brain among the pieces
     const n0 = g.gore.gibsList.length;
+    let died = 0; const od = g.onDeath; g.onDeath = (h) => { if (h === v) died++; od?.(h); };
     v.burst(4, [0, 2, 0]); g.advance(0.1);
     const pieces = g.gore.gibsList.slice(n0).map((o) => g.boxes.c[o.idx * 3] * 1000 | 0);
     out.gibs = pieces.length; out.mixed = new Set(pieces).size;
+    g.advance(0.5); g.onDeath = od; out.died = died;
     // dragged along the ground, bleeding: a smear behind
     const u = V.still(T.dummy(2.5, 2)); g.advance(0.2);
     u.h.hit({ part: 1, type: 'cut', power: 2.5, lp: [0, 0, 0.09], ln: [0, 0, 1], ld: [0, 0, -1] });
@@ -1930,6 +1932,7 @@ if (want('Gore')) {
   });
   check('a severed stump has a ring of flesh and the end of the bone standing proud of it, on both sides of the cut', r.caps >= 6 && r.capsOn === '5,6' && r.bone, `${r.caps} pieces on parts ${r.capsOn}`);
   check('a head that bursts throws bone and brain with the blood', r.gibs >= 8 && r.mixed >= 6, `${r.gibs} pieces, ${r.mixed} kinds`);
+  check('and it is one death, however many ways it comes to light (one kill in the feed, one report to the police)', r.died === 1, `${r.died} deaths`);
   check('somebody bleeding who is dragged along the ground leaves a smear the way they went', r.trails > 2, `${r.trails} smears`);
   check('blood that lands on a car stays on the car', r.onCar > 2, `${r.onCar} marks`);
   check('blood on the ground goes dark as it dries', r.dryK > 0.9, `${r.dryK}`);
@@ -2419,6 +2422,8 @@ if (want('Multiplayer')) {
   const reserved = await B.ev(async (email) => { const a = window.__ts.auth; await a.ready; return (await a.signUp({ email, password: 'secret-12', confirm: 'secret-12', name: 'Fake' })).error || ''; }, TEST_ADMIN);
   const ea = await enter(A, TEST_ADMIN, 'Boss'), eb = await enter(B, 'friend.player@gmail.com', 'Friend');
   check('on claude.ai the admin address is the page owner’s alone: anybody else is refused it', ea.admin && !eb.admin && /reserved/.test(reserved), reserved);
+  // each player's city has its own people, who fight back at someone shooting in the street and can knock the shooter down mid-check: empty streets
+  for (const x of [A, B]) await x.ev(() => { const g = window.__game; window.__ts.settings.people = 0; g.traffic.setCount(0); g.traffic.clearCars(); for (const h of g.humans.slice()) if (!h.isPlayer) g.removeHuman(h); });
   await step(0.5);
   const store = await B.ev(async () => { const db = await window.claude.use('db'); const s = await db.doc('config/admin').get(); let forged = false; try { await db.doc('config/admin').set({ id: 'u_friend' }); forged = true; } catch { forged = false; } return { id: s.exists ? s.data().id : null, forged }; });
   check('the admin’s platform id is in the shared store, and nobody else can write it', store.id === 'u_owner' && !store.forged);
@@ -2443,6 +2448,8 @@ if (want('Multiplayer')) {
     await B.ev(([x, z, yaw, d]) => { const p = window.__game.player; p.h.heal(); p.reset(x + Math.sin(yaw) * d, z + Math.cos(yaw) * d, yaw + Math.PI); p.h.tough = 1; }, [...a, d]);
     await step(1);
   };
+  // how both pages stand, for a check that fails
+  const diag = async () => JSON.stringify(await Promise.all([A, B].map((x) => x.ev(() => { const g = window.__game, mp = window.__ts.mp, p = g.player, r = [...mp.remotes.values()][0]; return { on: mp.on, n: mp.remotes.size, alive: p.h.alive, st: p.state, dn: p.h.deathNo, admin: window.__ts.auth.admin, me: [+p.x.toFixed(2), +p.z.toFixed(2)], pup: r && r.h ? { st: r.h.state, gone: r.h.gone.filter(Boolean).length, at: [+r.h.x.toFixed(2), +r.h.z.toFixed(2)] } : null, k: window.__k }; }))));
   const aim = () => A.ev(() => { const g = window.__game, r = [...window.__ts.mp.remotes.values()][0], c = r.h.bodies[2], a = g.aim; g.camYaw = Math.atan2(c.px - a.ox, c.pz - a.oz); g.camPitch = Math.atan2(c.py - a.oy, Math.hypot(c.px - a.ox, c.pz - a.oz)); });
   // blows: A punches B on A's screen; B's own game takes them
   await face(1.0);
@@ -2466,19 +2473,22 @@ if (want('Multiplayer')) {
   for (let i = 0; i < 12; i++) { await step(0.1); ghost = Math.max(ghost, await B.ev(() => window.__game.powers.shots.filter((o) => o.ghost).length)); }
   await step(1);
   const kicked = await B.ev(() => { const p = window.__game.player; return { cuts: p.h.wounds.filter((w) => w.type === 'slash' || w.type === 'cut' || w.type === 'stump').length, weapon: p.lastWeapon }; });
-  check('the admin’s Tempest Kick cuts another player, who sees the slash come', (await A.ev(() => window.__k)) && ghost >= 1 && kicked.cuts >= 1 && kicked.weapon === 'tempest', `ghost slashes ${ghost}, ${JSON.stringify(kicked)}`);
+  const kickOk = (await A.ev(() => window.__k)) && ghost >= 1 && kicked.cuts >= 1 && kicked.weapon === 'tempest';
+  check('the admin’s Tempest Kick cuts another player, who sees the slash come', kickOk, `ghost slashes ${ghost}, ${JSON.stringify(kicked)}${kickOk ? '' : ' ' + (await diag())}`);
   // a kill: the feed on both screens, and the score
   await face(5);
   await A.ev(() => { const g = window.__game; g.weapons.give(g.player, 'ak47', true); g.paused = false; g.advance(0.8); g.paused = true; });
   await B.ev(() => { window.__game.player.h.tough = 0.3; });
-  for (let i = 0; i < 14; i++) {
-    await aim(); await A.ev(() => { const g = window.__game, r = [...window.__ts.mp.remotes.values()][0], c = r.h.bodies[4], a = g.aim; g.camYaw = Math.atan2(c.px - a.ox, c.pz - a.oz); g.camPitch = Math.atan2(c.py - a.oy, Math.hypot(c.px - a.ox, c.pz - a.oz)); g.paused = false; g.advance(0.12); g.weapons.fire(); g.advance(0.05); g.paused = true; });
+  // at the head while they stand, at the chest once they are down (a head on the ground is a small mark behind the rest of them): a magazine at most
+  for (let i = 0; i < 30; i++) {
+    await aim(); await A.ev(() => { const g = window.__game, r = [...window.__ts.mp.remotes.values()][0], c = r.h.bodies[r.h.state === 2 ? 2 : 4], a = g.aim; g.camYaw = Math.atan2(c.px - a.ox, c.pz - a.oz); g.camPitch = Math.atan2(c.py - a.oy, Math.hypot(c.px - a.ox, c.pz - a.oz)); g.paused = false; g.advance(0.12); g.weapons.fire(); g.advance(0.05); g.paused = true; });
     await step(0.25);
     if (!(await B.ev(() => window.__game.player.h.alive))) break;
   }
   await step(1.5);
   const score = await Promise.all([A, B].map((x) => x.ev(() => ({ kills: window.__ts.mp.you.kills, deaths: window.__ts.mp.you.deaths, feed: Array.from(document.querySelectorAll('#feed .fe.kill')).map((e) => e.textContent) }))));
-  check('a kill goes in the feed on both screens, and on the scoreboard', score[0].kills === 1 && score[1].deaths === 1 && score[0].feed.some((f) => /Boss.*AK-47.*Friend/.test(f)) && score[1].feed.some((f) => /Boss.*AK-47.*Friend/.test(f)), JSON.stringify(score));
+  const killOk = score[0].kills === 1 && score[1].deaths === 1 && score[0].feed.some((f) => /Boss.*AK-47.*Friend/.test(f)) && score[1].feed.some((f) => /Boss.*AK-47.*Friend/.test(f));
+  check('a kill goes in the feed on both screens, and on the scoreboard', killOk, JSON.stringify(score) + (killOk ? '' : ' ' + (await diag())));
   // B gets up again: a new stand-in
   await A.ev(() => { window.__oldH = [...window.__ts.mp.remotes.values()][0].h; });
   await B.ev(() => document.querySelector('#btn-respawn').click());

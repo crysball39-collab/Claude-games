@@ -12,8 +12,11 @@ export const IN_CLAUDE = typeof window !== 'undefined' && !!window.claude && typ
 
 const cache = new Map();
 
-/** The capability `name`, or null: not open in claude.ai, not offered, or no answer within `ms`. */
-export function use(name, ms = 8000) {
+/**
+ * The capability `name`, or null: not open in claude.ai, not offered, or no answer within `ms`.
+ * (The page's host itself answers null after about ten seconds; this only covers a host that never answers.)
+ */
+export function use(name, ms = 12000) {
   if (!IN_CLAUDE) return Promise.resolve(null);
   if (cache.has(name)) return cache.get(name);
   const p = new Promise((done) => {

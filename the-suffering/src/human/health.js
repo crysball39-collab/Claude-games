@@ -147,6 +147,7 @@ export class Health {
     this.bleedIn = 0;                 // ml/s lost inside
     this.spilled = 0;                 // total ml lost outside
     this.events = [];                 // things that happened this tick: 'vomit', 'faint', 'arrest', 'death', 'wake'
+    this.deathNo = 0;                 // how many times this body has died (a doctor can bring it back)
     this.god = false;
   }
 
@@ -515,6 +516,7 @@ export class Health {
     this.heartStopped = true;
     this.cause = cause || this.mechanism || 'Unknown';
     this.pulse = 0; this.breath = 0;
+    this.deathNo++;
     this.events.push('death');
   }
 

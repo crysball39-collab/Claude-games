@@ -780,6 +780,9 @@ export class Human {
   }
 
   _died() {
+    // once for each death, however many ways it comes to light (a head burst by a round, and the body's own news of it)
+    if (this._diedNo === this.h.deathNo) return;
+    this._diedNo = this.h.deathNo;
     if (this.state !== ST.RAGDOLL) this.toRagdoll();
     this._relax();
     this.island.canSleep = true;
