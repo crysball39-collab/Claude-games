@@ -1189,21 +1189,24 @@ if (want('Blood runs')) {
     w.give(p, 'm4a1', true); g.advance(0.9);
     for (let k = 0; k < 6; k++) { V.aimAt(v.bodies[2]); g.advance(1 / 60); }
     for (let i = 0; i < 2; i++) { w.fire(); g.advance(0.3); }
-    // as tough as this, a round comes out of the back only half the time: a few more until one has
-    for (let i = 0; i < 4 && !v.h.wounds.some((x) => x.type === 'exit'); i++) {
-      for (let k = 0; k < 4; k++) { V.aimAt(v.bodies[2]); g.advance(1 / 60); }
-      w.fire(); g.advance(0.3);
-    }
     g.advance(15);
-    G._wallRun = wr;
     const mine = G.bDecals.filter((x) => x.human === v);
-    out.wall = walls;
     out.runs = mine.filter((x) => x.run).length;
     out.chained = G.stats.chained - s0.chained;
     out.drips = G.stats.drips - s0.drips;
     out.soaks = mine.filter((x) => x.soak).length;
     out.cloth = Math.max(...v.soak);
     out.wound = v.h.wounds.filter((x) => x.type === 'gunshot').length;
+    // as tough as that, a round comes out of the back only half the time: if neither did, somebody else against the wall
+    for (let n = 0, u = v; n < 3 && !walls; n++) {
+      g.removeHuman(u);
+      u = V.still(g.spawnHuman(0, vz, 0)); u.h.tough = 95; g.advance(0.5);
+      for (let k = 0; k < 6; k++) { V.aimAt(u.bodies[2]); g.advance(1 / 60); }
+      for (let i = 0; i < 2; i++) { w.fire(); g.advance(0.3); }
+      g.advance(3);
+    }
+    G._wallRun = wr;
+    out.wall = walls;
     // a blade that has been used drips
     V.stage();
     const q = V.still(T.dummy(1.0)); q.h.tough = 95;
