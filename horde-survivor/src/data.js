@@ -164,7 +164,7 @@ const BUFFS = {
     text: lv => `HP regen +${5 * lv}%: heal ${5 * lv}% of max HP every 10 seconds.`,
   },
   armor: {
-    name: "Shotgun's Armor", evolves: [],
+    name: "Shogun's Armor", evolves: [],
     text: lv => `All damage you take -${10 * lv}%.`,
   },
 };

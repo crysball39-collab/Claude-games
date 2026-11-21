@@ -89,14 +89,57 @@ function icEnergy(g) {
   rr(g, 21, 18, 6, 30, 2, 'rgba(255,255,255,0.22)', 0);
   poly(g, [35, 20, 26, 35, 32, 35, 29, 47, 39, 30, 33, 30], '#ffe14a', 1.8);
 }
+/* Shogun's Armor: red lacquered samurai armour with a horned helmet. */
 function icArmor(g) {
-  poly(g, [18, 14, 26, 10, 32, 15, 38, 10, 46, 14, 50, 30, 46, 54, 18, 54, 14, 30], '#4a5563', 2.2);
-  poly(g, [26, 10, 32, 15, 38, 10, 36, 24, 28, 24], '#2f3740', 1.6);
-  for (let i = 0; i < 4; i++) {
-    rr(g, 19 + i * 7, 34, 5.5, 13, 2, '#e0433a', 1.4);
-    rr(g, 19 + i * 7, 43, 5.5, 4, 1, '#d9b24a', 0);
+  const red = '#c8322e', redD = '#952320', lace = '#1f2a52', gold = '#f2c230', lacq = '#25262e';
+  // sode: laced shoulder guards
+  for (const s of [-1, 1]) {
+    g.save(); g.translate(32 + s * 18.5, 35); g.rotate(s * 0.2);
+    rr(g, -7, -9, 14, 21, 2, red, 2);
+    for (let i = 1; i < 4; i++) seg(g, -6, -9 + i * 5.2, 6, -9 + i * 5.2, lace, 1.6);
+    for (const x of [-3.5, 0, 3.5]) seg(g, x, -8, x, 11, 'rgba(31,42,82,0.55)', 0.9);
+    g.restore();
   }
-  seg(g, 16, 32, 48, 32, '#2a313a', 2.5);
+  // kusazuri: the skirt of hanging plates
+  for (const i of [-1, 0, 1]) {
+    const x = 32 + i * 9.5;
+    rr(g, x - 5, 48, 10, 12, 1.5, redD, 1.8);
+    seg(g, x - 4, 54, x + 4, 54, lace, 1.3);
+  }
+  // do: the chest, rows of laced plates studded with gold
+  g.beginPath(); g.moveTo(19, 27); g.lineTo(45, 27); g.quadraticCurveTo(48.5, 39, 46, 50); g.lineTo(18, 50); g.quadraticCurveTo(15.5, 39, 19, 27); g.closePath();
+  g.fillStyle = red; g.fill();
+  g.save(); g.clip();
+  for (let y = 32; y < 52; y += 5) {
+    seg(g, 14, y, 50, y, lace, 1.6);
+    for (let x = 21; x < 45; x += 4) circ(g, x, y - 2.5, 0.75, gold, 0);
+  }
+  g.fillStyle = 'rgba(255,255,255,0.16)'; g.fillRect(17, 27, 5, 23);
+  g.restore();
+  g.beginPath(); g.moveTo(19, 27); g.lineTo(45, 27); g.quadraticCurveTo(48.5, 39, 46, 50); g.lineTo(18, 50); g.quadraticCurveTo(15.5, 39, 19, 27); g.closePath();
+  strokeOut(g, 2.2);
+  // a gold crest on the chest
+  circ(g, 32, 39, 4.6, gold, 1.5);
+  for (let i = 0; i < 3; i++) { const a = -Math.PI / 2 + i * TAU / 3; circ(g, 32 + Math.cos(a) * 1.9, 39 + Math.sin(a) * 1.9, 1.3, redD, 0); }
+  // kabuto: neck guard, lacquered bowl, brim
+  poly(g, [20, 21, 44, 21, 49.5, 28.5, 14.5, 28.5], red, 2);
+  seg(g, 17.5, 25, 46.5, 25, lace, 1.4);
+  g.beginPath(); g.moveTo(21, 21.5); g.bezierCurveTo(21, 7.5, 43, 7.5, 43, 21.5); g.closePath();
+  g.fillStyle = lacq; g.fill(); strokeOut(g, 2);
+  for (const x of [26, 32, 38]) seg(g, x, 11.5 + Math.abs(x - 32) * 0.35, x, 20, '#3d3f4c', 1.2);
+  ell(g, 27, 13.5, 3.5, 1.6, 'rgba(255,255,255,0.18)', 0, -0.5);
+  for (const sd of [-1, 1]) poly(g, [32 + sd * 10, 21, 32 + sd * 15, 15.5, 32 + sd * 15.5, 21.5], red, 1.6);
+  rr(g, 21.5, 19.5, 21, 3.2, 1.4, lacq, 1.5);
+  // kuwagata: the golden horns, and the crest between them
+  for (const sd of [-1, 1]) {
+    g.beginPath();
+    g.moveTo(32 + sd * 1.2, 17.5);
+    g.quadraticCurveTo(32 + sd * 11.5, 12.5, 32 + sd * 13.5, 3.2);
+    g.quadraticCurveTo(32 + sd * 8.5, 10, 32 + sd * 1.2, 13);
+    g.closePath();
+    g.fillStyle = gold; g.fill(); strokeOut(g, 1.5);
+  }
+  circ(g, 32, 15.5, 2.8, gold, 1.4);
 }
 
 /* ------------------------------- gear icons ------------------------------ */

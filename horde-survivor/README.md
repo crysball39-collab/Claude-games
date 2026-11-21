@@ -85,7 +85,7 @@ buff, and the evolution then shows up as a glowing card.
 | **HE Fuel Canister** | +10% range, radius and speed | Durian and Missile |
 | **Blade Sharpener** | +2% damage, your effects last 15% longer (not poison) | Guardian |
 | **Energy Drink** | +5% HP regen: heal 5% of max HP every 10 seconds | Forcefield |
-| **Shotgun's Armor** | −10% damage taken | Nothing |
+| **Shogun's Armor** | −10% damage taken | Nothing |
 
 If you already hold everything at max, the cards offer a heal or a bag of gold instead.
 
