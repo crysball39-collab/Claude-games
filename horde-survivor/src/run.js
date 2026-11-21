@@ -203,7 +203,7 @@ function spawner(dt) {
   }
   if (plan.big) {
     R.ringT -= dt;
-    if (R.ringT <= 0) { R.ringT = 13; spawnRing(plan.mix, 28 + R.bigIdx * 8); }
+    if (R.ringT <= 0) { R.ringT = 14; spawnRing(plan.mix, 22 + R.bigIdx * 6); }
   }
   R.eliteT -= dt;
   if (R.eliteT <= 0) {
@@ -232,7 +232,7 @@ function makeEnemy(type, x, y, elite) {
     type, x, y, elite,
     r: d.r * (elite ? ELITE.size : 1),
     hp, maxHp: hp,
-    speed: d.speed * rand(0.88, 1.12) * (elite ? 0.9 : 1),
+    speed: d.speed * rand(0.88, 1.12) * (elite ? 0.9 : 1) * (1 + Math.min(R.t, 900) / 900 * 0.12),
     dmg: d.dmg * enemyDmgMult(R.t) * (elite ? ELITE.dmg : 1),
     exp: elite ? ELITE.exp : d.exp,
     fly: !!d.flying,
@@ -334,7 +334,7 @@ function hurtPlayer(amount, opts = {}) {
   P.hp -= dmg;
   if (!opts.dot) {
     P.flash = 0.14;
-    if (opts.boss) P.inv = 0.45;
+    if (opts.boss) P.inv = 0.6;
     R.shake = Math.max(R.shake, opts.boss ? 7 : 2.5);
     Sfx.play('hurt');
     UI.hurt();

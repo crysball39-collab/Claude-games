@@ -38,7 +38,7 @@ function updateIntro(dt) {
 
 function spawnBoss(id) {
   const R = run, def = BOSSES[id], A = R.arena;
-  const dm = enemyDmgMult(R.t);
+  const dm = 1 + R.t / 60 * 0.035;
   R.boss = {
     id, def, isBoss: true, x: A.x, y: A.y - A.h * 0.26, z: 460, r: def.r, hp: def.hp, maxHp: def.hp,
     speed: def.speed, dmg: def.dmg * dm, dm, face: -1, anim: 0, flash: 0, atkCd: 0,
@@ -110,7 +110,7 @@ function startAttack(B) {
 }
 
 function endAttack(B) {
-  B.state = 'chase'; B.pose = 'walk'; B.rot = 0;
+  B.state = 'chase'; B.phase = ''; B.pose = 'walk'; B.rot = 0;
   const enraged = B.hp < B.maxHp * 0.5;
   B.st = (B.id === 'titanus' ? 1.0 : 1.25) * (enraged ? 0.7 : 1);
 }
@@ -174,7 +174,7 @@ const BOSS_ATTACKS = {
       if (B.phase === 'wind' && B.st <= 0) {
         const P = run.p, hx = B.x + B.face * 2, hy = B.y - 94;
         const ang = Math.atan2(P.y - hy, P.x - hx);
-        run.ebullets.push({ kind: 'rock', x: hx, y: hy, vx: Math.cos(ang) * 340, vy: Math.sin(ang) * 340, r: 15, dmg: 18 * B.dm, life: 3, rot: 0, dead: false });
+        run.ebullets.push({ kind: 'rock', x: hx, y: hy, vx: Math.cos(ang) * 340, vy: Math.sin(ang) * 340, r: 15, dmg: 14 * B.dm, life: 3, rot: 0, dead: false });
         Sfx.play('thud');
         B.n++; B.pose = 'walk';
         B.phase = 'after'; B.st = 0.22;
@@ -203,7 +203,7 @@ const BOSS_ATTACKS = {
         if (B.st <= 0) {
           B.z = 0; B.x = B.tx; B.y = B.ty; B.targetable = true; B.invuln = false;
           B.phase = 'rec'; B.st = 0.9; B.pose = 'crouch';
-          slamImpact(B.x, B.y, 96, 30 * B.dm);
+          slamImpact(B.x, B.y, 96, 24 * B.dm);
         }
       } else if (B.phase === 'rec') {
         if (B.st < 0.5) B.pose = 'walk';
@@ -226,7 +226,7 @@ const BOSS_ATTACKS = {
           B.emit = B.hp < B.maxHp * 0.5 ? 0.09 : 0.115;
           for (let k = 0; k < 3; k++) {
             const a = B.rot * 0.45 + k * TAU / 3;
-            run.ebullets.push({ kind: 'dust', x: B.x + Math.cos(a) * 28, y: B.y + Math.sin(a) * 28, vx: Math.cos(a) * 150, vy: Math.sin(a) * 150, r: 7, dmg: 9 * B.dm, life: 3.6, dead: false });
+            run.ebullets.push({ kind: 'dust', x: B.x + Math.cos(a) * 28, y: B.y + Math.sin(a) * 28, vx: Math.cos(a) * 150, vy: Math.sin(a) * 150, r: 7, dmg: 7 * B.dm, life: 3.6, dead: false });
           }
         }
         if (B.st <= 0) { B.phase = 'rec'; B.st = 0.7; }
@@ -245,7 +245,7 @@ const BOSS_ATTACKS = {
         const P = run.p, base = Math.atan2(P.y - B.y, P.x - B.x);
         for (const off of [-0.32, 0, 0.32]) {
           const a = base + off;
-          run.ebullets.push({ kind: 'poison', x: B.x + Math.cos(a) * 20, y: B.y + Math.sin(a) * 20, vx: Math.cos(a) * 215, vy: Math.sin(a) * 215, r: 11, dmg: 7 * B.dm, life: 3.2, poison: true, dead: false });
+          run.ebullets.push({ kind: 'poison', x: B.x + Math.cos(a) * 20, y: B.y + Math.sin(a) * 20, vx: Math.cos(a) * 215, vy: Math.sin(a) * 215, r: 11, dmg: 6 * B.dm, life: 3.2, poison: true, dead: false });
         }
         Sfx.play('spike');
         B.n++;
@@ -263,7 +263,7 @@ const BOSS_ATTACKS = {
         const base = Math.atan2(P.y - my, P.x - mx), cnt = 7;
         for (let i = 0; i < cnt; i++) {
           const a = base + (i - (cnt - 1) / 2) * 0.17;
-          run.ebullets.push({ kind: 'lava', x: mx, y: my, vx: Math.cos(a) * 225, vy: Math.sin(a) * 225, r: 8, dmg: 12 * B.dm, life: 3.6, dead: false });
+          run.ebullets.push({ kind: 'lava', x: mx, y: my, vx: Math.cos(a) * 225, vy: Math.sin(a) * 225, r: 8, dmg: 9 * B.dm, life: 3.6, dead: false });
         }
         Sfx.play('fire');
         B.n++;
@@ -283,7 +283,7 @@ const BOSS_ATTACKS = {
             const a = base + off, dd = 28 + i * 34;
             const x = B.x + Math.cos(a) * dd, y = B.y + Math.sin(a) * dd;
             if (!inArena(x, y, 6)) break;
-            run.hazards.push({ kind: 'spike', x, y, r: 21, t: 0, delay: 0.5 + i * 0.075, dur: 0.45, dmg: 20 * B.dm, hit: false, erupted: false, dead: false });
+            run.hazards.push({ kind: 'spike', x, y, r: 21, t: 0, delay: 0.5 + i * 0.075, dur: 0.45, dmg: 16 * B.dm, hit: false, erupted: false, dead: false });
           }
         }
         run.shake = 7; Sfx.play('thud');
@@ -322,7 +322,7 @@ const BOSS_ATTACKS = {
           do {
             x = P.x + rand(-210, 210); y = P.y + rand(-210, 210); tries++;
           } while (tries < 30 && (!inArena(x, y, 24) || Math.hypot(x - B.x, y - B.y) < 90 || Math.hypot(x - P.x, y - P.y) < 60));
-          run.hazards.push({ kind: 'mine', x, y, sx: B.x, sy: B.y - 30, t: 0, fly: 0.55, arm: 0.9, state: 'fly', fuse: 0, r: 68, trig: 46, dmg: 24 * B.dm, life: 8, dead: false });
+          run.hazards.push({ kind: 'mine', x, y, sx: B.x, sy: B.y - 30, t: 0, fly: 0.55, arm: 0.9, state: 'fly', fuse: 0, r: 68, trig: 46, dmg: 18 * B.dm, life: 8, dead: false });
         }
         Sfx.play('shoot');
         B.phase = 'rec'; B.st = 0.8;
@@ -385,7 +385,7 @@ function updateEBullets(dt) {
     if (!P.dead && Math.hypot(P.x - b.x, P.y - b.y) < b.r + P.r - 2) {
       b.dead = true;
       const hit = hurtPlayer(b.dmg, { boss: true });
-      if (hit && b.poison) { P.poisonT = 10; P.poisonDps = 3 * enemyDmgMult(R.t); P.poisonTick = 0.5; }
+      if (hit && b.poison) { P.poisonT = 10; P.poisonDps = 2.5 * (1 + R.t / 60 * 0.035); P.poisonTick = 0.5; }
       const col = b.kind === 'poison' ? '#7dff5a' : b.kind === 'dust' ? '#d9a3ff' : b.kind === 'lava' ? '#ff9a3a' : '#8d939b';
       for (let i = 0; i < 6; i++) addPart(b.x, b.y, rand(-80, 80), rand(-80, 40), 0.35, rand(2, 4), col, 'dot');
     }

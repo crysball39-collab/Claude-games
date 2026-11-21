@@ -104,8 +104,9 @@ function frameSet(w, h, ax, ay, n, draw, opts = {}) {
   for (let f = 0; f < n; f++) {
     const r = makeSprite(w, h, ax, ay, g => draw(g, f));
     const fr = { r, l: opts.noFlip ? r : flipSprite(r) };
-    fr.wr = tintSprite(fr.r, '#ffffff', 0.85);
-    fr.wl = opts.noFlip ? fr.wr : tintSprite(fr.l, '#ffffff', 0.85);
+    const fa = opts.flash || 0.75;
+    fr.wr = tintSprite(fr.r, '#ffffff', fa);
+    fr.wl = opts.noFlip ? fr.wr : tintSprite(fr.l, '#ffffff', fa);
     if (opts.green) { fr.gr = tintSprite(fr.r, '#5dff3a', 0.42); fr.gl = tintSprite(fr.l, '#5dff3a', 0.42); }
     out.push(fr);
   }
@@ -585,11 +586,12 @@ function buildSprites(res) {
   SPR.beetle = frameSet(50, 34, 24, 31, 4, (g, f) => drawBeetle(g, f, BEETLE_PAL, false));
   SPR.beetleElite = frameSet(76, 56, 37, 50, 4, (g, f) => { g.scale(1.55, 1.55); drawBeetle(g, f, BEETLE_ELITE, true); });
   SPR.minion = frameSet(50, 34, 24, 31, 4, (g, f) => drawBeetle(g, f, MINION_PAL, true));
-  SPR.dread = frameSet(120, 150, 52, 142, 4, (g, f) => drawDreadnought(g, f, 'walk'));
-  SPR.dreadRaise = frameSet(120, 150, 52, 142, 1, g => drawDreadnought(g, 0, 'raise'))[0];
-  SPR.dreadCrouch = frameSet(120, 150, 52, 142, 1, g => drawDreadnought(g, 0, 'crouch'))[0];
-  SPR.mothra = frameSet(160, 130, 80, 62, 6, (g, f) => drawMothra(g, f), { noFlip: true });
-  SPR.titanus = frameSet(200, 140, 90, 132, 4, (g, f) => drawTitanus(g, f));
+  const B = { flash: 0.32 };
+  SPR.dread = frameSet(120, 150, 52, 142, 4, (g, f) => drawDreadnought(g, f, 'walk'), B);
+  SPR.dreadRaise = frameSet(120, 150, 52, 142, 1, g => drawDreadnought(g, 0, 'raise'), B)[0];
+  SPR.dreadCrouch = frameSet(120, 150, 52, 142, 1, g => drawDreadnought(g, 0, 'crouch'), B)[0];
+  SPR.mothra = frameSet(160, 130, 80, 62, 6, (g, f) => drawMothra(g, f), { noFlip: true, flash: 0.32 });
+  SPR.titanus = frameSet(200, 140, 90, 132, 4, (g, f) => drawTitanus(g, f), B);
 
   SPR.shadow = makeSprite(40, 16, 20, 8, g => ell(g, 0, 0, 19, 7, 'rgba(0,0,0,0.32)', 0));
   SPR.shuriken = makeSprite(24, 24, 12, 12, drawShuriken);

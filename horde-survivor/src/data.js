@@ -8,7 +8,7 @@
 const TAU = Math.PI * 2;
 
 /* The survivor with nothing equipped. Gear adds ATK and HP on top. */
-const BASE = { atk: 10, hp: 100, speed: 118, pickup: 54 };
+const BASE = { atk: 10, hp: 100, speed: 118, pickup: 84 };
 
 /* ------------------------------- chapters -------------------------------- */
 
@@ -31,15 +31,15 @@ function spawnPlan(t) {
   const L = (a, b, from, to) => a + (b - a) * Math.min(1, Math.max(0, (t - from) / (to - from)));
   if (t < 60)  return { rate: L(1.0, 1.7, 0, 60),     mix: { zombie: 1 } };
   if (t < 240) return { rate: L(1.7, 3.2, 60, 240),   mix: { zombie: 0.68, butterfly: 0.32 } };
-  if (t < 300) return { rate: 6.5, big: true,         mix: { zombie: 0.8, butterfly: 0.2 } };
+  if (t < 300) return { rate: 5.0, big: true,         mix: { zombie: 0.8, butterfly: 0.2 } };
   if (t < 540) return { rate: L(2.8, 4.4, 300, 540),  mix: { zombie: 0.4, butterfly: 0.4, beetle: 0.2 } };
-  if (t < 600) return { rate: 7.5, big: true,         mix: { zombie: 0.3, butterfly: 0.6, beetle: 0.1 } };
+  if (t < 600) return { rate: 6.0, big: true,         mix: { zombie: 0.3, butterfly: 0.6, beetle: 0.1 } };
   if (t < 840) return { rate: L(3.8, 5.6, 600, 840),  mix: { zombie: 0.3, butterfly: 0.3, beetle: 0.4 } };
-  return { rate: 8.5, big: true, mix: { zombie: 0.25, butterfly: 0.25, beetle: 0.5 } };
+  return { rate: 7.0, big: true, mix: { zombie: 0.25, butterfly: 0.25, beetle: 0.5 } };
 }
 
 /* Enemies get tougher with time, and again after every boss that falls. */
-function enemyHpMult(t, bossesDown) { return (1 + t / 60 * 0.26) * (1 + bossesDown * 0.22); }
+function enemyHpMult(t, bossesDown) { const m = t / 60; return (1 + m * 0.2 + m * m * 0.012) * (1 + bossesDown * 0.3); }
 function enemyDmgMult(t) { return 1 + t / 60 * 0.07; }
 
 /* -------------------------------- enemies -------------------------------- */
@@ -50,23 +50,23 @@ const ENEMIES = {
   beetle:    { name: 'Beetle',           r: 14, hp: 32, speed: 50, dmg: 10, exp: 2 },
   minion:    { name: 'Lava Beetle',      r: 11, hp: 26, speed: 76, dmg: 9,  exp: 1 },
 };
-const ELITE = { size: 1.55, hp: 9, dmg: 1.6, exp: 10 };
+const ELITE = { size: 1.55, hp: 10, dmg: 1.6, exp: 10 };
 
 /* --------------------------------- bosses -------------------------------- */
 
 const BOSSES = {
   dreadnought: {
-    name: 'Zombie Dreadnought', hp: 4200, r: 32, speed: 56, dmg: 16, gold: 30,
+    name: 'Zombie Dreadnought', hp: 4000, r: 32, speed: 56, dmg: 10, gold: 30,
     attacks: ['charge', 'rocks', 'slam'],
     blurb: 'Charge · Rock Throw · Jump Slam',
   },
   mothra: {
-    name: 'Mutated Butterfly', hp: 8800, r: 34, speed: 78, dmg: 14, gold: 30, flying: true,
+    name: 'Mutated Butterfly', hp: 11000, r: 34, speed: 78, dmg: 10, gold: 30, flying: true,
     attacks: ['spin', 'poison', 'charge'],
     blurb: 'Spin Attack · Poison Balls · Charge',
   },
   titanus: {
-    name: 'Titanus', hp: 16000, r: 40, speed: 50, dmg: 20, gold: 30,
+    name: 'Titanus', hp: 24000, r: 40, speed: 50, dmg: 13, gold: 30,
     attacks: ['bullets', 'charge', 'spikes', 'summon', 'mines'],
     blurb: 'Lava Bullets · Charge · Spike Surge · Minions · Lava Mines',
   },
@@ -172,7 +172,7 @@ const BUFF_IDS = Object.keys(BUFFS);
 const MAX_STARS = 5, MAX_HELD = 5;
 
 /* Level n -> n+1 needs this much EXP. */
-function expToNext(level) { return Math.round(4 + 3.3 * level + Math.pow(level, 1.35) * 0.35); }
+function expToNext(level) { return Math.round(3 + 2.8 * level + Math.pow(level, 1.4) * 0.6); }
 
 /* --------------------------------- gear ---------------------------------- */
 
@@ -201,7 +201,7 @@ const ITEMS = {
 
 function itemStat(item) { const d = ITEMS[item.type]; return d.base + d.per * (item.level - 1); }
 function itemMax(item) { return RARITIES[ITEMS[item.type].rarity].max; }
-function upgradeCost(level) { return 50 + 50 * level; }
+function upgradeCost(level) { return 100 * level; }
 function salvageValue(item) {
   let spent = 0;
   for (let l = 1; l < item.level; l++) spent += upgradeCost(l);
