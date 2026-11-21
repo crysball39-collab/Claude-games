@@ -82,6 +82,19 @@ export class Sound {
       case 'glock': this._n(d, t, 0.16, 1.0, 'lowpass', 4300, 620, 0.6); this._t(d, t, 0.1, 0.7, 'sine', 205, 60); this._n(d, t, 0.025, 0.75, 'highpass', 3700); this._n(d, t + 0.035, 0.42, 0.14, 'bandpass', 1100, 340, 0.4); break;
       case 'rifle': this._n(d, t, 0.24, 1.2, 'lowpass', 4200, 600, 0.5); this._t(d, t, 0.14, 1.0, 'sine', 130, 40); this._n(d, t, 0.025, 0.8, 'highpass', 4000); this._n(d, t + 0.05, 0.6, 0.2, 'bandpass', 700, 250, 0.4); break;
       case 'carbine': this._n(d, t, 0.19, 1.15, 'lowpass', 5400, 700, 0.5); this._t(d, t, 0.1, 0.8, 'sine', 165, 52); this._n(d, t, 0.02, 0.95, 'highpass', 5200); this._n(d, t + 0.04, 0.55, 0.18, 'bandpass', 950, 300, 0.4); break;
+      case 'musket':
+        // black powder: a deep, rounded boom rather than a crack, and a long roll after it
+        this._n(d, t, 0.55, 1.45, 'lowpass', 2300, 150, 0.6); this._t(d, t, 0.34, 1.25, 'sine', 92, 30); this._n(d, t, 0.03, 0.55, 'highpass', 2300);
+        this._n(d, t + 0.06, 1.5, 0.34, 'lowpass', 620, 85, 0.5, 0.08); this._n(d, t + 0.05, 0.9, 0.2, 'bandpass', 480, 170, 0.5);
+        break;
+      case 'blunderbuss':
+        this._n(d, t, 0.5, 1.55, 'lowpass', 3100, 190, 0.6); this._t(d, t, 0.3, 1.3, 'sine', 78, 27); this._n(d, t, 0.06, 0.85, 'bandpass', 1500, 520, 0.7);
+        this._n(d, t + 0.05, 1.35, 0.36, 'lowpass', 720, 90, 0.5, 0.08); for (let i = 0; i < 4; i++) this._n(d, t + 0.02 + rand(0, 0.06), 0.03, 0.3, 'highpass', 2400 + rand(0, 2000));
+        break;
+      case 'flint': this._n(d, t, 0.014, 0.75, 'highpass', 3600); this._t(d, t, 0.02, 0.25, 'square', 2300, 1400); this._n(d, t + 0.018, 0.1, 0.5, 'bandpass', 2600, 1100, 1.1, 0.01); break;
+      case 'match': this._n(d, t, 0.025, 0.35, 'bandpass', 1500, 900, 2); this._n(d, t + 0.025, 0.24, 0.45, 'highpass', 3000, 1700, 0.8, 0.015); break;
+      case 'ram': this._t(d, t, 0.07, 0.45, 'triangle', 320, 190); this._n(d, t, 0.05, 0.4, 'bandpass', 1300, 700, 2); this._t(d, t, 0.18, 0.06, 'sine', 2100, 2050, 0.002); break;
+      case 'bar': this._t(d, t, 0.13, 0.75, 'sine', 140, 58); this._n(d, t, 0.08, 0.7, 'lowpass', 1500, 380); this._t(d, t, 0.32, 0.15, 'sine', 1640, 1600, 0.002); this._t(d, t, 0.24, 0.1, 'sine', 2710, 2660, 0.002); break;
       case 'tasershot': this._n(d, t, 0.05, 0.8, 'highpass', 1800, 900, 1); this._t(d, t, 0.05, 0.3, 'square', 260, 90); this._n(d, t + 0.04, 0.2, 0.25, 'bandpass', 5200, 2600, 3); break;
       case 'taser': for (let i = 0; i < 9; i++) { this._n(d, t + i * 0.046 + rand(0, 0.006), 0.012, 0.8, 'highpass', 2600 + rand(0, 900)); this._t(d, t + i * 0.046, 0.014, 0.25, 'square', 1900, 700); } break;
       case 'cuff': for (let i = 0; i < 5; i++) this._n(d, t + i * 0.03, 0.012, 0.6, 'highpass', 3600 + i * 300); this._t(d, t + 0.17, 0.05, 0.3, 'triangle', 2300, 1500); break;

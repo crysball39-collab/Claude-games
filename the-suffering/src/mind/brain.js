@@ -17,10 +17,10 @@ import { onRoad } from '../world/city.js';
 import { clamp, rand, chance, wrapAngle, pick } from '../core/util.js';
 
 const _a = [0, 0, 0], _r = [0, 0];
-const WORD = { m1911: 'gun', glock: 'gun', ak47: 'rifle', m4a1: 'rifle', ar15: 'rifle', knife: 'knife', machete: 'machete', taser: 'taser', flamethrower: 'flamethrower' };
+const WORD = { m1911: 'gun', glock: 'gun', ak47: 'rifle', m4a1: 'rifle', ar15: 'rifle', musket: 'musket', arquebus: 'gun', blunderbuss: 'blunderbuss', knife: 'knife', machete: 'machete', sword: 'sword', crowbar: 'crowbar', taser: 'taser', flamethrower: 'flamethrower' };
 /** A real gun: anything that fires bullets. */
 const _door = [0, 0, 0], _door2 = [0, 0, 0];
-const isGun = (id) => id === 'm1911' || id === 'glock' || id === 'ak47' || id === 'm4a1' || id === 'ar15';
+const isGun = (id) => id === 'm1911' || id === 'glock' || id === 'ak47' || id === 'm4a1' || id === 'ar15' || id === 'musket' || id === 'arquebus' || id === 'blunderbuss';
 const NOKIT = [];
 /** What a caller says once they have got through, by what they are calling about. */
 const CALL_LINE = { body: 'callBody', assault: 'callAssault', stabbing: 'callStabbing', shooting: 'callShooting', shots: 'callShots', murder: 'callMurder', menace: 'callMenace', burning: 'callBurning', electrocution: 'callShock' };
@@ -139,7 +139,7 @@ export class Brain {
       const d = Math.hypot(t.x - h.x, t.z - h.z);
       const src = t.src, k = src ? m.known.get(src.id) : null;
       const gun = k && isGun(k.armed);
-      const blade = k && (k.armed === 'knife' || k.armed === 'machete');
+      const blade = k && (k.armed === 'knife' || k.armed === 'machete' || k.armed === 'sword');
       // anger and nerve on one side of the scales, fear on the other
       const urge = e.anger + p.bravery * 30 - e.fear * (blade ? 1.3 : 0.8);
       const willFight = src && src.h.alive && src.h.conscious && !gun && (!blade || p.bravery > 0.85) && p.bravery > 0.3 &&

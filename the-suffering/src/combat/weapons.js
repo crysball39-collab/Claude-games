@@ -20,10 +20,11 @@ import { groundHeight, KERB } from '../world/city.js';
 import { rgb } from '../render/boxes.js';
 import { cellUV } from '../render/quads.js';
 import { DECAL, ATLAS_COLS, ATLAS_ROWS } from '../render/textures.js';
-import { clamp, clamp01, lerp, smooth, rand, chance, wrapAngle } from '../core/util.js';
+import { clamp, clamp01, lerp, smooth, rand, chance, wrapAngle, TAU } from '../core/util.js';
 
 const STEEL = 0xc3c8cc, DARK = 0x26282c, WOOD = 0x7a4a26, GRIP = 0x3a2a1c, VEST = 0x121316, MAG = 0x15161a, YELLOW = 0xd8b614;
 const BLACK = 0x1c1d20, BLACK2 = 0x2a2c30, FDE = 0x8a7553;   // anodised black, the furniture, and flat dark earth
+const IRON = 0x3a3c40, WALNUT = 0x5e3a1e, OAK = 0x80542c, BRASS = 0xb08a3a, MATCH = 0x4a3a2a, EMBER = 0xff7a20;   // black powder: iron, walnut, oak, brass, slow match
 const POLY = 0x232427, SLIDE = 0x2e3034;                           // a polymer frame and a matte steel slide
 const tilt = (a) => [Math.sin(a / 2), 0, 0, Math.cos(a / 2)];
 
@@ -37,6 +38,18 @@ export const WEAPONS = {
   machete: {
     id: 'machete', name: 'Machete', label: 'CHOP', hold: 'blade', moves: MOVES.machete, melee: true, blade: [0.1, 0.5, 6], mass: 0.9, half: [0.02, 0.04, 0.32], centre: 0.22, chops: true,
     boxes: [[0, 0.004, 0.3, 0.005, 0.056, 0.44, STEEL, null, 1], [0, 0.012, 0.5, 0.005, 0.074, 0.13, STEEL, null, 1], [0, 0, 0.07, 0.016, 0.06, 0.014, DARK], [0, 0, 0, 0.028, 0.034, 0.13, GRIP]],
+  },
+  /* an arming sword: a metre of sharpened steel; it slices, it thrusts deep, and a cleaving blow takes a limb off */
+  sword: {
+    id: 'sword', name: 'Sword', label: 'SLASH', hold: 'blade', moves: MOVES.sword, melee: true, blade: [0.12, 0.78, 7], mass: 1.2, half: [0.02, 0.1, 0.5], centre: 0.38, chops: true, long: true,
+    boxes: [[0, 0, 0.5, 0.004, 0.044, 0.78, STEEL, null, 1], [0, 0, 0.915, 0.004, 0.024, 0.05, STEEL, null, 1], [0.0025, 0, 0.42, 0.001, 0.012, 0.6, 0x9aa0a6, null, 1],
+      [0, 0, 0.09, 0.016, 0.2, 0.018, 0x8c7a55], [0, 0, 0, 0.026, 0.028, 0.15, 0x3a2414], [0, 0, -0.085, 0.034, 0.034, 0.03, 0x8c7a55]],
+  },
+  /* a gooseneck crowbar: a bar of black steel with a hooked claw; nothing sharp about it, and it does not need to be */
+  crowbar: {
+    id: 'crowbar', name: 'Crowbar', label: 'SWING', hold: 'blade', moves: MOVES.crowbar, melee: true, blunt: true, smash: true, blade: [0.1, 0.52, 5], mass: 1.6, half: [0.02, 0.06, 0.36], centre: 0.27, hitSound: 'bar',
+    boxes: [[0, 0, 0.28, 0.022, 0.022, 0.62, 0x2b2d31], [0, 0.028, 0.6, 0.022, 0.06, 0.03, 0x2b2d31, tilt(-0.6)], [0, 0.064, 0.585, 0.022, 0.05, 0.022, 0x2b2d31, tilt(-1.3)],
+      [0, 0.084, 0.555, 0.024, 0.016, 0.02, 0x6a6c70], [0, -0.006, -0.055, 0.022, 0.014, 0.04, 0x6a6c70]],
   },
   m1911: {
     id: 'm1911', name: 'M1911', label: 'FIRE', hold: 'pistol', gun: true, mag: 7, auto: false, gap: 0.17, power: 1.0, hp: 32, impulse: 20, spread: 0.01, kick: 0.03,
@@ -80,6 +93,41 @@ export const WEAPONS = {
       [0, -0.02, -0.29, 0.042, 0.09, 0.25, FDE, tilt(0.06)], [0, 0.034, -0.12, 0.03, 0.012, 0.03, BLACK],
       [0, -0.076, -0.072, 0.03, 0.09, 0.04, FDE, tilt(0.35)], [0, -0.057, -0.005, 0.008, 0.012, 0.07, BLACK], [0, -0.105, 0.058, 0.026, 0.13, 0.062, MAG, tilt(-0.16), 0, 1]],
     slide: 9, magSize: [0.013, 0.085, 0.031],
+  },
+  /* ---- black powder: one shot, then a long drill with powder, ball and ramrod ---- */
+  /* a flintlock musket: a .75 lead ball, soft and slow and heavy, that breaks what it hits; a flash in the pan, then the shot */
+  musket: {
+    id: 'musket', name: 'Musket', label: 'FIRE', hold: 'rifle', reloadKind: 'muzzle', gun: true, lock: 'flint', delay: 0.13, misfire: 0.08,
+    mag: 1, auto: false, gap: 0.6, power: 1.75, hp: 36, impulse: 34, spread: 0.014, kick: 0.075, ball: true, smoke: 1.7,
+    reload: 8, loud: 166, mass: 4.6, half: [0.035, 0.08, 0.78], centre: 0.29, fore: [0, -0.04, 0.12], grip: [0, -0.03, -0.07], muzzle: [0, 0.03, 1.06], lockAt: [-0.032, 0.048, 0.085], sound: 'musket',
+    boxes: [[0, 0.03, 0.55, 0.026, 0.026, 1.02, IRON], [0, 0.006, 0.42, 0.04, 0.034, 0.8, WALNUT], [0, -0.012, -0.05, 0.034, 0.05, 0.16, WALNUT], [0, -0.05, -0.29, 0.044, 0.12, 0.38, WALNUT, tilt(0.16)],
+      [0, -0.074, -0.47, 0.046, 0.13, 0.012, BRASS, tilt(0.16)], [-0.024, 0.026, 0.06, 0.006, 0.03, 0.12, 0x4a4c50], [-0.03, 0.058, 0.03, 0.006, 0.032, 0.014, 0x2a2c30, tilt(-0.3)],
+      [-0.028, 0.046, 0.085, 0.008, 0.02, 0.018, 0x4a4c50], [0, -0.035, 0.02, 0.008, 0.012, 0.075, BRASS], [0, -0.03, 0.03, 0.004, 0.018, 0.004, 0x2a2c30],
+      [0, 0.022, 0.5, 0.044, 0.05, 0.018, BRASS], [0, 0.022, 0.78, 0.042, 0.046, 0.018, BRASS], [0, 0.046, 1.0, 0.004, 0.008, 0.008, BRASS],
+      [0, -0.012, 0.62, 0.008, 0.008, 0.82, 0x9aa0a6, null, 0, 1]],
+    slide: -1, magSize: [0.006, 0.006, 0.42],
+  },
+  /* a matchlock: the slow match in the serpentine is lit all the time, and smoulders; pull the lever and it dips into the pan */
+  arquebus: {
+    id: 'arquebus', name: 'Arquebus', label: 'FIRE', hold: 'rifle', reloadKind: 'muzzle', gun: true, lock: 'match', delay: 0.3, misfire: 0.12,
+    mag: 1, auto: false, gap: 0.7, power: 1.5, hp: 32, impulse: 30, spread: 0.02, kick: 0.07, ball: true, smoke: 1.5,
+    reload: 9, loud: 163, mass: 4.2, half: [0.035, 0.09, 0.66], centre: 0.28, fore: [0, -0.04, 0.12], grip: [0, -0.035, -0.07], muzzle: [0, 0.03, 0.94], lockAt: [-0.03, 0.05, 0.09], matchAt: [-0.03, 0.09, 0.105], sound: 'musket',
+    boxes: [[0, 0.03, 0.5, 0.03, 0.03, 0.88, 0x2e3033], [0, 0.008, 0.38, 0.042, 0.036, 0.7, OAK], [0, -0.016, -0.06, 0.036, 0.054, 0.16, OAK], [0, -0.07, -0.24, 0.04, 0.1, 0.26, OAK, tilt(0.42)],
+      [-0.026, 0.028, 0.07, 0.006, 0.032, 0.12, 0x5a5c60], [-0.03, 0.06, 0.08, 0.006, 0.05, 0.012, 0x6a6c70, tilt(-0.5)], [-0.03, 0.085, 0.1, 0.01, 0.012, 0.03, MATCH],
+      [-0.03, 0.09, 0.115, 0.009, 0.009, 0.009, EMBER], [0, -0.05, 0.0, 0.008, 0.07, 0.012, 0x6a6c70, tilt(0.45)], [0, 0.03, 0.935, 0.036, 0.036, 0.02, 0x2e3033],
+      [0, 0.05, 0.9, 0.004, 0.01, 0.008, 0x2e3033], [0, -0.012, 0.52, 0.008, 0.008, 0.74, 0x7a5a30, null, 0, 1]],
+    slide: -1, magSize: [0.006, 0.006, 0.38],
+  },
+  /* a flintlock blunderbuss: a short brass barrel that flares at the mouth, loaded with a handful of shot that spreads */
+  blunderbuss: {
+    id: 'blunderbuss', name: 'Blunderbuss', label: 'FIRE', hold: 'rifle', reloadKind: 'muzzle', gun: true, lock: 'flint', delay: 0.12, misfire: 0.07,
+    mag: 1, auto: false, gap: 0.6, power: 0.48, pellets: 14, pelletSpread: 0.07, hp: 10, impulse: 8, spread: 0.01, kick: 0.11, shot: true, smoke: 2.1,
+    reload: 7, loud: 168, mass: 3.4, half: [0.04, 0.08, 0.46], centre: 0.16, fore: [0, -0.04, 0.11], grip: [0, -0.03, -0.07], muzzle: [0, 0.03, 0.64], lockAt: [-0.032, 0.048, 0.08], sound: 'blunderbuss',
+    boxes: [[0, 0.03, 0.3, 0.036, 0.036, 0.52, BRASS], [0, 0.03, 0.57, 0.05, 0.05, 0.05, BRASS], [0, 0.03, 0.61, 0.066, 0.066, 0.04, BRASS], [0, 0.03, 0.636, 0.074, 0.074, 0.012, BRASS],
+      [0, 0.004, 0.2, 0.046, 0.04, 0.36, WALNUT], [0, -0.012, -0.05, 0.036, 0.05, 0.15, WALNUT], [0, -0.052, -0.21, 0.048, 0.12, 0.28, WALNUT, tilt(0.2)], [0, -0.08, -0.35, 0.05, 0.13, 0.012, BRASS, tilt(0.2)],
+      [-0.026, 0.026, 0.06, 0.006, 0.03, 0.11, 0x4a4c50], [-0.032, 0.058, 0.03, 0.006, 0.032, 0.014, 0x2a2c30, tilt(-0.3)], [-0.03, 0.046, 0.08, 0.008, 0.02, 0.018, 0x4a4c50],
+      [0, -0.036, 0.02, 0.008, 0.012, 0.07, BRASS], [0, -0.012, 0.3, 0.008, 0.008, 0.4, 0x9aa0a6, null, 0, 1]],
+    slide: -1, magSize: [0.006, 0.006, 0.3],
   },
   /* burning fuel thrown seven metres: a fuel canister under the wand, a pilot light at the nozzle */
   flamethrower: {
@@ -189,6 +237,11 @@ export const MOUNT = {
   rope: { part: P.PELVIS, pos: [0.16, 0.0, -0.11], q: [H, 0, 0, H], reach: 'hip', dur: 0.4, word: 'belt' },                  // a coil hung on the belt
   wire: { part: P.PELVIS, pos: [-0.16, 0.0, -0.11], q: [H, 0, 0, H], reach: 'hip', dur: 0.4, word: 'belt' },
   flamethrower: { part: P.CHEST, pos: [-0.01, -0.03, -0.17], q: slantUp(0.6), reach: 'back', dur: 0.8, word: 'back' },
+  musket: { part: P.CHEST, pos: [0.02, -0.04, -0.15], q: slantUp(0.66), reach: 'back', dur: 0.8, word: 'back' },            // slung, the long barrel up over the left shoulder
+  arquebus: { part: P.CHEST, pos: [0.02, -0.04, -0.15], q: slantUp(0.64), reach: 'back', dur: 0.8, word: 'back' },
+  blunderbuss: { part: P.CHEST, pos: [0.02, -0.03, -0.15], q: slantUp(0.58), reach: 'back', dur: 0.72, word: 'back' },
+  sword: { part: P.PELVIS, pos: [0.2, 0.02, 0.0], q: [0.866, 0, 0, 0.5], reach: 'cross', dur: 0.6, word: 'scabbard' },        // on the left hip, point down and back
+  crowbar: { part: P.PELVIS, pos: [-0.15, 0.02, -0.12], q: [H, 0, 0, H], reach: 'hip', dur: 0.48, word: 'belt' },              // hooked through the belt at the back
 };
 
 const _a = [0, 0, 0], _b = [0, 0, 0], _c = [0, 0, 0], _hit = [0, 0, 0, 0, 0, 0, 0], _n = [0, 0, 0];
@@ -750,7 +803,7 @@ export class Weapons {
       const len = Math.hypot(dx, dy, dz);
       if (len < 0.004) continue;
       dx /= len; dy /= len; dz /= len;
-      if (def.blade && g.ropes && g.ropes.list.length && g.ropes.cutBy(ox, oy, oz, ox + dx * (len + 0.03), oy + dy * (len + 0.03), oz + dz * (len + 0.03)) && human.isPlayer) g.ui?.toast('Cut through the rope.');
+      if (def.blade && !def.blunt && g.ropes && g.ropes.list.length && g.ropes.cutBy(ox, oy, oz, ox + dx * (len + 0.03), oy + dy * (len + 0.03), oz + dz * (len + 0.03)) && human.isPlayer) g.ui?.toast('Cut through the rope.');
       const hit = g.rayPeople(ox, oy, oz, dx, dy, dz, len + 0.03, human, def.blade ? 0.03 : 0.055);
       if (hit && !act.hits.has(hit.human)) {
         act.hits.add(hit.human); act.landed++;
@@ -772,11 +825,12 @@ export class Weapons {
           if (t < 0) continue;
           act.hitThing = true;
           const wood = v.mat === 'wood';
-          const power = (def.chops ? 1.15 : def.blade ? 0.55 : 0.12) * clip.power;
+          // a chopping edge bites wood; a bar smashes it; anything else hardly marks it
+          const power = (def.smash ? (wood ? 1.0 : 0.3) : def.chops ? 1.15 : def.blade ? 0.55 : 0.12) * clip.power;
           const lost = v.chop(v.hit.c, power, dx, dy, dz);
           this.stats.chops += lost;
           if (!v.anchored) v.body.applyImpulse(dx * 30 * clip.power, 0, dz * 30 * clip.power, ox + dx * t, oy + dy * t, oz + dz * t);
-          g.audio?.at(wood ? (def.blade ? 'chop' : 'crate') : def.blade ? 'clang' : 'thud', ox + dx * t, oy + dy * t, oz + dz * t, 0.8);
+          g.audio?.at(wood ? (def.blunt ? 'splinter' : def.blade ? 'chop' : 'crate') : def.blade ? 'clang' : 'thud', ox + dx * t, oy + dy * t, oz + dz * t, 0.8);
           if (!wood && def.blade) g.gore.puff('flash', ox + dx * t, oy + dy * t, oz + dz * t, 0.12, 0.05, 1, 0.9, 0.6);
           g.minds?.noise(ox, oy, oz, 70, 'crash', human);
           if (human.isPlayer) g.shake = Math.max(g.shake, 0.35);
@@ -800,9 +854,21 @@ export class Weapons {
         act.hitThing = true;
         const J = (clip.limb === 'footR' ? 110 : def.blade ? 45 : 60) * clip.power;
         o.body.applyImpulse(dx * J, dy * J * 0.4 + J * 0.1, dz * J, ox + dx * t, oy + dy * t, oz + dz * t);
-        g.audio?.at('crate', o.body.px, o.body.py, o.body.pz, 0.7);
+        g.audio?.at(def.blunt ? 'splinter' : 'crate', o.body.px, o.body.py, o.body.pz, 0.7);
         g.minds?.noise(o.body.px, o.body.py, o.body.pz, 68, 'crash', human);
         if (human.isPlayer) g.shake = Math.max(g.shake, 0.4);
+        break;
+      }
+      if (act.hitThing || !g.traffic) continue;
+      for (const car of g.traffic.cars) {
+        if (Math.hypot(car.x - ox, car.z - oz) > 4) continue;
+        const t = car.ray(ox, oy, oz, dx, dy, dz, len + 0.04, _ch);
+        if (t < 0) continue;
+        act.hitThing = true;
+        g.traffic.blow(car, _ch, human, def, clip, ox + dx * t, oy + dy * t, oz + dz * t, dx, dy, dz);
+        if (human.isPlayer) g.shake = Math.max(g.shake, 0.4);
+        // it stops where it lands
+        if (act.bounce == null) { act.t = Math.max(0, act.t - dt * 0.5); act.bounce = act.t / clip.dur; human.repose(); }
         break;
       }
     }
@@ -825,7 +891,7 @@ export class Weapons {
       part: hit.part, type: clip.kind, power, point: [px, py, pz], dir: [ix, iy, iz], normal: hit.ln, impulse: J,
       lift: clip.up ? J * 0.9 : 0, chop: def.chops ? clip.chop || 1 : 0, attacker, weapon: def.id, through: 0.1,
     });
-    const snd = clip.kind === 'blunt' ? 'punch' : clip.kind === 'stab' ? 'stab' : def.chops ? 'chop' : 'slash';
+    const snd = def.hitSound && clip.kind === 'blunt' ? def.hitSound : clip.kind === 'blunt' ? 'punch' : clip.kind === 'stab' ? 'stab' : def.chops ? 'chop' : 'slash';
     g.audio?.at(snd, px, py, pz, clamp01(0.5 + power * 0.3));
     g.minds?.noise(px, py, pz, clip.kind === 'blunt' ? 72 : 66, 'blow', attacker);
     g.minds?.witness({ kind: 'attack', actor: attacker, victim: t, weapon: def.id, part: hit.part, x: px, y: py, z: pz, rep });
@@ -851,6 +917,8 @@ export class Weapons {
   reload() {
     const p = this.game.player, e = this.equipped;
     if (!e || !e.def.gun || p.weapon !== e || p.reload || p.swap || e.ammo >= e.def.mag) return;
+    const G = this.game.grab;
+    if (G && G.hold && G.hold.hands.some((x) => x.side === 0)) { this.game.ui?.toast('Your other hand is full. Let go first.'); return; }
     if (this.reloadFor(p)) this.game.ui?.toast('Reloading');
   }
 
@@ -859,7 +927,7 @@ export class Weapons {
     const item = h.weapon;
     if (!item || !item.def.gun || h.reload || h.swap || h.state !== ST.ANIM || !h.h.armOk(-1) || h.cuffed) return false;
     this._dropWire(item);
-    h.reload = { t: 0, dur: item.def.reload * (h.h.armOk(1) ? 1 : 1.8), item, kind: item.def.hold, out: false, grab: false, seated: false, racked: false, magIdx: -1 };
+    h.reload = { t: 0, dur: item.def.reload * (h.h.armOk(1) ? 1 : 1.8), item, kind: item.def.reloadKind || item.def.hold, out: false, grab: false, seated: false, racked: false, magIdx: -1, rams: 0 };
     return true;
   }
   _cancelReload(h) {
@@ -868,6 +936,7 @@ export class Weapons {
     if (r.magIdx >= 0) this.game.boxes.release(r.magIdx);
     r.item.magOut = false; r.item.slide = 0;
     h.reload = null; h.handFull = 0;
+    if (h.reachT[0] && h.reachT[0].load) h.reachT[0] = null;
   }
 
   /** One frame of whatever a person's hands are in the middle of. */
@@ -908,6 +977,7 @@ export class Weapons {
     if (h.weapon !== item || h.state !== ST.ANIM || !h.h.conscious || !h.h.armOk(-1)) { this._cancelReload(h); return; }
     r.t += dt;
     const u = r.t / r.dur, hand = h.bodies[P.HAND_L];
+    if (R.muzzle) { this._muzzleLoad(h, r, item, R, u, hand); return; }
     if (!r.out && u >= R.magOut) {
       r.out = true; item.magOut = true;
       this._dropMag(h, item);
@@ -931,6 +1001,65 @@ export class Weapons {
       g.boxes.setOn(r.magIdx, hand.px, hand.py, hand.pz, hand.qx, hand.qy, hand.qz, hand.qw, -0.026 * s, -0.03 * s, 0.02 * s, sz[0] * 2, sz[2] * 2, sz[1] * 2);
     }
     if (u >= 1) { h.reload = null; h.handFull = 0; item.slide = 0; }
+  }
+
+  /**
+   * Loading a muzzle-loader, step by step: a paper cartridge from the pouch,
+   * torn open with the teeth, powder and ball poured down the barrel; the
+   * ramrod drawn, run home three times and put back; the pan primed, the lock
+   * cocked. What is in the left hand is drawn in it.
+   */
+  _muzzleLoad(h, r, item, R, u, hand) {
+    const g = this.game, s = h.scale, bx = g.boxes;
+    const at = item.muzzleWorld || [h.x, h.y + 1.5, h.z];
+    if (!r.grab && u >= R.grab) {
+      r.grab = true;
+      if (h.h.armOk(1)) { h.handFull = 1; r.magIdx = bx.alloc(); bx.colorHex(r.magIdx, 0xe8e0cc); }
+      g.audio?.at('pickup', h.x, h.y + 1, h.z, 0.3);
+    }
+    if (!r.bit && u >= R.bite) { r.bit = true; g.audio?.at('tie', h.x, h.y + 1.6, h.z, 0.25); }
+    if (!r.poured && u >= R.pour) {
+      r.poured = true;
+      g.audio?.at('reload', at[0], at[1], at[2], 0.35);
+      g.gore.puff('smoke', at[0], at[1] + 0.03, at[2], 0.05, 0.4, 0.3, 0.28, 0.26);   // a little black dust
+    }
+    // the rod out of its pipes for the ramming, back in after
+    const rod = u >= R.rodOut && u < R.rodIn;
+    if (rod !== !!item.magOut) { item.magOut = rod; g.audio?.at('click', at[0], at[1], at[2], 0.25); }
+    if (r.rams < R.rams.length && u >= R.rams[r.rams]) { r.rams++; g.audio?.at('ram', at[0], at[1], at[2], 0.4); }
+    if (!r.seated && u >= R.magIn) {
+      r.seated = true; item.ammo = item.def.mag;
+      if (h.isPlayer) g.ui?.ammoChanged();
+    }
+    if (!r.racked && u >= R.rackB) { r.racked = true; g.audio?.at('click', item.px, item.py, item.pz, 0.7); }
+    // where the left hand goes, now and then exactly: to the muzzle to pour, up and down above it with the rod, to the lock
+    const q = item.q, ax = 2 * (q[0] * q[2] + q[3] * q[1]), ay = 2 * (q[1] * q[2] - q[3] * q[0]), az = 1 - 2 * (q[0] * q[0] + q[1] * q[1]);
+    let tw = 0, tx = 0, ty = 0, tz = 0;
+    const win = (a, b) => smooth(clamp01((u - a) / 0.05)) * (1 - smooth(clamp01((u - b) / 0.05)));
+    if (u > R.pour - 0.1 && u < R.rodIn + 0.05) {
+      // the stroke: the rod drawn up out of the barrel and driven down again, the hand at the top of it
+      const ph = (u - (R.rams[0] - 0.05)) / (R.rams[1] - R.rams[0]);
+      const up = u < R.rodOut ? 0.05 : u > R.rodIn - 0.04 ? 0.06 : 0.1 + 0.3 * (0.5 + 0.5 * Math.cos(TAU * ph));
+      tx = at[0] + ax * up; ty = at[1] + ay * up; tz = at[2] + az * up; tw = win(R.pour - 0.1, R.rodIn);
+    } else if (item.lockWorld && u > R.rackA - 0.1 && u < 0.99) {
+      const L = item.lockWorld; tx = L[0]; ty = L[1] + 0.02; tz = L[2]; tw = win(R.rackA - 0.1, 0.97);
+    }
+    if (tw > 0.01 && h.h.armOk(1)) h.reachT[0] = { x: tx, y: ty, z: tz, w: tw, rate: 9, load: true };
+    else if (h.reachT[0] && h.reachT[0].load) h.reachT[0] = null;
+    // what the left hand holds: the cartridge until it is poured, the rod while it is out, down the barrel from the hand
+    if (r.magIdx >= 0) {
+      if (rod) {
+        const L = item.def.magSize[2] * 2 * s;
+        h.palmAt(0, _c);
+        bx.set(r.magIdx, _c[0] - ax * L * 0.5, _c[1] - ay * L * 0.5, _c[2] - az * L * 0.5, q[0], q[1], q[2], q[3], 0.009 * s, 0.009 * s, L);
+      } else if (u < R.pour) bx.setOn(r.magIdx, hand.px, hand.py, hand.pz, hand.qx, hand.qy, hand.qz, hand.qw, -0.02 * s, -0.04 * s, 0.02 * s, 0.014 * s, 0.05 * s, 0.014 * s);
+      else bx.hide(r.magIdx);
+    }
+    if (u >= 1) {
+      h.reload = null; h.handFull = 0; item.magOut = false;
+      if (h.reachT[0] && h.reachT[0].load) h.reachT[0] = null;
+      if (r.magIdx >= 0) { bx.release(r.magIdx); r.magIdx = -1; }
+    }
   }
 
   /** The empty magazine, on its way to the ground. */
@@ -968,17 +1097,21 @@ export class Weapons {
     }
     if (e.ammo <= 0) { g.audio?.at('click', h.x, h.y + 1.4, h.z, 0.5); e.cool = 0.4; this.reloadFor(h); return false; }
     e.ammo--; e.cool = d.gap * rand(2.2, 4.5);
+    if (d.lock) this._pan(h, e);
     const m = e.muzzleWorld || [h.x, h.y + 1.4 * h.scale, h.z];
     let dx = aim[0] - m[0], dy = aim[1] - m[1], dz = aim[2] - m[2];
     let l = Math.hypot(dx, dy, dz) || 1;
     const sp = d.spread * 2 + (1 - skill) * 0.075 + (h.speed > 1 ? 0.03 : 0) + clamp01(h.h.pain / 90) * 0.05;
     dx = dx / l + rand(-sp, sp); dy = dy / l + rand(-sp, sp) * 0.7; dz = dz / l + rand(-sp, sp);
     l = Math.hypot(dx, dy, dz); dx /= l; dy /= l; dz /= l;
-    this._bullet(h, d, m[0], m[1], m[2], dx, dy, dz, d.power, 0);
+    for (let i = 0, n = d.pellets || 1; i < n; i++) {
+      let ex = dx, ey = dy, ez = dz;
+      if (d.pelletSpread) { ex += rand(-1, 1) * d.pelletSpread; ey += rand(-1, 1) * d.pelletSpread; ez += rand(-1, 1) * d.pelletSpread; const k = Math.hypot(ex, ey, ez); ex /= k; ey /= k; ez /= k; }
+      this._bullet(h, d, m[0], m[1], m[2], ex, ey, ez, d.power, i ? 1 : 0);
+    }
     h.anim.recoil = 1;
-    g.gore.puff('flash', m[0] + dx * 0.12, m[1] + dy * 0.12, m[2] + dz * 0.12, d.auto ? 0.5 : 0.36, 0.055, 1, 0.92, 0.7);
-    g.gore.puff('smoke', m[0] + dx * 0.2, m[1] + dy * 0.2, m[2] + dz * 0.2, 0.22, 0.7, 0.75, 0.75, 0.75);
-    this._casing(h, m, dx, dz);
+    this._muzzle(m, dx, dy, dz, d);
+    if (!d.lock) this._casing(h, m, dx, dz);
     g.audio?.at(d.sound, m[0], m[1], m[2], 1);
     g.minds?.noise(m[0], m[1], m[2], d.loud, 'gunshot', h);
     g.minds?.witness({ kind: 'shot', actor: h, weapon: d.id, x: m[0], y: m[1], z: m[2] });
@@ -1096,6 +1229,29 @@ export class Weapons {
     }
     const d = e.def;
     if (e.ammo <= 0) { g.audio?.play('click', 0.6); this.cool = 0.25; this.reload(); return false; }
+    if (d.lock) {
+      // a flint strikes the frizzen (or the match dips into the pan): the priming flashes, and a moment later, the charge
+      if (this.lockT) return false;
+      this.cool = d.gap;
+      this._pan(p, e);
+      if (chance(d.misfire)) { g.ui?.toast(d.lock === 'match' ? 'The priming fizzled. Try again.' : 'A flash in the pan. Try again.'); return true; }
+      this.lockT = { t: d.delay, e };
+      return true;
+    }
+    return this._discharge(p, e);
+  }
+
+  /** The priming in the pan going off: a spit of flame and a puff of smoke at the lock. */
+  _pan(h, e) {
+    const g = this.game, at = e.lockWorld || e.muzzleWorld || [h.x, h.y + 1.4, h.z];
+    g.gore.puff('flash', at[0], at[1] + 0.02, at[2], 0.14, 0.06, 1, 0.85, 0.5);
+    g.gore.puff('smoke', at[0], at[1] + 0.05, at[2], 0.28, 1.4, 0.86, 0.86, 0.84);
+    g.audio?.at(e.def.lock === 'match' ? 'match' : 'flint', at[0], at[1], at[2], 0.8);
+  }
+
+  /** The charge goes off: the round (or the shot) toward the crosshair, and everything that comes with it. */
+  _discharge(p, e) {
+    const g = this.game, d = e.def;
     e.ammo--; this.cool = d.gap; this.heat = Math.min(1, this.heat + (d.auto ? 0.13 : 0.3));
     // from the muzzle toward whatever the crosshair is on
     const a = g.aim;
@@ -1114,20 +1270,41 @@ export class Weapons {
     const sp = d.spread * (1 + this.heat * 2.2) * (p.speed > 2 ? 1.8 : 1) * (p.crouching ? 0.6 : 1);
     dx = dx / l + rand(-sp, sp); dy = dy / l + rand(-sp, sp); dz = dz / l + rand(-sp, sp);
     l = Math.hypot(dx, dy, dz); dx /= l; dy /= l; dz /= l;
-    this._bullet(p, d, m[0], m[1], m[2], dx, dy, dz, d.power, 0);
-
+    // a handful of shot goes out in a cone; anything else is one round
+    const n = d.pellets || 1, ps = d.pelletSpread || 0;
+    for (let i = 0; i < n; i++) {
+      let ex = dx, ey = dy, ez = dz;
+      if (ps) { const r = Math.sqrt(Math.random()) * ps, th = rand(0, 6.283); ex += Math.cos(th) * r * dz; ey += Math.sin(th) * r; ez -= Math.cos(th) * r * dx; const k = Math.hypot(ex, ey, ez); ex /= k; ey /= k; ez /= k; }
+      this._bullet(p, d, m[0], m[1], m[2], ex, ey, ez, d.power, i ? 1 : 0);
+    }
     // what the shooter feels and sees
     p.anim.recoil = 1;
     g.camPitch += d.kick * rand(0.8, 1.2); g.camYaw += d.kick * rand(-0.45, 0.45);
-    g.shake = Math.max(g.shake, d.auto ? 0.45 : 0.6);
-    g.gore.puff('flash', m[0] + dx * 0.12, m[1] + dy * 0.12, m[2] + dz * 0.12, d.auto ? 0.5 : 0.36, 0.055, 1, 0.92, 0.7);
-    g.gore.puff('smoke', m[0] + dx * 0.2, m[1] + dy * 0.2, m[2] + dz * 0.2, 0.22, 0.7, 0.75, 0.75, 0.75);
-    this._casing(p, m, dx, dz);
+    g.shake = Math.max(g.shake, d.lock ? 0.9 : d.auto ? 0.45 : 0.6);
+    this._muzzle(m, dx, dy, dz, d);
+    if (!d.lock) this._casing(p, m, dx, dz);
     g.audio?.play(d.sound, 1);
     g.minds?.noise(m[0], m[1], m[2], d.loud, 'gunshot', p);
     g.minds?.witness({ kind: 'shot', actor: p, weapon: d.id, x: m[0], y: m[1], z: m[2] });
     g.ui?.ammoChanged();
     return true;
+  }
+
+  /** The flash and the smoke at the muzzle: a puff from a modern round; from black powder, a great white cloud. */
+  _muzzle(m, dx, dy, dz, d) {
+    const g = this.game;
+    if (d.smoke) {
+      g.gore.puff('flash', m[0] + dx * 0.25, m[1] + dy * 0.25, m[2] + dz * 0.25, 0.95 * d.smoke * 0.6, 0.08, 1, 0.82, 0.5);
+      for (let i = 0; i < 9; i++) {
+        const k = 0.2 + i * 0.22 * d.smoke;
+        g.gore.puff('smoke', m[0] + dx * k + rand(-0.15, 0.15), m[1] + dy * k + rand(-0.1, 0.15), m[2] + dz * k + rand(-0.15, 0.15), rand(0.45, 0.8) * d.smoke, rand(2.6, 4.2), 0.9, 0.9, 0.88);
+      }
+      if (g.voxels) for (let i = 0; i < 6; i++) g.voxels.chip(m[0], m[1], m[2], dx * rand(4, 9), dy * rand(4, 9) + rand(0, 1), dz * rand(4, 9), WAD, WAD_COL, 0);
+      g.lights?.ask('point', m[0], m[1], m[2], 0xffb060, 26, 9, 0, -1, 0, 1);
+      return;
+    }
+    g.gore.puff('flash', m[0] + dx * 0.12, m[1] + dy * 0.12, m[2] + dz * 0.12, d.auto ? 0.5 : 0.36, 0.055, 1, 0.92, 0.7);
+    g.gore.puff('smoke', m[0] + dx * 0.2, m[1] + dy * 0.2, m[2] + dz * 0.2, 0.22, 0.7, 0.75, 0.75, 0.75);
   }
 
   /**
@@ -1197,7 +1374,7 @@ export class Weapons {
 
     if (what === 4) {
       const t = ph.human, limb = ph.part >= P.UARM_L;
-      const rep = t.hit({ part: ph.part, type: 'bullet', power, point: [hx, hy, hz], dir: [dx, dy, dz], normal: ph.ln, impulse: d.impulse * power / d.power, through: ph.exit, hp: d.hp * power / d.power, attacker: shooter, weapon: d.id, rifle: !!d.rifle });
+      const rep = t.hit({ part: ph.part, type: 'bullet', power, point: [hx, hy, hz], dir: [dx, dy, dz], normal: ph.ln, impulse: d.impulse * power / d.power, through: ph.exit, hp: d.hp * power / d.power, attacker: shooter, weapon: d.id, rifle: !!d.rifle, ball: !!d.ball, shot: !!d.shot });
       g.audio?.at('flesh', hx, hy, hz, 0.8);
       if (depth === 0 && far < 1.5 && shooter.weapon && rep && !rep.stopped) g.gore.smear(shooter.weapon, far < 0.8 ? 2 : 1);
       g.minds?.witness({ kind: 'attack', actor: shooter, victim: t, weapon: d.id, part: ph.part, x: hx, y: hy, z: hz, rep });
@@ -1316,6 +1493,23 @@ export class Weapons {
     this.cool = Math.max(0, this.cool - dt);
     this.heat = Math.max(0, this.heat - dt * 1.6);
     for (const it of this.items) if (it.cool > 0) it.cool -= dt;
+    // a lock that has been sprung: the pan has flashed, and the charge is catching
+    if (this.lockT) {
+      const L = this.lockT;
+      if (p.weapon !== L.e || p.state !== ST.ANIM || p.car || p.reload || p.swap) this.lockT = null;
+      else if ((L.t -= dt) <= 0) { this.lockT = null; this._discharge(p, L.e); }
+    }
+    // the lit match on an arquebus smoulders the whole time it is in somebody's hands
+    if ((this.wispT = (this.wispT || 0) - dt) <= 0) {
+      this.wispT = 0.14;
+      for (const it of this.items) {
+        const h = it.holder;
+        if (!it.def.matchAt || !it.matchWorld || !h || h.removed || h.weapon !== it || h.state !== ST.ANIM) continue;
+        const m = it.matchWorld;
+        g.gore.puff('smoke', m[0] + rand(-0.01, 0.01), m[1] + 0.02, m[2] + rand(-0.01, 0.01), rand(0.035, 0.06), rand(1, 1.6), 0.78, 0.78, 0.76);
+        if (chance(0.25)) g.gore.puff('flash', m[0], m[1], m[2], 0.025, 0.08, 1, 0.5, 0.15);
+      }
+    }
     for (const h of g.humans) if (h.swap || h.reload || h.cuffing) this._hands(h, dt);
     // the player's hands
     if (g.doctor == null && p.state === ST.ANIM && !p.car) {
@@ -1399,18 +1593,23 @@ export class Weapons {
         if (d.gun && h.state === ST.ANIM) {
           // a gun points where its owner is looking, whatever the wrist is doing
           const yaw = h.isPlayer ? g.camYaw : h.aimYaw ?? h.yaw;
-          const rw = h.anim.reloadW, R = RELOAD[d.hold], low = h.isPlayer ? 0 : h.gunLow || 0;
+          const rw = h.anim.reloadW, R = RELOAD[d.reloadKind || d.hold], low = h.isPlayer ? 0 : h.gunLow || 0;
           const pitch = (h.isPlayer ? g.camPitch : h.aimPitch || 0) * (1 - rw) * (1 - low) + h.anim.recoil * 0.12 + R.tilt * rw - low * 0.9;
           const roll = R.roll * rw;
           const sy = Math.sin(yaw / 2), cy = Math.cos(yaw / 2), sx = Math.sin(-pitch / 2), cx = Math.cos(-pitch / 2);
           qx = cy * sx; qy = sy * cx; qz = -sy * sx; qw = cy * cx;
           if (roll) { const sr = Math.sin(roll / 2), cr = Math.cos(roll / 2); const ax = qx * cr + qy * sr, ay = qy * cr - qx * sr, az = qz * cr + qw * sr, aw = qw * cr - qz * sr; qx = ax; qy = ay; qz = az; qw = aw; }
           it.q[0] = qx; it.q[1] = qy; it.q[2] = qz; it.q[3] = qw;
-          rotv(it.q, d.grip[0], d.grip[1], d.grip[2], _a);
+          // (loading from the muzzle, the hand slides up to hold the barrel, so that the muzzle comes down to where
+          // the other hand can get at it)
+          const lg = R.muzzle ? rw : 0;
+          rotv(it.q, d.grip[0] * (1 - lg), d.grip[1] * (1 - lg), lerp(d.grip[2], d.muzzle[2] - 0.46, lg), _a);
           hand.toWorld(0.016 * s, -0.03 * s, 0.01, _b);
           px = _b[0] - _a[0]; py = _b[1] - _a[1]; pz = _b[2] - _a[2];
           rotv(it.q, d.muzzle[0], d.muzzle[1], d.muzzle[2], _a);
           it.muzzleWorld = [px + _a[0], py + _a[1], pz + _a[2]];
+          if (d.lockAt) { rotv(it.q, d.lockAt[0], d.lockAt[1], d.lockAt[2], _a); it.lockWorld = [px + _a[0], py + _a[1], pz + _a[2]]; }
+          if (d.matchAt) { rotv(it.q, d.matchAt[0], d.matchAt[1], d.matchAt[2], _a); it.matchWorld = [px + _a[0], py + _a[1], pz + _a[2]]; }
         } else {
           const act = h.anim.action, rev = act && act.clip.reverse;
           hand.toWorld(0.016 * s, -0.03 * s, 0, _a); px = _a[0]; py = _a[1]; pz = _a[2];
@@ -1498,6 +1697,7 @@ let _exW = null, _exM = null;
 function EXIT_WOOD_UV() { return _exW || (_exW = cellUV(DECAL.exitWood[0], DECAL.exitWood[1], ATLAS_COLS, ATLAS_ROWS)); }
 function EXIT_METAL_UV() { return _exM || (_exM = cellUV(DECAL.exitMetal[0], DECAL.exitMetal[1], ATLAS_COLS, ATLAS_ROWS)); }
 const CHIP_WOOD = [0.03, 0.012, 0.012], CHIP_METAL = [0.012, 0.004, 0.012];
+const WAD = [0.012, 0.012, 0.004], WAD_COL = [0.86, 0.82, 0.72];   // bits of burning paper wadding
 const _ch = { lp: [0, 0, 0], ln: [0, 0, 0], xn: [0, 0, 0], tag: '', piece: 0, exit: 0, glass: -1 }, _chHit = { lp: null, ln: null, glass: -1, tag: '' };
 const _cx = { lp: [0, 0, 0], ln: [0, 0, 0], tag: '', piece: 0, glass: -1 };
 const CHIP_WOOD_COL = [0.62, 0.45, 0.26], CHIP_METAL_COL = [0.78, 0.8, 0.82];

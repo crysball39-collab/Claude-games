@@ -5,7 +5,7 @@
    ========================================================================== */
 import { clamp } from './util.js';
 
-const BUTTONS = ['jump', 'crouch', 'attack', 'alt', 'reload', 'use', 'drop', 'talk', 'holster', 'gas', 'brake', 'hand', 'steerL', 'steerR', 'horn'];
+const BUTTONS = ['jump', 'crouch', 'attack', 'alt', 'reload', 'use', 'drop', 'talk', 'holster', 'grab', 'gas', 'brake', 'hand', 'steerL', 'steerR', 'horn'];
 
 export class Input {
   constructor() {
@@ -192,6 +192,7 @@ export class Input {
       case 'KeyE': set('use'); break;
       case 'KeyG': set('drop'); break;
       case 'KeyH': set('holster'); break;
+      case 'KeyZ': set('grab'); break;
       case 'KeyT': if (isDown && this.enabled) { e.preventDefault(); this.onKey?.('talk'); } break;
       case 'Tab': if (isDown) this.onKey?.('menu'); break;
       case 'KeyX': if (isDown) this.onKey?.('doctor'); break;

@@ -14,6 +14,7 @@ import { Gore } from './combat/gore.js';
 import { Voxels } from './world/voxels.js';
 import { Things } from './world/things.js';
 import { Ropes } from './world/ropes.js';
+import { Grab } from './combat/grab.js';
 import { Lights } from './render/lights.js';
 import { Fire } from './combat/fire.js';
 import { Power } from './world/power.js';
@@ -86,6 +87,7 @@ export class Game {
     this.voxels = new Voxels(this);
     this.things = new Things(this);
     this.ropes = new Ropes(this);
+    this.grab = new Grab(this);
     this.lights = new Lights(this);
     this.fire = new Fire(this);
     this.power = new Power(this);
@@ -259,6 +261,7 @@ export class Game {
     this.minds?.update(dt);
     this.police?.update(dt);
     this.traffic?.update(dt);
+    this.grab.update(dt);
     for (const h of this.humans) h.update(dt);
     this.ropes.tether();
     this.weapons?.update(dt);
@@ -268,6 +271,7 @@ export class Game {
     this.weapons?.late(dt);
     this.voxels.update(dt);
     this.ropes.update(dt);
+    this.grab.late(dt);
 
     // crates
     for (const o of this.props) {
@@ -556,6 +560,7 @@ export class Game {
     const old = this.player, sp = this.city.spawn;
     const x = home ? sp.x : clamp(old.x, -LIMIT + 2, LIMIT - 2), z = home ? sp.z : clamp(old.z, -LIMIT + 2, LIMIT - 2);
     if (old.cuffed) this.weapons?.uncuff(old, null);
+    this.grab.clear();
     this.weapons?.dropFrom(old, true);
     const i = this.humans.indexOf(old);
     old.remove();

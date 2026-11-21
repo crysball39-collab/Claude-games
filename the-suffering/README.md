@@ -33,6 +33,7 @@ npm start            # python3 -m http.server 8080, from the repository root
 | Choose the move | slide off the button left, up, right or down | right click or Q for the heavy one |
 | Pick up / drop / reload | PICK UP, DROP, RELOAD | E, G, R |
 | Holster or draw | HOLSTER / DRAW | H |
+| Grab, drag or let go | GRAB (DRAG, LET GO); ATTACK throws what you carry | Z |
 | Weapon slots | tap a slot | 1 to 5 |
 | Sandbox menu | SPAWN | Tab |
 | Doctor mode | DOCTOR, then tap a person | X, then click a person |
@@ -54,6 +55,12 @@ button repeatedly for the combo, or slide off it to pick one.
 | Fists | jab | cross | uppercut | kick |
 | Knife | slash | backhand slash | stab | overhand plunge |
 | Machete | chop | backhand | cleave | leg sweep |
+| Sword | slash | backhand | thrust | overhead cleave |
+| Crowbar | swing | backhand | jab | overhead smash |
+
+The sword has the longest reach of anything you can swing and takes limbs off like the
+machete; the thrust goes in deep. The crowbar does not cut: it breaks bones, smashes
+wooden boards, dents cars and breaks their windows, and rings when it lands.
 
 The M1911 holds seven rounds and fires as fast as you tap; the Glock-19 holds fifteen
 rounds of 9 mm, hits a little less hard and comes back on target a little faster. The AK-47 holds thirty, fires
@@ -69,10 +76,43 @@ it looks: the gun comes in to the chest, the empty magazine drops to the ground,
 hand fetches a full one from the belt and seats it, and the action is racked. You cannot
 fire until it is finished.
 
+**Black powder.** Three guns from before cartridges, each loaded with one shot.
+The *musket* is a flintlock: pull the trigger and the flint strikes, the priming in the
+pan flashes and smokes, and a beat later the charge goes off and a .75 lead ball leaves
+the barrel in a great cloud of white smoke. The ball is big, soft and slow: a large
+hole, a hard shove; a light vest catches it less than half the time, a medium one nearly
+always (and the wearer feels it like a hammer), and a plate stops it. Now and then the priming fizzles without setting off the charge:
+"a flash in the pan", and the gun is still loaded. The *arquebus* is older still, a
+matchlock: a lit match smoulders on the lock the whole time it is in your hands, and
+dips into the pan when you fire, a little slower than a flint and a little more likely to
+fizzle. The *blunderbuss* is a short flintlock with a flared muzzle that throws a
+handful of shot: fourteen small pellets in a cone, each a small hole, terrible close up,
+stopped by any vest. Loading them is the real drill and takes eight seconds or so:
+the gun is stood up in front of you, a paper cartridge comes out of the pouch and is
+bitten open, the powder and the ball are poured down the muzzle, the ramrod is drawn
+from under the barrel and driven down it three times, put back, and the pan primed and
+the lock cocked. The left hand goes to the muzzle and to the lock exactly, wherever the
+gun is. When you aim one, the left hand holds it out along the stock.
+
+**Grabbing and dragging.** GRAB (Z) takes hold of whatever is under the crosshair and in
+reach, or the nearest such thing in front of you: a crate, a lamp, a generator, a wall or
+a beam that has come loose, a limb that has come off, or somebody lying on the ground who
+is out cold or dead (nobody on their feet). You step up to it, bend and crouch for
+anything low, and your arm reaches for it, the hand open; then the fingers close round
+it. A person is taken by the wrist, the ankle or the collar, whichever is nearest where
+you reached (by the collar with both hands, if both are free). Anything light is picked
+up and carried in front of you, in both hands if they are free, and ATTACK throws it.
+Anything heavy is dragged: your arm stretched out to it, it slides along the ground
+after you, and you go no faster than its weight allows. A gun in your other hand still
+fires. GRAB again lets go; so does falling down, and somebody you are dragging who comes
+round pulls free. Bare hands leave prints, and anybody who sees you dragging a body will
+remember it, and an officer who sees it will come for you.
+
 **Carrying.** Whatever you are not holding rides on you where it would: the M1911 in a
 holster on the right hip, the Glock in a shoulder holster under the left arm, the knife
-in a sheath on the left hip, the machete, the rifles and the flamethrower across your
-back, the rope and the wire hung on your belt. HOLSTER puts away what is in your hand and DRAW brings it back, with the
+in a sheath on the left hip, the sword in a scabbard on the left hip and the crowbar
+through the belt on the right, the machete, the rifles, the muskets and the flamethrower
+across your back, the rope and the wire hung on your belt. HOLSTER puts away what is in your hand and DRAW brings it back, with the
 reach that takes. People are frightened of a weapon in the hand, not one put away.
 
 **The light vest.** Black, over the chest and the belly. It stops a pistol round and a
@@ -208,8 +248,9 @@ the wire comes off or is cut, or they fall clear of what they were touching.
 crates, the wooden and the steel wall, the short and the large steel beam, a light bulb,
 a floodlight and a generator, a car, a police car and a van; the rope, the wire, the
 light, medium and S.W.A.T. vests and helmets, handcuffs and the poison syringe; the taser
-and eight weapons (fists aside: the knife, the machete, the M1911, the Glock-19, the
-AK-47, the M4A1, the AR-15 and the flamethrower). It can clear away blood, bodies,
+and thirteen weapons (fists aside: the knife, the machete, the sword, the crowbar, the
+M1911, the Glock-19, the AK-47, the M4A1, the AR-15, the musket, the arquebus, the
+blunderbuss and the flamethrower). It can clear away blood, bodies,
 objects or cars, or patch you up.
 
 **Bodies.** Every person is seventeen rigid parts on sixteen limited joints, driven by

@@ -33,6 +33,7 @@ export class UI {
     inp.bind($('#btn-use'), 'use');
     inp.bind($('#btn-drop'), 'drop');
     inp.bind($('#btn-holster'), 'holster');
+    inp.bind($('#btn-grab'), 'grab');
     // in a car: two pedals, a handbrake, a wheel to turn either way, a horn, a door
     inp.bind($('#btn-gas'), 'gas');
     inp.bind($('#btn-brake'), 'brake');
@@ -363,7 +364,8 @@ export class UI {
   _label() {
     const w = this.weapons, d = w.def;
     const bound = !!this.g.player.cuffed;
-    $('#attack-label').textContent = bound ? 'CUFFED' : d.rope && this.g.ropes && this.g.ropes.pending ? (d.wire ? 'WIRE TO' : 'TIE TO') : d.label;
+    const G = this.g.grab, carrying = G && G.hold && G.hold.carry && G.hold.phase === 'hold';
+    $('#attack-label').textContent = bound ? 'CUFFED' : carrying ? 'THROW' : d.rope && this.g.ropes && this.g.ropes.pending ? (d.wire ? 'WIRE TO' : 'TIE TO') : d.label;
     $('#attack-next').textContent = bound || !d.melee ? '' : CLIPS[d.moves[(w.choice >= 0 ? w.choice : this.g.time - w.lastAttack > 1.15 ? 0 : w.combo) % 4]].label;
   }
 
@@ -405,6 +407,16 @@ export class UI {
     else if (c) $('#use-label').textContent = 'UNCUFF';
     else if (t) $('#use-label').textContent = this.g.things.label(t);
     else if (car) { const d = car.seats[0]; $('#use-label').textContent = !d ? 'DRIVE' : d.h.alive && d.h.conscious ? 'CARJACK' : 'PULL OUT'; }
+  }
+  /** Something has come within reach of the hands, or gone out of it, or been taken hold of. */
+  grabChanged() {
+    const G = this.g.grab, b = $('#btn-grab');
+    if (!G || !b) return;
+    const label = G.label();
+    b.hidden = !label || !!this.g.player.car;
+    $('#grab-label').textContent = label;
+    b.classList.toggle('holding', !!G.hold);
+    this._label();
   }
   /** Into a car, or out of one: the controls change over. */
   drivingChanged(on) {

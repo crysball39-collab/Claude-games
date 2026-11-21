@@ -30,6 +30,7 @@ await run(() => {
       if (p.cuffed) g.weapons.uncuff(p, null);
       p.tased = 0; p.dazeT = 0;
       for (const it of g.weapons.items.slice()) g.weapons.remove(it);
+      g.grab?.clear();
       g.ropes?.clear(); g.fire?.clear(); g.power?.clear(); g.voxels?.clear(); if (g.daylight && g.daylight.mode !== 'day') g.daylight.set('day');
       if (p.car) g.traffic.exit(p);
       g.traffic?.clearCars();
@@ -1945,6 +1946,214 @@ if (want('Pushing people')) {
   check('walk into somebody and keep walking: you push them back as you go', r.pushed > 1.2 && r.gap < 1.2 && r.upright, `${r.pushed.toFixed(2)} m in 3 s, still on their feet`);
   check('they face whoever is pushing them, and mind it', r.facing && r.noticed, `facing off by ${r.faceErr.toFixed(2)} rad; noticed ${r.noticed} (${r.mem})`);
   check('run into somebody and they are knocked off their feet', r.knocked);
+}
+
+head('Black-powder guns');
+if (want('Black-powder guns')) {
+  await run(() => { V.stage(); __game.paused = false; });
+  await t.page.click('#btn-menu');
+  const listed = await run(() => ['musket', 'arquebus', 'blunderbuss', 'sword', 'crowbar'].every((k) => !!document.querySelector(`[data-spawn="${k}"]`)));
+  await t.page.click('[data-close="sandbox"]');
+  const r = await run(() => {
+    const g = __game, p = g.player, W = g.weapons, out = {};
+    for (const gun of ['musket', 'arquebus', 'blunderbuss']) {
+      V.stage(); g.paused = false;
+      const it = W.give(p, gun, true); g.advance(1.2);
+      const d = it.def, keep = d.misfire; d.misfire = 0;
+      const o = out[gun] = { held: p.weapon === it, ammo: it.ammo };
+      const h = V.still(g.spawnHuman(p.x + 3.2, p.z, -Math.PI / 2)); g.advance(0.3);
+      V.aimAt(h.bodies[2]);
+      const fx0 = g.gore.fxList.length;
+      o.fired = W.fire(); o.lit = !!W.lockT;
+      g.advance(0.04); o.waits = it.ammo === 1;
+      g.advance(0.5); o.went = it.ammo === 0;
+      o.smoke = g.gore.fxList.length - fx0;
+      o.holes = h.h.wounds.filter((w) => w.type === 'gunshot').length;
+      // loading it again: long, from the muzzle, and it ends loaded
+      g.advance(0.8); W.reload(); o.loading = !!p.reload; o.dur = p.reload ? p.reload.dur : 0;
+      let rod = false, near = 9, lock = 9;
+      const a = [0, 0, 0];
+      for (let i = 0; i < (o.dur + 0.6) * 20 && (p.reload || i < 5); i++) {
+        g.advance(0.05);
+        if (it.magOut) rod = true;
+        const r = p.reload, u = r ? r.t / r.dur : 1;
+        if (r && it.muzzleWorld) {
+          p.palmAt(0, a);
+          const m = it.muzzleWorld, l = it.lockWorld;
+          if (u > 0.3 && u < 0.75) near = Math.min(near, Math.hypot(a[0] - m[0], a[1] - m[1], a[2] - m[2]));
+          if (l && u > 0.86 && u < 0.95) lock = Math.min(lock, Math.hypot(a[0] - l[0], a[1] - l[1], a[2] - l[2]));
+        }
+      }
+      o.rod = rod; o.near = near; o.lock = lock; o.reloaded = it.ammo === 1 && !p.reload;
+      d.misfire = keep;
+    }
+    // a flash in the pan: nothing comes out of the barrel, and it is still loaded
+    V.stage(); g.paused = false;
+    const m = W.give(p, 'musket', true); g.advance(1.2);
+    const keep = m.def.misfire; m.def.misfire = 1;
+    W.fire(); g.advance(0.6); out.misfire = m.ammo === 1 && !W.lockT;
+    m.def.misfire = keep;
+    // the left hand out along the stock, not by the right
+    const a = [0, 0, 0]; p.palmAt(0, a);
+    const q = m.q, fx = 2 * (q[0] * q[2] + q[3] * q[1]), fy = 2 * (q[1] * q[2] - q[3] * q[0]), fz = 1 - 2 * (q[0] * q[0] + q[1] * q[1]);
+    out.fore = (a[0] - m.px) * fx + (a[1] - m.py) * fy + (a[2] - m.pz) * fz;
+    // what armour makes of a ball, and of shot
+    const mk = (vest) => { const h = V.still(g.spawnHuman(p.x + 4, p.z, -Math.PI / 2)); if (vest) h.wearVest(vest); g.advance(0.05); return h; };
+    const shoot = (vest, kind) => {
+      let stopped = 0;
+      for (let i = 0; i < 12; i++) {
+        const h = mk(vest), c = h.bodies[2], pt = [0, 0, 0], dir = [0, 0, 0];
+        c.toWorld(0, 0, c.hz, pt); c.dirToWorld(0, 0, -1, dir);
+        const rep = h.hit({ part: 2, type: 'bullet', power: kind === 'shot' ? 0.48 : 1.75, point: pt, dir, normal: [0, 0, 1], impulse: 4, attacker: p, weapon: kind === 'shot' ? 'blunderbuss' : 'musket', ball: kind === 'ball', shot: kind === 'shot', through: 0.2, hp: kind === 'shot' ? 10 : 36 });
+        if (rep.stopped) stopped++;
+        g.removeHuman(h);
+      }
+      return stopped;
+    };
+    out.shotLight = shoot('light', 'shot'); out.ballSwat = shoot('swat', 'ball'); out.ballLight = shoot('light', 'ball');
+    // a pellet is a small hole; a ball a big one
+    const bare = (kind) => { const h = mk(null), c = h.bodies[2], pt = [0, 0, 0], dir = [0, 0, 0]; c.toWorld(0, 0, c.hz, pt); c.dirToWorld(0, 0, -1, dir); h.hit({ part: 2, type: 'bullet', power: kind === 'shot' ? 0.48 : 1.75, point: pt, dir, normal: [0, 0, 1], impulse: 4, attacker: p, weapon: 'musket', ball: kind === 'ball', shot: kind === 'shot', through: 0.2, hp: 10 }); const w = h.h.wounds.find((x) => x.type === 'gunshot'); const v = w ? w.size : 0; g.removeHuman(h); return v; };
+    out.pellet = bare('shot'); out.ball = bare('ball');
+    // people know what it is
+    const o = V.still(g.spawnHuman(p.x + 3, p.z, -Math.PI / 2)); g.advance(2.5);
+    out.seen = o.mind.memory.some((x) => /musket/.test(x.text || ''));
+    g.removeHuman(o);
+    g.paused = true;
+    return out;
+  });
+  check('the musket, arquebus, blunderbuss, sword and crowbar are in the sandbox', listed);
+  for (const gun of ['musket', 'arquebus', 'blunderbuss']) {
+    const o = r[gun];
+    check(`${gun}: the priming flashes first, then the charge goes off`, o.held && o.fired && o.lit && o.waits && o.went, `lit ${o.lit}, waited ${o.waits}, went ${o.went}`);
+    check(`${gun}: a cloud of white smoke`, o.smoke >= 8, `${o.smoke} puffs`);
+    check(`${gun}: it hits what it is aimed at`, o.holes >= (gun === 'blunderbuss' ? 3 : 1), `${o.holes} holes`);
+    check(`${gun}: loaded from the muzzle: powder, ball, the rod run down it, the pan primed`, o.loading && o.dur >= 6 && o.rod && o.reloaded, `${o.dur.toFixed(1)} s, rod drawn ${o.rod}, loaded ${o.reloaded}`);
+    check(`${gun}: the left hand goes to the muzzle, then to the lock`, o.near < 0.5 && o.lock < 0.25, `${o.near.toFixed(2)} m from the muzzle, ${o.lock.toFixed(2)} m from the lock`);
+  }
+  check('a flash in the pan leaves it loaded', r.misfire);
+  check('the left hand holds the musket out along the stock', r.fore > 0.06, `${r.fore.toFixed(2)} m forward of the grip`);
+  check('soft armour stops buckshot; a plate stops a musket ball; soft armour only sometimes does', r.shotLight === 12 && r.ballSwat === 12 && r.ballLight < 12, `shot ${r.shotLight}/12 on a light vest, ball ${r.ballSwat}/12 on a plate, ${r.ballLight}/12 on a light vest`);
+  check('a pellet of shot makes a small hole, a musket ball a big one', r.pellet > 0 && r.ball > r.pellet * 2, `${r.pellet.toFixed(3)} against ${r.ball.toFixed(3)}`);
+  check('people know a musket when they see one', r.seen);
+}
+
+head('Sword and crowbar');
+if (want('Sword and crowbar')) {
+  const r = await run(() => {
+    const g = __game, p = g.player, W = g.weapons, out = {};
+    for (const w of ['sword', 'crowbar']) {
+      V.stage(); g.paused = false;
+      W.give(p, w, true); g.advance(0.9);
+      const h = T.dummy(1.15); g.advance(0.4);
+      h.h.tough = 1;
+      for (let m = 0; m < 4; m++) { W.attack(m); g.advance(1.1); if (T.state(h) !== 'ANIM') break; }
+      out[w] = { moves: W.def.moves.join(','), wounds: h.h.wounds.map((x) => x.type), down: T.state(h) !== 'ANIM', bloody: p.weapon.bloody };
+    }
+    // a sword's reach: further than a knife's
+    out.reach = W.def ? 0 : 0;
+    V.stage(); g.paused = false;
+    W.give(p, 'crowbar', true); g.advance(0.9);
+    const car = g.traffic.spawnParked('car', p.x + 2.3, p.z, 0); g.advance(0.5);
+    const d0 = car.dents, w0 = car.windows.filter((x) => x && x.broken).length;
+    for (let i = 0; i < 4; i++) { g.camPitch = i < 2 ? -0.15 : 0.05; W.attack(i % 4); g.advance(1); }
+    out.dents = car.dents - d0; out.windows = car.windows.filter((x) => x && x.broken).length - w0;
+    // a rope is not cut by a bar
+    out.ropes = g.ropes.list.length;
+    g.paused = true;
+    return out;
+  });
+  check('the sword slashes, thrusts and cleaves: cuts, and it can take a limb', r.sword.down && r.sword.wounds.some((x) => x === 'slash' || x === 'stab' || x === 'stump'), r.sword.wounds.join(','));
+  check('the crowbar beats: bruises and broken bones, no cuts', r.crowbar.down && r.crowbar.wounds.length > 0 && r.crowbar.wounds.every((x) => x === 'bruise' || x === 'crush'), r.crowbar.wounds.join(','));
+  check('a crowbar dents a car and breaks its windows', r.dents >= 1 && r.windows >= 1, `${r.dents} dents, ${r.windows} windows`);
+}
+
+head('Grab and drag');
+if (want('Grab and drag')) {
+  await run(() => { V.stage(); __game.paused = false; });
+  const r = await run(() => {
+    const g = __game, p = g.player, G = g.grab, out = {};
+    V.stage(); g.paused = false;
+    // somebody out cold on the ground in front
+    const h = V.still(g.spawnHuman(p.x + 1.1, p.z + 0.2, 0)); g.advance(0.3);
+    h.h.ko = 80; h.h.faint = 80; h.toRagdoll(); g.advance(2.5);
+    g.camPitch = -0.3;
+    const n = G.find();
+    out.found = n && n.human === h; out.where = n && n.where; out.label = document.querySelector('#grab-label').textContent;
+    out.button = !document.querySelector('#btn-grab').hidden;
+    T.press('grab'); g.advance(0.05); T.release('grab');
+    // the arm goes out to it, the body bending down for it, the fingers opening
+    let stoop = 0, open = false;
+    for (let i = 0; i < 40 && G.hold && G.hold.phase === 'reach'; i++) { g.advance(1 / 30); stoop = Math.max(stoop, p.stoop); if (p.grasp[1] === 0 || p.grasp[0] === 0) open = true; }
+    out.stoop = stoop; out.open = open;
+    out.held = !!G.hold && G.hold.phase === 'hold';
+    g.advance(0.4);
+    const a = [0, 0, 0], b = [0, 0, 0], H = G.hold;
+    if (H) { const e = H.hands[0]; p.palmAt(e.side, a); H.body.toWorld(e.lp[0], e.lp[1], e.lp[2], b); out.gap = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]); out.curl = p.curl[e.side]; }
+    out.prints = !!(h.prints && h.prints.has(p.id));
+    // walking backward: they come too
+    const pel = h.bodies[0], x0 = pel.px;
+    __ts.input.move.y = -1; g.advance(3); __ts.input.move.y = 0; g.advance(0.3);
+    out.dragged = Math.abs(pel.px - x0); out.speed = p.dragMax; out.still = !!G.hold;
+    out.gap2 = Math.hypot(p.x - pel.px, p.z - pel.pz);
+    // and let go
+    T.press('grab'); g.advance(0.05); T.release('grab'); g.advance(0.2);
+    out.let = !G.hold && p.dragMax === Infinity && p.grasp[0] < 0 && p.grasp[1] < 0;
+    // they come round while being dragged: they pull free
+    T.press('grab'); g.advance(0.05); T.release('grab');
+    for (let i = 0; i < 40 && !(G.hold && G.hold.phase === 'hold'); i++) g.advance(0.1);
+    const held2 = !!G.hold && G.hold.phase === 'hold';
+    h.h.ko = 0; h.h.faint = 0; h.h.concussion = 0; g.advance(4);
+    out.freed = held2 && !G.hold && G.why === 'freed';
+    // somebody standing is not something you can take hold of
+    V.stage(); g.paused = false;
+    const s = V.still(g.spawnHuman(p.x + 1.0, p.z, -Math.PI / 2)); g.advance(0.5);
+    g.camPitch = -0.05;
+    const n2 = G.find();
+    out.standing = !n2 || n2.human !== s;
+    // a crate: dragged along the ground, not lifted
+    V.stage(); g.paused = false;
+    const c = g.spawnCrate(p.x + 1.2, 0.45, p.z); g.advance(1); g.camPitch = -0.3;
+    T.press('grab'); g.advance(0.05); T.release('grab'); g.advance(1.3);
+    out.crateHeld = !!G.hold && G.hold.phase === 'hold' && !G.hold.carry;
+    const cx0 = c.body.px; let high = 0;
+    __ts.input.move.y = -1;
+    for (let i = 0; i < 20; i++) { g.advance(0.1); high = Math.max(high, c.body.py); }
+    __ts.input.move.y = 0; g.advance(0.3);
+    out.crateMoved = Math.abs(c.body.px - cx0); out.crateHigh = high; out.crateStill = !!G.hold;
+    G.clear();
+    // something light: carried, then thrown
+    V.stage(); g.paused = false;
+    g.things.spawn('bulb', p.x + 0.8, p.z + 0.1, 0); g.advance(1);
+    const bulb = g.props.find((o) => o.thing && o.thing.type === 'bulb').body;
+    T.press('grab'); g.advance(0.05); T.release('grab'); g.advance(1.3);
+    out.carry = !!G.hold && G.hold.carry && G.hold.phase === 'hold'; out.carryY = bulb.py - p.y;
+    out.throwLabel = document.querySelector('#attack-label').textContent;
+    g.camPitch = 0.1;
+    T.press('attack'); g.advance(0.05); T.release('attack'); g.advance(0.15);
+    out.thrown = !G.hold && Math.hypot(bulb.vx, bulb.vz) > 3;
+    // somebody watching sees a body dragged
+    V.stage(); g.paused = false;
+    const v = V.still(g.spawnHuman(p.x + 1.1, p.z + 0.2, 0)); g.advance(0.3);
+    v.h.ko = 80; v.h.faint = 80; v.toRagdoll(); g.advance(2);
+    const w = V.still(g.spawnHuman(p.x + 2, p.z + 5, Math.PI)); g.advance(0.5);
+    g.camPitch = -0.3;
+    T.press('grab'); g.advance(0.05); T.release('grab'); g.advance(1.5);
+    out.witness = w.mind.memory.some((m) => m.kind === 'drag');
+    G.clear();
+    g.paused = true;
+    return out;
+  });
+  check('an unconscious person on the ground can be taken hold of: GRAB shows DRAG', r.found && r.button && r.label === 'DRAG', `${r.where}, button ${r.button} "${r.label}"`);
+  check('reaching for them: the body bends down, the hand opens, the arm goes to them', r.stoop > 0.6 && r.open && r.held, `stoop ${r.stoop.toFixed(2)}, open ${r.open}, held ${r.held}`);
+  check('the hand closes round the wrist and holds it', r.gap < 0.12 && r.curl > 0.7, `${(r.gap || 0).toFixed(3)} m from palm to wrist, curl ${(r.curl || 0).toFixed(2)}`);
+  check('bare hands leave prints on them', r.prints);
+  check('walking backward drags them along, slower than a walk', r.dragged > 1.8 && r.still && r.speed < 1.9 && r.gap2 < 2.2, `${r.dragged.toFixed(2)} m, top speed ${r.speed.toFixed(2)}, ${r.gap2.toFixed(2)} m behind`);
+  check('GRAB again lets go', r.let);
+  check('somebody who comes round while being dragged pulls free', r.freed);
+  check('somebody standing cannot be grabbed', r.standing);
+  check('a crate is dragged along the ground, not lifted', r.crateHeld && r.crateMoved > 1 && r.crateHigh < 0.6 && r.crateStill, `${r.crateMoved.toFixed(2)} m, never higher than ${r.crateHigh.toFixed(2)}`);
+  check('something light is carried in front, and ATTACK throws it', r.carry && r.carryY > 0.6 && r.throwLabel === 'THROW' && r.thrown, `carried at ${r.carryY.toFixed(2)} m, button "${r.throwLabel}", thrown ${r.thrown}`);
+  check('somebody watching remembers a body being dragged', r.witness);
 }
 
 /* --------------------------------- report ------------------------------- */

@@ -102,6 +102,15 @@ export class Human {
     this.snapPos = new Float32Array(PART_COUNT * 3);
     this.snapQuat = new Float32Array(PART_COUNT * 4);
     this.armFix = [new Float32Array(4), new Float32Array(4)];   // what has had to be added to each arm's pose to keep it out of the body
+    this.reachT = [null, null];            // somewhere a hand has been sent: { x, y, z, w } in the world, w how much (see _reach)
+    this.reachD = [new Float32Array(4), new Float32Array(4)];   // what has been added to each arm's pose to get the hand there
+    this.reachW = [0, 0];                  // how far into that each arm is, 0..1
+    this.grasp = [-1, -1];                 // a hand taking hold of something: -1 not, 0 open for it .. 1 closed round it
+    this.stoop = 0;                        // bent down to get at something low, 0..1
+    this.dragMax = Infinity;               // the fastest they can go with whatever they are hauling
+    this.grabFace = null;                  // a way to face while reaching for something
+    this.grabStep = null;                  // { x, z, d }: a spot to step up to within d of, to reach it
+    this.holdBody = null;                  // what they have hold of, which they do not walk into
     this.footLift = [0, 0];                // how far each foot is standing up on something that is not the floor: a body
     this.gait = 0;                         // how fast the feet are actually covering ground
     this.gvx = 0; this.gvz = 0;            // and which way
@@ -368,7 +377,7 @@ export class Human {
       hold: this.hold, aimPitch: this.aimPitch, lookYaw: this.lookYaw, lookPitch: this.lookPitch, pose: this.pose,
       limp: lm, limpSide: this.h.legLimp(1) >= this.h.legLimp(-1) ? 1 : -1, lowAim: this.lowAim,
       leanZ: this._leanZ || 0, leanX: this._leanX || 0,
-      reach: this.swap ? this.swap.reach : null, reachW: this.swap ? this.swap.w : 0, reload: this._reloadState(),
+      reach: this.swap ? this.swap.reach : null, reachW: this.swap ? this.swap.w : 0, reload: this._reloadState(), stoop: this.stoop,
       liftL: this.footLift[0] / this.scale, liftR: this.footLift[1] / this.scale,
     });
     this._ch = ch;
@@ -460,6 +469,100 @@ export class Human {
         solveArm(side, s, ch, fix, pos, quat);
         if (this._armCost(side) > 0) { for (let i = 0; i < 4; i++) fix[i] = _fx[i]; solveArm(side, s, ch, fix, pos, quat); }
       }
+    }
+  }
+
+  /**
+   * A long gun with a forestock to hold (def.fore): the left hand goes out
+   * along the stock to it, wherever the gun is pointing, rather than staying
+   * by the right. Worked out from the pose's right hand the way the gun
+   * itself is placed after the physics (Weapons.late).
+   */
+  _fore() {
+    const it = this.weapon, d = it && it.def, F = this._foreT || (this._foreT = { x: 0, y: 0, z: 0, w: 0, rate: 7, fore: true });
+    if (this.reachT[0] && !this.reachT[0].fore) return;
+    const w = d && d.fore && this.hold === 'rifle' && !this.swap && !this.handFull && this.grasp[0] < 0 && this.attached[P.HAND_R] && this.h.armOk(1)
+      ? this.anim.w.rifle * (1 - (this.anim.reloadW || 0)) : 0;
+    if (w < 0.02) { if (this.reachT[0] === F) this.reachT[0] = null; return; }
+    const g = this.game, low = this.isPlayer ? 0 : this.gunLow || 0;
+    const yaw = this.isPlayer ? g.camYaw : this.aimYaw ?? this.yaw;
+    const pitch = (this.isPlayer ? g.camPitch : this.aimPitch || 0) * (1 - low) + this.anim.recoil * 0.12 - low * 0.9;
+    const sy = Math.sin(yaw / 2), cy = Math.cos(yaw / 2), sx = Math.sin(-pitch / 2), cx = Math.cos(-pitch / 2);
+    const qx = cy * sx, qy = sy * cx, qz = -sy * sx, qw = cy * cx;
+    const s = this.scale, o = P.HAND_R * 4, q = this.quat;
+    qrot(q[o], q[o + 1], q[o + 2], q[o + 3], 0.016 * s, -0.03 * s, 0.01, _ra);
+    const gx = this.pos[P.HAND_R * 3] + _ra[0], gy = this.pos[P.HAND_R * 3 + 1] + _ra[1], gz = this.pos[P.HAND_R * 3 + 2] + _ra[2];
+    qrot(qx, qy, qz, qw, d.fore[0] - d.grip[0], d.fore[1] - d.grip[1], d.fore[2] - d.grip[2], _rb);
+    F.x = gx + _rb[0]; F.y = gy + _rb[1]; F.z = gz + _rb[2]; F.w = w;
+    this.reachT[0] = F;
+  }
+
+  /** Where the palm of one hand is in the pose as it stands (side 0 left, 1 right). */
+  palmAt(side, out) {
+    const i = side ? P.HAND_R : P.HAND_L, s = this.scale, q = this.quat, o = i * 4;
+    qrot(q[o], q[o + 1], q[o + 2], q[o + 3], (side ? 0.015 : -0.015) * s, -0.045 * s, 0.01 * s, out);
+    out[0] += this.pos[i * 3]; out[1] += this.pos[i * 3 + 1]; out[2] += this.pos[i * 3 + 2];
+    return out;
+  }
+
+  /**
+   * A hand sent to a point in the world (reachT), whatever the rest of the
+   * body is doing: the shoulder's three angles and the elbow are turned toward
+   * it a little at a time, by damped least squares, starting each frame from
+   * where they ended the last, and the result is blended in by how much the
+   * reach is wanted. What it adds is written into the pose's channels, so the
+   * arm is then kept out of the body like any other.
+   */
+  _reach(dt) {
+    const ch = this._ch, pos = this.pos, quat = this.quat, s = this.scale;
+    if (!ch) return;
+    this._fore();
+    for (let side = 0; side < 2; side++) {
+      const T = this.reachT[side], d = this.reachD[side];
+      const hand = side ? P.HAND_R : P.HAND_L;
+      const goal = T && this.attached[side ? P.UARM_R : P.UARM_L] && this.attached[hand] ? clamp01(T.w ?? 1) : 0;
+      const was = this.reachW[side];
+      const w = this.reachW[side] = was + clamp(goal - was, -dt * 4, dt * (T && T.rate ? T.rate : 4.5));
+      if (w <= 0.001) { if (!T) d.fill(0); continue; }
+      const base = side ? CH.shR : CH.shL;
+      if (goal > 0) {
+        // drift back toward the pose the animation wanted, and correct from there
+        for (let k = 0; k < 4; k++) d[k] *= 0.985;
+        for (let it = 0; it < 3; it++) {
+          solveArm(side, s, ch, d, pos, quat);
+          this.palmAt(side, _ra);
+          const ex = T.x - _ra[0], ey = T.y - _ra[1], ez = T.z - _ra[2];
+          if (ex * ex + ey * ey + ez * ez < 1.6e-5) break;
+          // how the palm moves for a small turn of each of the four
+          for (let k = 0; k < 4; k++) {
+            const v = d[k];
+            d[k] = v + 0.02;
+            solveArm(side, s, ch, d, pos, quat);
+            this.palmAt(side, _rb);
+            _rj[k * 3] = (_rb[0] - _ra[0]) / 0.02; _rj[k * 3 + 1] = (_rb[1] - _ra[1]) / 0.02; _rj[k * 3 + 2] = (_rb[2] - _ra[2]) / 0.02;
+            d[k] = v;
+          }
+          // (J Jt + l^2 I) y = e, then the step is Jt y
+          const L2 = 0.006;
+          let a00 = L2, a01 = 0, a02 = 0, a11 = L2, a12 = 0, a22 = L2;
+          for (let k = 0; k < 4; k++) {
+            const jx = _rj[k * 3], jy = _rj[k * 3 + 1], jz = _rj[k * 3 + 2];
+            a00 += jx * jx; a01 += jx * jy; a02 += jx * jz; a11 += jy * jy; a12 += jy * jz; a22 += jz * jz;
+          }
+          const c00 = a11 * a22 - a12 * a12, c01 = a02 * a12 - a01 * a22, c02 = a01 * a12 - a02 * a11;
+          const det = a00 * c00 + a01 * c01 + a02 * c02;
+          if (Math.abs(det) < 1e-12) break;
+          const c11 = a00 * a22 - a02 * a02, c12 = a01 * a02 - a00 * a12, c22 = a00 * a11 - a01 * a01;
+          const yx = (c00 * ex + c01 * ey + c02 * ez) / det, yy = (c01 * ex + c11 * ey + c12 * ez) / det, yz = (c02 * ex + c12 * ey + c22 * ez) / det;
+          for (let k = 0; k < 4; k++) {
+            const step = clamp(_rj[k * 3] * yx + _rj[k * 3 + 1] * yy + _rj[k * 3 + 2] * yz, -0.3, 0.3);
+            // within what a shoulder and an elbow will do
+            d[k] = clamp(d[k] + step, REACH_LO[k] - ch[base + k], REACH_HI[k] - ch[base + k]);
+          }
+        }
+      }
+      for (let k = 0; k < 4; k++) ch[base + k] += d[k] * w;
+      solveArm(side, s, ch, _r0, pos, quat);
     }
   }
 
@@ -738,6 +841,7 @@ export class Human {
     top *= (this.scale / 0.93) * lerp(0.4, 1, mob) * (this.anim.busy ? 0.3 : 1) * (this.cuffed ? 0.72 : 1) * (this.cuffing ? 0 : 1);
     if (this.cuffing) { this.crouching = !!this.cuffing.low && this.grounded; this.pose.cuffing = 1; } else this.pose.cuffing = 0;
     if (h.legLimp(1) > 0.3 || h.legLimp(-1) > 0.3) top = Math.min(top, 2.2);
+    if (this.dragMax < top) top = this.dragMax;                 // hauling something heavy
     // nothing left in the legs: a run is a jog, then a walk
     if (it.run && h.stamina < 35) top = lerp(Math.min(top, WALK * 1.25 * (this.scale / 0.93)), top, h.stamina / 35);
     let tvx = 0, tvz = 0;
@@ -759,6 +863,12 @@ export class Human {
       const ct = this.cuffing.target, cdx = ct.x - this.x, cdz = ct.z - this.z, cd = Math.hypot(cdx, cdz);
       if (cd > 0.95) { tvx = cdx / cd * 1.7; tvz = cdz / cd * 1.7; }
     }
+    if (this.grabStep) {
+      // up to whatever the hands are going for, or back a little from something underfoot
+      const gs = this.grabStep, gx = gs.x - this.x, gz = gs.z - this.z, gd = Math.hypot(gx, gz) || 1;
+      const v = gd > gs.d ? Math.min(1.5, (gd - gs.d) * 5 + 0.25) : gd < gs.d * 0.55 ? -0.7 : 0;
+      tvx = gx / gd * v; tvz = gz / gd * v;
+    }
     const acc = this.grounded ? 11 : 4;
     this.vx = damp(this.vx, tvx, acc, dt); this.vz = damp(this.vz, tvz, acc, dt);
 
@@ -776,11 +886,12 @@ export class Human {
     const wary = !!pv && !!pv.by && g.time - pv.t < 1.5 && !pv.by.removed;
     let face = wary ? Math.atan2(pv.by.x - this.x, pv.by.z - this.z) : it.face;
     if (this.cuffing) { const ct = this.cuffing.target; face = Math.atan2(ct.x - this.x, ct.z - this.z); }
+    if (this.grabFace != null) face = this.grabFace;
     if (face == null && this.speed > 0.25) face = Math.atan2(this.vx, this.vz);
     if (face != null) this.yaw = turnToward(this.yaw, face, (it.face != null ? 13 : 9) * dt);
 
     // up and down
-    if (it.jump && this.grounded && this.jumpCool <= 0 && h.legOk(1) && h.legOk(-1) && !this.anim.busy && !this.cuffing) {
+    if (it.jump && this.grounded && this.jumpCool <= 0 && h.legOk(1) && h.legOk(-1) && !this.anim.busy && !this.cuffing && this.dragMax > 2.5) {
       this.vy = JUMP_V * lerp(0.6, 1, mob) * (h.stamina < 15 ? 0.75 : 1); this.grounded = false; this.jumpCool = 0.35; h.spend(7);
       g.audio?.at('step', this.x, this.y, this.z, 0.5);
     }
@@ -820,6 +931,7 @@ export class Human {
     this.hold = this.weaponHold();
     this._footing(dt);
     this._solve(dt);
+    this._reach(dt);
     this._clearArms();
     if (this.blendDur > 0) {
       this.blend += dt;
@@ -875,6 +987,7 @@ export class Human {
   repose() {
     if (this.state !== ST.ANIM || this.blendDur > 0) return;
     this._solve(0);
+    this._reach(0);
     this._clearArms();
     this._apply(this._dt || 1 / 60);
   }
@@ -939,6 +1052,7 @@ export class Human {
     // crates and the like: shove them, and be stopped by them
     for (const o of g.props) {
       const b = o.body;
+      if (b === this.holdBody) continue;           // what they are dragging along behind them
       if (b.py + b.boundR < lo || b.py - b.boundR > hi) continue;
       // anything whose top is below the knee is stepped on to, not walked into
       const up = Math.abs(1 - 2 * (b.qx * b.qx + b.qz * b.qz));
@@ -1120,6 +1234,8 @@ export class Human {
     for (let i = 0; i < PART_COUNT; i++) if (this.attached[i]) this.bodies[i].setKinematic(false);
     this.island.mover = false;
     this.island.wake();
+    this.reachT[0] = this.reachT[1] = null; this.reachW[0] = this.reachW[1] = 0; this.reachD[0].fill(0); this.reachD[1].fill(0);
+    this.grasp[0] = this.grasp[1] = -1; this.stoop = 0; this.grabFace = null; this.grabStep = null; this.dragMax = Infinity;
   }
 
   _stumbling(dt) {
@@ -1584,6 +1700,9 @@ export class Human {
       r = lerp(r, 0.8, w.phone);
       l = lerp(l, 0.75, Math.max(w.pistol, w.rifle));      // the hand that steadies the gun
       if (this.handFull > 0) l = lerp(l, 0.9, this.handFull);   // a magazine in the left hand
+      // a hand taking hold of something opens for it, then closes round it
+      if (this.grasp[0] >= 0) { l = lerp(0.03, 0.97, this.grasp[0]); sl = (1 - this.grasp[0]) * 0.6; }
+      if (this.grasp[1] >= 0 && !this.weapon) { r = lerp(0.03, 0.97, this.grasp[1]); sr = (1 - this.grasp[1]) * 0.6; }
       if (this.cuffed) { l = r = 0.5; sl = sr = 0; }
       if (this.cuffing) { l = r = 0.7; }
     }
@@ -1620,7 +1739,7 @@ export class Human {
       const n0 = info.normal || faceOf([_a[0] / b.hx, _a[1] / b.hy, _a[2] / b.hz]);
       mat = this.armourAt(part, _a, n0);
       if (mat) {
-        const was = type, r = throughArmour(mat, type, !!info.rifle, power, hp);
+        const was = type, r = throughArmour(mat, type, info.shot ? 'shot' : info.ball ? 'ball' : info.rifle ? 'rifle' : 'pistol', power, hp);
         type = r.type; power = r.power; hp = r.hp; stopped = r.stopped;
         if (part === P.HEAD) {
           this.helmet.hits++;
@@ -1653,7 +1772,7 @@ export class Human {
       return null;
     }
     const wasAlive = this.h.alive;
-    const rep = this.h.hit({ part, type, power, lp, ln, ld, through: info.through, chop: info.chop, hp, weapon: info.weapon });
+    const rep = this.h.hit({ part, type, power, lp, ln, ld, through: info.through, chop: info.chop, hp, weapon: info.weapon, shot: !!info.shot && type === 'bullet' });
     rep.wasAlive = wasAlive;
     rep.stopped = stopped;
     if (stopped) {
@@ -1670,10 +1789,10 @@ export class Human {
       g.gore.mist(_a[0], _a[1], _a[2], info.dir[0], info.dir[1] + 0.1, info.dir[2], 34, 7.5, 0.5);
     }
     // what comes out of the wound, back the way the blow came
-    const spray = this.h.god ? 0 : type === 'bullet' ? 9 : type === 'blunt' ? (power > 0.9 && part === P.HEAD ? 6 : 0) : type === 'stab' ? 10 : 12 + power * 5;
+    const spray = this.h.god ? 0 : type === 'bullet' ? (info.shot ? 3 : info.ball ? 13 : 9) : type === 'blunt' ? (power > 0.9 && part === P.HEAD ? 6 : 0) : type === 'stab' ? 10 : 12 + power * 5;
     if (spray > 0) g.gore.burst(info.point[0], info.point[1], info.point[2], -info.dir[0] * 0.6, 0.5, -info.dir[2] * 0.6, spray, type === 'cut' ? 3.4 : 2.6, 0.7);
     if (this.h.god) { /* not a mark on them */ }
-    else if (type === 'bullet') g.gore.mist(info.point[0], info.point[1], info.point[2], -info.dir[0], 0.25, -info.dir[2], 12, 3.2, 0.8);
+    else if (type === 'bullet') g.gore.mist(info.point[0], info.point[1], info.point[2], -info.dir[0], 0.25, -info.dir[2], info.shot ? 4 : 12, 3.2, 0.8);
     else if (type === 'cut' && power > 1.2) g.gore.mist(info.point[0], info.point[1], info.point[2], info.dir[0], 0.4, info.dir[2], 14, 4.2, 0.9);
     if (rep.arterial) g.gore.burst(info.point[0], info.point[1], info.point[2], -info.dir[0], 0.8, -info.dir[2], 26, 4.5, 0.5);
     if (!this.h.god) this.bloodied = Math.min(1, this.bloodied + (type === 'blunt' ? 0.02 : 0.12));
@@ -1992,6 +2111,9 @@ const _hch = new Float32Array(CHANNELS), _hloc = new Float32Array(PART_COUNT * 4
 const _hfd = { x: 0, y: 0, z: 0, w: 1 }, _hpel = { x: 0, y: 0, z: 0, w: 1 };
 const _bq = [0, 0, 0, 1];
 const _fx = [0, 0, 0, 0];
+const _ra = [0, 0, 0], _rb = [0, 0, 0], _rj = new Float64Array(12), _r0 = [0, 0, 0, 0];
+/** How far the shoulder (raised, out to the side, turned in) and the elbow can go, in all, while reaching. */
+const REACH_LO = [-1.0, -0.35, -1.3, 0.02], REACH_HI = [3.0, 1.7, 1.5, 2.45];
 const _ma = new Float64Array(9), _mb = new Float64Array(9);
 function axesOf(q, k, o) {
   const x = q[k], y = q[k + 1], z = q[k + 2], w = q[k + 3];

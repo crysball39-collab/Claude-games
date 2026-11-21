@@ -49,6 +49,19 @@ export const RELOAD = {
     right: RA_R, magOut: 0.15, grab: 0.34, magIn: 0.56, rackA: 0.68, rackB: 0.78, tilt: 0.3, roll: 0.35,
     left: [[0, LA.magR], [0.1, LA.magR], [0.18, LA.magR], [0.34, LA.pouch], [0.4, LA.pouch], [0.56, LA.magR], [0.61, LA.magR], [0.68, LA.boltA], [0.78, LA.boltB], [0.84, LA.boltA], [1, LA.magR]],
   },
+  /*
+   * A muzzle-loader: the gun stood up in front of you, muzzle high; a cartridge
+   * from the pouch, bitten open, the powder and the ball poured down the
+   * barrel; the ramrod drawn, run down it three times, put back; the pan
+   * primed and the lock cocked.
+   */
+  muzzle: {
+    muzzle: true, right: [0.32, 0.22, 0.42, 1.5], tilt: 1.3, roll: 0.1,
+    grab: 0.12, bite: 0.22, pour: 0.32, rodOut: 0.38, rodIn: 0.76, magIn: 0.72, rams: [0.48, 0.58, 0.68], rackA: 0.86, rackB: 0.92, magOut: 9,
+    left: [[0, LA.magR], [0.06, LA.pouch], [0.14, LA.pouch], [0.22, [1.05, 0.12, 0.95, 2.15]], [0.27, [1.55, 0.22, 0.62, 0.95]], [0.33, [1.55, 0.22, 0.62, 0.95]],
+      [0.38, [0.62, 0.26, 0.82, 0.72]], [0.44, [1.78, 0.2, 0.55, 0.48]], [0.48, [1.38, 0.2, 0.66, 1.0]], [0.53, [1.78, 0.2, 0.55, 0.48]], [0.58, [1.38, 0.2, 0.66, 1.0]],
+      [0.63, [1.78, 0.2, 0.55, 0.48]], [0.68, [1.38, 0.2, 0.66, 1.0]], [0.76, [0.62, 0.26, 0.82, 0.72]], [0.84, [0.32, 0.06, 1.18, 1.5]], [0.92, [0.36, 0.06, 1.24, 1.36]], [1, LA.magR]],
+  },
 };
 const k = (t, o) => ({ t, o });
 /** How a blade is carried when nothing is happening. */
@@ -98,6 +111,18 @@ export const CLIPS = {
   backhand: { label: 'BACKHAND', dur: 0.5, hit: [0.3, 0.64], limb: 'blade', lunge: 0.18, reach: 1.12, power: 1.8, kind: 'cut', chop: 1, keys: swing('backhand') },
   cleave: { label: 'CLEAVE', dur: 0.6, hit: [0.36, 0.7], limb: 'blade', lunge: 0.2, reach: 1.2, power: 2.3, kind: 'cut', chop: 1.15, down: true, keys: swing('cleave') },
   sweep: { label: 'SWEEP', dur: 0.56, hit: [0.26, 0.66], limb: 'blade', lunge: 0.16, reach: 1.18, power: 2.1, kind: 'cut', chop: 1.25, level: true, keys: swing('sweep') },
+
+  /* ---- sword: the machete's paths with a metre of blade on them, and a thrust from the knife's ---- */
+  swordSlash: { label: 'SLASH', dur: 0.5, hit: [0.3, 0.64], limb: 'blade', lunge: 0.22, reach: 1.45, power: 1.75, kind: 'cut', chop: 0.8, keys: swing('chop') },
+  swordBack: { label: 'BACKHAND', dur: 0.5, hit: [0.3, 0.64], limb: 'blade', lunge: 0.22, reach: 1.45, power: 1.65, kind: 'cut', chop: 0.8, keys: swing('backhand') },
+  thrust: { label: 'THRUST', dur: 0.46, hit: [0.3, 0.6], limb: 'blade', lunge: 0.34, reach: 1.6, power: 1.95, kind: 'stab', keys: swing('stab') },
+  swordCleave: { label: 'CLEAVE', dur: 0.62, hit: [0.36, 0.7], limb: 'blade', lunge: 0.22, reach: 1.5, power: 2.5, kind: 'cut', chop: 1.4, down: true, keys: swing('cleave') },
+
+  /* ---- crowbar: the same paths, struck with a steel bar ---- */
+  barSwing: { label: 'SWING', dur: 0.52, hit: [0.3, 0.64], limb: 'blade', lunge: 0.18, reach: 1.15, power: 1.7, kind: 'blunt', keys: swing('chop') },
+  barBack: { label: 'BACKHAND', dur: 0.52, hit: [0.3, 0.64], limb: 'blade', lunge: 0.18, reach: 1.15, power: 1.6, kind: 'blunt', keys: swing('backhand') },
+  barJab: { label: 'JAB', dur: 0.42, hit: [0.3, 0.6], limb: 'blade', lunge: 0.24, reach: 1.15, power: 1.15, kind: 'blunt', push: true, keys: swing('stab') },
+  barSmash: { label: 'SMASH', dur: 0.64, hit: [0.36, 0.7], limb: 'blade', lunge: 0.2, reach: 1.2, power: 2.5, kind: 'blunt', down: true, keys: swing('cleave') },
 };
 
 /** The four attacks each way of fighting has, in combo order. */
@@ -105,6 +130,8 @@ export const MOVES = {
   fists: ['jab', 'cross', 'uppercut', 'kick'],
   knife: ['slash', 'backslash', 'stab', 'overhand'],
   machete: ['chop', 'backhand', 'cleave', 'sweep'],
+  sword: ['swordSlash', 'swordBack', 'thrust', 'swordCleave'],
+  crowbar: ['barSwing', 'barBack', 'barJab', 'barSmash'],
 };
 
 // keyframes are written with channel names; turn them into indices once
@@ -175,7 +202,8 @@ export class Animator {
       this.w[n] = damp(this.w[n], target, n === 'cower' || n === 'handsUp' ? 9 : 11, dt);
     }
     const W = this.w;
-    const crouchT = Math.max(s.crouch || 0, W.cower, W.kneel);
+    this.stoop = damp(this.stoop || 0, s.stoop || 0, 7, dt);
+    const crouchT = Math.max(s.crouch || 0, W.cower, W.kneel, this.stoop * 0.85);
     this.crouch = damp(this.crouch, crouchT, 9, dt);
     this.run = damp(this.run, smooth((s.speed - 2.3) / 1.9), 8, dt);
     this.moving = damp(this.moving, s.speed > 0.12 ? 1 : 0, 10, dt);
@@ -204,7 +232,7 @@ export class Animator {
     const liftAmp = lerp(WALK.lift, RUN.lift, g);
     const bob = lerp(WALK.bob, RUN.bob, g) * m;
     const drop = lerp(WALK.drop, RUN.drop, g) * m + cr * 0.37 + this.land * 0.16 + this.lowAim * 0.2;
-    let rootY = -drop + bob * Math.cos(2 * TAU * ph + 0.6);
+    let rootY = -drop + bob * Math.cos(2 * TAU * ph + 0.6) - this.stoop * 0.15;
     // an injured leg takes less weight: the hips dip toward it while it is down
     const limpDip = lim * m * Math.max(0, Math.sin(TAU * (ph + (this.limpSide > 0 ? 0 : 0.5)) + 0.6));
     rootY -= limpDip * 0.05;
@@ -328,6 +356,11 @@ export class Animator {
       ch[CH.shR] += (0.35 + 0.25 * Math.sin(t * 5.1)) * a; ch[CH.elR] += (0.9 + 0.3 * Math.sin(t * 6.7)) * a; ch[CH.shROut] += 0.15 * a;
       ch[CH.shL] += (0.12 + 0.12 * Math.sin(t * 4.3 + 1)) * a; ch[CH.elL] += (0.5 + 0.2 * Math.sin(t * 5.9 + 2)) * a;
       ch[CH.headSide] += 0.06 * Math.sin(t * 3.3) * a; ch[CH.headBend] += 0.05 * Math.sin(t * 7.1) * a;
+    }
+    if (this.stoop > 0.01) {
+      // bent at the hips and down through the back, to get a hand to something low; the head stays up to see it
+      const a = this.stoop;
+      ch[CH.waistBend] += 0.58 * a; ch[CH.spineBend] += 0.46 * a; ch[CH.neckBend] -= 0.22 * a; ch[CH.headBend] -= 0.14 * a;
     }
     if (W.kneel > 0.01) {
       const a = W.kneel;

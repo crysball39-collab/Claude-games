@@ -57,6 +57,7 @@
       <button id="btn-use" class="ab small" hidden><b id="use-label">PICK UP</b></button>
       <button id="btn-drop" class="ab small" hidden><b>DROP</b></button>
       <button id="btn-holster" class="ab small" hidden><b id="holster-label">HOLSTER</b></button>
+      <button id="btn-grab" class="ab small" hidden><i class="ic grab"></i><b id="grab-label">GRAB</b></button>
       <div id="ammo" hidden></div>
     </div>
 
@@ -125,10 +126,15 @@
         <button class="item" data-spawn="ak47"><i class="ic rifle"></i><b>AK-47</b><small>automatic rifle, 7.62, 30 rounds</small></button>
         <button class="item" data-spawn="m4a1"><i class="ic rifle"></i><b>M4A1</b><small>automatic carbine, 5.56, 30 rounds</small></button>
         <button class="item" data-spawn="ar15"><i class="ic rifle"></i><b>AR-15</b><small>semi-automatic rifle, 5.56, 30 rounds</small></button>
+        <button class="item" data-spawn="musket"><i class="ic musket"></i><b>Musket</b><small>flintlock, one .75 ball; a flash in the pan, then the shot; long to reload</small></button>
+        <button class="item" data-spawn="arquebus"><i class="ic musket"></i><b>Arquebus</b><small>matchlock, a lit match on the lock; slower to fire, slower to load</small></button>
+        <button class="item" data-spawn="blunderbuss"><i class="ic blunder"></i><b>Blunderbuss</b><small>flintlock, a handful of shot out of a flared muzzle</small></button>
         <button class="item" data-spawn="flamethrower"><i class="ic flame"></i><b>Flamethrower</b><small>ten seconds of fire, seven metres; sets people and wood alight</small></button>
         <button class="item" data-spawn="taser"><i class="ic taser"></i><b>Taser</b><small>two probes, seven metres, five seconds rigid</small></button>
         <button class="item" data-spawn="knife"><i class="ic knife"></i><b>Knife</b><small>slash, backhand, stab, plunge</small></button>
         <button class="item" data-spawn="machete"><i class="ic machete"></i><b>Machete</b><small>chop, backhand, cleave, sweep</small></button>
+        <button class="item" data-spawn="sword"><i class="ic sword"></i><b>Sword</b><small>slash, backhand, thrust, cleave; long reach</small></button>
+        <button class="item" data-spawn="crowbar"><i class="ic crowbar"></i><b>Crowbar</b><small>swing, backhand, jab, smash; breaks bones and glass</small></button>
       </div>
       <h3>Clean up</h3>
       <div class="row">
@@ -244,7 +250,9 @@
             <h3>Touch</h3>
             <p>Left thumb moves. Drag anywhere else to look. JUMP and CROUCH sit by the right thumb.</p>
             <p>The big button attacks. Tap it again and again for a four move combo; slide your thumb off it left, right, up or down to choose the next move yourself.</p>
-            <p>SPAWN opens the sandbox: humans, police officers, a S.W.A.T. team, crates, wooden and steel walls, steel beams, a light bulb, a floodlight, a generator, a car, a police car, a van, rope, wire, light, medium and S.W.A.T. vests and helmets, handcuffs, a poison syringe, the M1911, the Glock-19, the AK-47, the M4A1, the AR-15, the flamethrower, the taser, the knife and the machete. Walk up to a weapon and PICK UP, or to a vest or a helmet and PUT ON.</p>
+            <p>SPAWN opens the sandbox: humans, police officers, a S.W.A.T. team, crates, wooden and steel walls, steel beams, a light bulb, a floodlight, a generator, a car, a police car, a van, rope, wire, light, medium and S.W.A.T. vests and helmets, handcuffs, a poison syringe, the M1911, the Glock-19, the AK-47, the M4A1, the AR-15, the musket, the arquebus, the blunderbuss, the flamethrower, the taser, the knife, the machete, the sword and the crowbar. Walk up to a weapon and PICK UP, or to a vest or a helmet and PUT ON.</p>
+            <p>GRAB takes hold of what is in front of you: a crate, a lamp, a loose beam, a severed limb, or somebody lying on the ground out cold or dead. Your arm reaches for it and your hand closes on it. Light things are carried (ATTACK throws them); heavy things and people are dragged as you walk, as slowly as their weight makes you. GRAB again lets go.</p>
+            <p>The musket, the arquebus and the blunderbuss are black powder, one shot each: the priming flashes, then the charge goes off in a cloud of smoke. Sometimes it only flashes in the pan; fire again. RELOAD is the whole drill: powder and ball down the muzzle, the ramrod, the pan primed. The blunderbuss throws a spread of shot.</p>
             <p>Armour: a light vest covers the chest and the belly; a medium one the whole torso; a S.W.A.T. vest has plates front and back that stop rifle rounds. A medium helmet comes down over the ears; a S.W.A.T. helmet has a visor that stops a few pistol rounds before it is crazed.</p>
             <p>Cars: walk up to a front door and DRIVE (or CARJACK, if somebody is driving it). GAS and BRAKE are the pedals (hold BRAKE once stopped to reverse), the arrows steer, HANDBRAKE locks the back wheels, EXIT gets out. In a police car HORN also works the lights and the siren. Cars dent where they are hit, as hard as they were hit; a damaged engine smokes light grey, then grey, then dark grey; a finished one catches fire and explodes. Bullets go through the doors and the glass into whoever is inside. Anyone lying in the road is driven over.</p>
             <p>Walls and beams are built of small cubes and come apart a cube at a time: rounds go through wood (out of the far side in a bigger hole) and through steel only from a rifle; a machete chops wood; fire burns it. A piece no longer joined to anything falls.</p>
@@ -253,7 +261,7 @@
             <p>The flamethrower throws burning fuel seven metres. People catch fire and burn until they put it out or it burns out; wood and crates catch and burn away. RELOAD for a new canister.</p>
             <p>The poison syringe holds one lethal dose: INJECT puts it into whoever is in reach in front of you. They are sick within seconds, down within a minute, and then their breathing fails. A needle leaves no fingerprints.</p>
             <p>The taser fires two probes on wires, good for seven metres. Whoever they land in is rigid on the ground for five seconds; press again while the wires are in for another five. Handcuffs go on someone who is down or has given up: select them and press CUFF. Someone on the ground is turned on to their front and their arms brought round behind them first. PICK UP beside someone in cuffs takes them off.</p>
-            <p>HOLSTER puts away what is in your hand: the pistol on your hip, the knife in its sheath, the machete and the rifles across your back. DRAW brings back the last one. A weapon out in the street frightens people; one put away does not.</p>
+            <p>HOLSTER puts away what is in your hand: the pistol on your hip, the knife in its sheath, the sword in its scabbard, the crowbar in your belt, the machete, the rifles and the muskets across your back. DRAW brings back the last one. A weapon out in the street frightens people; one put away does not.</p>
             <p>Walk into somebody and keep walking to push them back; run into them to knock them over.</p>
             <p>Running uses up stamina (the STAMINA bar under BLOOD); with little left you can only jog. Stand or walk to get it back.</p>
             <p>The police know only what they see or are told. WANTED shows how much they know about you. One star: they come to arrest you; stand still or put your hands up and you are cuffed, run or fight and you are tased. Two stars (a gun or a blade used on someone, a killing, an attack on an officer): they shoot. Anyone who sees a crime, or finds a body, may ring 911; only someone who saw you do it can describe you. Officers sent to a body scan it for fingerprints, and if you touched the victim with your bare hands they match yours, you get a star and they search the city. Stay out of their sight and the stars go out one at a time. If they cuff you, tap CUFFED in the weapon bar to slip them.</p>
@@ -261,7 +269,7 @@
             <p>DOCTOR lets you tap anyone to read their condition (blood, air, pulse, pain, nausea, temperature, breathing), their state (awareness, dizziness, stamina, adrenaline, poison and shock), their emotions and an X-ray of their bones and organs.</p>
             <p>TALK lets you say something. Whoever is close enough to hear it will answer.</p>
             <h3>Keyboard and mouse</h3>
-            <p>WASD move (Shift walks) &middot; mouse looks (click to capture) &middot; Space jump &middot; C crouch &middot; left click or F attack &middot; right click or Q heavy attack &middot; R reload &middot; E pick up &middot; G drop &middot; H holster or draw &middot; 1-5 weapons &middot; Tab sandbox &middot; X doctor &middot; T talk &middot; V view &middot; Esc pause</p>
+            <p>WASD move (Shift walks) &middot; mouse looks (click to capture) &middot; Space jump &middot; C crouch &middot; left click or F attack &middot; right click or Q heavy attack &middot; R reload &middot; E pick up &middot; G drop &middot; H holster or draw &middot; Z grab, drag or let go &middot; 1-5 weapons &middot; Tab sandbox &middot; X doctor &middot; T talk &middot; V view &middot; Esc pause</p>
             <p>In a car: W or up is the gas &middot; S or down brakes, then reverses &middot; A / D or left / right steer &middot; Space handbrake &middot; H horn (and siren) &middot; E gets out</p>
           </div>
         </section>

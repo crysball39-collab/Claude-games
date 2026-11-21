@@ -1048,6 +1048,40 @@ export class Traffic {
     return engine ? 0.25 : clamp(1 - 0.55 / Math.max(0.6, power), 0, 0.85);
   }
 
+  /**
+   * A blow from somebody on foot: a fist, a boot, a blade or a bar. Glass
+   * breaks under anything hard (a windscreen cracks first); a bar or a boot
+   * puts a dent in a panel; an edge only scratches the paint.
+   */
+  blow(car, hit, by, def, clip, wx, wy, wz, dx, dy, dz) {
+    const g = this.game, lp = hit.lp;
+    const hard = !!def.blade || clip.limb === 'footR';
+    const power = clip.power * (def.blunt ? 1.6 : def.blade ? 1 : clip.limb === 'footR' ? 0.9 : 0.4);
+    car.panic = Math.max(car.panic || 0, 4);
+    if (car.honk <= 0 && car.seats[0] && chance(0.6)) this._honk(car);
+    if (hit.glass >= 0) {
+      if (hard) {
+        const broke = car.hitGlass(hit.glass, lp, power * 2.5);
+        if (broke) this.stats.windows++;
+        else { const d = g.gore._attach(car.body, carDecal(car, lp, hit.ln, 0.22, 0.22, rand(TAU), 0.012), CRACK_UV, null, -1); if (d) d.stain = true; }
+      }
+      g.audio?.at(hard ? 'glass' : 'punch', wx, wy, wz, hard ? 0.7 : 0.5);
+    } else if (hit.glass !== -2) {
+      if (def.blunt || clip.limb === 'footR' || (!def.blade && clip.power > 1.2)) {
+        car.dirToLocal(dx, dy, dz, _b);
+        car.dent(lp[0], lp[1], lp[2], _b[0], _b[1], _b[2], 0.012 * power, 0.1 + 0.03 * power);
+        g.audio?.at(def.hitSound || 'carhit', wx, wy, wz, 0.55);
+      } else {
+        // a blade skates off the metal
+        g.gore.puff('flash', wx, wy, wz, 0.12, 0.05, 1, 0.9, 0.6);
+        g.audio?.at(def.blade ? 'clang' : 'punch', wx, wy, wz, 0.6);
+      }
+      car.damage(0.25 * power, by);
+    }
+    g.minds?.noise(wx, wy, wz, 74, 'crash', by);
+    if (car.mode === 'rail' && car.hp < 30) this.loosen(car);
+  }
+
   /** And the far side of it, where a round comes out. */
   shotOut(car, hit, wx, wy, wz) {
     const g = this.game;

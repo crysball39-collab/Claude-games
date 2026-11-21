@@ -87,7 +87,7 @@ export class Gore {
     this.drains = [];                     // marks being drawn into a pool that has reached them
     this.body = new Quads(scene, bodyDecals, game.atlas, { offset: -6, renderOrder: 3 });
     this.bDecals = [];                    // { body, c[12], quad, human, part, grow }
-    this.fx = new Quads(scene, 96, game.atlas, { offset: 0, renderOrder: 6, alphaTest: 0.01 });
+    this.fx = new Quads(scene, 192, game.atlas, { offset: 0, renderOrder: 6, alphaTest: 0.01 });
     this.fxList = [];
 
     /* ---- lumps ---- */

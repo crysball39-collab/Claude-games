@@ -304,10 +304,11 @@ export class Health {
    *   ld       which way it was travelling (part space, unit)
    *   through  for a bullet, how far it travels inside the part (metres)
    *   chop     for a blade, how much of a limb it takes off (0 for a knife)
+   *   shot     for a bullet, one pellet of a load of shot: a small hole each
    * Returns a report: { pain, wound, exit, bones[], organs[], severed, burst,
    * arterial, killed, ko }.
    */
-  hit({ part, type, power = 1, lp, ln, ld = [0, 0, -1], through = 0.2, chop = 0, hp = null, weapon = '' }) {
+  hit({ part, type, power = 1, lp, ln, ld = [0, 0, -1], through = 0.2, chop = 0, hp = null, weapon = '', shot = false }) {
     const out = { part, type, pain: 0, wound: null, exit: null, bones: [], organs: [], severed: -1, burst: false, arterial: false, killed: false, ko: false, bled: 0 };
     if (!this.alive && type === 'blunt') { this._structural(part, power * 4, out, false); return out; }
     if (this.missing[part] || this.god) return out;
@@ -396,31 +397,33 @@ export class Health {
       this.trauma += 6 + p * 3;
       this._structural(part, p * 5, out, true);
     } else if (type === 'bullet') {
-      const pain = clamp(24 + p * 10, 0, 70);
-      let bleed = 3.2 + p * 2.4;
+      // a pellet of shot is a small hole that seldom goes far; a load of them is a great many small holes
+      const k = shot ? 0.4 : 1, kb = shot ? 0.35 : 1;
+      const pain = clamp((24 + p * 10) * (shot ? 0.5 : 1), 0, 70);
+      let bleed = (3.2 + p * 2.4) * k;
       let arterial = false;
-      if (neck && chance(0.5)) { bleed += 105; arterial = true; }
-      else if ((part === P.THIGH_L || part === P.THIGH_R) && chance(0.24)) { bleed += 55; arterial = true; }
-      else if ((part === P.UARM_L || part === P.UARM_R) && chance(0.16)) { bleed += 28; arterial = true; }
-      out.wound = this._wound(part, 'gunshot', lp, ln, { size: 0.035 + p * 0.008, bleed, pain, arterial, clot: 85 });
+      if (neck && chance(0.5 * kb)) { bleed += 105 * k; arterial = true; }
+      else if ((part === P.THIGH_L || part === P.THIGH_R) && chance(0.24 * kb)) { bleed += 55 * k; arterial = true; }
+      else if ((part === P.UARM_L || part === P.UARM_R) && chance(0.16 * kb)) { bleed += 28 * k; arterial = true; }
+      out.wound = this._wound(part, 'gunshot', lp, ln, { size: shot ? 0.014 + p * 0.006 : 0.035 + p * 0.008, bleed, pain, arterial, clot: 85 });
       out.pain = pain; out.arterial = arterial;
-      const goesThrough = torso || head ? chance(p > 1.2 ? 0.88 : 0.5) : chance(0.85);
+      const goesThrough = shot ? chance(limb ? 0.3 : 0.04) : torso || head ? chance(p > 1.2 ? 0.88 : 0.5) : chance(0.85);
       out.through = goesThrough;
       if (goesThrough) {
         const ex = [lp[0] + ld[0] * through, lp[1] + ld[1] * through, lp[2] + ld[2] * through];
-        out.exit = this._wound(part, 'exit', ex, [-ln[0], -ln[1], -ln[2]], { size: 0.06 + p * 0.02, bleed: bleed * 1.5, pain: pain * 0.4, clot: 95 });
+        out.exit = this._wound(part, 'exit', ex, [-ln[0], -ln[1], -ln[2]], { size: (0.06 + p * 0.02) * (shot ? 0.4 : 1), bleed: bleed * 1.5, pain: pain * 0.4, clot: 95 });
       }
-      this._path(part, lp, ld, goesThrough ? through : through * 0.6, 60 + p * 28, out);
-      if (head) { this._bone('skull', 60 + p * 20, out); }
-      else if (neck) { this._organ('airway', 30 + p * 25, out); if (Math.abs(lp[0]) < 0.03 && chance(0.4)) this._bone('cspine', 55 + p * 20, out); }
+      this._path(part, lp, ld, goesThrough ? through : through * (shot ? 0.3 : 0.6), (60 + p * 28) * (shot ? 0.45 : 1), out);
+      if (head) { if (!shot || chance(0.4)) this._bone('skull', (60 + p * 20) * k, out); }
+      else if (neck) { this._organ('airway', (30 + p * 25) * k, out); if (Math.abs(lp[0]) < 0.03 && chance(0.4 * kb)) this._bone('cspine', 55 + p * 20, out); }
       else if (chest) {
-        if (chance(0.45)) this._bone(lp[0] > 0 ? 'ribsL' : 'ribsR', 26 + p * 14, out);
-        if (Math.abs(lp[0]) < 0.04 && chance(0.3)) this._bone('tspine', 50 + p * 22, out);
-        if (lp[1] > 0.09 && chance(0.25)) this._bone(lp[0] > 0 ? 'clavL' : 'clavR', 50, out);
-      } else if (belly) { if (Math.abs(lp[0]) < 0.04 && chance(0.3)) this._bone('lspine', 50 + p * 22, out); }
-      else if (hips) { if (chance(0.5)) this._bone('pelvis', 28 + p * 16, out); }
-      else if (limb && chance(0.55)) this._bone(limb, 46 + p * 22, out);
-      this.trauma += 14 + p * 7;
+        if (chance(0.45 * kb)) this._bone(lp[0] > 0 ? 'ribsL' : 'ribsR', 26 + p * 14, out);
+        if (Math.abs(lp[0]) < 0.04 && chance(0.3 * kb)) this._bone('tspine', 50 + p * 22, out);
+        if (lp[1] > 0.09 && chance(0.25 * kb)) this._bone(lp[0] > 0 ? 'clavL' : 'clavR', 50, out);
+      } else if (belly) { if (Math.abs(lp[0]) < 0.04 && chance(0.3 * kb)) this._bone('lspine', 50 + p * 22, out); }
+      else if (hips) { if (chance(0.5 * kb)) this._bone('pelvis', 28 + p * 16, out); }
+      else if (limb && chance(0.55 * kb)) this._bone(limb, 46 + p * 22, out);
+      this.trauma += (14 + p * 7) * (shot ? 0.3 : 1);
       this._structural(part, hp ?? p * 30, out, false);
     }
 

@@ -95,6 +95,8 @@ export class Body {
     this.boundR = Math.hypot(this.hx, this.hy, this.hz);
     this.collides = o.collides ?? true;
     this.yields = false;               // while kinematic, leaves slow props alone
+    this.nohit = null;                 // one body this one does not collide with: what a hand is holding
+    this.skipIsland = null;            // and a whole island it does not: what somebody is reaching in among
     this.slow = false;                 // a prop that is not moving fast enough to hurt anyone
 
     // points tested against the ground and static geometry: x,y,z,radius ...
@@ -354,6 +356,7 @@ export class Joint {
     /** A rope: the anchors may come as close as they like, but no further apart than this. 0 for an ordinary joint. */
     this.rope = o.rope ?? 0;
     this.force = 0;               // a rope's pull, newtons, the most it reached since it was last read
+    this.measure = false;         // keep that for an ordinary joint too
     this.enabled = true;
     this.limits = true;         // a shattered joint keeps its anchor and loses its limits
     // muscle: a target for the child's rotation relative to the parent
@@ -551,6 +554,8 @@ export class World {
             if (!bb.collides) continue;
             if (ba.group !== 0 && ba.group === bb.group) continue;
             if (ba.im === 0 && bb.im === 0) continue;
+            if (ba.nohit === bb || bb.nohit === ba) continue;      // a hand and what it is holding
+            if ((ba.skipIsland !== null && ba.skipIsland === bb.island) || (bb.skipIsland !== null && bb.skipIsland === ba.island)) continue;
             // a posed limb does not bulldoze a crate that is merely in the way; whoever owns the limb deals with that
             if ((ba.kinematic && ba.yields && bb.slow) || (bb.kinematic && bb.yields && ba.slow)) continue;
             const dx = ba.px - bb.px, dy = ba.py - bb.py, dz = ba.pz - bb.pz;
@@ -838,6 +843,7 @@ export class World {
     const w = wA + wB;
     if (w <= 0) return;
     const l = C / (w + j.compliance / (h * h));
+    if (j.measure) { const f = l / (h * h); if (f > j.force) j.force = f; }
     if (wA > 0) A._applyPos(nx * l, ny * l, nz * l, rax, ray, raz);
     if (wB > 0) B._applyPos(-nx * l, -ny * l, -nz * l, rbx, rby, rbz);
   }
