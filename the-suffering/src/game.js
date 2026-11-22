@@ -20,6 +20,7 @@ import { Lights } from './render/lights.js';
 import { Fire } from './combat/fire.js';
 import { Frost } from './combat/frost.js';
 import { Arrows } from './combat/arrows.js';
+import { Air } from './world/heli.js';
 import { Power } from './world/power.js';
 import { Daylight } from './world/daylight.js';
 import { clamp, clamp01, damp, dampAngle, lerp, rand, wrapAngle } from './core/util.js';
@@ -96,6 +97,7 @@ export class Game {
     this.fire = new Fire(this);
     this.frost = new Frost(this);
     this.arrows = new Arrows(this);
+    this.air = new Air(this);
     this.power = new Power(this);
     this.daylight = new Daylight(this);
     this.daylight.set(settings.tod || 'day');
@@ -149,13 +151,14 @@ export class Game {
   }
 
   spawnHuman(x, z, yaw = rand(-Math.PI, Math.PI), look = randomLook()) {
-    // make room: the long dead go first, then whoever is furthest away
+    // make room: the long dead go first, then whoever is furthest away; the police on duty, and anyone riding in
+    // something (a car's driver, a helicopter's crew), only when there is nobody else
     while (this.humans.length >= this.maxPeople) {
-      let worst = null, score = -1;
+      let worst = null, score = -Infinity;
       for (const h of this.humans) {
         if (h.isPlayer || h === this.selected || h.puppet) continue;
         const d = Math.hypot(h.x - this.player.x, h.z - this.player.z);
-        const s = (h.h.alive ? 0 : 500 + h.deadFor) + d;
+        const s = (h.h.alive ? 0 : 500 + h.deadFor) + d - (h.h.alive && h.officer ? 300 : 0) - (h.car && h.h.alive ? 600 : 0);
         if (s > score) { score = s; worst = h; }
       }
       if (!worst) break;
@@ -269,6 +272,7 @@ export class Game {
     this.mp?.update(dt);
     this.police?.update(dt);
     this.traffic?.update(dt);
+    this.air.update(dt);
     this.grab.update(dt);
     this.powers.update(dt);
     for (const h of this.humans) h.update(dt);

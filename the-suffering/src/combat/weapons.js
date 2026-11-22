@@ -1603,10 +1603,19 @@ export class Weapons {
       const t = c.ray(ox, oy, oz, dx, dy, dz, far, _ch);
       if (t >= 0 && t < far) { far = t; what = 3; car = c; _chHit.lp = _ch.lp.slice(); _chHit.ln = _ch.ln.slice(); _chHit.glass = _ch.glass; _chHit.tag = _ch.tag; }
     }
+    // a helicopter (not the one the shooter is sitting in)
+    let air = null;
+    if (g.air && g.air.list.length) { const ah = g.air.ray(ox, oy, oz, dx, dy, dz, far, shooter && shooter.car && shooter.car.heli ? shooter.car : null); if (ah) { far = ah.t; what = 6; air = ah.heli; } }
     const ph = g.rayPeople(ox, oy, oz, dx, dy, dz, far, depth === 0 ? shooter : null, 0.012);
     if (ph) { far = ph.t; what = 4; }
     const hx = ox + dx * far, hy = oy + dy * far, hz = oz + dz * far;
     if (g.ropes && g.ropes.list.length) g.ropes.shot(ox, oy, oz, dx, dy, dz, far);
+    if (what === 6) {
+      g.air.shot(air, power, shooter, hx, hy, hz, !!d.rifle);
+      g.minds?.noise(hx, hy, hz, 86, 'impact', shooter);
+      if (depth === 0) this.tracers.push({ ax: ox, ay: oy, az: oz, bx: hx, by: hy, bz: hz, t: 0, q: g.gore.fx.alloc() });
+      return;
+    }
     if (depth === 0) this.tracers.push({ ax: ox, ay: oy, az: oz, bx: hx, by: hy, bz: hz, t: 0, q: g.gore.fx.alloc() });
 
     if (what === 4) {

@@ -282,6 +282,14 @@ export class VoxelThing {
         return false;
       }
       if (!entered) { entered = true; entryC = c; entryAxis = axis; entrySign = sign; }
+      else if (axis !== entryAxis && lastSolid >= 0) {
+        // across into the next cube in the same layer (a round passing near a cube's edge): it is still the same
+        // thickness of wall it is going through, so it clips this one and goes on, at no further cost
+        this.hp[c] -= left * M.dmg * 0.5;
+        if (this.hp[c] > 0) this._dent(c); else cuts.push(c);
+        lastSolid = c;
+        return false;
+      }
       this.hp[c] -= left * M.dmg;
       if (this.hp[c] > 0) {
         // it held: a dent, and the round is spent

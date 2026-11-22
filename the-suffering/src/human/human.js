@@ -885,12 +885,18 @@ export class Human {
     this.vx = 0; this.vz = 0; this.vy = 0; this.grounded = true; this.crouching = false;
     this.anim.action = null; this.cuffing = null; this.lunge = 0;
     const it = this.intent; it.mx = 0; it.mz = 0; it.face = null; it.run = false; it.jump = false;
-    this.pose.sit = 1; this.pose.drive = seat === 0 ? 1 : 0; this.pose.slump = 0;
-    if (instant) { this.anim.w.sit = 1; this.anim.w.drive = seat === 0 ? 1 : 0; this.blendDur = 0; this._seated(0); }
+    const K = car.seatKind && car.seatKind[seat];
+    this.pose.sit = K && (K.stand || K.rope) ? 0 : 1; this.pose.drive = K ? (K.pilot ? 1 : 0) : seat === 0 ? 1 : 0; this.pose.slump = 0;
+    if (instant) {
+      this.anim.w.sit = this.pose.sit; this.anim.w.drive = this.pose.drive;
+      if (K) { this.anim.w.hang = K.hang ? 1 : 0; this.anim.w.rope = K.rope ? 1 : 0; this.anim.w.gunner = K.gun ? 1 : 0; }
+      this.blendDur = 0; this._seated(0);
+    }
     else { this._snapshot(); this.blend = 0; this.blendDur = 0.55; }
-    // a gun is no use to somebody with both hands on the wheel
+    // a gun is no use to somebody with both hands on the wheel (or on a rail, or a rope); a door gunner keeps theirs
     const W = this.game.weapons;
-    if (W && seat === 0) { if (this.isPlayer) { if (W.current >= 0) W.select(-1); } else if (this.weapon && W.putAway) W.putAway(this); }
+    const busy = K ? !K.gun : seat === 0;
+    if (W && busy) { if (this.isPlayer) { if (W.current >= 0) W.select(-1); } else if (this.weapon && W.putAway) W.putAway(this); }
   }
 
   /** Out of the seat, standing at (x, z). `raw`: thrown out, not climbing out. */
@@ -898,8 +904,10 @@ export class Human {
     this.car = null; this.seat = -1;
     this.x = x; this.z = z; this.y = groundHeight(x, z); this.yaw = yaw;
     this.vx = 0; this.vz = 0; this.vy = 0; this.grounded = true;
-    this.pose.sit = 0; this.pose.drive = 0; this.pose.slump = 0;
-    this.anim.w.sit = 0; this.anim.w.drive = 0; this.anim.w.slump = 0;
+    this.pose.sit = 0; this.pose.drive = 0; this.pose.slump = 0; this.pose.hang = 0; this.pose.rope = 0; this.pose.gunner = 0;
+    this.anim.w.sit = 0; this.anim.w.drive = 0; this.anim.w.slump = 0; this.anim.w.hang = 0; this.anim.w.rope = 0; this.anim.w.gunner = 0;
+    // hands off the rail, or the rope
+    for (let k = 0; k < 2; k++) if (this.reachT[k] && this.reachT[k].ride) this.reachT[k] = null;
     if (this.state !== ST.ANIM) this.recover();
     const fit = this.h.alive && this.h.conscious && this.h.canStand;
     if (raw || !fit) {
@@ -913,6 +921,8 @@ export class Human {
   /** Sitting: carried along by the car, the pose the seat gives them. */
   _seated(dt) {
     const car = this.car, h = this.h, sp = car.seatAt[this.seat];
+    const K = car.seatKind && car.seatKind[this.seat];
+    if (K) { this._riding(dt, K, sp); return; }
     car.toWorld(sp[0], sp[1], sp[2], _a);
     this.x = _a[0]; this.z = _a[2]; this.y = _a[1] - PELVIS_HEIGHT * this.scale;
     this.yaw = car.yaw;
@@ -934,6 +944,73 @@ export class Human {
       this._apply(this._dt, w);
       if (w >= 1) this.blendDur = 0;
     } else this._apply(this._dt);
+  }
+
+  /**
+   * Riding somewhere that is not an ordinary seat, carried along by whatever it is: standing on the step of a van
+   * with a hand on its rail, sitting in a helicopter's open door with a rifle, on its bench, at its controls, or
+   * going down its rope (whose end the helicopter moves). `K` says which: { stand, foot, hang, side, rail, gun, yaw,
+   * pilot, rope }.
+   */
+  _riding(dt, K, sp) {
+    const car = this.car, h = this.h, awake = h.alive && h.conscious;
+    // on the outside of it (a step, a rope) and out cold or dead: nothing holds them on
+    if ((K.stand || K.rope) && !awake) { this.fallOff(); return; }
+    if (K.stand) { car.toWorld(sp[0], K.foot, sp[2], _a); this.y = _a[1]; }
+    else { car.toWorld(sp[0], sp[1], sp[2], _a); this.y = _a[1] - PELVIS_HEIGHT * this.scale; }
+    this.x = _a[0]; this.z = _a[2];
+    this.yaw = car.yaw + (K.yaw || 0);
+    this.vx = car.vx; this.vz = car.vz; this.vy = car.vy || 0; this.speed = 0; this.gait = 0; this.gvx = this.gvz = 0;
+    this.grounded = true; this.crouching = false;
+    const P0 = this.pose;
+    P0.sit = K.stand || K.rope ? 0 : 1;
+    P0.drive = K.pilot && awake ? 1 : 0;
+    P0.slump = awake || K.stand || K.rope ? 0 : 1;
+    P0.hang = K.hang && awake ? 1 : 0;
+    P0.rope = K.rope ? 1 : 0;
+    P0.gunner = K.gun && awake ? 1 : 0;
+    P0.hurt = awake ? clamp01((h.pain - 28) / 50) : 0;
+    P0.cower = 0;
+    this.hold = K.gun && awake && this.weapon && this.weapon.def.gun ? this.weaponHold() : 'none';
+    if (!this.hold || this.hold === 'none') { this.aimYaw = null; }
+    this.footLift[0] = this.footLift[1] = 0;
+    // a hand on the van's rail (the one nearer the van), or both on the rope
+    const R = this._ride || (this._ride = [{ x: 0, y: 0, z: 0, w: 1, rate: 6, ride: true }, { x: 0, y: 0, z: 0, w: 1, rate: 6, ride: true }]);
+    for (let k = 0; k < 2; k++) if (this.reachT[k] === R[k]) this.reachT[k] = null;
+    if (K.hang && awake) {
+      const k = K.side > 0 ? 1 : 0;
+      car.toWorld(K.rail[0], K.rail[1], sp[2] + 0.12, _b);
+      R[k].x = _b[0]; R[k].y = _b[1]; R[k].z = _b[2]; R[k].w = 1;
+      this.reachT[k] = R[k];
+    } else if (K.rope && awake) {
+      // the rope runs straight down past the chest; the hands on it, one above the other
+      car.toWorld(K.ropeX, sp[1], sp[2], _b);
+      const top = _a[1] + 0.62 * this.scale;
+      R[0].x = _b[0]; R[0].y = top + 0.2 * this.scale; R[0].z = _b[2]; R[0].w = 1;
+      R[1].x = _b[0]; R[1].y = top - 0.02 * this.scale; R[1].z = _b[2]; R[1].w = 1;
+      this.reachT[0] = R[0]; this.reachT[1] = R[1];
+    }
+    this._dt = dt || 1 / 60;
+    this._solve(dt, this.x, this.y, this.z, this.yaw);
+    this._reach(dt);
+    if (this.blendDur > 0) {
+      this.blend += dt;
+      const w = smooth(this.blend / this.blendDur);
+      this._apply(this._dt, w);
+      if (w >= 1) this.blendDur = 0;
+    } else this._apply(this._dt);
+  }
+
+  /** Off whatever they were riding on the outside of, a step or a rope: they fall from where they are, at its speed. */
+  fallOff() {
+    const car = this.car;
+    if (!car) return;
+    if (car.seats[this.seat] === this) car.seats[this.seat] = null;
+    this.car = null; this.seat = -1;
+    const P0 = this.pose; P0.sit = 0; P0.drive = 0; P0.slump = 0; P0.hang = 0; P0.rope = 0; P0.gunner = 0;
+    for (let k = 0; k < 2; k++) if (this.reachT[k] && this.reachT[k].ride) this.reachT[k] = null;
+    if (this.state !== ST.RAGDOLL) this.toRagdoll();
+    for (const b of this.bodies) { b.vx = car.vx + rand(-0.4, 0.4); b.vy = Math.min(car.vy || 0, 0); b.vz = car.vz + rand(-0.4, 0.4); }
   }
 
   /* ---- on their feet, under the animation's control ---- */

@@ -23,6 +23,11 @@ await run(() => {
     /** An empty stretch of road, the player facing along it. */
     stage() {
       if (ts.mp && ts.mp.on) ts.mp.leave(true);
+      // a section starts with you alive, and nobody after you (a chase left over is a chase in the next section)
+      if (!g.player.h.alive) g.respawn(false);
+      const dead = document.querySelector('#dead');
+      if (dead && !dead.hidden && g.ui) { dead.hidden = true; g.ui.deadT = 0; if (g.ui.input) g.ui.input.enabled = true; }
+      g.police?.reset();
       T.clear();
       for (const o of g.props.slice()) g.removeProp(o);
       const p = g.player;
@@ -34,7 +39,7 @@ await run(() => {
       for (const it of g.weapons.items.slice()) g.weapons.remove(it);
       g.grab?.clear();
       g.powers?.clear();
-      g.ropes?.clear(); g.fire?.clear(); g.frost?.clear(); g.arrows?.clear(); g.power?.clear(); g.voxels?.clear(); if (g.daylight && g.daylight.mode !== 'day') g.daylight.set('day');
+      g.ropes?.clear(); g.fire?.clear(); g.frost?.clear(); g.arrows?.clear(); g.air?.clear(); g.power?.clear(); g.voxels?.clear(); if (g.daylight && g.daylight.mode !== 'day') g.daylight.set('day');
       if (p.car) g.traffic.exit(p);
       g.traffic?.clearCars();
       p.h.heal(); p.reset(0, -18, Math.PI / 2);
@@ -1070,7 +1075,7 @@ if (want('Wanted')) {
     const g = __game, p = g.player, w = g.weapons, P = g.police, out = {};
     const stars = () => { g.ui.update(0.25); return document.querySelectorAll('#wanted .stars b.on').length; };
     V.stage(); P.reset(); g.settings.cheatCops = false;
-    // the most there can be is two
+    // the most there can be is five
     P.raise(5, 'test'); out.max = P.wanted; out.maxStars = stars(); P.clear('test');
     // nobody sees it: nobody knows
     const q = V.still(T.dummy(1.0));
@@ -1115,7 +1120,7 @@ if (want('Wanted')) {
     g.paused = true;
     return out;
   });
-  check('two stars at most', r.max === 2 && r.maxStars === 2);
+  check('five stars at most, all of them on the HUD', r.max === 5 && r.maxStars === 5);
   check('with nobody to see it, nobody knows', r.unseen === 0);
   check('an officer who sees you hit someone gives you one star', r.punch === 1 && r.punchStars === 1);
   check('at one star, standing still, you are told to stop and handcuffed: not shot, not tased', r.arrest.cuffed > 0 && r.arrest.fires === 0 && r.arrest.tasers === 0, r.arrest.cuffed > 0 ? `cuffed after ${r.arrest.cuffed.toFixed(1)}s, ${r.arrest.tasers} taser shots` : `not cuffed; officer ${r.arrest.mode}`);
@@ -2384,6 +2389,165 @@ if (want('Frost')) {
   check('on the street it leaves ice, and running on ice you go down', r.iced >= 1 && r.slip, `${r.iced} patches of ice; slipped ${r.slip}`);
   check('a limb frozen through breaks off under a hard blow', r.shatter && r.shatter.broke && r.shatter.gone, JSON.stringify(r.shatter));
   check('and it thaws, rime and all', r.thaw && r.thaw.marks >= 1 && r.thaw.after === 0 && !r.thaw.ice && r.thaw.slow === 1, JSON.stringify(r.thaw));
+}
+
+/* ------------------------------ the pursuit ------------------------------ */
+head('Pursuit');
+if (want('Pursuit')) {
+  const r = await run(() => {
+    const g = __game, p = g.player, P = g.police, T = g.traffic, A = g.air, W = g.weapons, out = {};
+    const R = P.response, room = g.maxPeople;
+    // a clean start, a player who can take a lot of it (and is not easily knocked over), nobody else in uniform
+    const fresh = (x = 0, z = -7) => {
+      V.stage(); P.reset(); g.settings.cheatCops = false; g.maxPeople = room;
+      for (const h of g.humans.slice()) if (h.officer) g.removeHuman(h);
+      p.h.heal(); p.h.god = true; p.knock = 10; p.reset(x, z, 0); g.advance(0.3);
+    };
+    // the stars held where they are (and you kept in their sight) while the city does what it does
+    const hold = (n, secs, each = null) => {
+      for (let i = 0; i < secs * 10; i++) {
+        if (p.cuffed) W.uncuff(p, null);
+        if (P.wanted < n) P.raise(n, 'test', { x: p.x, z: p.z });
+        P.lastSeen = { x: p.x, z: p.z, t: g.time };
+        g.advance(0.1);
+        if (each && each(i / 10) === true) return i / 10;
+      }
+      return -1;
+    };
+    // 1. what they hold against you: each crime once, and enough of it is more stars
+    fresh();
+    g.maxPeople = 0;
+    const vic = (n) => ({ id: 900000 + n });
+    P.raise(2, 'test', { x: p.x, z: p.z }, { kind: 'shooting', victim: vic(1) });
+    for (let k = 0; k < 6; k++) P.raise(2, 'test', { x: p.x, z: p.z }, { kind: 'murder', victim: vic(1) });
+    out.once = { wanted: P.wanted, heat: P.heat };
+    P.raise(2, 'test', { x: p.x, z: p.z }, { kind: 'murder', victim: vic(2) });
+    out.second = P.wanted;
+    const steps = [P.wanted];
+    for (let k = 3; k < 14 && P.wanted < 5; k++) { P.raise(2, 'test', { x: p.x, z: p.z }, { kind: 'murder', victim: vic(k) }); steps.push(P.wanted); }
+    out.escalates = { steps: steps.join(','), top: P.wanted };
+    P.reset();
+    const cop = g.spawnOfficer(p.x + 4, p.z, -Math.PI / 2); g.advance(0.2);
+    cop.lastAttacker = p; cop.h.kill('test'); g.advance(0.2);
+    out.copKill = { wanted: P.wanted, why: P.why };
+    g.removeHuman(cop);
+    // 2. two stars: a patrol car, from out of sight, to you; and out they get
+    fresh(0, -18);
+    let unit = null, info = null;
+    const arrived = hold(2, 45, () => {
+      if (!unit) { unit = T.cars.find((c) => c.unit === 'police'); if (unit) info = { d: Math.hypot(unit.x - p.x, unit.z - p.z), seen: !!unit.cameSeen, siren: !!unit.siren, crew: unit.seats.filter((h) => h && h.officer).length }; }
+      return !!unit && unit.ai && unit.ai.state === 'arrived';
+    });
+    let allOut = -1;
+    if (unit) allOut = hold(2, 6, () => unit.seats.every((h) => !h));
+    out.car = { info, arrived, allOut, near: unit ? +Math.hypot(unit.x - p.x, unit.z - p.z).toFixed(1) : null, engaging: g.humans.filter((h) => h.officer && !h.car && h.brain && h.brain.mode === 'engage').length };
+    // 3. if you drive, they follow; when you stop, they stop (on a street with no other traffic to get in the way)
+    fresh(-30, -18 - 2.15);
+    const traffic = T.want; T.setCount(0);
+    const mine = T.spawnParked('sedan', -30, -18 - 2.15, Math.PI / 2); g.advance(0.2);
+    T.enter(p, mine); g.advance(0.3);
+    P.raise(2, 'test', { x: p.x, z: p.z });
+    const chaser = T.spawnUnit('police', { x: -54 - 2.15, z: -40, yaw: 0 });
+    let closest = 99;
+    __ts.input.move.y = 1;
+    hold(2, 6, () => { closest = Math.min(closest, Math.hypot(chaser.x - mine.x, chaser.z - mine.z)); });
+    __ts.input.move.y = -1;
+    hold(2, 1.6);
+    __ts.input.move.y = 0;
+    const caught = hold(2, 25, () => chaser.ai && chaser.ai.state === 'arrived');
+    out.follow = { closest: +closest.toFixed(1), moved: +Math.hypot(mine.x + 30, mine.z + 20.15).toFixed(1), caught, gap: +Math.hypot(chaser.x - mine.x, chaser.z - mine.z).toFixed(1) };
+    T.exit(p);
+    T.setCount(traffic);
+    // 4. three stars: a helicopter. One with door gunners circles you and shoots from the door
+    fresh(0, -7);
+    let heli = null;
+    hold(3, 30, () => { heli = A.list[0]; return !!heli; });
+    out.sent = { heli: !!heli, kind: heli && heli.kind, high: heli && heli.y > 50 };
+    A.clear();
+    // (from here the helicopters are put there by hand: nothing else is sent while they are watched)
+    const respond = R.update;
+    R.update = () => {};
+    let near = 0, fires = 0;
+    const nb = W._bullet.bind(W);
+    W._bullet = (sh, d, ox, oy, oz, dx, dy, dz, ...rest) => {
+      if (sh.car && sh.car.heli && !rest[1]) { fires++; const c = p.bodies[2], ex = c.px - ox, ey = c.py - oy, ez = c.pz - oz, al = ex * dx + ey * dy + ez * dz; if (Math.hypot(ex - dx * al, ey - dy * al, ez - dz * al) < 2.5) near++; }
+      return nb(sh, d, ox, oy, oz, dx, dy, dz, ...rest);
+    };
+    const gun = A.spawn('gunner', 0.8);
+    hold(3, 28);
+    W._bullet = nb;
+    out.gunner = { st: gun.state, fires, near, ring: +Math.hypot(gun.x - p.x, gun.z - p.z).toFixed(1), up: +(gun.y - p.y).toFixed(1), seeing: gun.seen < 2 };
+    // shot at enough, it comes down: spinning, and it blows up where it lands
+    p.h.heal(); p.reset(p.x, p.z, 0); g.advance(0.3);
+    const rifle = W.give(p, 'm4a1', true); g.advance(1);
+    let rounds = 0;
+    for (let i = 0; i < 1200 && !gun.down; i++) {
+      if (P.wanted < 3) P.raise(3, 'test');
+      const a = g.aim; g.camYaw = Math.atan2(gun.x - a.ox, gun.z - a.oz); g.camPitch = Math.atan2(gun.y + 1.3 - a.oy, Math.hypot(gun.x - a.ox, gun.z - a.oz));
+      if (gun.state !== 'crash' && i % 2 === 0 && rifle.ammo > 0 && !p.reload && W.fire()) rounds++;
+      if (rifle.ammo <= 0 && !p.reload) W.reload();
+      g.advance(1 / 30);
+    }
+    out.down = { rounds, down: gun.down, crashed: A.stats.crashed, wreck: gun.wreck, booms: T.stats.explosions, wanted: P.wanted };
+    // one through the pilot does it too
+    A.clear();
+    const two = A.spawn('gunner', 2.4);
+    hold(3, 9);
+    const pd = two.pilot, ph = pd.bodies[4];
+    pd.hit({ part: 4, type: 'bullet', power: 3, point: [ph.px, ph.py, ph.pz], dir: [0, -1, 0], normal: [0, 1, 0], impulse: 3, hp: 90, attacker: p, weapon: 'm4a1', rifle: true });
+    hold(3, 30, () => two.down);
+    out.pilot = { dead: !pd.h.alive || !pd.h.conscious, down: two.down };
+    // the other kind: four down the ropes, and away
+    fresh(0, -7);
+    const drop = A.spawn('drop', 2.2);
+    let roped = 0;
+    const gone = hold(3, 70, () => { roped = Math.max(roped, A.stats.roped); return !!drop.removed; });
+    const team = g.humans.filter((h) => h.heliTeam && !h.car && h.h.alive);
+    out.drop = { roped, gone, onFoot: team.length, near: team.filter((h) => Math.hypot(h.x - p.x, h.z - p.z) < 40).length };
+    R.update = respond;
+    // 5. four stars: a black S.W.A.T. van (two in the cab, two on the steps), and S.W.A.T. coming on foot
+    fresh(0, -18);
+    let van = null, vinfo = null, foot = null;
+    hold(4, 60, () => {
+      if (!van) { van = T.cars.find((c) => c.unit === 'swatvan'); if (van) vinfo = { cab: [0, 1].filter((i) => van.seats[i] && van.seats[i].swat).length, steps: [2, 3].filter((i) => van.seats[i] && van.seats[i].swat && van.seats[i].pose.hang).length, black: van.paint === 0x16181c }; }
+      if (!foot) { const f = g.humans.find((h) => h.footTeam); if (f) foot = { d: Math.hypot(f.x - p.x, f.z - p.z) }; }
+      return !!van && van.ai.state === 'arrived' && !!foot;
+    });
+    const off = van ? hold(4, 8, () => van.seats.every((h) => !h)) : -1;
+    out.van = { vinfo, arrived: !!van && van.ai.state === 'arrived', off, foot };
+    // 6. five stars: two helicopters, and more of everything
+    fresh(0, -7);
+    const most = { helis: 0, swat: 0 }, s0 = { ...R.stats };
+    hold(5, 60, () => { most.helis = Math.max(most.helis, R.units('heli')); most.swat = Math.max(most.swat, R._swatOnFoot()); });
+    out.five = { ...most, cars: R.stats.cars - s0.cars, vans: R.stats.vans - s0.vans, teams: R.stats.swat - s0.swat };
+    // 7. and when it is over, they go home
+    P.clear('test');
+    for (let i = 0; i < 900 && (A.list.some((x) => !x.down) || T.cars.some((c) => c.unit)); i++) {
+      g.advance(0.1);
+      // (out of your sight, they are taken away: so go somewhere nothing is)
+      if (i === 20) p.reset(-54, 54, 0);
+    }
+    out.home = { helis: A.list.filter((x) => !x.down).length, units: T.cars.filter((c) => c.unit).length };
+    if (out.home.units) out.home.left = T.cars.filter((c) => c.unit).map((c) => ({ kind: c.unit, mode: c.mode, ai: c.ai && c.ai.state, wreck: c.wreck, d: Math.round(Math.hypot(c.x - p.x, c.z - p.z)), seen: R._inSight(c.x, 1.2, c.z), at: [Math.round(c.x), Math.round(c.z)], crew: c.seats.filter(Boolean).length }));
+    p.h.god = false; p.knock = 1; P.reset(); A.clear();
+    g.paused = true;
+    return out;
+  });
+  check('each crime is held against you once, however many saw it or rang in', r.once.wanted === 2 && r.once.heat === 7, JSON.stringify(r.once));
+  check('a second killing while wanted makes it three stars; more crime, more stars, up to five', r.second === 3 && r.escalates.top === 5, `${r.escalates.steps}`);
+  check('killing a police officer is three stars at once', r.copKill.wanted >= 3, JSON.stringify(r.copKill));
+  check('at two stars a patrol car comes for you: from out of sight, lights and siren going, two officers in it', !!r.car.info && !r.car.info.seen && r.car.info.siren && r.car.info.crew === 2 && r.car.info.d > 40, JSON.stringify(r.car.info));
+  check('it drives to you along the streets, and the officers get out and come for you', r.car.arrived > 0 && r.car.allOut >= 0 && r.car.near < 16 && r.car.engaging >= 1, `there after ${r.car.arrived.toFixed(1)} s, ${r.car.near} m off, ${r.car.engaging} engaging`);
+  check('drive, and it follows; stop, and it pulls up beside you', r.follow.moved > 15 && r.follow.caught >= 0 && r.follow.gap < 14, JSON.stringify(r.follow));
+  check('at three stars a police helicopter comes, high over the city', r.sent.heli && r.sent.high, JSON.stringify(r.sent));
+  check('one kind circles you with two S.W.A.T. in its doors, and they shoot from them', r.gunner.st === 'orbit' && r.gunner.fires >= 8 && r.gunner.near >= 4 && r.gunner.ring < 32, JSON.stringify(r.gunner));
+  check('it can be shot down: it comes down spinning, and blows up where it lands', r.down.down && r.down.crashed >= 1 && r.down.rounds < 70, `${r.down.rounds} rounds`);
+  check('so can its pilot: then it comes down', r.pilot.dead && r.pilot.down);
+  check('the other kind puts four S.W.A.T. down ropes near you, then leaves', r.drop.roped === 4 && r.drop.gone > 0 && r.drop.near >= 3, JSON.stringify(r.drop));
+  check('at four stars a black S.W.A.T. van comes: two in the cab, two on its steps; they all get off at you', !!r.van.vinfo && r.van.vinfo.cab === 2 && r.van.vinfo.steps === 2 && r.van.vinfo.black && r.van.arrived && r.van.off >= 0, JSON.stringify(r.van));
+  check('and S.W.A.T. come on foot, from out of sight', !!r.van.foot && r.van.foot.d > 25, JSON.stringify(r.van.foot));
+  check('at five stars two helicopters at once, and cars, vans and S.W.A.T. sent more often (a minute of it)', r.five.helis === 2 && r.five.cars >= 2 && r.five.vans >= 2 && r.five.teams >= 2, JSON.stringify(r.five));
+  check('when it is over, they all go home', r.home.helis === 0 && r.home.units === 0, JSON.stringify(r.home));
 }
 
 head('Special abilities');

@@ -378,7 +378,7 @@ export class Brain {
     // (at one star you are told to stop first: running, fighting on, or ignoring them twice is what gets the taser)
     const stubborn = !lethal && !down && !complying && !sGun && (S.isPlayer ? (wanted >= 1 && (S.speed > 1.6 || !!S.anim.action || this.warned >= 2)) || (sBlade && this.warned >= 2) : k.crime >= 1.9 || (sBlade && this.warned >= 2));
     // told again and again to put it down, and not doing it: that is resisting, and then it is an arrest
-    if (S.isPlayer && sArmed && seen && this.warned >= (sGun ? 4 : 3)) this.g.police?.raise(sGun ? 2 : 1, sGun ? 'you would not put the gun down' : 'you would not put the weapon down', { x: S.x, z: S.z });
+    if (S.isPlayer && sArmed && seen && this.warned >= (sGun ? 4 : 3)) this.g.police?.raise(sGun ? 2 : 1, sGun ? 'you would not put the gun down' : 'you would not put the weapon down', { x: S.x, z: S.z }, { kind: 'resisting', key: 'resisting' });
 
     // one officer makes the arrest; the rest cover
     if (arrestable && (down || complying)) {
@@ -785,6 +785,8 @@ export class Brain {
   _inCar(dt) {
     const h = this.h, m = this.m, g = this.g, car = h.car, T = g.traffic, t = m.threat;
     const it = h.intent; it.mx = 0; it.mz = 0; it.face = null; it.run = false;
+    // a helicopter's crew have their own work (see Air)
+    if (car.heli) { g.air?.crew(h, this, dt); return; }
     const driver = car.seats[0] === h, sp = Math.hypot(car.vx, car.vz);
     // the car is burning, or they are: out, now
     if ((h.fire && h.burning > 0.1) || car.fire >= 0 || !car.drivable) {
@@ -799,6 +801,7 @@ export class Brain {
       m.doing = 'trying to stop a burning car';
       return;
     }
+    if (h.officer && car.unit) { this._unitRide(dt); return; }
     if (driver) m.doing = car.mode === 'rail' ? (car.panic > 0 ? 'driving away fast' : 'driving') : car.ai && car.ai.state === 'stop' ? 'sitting at the wheel, shaken' : car.ai && car.ai.state === 'flee' ? 'driving away as fast as the car will go' : 'driving';
     else m.doing = 'riding in a car';
     // somebody dangerous close by: a driver puts their foot down; a passenger in a car that is not going anywhere gets out and runs
@@ -807,6 +810,27 @@ export class Brain {
     if (!driver && near && t.level > 45 && sp < 1 && chance(dt * 0.9)) { T.unseat(h); this.mode = 'flee'; this.modeT = 0; m.stir('fear', 30); return; }
     if (this.sayT <= 0 && near && t.level > 55 && chance(0.4)) { m.ask('flee', 44, { sex: t.src && t.src.look ? t.src.look.sex : 'm' }); this.sayT = rand(4, 8); }
     this._look();
+  }
+
+  /**
+   * On the way to you in a patrol car or a S.W.A.T. van, the siren going. Once it has stopped where it was going (or
+   * nobody is driving it any more), out, one after another as the doors open; those on the van's steps jump down as
+   * it slows. Then it is the work they came for (see _decideOfficer).
+   */
+  _unitRide(dt) {
+    const h = this.h, m = this.m, g = this.g, car = h.car, T = g.traffic;
+    const driver = car.seats[0] === h, sp = Math.hypot(car.vx, car.vz);
+    const K = car.seatKind && car.seatKind[h.seat];
+    const there = car.ai && car.ai.state === 'arrived';
+    const nobody = !car.seats[0] || !T._fit(car.seats[0]);
+    m.doing = there ? 'getting out to deal with the suspect' : driver ? 'driving to the suspect, lights and siren going' : K && K.hang ? 'riding on the side of the van' : 'riding to the suspect, lights and siren going';
+    if (!(there || nobody) || sp > (K && K.hang ? 3.2 : 1.2)) { this.outT = null; return; }
+    if (this.outT == null) this.outT = g.time + (K && K.hang ? rand(0, 0.25) : rand(0.25, 1.1));
+    if (g.time < this.outT) return;
+    this.outT = null;
+    T.unseat(h);
+    this.mode = 'post'; this.modeT = 0; this.decideT = 0;
+    if (this.sayT <= 0 && chance(0.6)) { m.ask('copHalt', 60); this.sayT = rand(2, 4); }
   }
 
   /** Running away, an empty car close by: get in it and drive. Returns true while that is the plan. */

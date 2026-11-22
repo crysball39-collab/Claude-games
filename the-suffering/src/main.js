@@ -94,6 +94,7 @@ async function boot() {
   game.onDeath = (h) => {
     const c = h.bodies[P.CHEST];
     minds.witness({ kind: 'death', victim: h, actor: h.lastAttacker, x: c.px, y: c.py + 0.2, z: c.pz });
+    game.police?.killed(h);
     game.mp?.onDeath(h);
   };
   game.onDismember = (h, part, burst) => {

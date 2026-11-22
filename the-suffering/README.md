@@ -467,15 +467,36 @@ a vest and carries an M1911, a taser, a pair of handcuffs and a fingerprint scan
 their belt.
 
 They know nothing they have not seen or been told. What they know about you is your
-*wanted level*, shown under your vitals: at most two stars for now.
+*wanted level*, shown under your vitals: up to five stars.
 
 - *One star*: they want you in handcuffs. You are told to stop; stand still, or put
   your hands up, and one officer cuffs you while the others cover. Run, keep fighting or
   ignore them and you are tased first.
 - *Two stars*: you have used a gun, a bow, a blade, fire, frost or a live wire on
   someone, killed someone, gone for an officer, or blown up a car. They shoot, and
-  standing still does not stop them. At two stars it is the S.W.A.T. team that comes out
-  of the station.
+  standing still does not stop them. It is the S.W.A.T. team that comes out of the
+  station, and patrol cars come after you: two officers in each, lights and siren going,
+  sent from somewhere you cannot see. They drive the streets to wherever you are (the
+  traffic slows and lets them by), follow you if you drive, and pull up when they reach
+  you or you stop; then both get out and come for you.
+- *Three stars*: you have killed an officer, or kept on. A police helicopter comes in
+  high over the city and down to work. One kind circles you with two S.W.A.T. sitting in
+  its open doors, and whichever door faces you shoots at you. The other finds somewhere
+  open near you, hovers, drops a rope from each door, and four S.W.A.T. come down them two
+  at a time; then it pulls the ropes in and leaves. From up there they see you unless a
+  building is in the way, and at night a searchlight follows you. It can be shot down:
+  enough rounds and it smokes, burns and comes down spinning, and a round through the
+  pilot does the same; where it lands it blows up, and whoever is still in it is thrown
+  out. Anyone shot on the rope lets go of it.
+- *Four stars*: black S.W.A.T. vans as well, two in the cab and two standing on the steps
+  down its sides holding the rail, who jump down as it slows; and S.W.A.T. teams coming on
+  foot from out of sight. The streets clear of traffic.
+- *Five stars*: all of it, more often, and two helicopters at once.
+
+Every crime they hear of while you are wanted is held against you, each one once however
+many saw it or rang in about it, and enough of it is another star: a second killing is a
+third star; killing an officer is three stars at once; blowing up a police car or
+bringing down their helicopter counts for a great deal.
 
 An officer who sees you do something gives you the stars for it there and then and tells
 the others by radio. Anybody else has to ring 911: a witness steps back, gets their phone
@@ -488,8 +509,9 @@ off them, handcuffing them), the prints are yours: one star, and every officer s
 the city for you. A kick, a knife, a gun or a needle leaves nothing on the skin.
 
 Officers who lose sight of you search where you were last seen, and more come out of the
-station while you are wanted. Out of their sight for long enough, the stars go out one
-at a time. Being arrested clears them, and so does dying. (If the prisoner is you, they
+station while you are wanted. Out of their sight (the helicopter's included) for long
+enough, the stars go out one at a time, more slowly the more of them there are, and what
+was sent after you goes home. Being arrested clears them, and so does dying. (If the prisoner is you, they
 leave you where you are in cuffs. This is a sandbox: tap CUFFED in the weapon bar and
 they come off.) They stop shooting when you are down, do not fire with a bystander in
 the way, and reload before they holster. Somebody else they arrest is walked back to the
@@ -524,10 +546,10 @@ node tools/overlap.mjs   # how far body parts get inside each other, scenario by
 | --- | --- |
 | `src/physics/world.js` | the rigid body engine: XPBD, joints with limits, muscles, sleeping islands |
 | `src/human/` | the rig, the animation and attack clips, the medical model, armour, the human itself |
-| `src/mind/` | senses, memory and emotion; behaviour; scripted lines; speech; the Claude connection |
+| `src/mind/` | senses, memory and emotion; behaviour; scripted lines; speech; the Claude connection; the police (`police.js`) and who they send after you (`response.js`) |
 | `src/net/` | accounts (`accounts.js`); multiplayer over the claude.ai room (`multiplayer.js`: the server list, hosting and joining, other players' stand-ins, hits sent to their owners); a body's pose in a few hundred characters (`pose.js`) |
 | `src/combat/` | weapons and ballistics; arrows and bolts (`arrows.js`); frost and ice (`frost.js`); blood, wounds and dismemberment |
-| `src/world/` | the city, its pavement network; cars (`car.js`: the model, glass, dents, damage) and everything with wheels (`traffic.js`: driving, collisions, crashes, explosions) |
+| `src/world/` | the city, its pavement network; cars (`car.js`: the model, glass, dents, damage) and everything with wheels (`traffic.js`: driving, police pursuit, collisions, crashes, explosions); police helicopters (`heli.js`) |
 | `src/render/` | instanced boxes, decal batches, procedural textures |
 | `src/ui/` | the HUD, the sandbox menu, doctor mode, signing in (`authui.js`), the multiplayer screens (`mpui.js`) |
 | `tools/` | tests, the browser harness, the swing solver, the build |

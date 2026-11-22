@@ -302,6 +302,17 @@ export class Sound {
       const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1150; f.Q.value = 0.7;
       o.connect(f); f.connect(g); o.start(); lfo.start(); nodes.push(o, lfo);
       base = 0.22;
+    } else if (kind === 'rotor') {
+      // a helicopter: the thud of the blades (noise, chopped at the rate they pass), the turbine's whine, the tail's buzz
+      const chop = ctx.createGain(); chop.gain.value = 0.5;
+      const lfo = ctx.createOscillator(); lfo.type = 'sawtooth'; lfo.frequency.value = 18; const lg = ctx.createGain(); lg.gain.value = 0.5;
+      lfo.connect(lg); lg.connect(chop.gain);
+      const s = ctx.createBufferSource(); s.buffer = this.noiseBuf; s.loop = true;
+      const fl = ctx.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = 220; fl.Q.value = 0.9;
+      s.connect(fl); fl.connect(chop); chop.connect(g); s.start(0, Math.random()); lfo.start(); nodes.push(s, lfo);
+      const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = 2350; const og = ctx.createGain(); og.gain.value = 0.025; o.connect(og); og.connect(g); o.start(); nodes.push(o);
+      noise('bandpass', 950, 2.5, 0.07);
+      base = 0.9;
     } else if (kind === 'buzz') {
       const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = 120; o.connect(g); o.start(); nodes.push(o);
       base = 0.04;

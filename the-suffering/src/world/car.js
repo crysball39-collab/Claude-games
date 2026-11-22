@@ -39,13 +39,22 @@ export const SPECS = {
   taxi: { mass: 1450, top: 44, accel: 4.3, rev: 8, grip: 9.4, seats: 4, steer: 0.62 },
   police: { mass: 1700, top: 52, accel: 5.4, rev: 9, grip: 10.2, seats: 4, steer: 0.6 },
   van: { mass: 2300, top: 36, accel: 3.0, rev: 6, grip: 8.0, seats: 2, steer: 0.56 },
+  swatvan: { mass: 3300, top: 40, accel: 3.7, rev: 6, grip: 8.8, seats: 4, steer: 0.56 },
 };
 
 /** Where the hips go, in the car's own space (nose toward +Z, +X its left, the ground at y = 0). The driver sits on the left. */
 const SEATS = {
   sedan: [[0.38, 0.56, 0.02], [-0.38, 0.56, 0.02], [0.38, 0.56, -0.92], [-0.38, 0.56, -0.92]],
   van: [[0.42, 0.64, 0.8], [-0.42, 0.64, 0.8]],
+  // the S.W.A.T. van: two in the cab, and one standing on the step down each side of the back, holding the rail
+  swatvan: [[0.42, 0.64, 0.8], [-0.42, 0.64, 0.8], [1.13, 1.4, -0.55], [-1.13, 1.4, -0.55]],
 };
+/** Seats that are not ordinary seats (see Human._riding): standing on a step, a hand up on the rail above it. */
+const SEAT_KIND = {
+  swatvan: [null, null, { stand: true, foot: 0.45, hang: true, side: 1, rail: [0.94, 1.93] }, { stand: true, foot: 0.45, hang: true, side: -1, rail: [-0.94, 1.93] }],
+};
+/** S, W, A, T in blocks, five high: for the side of the van. */
+const GLYPH = { S: ['111', '100', '111', '001', '111'], W: ['10001', '10001', '10101', '10101', '01010'], A: ['010', '101', '111', '101', '101'], T: ['111', '010', '010', '010', '010'] };
 /** Where the steering wheel is. */
 const WHEEL_AT = { sedan: [0.38, 0.92, 0.5], van: [0.42, 1.0, 1.2] };
 
@@ -60,7 +69,7 @@ const WHEEL_AT = { sedan: [0.38, 0.92, 0.5], van: [0.42, 1.0, 1.2] };
 function shapeFor(kind) {
   const P = (nx, ny, nz, px, py, pz, tag) => { const l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l; return [nx, ny, nz, nx * px + ny * py + nz * pz, tag]; };
   const lower = [P(1, 0, 0, 0.9, 0, 0, 'side'), P(-1, 0, 0, -0.9, 0, 0, 'side'), P(0, 1, 0, 0, 0.77, 0, 'top'), P(0, -1, 0, 0, 0.27, 0, 'under'), P(0, 0, 1, 0, 0, 2.15, 'front'), P(0, 0, -1, 0, 0, -2.15, 'back')];
-  if (kind === 'van') {
+  if (kind === 'van' || kind === 'swatvan') {
     const cab = [P(1, 0, 0, 0.87, 0, 0, 'vside'), P(-1, 0, 0, -0.87, 0, 0, 'vside'), P(0, -1, 0, 0, 0.77, 0, 'floor'), P(0, 1, 0, 0, 1.57, 0, 'roof'), P(0, 0, -1, 0, 0, -2.15, 'doors'), P(0, 0.25, 0.76, 0, 0.79, 1.45, 'screen')];
     return [lower, cab];
   }
@@ -153,8 +162,10 @@ export class Car {
     this.id = _carId++;
     this.kind = kind; this.paint = paint;
     this.spec = SPECS[kind] || SPECS.sedan;
-    this.van = kind === 'van';
-    this.seatAt = SEATS[this.van ? 'van' : 'sedan'];
+    this.van = kind === 'van' || kind === 'swatvan';
+    this.swat = kind === 'swatvan';
+    this.seatAt = SEATS[kind === 'swatvan' ? 'swatvan' : this.van ? 'van' : 'sedan'];
+    this.seatKind = SEAT_KIND[kind] || null;
     this.seats = this.seatAt.map(() => null);
     this.shape = shapeFor(kind);
     this._build();
@@ -181,7 +192,7 @@ export class Car {
   /* -------------------------------- the model ----------------------------- */
 
   _build() {
-    const g = this.g, kind = this.kind, van = this.van, police = kind === 'police', taxi = kind === 'taxi';
+    const g = this.g, kind = this.kind, van = this.van, police = kind === 'police', taxi = kind === 'taxi', swat = kind === 'swatvan';
     const paint = this.paint, trim = 0x232528, dark = 0x15171a, door = police ? 0x16306b : paint;
     const S = new Shell(), G = new Panes(true), L = new Panes(false), I = new Merger();
     /* ---- the painted shell ---- */
@@ -211,6 +222,35 @@ export class Car {
       S.box(0, 0.79, 1.6, 1.82, 0.03, 1.0, 0x16306b);
       S.box(0, 1.53, -0.2, 1.2, 0.07, 0.3, 0x1c1e22);
     }
+    if (swat) {
+      // a step down each side of the back to stand on, a rail along the roof's edge to hold, a push bar on the front
+      const STEEL = 0x3a3d42, RAIL = 0x8c9198;
+      for (const sx of [1, -1]) {
+        S.box(sx * 1.0, 0.43, -0.85, 0.22, 0.05, 2.3, STEEL);
+        for (const z of [-1.85, 0.2]) S.box(sx * 0.97, 0.37, z, 0.08, 0.1, 0.08, STEEL);
+        S.box(sx * 0.93, 1.93, -0.85, 0.045, 0.045, 2.3, RAIL);
+        for (const z of [-1.95, -0.85, 0.25]) S.box(sx * 0.92, 1.87, z, 0.04, 0.1, 0.04, RAIL);
+      }
+      S.box(0, 1.585, 0.75, 1.2, 0.05, 0.3, 0x1c1e22);            // the light bar's housing, on the cab roof
+      S.box(0, 0.62, 2.28, 1.5, 0.08, 0.08, STEEL); S.box(0, 0.4, 2.28, 1.5, 0.08, 0.08, STEEL);
+      for (const sx of [0.62, -0.62]) S.box(sx, 0.5, 2.27, 0.08, 0.36, 0.08, STEEL);
+      // the letters, in white, along each side of the back: read from the front on the left, from the back on the right
+      const px = 0.068, word = 'SWAT';
+      let cols = 0; for (const ch of word) cols += GLYPH[ch][0].length + 1;
+      cols -= 1;
+      for (const sx of [1, -1]) {
+        let c = 0;
+        for (const ch of word) {
+          const rows = GLYPH[ch];
+          for (let r = 0; r < 5; r++) for (let k = 0; k < rows[r].length; k++) {
+            if (rows[r][k] !== '1') continue;
+            const u = (c + k) - (cols - 1) / 2;
+            S.box(sx * 0.905, 1.35 - r * px, -0.85 - sx * u * px, 0.012, px * 0.92, px * 0.92, 0xe8e8e2);
+          }
+          c += rows[0].length + 1;
+        }
+      }
+    }
     if (taxi) S.box(0, 1.58, -0.1, 0.5, 0.16, 0.22, 0xf4e9b0);
     const shellGeo = S.build();
     /* ---- glass ---- */
@@ -238,12 +278,12 @@ export class Car {
       rev: [L.quad([0.38, 0.6, zb], [0.5, 0.6, zb], [0.5, 0.68, zb], [0.38, 0.68, zb], 0x3a3a38, 1, 1), L.quad([-0.5, 0.6, zb], [-0.38, 0.6, zb], [-0.38, 0.68, zb], [-0.5, 0.68, zb], 0x3a3a38, 1, 1)],
       bar: [],
     };
-    if (police) {
-      const y = 1.575;
-      this.lamps.bar.push(L.quad([0.56, y, -0.08], [0.16, y, -0.08], [0.16, y + 0.09, -0.08], [0.56, y + 0.09, -0.08], 0x2b6cff, 1, 1));
-      this.lamps.bar.push(L.quad([-0.16, y, -0.08], [-0.56, y, -0.08], [-0.56, y + 0.09, -0.08], [-0.16, y + 0.09, -0.08], 0xd41f1f, 1, 1));
-      this.lamps.bar.push(L.quad([0.16, y, -0.32], [0.56, y, -0.32], [0.56, y + 0.09, -0.32], [0.16, y + 0.09, -0.32], 0x2b6cff, 1, 1));
-      this.lamps.bar.push(L.quad([-0.56, y, -0.32], [-0.16, y, -0.32], [-0.16, y + 0.09, -0.32], [-0.56, y + 0.09, -0.32], 0xd41f1f, 1, 1));
+    if (police || swat) {
+      const y = swat ? 1.6 : 1.575, zz = swat ? 0.95 : 0;
+      this.lamps.bar.push(L.quad([0.56, y, zz - 0.08], [0.16, y, zz - 0.08], [0.16, y + 0.09, zz - 0.08], [0.56, y + 0.09, zz - 0.08], 0x2b6cff, 1, 1));
+      this.lamps.bar.push(L.quad([-0.16, y, zz - 0.08], [-0.56, y, zz - 0.08], [-0.56, y + 0.09, zz - 0.08], [-0.16, y + 0.09, zz - 0.08], 0xd41f1f, 1, 1));
+      this.lamps.bar.push(L.quad([0.16, y, zz - 0.32], [0.56, y, zz - 0.32], [0.56, y + 0.09, zz - 0.32], [0.16, y + 0.09, zz - 0.32], 0x2b6cff, 1, 1));
+      this.lamps.bar.push(L.quad([-0.56, y, zz - 0.32], [-0.16, y, zz - 0.32], [-0.16, y + 0.09, zz - 0.32], [-0.56, y + 0.09, zz - 0.32], 0xd41f1f, 1, 1));
     }
     this.lampsBroken = {};
     const lampGeo = L.build();

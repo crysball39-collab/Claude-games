@@ -567,7 +567,7 @@ export class Multiplayer {
         if (!c || typeof c !== 'object') return;
         this.stats.cmdsIn++;
         if (c.op === 'set') {
-          this._applyAdmin({ sp: num(c.sp, 0.1, 5, 1), hp: num(c.hp, 1, 10000, 100), tg: num(c.tg, 0.1, 20, 1), wl: num(c.wl, 0, 2) | 0 });
+          this._applyAdmin({ sp: num(c.sp, 0.1, 5, 1), hp: num(c.hp, 1, 10000, 100), tg: num(c.tg, 0.1, 20, 1), wl: num(c.wl, 0, 5) | 0 });
           g.ui?.toast(`The admin set your speed to ${num(c.sp, 0.1, 5, 1)}x, max HP to ${num(c.hp, 1, 10000, 100) | 0} and toughness to ${num(c.tg, 0.1, 20, 1)}x.`, 4);
         } else if (c.op === 'kick') {
           const note = cleanText(c.note, 200);
@@ -674,7 +674,7 @@ export class Multiplayer {
   /** Speed, max HP, toughness and wanted level for a player on the server ('me' for you). */
   adminApply(target, vals) {
     if (!this.auth.admin) return { error: 'Only the admin can do that.' };
-    const v = { sp: num(+vals.speed, 0.1, 5, 1), hp: num(+vals.hp, 1, 10000, 100), tg: num(+vals.tough, 0.1, 20, 1), wl: num(+vals.wanted, 0, 2) | 0 };
+    const v = { sp: num(+vals.speed, 0.1, 5, 1), hp: num(+vals.hp, 1, 10000, 100), tg: num(+vals.tough, 0.1, 20, 1), wl: num(+vals.wanted, 0, 5) | 0 };
     if (target === 'me' || (this.myPeer && target === this.myPeer)) { this._applyAdmin(v); return { ok: true, who: 'you' }; }
     const r = this.remotes.get(target);
     if (!r) return { error: 'They are not on this server any more.' };

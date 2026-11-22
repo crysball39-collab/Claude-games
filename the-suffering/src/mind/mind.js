@@ -257,7 +257,7 @@ export class Mind {
       this.stir('fear', 6);
       this._threaten(pl, 92);
       const kp = this._know(pl); kp.crime = Math.max(kp.crime, this.aimed > 1.4 ? 2.6 : 1.5); kp.crimeT = now;
-      if (h.officer && this.aimed > 1.4) g.police?.raise(STARS.officer, 'you pointed a gun at an officer', { x: pl.x, z: pl.z });
+      if (h.officer && this.aimed > 1.4) g.police?.raise(STARS.officer, 'you pointed a gun at an officer', { x: pl.x, z: pl.z }, { kind: 'menace', key: 'aimedAt' + h.id });
       else if (!h.officer && this.aimed > 1.4) this._wantCall({ kind: 'menace', x: pl.x, z: pl.z, suspect: pl });
     } else this.aimed = Math.max(0, this.aimed - 0.6);
 
@@ -332,7 +332,7 @@ export class Mind {
           this.culprit.set(V.id, A);
           const kind = isGun(ev.weapon) || isBow(ev.weapon) ? 'shooting' : ev.weapon === 'frostthrower' ? 'freezing' : ev.weapon === 'knife' || ev.weapon === 'machete' || ev.weapon === 'sword' || ev.weapon === 'tempest' || ev.weapon === 'fingerpistol' || ev.weapon === 'claws' || ev.weapon === 'leopard' ? 'stabbing' : ev.weapon === 'flame' || ev.weapon === 'swirl' ? 'burning' : ev.weapon === 'flamethrower' ? 'burning' : ev.weapon === 'wire' ? 'electrocution' : 'assault';
           // an officer who sees it is the police; anyone else has to ring them
-          if (h.officer) { if (A.isPlayer) this.game.police?.raise(STARS[kind] || 1, `an officer saw you ${kind === 'assault' ? 'attack someone' : kind === 'shooting' ? 'shoot someone' : kind === 'burning' ? 'set someone on fire' : kind === 'freezing' ? 'freeze someone' : kind === 'electrocution' ? 'electrocute someone' : 'cut someone'}`, { x: A.x, z: A.z }); }
+          if (h.officer) { if (A.isPlayer) this.game.police?.raise(STARS[kind] || 1, `an officer saw you ${kind === 'assault' ? 'attack someone' : kind === 'shooting' ? 'shoot someone' : kind === 'burning' ? 'set someone on fire' : kind === 'freezing' ? 'freeze someone' : kind === 'electrocution' ? 'electrocute someone' : 'cut someone'}`, { x: A.x, z: A.z }, { kind, victim: V }); }
           else this._wantCall({ kind, x: ev.x, z: ev.z, victim: V, suspect: A });
         }
         if (h.officer && A.officer) break;
@@ -347,7 +347,7 @@ export class Mind {
         this.note('saw', 'shot', ev.weapon === 'flamethrower' ? `saw ${this.name(A)} spraying fire from a flamethrower` : ev.weapon === 'frostthrower' ? `saw ${this.name(A)} spraying freezing mist from a frost thrower` : ev.weapon === 'bow' ? `saw ${this.name(A)} loose an arrow` : `saw ${this.name(A)} fire a ${WEAPON_WORD[ev.weapon]}`, 0.8, { o: A });
         if (!A.officer) {
           kn.hostile = Math.max(kn.hostile, 0.8); kn.crime = Math.max(kn.crime, 2); kn.crimeT = this.game.time;
-          if (h.officer) { if (A.isPlayer && ev.weapon !== 'taser') this.game.police?.raise(STARS.shots, sprays ? `an officer saw you use a ${WEAPON_WORD[ev.weapon]}` : isBow(ev.weapon) ? `an officer saw you shoot a ${WEAPON_WORD[ev.weapon]}` : 'an officer saw you fire a gun', { x: A.x, z: A.z }); }
+          if (h.officer) { if (A.isPlayer && ev.weapon !== 'taser') this.game.police?.raise(STARS.shots, sprays ? `an officer saw you use a ${WEAPON_WORD[ev.weapon]}` : isBow(ev.weapon) ? `an officer saw you shoot a ${WEAPON_WORD[ev.weapon]}` : 'an officer saw you fire a gun', { x: A.x, z: A.z }, { kind: sprays ? 'menace' : 'shots' }); }
           else if (ev.weapon !== 'taser') this._wantCall({ kind: sprays || isBow(ev.weapon) ? 'menace' : 'shots', x: ev.x, z: ev.z, suspect: A });
         }
         if (h.officer && A.officer) break;
@@ -381,7 +381,7 @@ export class Mind {
         if (!h.officer) this.ask('sawTied', 40, null, 0.6);
         const kn = this._know(A);
         if (!A.officer) { kn.crime = Math.max(kn.crime, 1.2); kn.crimeT = this.game.time; }
-        if (h.officer && A.isPlayer) this.game.police?.raise(STARS.assault, 'an officer saw you tie somebody up', { x: A.x, z: A.z });
+        if (h.officer && A.isPlayer) this.game.police?.raise(STARS.assault, 'an officer saw you tie somebody up', { x: A.x, z: A.z }, { kind: 'assault', key: 'tied' + V.id });
         break;
       }
       case 'power': {
@@ -404,7 +404,7 @@ export class Mind {
         if (!h.officer) this.ask('sawDrag', 52, null, rand(0.4, 1.1));
         const kn = this._know(A);
         if (!A.officer) { kn.crime = Math.max(kn.crime, dead ? 2 : 1.2); kn.crimeT = this.game.time; }
-        if (h.officer && A.isPlayer && !A.officer) this.game.police?.raise(STARS.assault, 'an officer saw you dragging somebody', { x: A.x, z: A.z });
+        if (h.officer && A.isPlayer && !A.officer) this.game.police?.raise(STARS.assault, 'an officer saw you dragging somebody', { x: A.x, z: A.z }, { kind: 'assault', key: 'dragged' + V.id });
         break;
       }
       case 'cuff':
@@ -428,7 +428,7 @@ export class Mind {
             ka.crime = Math.max(ka.crime, 3); ka.crimeT = this.game.time;
             // it was seen to be them only if this person saw them do it
             const did = this.culprit.get(V.id) === A;
-            if (h.officer) { if (A.isPlayer && did) this.game.police?.raise(STARS.murder, 'an officer saw you kill someone', { x: A.x, z: A.z }); }
+            if (h.officer) { if (A.isPlayer && did) this.game.police?.raise(V.officer ? STARS.copKill : STARS.murder, V.officer ? 'an officer saw you kill an officer' : 'an officer saw you kill someone', { x: A.x, z: A.z }, { kind: V.officer ? 'copKill' : 'murder', victim: V }); }
             else this._wantCall({ kind: did ? 'murder' : 'body', x: ev.x, z: ev.z, victim: V, suspect: did ? A : null });
           }
         } else if (!h.officer) this._wantCall({ kind: 'body', x: ev.x, z: ev.z, victim: V, suspect: null });
@@ -605,7 +605,7 @@ export class Mind {
       if (!attacker.officer) {
         const kind = type === 'bullet' || isBow(weapon) ? 'shooting' : type === 'stab' || type === 'cut' ? 'stabbing' : type === 'burn' ? 'burning' : type === 'cold' ? 'freezing' : 'assault';
         // an officer attacked is the police finding out for themselves; anyone else may ring them, later, and say who it was if they saw
-        if (h.officer) { if (attacker.isPlayer) this.game.police?.raise(type === 'blunt' && !weaponHurt(weapon) ? STARS.assault : STARS.officer, 'you attacked an officer', { x: attacker.x, z: attacker.z }); }
+        if (h.officer) { if (attacker.isPlayer) this.game.police?.raise(type === 'blunt' && !weaponHurt(weapon) ? STARS.assault : STARS.officer, 'you attacked an officer', { x: attacker.x, z: attacker.z }, { kind: 'officer', victim: h }); }
         else this._wantCall({ kind, x: h.x, z: h.z, victim: h, suspect: seen ? attacker : null, self: true });
       }
     }

@@ -415,6 +415,7 @@ export class UI {
     box.querySelectorAll('b').forEach((b, i) => b.classList.toggle('on', i < n));
     box.classList.toggle('searching', n > 0 && !P.seen);
     box.classList.toggle('lethal', n >= 2);
+    box.classList.toggle('extreme', n >= 4);
   }
 
   cheatChanged() {

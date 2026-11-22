@@ -78,7 +78,7 @@ h1, h2, h3, p { margin: 0; }
 /* the edges of the picture darken as the player stops taking things in */
 #hud > #haze { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.6s;
   background: radial-gradient(ellipse 75% 70% at 50% 50%, rgba(6, 4, 4, 0) 40%, rgba(6, 4, 4, 0.55) 72%, rgba(4, 2, 2, 0.94) 100%); }
-/* the wanted level: two stars, lit gold when the police are after you, flashing while they have lost sight of you */
+/* the wanted level: five stars, lit gold when the police are after you, flashing while they have lost sight of you */
 #wanted .stars { display: flex; gap: 4px; }
 #wanted .stars b { width: 13px; height: 13px; display: block; background: rgba(233, 227, 215, 0.2);
   clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
@@ -86,6 +86,7 @@ h1, h2, h3, p { margin: 0; }
 #wanted.searching .stars b.on { animation: wanted-flash 0.9s steps(2, jump-none) infinite; }
 @keyframes wanted-flash { 0% { background: #f2c14a; } 100% { background: rgba(242, 193, 74, 0.25); } }
 #wanted.lethal .stars b.on { background: #ff7a3c; }
+#wanted.extreme .stars b.on { background: #ff3b30; box-shadow: 0 0 6px rgba(255, 59, 48, 0.7); }
 #v-cheat { font: 800 8px/1 var(--display); letter-spacing: 0.12em; color: var(--clinic); text-align: center; }
 .sub { font: 800 10px/1 var(--display); letter-spacing: 0.14em; color: var(--dim); margin: 14px 0 2px; text-transform: uppercase; }
 .slot.bound { color: var(--warn); border-color: var(--warn); border-style: dashed; }

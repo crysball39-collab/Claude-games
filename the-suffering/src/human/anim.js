@@ -240,7 +240,7 @@ export class Animator {
     this.t = Math.random() * 10;
     this.phase = Math.random();
     this.run = 0; this.moving = 0; this.crouch = 0; this.air = 0; this.land = 0;
-    this.w = { guard: 0, blade: 0, pistol: 0, rifle: 0, bow: 0, cower: 0, handsUp: 0, hurt: 0, talk: 0, stagger: 0, writhe: 0, crawl: 0, brace: 0, phone: 0, kneel: 0, cuffed: 0, cuffing: 0, call: 0, scan: 0, sit: 0, drive: 0, slump: 0 };
+    this.w = { guard: 0, blade: 0, pistol: 0, rifle: 0, bow: 0, cower: 0, handsUp: 0, hurt: 0, talk: 0, stagger: 0, writhe: 0, crawl: 0, brace: 0, phone: 0, kneel: 0, cuffed: 0, cuffing: 0, call: 0, scan: 0, sit: 0, drive: 0, slump: 0, hang: 0, rope: 0, gunner: 0 };
     this.action = null;
     this.flinch = 0; this.flX = 0; this.flZ = 0;
     this.aim = 0; this.lookYaw = 0; this.lookPitch = 0;
@@ -551,9 +551,10 @@ export class Animator {
       this._to(CH.hipLTwist, 0, a); this._to(CH.hipRTwist, 0, a);
       this._to(CH.kneeL, 0.72, a); this._to(CH.kneeR, 0.72, a); this._to(CH.ankleL, -0.45, a); this._to(CH.ankleR, -0.45, a);
       this._to(CH.waistBend, 0.05, a); this._to(CH.spineBend, 0.05, a); this._to(CH.waistSide, 0, a); this._to(CH.spineSide, 0, a);
-      // hands in the lap...
-      this._to(CH.shL, 0.5, a); this._to(CH.shR, 0.5, a); this._to(CH.elL, 1.05, a); this._to(CH.elR, 1.05, a);
-      this._to(CH.shLOut, 0.06, a); this._to(CH.shROut, 0.06, a); this._to(CH.shLIn, 0.14, a); this._to(CH.shRIn, 0.14, a);
+      // hands in the lap (unless they are on a rifle, sitting in a helicopter's door)...
+      const lap = a * (1 - W.gunner);
+      this._to(CH.shL, 0.5, lap); this._to(CH.shR, 0.5, lap); this._to(CH.elL, 1.05, lap); this._to(CH.elR, 1.05, lap);
+      this._to(CH.shLOut, 0.06, lap); this._to(CH.shROut, 0.06, lap); this._to(CH.shLIn, 0.14, lap); this._to(CH.shRIn, 0.14, lap);
       // ...or on the wheel, at ten to two
       if (dr > 0.01) {
         this._to(CH.shL, 1.2, dr); this._to(CH.shR, 1.2, dr); this._to(CH.elL, 0.38, dr); this._to(CH.elR, 0.38, dr);
@@ -566,6 +567,26 @@ export class Animator {
         this._to(CH.shL, 0.12, sl); this._to(CH.shR, 0.12, sl); this._to(CH.elL, 0.35, sl); this._to(CH.elR, 0.35, sl);
         this._to(CH.shLOut, 0.18, sl); this._to(CH.shROut, 0.18, sl); this._to(CH.shLIn, 0, sl); this._to(CH.shRIn, 0, sl);
       }
+    }
+
+    /* ---- standing on a van's step, a hand on its rail: feet together on the board, knees soft for the bumps ---- */
+    if (W.hang > 0.01) {
+      const a = W.hang;
+      ch[CH.rootX] *= 1 - a; ch[CH.rootZ] *= 1 - a;
+      this._to(CH.hipL, 0.1, a); this._to(CH.hipR, 0.1, a); this._to(CH.hipLOut, -0.03, a); this._to(CH.hipROut, -0.03, a);
+      this._to(CH.kneeL, 0.2, a); this._to(CH.kneeR, 0.2, a); this._to(CH.ankleL, -0.1, a); this._to(CH.ankleR, -0.1, a);
+      this._to(CH.shL, 0.2, a); this._to(CH.shR, 0.2, a); this._to(CH.elL, 0.35, a); this._to(CH.elR, 0.35, a);
+      this._to(CH.shLOut, 0.14, a); this._to(CH.shROut, 0.14, a);
+    }
+    /* ---- going down a rope: upright, both hands on it overhead, knees drawn up a little, feet together on it ---- */
+    if (W.rope > 0.01) {
+      const a = W.rope;
+      ch[CH.rootX] *= 1 - a; ch[CH.rootZ] *= 1 - a; ch[CH.rootY] *= 1 - a; ch[CH.rootRoll] *= 1 - a;
+      this._to(CH.hipL, 0.55, a); this._to(CH.hipR, 0.42, a); this._to(CH.hipLOut, -0.06, a); this._to(CH.hipROut, -0.06, a);
+      this._to(CH.kneeL, 0.8, a); this._to(CH.kneeR, 0.62, a); this._to(CH.ankleL, 0.25, a); this._to(CH.ankleR, 0.2, a);
+      this._to(CH.shL, 2.5, a); this._to(CH.shR, 2.3, a); this._to(CH.elL, 0.55, a); this._to(CH.elR, 0.7, a);
+      this._to(CH.shLOut, 0, a); this._to(CH.shROut, 0, a); this._to(CH.shLIn, 0.25, a); this._to(CH.shRIn, 0.25, a);
+      this._to(CH.spineBend, 0.06, a); this._to(CH.neckBend, -0.2, a);
     }
 
     /* ---- the head goes where the eyes want ---- */

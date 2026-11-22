@@ -23,7 +23,7 @@
 import { Car, WheelSet, BODY, WHEEL_R, WHEELBASE, TRACK, carDecal } from './car.js';
 import { Boxes } from '../render/boxes.js';
 import { Body, Island } from '../physics/world.js';
-import { ROAD_W, LANE, KERB, groundHeight } from './city.js';
+import { ROAD_W, LANE, KERB, ROADS, groundHeight } from './city.js';
 import { CAR_PAINT } from './models.js';
 import { ST } from '../human/human.js';
 import { P, PART_COUNT } from '../human/rig.js';
@@ -108,6 +108,32 @@ export class Traffic {
     car.place(0);
     // nothing standing where it appeared
     for (const h of this.game.humans) if (!h.car && this._inside(car, h.x, h.z, 0.25) && h.state === ST.ANIM) h.shove((h.x - x) * 2, (h.z - z) * 2, 30, null);
+    return car;
+  }
+
+  /**
+   * A police unit sent after you: a patrol car with two officers, or a S.W.A.T. van with four (two in the cab, two on
+   * its steps). It appears on a street (the Response picks one out of your sight), already moving, lights and siren
+   * going, and drives itself to you (see _pursue).
+   */
+  spawnUnit(kind, at) {
+    const g = this.game;
+    if (!g.spawnOfficer || !g.spawnSwat) return null;
+    const car = this._make(kind, kind === 'police' ? 0xf0f0ec : 0x16181c);
+    car.x = at.x; car.z = at.z; car.yaw = at.yaw; car.y = groundHeight(at.x, at.z);
+    car.mode = 'loose'; car.traffic = false; car.hand = 0; car.unit = kind; car.siren = true; car.quiet = false;
+    car.ai = { state: 'pursue', t: 0, stuck: 0, route: null, routeT: 0, wp: 0, rx: 0, rz: 0 };
+    const v0 = 7;
+    car.vx = Math.sin(at.yaw) * v0; car.vz = Math.cos(at.yaw) * v0; car.speed = v0;
+    car.place(0);
+    const n = kind === 'swatvan' ? 4 : 2;
+    for (let i = 0; i < n; i++) {
+      const h = kind === 'swatvan' ? g.spawnSwat(car.x, car.z, car.yaw) : g.spawnOfficer(car.x, car.z, car.yaw);
+      if (!h) continue;
+      if (kind === 'swatvan') h.vanTeam = true;
+      this.seat(h, car, i, true);
+    }
+    this.stats.units = (this.stats.units || 0) + 1;
     return car;
   }
 
@@ -344,6 +370,11 @@ export class Traffic {
     const panic = car.panic > 0;
     let limit = car.cruise * (panic ? 1.55 : 1) * (car.hp < 50 ? 0.75 : 1);
     let stopIn = Infinity;
+    // a siren close by: slow right down and let it through
+    for (const o of this.cars) {
+      if (o === car || !o.unit || !o.siren || o.quiet || !o.drivable) continue;
+      if ((o.x - car.x) ** 2 + (o.z - car.z) ** 2 < 24 * 24) { limit = Math.min(limit, 2.2); break; }
+    }
 
     if (car.u < 0) {
       if (car.next < 0 && car.s > L - 14) {
@@ -530,6 +561,193 @@ export class Traffic {
     if (a.t > 40) this._everyoneOut(car, false);
   }
 
+  /**
+   * A police driver on the way to you: along the streets, fast, the siren going, to wherever you are if they can see
+   * you (or have just been told), or else to where you were last seen. Close to you, they stop, and everyone gets out
+   * (Brain._unitRide). If you are driving, they follow you, and stop when you do. When nobody is wanted any more,
+   * they turn the siren off and go back into the traffic.
+   */
+  _pursue(car, d, dt) {
+    const g = this.game, a = car.ai, p = g.player, P = g.police;
+    a.t += dt;
+    const fx = Math.sin(car.yaw), fz = Math.cos(car.yaw);
+    const fwd = car.vx * fx + car.vz * fz;
+    car.hand = 0;
+    const halt = () => { car.gas = 0; car.steerIn = 0; if (Math.abs(fwd) > 0.6) { car.brake = fwd > 0 ? 1 : 0; car.gas = fwd < 0 ? 1 : 0; } else { car.brake = 0; car.hand = 1; } };
+    if (!P || !P.wanted || !p || !p.h.alive) {
+      // stood down: lights off, back into the traffic (and taken away once out of sight: see Response._home)
+      car.siren = false;
+      car.ai = { state: 'rejoin', t: 0, stuck: 0 };
+      return;
+    }
+    if (a.state === 'arrived') {
+      halt();
+      car.quiet = true;
+      // everyone got out and you have gone: whoever is left at the wheel comes after you again
+      const dd = Math.hypot((p.car || p).x - car.x, (p.car || p).z - car.z);
+      if (a.t > 6 && dd > 45 && car.seats[0] && !car.seats[0].isPlayer && P.lastSeen && g.time - P.lastSeen.t < 6) { a.state = 'pursue'; a.t = 0; car.quiet = false; a.route = null; }
+      return;
+    }
+    if (a.state === 'back') {
+      car.gas = 0; car.brake = 0.85; car.steerIn = a.steer;
+      if (a.t > 1.3) { a.state = 'pursue'; a.t = 0; a.stuck = 0; }
+      return;
+    }
+    car.quiet = false;
+    // where to: you, where they know you are
+    const fresh = P.lastSeen && g.time - P.lastSeen.t < 4;
+    const you = p.car || p;
+    const tx = fresh || !P.lastSeen ? you.x : P.lastSeen.x, tz = fresh || !P.lastSeen ? you.z : P.lastSeen.z;
+    a.routeT -= dt;
+    if (!a.route || a.routeT <= 0 || Math.hypot(tx - a.rx, tz - a.rz) > 10) {
+      a.route = this._streetRoute(car.x, car.z, car.yaw, tx, tz, Math.abs(fwd));
+      a.wp = 0; a.routeT = 3; a.rx = tx; a.rz = tz;
+    }
+    const R = a.route;
+    // there: near you (on foot, or stopped in a car), or at the spot they were sent to
+    const toYou = Math.hypot(you.x - car.x, you.z - car.z), end = R[R.length - 1];
+    const toEnd = Math.hypot(end.x - car.x, end.z - car.z);
+    const youStopped = !p.car || Math.hypot(p.car.vx, p.car.vz) < 2.5;
+    // (somewhere off the street, the nearest it can get on the street is as near as it gets)
+    if ((fresh && youStopped && toYou < (p.car ? 10 : 13)) || (youStopped && toEnd < 6.5)) { a.state = 'arrived'; a.t = 0; halt(); return; }
+    // the next point on the way, and the one after (to know whether it is a corner)
+    while (a.wp < R.length - 1 && Math.hypot(R[a.wp].x - car.x, R[a.wp].z - car.z) < (R[a.wp].j ? 5.5 : 3)) a.wp++;
+    const w = R[a.wp], nx = R[Math.min(R.length - 1, a.wp + 1)];
+    const wd = Math.hypot(w.x - car.x, w.z - car.z);
+    // down the middle of the road, between the two lanes of traffic (which keep to their own); braking for anything
+    // in it, and round it if it is not going anywhere
+    let ax = w.x, az = w.z, slow = Infinity, block = null;
+    for (const o of this.cars) {
+      if (o === car || (p.car === o && fresh)) continue;
+      const ex = o.x - car.x, ez = o.z - car.z;
+      if (ex * ex + ez * ez > 900) continue;
+      const along = ex * fx + ez * fz, side = ex * -fz + ez * fx;
+      if (along < 2.5 || along > 9 + Math.max(0, fwd) * 0.9 || Math.abs(side) > 1.7) continue;
+      const v = Math.max(0, (along - 5.2) * 0.9 + Math.max(0, o.vx * fx + o.vz * fz));
+      if (v < slow) { slow = v; block = { o, side }; }
+    }
+    if (block && Math.hypot(block.o.vx, block.o.vz) < 1 && fwd < 2.5) a.blockT = (a.blockT || 0) + dt; else a.blockT = 0;
+    if (a.blockT > 1.5 && !a.around) { a.around = { t: 2.6, dir: block.side > 0 ? -1 : 1 }; a.blockT = 0; }
+    if (a.around) {
+      a.around.t -= dt;
+      if (a.around.t <= 0) a.around = null;
+      else { ax += -fz * a.around.dir * 3.2 + fx * 4; az += fx * a.around.dir * 3.2 + fz * 4; slow = Infinity; }
+    }
+    const ang = wrapAngle(Math.atan2(ax - car.x, az - car.z) - car.yaw);
+    car.steerIn = clamp(-ang * 2.6, -1, 1);
+    // how fast: flat out on a straight, slow for a corner, slower near you
+    let want = car.unit === 'swatvan' ? 14 : 17;
+    if (w.j && nx !== w) {
+      const ix = w.x - car.x, iz = w.z - car.z, ox = nx.x - w.x, oz = nx.z - w.z;
+      const c = (ix * ox + iz * oz) / ((Math.hypot(ix, iz) || 1) * (Math.hypot(ox, oz) || 1));
+      // a corner: no faster than it can be braked down from to take it at a crawl by the time it is there
+      if (c < 0.7) want = Math.min(want, Math.sqrt(36 + 2 * 6.5 * Math.max(0, wd - 6.5)));
+    }
+    if (Math.abs(ang) > 1.2) want = Math.min(want, 5);
+    want = Math.min(want, slow);
+    // through a junction a little more carefully, whatever is crossing it
+    if (w.j && wd < 12) want = Math.min(want, 11);
+    const close = Math.min(toYou, toEnd);
+    if (close < 32) want = Math.min(want, 4 + close * 0.42);
+    // stuck for good (tangled with a car it hit, say): they get out and come the rest of the way on foot
+    a.slowT = Math.abs(fwd) < 2.5 ? (a.slowT || 0) + dt : Math.max(0, (a.slowT || 0) - dt * 2);
+    if (a.slowT > 8) { a.state = 'arrived'; a.t = 0; a.bail = true; halt(); return; }
+    if (p.car && fresh) want = Math.max(want, Math.min(20, Math.hypot(p.car.vx, p.car.vz) + 4));
+    // somebody in the road just ahead: brake for them (not for you)
+    for (const h of g.humans) {
+      if (h.removed || h.car || h.isPlayer || h.state !== ST.ANIM) continue;
+      const ex = h.x - car.x, ez = h.z - car.z, along = ex * fx + ez * fz, side = ex * -fz + ez * fx;
+      if (along > 2 && along < 3 + fwd * 0.6 && Math.abs(side) < 1.3) want = Math.min(want, Math.max(0, along - 3.5));
+    }
+    car.gas = fwd < want ? (Math.abs(ang) > 1.0 ? 0.55 : 1) : 0;
+    car.brake = fwd > want + 0.4 ? clamp01((fwd - want) / 2) : 0;
+    // stuck against something: back off, wheel the other way, and try again
+    if (fwd < 0.6 && car.gas > 0) a.stuck += dt; else a.stuck = Math.max(0, a.stuck - dt * 2);
+    if (a.stuck > 1.6) { a.state = 'back'; a.t = 0; a.steer = -Math.sign(car.steerIn || 1); a.route = null; }
+  }
+
+  /**
+   * The way along the streets from one point to another: the junctions to go through, then the point of the street
+   * nearest where they are going, then (if that is not on a street) nothing further. Each point is { x, z, j } (j: a
+   * junction, where the way may turn).
+   */
+  _streetRoute(x, z, yaw, tx, tz, speed = 0) {
+    const J = this.game.city.junctions, E = ROADS[ROADS.length - 1], S = ROADS[0];
+    // the nearest point on a street's middle, and which junctions are at either end of that piece of it
+    const onStreet = (px, pz) => {
+      let best = null, bd = Infinity;
+      for (let i = 0; i < ROADS.length; i++) {
+        const qz = clamp(pz, S, E), d = Math.abs(px - ROADS[i]) + Math.abs(pz - qz);
+        if (d < bd) { bd = d; best = { x: ROADS[i], z: qz, i, axis: 'z' }; }
+        const qx = clamp(px, S, E), d2 = Math.abs(pz - ROADS[i]) + Math.abs(px - qx);
+        if (d2 < bd) { bd = d2; best = { x: qx, z: ROADS[i], j: i, axis: 'x' }; }
+      }
+      // the junctions either side of it along the street
+      const k = (v) => { let n = 0; while (n < ROADS.length - 2 && v > ROADS[n + 1]) n++; return n; };
+      if (best.axis === 'z') { const a = k(best.z); best.ends = [a * 4 + best.i, (a + 1) * 4 + best.i]; }
+      else { const a = k(best.x); best.ends = [best.j * 4 + a, best.j * 4 + a + 1]; }
+      return best;
+    };
+    const A = onStreet(x, z), B = onStreet(tx, tz);
+    const fx = Math.sin(yaw), fz = Math.cos(yaw);
+    // turning round in the street costs time, more the faster it is going
+    const turnRound = 25 + speed * 4;
+    const out = [];
+    // the same piece of street: straight there (turning round first if it is behind)
+    const same = A.ends[0] === B.ends[0] && A.ends[1] === B.ends[1];
+    let direct = Infinity;
+    if (same) { const dx = B.x - x, dz = B.z - z, L = Math.hypot(dx, dz); direct = L + (L > 1 && (dx * fx + dz * fz) / L < -0.2 ? turnRound : 0); }
+    // otherwise through the junctions: a shortest way that knows which way it came into each one, so that a U turn
+    // (which, at a junction at the edge of the city, is a building) is the last thing it does
+    const N = J.length, K = N + 1, NONE = N;
+    const dist = new Float32Array(N * K).fill(Infinity), prev = new Int16Array(N * K).fill(-1), done = new Uint8Array(N * K);
+    const turn = (f, u, v) => {
+      if (f === NONE) return 0;
+      if (v === f) return 90;
+      const ax = J[u].x - J[f].x, az = J[u].z - J[f].z, bx = J[v].x - J[u].x, bz = J[v].z - J[u].z;
+      return ax * bx + az * bz > 0 ? 0 : 4;
+    };
+    for (const e of A.ends) {
+      const other = A.ends[0] === e ? A.ends[1] : A.ends[0];
+      const j = J[e], dx = j.x - x, dz = j.z - z, L = Math.hypot(dx, dz);
+      const behind = L > 0.5 && (dx * fx + dz * fz) / L < -0.2;
+      // a junction just driven through is not one to go back to at speed
+      if (behind && L < 9 && speed > 3) continue;
+      const k = e * K + (other === e ? NONE : other);
+      dist[k] = Math.min(dist[k], L + (behind ? turnRound : 0));
+    }
+    for (;;) {
+      let u = -1, bd = Infinity;
+      for (let i = 0; i < N * K; i++) if (!done[i] && dist[i] < bd) { bd = dist[i]; u = i; }
+      if (u < 0) break;
+      done[u] = 1;
+      const uj = (u / K) | 0, uf = u % K;
+      for (const v of J[uj].out) {
+        const k = v * K + uj;
+        const w = dist[u] + Math.hypot(J[v].x - J[uj].x, J[v].z - J[uj].z) + turn(uf, uj, v);
+        if (w < dist[k]) { dist[k] = w; prev[k] = u; }
+      }
+    }
+    // into the target's piece of street from either end: from the end it is reached at, along toward the other
+    let goal = -1, gs = Infinity;
+    for (const e of B.ends) {
+      const other = B.ends[0] === e ? B.ends[1] : B.ends[0];
+      for (let f = 0; f < K; f++) {
+        const k = e * K + f;
+        if (dist[k] === Infinity) continue;
+        const sc = dist[k] + Math.hypot(J[e].x - B.x, J[e].z - B.z) + (f === other ? 90 : 0);
+        if (sc < gs) { gs = sc; goal = k; }
+      }
+    }
+    if (goal >= 0 && gs < direct) {
+      const chain = [];
+      for (let u = goal; u >= 0; u = prev[u]) chain.unshift((u / K) | 0);
+      for (const u of chain) out.push({ x: J[u].x, z: J[u].z, j: true });
+    }
+    out.push({ x: B.x, z: B.z, j: false });
+    return out;
+  }
+
   _toRail(car, L, speed) {
     car.mode = 'rail';
     car.from = L.from; car.to = L.to; car.s = L.s; car.u = -1; car.turn = null; car.next = -1;
@@ -631,6 +849,7 @@ export class Traffic {
   _drive(car, dt) {
     const g = this.game, d = car.seats[0];
     if (d && d.isPlayer) { /* the pedals are the player's: set by the game from the controls */ }
+    else if (d && this._fit(d) && car.unit && car.ai && (car.ai.state === 'pursue' || car.ai.state === 'arrived' || car.ai.state === 'back')) this._pursue(car, d, dt);
     else if (d && this._fit(d)) this._ai(car, d, dt);
     else { car.gas = 0; car.steerIn = 0; car.brake = 0; if (Math.hypot(car.vx, car.vz) < 0.2 && !d) car.hand = 1; }
     if (!car.drivable) car.gas = 0;
@@ -1148,7 +1367,7 @@ export class Traffic {
     // pieces of it
     for (let k = 0; k < 8; k++) this._debris(car, x, y, z);
     const d = car.lastBy;
-    if (d && d.isPlayer) g.police?.raise(2, 'you blew up a car', { x, z });
+    if (d && d.isPlayer) g.police?.raise(2, car.unit || car.kind === 'police' ? 'you blew up a police car' : 'you blew up a car', { x, z }, { kind: car.unit || car.kind === 'police' ? 'copCar' : 'car', key: 'car' + car.id });
   }
 
   /** Paint burnt off: the shell goes black and brown, the seats to ash. */
@@ -1187,6 +1406,7 @@ export class Traffic {
       g.fire._add(1, x + Math.cos(a) * u, y + rand(0, 0.8), z + Math.sin(a) * u, Math.cos(a) * sp, rand(2, 7) * power, Math.sin(a) * sp, rand(0.5, 1.1), rand(0.5, 1.0) * power, rand(1.8, 2.6), by);
     }
     for (let k = 0; k < 16; k++) g.gore.puff('smoke', x + rand(-1.5, 1.5), y + rand(0.5, 3), z + rand(-1.5, 1.5), rand(1.6, 3.2) * power, rand(2.5, 4.5), 0.12, 0.11, 0.1);
+    g.air?.blast(x, y, z, power, by);
     for (let k = 0; k < 5; k++) g.gore.puff('flash', x + rand(-1, 1), y + rand(0, 1.5), z + rand(-1, 1), rand(2, 3.4) * power, rand(0.12, 0.22), 1, 0.75, 0.4);
     // people
     for (const h of g.humans) {
@@ -1337,7 +1557,7 @@ export class Traffic {
       const live = this.cars.filter((c) => c.traffic && !c.wreck && c.mode === 'rail').length;
       if (live < this.want) this._add();
       // and the wrecks and empty cars that have piled up are taken away, the furthest first
-      const left = this.cars.filter((c) => c.traffic === false && !c.home && !c.seats.some((h) => h && h.isPlayer));
+      const left = this.cars.filter((c) => c.traffic === false && !c.home && !c.unit && !c.seats.some((h) => h && h.isPlayer));
       if (left.length > 6) {
         const p = g.player;
         let worst = null, ws = 40;
@@ -1362,7 +1582,7 @@ export class Traffic {
       }
       // a police car with its lights going: blue and red, and the siren
       if (car.siren && car.drivable) {
-        g.audio?.loop('siren' + car.id, 'siren', car.x, car.y + 1.5, car.z, 0.9);
+        if (!car.quiet) g.audio?.loop('siren' + car.id, 'siren', car.x, car.y + 1.5, car.z, 0.9);
         if (night) { car.toWorld(0, 2.4, -0.2, _a); g.lights?.ask('point', _a[0], _a[1], _a[2], Math.floor(g.time * 6) % 2 ? 0xff3030 : 0x3a7cff, 7, 12, 0, -1, 0, 0); }
       }
       if (car.fire >= 0) {
