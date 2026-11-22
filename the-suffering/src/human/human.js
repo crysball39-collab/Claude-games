@@ -122,6 +122,8 @@ export class Human {
     this.powerMul = 1; this.reachMul = 1;  // blows land harder, and reach further
     this.sturdy = 1;                       // this much harder to knock off their feet
     this.boost = 1; this.knock = 1;        // what the admin has set: speed, and how hard they are to knock down
+    this.ice = null; this.iced = 0;        // rime on each part (the frost keeps it), and how much of the skin is under it
+    this.coldMul = 1; this.frozen = false; // stiff with cold: slower; iced all over: not moving at all
     this.puppet = false;                   // a stand-in for another player, moved by what their game sends
     this.remote = null;                    // ...and which player
     this.lastWeapon = null;                // what the last blow to land was dealt with
@@ -314,6 +316,31 @@ export class Human {
     }
   }
 
+  /**
+   * Iced over so far that nothing will move: they stay as they were, stiff as
+   * a board, standing if they happen to balance, until enough of it thaws.
+   */
+  freezeSolid() {
+    if (this.removed || this.frozen || this.puppet) return;
+    this.frozen = true;
+    if (this.state !== ST.RAGDOLL) this.toRagdoll();
+    const pel = this.bodies[P.PELVIS];
+    this._stiff = this.bodies.map((b) => {
+      const ax = -pel.qx, ay = -pel.qy, az = -pel.qz, aw = pel.qw;
+      return [aw * b.qx + ax * b.qw + ay * b.qz - az * b.qy, aw * b.qy - ax * b.qz + ay * b.qw + az * b.qx, aw * b.qz + ax * b.qy - ay * b.qx + az * b.qw, aw * b.qw - ax * b.qx - ay * b.qy - az * b.qz];
+    });
+    this.game.weapons?.dropFrom(this);
+    const c = this.bodies[P.CHEST];
+    this.game.audio?.at('freeze', c.px, c.py, c.pz, 0.9);
+    if (this.mind) { this.mind.note('felt', 'frozen', 'froze stiff: I could not move at all, not even my eyes', 1); this.mind.stir('fear', 60); }
+    if (this.isPlayer) this.game.ui?.toast('Frozen stiff. It has to thaw.', 3);
+  }
+  thawOut() {
+    if (!this.frozen) return;
+    this.frozen = false;
+    this._relax();
+  }
+
   /** Blood loss shows in the skin. */
   _tintSkin() {
     // the colour goes with the blood, and then, slowly, with everything else
@@ -323,16 +350,19 @@ export class Human {
     const B = this.h.burns;
     let bk = 0;
     for (const i of this.skinParts) bk = bk * 7 + Math.round(B[i] / 15);
-    if (q === this._pallor && bk === this._burnKey) return;
-    this._pallor = q; this._burnKey = bk;
+    let ik = 0;
+    if (this.ice) for (const i of this.skinParts) ik = ik * 9 + Math.round(this.ice[i] * 8);
+    if (q === this._pallor && bk === this._burnKey && ik === this._iceKey) return;
+    this._pallor = q; this._burnKey = bk; this._iceKey = ik;
     const base = rgb(this.fur ?? this.look.skin), grey = rgb(0xb9bdb6), k = this.fur != null ? 0 : q / 10 * 0.72;
     const cr = lerp(base[0], grey[0], k), cg = lerp(base[1], grey[1], k), cb = lerp(base[2], grey[2], k);
     const coat = this.coat, cc = (i) => { if (!coat) return [cr, cg, cb]; const v = rgb(coat[i]); return v; };
+    const I = this.ice, icy = (c, i) => { const k = I ? Math.round(I[i] * 8) / 8 * 0.78 : 0; return k ? [lerp(c[0], 0.74, k), lerp(c[1], 0.84, k), lerp(c[2], 0.93, k)] : c; };
     for (const i of this.skinParts) {
-      const b0 = cc(i), c = burnt(b0[0], b0[1], b0[2], B[i]);
+      const b0 = cc(i), c = icy(burnt(b0[0], b0[1], b0[2], B[i]), i);
       this.game.boxes.color(this.inst[i], c[0], c[1], c[2]);
     }
-    this.fingers.forEach((hand, n) => { const part = n ? P.HAND_R : P.HAND_L, b0 = cc(part), c = burnt(b0[0], b0[1], b0[2], B[part]); for (const i of hand) this.game.boxes.color(i, c[0], c[1], c[2]); });
+    this.fingers.forEach((hand, n) => { const part = n ? P.HAND_R : P.HAND_L, b0 = cc(part), c = icy(burnt(b0[0], b0[1], b0[2], B[part]), part); for (const i of hand) this.game.boxes.color(i, c[0], c[1], c[2]); });
   }
 
   _expression(dt) {
@@ -391,7 +421,7 @@ export class Human {
     const lm = Math.max(this.h.legLimp(1), this.h.legLimp(-1));
     const ch = this.anim.update(dt, {
       speed: sp, mx, mz, crouch: this.crouching ? 1 : 0, grounded: this.grounded || this.state !== ST.ANIM, vy: this.vy,
-      hold: this.hold, aimPitch: this.aimPitch, lookYaw: this.lookYaw, lookPitch: this.lookPitch, pose: this.pose,
+      hold: this.hold, draw: this.weapon && this.weapon.def.hold === 'bow' ? this.weapon.draw || 0 : 0, aimPitch: this.aimPitch, lookYaw: this.lookYaw, lookPitch: this.lookPitch, pose: this.pose,
       limp: lm, limpSide: this.h.legLimp(1) >= this.h.legLimp(-1) ? 1 : -1, lowAim: this.lowAim,
       leanZ: this._leanZ || 0, leanX: this._leanX || 0,
       reach: this.swap ? this.swap.reach : null, reachW: this.swap ? this.swap.w : 0, reload: this._reloadState(), stoop: this.stoop,
@@ -514,6 +544,55 @@ export class Human {
     this.reachT[0] = F;
   }
 
+  /**
+   * A bow in the hands: the left hand out along the line of aim at arm's
+   * length, holding the grip; the right on the string, as far back from the
+   * grip as the bow is drawn. Worked out the way the bow itself is placed
+   * after the physics (Weapons.late), so the string ends up in the fingers.
+   */
+  _bowArms() {
+    const it = this.weapon, d = it && it.def;
+    const L = this._bowL || (this._bowL = { x: 0, y: 0, z: 0, w: 0, rate: 9, bow: true }), R = this._bowR || (this._bowR = { x: 0, y: 0, z: 0, w: 0, rate: 12, bow: true });
+    const w = d && d.hold === 'bow' && this.hold === 'bow' && !this.swap && this.attached[P.HAND_L] && this.attached[P.HAND_R] && this.h.armOk(-1)
+      ? this.anim.w.bow * (1 - (this.anim.reloadW || 0)) : 0;
+    if (w < 0.02) {
+      if (this.reachT[0] === L) this.reachT[0] = null;
+      if (this.reachT[1] === R) this.reachT[1] = null;
+      return;
+    }
+    const g = this.game, low = this.isPlayer ? 0 : this.gunLow || 0;
+    const yaw = this.isPlayer ? g.camYaw : this.aimYaw ?? this.yaw;
+    const pitch = (this.isPlayer ? g.camPitch : this.aimPitch || 0) * (1 - low) - low * 0.7;
+    const cp = Math.cos(pitch), fx = Math.sin(yaw) * cp, fy = Math.sin(pitch), fz = Math.cos(yaw) * cp;
+    // the left shoulder, from the chest as posed
+    const s = this.scale, o = P.CHEST * 4, q = this.quat;
+    qrot(q[o], q[o + 1], q[o + 2], q[o + 3], 0.17 * s, 0.14 * s, 0, _ra);
+    const sx = this.pos[P.CHEST * 3] + _ra[0], sy = this.pos[P.CHEST * 3 + 1] + _ra[1], sz = this.pos[P.CHEST * 3 + 2] + _ra[2];
+    // out along the line of aim, a little up (the arrow runs at the jaw) and a little in toward the middle of the body
+    const reach = 0.56 * s, up = 0.08 * s, inward = 0.08 * s;
+    const ix = -Math.cos(yaw), iz = Math.sin(yaw);
+    L.x = sx + fx * reach + ix * inward; L.y = sy + fy * reach + up; L.z = sz + fz * reach + iz * inward; L.w = w;
+    // the bow's own turn, as Weapons.late will give it; where its string is is worked out from that once the left
+    // hand has gone where it is going this frame (_bowString, from _reach)
+    const roll = 0.12 + low * 0.3;
+    const hy = Math.sin(yaw / 2), hc = Math.cos(yaw / 2), px = Math.sin(-pitch / 2), pc = Math.cos(-pitch / 2);
+    const qx = hc * px, qy = hy * pc, qz = -hy * px, qw = hc * pc, rs = Math.sin(roll / 2), rc = Math.cos(roll / 2);
+    this._bowQ = [qx * rc + qy * rs, qy * rc - qx * rs, qz * rc + qw * rs, qw * rc - qz * rs];
+    R.w = w * (0.35 + 0.65 * Math.min(1, (it.draw || 0) * 3));
+    this.reachT[0] = L; this.reachT[1] = R;
+  }
+
+  /** The right hand's mark on a bow: the corner of the string, as far back from the grip as it is drawn, from the left hand as it now is. */
+  _bowString(R) {
+    const it = this.weapon, S = it && it.def.string;
+    if (!S || !this._bowQ) return;
+    const s = this.scale, o = P.HAND_L * 4, q = this.quat, b = this._bowQ;
+    qrot(q[o], q[o + 1], q[o + 2], q[o + 3], -0.016 * s, -0.03 * s, 0.01, _ra);
+    const gx = this.pos[P.HAND_L * 3] + _ra[0], gy = this.pos[P.HAND_L * 3 + 1] + _ra[1], gz = this.pos[P.HAND_L * 3 + 2] + _ra[2];
+    qrot(b[0], b[1], b[2], b[3], 0, S.y, S.rest - S.pull * (it.draw || 0), _rb);
+    R.x = gx + _rb[0]; R.y = gy + _rb[1]; R.z = gz + _rb[2];
+  }
+
   /** Where the palm of one hand is in the pose as it stands (side 0 left, 1 right). */
   palmAt(side, out) {
     const i = side ? P.HAND_R : P.HAND_L, s = this.scale, q = this.quat, o = i * 4;
@@ -534,9 +613,12 @@ export class Human {
     const ch = this._ch, pos = this.pos, quat = this.quat, s = this.scale;
     if (!ch) return;
     this._fore();
+    this._bowArms();
     for (let side = 0; side < 2; side++) {
       const T = this.reachT[side], d = this.reachD[side];
       const hand = side ? P.HAND_R : P.HAND_L;
+      // a bow: the string is where the left hand has just put the bow
+      if (side === 1 && T && T.bow) this._bowString(T);
       const goal = T && this.attached[side ? P.UARM_R : P.UARM_L] && this.attached[hand] ? clamp01(T.w ?? 1) : 0;
       const was = this.reachW[side];
       const w = this.reachW[side] = was + clamp(goal - was, -dt * 4, dt * (T && T.rate ? T.rate : 4.5));
@@ -769,15 +851,17 @@ export class Human {
     for (let i = 0; i < PART_COUNT; i++) {
       const hex = this.cloth[i] < 0 ? -1 : this.coat ? this.coat[i] : this.fur ?? this.cloth[i];
       if (hex < 0 || this.gone[i]) continue;
-      const fb = Math.round(this.h.burns[i] / 10);
-      const q = Math.round(this.soak[i] * 10) + fb * 16;
+      const fb = Math.round(this.h.burns[i] / 10), ic = this.ice ? Math.round(this.ice[i] * 8) : 0;
+      const q = Math.round(this.soak[i] * 10) + fb * 16 + ic * 256;
       if (q === this._soakQ[i]) continue;
       this._soakQ[i] = q;
       const sq = Math.round(this.soak[i] * 10);
       const c = rgb(hex), k = Math.max(0, sq / 10 - 0.25) * 0.55;
       // cloth that has been in a fire is scorched brown, then black
       const ch = clamp01(fb / 7);
-      this.game.boxes.color(this.inst[i], lerp(lerp(c[0], 0.27, k), 0.045, ch), lerp(lerp(c[1], 0.03, k), 0.035, ch), lerp(lerp(c[2], 0.025, k), 0.03, ch));
+      // and cloth that has been frozen is white with rime
+      const ck = ic / 8 * 0.82;
+      this.game.boxes.color(this.inst[i], lerp(lerp(lerp(c[0], 0.27, k), 0.045, ch), 0.8, ck), lerp(lerp(lerp(c[1], 0.03, k), 0.035, ch), 0.88, ck), lerp(lerp(lerp(c[2], 0.025, k), 0.03, ch), 0.95, ck));
     }
   }
 
@@ -868,7 +952,7 @@ export class Human {
     if (this.cuffing) { this.crouching = !!this.cuffing.low && this.grounded; this.pose.cuffing = 1; } else this.pose.cuffing = 0;
     if (h.legLimp(1) > 0.3 || h.legLimp(-1) > 0.3) top = Math.min(top, 2.2);
     if (this.dragMax < top) top = this.dragMax;                 // hauling something heavy
-    top *= this.speedMul * this.boost;
+    top *= this.speedMul * this.boost * this.coldMul;
     // nothing left in the legs: a run is a jog, then a walk
     if (it.run && h.stamina < 35) top = lerp(Math.min(top, WALK * 1.25 * (this.scale / 0.93)), top, h.stamina / 35);
     let tvx = 0, tvz = 0;
@@ -1367,6 +1451,23 @@ export class Human {
       if (this.game.time - this.handled.t < 0.15 && h.alive) { this._beHandled(dt); return; }
       this.handled = null;
     }
+    if (this.frozen) {
+      // frozen stiff: every joint held where it was when the cold took it, alive or not; nothing shakes, nobody gets up
+      this.pose.writhe = 0; this.pose.crawl = 0; this.pose.brace = 0; this.tased = 0;
+      const st = this._stiff;
+      if (st) for (let i = 1; i < PART_COUNT; i++) {
+        if (!this.attached[i]) continue;
+        const b = this.bodies[i], o = this.orients[i], r = st[i];
+        o.x = pel.qw * r[0] + pel.qx * r[3] + pel.qy * r[2] - pel.qz * r[1];
+        o.y = pel.qw * r[1] - pel.qx * r[2] + pel.qy * r[3] + pel.qz * r[0];
+        o.z = pel.qw * r[2] + pel.qx * r[1] - pel.qy * r[0] + pel.qz * r[3];
+        o.w = pel.qw * r[3] - pel.qx * r[0] - pel.qy * r[1] - pel.qz * r[2];
+        o.s = 0.92;
+        b.orient = o;
+      }
+      this.stillT = 0;
+      return;
+    }
     if (!h.alive || !h.conscious) { this._relax(); this.island.canSleep = true; this.pose.writhe = 0; this.pose.crawl = 0; this.pose.brace = 0; this.tased = 0; return; }
 
     if (this.tased > 0) {
@@ -1815,7 +1916,11 @@ export class Human {
       if (this.cuffing) { l = r = 0.7; }
     }
     const item = this.weapon;
-    if (item && this.attached[P.HAND_R] && !this.gone[P.HAND_R]) {
+    if (item && item.def.hold === 'bow') {
+      // the bow in the left fist, two fingers of the right hooked round the string
+      if (this.attached[P.HAND_L] && !this.gone[P.HAND_L]) { l = 1; sl = 0; }
+      if (alive && anim && !this.reload) { r = 0.62; sr = 0; }
+    } else if (item && this.attached[P.HAND_R] && !this.gone[P.HAND_R]) {
       r = 1; sr = 0;
       if (item.def.gun) trig = alive && anim ? 0.42 + this.anim.recoil * 0.5 : 0.6;
     }
@@ -1849,8 +1954,8 @@ export class Human {
       const n0 = info.normal || faceOf([_a[0] / b.hx, _a[1] / b.hy, _a[2] / b.hz]);
       mat = this.armourAt(part, _a, n0);
       if (mat) {
-        const was = type, r = throughArmour(mat, type, info.shot ? 'shot' : info.ball ? 'ball' : info.rifle ? 'rifle' : 'pistol', power, hp);
-        type = r.type; power = r.power; hp = r.hp; stopped = r.stopped;
+        const was = type, r = throughArmour(mat, info.arrow ? 'arrow' : type, info.shot ? 'shot' : info.ball ? 'ball' : info.rifle ? 'rifle' : 'pistol', power, hp);
+        type = r.type === 'arrow' ? 'stab' : r.type; power = r.power; hp = r.hp; stopped = r.stopped;
         if (part === P.HEAD) {
           this.helmet.hits++;
           if (mat === 'visor' && was === 'bullet') {
@@ -1867,6 +1972,15 @@ export class Human {
           if (stopped) armour = 'vest';
         }
       }
+    }
+    // a limb frozen right through is brittle: a hard enough blow breaks it clean off
+    if (this.ice && this.ice[part] > 0.85 && part >= P.UARM_L && this.attached[part] && !this.h.god &&
+      ((type === 'blunt' && power > 0.9) || type === 'bullet' || type === 'crush' || (type === 'cut' && info.chop))) {
+      this.lastAttacker = info.attacker || this.lastAttacker;
+      if (info.weapon) this.lastWeapon = info.weapon;
+      this.burst(part, [info.dir[0] * 2.2, 1.2, info.dir[2] * 2.2], true);
+      if (g.frost) g.frost.stats.shattered++;
+      return { pain: 0, bones: [], wound: null, through: false, stopped: false, severed: -1, burst: true, shattered: true, wasAlive: this.h.alive };
     }
     b.toLocal(info.point[0], info.point[1], info.point[2], _a);
     const lp = [_a[0], _a[1], _a[2]];
@@ -2069,7 +2183,7 @@ export class Human {
   }
 
   /** The part is destroyed outright; whatever hung from it drops. */
-  burst(part, vel = [0, 2, 0]) {
+  burst(part, vel = [0, 2, 0], icy = false) {
     if (this.h.god) return;
     if (this.cuffed && part >= P.UARM_L && part <= P.HAND_R) this.game.weapons?.uncuff(this, null);
     if (part <= 0 || this.gone[part] || this.removed) return;
@@ -2098,12 +2212,16 @@ export class Human {
     g.gore.clearPart(this, part);
     let stump = null;
     if (wasAttached) stump = this.h.lose(part, [part], true).stump;
+    // frozen through, it breaks like ice: pale pieces, and hardly any blood from a stump the cold has closed
+    if (icy && stump) { stump.bleed *= 0.15; stump.base *= 0.15; }
     const parent = PARTS[part].parent;
     if (!this.gone[parent]) g.gore.stump(this, parent, PARTS[part].la, part, stump);
-    g.gore.gibs(b.px, b.py, b.pz, vel, this.sizes[part], this.look.skin, this.clothed[part] ? partCloth(this.look, part) : this.look.skin, part);
+    g.gore.gibs(b.px, b.py, b.pz, vel, this.sizes[part], icy ? 0xc9dbe6 : this.look.skin, icy ? 0xdbe8f0 : this.clothed[part] ? partCloth(this.look, part) : this.look.skin, part);
     for (const c of this.caps || []) if (c.part === part) g.boxes.hide(c.idx);
-    g.gore.burst(b.px, b.py, b.pz, 0, 1, 0, part === P.HEAD ? 90 : 55, 6, 1.4);
-    g.audio?.at('burst', b.px, b.py, b.pz, 1);
+    g.gore.burst(b.px, b.py, b.pz, 0, 1, 0, icy ? 6 : part === P.HEAD ? 90 : 55, icy ? 3 : 6, 1.4);
+    g.audio?.at(icy ? 'shatter' : 'burst', b.px, b.py, b.pz, 1);
+    if (icy && g.frost) for (let i = 0; i < 10; i++) g.frost.glint(b.px + rand(-0.1, 0.1), b.py + rand(-0.1, 0.1), b.pz + rand(-0.1, 0.1));
+    if (this.ice) this.ice[part] = 0;
     if (wasAttached) {
       if (this.mind) this.mind.lost(part, true);
       g.onDismember?.(this, part, true);

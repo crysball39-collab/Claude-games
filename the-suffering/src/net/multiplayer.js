@@ -287,6 +287,7 @@ export class Multiplayer {
     }
     // the host answers pings at once
     if (this.isHost) { const pk = JSON.stringify(this._pongs(peers)); if (pk !== this.pkJson) { this.pkJson = pk; this.sendT = 0; } }
+    this._flushChill(dt);
     // a new body (you died and got up again): everyone is told, and what the admin set still holds
     if (g.player !== this._player) { this._player = g.player; this.respawns++; this.reapply(); }
     if ((this.sendT -= dt) <= 0 && this.server === s) { this.sendT = SEND; this._send(peers); }
@@ -505,12 +506,33 @@ export class Multiplayer {
         b.toWorld(lp ? lp[0] : 0, lp ? lp[1] : 0, lp ? lp[2] : 0, _a);
         b.dirToWorld(ld[0], ld[1], ld[2], _b);
         this.stats.hitsIn++;
-        pl.hit({ part, type, power: num(d.pw, 0, 6), hp: d.hp == null ? undefined : num(d.hp, 0, 200), impulse: num(d.im, 0, 160), through: num(d.th, 0, 1), chop: num(d.ch, 0, 3), lift: num(d.lf, 0, 200),
-          weapon: word(d.w) || 'fists', rifle: !!d.rf, shot: !!d.sh, ball: !!d.bl, point: [_a[0], _a[1], _a[2]], dir: [_b[0], _b[1], _b[2]], normal: ln || undefined, attacker: r.h });
+        const arrow = d.ar === 2 ? 'bolt' : d.ar === 1 ? 'arrow' : null;
+        const rep = pl.hit({ part, type, power: num(d.pw, 0, 6), hp: d.hp == null ? undefined : num(d.hp, 0, 200), impulse: num(d.im, 0, 160), through: num(d.th, 0, 1), chop: num(d.ch, 0, 3), lift: num(d.lf, 0, 200),
+          weapon: word(d.w) || 'fists', rifle: !!d.rf, shot: !!d.sh, ball: !!d.bl, arrow, point: [_a[0], _a[1], _a[2]], dir: [_b[0], _b[1], _b[2]], normal: ln || undefined, attacker: r.h });
+        // an arrow that went in stays in, here as on their screen
+        if (arrow && rep && !rep.stopped && !pl.gone[part]) g.arrows?.stickAt(pl, part, [_a[0], _a[1], _a[2]], [_b[0], _b[1], _b[2]], arrow, 0.1);
         return;
       }
       case 'shv': if (e[2] === me && me) pl.shove(num(e[3], -20, 20), num(e[4], -20, 20), num(e[5], 0, 160), r.h); return;
       case 'tz': if (e[2] === me && me) pl.tase(num(e[3], 0, 6), r.h, e[4] === 'shock' ? 'shock' : 'taser'); return;
+      case 'frz': {
+        // frost on you, part by part, as their game saw it land
+        if (e[2] !== me || !me || !Array.isArray(e[3])) return;
+        const w = word(e[4]) || 'frostthrower';
+        for (let i = 0; i < Math.min(PART_COUNT, e[3].length); i++) { const n = num(e[3][i], 0, 1); if (n > 0.004) g.frost?.chill(pl, i, n, r.h, w); }
+        return;
+      }
+      case 'arw': {
+        // somebody else's arrow, in the air: it flies and lands here as it did for them, and hurts nobody here (whoever it struck has been told)
+        const m = vec(e[3], 500), v = vec(e[4], 200);
+        if (!m || !v || !r.h) return;
+        const bolt = e[2] === 'bolt', d = WEAPONS[bolt ? 'crossbow' : 'bow'];
+        g.arrows?.loose(r.h, bolt ? 'bolt' : 'arrow', m[0], m[1], m[2], v[0], v[1], v[2], 0, word(e[5]) || d.id, true);
+        // and the string is heard, here as there
+        g.audio?.at(d.sound, m[0], m[1], m[2], 1);
+        g.minds?.noise(m[0], m[1], m[2], d.loud, 'twang', r.h);
+        return;
+      }
       case 'brn': if (e[2] === me && me) g.fire?.ignite(pl, num(e[3], 0, PART_COUNT - 1) | 0, num(e[4], 0, 1), r.h, word(e[5]) || 'flamethrower'); return;
       case 'car': if (e[2] === me && me && r.car && !pl.car) { r.car.vx = num(e[4], -60, 60); r.car.vz = num(e[5], -60, 60); pl.struckByCar(r.car, num(e[3], 0, 60)); } return;
       case 'wd': {
@@ -576,6 +598,7 @@ export class Multiplayer {
     if (info.chop) d.ch = r2(info.chop);
     if (info.lift) d.lf = r2(info.lift);
     if (info.rifle) d.rf = 1; if (info.shot) d.sh = 1; if (info.ball) d.bl = 1;
+    if (info.arrow) d.ar = info.arrow === 'bolt' ? 2 : 1;
     if (Array.isArray(info.normal)) d.ln = info.normal.map(r3);
     this._emit('hit', r.peer, d);
     this.stats.hitsOut++;
@@ -583,6 +606,22 @@ export class Multiplayer {
   }
   shoveRemote(h, vx, vz, force, by) { if (h.remote && this.server && by === this.g.player) this._emit('shv', h.remote.peer, r2(vx), r2(vz), r2(force)); }
   taseRemote(h, secs, by, how) { if (h.remote && this.server && by === this.g.player) this._emit('tz', h.remote.peer, r2(secs), how); }
+  /** Frost on another player's stand-in: added up, and sent four times a second (a spray is a great many small chills). */
+  chillRemote(h, part, amount, who, weapon) {
+    if (!h.remote || !this.server || who !== this.g.player) return;
+    const A = this.chillAcc || (this.chillAcc = new Map()), peer = h.remote.peer;
+    let a = A.get(peer);
+    if (!a) A.set(peer, (a = { parts: new Float32Array(PART_COUNT), weapon: word(weapon) || 'frostthrower' }));
+    a.parts[part] = Math.min(1, a.parts[part] + amount);
+  }
+  _flushChill(dt) {
+    if (!this.chillAcc || !this.chillAcc.size || (this.chillT = (this.chillT || 0) - dt) > 0) return;
+    this.chillT = 0.25;
+    for (const [peer, a] of this.chillAcc) this._emit('frz', peer, Array.from(a.parts, r2), a.weapon);
+    this.chillAcc.clear();
+  }
+  /** One of your arrows away: the others see it fly. */
+  arrowFx(kind, m, v, weapon) { if (this.server) this._emit('arw', kind === 'bolt' ? 'bolt' : 'arrow', m.map(r2), v.map(r2), weapon); }
   burnRemote(h, part, amount, who, weapon) { if (h.remote && this.server && who === this.g.player) this._emit('brn', h.remote.peer, part, r2(amount), word(weapon) || 'flamethrower'); }
   carRemote(h, car, closing) { if (h.remote && this.server && car && car.seats[0] === this.g.player) this._emit('car', h.remote.peer, r2(closing), r2(car.vx), r2(car.vz)); }
   /** Your gun went off: everyone else sees the flash and hears it, and the round marks what it hits. */

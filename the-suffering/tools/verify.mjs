@@ -34,7 +34,7 @@ await run(() => {
       for (const it of g.weapons.items.slice()) g.weapons.remove(it);
       g.grab?.clear();
       g.powers?.clear();
-      g.ropes?.clear(); g.fire?.clear(); g.power?.clear(); g.voxels?.clear(); if (g.daylight && g.daylight.mode !== 'day') g.daylight.set('day');
+      g.ropes?.clear(); g.fire?.clear(); g.frost?.clear(); g.arrows?.clear(); g.power?.clear(); g.voxels?.clear(); if (g.daylight && g.daylight.mode !== 'day') g.daylight.set('day');
       if (p.car) g.traffic.exit(p);
       g.traffic?.clearCars();
       p.h.heal(); p.reset(0, -18, Math.PI / 2);
@@ -1905,10 +1905,12 @@ if (want('Gore')) {
     const cols = (v.caps || []).map((c) => [g.boxes.c[c.idx * 3], g.boxes.c[c.idx * 3 + 1], g.boxes.c[c.idx * 3 + 2]]);
     out.bone = cols.some((c) => c[0] > 0.7 && c[1] > 0.65 && c[2] > 0.5);
     // a burst head: bone and brain among the pieces
-    const n0 = g.gore.gibsList.length;
+    // (the pieces it threw are told by when they were made: the list is capped, and a full one drops its oldest as
+    // these go in, so counting from where it ended before would find none)
+    const burstAt = g.time;
     let died = 0; const od = g.onDeath; g.onDeath = (h) => { if (h === v) died++; od?.(h); };
     v.burst(4, [0, 2, 0]); g.advance(0.1);
-    const pieces = g.gore.gibsList.slice(n0).map((o) => g.boxes.c[o.idx * 3] * 1000 | 0);
+    const pieces = g.gore.gibsList.filter((o) => o.born >= burstAt).map((o) => g.boxes.c[o.idx * 3] * 1000 | 0);
     out.gibs = pieces.length; out.mixed = new Set(pieces).size;
     g.advance(0.5); g.onDeath = od; out.died = died;
     // dragged along the ground, bleeding: a smear behind
@@ -1991,11 +1993,14 @@ if (want('Black-powder guns')) {
       // (turning the camera moves it, so aim, let it settle, and aim again)
       for (let i = 0; i < 3; i++) { V.aimAt(h.bodies[2]); g.advance(1 / 60); }
       V.aimAt(h.bodies[2]);
-      const fx0 = g.gore.fxList.length;
+      // the cloud, counted puff by puff as it goes up (the match's own wisps come and go meanwhile; they are tiny)
+      let cloud = 0; const puff = g.gore.puff;
+      g.gore.puff = function (kind, x, y, z, size, ...rest) { const n = this.fxList.length; puff.call(this, kind, x, y, z, size, ...rest); if (kind === 'smoke' && size >= 0.2 && this.fxList.length > n) cloud++; };
       o.fired = W.fire(); o.lit = !!W.lockT;
       g.advance(0.04); o.waits = it.ammo === 1;
       g.advance(0.5); o.went = it.ammo === 0;
-      o.smoke = g.gore.fxList.length - fx0;
+      g.gore.puff = puff;
+      o.smoke = cloud;
       o.holes = h.h.wounds.filter((w) => w.type === 'gunshot').length;
       // loading it again: long, from the muzzle, and it ends loaded
       g.advance(0.8); W.reload(); o.loading = !!p.reload; o.dur = p.reload ? p.reload.dur : 0;
@@ -2182,6 +2187,203 @@ if (want('Grab and drag')) {
   check('a crate is dragged along the ground, not lifted', r.crateHeld && r.crateMoved > 1 && r.crateHigh < 0.6 && r.crateStill, `${r.crateMoved.toFixed(2)} m, never higher than ${r.crateHigh.toFixed(2)}`);
   check('something light is carried in front, and ATTACK throws it', r.carry && r.carryY > 0.6 && r.throwLabel === 'THROW' && r.thrown, `carried at ${r.carryY.toFixed(2)} m, button "${r.throwLabel}", thrown ${r.thrown}`);
   check('somebody watching remembers a body being dragged', r.witness);
+}
+
+/* ------------------------------ the bow ------------------------------ */
+head('Bow and arrows');
+if (want('Bow')) {
+  await run(() => { V.stage(); __game.paused = false; });
+  await t.page.click('#btn-menu');
+  await t.page.click('[data-spawn="bow"]');
+  await t.page.click('[data-close="sandbox"]');
+  const r = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, A = g.arrows, out = {};
+    const rot = (q, x, y, z) => { const tx = 2 * (q[1] * z - q[2] * y), ty = 2 * (q[2] * x - q[0] * z), tz = 2 * (q[0] * y - q[1] * x); return [x + q[3] * tx + (q[1] * tz - q[2] * ty), y + q[3] * ty + (q[2] * tx - q[0] * tz), z + q[3] * tz + (q[0] * ty - q[1] * tx)]; };
+    const loose = (secs, at) => { T.press('attack'); for (let i = 0; i < Math.round(60 * secs); i++) { if (at) V.aimAt(at); g.advance(1 / 60); } T.release('attack'); g.advance(1 / 60); };
+    g.advance(0.6);
+    const bow = w.items.find((i) => i.type === 'bow' && i.body);
+    out.spawned = !!bow;
+    if (!bow) return out;
+    w.pickUp(bow); g.advance(1);
+    out.held = p.weapon === bow && p.hold === 'bow' && bow.ammo === 1 && document.querySelector('#ammo').textContent === 'NOCKED';
+    // drawn: the string comes back with the right hand
+    const v = V.still(T.dummy(12)); v.h.tough = 3;
+    const seer = V.still(T.dummy(4, 3)); g.advance(0.4);
+    T.press('attack'); for (let i = 0; i < 70; i++) { V.aimAt(v.bodies[2]); g.advance(1 / 60); }
+    const S = bow.def.string, n = rot(bow.q, 0, S.y, S.rest - S.pull * bow.draw), palm = [0, 0, 0], s = p.scale;
+    p.bodies[10].toWorld(0.016 * s, -0.03 * s, 0.01, palm);
+    out.draw = { k: bow.draw, label: document.querySelector('#ammo').textContent, gap: Math.hypot(bow.px + n[0] - palm[0], bow.py + n[1] - palm[1], bow.pz + n[2] - palm[2]) };
+    // loosed
+    T.release('attack'); g.advance(1 / 60);
+    const a = A.list[A.list.length - 1];
+    out.flew = !!a && a.state === 'fly' && a.kind === 'arrow';
+    out.renock = { kind: p.reload && p.reload.kind, ammo: bow.ammo };
+    for (let i = 0; i < 70 && a && a.state === 'fly'; i++) g.advance(1 / 60);
+    out.hit = { state: a && a.state, inV: !!a && a.human === v, wound: v.h.wounds.some((x) => x.name === 'Arrow wound') };
+    // it stays in, and goes where the part goes
+    v.toRagdoll(); for (const b of v.bodies) { b.vx = 2.5; b.vy = 1; } g.advance(1.5);
+    const M = g.boxes.m, o = a.inst[0] * 16, bp = v.bodies[a.part || 2];
+    out.follows = a.state === 'stuck' && a.human === v && Math.hypot(M[o + 12] - bp.px, M[o + 13] - bp.py, M[o + 14] - bp.pz) < 0.6 && Math.hypot(bp.px - v.x, bp.pz - v.z) < 1.5;
+    out.seen = seer.mind.memory.some((m) => /arrow|bow/.test(m.text));
+    g.advance(0.2);
+    out.renocked = bow.ammo === 1 && !p.reload;
+    // barely drawn: let down again
+    const n0 = A.stats.loosed; loose(0.08); out.letDown = A.stats.loosed === n0 && bow.ammo === 1;
+    // a long shot: up into the air, and down on the mark
+    V.stage();
+    const far = V.still(T.dummy(40)); far.h.tough = 3; g.advance(0.4);
+    const lb = w.give(p, 'bow', true), spread = lb.def.spread; g.advance(1);
+    for (let k = 0; k < 6; k++) { V.aimAt(far.bodies[2]); g.advance(1 / 60); }
+    // a steady hand: this is about the arc, not the archer (spread alone takes a quarter of shots this far wide)
+    lb.def.spread = 0;
+    loose(1.1, far.bodies[2]);
+    lb.def.spread = spread;
+    const b1 = A.list[A.list.length - 1], up = Math.atan2(b1.vy, Math.hypot(b1.vx, b1.vz));
+    let top = b1.y;
+    for (let i = 0; i < 120 && b1.state === 'fly'; i++) { g.advance(1 / 60); top = Math.max(top, b1.y); }
+    out.long = { up: +(up - g.camPitch).toFixed(3), rose: +(top - (b1.human ? b1.human.bodies[2].py : 1.3)).toFixed(2), hit: b1.human === far, t: +b1.t.toFixed(2) };
+    // wood takes it; stone turns it; it goes into the earth
+    V.stage();
+    const wall = g.voxels.wall('wood', p.x + 6, p.z, Math.PI / 2); g.advance(0.3);
+    w.give(p, 'bow', true); g.advance(1);
+    for (let k = 0; k < 6; k++) { V.aimAt({ px: wall.body.px, py: 1.2, pz: wall.body.pz }); g.advance(1 / 60); }
+    loose(1); g.advance(0.5);
+    const w1 = A.list[A.list.length - 1];
+    out.wood = w1.state === 'stuck' && w1.prop && w1.prop.vox === wall;
+    g.voxels.clear(); g.camYaw = Math.PI; g.camPitch = 0.05; g.advance(0.4);
+    const gl0 = A.stats.glanced; loose(1); g.advance(1.6);
+    out.stone = A.stats.glanced - gl0 === 1 && A.list[A.list.length - 1].state === 'down';
+    g.camYaw = Math.PI / 2; g.camPitch = -0.35; g.advance(0.3);
+    const st0 = A.stats.stuck; loose(0.6); g.advance(1);
+    out.earth = A.stats.stuck - st0 === 1 && A.list[A.list.length - 1].state === 'stuck';
+    // a S.W.A.T. vest turns it
+    V.stage();
+    const sw = V.still(T.dummy(8)); sw.wearVest('swat'); sw.h.tough = 3; g.advance(0.4);
+    w.give(p, 'bow', true); g.advance(1);
+    for (let k = 0; k < 6; k++) { V.aimAt(sw.bodies[2]); g.advance(1 / 60); }
+    const sp0 = A.stats.stopped; loose(1, sw.bodies[2]); g.advance(0.7);
+    out.vest = { stopped: A.stats.stopped - sp0, holes: sw.h.wounds.filter((x) => x.name === 'Arrow wound').length };
+    g.paused = true;
+    return out;
+  });
+  check('the bow is in the sandbox, and is held in the left hand with an arrow on the string', r.spawned && r.held);
+  check('held, the trigger draws it: the string comes back with the right hand', r.draw && r.draw.k >= 0.99 && r.draw.label === 'DRAW 100%' && r.draw.gap < 0.15, r.draw && `drawn ${(r.draw.k * 100).toFixed(0)}%, string ${(r.draw.gap * 100).toFixed(0)} cm from the fingers`);
+  check('let go, the arrow flies, and goes into whoever it reaches: an arrow wound', r.flew && r.hit && r.hit.state === 'stuck' && r.hit.inV && r.hit.wound, JSON.stringify(r.hit));
+  check('it stays in, and goes where the body goes', r.follows);
+  check('the next arrow comes out of the quiver on the back', r.renock && r.renock.kind === 'nock' && r.renock.ammo === 0 && r.renocked, JSON.stringify(r.renock));
+  check('barely drawn, it is let down again, and nothing is loosed', r.letDown);
+  check('at forty metres it is sent up, and comes down on the mark', r.long && r.long.up > 0.02 && r.long.rose > 0.2 && r.long.hit, JSON.stringify(r.long));
+  check('it sticks in wood and in the earth, and glances off stone and falls', r.wood && r.stone && r.earth, `wood ${r.wood}, stone ${r.stone}, earth ${r.earth}`);
+  check('a S.W.A.T. vest turns it', r.vest && r.vest.stopped === 1 && r.vest.holes === 0, JSON.stringify(r.vest));
+  check('somebody watching knows it was an arrow', r.seen);
+}
+
+/* ---------------------------- the crossbow ---------------------------- */
+head('Crossbow');
+if (want('Crossbow')) {
+  const r = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, A = g.arrows, out = {};
+    V.stage();
+    const v = V.still(T.dummy(20)); v.h.tough = 3; g.advance(0.4);
+    const cb = w.give(p, 'crossbow', true); g.advance(1);
+    for (let k = 0; k < 6; k++) { V.aimAt(v.bodies[2]); g.advance(1 / 60); }
+    out.loaded = cb.ammo === 1 && cb.cocked;
+    w.fire(); g.advance(1 / 60);
+    const b = A.list[A.list.length - 1], y0 = b.y;
+    let top = b.y;
+    for (let i = 0; i < 60 && b.state === 'fly'; i++) { g.advance(1 / 60); top = Math.max(top, b.y); }
+    out.shot = { kind: b.kind, state: b.state, inV: b.human === v, t: +b.t.toFixed(2), rose: +(top - y0).toFixed(2), wound: v.h.wounds.some((x) => x.name === 'Bolt wound'), after: { ammo: cb.ammo, cocked: cb.cocked } };
+    // spanned again: the string back on the latch first, then a bolt laid in the groove
+    const t0 = g.time;
+    w.reload(); out.kind = p.reload && p.reload.kind;
+    let cockedAt = -1, loadedAt = -1;
+    for (let i = 0; i < 300 && (p.reload || loadedAt < 0); i++) { g.advance(1 / 30); if (cockedAt < 0 && cb.cocked) cockedAt = g.time - t0; if (loadedAt < 0 && cb.ammo === 1) loadedAt = g.time - t0; }
+    out.span = { cockedAt: +cockedAt.toFixed(2), loadedAt: +loadedAt.toFixed(2), done: !p.reload && cb.ammo === 1 && cb.cocked };
+    g.paused = true;
+    return out;
+  });
+  check('a crossbow shoots a bolt, fast and flat, and it goes in: a bolt wound', r.loaded && r.shot.kind === 'bolt' && r.shot.state === 'stuck' && r.shot.inV && r.shot.wound && r.shot.t < 0.4 && r.shot.rose < 0.15 && r.shot.after.ammo === 0 && !r.shot.after.cocked, JSON.stringify(r.shot));
+  check('then the string is hauled back on to the latch, and a bolt laid in: a long reload', r.kind === 'span' && r.span.done && r.span.cockedAt > 0.5 && r.span.loadedAt > r.span.cockedAt && r.span.loadedAt > 2.2, JSON.stringify(r.span));
+}
+
+/* --------------------------- the frost thrower --------------------------- */
+head('Frost thrower');
+if (want('Frost')) {
+  await run(() => { V.stage(); __game.paused = false; });
+  await t.page.click('#btn-menu');
+  await t.page.click('[data-spawn="frostthrower"]');
+  await t.page.click('[data-close="sandbox"]');
+  const r = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, F = g.frost, out = {};
+    const spray = (secs, at) => { T.press('attack'); for (let i = 0; i < Math.round(30 * secs); i++) { if (at) V.aimAt(at); g.advance(1 / 30); } T.release('attack'); g.advance(1 / 30); };
+    g.advance(0.6);
+    const ft = w.items.find((i) => i.type === 'frostthrower' && i.body);
+    out.spawned = !!ft;
+    if (!ft) return out;
+    w.pickUp(ft); g.advance(1);
+    const v = V.still(T.dummy(3.5)); g.advance(0.4);
+    const col = (i) => [g.boxes.c[v.inst[i] * 3], g.boxes.c[v.inst[i] * 3 + 1], g.boxes.c[v.inst[i] * 3 + 2]];
+    const c0 = col(2), t0 = v.h.temp;
+    spray(1.2, v.bodies[2]);
+    out.first = { fuel: ft.ammo, iced: +(v.iced || 0).toFixed(2), slow: +(v.coldMul || 1).toFixed(2), parts: v.ice ? Array.from(v.ice).filter((x) => x > 0.05).length : 0 };
+    const c1 = col(2);
+    const toIce = (c) => Math.hypot(c[0] - 0.8, c[1] - 0.88, c[2] - 0.95);
+    out.whiter = toIce(c1) < toIce(c0) - 0.08 || toIce(c0) < 0.3;
+    spray(3, v.bodies[2]);
+    g.advance(6);
+    out.frozen = { frozen: !!v.frozen, iced: +(v.iced || 0).toFixed(2), state: v.state, temp: +v.h.temp.toFixed(1), t0: +t0.toFixed(1), bitten: Array.from(v.h.frostbite).filter((x) => x > 3).length };
+    g.ui.toggleDoctor(true); g.ui.doctor.select(v); g.ui.update(0.3);
+    const li = [...document.querySelectorAll('#doc-wounds li')].map((e) => e.textContent);
+    out.doctor = { frostbite: li.filter((t) => /Frostbite/.test(t)).length, frozen: li.some((t) => /Frozen stiff|Iced over/.test(t)), hypo: li.some((t) => /Hypothermia/.test(t)) };
+    g.ui.toggleDoctor(false);
+    // it puts out somebody on fire
+    V.stage();
+    const burning = V.still(T.dummy(3)); g.advance(0.3);
+    for (const part of [2, 1, 5, 8]) g.fire.ignite(burning, part, 0.8, null);
+    g.advance(0.3);
+    const fire0 = burning.burning;
+    w.give(p, 'frostthrower', true); g.advance(1);
+    spray(2, burning.bodies[2]); g.advance(1);
+    out.quench = { before: +fire0.toFixed(2), after: +(burning.burning || 0).toFixed(2), out: !g.fire.people.has(burning) };
+    // on the street it leaves ice, and running on ice you go down
+    V.stage();
+    w.give(p, 'frostthrower', true); g.advance(1);
+    g.camPitch = -0.5; spray(2.5);
+    out.iced = F.patches.length;
+    V.stage();
+    for (let i = 0; i < 8; i++) F.ice(p.x + Math.sin(g.camYaw) * (2 + i * 0.7), 0, p.z + Math.cos(g.camYaw) * (2 + i * 0.7), 0.6, 30);
+    let fell = false;
+    __ts.input.move.y = 1;
+    for (let i = 0; i < 180 && !fell; i++) { g.advance(1 / 60); if (p.state !== 0) fell = true; }
+    __ts.input.move.y = 0; g.advance(2.5);
+    out.slip = fell;
+    // a limb frozen through breaks off under a hard blow
+    V.stage();
+    const ice = V.still(T.dummy(1.0)); g.advance(0.3);
+    for (let k = 0; k < 2; k++) for (const part of [5, 6, 7]) F.chill(ice, part, 1, null);
+    g.advance(0.1);
+    const c = ice.bodies[6];
+    const rep = ice.hit({ part: 6, type: 'blunt', power: 1.6, point: [c.px, c.py, c.pz], dir: [1, 0, 0], normal: [0, 0, 1], impulse: 8, attacker: p, weapon: 'crowbar' });
+    out.shatter = { broke: !!(rep && rep.shattered), gone: ice.gone[6] };
+    // and it all thaws
+    V.stage();
+    const th = V.still(T.dummy(2)); g.advance(0.3);
+    for (const part of [1, 2]) F.chill(th, part, 0.35, null);
+    g.advance(0.2);
+    const marks = g.gore.bDecals.filter((d) => d.human === th && d.frost).length;
+    g.advance(45);
+    out.thaw = { marks, after: g.gore.bDecals.filter((d) => d.human === th && d.frost).length, ice: !!th.ice, slow: th.coldMul };
+    g.paused = true;
+    return out;
+  });
+  check('the frost thrower is in the sandbox, and uses coolant', r.spawned && r.first && r.first.fuel < 95, r.first && `coolant left ${r.first.fuel}`);
+  check('whoever it reaches is frosted part by part: white with rime, stiff and slower', r.first && r.first.iced > 0.08 && r.first.parts >= 2 && r.first.slow < 0.97 && r.whiter, JSON.stringify(r.first));
+  check('iced all over, they freeze stiff, the skin under it frostbitten, and the body cools', r.frozen && r.frozen.frozen && r.frozen.state === 2 && r.frozen.bitten >= 4 && r.frozen.temp < r.frozen.t0 - 1.5, JSON.stringify(r.frozen));
+  check('the doctor shows the frostbite, the ice and the cold', r.doctor && r.doctor.frostbite >= 2 && r.doctor.frozen && r.doctor.hypo, JSON.stringify(r.doctor));
+  check('it puts out somebody on fire', r.quench && r.quench.before > 1 && r.quench.out, JSON.stringify(r.quench));
+  check('on the street it leaves ice, and running on ice you go down', r.iced >= 1 && r.slip, `${r.iced} patches of ice; slipped ${r.slip}`);
+  check('a limb frozen through breaks off under a hard blow', r.shatter && r.shatter.broke && r.shatter.gone, JSON.stringify(r.shatter));
+  check('and it thaws, rime and all', r.thaw && r.thaw.marks >= 1 && r.thaw.after === 0 && !r.thaw.ice && r.thaw.slow === 1, JSON.stringify(r.thaw));
 }
 
 head('Special abilities');
@@ -2489,6 +2691,8 @@ if (want('Multiplayer')) {
     await step(0.25);
     if (!(await B.ev(() => window.__game.player.h.alive))) break;
   }
+  // rounds through the chest that miss the heart take a while to kill: bleeding out, they die in their own game
+  for (let i = 0; i < 30 && (await B.ev(() => window.__game.player.h.alive)); i++) await step(0.5);
   await step(1.5);
   const score = await Promise.all([A, B].map((x) => x.ev(() => ({ kills: window.__ts.mp.you.kills, deaths: window.__ts.mp.you.deaths, feed: Array.from(document.querySelectorAll('#feed .fe.kill')).map((e) => e.textContent) }))));
   const killOk = score[0].kills === 1 && score[1].deaths === 1 && score[0].feed.some((f) => /Boss.*AK-47.*Friend/.test(f)) && score[1].feed.some((f) => /Boss.*AK-47.*Friend/.test(f));
@@ -2499,6 +2703,34 @@ if (want('Multiplayer')) {
   await step(1.5);
   const back = await A.ev(() => { const r = [...window.__ts.mp.remotes.values()][0]; return { fresh: r.h !== window.__oldH && window.__oldH.removed && r.h.h.alive }; });
   check('a player who gets up again is a fresh stand-in on everybody else’s screen', back.fresh);
+  // an arrow at another player: they see it come, it goes into their own body, and it stays in, on both screens
+  await face(8);
+  await A.ev(() => { const g = window.__game; g.weapons.give(g.player, 'bow', true); g.paused = false; g.advance(1); g.paused = true; });
+  await A.ev(() => {
+    const g = window.__game, ts = window.__ts, r = [...ts.mp.remotes.values()][0];
+    const at = () => { const c = r.h.bodies[2], a = g.aim; g.camYaw = Math.atan2(c.px - a.ox, c.pz - a.oz); g.camPitch = Math.atan2(c.py - a.oy, Math.hypot(c.px - a.ox, c.pz - a.oz)); };
+    g.paused = false; ts.input._press('attack');
+    for (let i = 0; i < 60; i++) { at(); g.advance(1 / 60); }
+    ts.input._release('attack'); g.advance(1 / 60); g.paused = true;
+  });
+  await step(1.5);
+  const ghostArrow = await B.ev(() => window.__game.arrows.stats.ghosts >= 1);
+  const arrowB = await B.ev(() => { const g = window.__game, p = g.player; return { wounds: p.h.wounds.filter((w) => w.name === 'Arrow wound').length, inMe: g.arrows.inHuman(p) }; });
+  const arrowA = await A.ev(() => { const g = window.__game, r = [...window.__ts.mp.remotes.values()][0]; return g.arrows.inHuman(r.h); });
+  check('an arrow at another player: they see it come, it goes into their own body, and it stays in, on both screens', ghostArrow && arrowB.wounds >= 1 && arrowB.inMe === 1 && arrowA >= 1, `seen in the air ${ghostArrow}; ${JSON.stringify(arrowB)}; in the stand-in here ${arrowA}`);
+  // frost: their own game ices them
+  await face(3);
+  await A.ev(() => { const g = window.__game; g.weapons.give(g.player, 'frostthrower', true); g.paused = false; g.advance(1); g.paused = true; });
+  await A.ev(() => {
+    const g = window.__game, ts = window.__ts, r = [...ts.mp.remotes.values()][0];
+    const at = () => { const c = r.h.bodies[2], a = g.aim; g.camYaw = Math.atan2(c.px - a.ox, c.pz - a.oz); g.camPitch = Math.atan2(c.py - a.oy, Math.hypot(c.px - a.ox, c.pz - a.oz)); };
+    g.paused = false; ts.input._press('attack');
+    for (let i = 0; i < 45; i++) { at(); g.advance(1 / 30); }
+    ts.input._release('attack'); g.paused = true;
+  });
+  await step(1);
+  const iceB = await B.ev(() => +(window.__game.player.iced || 0).toFixed(2));
+  check('and frost: whoever it reaches is iced in their own game', iceB > 0.05, `${iceB} of the skin`);
   // talk
   await B.ev(() => window.__game.speech.playerSay('hello boss!'));
   await step(0.6);
@@ -2578,12 +2810,14 @@ if (want('Multiplayer')) {
   await D.ev(() => { window.__ts.ui.showMenu(); document.querySelector('#btn-mp').click(); });
   await sleep(3000);
   const row = await D.ev(() => {
-    window.__ts.ui.mpui._servers();
+    const b0 = document.querySelector('#mp-servers .srv button.join');
+    window.__ts.ui.mpui._servers(); window.__ts.ui.mpui.changed();
     const r = document.querySelector('#mp-servers .srv'), s = window.__ts.mp.servers[0];
-    return r ? { name: r.querySelector('.srv-name b').textContent, host: r.querySelector('.srv-name small').textContent, ping: r.querySelector('.srv-ping').textContent, join: !r.querySelector('button.join').disabled, mine: s.mine, paused: window.__game.paused } : null;
+    return r ? { name: r.querySelector('.srv-name b').textContent, host: r.querySelector('.srv-name small').textContent, ping: r.querySelector('.srv-ping').textContent, join: !r.querySelector('button.join').disabled, mine: s.mine, paused: window.__game.paused, same: !!b0 && b0 === r.querySelector('button.join') } : null;
   });
   check('the same person on two pages: each page is a player, and can join the other’s server', ec.admin && !ed.admin && row && row.name === 'Two Tabs' && row.join && !row.mine, JSON.stringify(row));
   check('in the server list (the game paused behind it) the ping is measured, and the host shown as they are', row && row.paused && /^[1-9]\d* ms$/.test(row.ping) && /Boss \(admin\)/.test(row.host), JSON.stringify(row));
+  check('the list is brought up to date in place: JOIN is the same button after a refresh, so a tap on it is not lost', row && row.same);
   await D.page.click('#mp-servers .srv button.join');
   await step2(2.5);
   const both = await Promise.all([C, D].map((x) => x.ev(() => { const mp = window.__ts.mp, r = [...mp.remotes.values()][0]; return { on: mp.on, other: r ? r.name : null, otherAdmin: r ? r.admin : null }; })));

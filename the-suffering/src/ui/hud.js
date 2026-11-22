@@ -385,7 +385,7 @@ export class UI {
       const [x, z] = g.spotAhead(1.5, 0.1);
       this.weapons.spawn(what, x, groundHeight(x, z) + 1.1, z);
       const D = WEAPONS[what];
-      this.toast(D.name + (D.wear ? ' - walk up to it and put it on' : D.wire ? ' - pick it up, WIRE a generator, then WIRE TO whatever it should power' : D.rope ? ' - pick it up, TIE one thing, then the other' : D.cuffs ? ' - pick them up, then CUFF someone who is down or has given up' : ' - walk up to it and pick it up'));
+      this.toast(D.name + (D.hold === 'bow' ? ' - pick it up; hold the trigger to draw, let go to loose' : D.arrow ? ' - pick it up; after each bolt, R spans it again' : D.frost ? ' - pick it up; hold the trigger to spray' : D.wear ? ' - walk up to it and put it on' : D.wire ? ' - pick it up, WIRE a generator, then WIRE TO whatever it should power' : D.rope ? ' - pick it up, TIE one thing, then the other' : D.cuffs ? ' - pick them up, then CUFF someone who is down or has given up' : ' - walk up to it and pick it up'));
     }
     this._count();
   }
@@ -497,7 +497,11 @@ export class UI {
   ammoChanged() {
     const e = this.weapons.equipped, a = $('#ammo');
     a.hidden = !(e && e.def.gun);
-    if (!a.hidden) { a.textContent = `${e.ammo} / ${e.def.mag}`; a.classList.toggle('low', e.ammo <= Math.ceil(e.def.mag * 0.2)); }
+    if (a.hidden) return;
+    // a bow: whether an arrow is on the string, and how far it is drawn
+    const t = e.def.hold === 'bow' ? (e.draw > 0 ? `DRAW ${Math.round(e.draw * 100)}%` : e.ammo > 0 ? 'NOCKED' : 'NOCKING') : `${e.ammo} / ${e.def.mag}`;
+    if (a.textContent !== t) a.textContent = t;
+    a.classList.toggle('low', e.def.hold === 'bow' ? e.ammo <= 0 : e.ammo <= Math.ceil(e.def.mag * 0.2));
   }
   nearChanged() {
     const n = this.weapons.near, c = this.weapons.nearCuffed, t = this.g.things && this.g.things.near, car = this.g.traffic && this.g.traffic.near;
@@ -534,6 +538,8 @@ export class UI {
     this.doctor.update(dt);
     this.mpui?.update(dt);
     this.adminui?.update(dt);
+    // a bow in the hands: its label follows the draw
+    { const e = this.weapons.equipped; if (e && e.def.hold === 'bow') this.ammoChanged(); }
     this.slow += dt;
     if (this.slow > 0.2) {
       this.slow = 0;

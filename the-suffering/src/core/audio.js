@@ -153,6 +153,18 @@ export class Sound {
         this._n(d, t, 0.14, 1.3, 'highpass', 1400); this._n(d, t + 0.08, 2.4, 0.55, 'lowpass', 420, 70, 0.5, 0.25);
         for (let i = 0; i < 5; i++) this._n(d, t + 0.15 + rand(0, 0.9), 0.04, 0.3, 'bandpass', 2000 + rand(0, 2500), 1200, 2);
         break;
+      // the string: a bow's twang and the hiss of the arrow leaving; a crossbow's snap; and where they land
+      case 'bow': this._t(d, t, 0.2, 0.5, 'triangle', 230, 118); this._n(d, t, 0.05, 0.55, 'bandpass', 1500, 700, 1.5); this._n(d, t + 0.01, 0.22, 0.22, 'bandpass', 700, 1800, 1.2, 0.03); break;
+      case 'crossbow': this._n(d, t, 0.03, 0.9, 'highpass', 2400); this._t(d, t, 0.12, 0.6, 'triangle', 300, 90); this._n(d, t, 0.08, 0.6, 'lowpass', 900, 300); this._t(d, t + 0.01, 0.22, 0.22, 'sine', 160, 110); break;
+      case 'draw': this._n(d, t, 0.45, 0.14, 'bandpass', 950, 650, 4, 0.12); this._t(d, t, 0.45, 0.05, 'sawtooth', 72, 92, 0.12); break;
+      case 'arrowhit': this._n(d, t, 0.06, 0.8, 'lowpass', 1100, 300); this._t(d, t, 0.07, 0.42, 'sine', 160, 70); this._n(d, t, 0.03, 0.4, 'bandpass', 2200, 1100, 2); break;
+      case 'arrowwood': this._t(d, t, 0.09, 0.6, 'triangle', 260, 140); this._n(d, t, 0.05, 0.6, 'bandpass', 900, 500, 1.5); this._t(d, t + 0.02, 0.32, 0.12, 'sine', 212, 198, 0.004); break;
+      case 'arrowglance': this._n(d, t, 0.03, 0.6, 'highpass', 2200); this._t(d, t, 0.06, 0.25, 'triangle', 900, 500); this._n(d, t + 0.06, 0.04, 0.3, 'highpass', 2600); this._n(d, t + 0.12, 0.03, 0.2, 'highpass', 2600); break;
+      case 'clink': this._t(d, t, 0.16, 0.25, 'sine', 3400, 3300, 0.002); this._n(d, t, 0.02, 0.4, 'highpass', 4000); break;
+      case 'span': this._n(d, t, 0.02, 0.7, 'highpass', 2800); this._t(d, t, 0.05, 0.45, 'square', 700, 300); this._t(d, t + 0.01, 0.2, 0.15, 'triangle', 180, 120); break;
+      // the cold: frost taking hold with a crackle, and something frozen through breaking like ice
+      case 'freeze': for (let i = 0; i < 7; i++) this._n(d, t + i * 0.03 + rand(0, 0.02), 0.02, 0.55, 'highpass', 3000 + rand(0, 3000)); this._n(d, t, 0.28, 0.22, 'bandpass', 5000, 2500, 2, 0.02); break;
+      case 'shatter': for (let i = 0; i < 10; i++) this._n(d, t + i * 0.012 + rand(0, 0.02), 0.04 + rand(0, 0.06), 0.6, 'highpass', 2500 + rand(0, 4000)); this._t(d, t, 0.12, 0.6, 'sine', 140, 60); this._n(d, t, 0.1, 0.5, 'lowpass', 1500, 400); break;
       case 'door': this._t(d, t, 0.09, 0.6, 'sine', 150, 70); this._n(d, t, 0.07, 0.6, 'lowpass', 1300, 420); this._n(d, t + 0.012, 0.03, 0.3, 'highpass', 2600); break;
       default: return false;
     }
@@ -265,6 +277,12 @@ export class Sound {
       noise('bandpass', 900, 0.6, 0.45);
       noise('highpass', 3000, 0.5, 0.08);
       base = 0.8;
+    } else if (kind === 'frost') {
+      // liquid nitrogen out of a nozzle: a hard hiss, and the rush of the cold air behind it
+      noise('highpass', 2600, 0.6, 0.55);
+      noise('bandpass', 1200, 0.8, 0.3);
+      noise('lowpass', 320, 0.7, 0.22);
+      base = 0.65;
     } else if (kind === 'fire') {
       noise('lowpass', 420, 0.6, 0.5);
       noise('bandpass', 1300, 0.8, 0.12);

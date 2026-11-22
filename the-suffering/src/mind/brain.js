@@ -17,13 +17,13 @@ import { onRoad } from '../world/city.js';
 import { clamp, rand, chance, wrapAngle, pick } from '../core/util.js';
 
 const _a = [0, 0, 0], _r = [0, 0];
-const WORD = { m1911: 'gun', glock: 'gun', ak47: 'rifle', m4a1: 'rifle', ar15: 'rifle', musket: 'musket', arquebus: 'gun', blunderbuss: 'blunderbuss', knife: 'knife', machete: 'machete', sword: 'sword', crowbar: 'crowbar', taser: 'taser', flamethrower: 'flamethrower' };
+const WORD = { m1911: 'gun', glock: 'gun', ak47: 'rifle', m4a1: 'rifle', ar15: 'rifle', musket: 'musket', arquebus: 'gun', blunderbuss: 'blunderbuss', knife: 'knife', machete: 'machete', sword: 'sword', crowbar: 'crowbar', taser: 'taser', flamethrower: 'flamethrower', frostthrower: 'frost thrower', bow: 'bow', crossbow: 'crossbow' };
 /** A real gun: anything that fires bullets. */
 const _door = [0, 0, 0], _door2 = [0, 0, 0];
 const isGun = (id) => id === 'm1911' || id === 'glock' || id === 'ak47' || id === 'm4a1' || id === 'ar15' || id === 'musket' || id === 'arquebus' || id === 'blunderbuss';
 const NOKIT = [];
 /** What a caller says once they have got through, by what they are calling about. */
-const CALL_LINE = { body: 'callBody', assault: 'callAssault', stabbing: 'callStabbing', shooting: 'callShooting', shots: 'callShots', murder: 'callMurder', menace: 'callMenace', burning: 'callBurning', electrocution: 'callShock' };
+const CALL_LINE = { body: 'callBody', assault: 'callAssault', stabbing: 'callStabbing', shooting: 'callShooting', shots: 'callShots', murder: 'callMurder', menace: 'callMenace', burning: 'callBurning', electrocution: 'callShock', freezing: 'callFreezing' };
 const WHAT_WORD = { body: 'a body', assault: 'an assault', stabbing: 'a stabbing', shooting: 'a shooting', shots: 'shots fired', murder: 'a killing', menace: 'a man with a weapon' };
 
 export class Brain {
@@ -138,7 +138,8 @@ export class Brain {
     if (t && danger > 18) {
       const d = Math.hypot(t.x - h.x, t.z - h.z);
       const src = t.src, k = src ? m.known.get(src.id) : null;
-      const gun = k && isGun(k.armed);
+      // a gun, or a bow, can reach you from where it is: nobody sensible rushes either
+      const gun = k && (isGun(k.armed) || k.armed === 'bow' || k.armed === 'crossbow');
       const blade = k && (k.armed === 'knife' || k.armed === 'machete' || k.armed === 'sword');
       // anger and nerve on one side of the scales, fear on the other
       const urge = e.anger + p.bravery * 30 - e.fear * (blade ? 1.3 : 0.8);

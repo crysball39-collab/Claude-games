@@ -406,6 +406,20 @@ export class VoxelThing {
       this.sys.hot.add(this);
     }
   }
+  /** Cold on a cube: a fire in it goes out, and it is a while before it will catch again; hot steel cools. True if a fire went out. */
+  cool(c) {
+    if (!this.cells[c]) return false;
+    if (this.M.burns) {
+      this.heat[c] = Math.min(this.heat[c], 0.12);
+      if (this.burn[c] <= 0) return false;
+      this.burn[c] = 0;
+      const i = this.burning.indexOf(c);
+      if (i >= 0) this.burning.splice(i, 1);
+      return true;
+    }
+    if (this.heat[c] > 0) { this.heat[c] = Math.max(0, this.heat[c] - 0.25); this._tint(c); }
+    return false;
+  }
   ignite(c) {
     if (!this.cells[c] || !this.M.burns || this.burn[c] > 0) return;
     this.burn[c] = rand(9, 16);

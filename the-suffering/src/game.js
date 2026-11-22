@@ -18,6 +18,8 @@ import { Grab } from './combat/grab.js';
 import { Powers } from './combat/powers.js';
 import { Lights } from './render/lights.js';
 import { Fire } from './combat/fire.js';
+import { Frost } from './combat/frost.js';
+import { Arrows } from './combat/arrows.js';
 import { Power } from './world/power.js';
 import { Daylight } from './world/daylight.js';
 import { clamp, clamp01, damp, dampAngle, lerp, rand, wrapAngle } from './core/util.js';
@@ -92,6 +94,8 @@ export class Game {
     this.powers = new Powers(this);
     this.lights = new Lights(this);
     this.fire = new Fire(this);
+    this.frost = new Frost(this);
+    this.arrows = new Arrows(this);
     this.power = new Power(this);
     this.daylight = new Daylight(this);
     this.daylight.set(settings.tod || 'day');
@@ -270,10 +274,12 @@ export class Game {
     for (const h of this.humans) h.update(dt);
     this.ropes.tether();
     this.weapons?.update(dt);
+    this.arrows.update(dt);
     for (const o of this.props) { const b = o.body; b.preSpeed = Math.hypot(b.vx, b.vy, b.vz); b.slow = b.preSpeed < 4.2; }
     this.world.step(dt);
     for (const h of this.humans) h.late(dt);
     this.weapons?.late(dt);
+    this.arrows.late(dt);
     this.voxels.update(dt);
     this.ropes.update(dt);
     this.grab.late(dt);
@@ -297,6 +303,7 @@ export class Game {
     this.power.update(dt);
     this.things.update(dt);
     this.fire.update(dt);
+    this.frost.update(dt);
     this.gore.update(dt, this.camera);
     this.speech?.update(dt);
     this._underlay();
@@ -555,6 +562,8 @@ export class Game {
     if (what === 'things' || what === 'all') {
       this.ropes.clear();
       this.fire.clear();
+      this.frost.clear();
+      this.arrows.clear();
       this.power.clear();
       for (const o of this.props.slice()) this.removeProp(o);
       this.voxels.clear();

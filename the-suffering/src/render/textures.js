@@ -175,7 +175,7 @@ export function skyTexture() {
 
 /* ------------------------------ decal atlas ------------------------------- */
 
-export const ATLAS_COLS = 8, ATLAS_ROWS = 6;
+export const ATLAS_COLS = 8, ATLAS_ROWS = 8;
 /** Where each decal lives in the atlas: [column, row]. */
 export const DECAL = {
   splat: [[0, 0], [1, 0], [2, 0], [3, 0]], pool: [[4, 0], [5, 0]], drip: [[6, 0], [7, 0]],
@@ -184,6 +184,7 @@ export const DECAL = {
   shadow: [0, 3], ring: [1, 3], flash: [2, 3], smoke: [3, 3], streak: [[4, 3], [5, 3]], glow: [6, 3], white: [7, 3],
   run: [[0, 4], [1, 4], [2, 4]], soak: [[3, 4], [4, 4]], soakDry: [5, 4], exitWood: [6, 4], exitMetal: [7, 4],
   scorch: [0, 5], flame: [[1, 5], [2, 5], [3, 5]], ember: [4, 5], soot: [5, 5], burn: [6, 5], crack: [7, 5],
+  frost: [0, 6], ice: [1, 6], rime: [2, 6], vapour: [3, 6],
 };
 
 const BLOOD = '#7d0606', BLOOD_DARK = '#4a0202', BLOOD_BRIGHT = '#a30c0c';
@@ -326,6 +327,48 @@ function drawScorch(x, rng) {
   for (let i = 0; i < 30; i++) { x.fillStyle = `rgba(${10 + rng() * 30},${8 + rng() * 14},${6 + rng() * 8},${0.3 + rng() * 0.4})`; const a = rng() * TAU, d = Math.pow(rng(), 0.7) * 50; x.beginPath(); x.arc(64 + Math.cos(a) * d, 64 + Math.sin(a) * d, 2 + rng() * 6, 0, TAU); x.fill(); }
 }
 
+/** A white bloom of frost: a soft core, and feathers of crystal reaching out from it. */
+function drawFrost(x, rng) {
+  const g = x.createRadialGradient(64, 64, 4, 64, 64, 60);
+  g.addColorStop(0, 'rgba(240,248,255,0.85)'); g.addColorStop(0.5, 'rgba(225,238,250,0.5)'); g.addColorStop(1, 'rgba(220,235,250,0)');
+  x.fillStyle = g; blobPath(x, 64, 64, 56, 0.5, rng, 16); x.fill();
+  x.strokeStyle = 'rgba(255,255,255,0.8)'; x.lineCap = 'round';
+  for (let i = 0; i < 26; i++) {
+    const a = rng() * TAU, r0 = rng() * 18, len = 14 + rng() * 34;
+    const px = 64 + Math.cos(a) * r0, py = 64 + Math.sin(a) * r0, ex = px + Math.cos(a) * len, ey = py + Math.sin(a) * len;
+    x.lineWidth = 1 + rng() * 1.6;
+    x.beginPath(); x.moveTo(px, py); x.lineTo(ex, ey); x.stroke();
+    for (let k = 1; k < 4; k++) {
+      const t = k / 4, bx = px + (ex - px) * t, by = py + (ey - py) * t, bl = len * 0.3 * (1 - t);
+      for (const sd of [-1, 1]) { const b = a + sd * 0.7; x.beginPath(); x.moveTo(bx, by); x.lineTo(bx + Math.cos(b) * bl, by + Math.sin(b) * bl); x.stroke(); }
+    }
+  }
+}
+
+/** A skin of ice on the ground: pale, glossy, with a sheen across it and fine cracks. */
+function drawIce(x, rng) {
+  const g = x.createRadialGradient(56, 52, 6, 64, 64, 62);
+  g.addColorStop(0, 'rgba(235,246,255,0.75)'); g.addColorStop(0.6, 'rgba(190,220,240,0.5)'); g.addColorStop(1, 'rgba(180,212,236,0)');
+  x.fillStyle = g; blobPath(x, 64, 64, 58, 0.35, rng, 15); x.fill();
+  x.fillStyle = 'rgba(255,255,255,0.45)'; x.beginPath(); x.ellipse(50, 46, 22, 7, -0.5, 0, TAU); x.fill();
+  x.strokeStyle = 'rgba(255,255,255,0.55)'; x.lineWidth = 0.8;
+  for (let i = 0; i < 7; i++) {
+    let px = 64 + (rng() - 0.5) * 60, py = 64 + (rng() - 0.5) * 60;
+    x.beginPath(); x.moveTo(px, py);
+    for (let k = 0; k < 4; k++) { px += (rng() - 0.5) * 22; py += (rng() - 0.5) * 22; x.lineTo(px, py); }
+    x.stroke();
+  }
+}
+
+/** A glint of ice: a bright point with a six-rayed star through it. */
+function drawRime(x) {
+  const g = x.createRadialGradient(64, 64, 0, 64, 64, 30);
+  g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.4, 'rgba(230,245,255,0.6)'); g.addColorStop(1, 'rgba(220,240,255,0)');
+  x.fillStyle = g; x.beginPath(); x.arc(64, 64, 30, 0, TAU); x.fill();
+  x.strokeStyle = 'rgba(255,255,255,0.9)'; x.lineWidth = 3; x.lineCap = 'round';
+  for (let i = 0; i < 3; i++) { const a = i * Math.PI / 3; x.beginPath(); x.moveTo(64 - Math.cos(a) * 58, 64 - Math.sin(a) * 58); x.lineTo(64 + Math.cos(a) * 58, 64 + Math.sin(a) * 58); x.stroke(); }
+}
+
 /** One tongue of flame, white at the root, for additive drawing. */
 function drawFlame(x, rng) {
   const g = x.createRadialGradient(64, 92, 2, 64, 70, 60);
@@ -397,6 +440,9 @@ function paintDecals(x) {
   DECAL.flame.forEach((c, i) => cell(c, () => drawFlame(x, mulberry(440 + i * 11))));
   cell(DECAL.burn, () => drawBurn(x, mulberry(471)));
   cell(DECAL.crack, () => drawCrack(x, mulberry(479)));
+  cell(DECAL.frost, () => drawFrost(x, mulberry(491)));
+  cell(DECAL.ice, () => drawIce(x, mulberry(503)));
+  cell(DECAL.rime, () => drawRime(x));
 
   cell(DECAL.entry, () => {
     const g = x.createRadialGradient(64, 64, 4, 64, 64, 26);
@@ -507,6 +553,7 @@ function paintDecals(x) {
   radial(DECAL.shadow, [[0, 'rgba(0,0,0,0.62)'], [0.55, 'rgba(0,0,0,0.38)'], [1, 'rgba(0,0,0,0)']]);
   radial(DECAL.glow, [[0, 'rgba(255,255,255,1)'], [0.3, 'rgba(255,255,255,0.55)'], [1, 'rgba(255,255,255,0)']]);
   radial(DECAL.smoke, [[0, 'rgba(210,210,210,0.75)'], [0.5, 'rgba(180,180,180,0.4)'], [1, 'rgba(160,160,160,0)']]);
+  radial(DECAL.vapour, [[0, 'rgba(255,255,255,0.85)'], [0.45, 'rgba(250,252,255,0.45)'], [1, 'rgba(245,250,255,0)']]);
   radial(DECAL.soot, [[0, 'rgba(40,36,34,0.8)'], [0.5, 'rgba(30,28,26,0.45)'], [1, 'rgba(20,20,20,0)']]);
   radial(DECAL.ember, [[0, 'rgba(255,240,200,1)'], [0.2, 'rgba(255,170,60,0.9)'], [0.55, 'rgba(230,80,20,0.35)'], [1, 'rgba(200,40,10,0)']]);
   cell(DECAL.ring, () => {

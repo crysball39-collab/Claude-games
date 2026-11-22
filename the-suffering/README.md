@@ -30,19 +30,19 @@ npm start            # python3 -m http.server 8080, from the repository root
 | Look | drag anywhere else | mouse (click to capture) |
 | Jump / crouch | JUMP, CROUCH | Space, C |
 | Attack | the big red button | left click or F |
+| Draw a bow, and loose | hold the red button (DRAW), let go | hold left click or F, let go |
 | Choose the move | slide off the button left, up, right or down | right click or Q for the heavy one |
 | Pick up / drop / reload | PICK UP, DROP, RELOAD | E, G, R |
 | Holster or draw | HOLSTER / DRAW | H |
 | Grab, drag or let go | GRAB (DRAG, LET GO); ATTACK throws what you carry | Z |
-| Special abilities menu (the admin) | ABILITIES (beside SPAWN) | M |
-| Use the chosen ability | POWER | B, or each ability's own key: J K L U I O Y |
+| Special abilities menu | ABILITIES (beside SPAWN) | M |
+| Use the chosen ability | POWER | B |
 | Weapon slots | tap a slot | 1 to 5 |
 | Sandbox menu | SPAWN | Tab |
 | Doctor mode | DOCTOR, then tap a person | X, then click a person |
 | Say something | TALK | T |
 | First or third person | VIEW | V |
 | Players on a server | the chip at the top right | N |
-| Admin menu (the admin) | ADMIN (beside ABILITIES) | \` |
 | Pause | PAUSE | Esc or P |
 | Get into a car | DRIVE (or CARJACK) at a front door | E |
 | Drive | GAS and BRAKE pedals; BRAKE held at a standstill reverses | W / up, S / down |
@@ -98,39 +98,27 @@ from under the barrel and driven down it three times, put back, and the pan prim
 the lock cocked. The left hand goes to the muzzle and to the lock exactly, wherever the
 gun is. When you aim one, the left hand holds it out along the stock.
 
-**Special abilities** (the admin account's alone; see *The admin* below). ABILITIES, beside SPAWN, opens a menu of them. Tap one and the
-POWER button uses it; on a keyboard B does, and each also has a key of its own. POWER
-sweeps dark while it gets ready again.
+**The bow and the crossbow.** The bow is a recurve, held in the left hand with an arrow
+on the string, and with it in your hand you stand side on to the mark. Hold the trigger
+and the right hand draws the string back to the jaw (DRAW shows how far; a full draw
+takes most of a second); let go and the arrow flies, faster and harder the further it
+was drawn. Let go before it is a fifth drawn and the string is let down again, the arrow
+still on it. Then the right hand reaches back over the shoulder to the quiver for the
+next one. An arrow falls as it flies, and the bow sends it up as far as it needs to come
+down where the crosshair is: a long shot goes up and drops in. The crossbow is held like a rifle and shoots a bolt on the
+trigger, flat and fast and harder than an arrow; then it takes three seconds or so to load
+again: the nose goes down, the string is hauled back on to the latch, click by click, and
+a bolt is laid in the groove.
 
-- *Tempest Kick* (J), which anybody can do: a high sweeping kick so fast that the air it
-  cuts goes on without it, a green crescent that flies on past where the foot reached and
-  cuts through whatever it meets: people (it takes limbs off), boards and beams, crates,
-  rope, car glass and panels. A building stops it.
-- The *Cat-Cat Fruit, Model: Leopard*: a strange swirled fruit, in the same menu. Eat it
-  (three bites, and it tastes terrible) and six more are yours, until you choose to lose
-  them again:
-  - *Finger Pistol* (K): one finger, held straight, driven into somebody so hard it goes in
-    like a round, an entry hole and often an exit. With a gun in your right hand, the left
-    does it.
-  - *Leo's Flame* (L): five fireballs, a palm thrust from each hand in turn, at whoever is
-    nearest; they bend toward them in flight, and whoever they hit catches fire.
-  - *Swirling Kick* (U): a spinning kick that sends a white ring of air spinning forward;
-    whatever it touches (or where it runs out) it bursts into flame, knocking down and
-    setting alight everyone close.
-  - *Full Leopard* (I): you become a leopard on all fours, spotted, with a tail, more than
-    twice as fast as you can run. The first person you run into you pounce on, bite and
-    maul, and then you are a person again. The same button turns you back sooner.
-  - *Leopard Leap* (O): a long, low bound; whoever it comes down on takes a finger from
-    each hand, a double Finger Pistol.
-  - *Hybrid Transform* (Y): half leopard, half person, upright and a head taller (1.3
-    times your size): a leopard's head, neck and hands, a tail and claws on every finger,
-    in a black suit (white shirt, black tie, a red square in the pocket) and a black top
-    hat with a red band. It takes two and a half times the punishment and is nearly three
-    times as hard to knock off its feet. Every attack is bigger, harder and faster:
-    punches become claw rakes (reaching down to people smaller than it), slashes and
-    fireballs are half as big again, and everything is ready again sooner. The same
-    button turns you back, to your own size.
+An arrow or a bolt goes into whoever it reaches and stays in, deep, moving with them
+wherever they go, ragdoll and all. It sticks in wood (a crate, a wooden wall) and in the
+ground if it comes down steeply, and glances off buildings, steel, cars and car glass and
+falls. A light or medium vest stops an arrow about half the time, a S.W.A.T. plate every
+time; a light helmet turns most of them and the heavier helmets nearly all. Anybody who
+sees it knows it was an arrow.
 
+**Special abilities.** ABILITIES, beside SPAWN, opens a menu of them. Tap one and the
+POWER button uses it; on a keyboard B does. POWER sweeps dark while it gets ready again.
 Nobody watching takes any of it calmly, and the police treat it like any other attack.
 
 **Grabbing and dragging.** GRAB (Z) takes hold of whatever is under the crosshair and in
@@ -150,8 +138,9 @@ remember it, and an officer who sees it will come for you.
 **Carrying.** Whatever you are not holding rides on you where it would: the M1911 in a
 holster on the right hip, the Glock in a shoulder holster under the left arm, the knife
 in a sheath on the left hip, the sword in a scabbard on the left hip and the crowbar
-through the belt on the right, the machete, the rifles, the muskets and the flamethrower
-across your back, the rope and the wire hung on your belt. HOLSTER puts away what is in your hand and DRAW brings it back, with the
+through the belt on the right, the machete, the rifles, the muskets, the crossbow, the
+flamethrower and the frost thrower across your back, the bow slung across it with the
+quiver over the right shoulder, the rope and the wire hung on your belt. HOLSTER puts away what is in your hand and DRAW brings it back, with the
 reach that takes. People are frightened of a weapon in the hand, not one put away.
 
 **The light vest.** Black, over the chest and the belly. It stops a pistol round and a
@@ -243,6 +232,14 @@ seconds where it pools. Whatever it touches catches: people (see *Burns*), wood 
 burns for half a minute and falls apart; a wooden wall catches, chars and burns away cube
 by cube, upward), and steel only gets hot, glowing orange. RELOAD swaps the canister.
 
+**The frost thrower.** The flamethrower's opposite: a white wand on a tank of coolant, ten
+seconds of spray to a tank, six metres. It throws a cone of freezing mist. Whoever it
+reaches is frosted (see *Cold*); somebody on fire is put out at once, and so are burning
+crates, burning walls and a car whose engine is alight. It frosts walls, cools hot steel,
+and leaves patches of ice on the street that last half a minute or so. Walk across ice
+and you are fine; hurry over it and a foot goes, the surer the longer you keep it up.
+RELOAD swaps the tank.
+
 **Walls and beams.** A wooden wall (boards 10 cm thick), a steel wall (a ribbed plate),
 and a short and a large steel I-beam are each built of cubes a few centimetres across,
 and come apart a cube at a time. A round punches out the cubes it goes through and comes
@@ -287,9 +284,9 @@ the wire comes off or is cut, or they fall clear of what they were touching.
 crates, the wooden and the steel wall, the short and the large steel beam, a light bulb,
 a floodlight and a generator, a car, a police car and a van; the rope, the wire, the
 light, medium and S.W.A.T. vests and helmets, handcuffs and the poison syringe; the taser
-and thirteen weapons (fists aside: the knife, the machete, the sword, the crowbar, the
+and sixteen weapons (fists aside: the knife, the machete, the sword, the crowbar, the
 M1911, the Glock-19, the AK-47, the M4A1, the AR-15, the musket, the arquebus, the
-blunderbuss and the flamethrower). It can clear away blood, bodies,
+blunderbuss, the bow, the crossbow, the flamethrower and the frost thrower). It can clear away blood, bodies,
 objects or cars, or patch you up.
 
 **Bodies.** Every person is seventeen rigid parts on sixteen limited joints, driven by
@@ -375,6 +372,16 @@ Plasma weeps out through burnt skin, burns bring on shock and cold, and flames r
 face burn the airway, which swells shut. Doctor mode lists every burn by its degree and
 how much of the skin is burnt in all.
 
+**Cold.** Frost works on a person part by part, as fire does: rime forms on the clothes
+and the skin, the part stiffens, and ice that stays on frostbites the skin under it (first
+degree, white and numb; second, blistered; third, frozen through). Legs iced over slow
+somebody to a shuffle; iced all over, they freeze stiff and go over like a statue. A body
+under ice cools: they shiver, then they are confused (below 33 degrees), then out (below
+30), and at about 25 the heart stops. A limb frozen through is brittle, and a hard blow, a
+round or a blade breaks it off in a burst of ice. Ice thaws, faster near a fire, and the
+rime goes with it; frostbite stays. Doctor mode lists the frostbite by degree, whether
+they are iced over or frozen stiff, and hypothermia.
+
 **Doctor mode.** Tap anyone, or examine yourself.
 
 - STATUS: condition, an ECG, blood, air, pulse, pain, nausea, temperature and
@@ -401,7 +408,7 @@ What they perceive becomes memory and moves their six emotions, scaled by who th
 carry on, stare, run, cower, put their hands up when a gun is on them, fight back, or
 kneel by someone who is hurt.
 
-**Voices.** Everyone has about 1,380 scripted lines to draw on, chosen by what is
+**Voices.** Everyone has about 1,430 scripted lines to draw on, chosen by what is
 happening to them and coloured by their habits of speech, and they answer when you TALK
 to them. The lines are written the way people actually talk: short, broken, repeating
 themselves, swearing. Pain is mostly breath and noise and a word or two; somebody badly
@@ -429,26 +436,6 @@ the page's owner included); for someone the page lets read but not write, and in
 the game opened on its own, it is kept in that browser. Nothing sends email, so a
 forgotten password cannot be reset. The title screen says who is signed in, with SIGN OUT.
 
-**The admin.** One account is the admin: the page owner's. It alone has the special
-abilities and the cheats, in single player too; for everyone else ABILITIES, POWER, the
-ability keys and the fruit are locked, and the Settings cheats are hidden and do nothing.
-The admin also has an ADMIN menu (the button beside ABILITIES, or the \` key): choose
-anyone on your server (you are at the top), then
-- **APPLY** a speed (0.25x to 4x), a max HP (100 is anybody; 400 loses blood four times
-  more slowly and takes a quarter of the punishment), a toughness (how hard they are to
-  knock over, 0.25x to 10x) and a wanted level (none, one star, two);
-- **KICK** them off the server (they may come back after a minute);
-- **BAN** them with a mod note they are shown and a length (10 minutes to for good); the
-  banned list underneath lifts a ban.
-
-What the admin sets on you lasts through a respawn. The admin's address is in the code
-only as a hash. On claude.ai only the page's owner can be the admin: anybody else is
-refused that address, the owner's platform id is written into the shared store (which
-only the owner can write), and every player's game believes an admin command only when
-the platform says it came from that id. Bans live in the store too, where only the owner
-can write them. In a copy of the game opened on its own there is nobody to check with, so
-whoever makes the admin account on that device has it, for that device's game.
-
 **Multiplayer.** MULTIPLAYER on the title screen, when the game is open on claude.ai, lists
 the servers people are hosting right now, each with its name, how many players are on it,
 and your ping to it (a real round trip, measured); JOIN one, or HOST your own (a name, up
@@ -457,11 +444,11 @@ the page's live room on claude.ai, so the people you play with are the people th
 shared with.
 
 - **Shared:** every player, exactly: their own game sends where each part of their body is,
-  fifteen times a second, with what they hold and wear, their armour, their form (the
-  hybrid, the leopard) and how they are, and the others draw a stand-in that follows it.
-  Blows, rounds, flames, tasers, cars and powers that land on a stand-in are sent to the
-  player it stands for, whose own game takes them; what that does to them comes back with
-  their body. Gunshots and powers are seen and heard by everyone. Cars go with whoever
+  fifteen times a second, with what they hold and wear, their armour and how they are,
+  and the others draw a stand-in that follows it. Blows, rounds, arrows, flames, frost,
+  tasers, cars and powers that land on a stand-in are sent to the player it stands for,
+  whose own game takes them; what that does to them comes back with their body. Gunshots,
+  arrows and powers are seen and heard by everyone. Cars go with whoever
   drives them. What anybody says (TALK) shows over them and in the chat; deaths go in the
   kill feed with who did it and with what. A name and a health bar over every other
   player; the chip at the top right (or N) lists the players with kills, deaths and pings.
@@ -485,9 +472,10 @@ They know nothing they have not seen or been told. What they know about you is y
 - *One star*: they want you in handcuffs. You are told to stop; stand still, or put
   your hands up, and one officer cuffs you while the others cover. Run, keep fighting or
   ignore them and you are tased first.
-- *Two stars*: you have used a gun or a blade on someone, killed someone, gone for an
-  officer, or blown up a car. They shoot, and standing still does not stop them. At two
-  stars it is the S.W.A.T. team that comes out of the station.
+- *Two stars*: you have used a gun, a bow, a blade, fire, frost or a live wire on
+  someone, killed someone, gone for an officer, or blown up a car. They shoot, and
+  standing still does not stop them. At two stars it is the S.W.A.T. team that comes out
+  of the station.
 
 An officer who sees you do something gives you the stars for it there and then and tells
 the others by radio. Anybody else has to ring 911: a witness steps back, gets their phone
@@ -514,7 +502,7 @@ At night the sky goes dark, windows are lit from inside, and every street lamp t
 pool of light on the pavement under it; the lamps, the fires and the floodlights you put
 out yourself are what you see by.
 
-**Cheats** (the admin account's alone). *Pause -> Settings -> Cheats -> Infinite HP.* Nothing injures you: no
+**Cheats.** *Pause -> Settings -> Cheats -> Infinite HP.* Nothing injures you: no
 wounds, no bleeding, nothing cut off, no dying, and whatever was wrong with you when you
 switched it on is mended. You can still be knocked over, tased and handcuffed.
 
@@ -537,9 +525,9 @@ node tools/overlap.mjs   # how far body parts get inside each other, scenario by
 | `src/physics/world.js` | the rigid body engine: XPBD, joints with limits, muscles, sleeping islands |
 | `src/human/` | the rig, the animation and attack clips, the medical model, armour, the human itself |
 | `src/mind/` | senses, memory and emotion; behaviour; scripted lines; speech; the Claude connection |
-| `src/net/` | accounts (`accounts.js`); multiplayer over the claude.ai room (`multiplayer.js`: the server list, hosting and joining, other players' stand-ins, hits sent to their owners, the admin's commands and bans); a body's pose in a few hundred characters (`pose.js`) |
-| `src/combat/` | weapons and ballistics; blood, wounds and dismemberment |
+| `src/net/` | accounts (`accounts.js`); multiplayer over the claude.ai room (`multiplayer.js`: the server list, hosting and joining, other players' stand-ins, hits sent to their owners); a body's pose in a few hundred characters (`pose.js`) |
+| `src/combat/` | weapons and ballistics; arrows and bolts (`arrows.js`); frost and ice (`frost.js`); blood, wounds and dismemberment |
 | `src/world/` | the city, its pavement network; cars (`car.js`: the model, glass, dents, damage) and everything with wheels (`traffic.js`: driving, collisions, crashes, explosions) |
 | `src/render/` | instanced boxes, decal batches, procedural textures |
-| `src/ui/` | the HUD, the sandbox menu, doctor mode, signing in (`authui.js`), the admin menu (`admin.js`), the multiplayer screens (`mpui.js`) |
+| `src/ui/` | the HUD, the sandbox menu, doctor mode, signing in (`authui.js`), the multiplayer screens (`mpui.js`) |
 | `tools/` | tests, the browser harness, the swing solver, the build |

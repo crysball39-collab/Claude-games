@@ -467,9 +467,14 @@ export class Gore {
   mark(human, part, kind, lp, ln, size, lift = 0.004) {
     if (!this.enabled || human.gone[part]) return;
     const b = human.bodies[part];
-    const cell = kind === 'entry' ? UV.entry : kind === 'crack' ? UV.crack : kind === 'bruise' ? UV.bruise : kind === 'slash' ? UV.slash : kind === 'dot' ? UV.dot : pick(UV.splat);
+    const cell = kind === 'entry' ? UV.entry : kind === 'crack' ? UV.crack : kind === 'bruise' ? UV.bruise : kind === 'slash' ? UV.slash : kind === 'dot' ? UV.dot : kind === 'frost' ? UV.frost : pick(UV.splat);
     const d = this._attach(b, this._onFace(b, lp, ln, size, size, rand(TAU), lift), cell, human, part);
     if (d && (kind === 'dot' || kind === 'splat')) d.stain = true;
+    if (d && kind === 'frost') d.frost = true;
+  }
+  /** The rime on somebody, gone: it has thawed. */
+  clearFrost(human) {
+    for (let i = this.bDecals.length - 1; i >= 0; i--) { const d = this.bDecals[i]; if (d.human === human && d.frost) this._detach(i); }
   }
 
   /** The raw end left where a part came away. */

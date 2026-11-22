@@ -3,7 +3,7 @@
    APPLY a speed, max HP, toughness and wanted level, KICK them, or BAN them
    for a while with a note they are shown. Only the admin account has it.
    ========================================================================== */
-import { $, el, clamp } from '../core/util.js';
+import { $, el, clamp, put, putClass, keyed } from '../core/util.js';
 
 const WANT = ['None', '★', '★★'];
 
@@ -69,35 +69,41 @@ export class AdminUI {
     const mp = this.mp, box = $('#ad-targets');
     const list = this._targets();
     if (!list.some((t) => t.id === this.target)) this._select('me');
-    box.textContent = '';
-    for (const t of list) {
-      const b = el('button', 'tg' + (t.id === this.target ? ' on' : ''));
-      b.appendChild(el('span', '', t.name + (t.you ? ' (you)' : '')));
-      b.appendChild(el('small', '', t.sub));
-      b.addEventListener('click', (e) => { e.preventDefault(); this._select(t.id); this.render(); });
-      box.appendChild(b);
-    }
+    // changed in place, not rebuilt: a person's button stays the same button from one refresh to the next
+    keyed(box, list, (t) => t.id, (t) => {
+      const b = el('button', 'tg');
+      b.append(el('span'), el('small'));
+      const id = t.id;
+      b.addEventListener('click', (e) => { e.preventDefault(); this._select(id); this.render(); });
+      return b;
+    }, (b, t) => {
+      putClass(b, 'tg' + (t.id === this.target ? ' on' : ''));
+      put(b.firstChild, t.name + (t.you ? ' (you)' : ''));
+      put(b.lastChild, t.sub);
+    });
     $('#ad-sub').textContent = mp.on
       ? `${mp.server.name} · ${mp.players.length} player${mp.players.length === 1 ? '' : 's'}` + (mp.adminVerified ? '' : ' · your commands to others are not recognised yet')
       : 'Single player: just you. On a server, everyone on it is here.';
     $('#ad-kick').disabled = !mp.on;
     $('#ad-ban').disabled = !mp.db;
     // the bans in force
-    const ul = $('#ad-bans');
-    ul.textContent = '';
     const bans = mp.banList;
-    if (!mp.db) ul.appendChild(el('li', 'empty', 'Bans need the game open on claude.ai.'));
-    else if (!bans.length) ul.appendChild(el('li', 'empty', 'Nobody is banned.'));
-    for (const b of bans) {
-      const li = el('li', '');
-      li.appendChild(el('span', '', b.name + (b.note ? ' — ' + b.note : '')));
-      const right = el('span', '', b.until ? 'until ' + new Date(b.until).toLocaleString() : 'for good');
-      const u = el('button', 'chip unban', 'UNBAN');
-      u.addEventListener('click', async (e) => { e.preventDefault(); const r = await mp.adminUnban(b.id); this._msg(r.error || 'Ban lifted for ' + b.name + '.'); this.render(); });
-      right.appendChild(document.createTextNode(' ')); right.appendChild(u);
-      li.appendChild(right);
-      ul.appendChild(li);
-    }
+    const rows = !mp.db ? [{ empty: 'Bans need the game open on claude.ai.' }] : !bans.length ? [{ empty: 'Nobody is banned.' }] : bans;
+    keyed($('#ad-bans'), rows, (b) => (b.empty ? 'empty' : 'ban ' + b.id), (b) => {
+      if (b.empty) return el('li', 'empty');
+      const li = el('li', ''), name = el('span'), right = el('span'), when = document.createTextNode(''), u = el('button', 'chip unban', 'UNBAN');
+      right.append(when, ' ', u);
+      li.append(name, right);
+      li.q = { name, when };
+      u.addEventListener('click', async (e) => { e.preventDefault(); const ban = li.ban, r = await mp.adminUnban(ban.id); this._msg(r.error || 'Ban lifted for ' + ban.name + '.'); this.render(); });
+      return li;
+    }, (li, b) => {
+      if (b.empty) { put(li, b.empty); return; }
+      li.ban = b;
+      put(li.q.name, b.name + (b.note ? ' — ' + b.note : ''));
+      const when = b.until ? 'until ' + new Date(b.until).toLocaleString() : 'for good';
+      if (li.q.when.nodeValue !== when) li.q.when.nodeValue = when;
+    });
   }
 
   /** Choosing someone shows what they are set to now: yours as they are, others' as you last set them. */

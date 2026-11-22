@@ -131,6 +131,8 @@ export class Health {
     this.poison = 0;                  // 0..100: toxin in the blood
     this.toxin = 0;                   // a dose still on its way in from where it was injected
     this.burns = new Float32Array(PART_COUNT);   // 0..100 a part: how much of it is burnt, and how deep
+    this.frostbite = new Float32Array(PART_COUNT);   // 0..100 a part: how far into it the cold has frozen the tissue
+    this.iceArea = 0;                            // how much of the skin is under rime right now (the frost keeps it)
     this.chestBlood = 0;              // ml pooled round the lungs
     this.vomitCooldown = 0;
     this.hypoxia = 0;
@@ -185,6 +187,15 @@ export class Health {
     if ((part === P.HEAD || part === P.NECK) && this.organs.airway > 0) this.organs.airway = Math.max(0, this.organs.airway - amount * 0.32);
     this.trauma = Math.min(60, this.trauma + amount * 0.12);
   }
+
+  /** Cold through the rime on a part: the tissue under it freezes. */
+  freeze(part, amount) {
+    if (this.god || !this.alive || this.missing[part] || amount <= 0) return;
+    this.frostbite[part] = Math.min(100, this.frostbite[part] + amount);
+  }
+  get frostArea() { let a = 0; for (let i = 0; i < PART_COUNT; i++) a += this.frostbite[i] / 100 * SKIN_AREA[i]; return a; }
+  /** 0 none, 1 frostnip, 2 blistered, 3 frozen through. */
+  frostDegree(part) { const f = this.frostbite[part]; return f < 3 ? 0 : f < 25 ? 1 : f < 65 ? 2 : 3; }
 
   /** Something hard done: a jump, a swing. */
   spend(n) { if (!this.god) this.stamina = Math.max(0, this.stamina - n); }
@@ -250,7 +261,7 @@ export class Health {
     let hurt = 0;
     for (const w of this.wounds) hurt += w.type === 'bruise' ? 1.2 : w.type === 'stump' ? 14 : 5;
     for (const k in this.bones) if (this.bones[k] >= 0 && this.bones[k] < 67) hurt += this.bones[k] < 34 ? 7 : 4;
-    pct = clamp(pct - Math.min(45, hurt) - this.shock * 0.15 - this.poison * 0.7 - this.burnArea * 130, 1, 100);
+    pct = clamp(pct - Math.min(45, hurt) - this.shock * 0.15 - this.poison * 0.7 - this.burnArea * 130 - this.frostArea * 70 - Math.max(0, 35 - this.temp) * 4, 1, 100);
     let label, tone;
     if (this.heartStopped) { label = 'DYING'; tone = 'dead'; pct = Math.min(pct, 4); }
     else if (pct < 22 || this.bloodPct < 55 || this.air < 50) { label = 'CRITICAL'; tone = 'bad'; }
@@ -383,14 +394,17 @@ export class Health {
       }
       this._structural(part, p * (chop > 0 ? 14 : 4), out, true);
     } else if (type === 'stab') {
-      const depth = clamp(0.07 + p * 0.05, 0.05, 0.19);
-      let bleed = 2 + p * 2.2;
+      // an arrow, or a crossbow bolt, goes in further than a blade is pushed; and while it is left in, it plugs its own hole a little
+      const shaft = weapon === 'bow' || weapon === 'crossbow';
+      const depth = clamp(0.07 + p * 0.05, 0.05, shaft ? 0.26 : 0.19);
+      let bleed = (2 + p * 2.2) * (shaft ? 0.75 : 1);
       const pain = clamp(15 + p * 8, 0, 60);
       let arterial = false;
       if (neck && chance(0.55)) { bleed += 100; arterial = true; }
       else if ((part === P.THIGH_L || part === P.THIGH_R) && chance(0.3)) { bleed += 55; arterial = true; }
       else if ((part === P.UARM_L || part === P.UARM_R) && chance(0.2)) { bleed += 28; arterial = true; }
-      out.wound = this._wound(part, 'stab', lp, ln, { size: 0.05, bleed, pain, arterial, clot: 65 });
+      out.wound = this._wound(part, 'stab', lp, ln, { size: shaft ? 0.035 : 0.05, bleed, pain, arterial, clot: 65 });
+      if (shaft) out.wound.name = weapon === 'crossbow' ? 'Bolt wound' : 'Arrow wound';
       out.pain = pain; out.arterial = arterial;
       let reach = depth;
       if (chest && chance(0.28)) { this._bone(lp[0] > 0 ? 'ribsL' : 'ribsR', 14, out); reach *= 0.55; }
@@ -532,7 +546,7 @@ export class Health {
     this.wounds = this.wounds.filter((w) => w.type === 'stump');
     for (const w of this.wounds) { w.bleed = 0; w.base = 0; w.pain = 0; w.pain0 = 0; w.dropped = false; }
     this.concussion = 0; this.ko = 0; this.faint = 0; this.trauma = 0; this.chestBlood = 0; this.hypoxia = 0;
-    this.stamina = 100; this.poison = 0; this.toxin = 0; this.adrenaline = 0; this.dizzy = 0; this.burns.fill(0);
+    this.stamina = 100; this.poison = 0; this.toxin = 0; this.adrenaline = 0; this.dizzy = 0; this.burns.fill(0); this.frostbite.fill(0); this.iceArea = 0;
     if (!this.missing[P.HEAD]) { this.alive = true; this.heartStopped = false; this.conscious = true; this.cause = ''; this.mechanism = ''; this.pulse = this.basePulse; this.arrestTime = 0; this.timeDead = 0; }
   }
 
@@ -547,7 +561,7 @@ export class Health {
     if (this.god && this.alive) {
       // whatever else is true, they are whole
       this.blood = this.bloodMax; this.air = 98; this.pain = 0; this.shock = 0; this.nausea = 0; this.dizzy = 0; this.concussion = 0; this.bleedOut = 0;
-      this.stamina = 100; this.poison = 0; this.toxin = 0; this.burns.fill(0);
+      this.stamina = 100; this.poison = 0; this.toxin = 0; this.burns.fill(0); this.frostbite.fill(0); this.iceArea = 0;
       this.conscious = true; this.dazed = false; this.heartStopped = false;
       return;
     }
@@ -648,7 +662,7 @@ export class Health {
       this.pulse += (target - this.pulse) * (1 - Math.exp(-dt / 2.2));
       if (this.pulse < 24) {
         this.heartStopped = true; this.pulse = 0;
-        this.mechanism = this.mechanism || (this.poison > 60 ? 'Poisoning' : burnt > 0.18 ? 'Burns' : pct < 47 ? 'Blood loss' : this.air < 30 ? 'Asphyxia' : 'Cardiac arrest');
+        this.mechanism = this.mechanism || (this.poison > 60 ? 'Poisoning' : this.temp < 28 ? 'Hypothermia' : burnt > 0.18 ? 'Burns' : pct < 47 ? 'Blood loss' : this.air < 30 ? 'Asphyxia' : 'Cardiac arrest');
         this.events.push('arrest');
       }
     } else {
@@ -661,7 +675,7 @@ export class Health {
     if (o2 < 0.4 && O.brain > 0) {
       this.hypoxia += dt;
       O.brain = Math.max(0, O.brain - (0.4 - o2) * 16 * dt);
-      if (O.brain <= 0) { this._die(this.mechanism || (this.poison > 60 ? 'Poisoning' : burnt > 0.18 ? 'Burns' : pct < 56 ? 'Blood loss' : this.air < 50 ? 'Asphyxia' : 'Cardiac arrest')); return; }
+      if (O.brain <= 0) { this._die(this.mechanism || (this.poison > 60 ? 'Poisoning' : this.temp < 28 ? 'Hypothermia' : burnt > 0.18 ? 'Burns' : pct < 56 ? 'Blood loss' : this.air < 50 ? 'Asphyxia' : 'Cardiac arrest')); return; }
     }
 
     /* ---- pain ---- */
@@ -669,6 +683,9 @@ export class Health {
     for (const w of this.wounds) keep *= 1 - clamp01(w.pain / 100);
     // a burn hurts most where it is blistered; burnt right through, the nerves are gone, but never the edges
     for (let i = 0; i < PART_COUNT; i++) { const b = this.burns[i]; if (b > 2) keep *= 1 - clamp01((b < 65 ? b * 1.35 : 88 - (b - 65) * 0.9) / 100) * (0.4 + SKIN_AREA[i] * 6); }
+    // ice on the skin burns with cold; frostbite aches, until it goes deep enough that nothing is felt there at all
+    if (this.iceArea > 0.005) keep *= 1 - clamp01(this.iceArea * 1.8) * 0.5;
+    for (let i = 0; i < PART_COUNT; i++) { const f = this.frostbite[i]; if (f > 2) keep *= 1 - clamp01((f < 65 ? f * 0.8 : 52 - (f - 65) * 1.3) / 100) * (0.3 + SKIN_AREA[i] * 5); }
     for (const k in B) { const v = B[k]; if (v >= 0 && v < 67) bonePain += v < 34 ? 22 + moving * 14 : 10 + moving * 6; }
     let felt = 100 * (1 - keep * (1 - clamp01(bonePain / 100)));
     felt = Math.min(100, felt + this.poison * 0.12);                    // cramps
@@ -696,15 +713,19 @@ export class Health {
     }
 
     /* ---- temperature ---- */
-    const tTarget = this.baseTemp + this.exertion * 1.0 + fear * 0.002 - this.shock * 0.021 - Math.max(0, 82 - pct) * 0.04 - burnt * 2.5;
+    // (ice on the body draws its heat out through the skin, as fast as it can be made)
+    const tTarget = this.baseTemp + this.exertion * 1.0 + fear * 0.002 - this.shock * 0.021 - Math.max(0, 82 - pct) * 0.04 - burnt * 2.5 - this.iceArea * 17 - this.frostArea * 2;
     this.temp += (tTarget - this.temp) * (1 - Math.exp(-dt / 22));
+    /* ---- the cold: shivering, then confusion, then nothing; and below that the heart gives out ---- */
+    if (this.temp < 35.2) this.stamina = Math.max(0, this.stamina - dt * (35.2 - this.temp) * 2.2);
+    if (this.temp < 25.5 && !this.heartStopped) { this.heartStopped = true; this.mechanism = 'Hypothermia'; this.events.push('arrest'); }
 
     /* ---- is anyone home ---- */
     const wasAwake = this.conscious;
     this.ko = Math.max(0, this.ko - dt); this.faint = Math.max(0, this.faint - dt);
-    const out2 = O.brain < 30 || this.air < 46 || pct < 53 || this.shock > 91 || this.ko > 0 || this.faint > 0 || (this.heartStopped && this.arrestTime > 2.5) || this.poison > 84;
+    const out2 = O.brain < 30 || this.air < 46 || pct < 53 || this.shock > 91 || this.ko > 0 || this.faint > 0 || (this.heartStopped && this.arrestTime > 2.5) || this.poison > 84 || this.temp < 30;
     this.conscious = !out2;
-    this.dazed = this.conscious && (this.air < 66 || pct < 64 || this.shock > 72 || this.concussion > 34 || this.pain > 86 || this.poison > 55);
+    this.dazed = this.conscious && (this.air < 66 || pct < 64 || this.shock > 72 || this.concussion > 34 || this.pain > 86 || this.poison > 55 || this.temp < 33);
     if (wasAwake && !this.conscious) this.events.push('out');
     if (!wasAwake && this.conscious) this.events.push('wake');
   }

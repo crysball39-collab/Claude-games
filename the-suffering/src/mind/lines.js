@@ -330,6 +330,20 @@ const MORE = {
     "They're burning. They're burning right in front of me.", "Fire! There's a person on fire!"],
   hearFlame: ["What's that roaring?", "Is something on fire?", "I smell smoke.", "Oh God, is that fire?"],
 
+  /* the cold */
+  frozen: ["I c-can't feel my hands!", "So c-cold... so cold...", "Make it stop! It's freezing!", "My legs won't move!", "I'm freezing! Help me!",
+    "It burns! How does cold burn?!", "My fingers- I can't move my fingers-", "Get it off me! It's ice! It's ICE!", "I c-can't stop sh-shaking...",
+    "Somebody get me w-warm...", "Everything's going numb.", "My face- I can't feel my face-"],
+  sawFreeze: ["He's freezing people!", "What is that? He's turning them to ice!", "He froze him solid!", "Get back! He'll freeze you too!",
+    "Is that- is that frost on them?!", "That's not smoke, it's cold! RUN!", "Oh God, they're frozen stiff!"],
+  hearFrost: ["What's that hissing?", "Is that gas? Is something leaking?", "Why is it suddenly so cold?", "Something just went freezing cold."],
+  callFreezing: ["There's a man spraying people with some kind of freezing gas!", "He froze somebody. Like, actually froze them solid!",
+    "Somebody's been frozen! Please, send an ambulance!", "There's a guy with some kind of freezing gun. It's turning people to ice."],
+
+  /* the string */
+  sawArrow: ["He shot him with an arrow!", "He's got a bow! Get down!", "Arrows! He's shooting arrows!", "Is that a crossbow?! RUN!",
+    "There's an arrow in him! There's an ARROW in him!", "Get behind something! He's got a bow!", "Oh my God, it went right into him!"],
+
   /* ropes */
   tied: ["Hey! What are you doing?!", "Get this off me!", "Untie me! Right now!", "What is this, a rope? Are you serious?", "Let me go!", "What are you tying me to?!",
     "This isn't funny!", "Somebody help, he's tying me up!", "I can't get it off!", "Why are you doing this?"],

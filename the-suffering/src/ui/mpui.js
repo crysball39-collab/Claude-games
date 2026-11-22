@@ -6,7 +6,7 @@
    ========================================================================== */
 import { P } from '../human/rig.js';
 import { MAX_PLAYERS } from '../net/multiplayer.js';
-import { $, el, clamp } from '../core/util.js';
+import { $, el, clamp, put, putClass, keyed } from '../core/util.js';
 
 const _s = [0, 0, 0];
 const CROWN = '♛ ';
@@ -62,25 +62,31 @@ export class MPUI {
 
   _servers() {
     this._status();
-    const box = $('#mp-servers'), mp = this.mp;
-    box.textContent = '';
-    const list = mp.servers;
-    if (!list.length) box.appendChild(el('p', 'note', mp.available ? 'Nobody is hosting a server right now. HOST one, and anyone else with the game open will see it here.' : 'No servers: there is nothing to connect through here.'));
-    for (const s of list) {
-      const row = el('div', 'srv');
-      const name = el('div', 'srv-name');
-      name.appendChild(el('b', '', s.name));
-      name.appendChild(el('small', '', `host ${s.host}${s.admin ? ' (admin)' : ''}`));
-      row.appendChild(name);
-      row.appendChild(el('span', 'srv-n' + (s.n >= s.max ? ' full' : ''), `${s.n}/${s.max}`));
-      row.appendChild(el('span', 'srv-ping ' + (s.ping == null ? '' : s.ping < 120 ? 'good' : s.ping < 250 ? 'mid' : 'bad'), s.ping == null ? '…' : `${s.ping} ms`));
-      const full = s.n >= s.max, here = mp.on && mp.server.id === s.id;
-      const b = el('button', 'chip join', here ? 'ON IT' : full ? 'FULL' : 'JOIN');
-      b.disabled = full || here || s.mine;
-      b.addEventListener('click', (e) => { e.preventDefault(); this.ui.sound.unlock(); this._join(s.id); });
-      row.appendChild(b);
-      box.appendChild(row);
-    }
+    const box = $('#mp-servers'), mp = this.mp, list = mp.servers;
+    const items = list.length ? list : [{ note: mp.available ? 'Nobody is hosting a server right now. HOST one, and anyone else with the game open will see it here.' : 'No servers: there is nothing to connect through here.' }];
+    // changed in place, not rebuilt: JOIN stays the same button from one refresh to the next
+    keyed(box, items, (s) => (s.note ? 'note' : 'srv ' + s.id), (s) => (s.note ? el('p', 'note') : this._serverRow(s.id)), (r, s) => {
+      if (s.note) { put(r, s.note); return; }
+      const q = r.q, full = s.n >= s.max, here = mp.on && mp.server.id === s.id;
+      put(q.name, s.name);
+      put(q.host, `host ${s.host}${s.admin ? ' (admin)' : ''}`);
+      put(q.n, `${s.n}/${s.max}`); putClass(q.n, 'srv-n' + (full ? ' full' : ''));
+      put(q.ping, s.ping == null ? '…' : `${s.ping} ms`); putClass(q.ping, 'srv-ping ' + (s.ping == null ? '' : s.ping < 120 ? 'good' : s.ping < 250 ? 'mid' : 'bad'));
+      put(q.join, here ? 'ON IT' : full ? 'FULL' : 'JOIN');
+      const off = full || here || !!s.mine;
+      if (q.join.disabled !== off) q.join.disabled = off;
+    });
+  }
+
+  /** One server's row, for _servers to fill in. */
+  _serverRow(id) {
+    const row = el('div', 'srv'), name = el('div', 'srv-name');
+    const q = { name: el('b'), host: el('small'), n: el('span', 'srv-n'), ping: el('span', 'srv-ping'), join: el('button', 'chip join') };
+    name.append(q.name, q.host);
+    row.append(name, q.n, q.ping, q.join);
+    q.join.addEventListener('click', (e) => { e.preventDefault(); this.ui.sound.unlock(); this._join(id); });
+    row.q = q;
+    return row;
   }
 
   async _join(id) {
@@ -144,37 +150,45 @@ export class MPUI {
   _list() {
     const mp = this.mp;
     if (!mp.on) return;
-    $('#pl-server').textContent = mp.server.name;
-    $('#pl-sub').textContent = `${mp.count}/${mp.server.max} players · host ${mp.hostName}`;
-    const box = $('#pl-rows');
-    box.textContent = '';
-    const head = el('div', 'pl head');
-    for (const t of ['PLAYER', 'K', 'D', 'PING', '']) head.appendChild(el('span', '', t));
-    box.appendChild(head);
+    put($('#pl-server'), mp.server.name);
+    put($('#pl-sub'), `${mp.count}/${mp.server.max} players · host ${mp.hostName}`);
     const admin = this.g.auth.admin;
     const all = mp.players.slice().sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
-    for (const p of all) {
-      const r = el('div', 'pl' + (p.you ? ' you' : ''));
-      const who = el('div', 'pl-who');
-      const b = el('b', '', (p.host ? CROWN : '') + p.name + (p.you ? ' (you)' : ''));
-      if (p.admin) b.appendChild(el('span', 'badge', 'ADMIN'));
-      who.appendChild(b);
-      const h = p.h, state = !h || h.removed ? '' : !h.h.alive ? 'dead' : !h.h.conscious ? 'knocked out' : h.car ? 'driving' : 'playing';
-      who.appendChild(el('small', '', (p.host ? 'host · ' : '') + state));
-      r.appendChild(who);
-      r.appendChild(el('span', '', String(p.kills)));
-      r.appendChild(el('span', '', String(p.deaths)));
-      r.appendChild(el('span', 'ping', p.host && p.you ? '-' : p.ping ? String(p.ping) : '…'));
-      const k = el('span', '');
-      if (admin && !p.you) {
-        const kb = el('button', 'chip kick', 'KICK');
-        kb.addEventListener('click', (e) => { e.preventDefault(); const res = mp.adminKick(p.peer); this.ui.toast(res.error || `${res.who} was kicked.`); });
-        k.appendChild(kb);
+    // changed in place, not rebuilt, so that KICK stays the same button from one refresh to the next
+    keyed($('#pl-rows'), [{ head: true }, ...all], (p) => (p.head ? 'head' : p.you ? 'you' : 'pl ' + p.peer), (p) => {
+      if (p.head) {
+        const head = el('div', 'pl head');
+        for (const t of ['PLAYER', 'K', 'D', 'PING', '']) head.appendChild(el('span', '', t));
+        return head;
       }
-      r.appendChild(k);
-      box.appendChild(r);
-    }
-    $('#pl-stats').textContent = 'Everyone here is a real person. Fights between players count on both screens; the city’s own people, police and traffic are each player’s own.';
+      const r = el('div', 'pl'), who = el('div', 'pl-who');
+      r.q = { name: el('b'), state: el('small'), kills: el('span'), deaths: el('span'), ping: el('span', 'ping'), kick: el('span'), peer: p.peer };
+      who.append(r.q.name, r.q.state);
+      r.append(who, r.q.kills, r.q.deaths, r.q.ping, r.q.kick);
+      return r;
+    }, (r, p) => {
+      if (p.head) return;
+      const q = r.q;
+      putClass(r, 'pl' + (p.you ? ' you' : ''));
+      const name = (p.host ? CROWN : '') + p.name + (p.you ? ' (you)' : '');
+      if (q.nameText !== name || q.badge !== !!p.admin) {
+        q.nameText = name; q.badge = !!p.admin;
+        q.name.textContent = name;
+        if (p.admin) q.name.appendChild(el('span', 'badge', 'ADMIN'));
+      }
+      const h = p.h, state = !h || h.removed ? '' : !h.h.alive ? 'dead' : !h.h.conscious ? 'knocked out' : h.car ? 'driving' : 'playing';
+      put(q.state, (p.host ? 'host · ' : '') + state);
+      put(q.kills, String(p.kills));
+      put(q.deaths, String(p.deaths));
+      put(q.ping, p.host && p.you ? '-' : p.ping ? String(p.ping) : '…');
+      const kick = admin && !p.you;
+      if (kick && !q.kick.firstChild) {
+        const kb = el('button', 'chip kick', 'KICK');
+        kb.addEventListener('click', (e) => { e.preventDefault(); const res = mp.adminKick(q.peer); this.ui.toast(res.error || `${res.who} was kicked.`); });
+        q.kick.appendChild(kb);
+      } else if (!kick && q.kick.firstChild) q.kick.textContent = '';
+    });
+    put($('#pl-stats'), 'Everyone here is a real person. Fights between players count on both screens; the city’s own people, police and traffic are each player’s own.');
   }
 
   /* ------------------------------------ the feed ------------------------------------ */

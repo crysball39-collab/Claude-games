@@ -27,11 +27,11 @@ export const MAX_WANTED = 2;
 /** Seconds without being seen before each level drops by one. */
 const COOL = [0, 70, 95];
 /** How many stars each kind of thing earns, once they know it was you. */
-export const STARS = { assault: 1, menace: 1, prints: 1, suspicion: 1, resisting: 1, weapon: 2, stabbing: 2, shooting: 2, shots: 2, murder: 2, officer: 2, burning: 2, electrocution: 2 };
+export const STARS = { assault: 1, menace: 1, prints: 1, suspicion: 1, resisting: 1, weapon: 2, stabbing: 2, shooting: 2, shots: 2, murder: 2, officer: 2, burning: 2, electrocution: 2, freezing: 2 };
 /** What a report is about, in the words the station would use. */
 const WHAT = {
   body: 'a body', assault: 'an assault', stabbing: 'a stabbing', shooting: 'a shooting', shots: 'shots fired', murder: 'a killing', menace: 'a man threatening people with a weapon',
-  burning: 'someone set on fire', electrocution: 'someone electrocuted',
+  burning: 'someone set on fire', electrocution: 'someone electrocuted', freezing: 'someone frozen',
 };
 /** How long prints left by bare hands can still be lifted, in seconds. */
 const PRINT_LIFE = 900;

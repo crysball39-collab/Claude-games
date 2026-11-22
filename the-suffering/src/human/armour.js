@@ -26,13 +26,13 @@ import { chance } from '../core/util.js';
  * stopped]. A blunt blow is never stopped, only softened.
  */
 export const PROTECT = {
-  soft2: { pistol: [0.6, 1, 1], rifle: [0, 0.7, 0], ball: [0.85, 0.6, 0.4], shot: [0.25, 1, 1], cut: [0.3, 1, 1], stab: [0, 0.45, 0], blunt: [0, 0.8, 0] },
-  soft3: { pistol: [0.42, 1, 1], rifle: [0, 0.55, 0], ball: [0.6, 0.8, 0.9], shot: [0.2, 1, 1], cut: [0.22, 1, 1], stab: [0.25, 0.3, 0.5], blunt: [0, 0.7, 0] },
-  plate: { pistol: [0.3, 1, 1], rifle: [0.75, 1, 1], ball: [0.45, 1, 1], shot: [0.12, 1, 1], cut: [0.15, 1, 1], stab: [0.2, 1, 1], blunt: [0, 0.55, 0] },
-  shell: { pistol: [0.8, 0.8, 0.6], rifle: [0, 0.9, 0], ball: [0, 0.85, 0], shot: [0.3, 0.7, 0.8], cut: [0.35, 1, 1], stab: [0, 0.5, 0], blunt: [0, 0.4, 0] },
-  ballistic: { pistol: [0.62, 0.7, 0.95], rifle: [1.0, 0.75, 0.12], ball: [0.8, 0.75, 0.7], shot: [0.2, 1, 1], cut: [0.3, 1, 1], stab: [0, 0.3, 0], blunt: [0, 0.35, 0] },
-  heavy: { pistol: [0.55, 1, 1], rifle: [1.05, 0.65, 0.35], ball: [0.65, 1, 0.95], shot: [0.2, 1, 1], cut: [0.25, 1, 1], stab: [0, 0.25, 0], blunt: [0, 0.3, 0] },
-  visor: { pistol: [0.45, 0.85, 0.85], rifle: [0, 0.8, 0], ball: [0, 0.8, 0.3], shot: [0.25, 1, 0.95], cut: [0.2, 1, 1], stab: [0.2, 1, 1], blunt: [0, 0.35, 0] },
+  soft2: { arrow: [0.4, 0.55, 0.5], pistol: [0.6, 1, 1], rifle: [0, 0.7, 0], ball: [0.85, 0.6, 0.4], shot: [0.25, 1, 1], cut: [0.3, 1, 1], stab: [0, 0.45, 0], blunt: [0, 0.8, 0] },
+  soft3: { arrow: [0.3, 0.45, 0.6], pistol: [0.42, 1, 1], rifle: [0, 0.55, 0], ball: [0.6, 0.8, 0.9], shot: [0.2, 1, 1], cut: [0.22, 1, 1], stab: [0.25, 0.3, 0.5], blunt: [0, 0.7, 0] },
+  plate: { arrow: [0.25, 1, 1], pistol: [0.3, 1, 1], rifle: [0.75, 1, 1], ball: [0.45, 1, 1], shot: [0.12, 1, 1], cut: [0.15, 1, 1], stab: [0.2, 1, 1], blunt: [0, 0.55, 0] },
+  shell: { arrow: [0.35, 0.6, 0.75], pistol: [0.8, 0.8, 0.6], rifle: [0, 0.9, 0], ball: [0, 0.85, 0], shot: [0.3, 0.7, 0.8], cut: [0.35, 1, 1], stab: [0, 0.5, 0], blunt: [0, 0.4, 0] },
+  ballistic: { arrow: [0.3, 0.5, 0.95], pistol: [0.62, 0.7, 0.95], rifle: [1.0, 0.75, 0.12], ball: [0.8, 0.75, 0.7], shot: [0.2, 1, 1], cut: [0.3, 1, 1], stab: [0, 0.3, 0], blunt: [0, 0.35, 0] },
+  heavy: { arrow: [0.3, 1, 1], pistol: [0.55, 1, 1], rifle: [1.05, 0.65, 0.35], ball: [0.65, 1, 0.95], shot: [0.2, 1, 1], cut: [0.25, 1, 1], stab: [0, 0.25, 0], blunt: [0, 0.3, 0] },
+  visor: { arrow: [0.3, 1, 0.9], pistol: [0.45, 0.85, 0.85], rifle: [0, 0.8, 0], ball: [0, 0.8, 0.3], shot: [0.25, 1, 0.95], cut: [0.2, 1, 1], stab: [0.2, 1, 1], blunt: [0, 0.35, 0] },
 };
 
 export const VESTS = {
@@ -89,7 +89,9 @@ export function helmetCover(kind, lp, ln, s, visorOk) {
  * A blow meeting armour of material `mat`. `round` says what kind of bullet
  * it was: 'pistol', 'rifle', 'ball' (a soft lead musket ball, big and slow:
  * soft armour often catches it, but it lands like a sledgehammer) or 'shot'
- * (a pellet of buckshot, which almost anything stops). Returns what gets
+ * (a pellet of buckshot, which almost anything stops). An arrow or a bolt is
+ * met as 'arrow': a plate turns it; soft armour, made to catch bullets, is
+ * as likely to let a broadhead through as not. Returns what gets
  * through: { type, power, hp, stopped }.
  */
 export function throughArmour(mat, type, round, power, hp) {

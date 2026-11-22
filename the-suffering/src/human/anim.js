@@ -55,6 +55,25 @@ export const RELOAD = {
    * barrel; the ramrod drawn, run down it three times, put back; the pan
    * primed and the lock cocked.
    */
+  /*
+   * A bow: the right hand goes back over the shoulder to the quiver, draws an
+   * arrow, and brings it round to the string; the bow arm comes down a little
+   * and the bow is turned flat while it is put on.
+   */
+  nock: {
+    nock: true, right: [2.55, 0.18, -0.55, 2.2], tilt: -0.35, roll: 0.55,
+    grab: 0.44, magIn: 0.86, magOut: 9, rackA: 9, rackB: 9,
+    left: [[0, [1.05, 0.1, 0.2, 0.3]], [1, [1.05, 0.1, 0.2, 0.3]]],
+  },
+  /*
+   * A crossbow: the nose down to the ground, the string hauled back on to the
+   * latch, then a bolt from the belt laid in the groove.
+   */
+  span: {
+    span: true, right: RA_R, tilt: -0.95, roll: 0.15,
+    cock: 0.48, grab: 0.58, magIn: 0.84, magOut: 9, rackA: 9, rackB: 9,
+    left: [[0, LA.magR], [0.12, LA.magR], [0.42, LA.boltB], [0.52, LA.boltB], [0.6, LA.pouch], [0.68, LA.pouch], [0.84, LA.magR], [1, LA.magR]],
+  },
   muzzle: {
     muzzle: true, right: [0.32, 0.22, 0.42, 1.5], tilt: 1.3, roll: 0.1,
     grab: 0.12, bite: 0.22, pour: 0.32, rodOut: 0.38, rodIn: 0.76, magIn: 0.72, rams: [0.48, 0.58, 0.68], rackA: 0.86, rackB: 0.92, magOut: 9,
@@ -221,7 +240,7 @@ export class Animator {
     this.t = Math.random() * 10;
     this.phase = Math.random();
     this.run = 0; this.moving = 0; this.crouch = 0; this.air = 0; this.land = 0;
-    this.w = { guard: 0, blade: 0, pistol: 0, rifle: 0, cower: 0, handsUp: 0, hurt: 0, talk: 0, stagger: 0, writhe: 0, crawl: 0, brace: 0, phone: 0, kneel: 0, cuffed: 0, cuffing: 0, call: 0, scan: 0, sit: 0, drive: 0, slump: 0 };
+    this.w = { guard: 0, blade: 0, pistol: 0, rifle: 0, bow: 0, cower: 0, handsUp: 0, hurt: 0, talk: 0, stagger: 0, writhe: 0, crawl: 0, brace: 0, phone: 0, kneel: 0, cuffed: 0, cuffing: 0, call: 0, scan: 0, sit: 0, drive: 0, slump: 0 };
     this.action = null;
     this.flinch = 0; this.flX = 0; this.flZ = 0;
     this.aim = 0; this.lookYaw = 0; this.lookPitch = 0;
@@ -254,7 +273,8 @@ export class Animator {
    *   mx, mz       which way they are moving relative to the way they face (unit)
    *   crouch       0 or 1
    *   grounded, vy
-   *   hold         'none' | 'guard' | 'blade' | 'pistol' | 'rifle'
+   *   hold         'none' | 'guard' | 'blade' | 'pistol' | 'rifle' | 'bow'
+   *   draw         0..1, how far a bow in the hands is drawn
    *   aimPitch     radians, up positive
    *   lookYaw, lookPitch   where the head wants to turn, relative to the body
    *   pose         { cower, handsUp, hurt, talk, stagger, writhe, crawl, brace, phone, kneel } 0..1 each
@@ -379,8 +399,17 @@ export class Animator {
       this._to(CH.shL, 1.12 + up * 0.85, a); this._to(CH.shLOut, 0.05, a); this._to(CH.shLIn, 0.78, a); this._to(CH.elL, 0.72, a);
       ch[CH.spineTwist] += -0.32 * a; ch[CH.neckTwist] += 0.22 * a; ch[CH.spineBend] += 0.06 * a;
     }
-    if (W.pistol + W.rifle > 0.01) {
-      const a = Math.min(1, W.pistol + W.rifle);
+    if (W.bow > 0.01) {
+      // side on to the mark: the bow arm out straight at it, the drawing arm up, its elbow coming back as the string does
+      // (both hands are then put exactly where the bow and the string are)
+      const a = W.bow, dr = clamp01(s.draw || 0);
+      this._to(CH.shL, 1.5 + up * 0.92, a); this._to(CH.shLOut, 0.05, a); this._to(CH.shLIn, 0.05, a); this._to(CH.elL, 0.08, a);
+      this._to(CH.shR, 1.35 + up * 0.8, a); this._to(CH.shROut, 0.5 + 0.25 * dr, a); this._to(CH.shRIn, 0.3, a); this._to(CH.elR, 0.9 + 1.35 * dr, a);
+      // turned well round, waist and chest, so the drawing hand can bring the string to the jaw; the head comes back to the mark
+      ch[CH.spineTwist] += -1.0 * a; ch[CH.waistTwist] += -0.35 * a; ch[CH.neckTwist] += 1.15 * a;
+    }
+    if (W.pistol + W.rifle + W.bow > 0.01) {
+      const a = Math.min(1, W.pistol + W.rifle + W.bow);
       ch[CH.spineBend] -= up * 0.2 * a; ch[CH.neckBend] -= up * 0.3 * a; ch[CH.headBend] -= up * 0.2 * a;
       ch[CH.spineBend] -= this.recoil * 0.05 * a;
     }

@@ -71,6 +71,39 @@ export function el(tag, cls, text) {
   return e;
 }
 
+/** An element's text, set only if it is different. */
+export function put(e, text) { if (e.textContent !== text) e.textContent = text; return e; }
+/** An element's class, set only if it is different. */
+export function putClass(e, cls) { if (e.className !== cls) e.className = cls; return e; }
+
+/**
+ * Keeps a box's children in step with a list without rebuilding it. A row that is still wanted stays the same
+ * element, brought up to date by fill(row, item) and moved only if the order has changed; make(item) builds a row for
+ * a key(item) not seen before, and rows no longer wanted go. (A list rebuilt under somebody's finger loses the tap:
+ * the press lands on one button and the release on the one that replaced it, and these lists refresh every second
+ * and at every change.)
+ */
+export function keyed(box, items, key, make, fill) {
+  const had = box._keyed || new Map(), now = new Map();
+  for (const it of items) {
+    const k = key(it);
+    if (now.has(k)) continue;
+    let row = had.get(k);
+    if (row) had.delete(k);
+    else row = make(it);
+    now.set(k, row);
+    fill(row, it);
+  }
+  for (const row of had.values()) row.remove();
+  let at = box.firstChild;
+  for (const row of now.values()) {
+    if (row === at) at = at.nextSibling;
+    else box.insertBefore(row, at);
+  }
+  while (at) { const next = at.nextSibling; at.remove(); at = next; }
+  box._keyed = now;
+}
+
 /** "a", "a and b", "a, b and c" */
 export function listWords(items) {
   if (items.length <= 1) return items[0] || '';

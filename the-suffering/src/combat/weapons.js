@@ -21,6 +21,7 @@ import { rgb } from '../render/boxes.js';
 import { cellUV } from '../render/quads.js';
 import { DECAL, ATLAS_COLS, ATLAS_ROWS } from '../render/textures.js';
 import { clamp, clamp01, lerp, smooth, rand, chance, wrapAngle, TAU } from '../core/util.js';
+import { ARROW_KINDS, lob } from './arrows.js';
 
 const STEEL = 0xc3c8cc, DARK = 0x26282c, WOOD = 0x7a4a26, GRIP = 0x3a2a1c, VEST = 0x121316, MAG = 0x15161a, YELLOW = 0xd8b614;
 const BLACK = 0x1c1d20, BLACK2 = 0x2a2c30, FDE = 0x8a7553;   // anodised black, the furniture, and flat dark earth
@@ -139,6 +140,42 @@ export const WEAPONS = {
       [0, -0.105, 0.12, 0.09, 0.09, 0.22, 0xb33a26, null, 0, 1], [0, -0.105, 0.24, 0.04, 0.04, 0.025, 0x1d1e20, null, 0, 1]],
     slide: -1, magSize: [0.045, 0.045, 0.12],
   },
+  /* liquid nitrogen thrown six metres as a freezing mist: it frosts whoever it reaches, part by part, and puts fire out */
+  frostthrower: {
+    id: 'frostthrower', name: 'Frost thrower', tag: 'Froster', label: 'FREEZE', hold: 'rifle', gun: true, frost: true, mag: 100, auto: true, gap: 0.1, power: 0, hp: 0, impulse: 0, spread: 0, kick: 0.002,
+    reload: 2.6, loud: 104, mass: 7.2, half: [0.05, 0.12, 0.44], centre: 0.12, grip: [0, -0.08, -0.04], muzzle: [0, 0.015, 0.69], sound: 'frost', range: 6,
+    boxes: [[0, 0, 0, 0.062, 0.085, 0.3, 0xd9dee2], [0, 0.015, 0.38, 0.036, 0.036, 0.46, 0x9ba7ae], [0, 0.015, 0.62, 0.052, 0.052, 0.07, 0x2a2b2d], [0, 0.015, 0.664, 0.058, 0.058, 0.02, 0xd4f1ff],
+      [0, 0.048, 0.57, 0.03, 0.02, 0.09, 0x6fb6dc], [0, -0.07, 0.24, 0.03, 0.1, 0.04, 0x1d1e20, tilt(0.15)], [0, -0.08, -0.04, 0.03, 0.11, 0.046, 0x1d1e20, tilt(0.25)],
+      [0, -0.01, -0.25, 0.046, 0.08, 0.18, 0xd9dee2], [0, -0.05, 0.06, 0.02, 0.02, 0.13, 0x111214],
+      [0, -0.105, 0.12, 0.09, 0.09, 0.22, 0x2f86bf, null, 0, 1], [0, -0.105, 0.06, 0.094, 0.094, 0.014, 0xeaf6ff, null, 0, 1], [0, -0.105, 0.18, 0.094, 0.094, 0.014, 0xeaf6ff, null, 0, 1], [0, -0.105, 0.24, 0.04, 0.04, 0.025, 0x1d1e20, null, 0, 1]],
+    slide: -1, magSize: [0.045, 0.045, 0.12],
+  },
+  /* ---- the string: an arrow, or a bolt, that you can watch go ---- */
+  /*
+   * A recurve bow. Hold the trigger to draw it (the longer, the harder it
+   * throws), let go to loose; the next arrow comes from the quiver on the
+   * back. Held in the left hand: the grip is its own origin.
+   */
+  bow: {
+    id: 'bow', name: 'Bow', label: 'DRAW', hold: 'bow', gun: true, arrow: 'arrow', reloadKind: 'nock', quiver: true, mag: 1, auto: true, gap: 0.2, power: 2.2, hp: 0, impulse: 0, spread: 0.006, kick: 0.004,
+    speed: 64, drawT: 0.85, reload: 0.85, loud: 64, mass: 1.1, half: [0.03, 0.62, 0.08], centre: 0, grip: [0, 0, 0], muzzle: [0.013, 0.024, 0.1], sound: 'bow',
+    boxes: [[0, 0, 0, 0.032, 0.42, 0.046, 0x5b3a22], [0, 0.01, 0.006, 0.036, 0.11, 0.05, 0x2a1d14], [0.013, 0.03, 0.012, 0.008, 0.012, 0.04, 0x2a1d14],
+      [0, 0.33, -0.04, 0.03, 0.272, 0.013, 0x26271f, tilt(-0.298)], [0, 0.53, -0.115, 0.027, 0.157, 0.011, 0x26271f, tilt(-0.464)], [0, 0.63, -0.14, 0.024, 0.063, 0.01, 0x26271f, tilt(0.32)],
+      [0, -0.33, -0.04, 0.03, 0.272, 0.013, 0x26271f, tilt(0.298)], [0, -0.53, -0.115, 0.027, 0.157, 0.011, 0x26271f, tilt(0.464)], [0, -0.63, -0.14, 0.024, 0.063, 0.01, 0x26271f, tilt(-0.32)]],
+    string: { up: [0, 0.645, -0.14], down: [0, -0.645, -0.14], rest: -0.14, pull: 0.55, y: 0.02 },
+    slide: -1, magSize: [0.004, 0.37, 0.004],
+  },
+  /* a crossbow: a bolt on a trigger, flat and fast, and then the string hauled back to the latch by hand */
+  crossbow: {
+    id: 'crossbow', name: 'Crossbow', label: 'FIRE', hold: 'rifle', gun: true, arrow: 'bolt', reloadKind: 'span', mag: 1, auto: false, gap: 0.4, power: 2.8, hp: 0, impulse: 0, spread: 0.003, kick: 0.012,
+    speed: 96, reload: 3.4, loud: 82, mass: 3.3, half: [0.3, 0.06, 0.38], centre: 0.09, grip: [0, -0.07, -0.06], fore: [0, -0.035, 0.2], muzzle: [0, 0.04, 0.46], sound: 'crossbow',
+    boxes: [[0, -0.02, -0.28, 0.04, 0.1, 0.22, WALNUT, tilt(-0.1)], [0, 0, 0.1, 0.046, 0.05, 0.62, WALNUT], [0, 0.027, 0.17, 0.018, 0.006, 0.5, 0x2a2c30],
+      [0, -0.075, -0.06, 0.03, 0.1, 0.042, GRIP, tilt(0.3)], [0, -0.04, 0.0, 0.006, 0.022, 0.05, DARK], [0, 0.038, 0.0, 0.032, 0.016, 0.03, 0x15161a],
+      [0.17, 0.03, 0.39, 0.3, 0.026, 0.034, 0x2a2c30, [0, -0.06, 0, 0.998]], [-0.17, 0.03, 0.39, 0.3, 0.026, 0.034, 0x2a2c30, [0, 0.06, 0, 0.998]], [0, 0.03, 0.405, 0.06, 0.05, 0.05, 0x15161a],
+      [0, -0.01, 0.47, 0.12, 0.012, 0.012, 0x3a3c40], [0.06, -0.035, 0.47, 0.012, 0.06, 0.012, 0x3a3c40], [-0.06, -0.035, 0.47, 0.012, 0.06, 0.012, 0x3a3c40], [0, 0.062, 0.05, 0.006, 0.03, 0.01, 0x15161a]],
+    string: { left: [0.32, 0.032, 0.36], right: [-0.32, 0.032, 0.36], rest: 0.37, latch: 0.012, y: 0.038 },
+    slide: -1, magSize: [0.006, 0.006, 0.19],
+  },
   /* two barbed probes on seven metres of wire: no wound to speak of, and five seconds in which no muscle answers */
   taser: {
     id: 'taser', name: 'Taser', label: 'TASE', hold: 'pistol', gun: true, taser: true, mag: 2, auto: false, gap: 0.7, power: 0, hp: 0, impulse: 0, spread: 0.008, kick: 0.006,
@@ -217,6 +254,8 @@ function basis(ex, ey, ez) {
 const H = Math.SQRT1_2;
 const slant = (a) => { const d = [Math.sin(a), -Math.cos(a), 0]; return basis([0, 0, 1], [d[1], -d[0], 0], d); };
 const slantUp = (a) => { const d = [Math.sin(a), Math.cos(a), 0]; return basis([0, 0, -1], [-d[1], d[0], 0], d); };
+/** A bow's length (its own Y) slanted across the back, its face (its own Z) turned out from the body. */
+const slung = (a) => basis([-Math.cos(a), Math.sin(a), 0], [Math.sin(a), Math.cos(a), 0], [0, 0, -1]);
 /**
  * Where each weapon rides when it is not in the hand: which part of the body,
  * where on it (metres, for someone of average size), which way it lies, and
@@ -237,6 +276,9 @@ export const MOUNT = {
   rope: { part: P.PELVIS, pos: [0.16, 0.0, -0.11], q: [H, 0, 0, H], reach: 'hip', dur: 0.4, word: 'belt' },                  // a coil hung on the belt
   wire: { part: P.PELVIS, pos: [-0.16, 0.0, -0.11], q: [H, 0, 0, H], reach: 'hip', dur: 0.4, word: 'belt' },
   flamethrower: { part: P.CHEST, pos: [-0.01, -0.03, -0.17], q: slantUp(0.6), reach: 'back', dur: 0.8, word: 'back' },
+  frostthrower: { part: P.CHEST, pos: [-0.01, -0.03, -0.17], q: slantUp(0.6), reach: 'back', dur: 0.8, word: 'back' },
+  bow: { part: P.CHEST, pos: [0.03, 0.02, -0.17], q: slung(0.55), reach: 'back', dur: 0.75, word: 'back' },                    // across the back, the string outward
+  crossbow: { part: P.CHEST, pos: [0.02, -0.03, -0.17], q: slantUp(0.62), reach: 'back', dur: 0.8, word: 'back' },
   musket: { part: P.CHEST, pos: [0.02, -0.04, -0.15], q: slantUp(0.66), reach: 'back', dur: 0.8, word: 'back' },            // slung, the long barrel up over the left shoulder
   arquebus: { part: P.CHEST, pos: [0.02, -0.04, -0.15], q: slantUp(0.64), reach: 'back', dur: 0.8, word: 'back' },
   blunderbuss: { part: P.CHEST, pos: [0.02, -0.03, -0.15], q: slantUp(0.58), reach: 'back', dur: 0.72, word: 'back' },
@@ -245,6 +287,22 @@ export const MOUNT = {
 };
 
 const _a = [0, 0, 0], _b = [0, 0, 0], _c = [0, 0, 0], _hit = [0, 0, 0, 0, 0, 0, 0], _n = [0, 0, 0];
+/**
+ * A bow's quiver, worn on the back by whoever has the bow: its boxes in the
+ * chest's own space (x, y, z, w, h, l, colour, turn), slung so the arrows
+ * come over the right shoulder.
+ */
+const QUIVER = (() => {
+  const az = 0.38, ax = -0.22, sz = Math.sin(az / 2), cz = Math.cos(az / 2), sx = Math.sin(ax / 2), cx = Math.cos(ax / 2);
+  const q = [cz * sx, sz * sx, sz * cx, cz * cx];            // about X (away from the back), then about Z (the top toward the right)
+  const at = [-0.1, 0.04, -0.15];
+  const W = 0x9a7448, R = 0xc63a26, F = 0xece6d6, L = 0x4b2f1c, D = 0x2a1a10;
+  const parts = [[0, 0, 0, 0.085, 0.48, 0.085, L], [0, 0.24, 0, 0.094, 0.022, 0.094, D], [0, -0.24, 0, 0.094, 0.026, 0.094, D], [0, 0.02, 0.045, 0.024, 0.4, 0.006, D],
+    [0.022, 0.275, 0.018, 0.008, 0.06, 0.008, W], [-0.02, 0.275, 0.022, 0.008, 0.06, 0.008, W], [0.018, 0.275, -0.022, 0.008, 0.06, 0.008, W], [-0.022, 0.275, -0.016, 0.008, 0.06, 0.008, W],
+    [0.022, 0.33, 0.018, 0.002, 0.075, 0.03, R], [-0.02, 0.33, 0.022, 0.03, 0.075, 0.002, F], [0.018, 0.33, -0.022, 0.002, 0.075, 0.03, F], [-0.022, 0.33, -0.016, 0.03, 0.075, 0.002, R]];
+  return parts.map((b) => { const r = rotv(q, b[0], b[1], b[2], [0, 0, 0]); return [at[0] + r[0], at[1] + r[1], at[2] + r[2], b[3], b[4], b[5], b[6], q]; });
+})();
+
 const NONE = [];
 /** How soft the handcuffs' link is while the wrists are still apart (XPBD compliance). */
 const CUFF_SLACK = 4e-4;
@@ -299,9 +357,15 @@ export class Weapons {
       item.reach2 = (def.half[2] * 2 + 0.2) ** 2;
     }
     this._paint(item);
+    // what moves on a bow or a crossbow: the string, the arrow (or bolt) on it, and a bow's quiver of arrows
+    if (def.string) { item.str = [g.boxes.alloc(), g.boxes.alloc()]; for (const i of item.str) g.boxes.colorHex(i, def.hold === 'bow' ? 0xe9e3cf : 0x2b2b2b); item.draw = 0; item.cocked = true; }
+    if (def.arrow) { const K = ARROW_KINDS[def.arrow]; item.nocked = K.boxes.map((b) => { const i = g.boxes.alloc(); g.boxes.colorHex(i, b[6]); return i; }); }
+    if (def.quiver) item.quiv = QUIVER.map((b) => { const i = g.boxes.alloc(); g.boxes.colorHex(i, b[6]); return i; });
     this.items.push(item);
     return item;
   }
+  /** The boxes an item has besides its model. */
+  _extra(item) { return [...(item.str || NONE), ...(item.nocked || NONE), ...(item.quiv || NONE)]; }
 
   /** Puts a weapon straight on to somebody: in its holster, or in the hand. */
   give(human, type, inHand = false) {
@@ -375,6 +439,7 @@ export class Weapons {
     const who = item.holder;
     if (who && !who.isPlayer) { const k = who.kit ? who.kit.indexOf(item) : -1; if (k >= 0) who.kit.splice(k, 1); if (who.weapon === item) who.weapon = null; if (who.reload && who.reload.item === item) this._cancelReload(who); if (who.swap && who.swap.to === item) who.swap = null; }
     for (const i of item.inst) this.game.boxes.release(i);
+    for (const i of this._extra(item)) this.game.boxes.release(i);
     const k = this.items.indexOf(item);
     if (k >= 0) this.items.splice(k, 1);
     const n = this.inventory.indexOf(item);
@@ -751,7 +816,7 @@ export class Weapons {
   /** Another player's shot, as it looks and sounds from here: the flash, the bang, and rounds that mark what they meet. */
   ghostShot(h, type, m, dir) {
     const g = this.game, d = WEAPONS[type];
-    if (!d || !d.gun || d.taser || d.flame) return;
+    if (!d || !d.gun || d.taser || d.flame || d.frost || d.arrow) return;
     for (let i = 0, n = d.pellets || 1; i < n; i++) {
       let ex = dir[0], ey = dir[1], ez = dir[2];
       if (d.pelletSpread) { ex += rand(-1, 1) * d.pelletSpread; ey += rand(-1, 1) * d.pelletSpread; ez += rand(-1, 1) * d.pelletSpread; const k = Math.hypot(ex, ey, ez) || 1; ex /= k; ey /= k; ez /= k; }
@@ -1005,6 +1070,8 @@ export class Weapons {
     r.t += dt;
     const u = r.t / r.dur, hand = h.bodies[P.HAND_L];
     if (R.muzzle) { this._muzzleLoad(h, r, item, R, u, hand); return; }
+    if (R.nock) { this._nock(h, r, item, R, u); return; }
+    if (R.span) { this._span(h, r, item, R, u); return; }
     if (!r.out && u >= R.magOut) {
       r.out = true; item.magOut = true;
       this._dropMag(h, item);
@@ -1089,6 +1156,37 @@ export class Weapons {
     }
   }
 
+  /** A hand back over the shoulder to the quiver, an arrow out of it, and on to the string. */
+  _nock(h, r, item, R, u) {
+    const g = this.game, bx = g.boxes, s = h.scale, hand = h.bodies[P.HAND_R];
+    if (!r.grab && u >= R.grab) { r.grab = true; r.magIdx = bx.alloc(); bx.colorHex(r.magIdx, 0x9a7448); g.audio?.at('pickup', h.x, h.y + 1.5, h.z, 0.22); }
+    if (!r.seated && u >= R.magIn) {
+      r.seated = true; item.ammo = item.def.mag;
+      if (r.magIdx >= 0) { bx.release(r.magIdx); r.magIdx = -1; }
+      g.audio?.at('click', item.px, item.py, item.pz, 0.22);
+      if (h.isPlayer) g.ui?.ammoChanged();
+    }
+    if (r.magIdx >= 0) bx.setOn(r.magIdx, hand.px, hand.py, hand.pz, hand.qx, hand.qy, hand.qz, hand.qw, 0, -0.06 * s, 0.015 * s, 0.008 * s, 0.74, 0.008 * s);
+    if (u >= 1) { h.reload = null; h.handFull = 0; }
+  }
+
+  /** The crossbow's nose to the ground, the string hauled back on to the latch, a bolt from the belt into the groove. */
+  _span(h, r, item, R, u) {
+    const g = this.game, bx = g.boxes, s = h.scale, hand = h.bodies[P.HAND_L];
+    // the haul: a ratchet of clicks, and the latch catching
+    if (!r.racked && u > R.cock - 0.26 && (r.clk = (r.clk || 0) - g.dt) <= 0) { r.clk = 0.085; g.audio?.at('click', item.px, item.py, item.pz, 0.2); }
+    if (!r.racked && u >= R.cock) { r.racked = true; item.cocked = true; g.audio?.at('span', item.px, item.py, item.pz, 0.7); }
+    if (!r.grab && u >= R.grab) { r.grab = true; if (h.h.armOk(1)) { h.handFull = 1; r.magIdx = bx.alloc(); bx.colorHex(r.magIdx, 0x2b2d30); } }
+    if (!r.seated && u >= R.magIn) {
+      r.seated = true; item.ammo = item.def.mag; h.handFull = 0;
+      if (r.magIdx >= 0) { bx.release(r.magIdx); r.magIdx = -1; }
+      g.audio?.at('click', item.px, item.py, item.pz, 0.45);
+      if (h.isPlayer) g.ui?.ammoChanged();
+    }
+    if (r.magIdx >= 0) bx.setOn(r.magIdx, hand.px, hand.py, hand.pz, hand.qx, hand.qy, hand.qz, hand.qw, -0.02 * s, -0.05 * s, 0.02 * s, 0.011 * s, 0.36, 0.011 * s);
+    if (u >= 1) { h.reload = null; h.handFull = 0; }
+  }
+
   /** The empty magazine, on its way to the ground. */
   _dropMag(h, item) {
     const g = this.game, sz = item.def.magSize;
@@ -1116,6 +1214,12 @@ export class Weapons {
     const g = this.game, e = h.weapon;
     if (!e || !e.def.gun || e.cool > 0 || h.reload || h.swap || h.cuffed || h.cuffing || h.state !== ST.ANIM || !h.h.armOk(-1)) return false;
     const d = e.def;
+    if (d.flame || d.frost) return false;
+    if (d.arrow) {
+      if (e.ammo <= 0) { e.cool = 0.4; this.reloadFor(h); return false; }
+      e.cool = d.gap * rand(5, 8);
+      return this._shoot(h, e, d.hold === 'bow' ? rand(0.8, 1) : 1, aim);
+    }
     if (d.taser) {
       const m = e.muzzleWorld || [h.x, h.y + 1.4 * h.scale, h.z];
       let dx = aim[0] - m[0], dy = aim[1] - m[1], dz = aim[2] - m[2];
@@ -1237,6 +1341,8 @@ export class Weapons {
   fire() {
     const g = this.game, p = g.player, e = this.equipped;
     if (e && e.def.flame) return this._flame(p, e);
+    if (e && e.def.frost) return this._frost(p, e);
+    if (e && e.def.hold === 'bow') return this._draw(p, e);
     if (!e || !e.def.gun || this.cool > 0 || p.reload || p.swap || p.weapon !== e || p.cuffed || p.cuffing) return false;
     if (!p.h.armOk(-1)) return false;
     if (e.def.taser) {
@@ -1265,7 +1371,79 @@ export class Weapons {
       this.lockT = { t: d.delay, e };
       return true;
     }
+    if (d.arrow) return this._shoot(p, e, 1);
     return this._discharge(p, e);
+  }
+
+  /** The bow drawn back, a frame at a time while the trigger is held; let go and it looses (in update). */
+  _draw(p, e) {
+    const g = this.game, d = e.def;
+    if (p.reload || p.swap || p.weapon !== e || p.cuffed || p.cuffing || !p.h.armOk(-1) || !p.h.armOk(1)) return false;
+    if (e.ammo <= 0) { this.reload(); return false; }
+    if (this.cool > 0 && !e.draw) return false;
+    if (!e.draw) g.audio?.at('draw', p.x, p.y + 1.5, p.z, 0.55);
+    // a tired or a hurting arm draws slower
+    const k = (0.55 + 0.45 * clamp01(p.h.stamina / 60)) * (p.h.pain > 60 ? 0.7 : 1);
+    e.draw = Math.min(1, (e.draw || 0) + g.dt / d.drawT * k);
+    this.drawing = e;
+    // and holding it at full draw is work
+    if (e.draw >= 1) p.h.spend(g.dt * 2.5);
+    return true;
+  }
+
+  /** The string let go: barely drawn, it is let down again; otherwise the arrow goes. */
+  _loose(h, e) {
+    const k = e.draw || 0;
+    e.draw = 0;
+    if (k < 0.2) return false;
+    return this._shoot(h, e, k);
+  }
+
+  /**
+   * An arrow (or a bolt) away, `k` being how far the bow was drawn. It is sent
+   * on the arc that brings it down on what the eye is on (the player's), or
+   * on `aim` (anybody else's); straight along the line of sight when that
+   * is out of its reach.
+   */
+  _shoot(h, e, k, aim = null) {
+    const g = this.game, d = e.def, A = g.arrows;
+    if (!A || e.ammo <= 0) return false;
+    e.ammo--;
+    if (d.hold !== 'bow') e.cocked = false;
+    const m = e.muzzleWorld || [h.x, h.y + 1.45 * h.scale, h.z];
+    let tx, ty, tz;
+    if (aim) { tx = aim[0]; ty = aim[1]; tz = aim[2]; }
+    else {
+      const a = g.aim;
+      let far = 200;
+      const w = g.world.rayWorld(a.ox, a.oy, a.oz, a.dx, a.dy, a.dz, far); if (w >= 0) far = w;
+      const ph = g.rayPeople(a.ox, a.oy, a.oz, a.dx, a.dy, a.dz, far, h, 0.02); if (ph) far = ph.t;
+      for (const o of g.props) { if (o.kind === 'weapon') continue; const t = o.vox ? o.vox.ray(a.ox, a.oy, a.oz, a.dx, a.dy, a.dz, far) : rayBody(o.body, a.ox, a.oy, a.oz, a.dx, a.dy, a.dz, far, null); if (t >= 0 && t < far) far = t; }
+      tx = a.ox + a.dx * far; ty = a.oy + a.dy * far; tz = a.oz + a.dz * far;
+    }
+    const v = d.speed * (0.3 + 0.7 * k);
+    let sx = tx - m[0], sy = ty - m[1], sz = tz - m[2];
+    const sl = Math.hypot(sx, sy, sz) || 1; sx /= sl; sy /= sl; sz /= sl;
+    let dir = sl > 0.8 ? lob(m[0], m[1], m[2], tx, ty, tz, v) : null;
+    if (!dir || dir[0] * sx + dir[1] * sy + dir[2] * sz < 0.94) dir = [sx, sy, sz];
+    const sp = h.isPlayer ? d.spread * (h.speed > 2 ? 2.5 : 1) * (h.crouching ? 0.7 : 1) * (1.6 - 0.6 * k) : d.spread * 2.5 + 0.012;
+    let dx = dir[0] + rand(-sp, sp), dy = dir[1] + rand(-sp, sp), dz = dir[2] + rand(-sp, sp);
+    const l = Math.hypot(dx, dy, dz); dx /= l; dy /= l; dz /= l;
+    A.loose(h, d.arrow, m[0], m[1], m[2], dx * v + (h.vx || 0), dy * v, dz * v + (h.vz || 0), d.power * (0.3 + 0.7 * k), d.id);
+    g.mp?.arrowFx(d.arrow, [m[0], m[1], m[2]], [dx * v, dy * v, dz * v], d.id);
+    h.anim.recoil = d.hold === 'bow' ? 0.35 : 0.7;
+    if (h.isPlayer) {
+      this.cool = d.gap;
+      g.camPitch += d.kick * rand(0.8, 1.2); g.camYaw += d.kick * rand(-0.4, 0.4);
+      g.shake = Math.max(g.shake, d.hold === 'bow' ? 0.15 : 0.35);
+      g.audio?.play(d.sound, 1);
+      g.ui?.ammoChanged();
+    } else g.audio?.at(d.sound, m[0], m[1], m[2], 1);
+    g.minds?.noise(m[0], m[1], m[2], d.loud, 'twang', h);
+    g.minds?.witness({ kind: 'shot', actor: h, weapon: d.id, x: m[0], y: m[1], z: m[2] });
+    // the next arrow out of the quiver at once
+    if (d.hold === 'bow' && e.ammo <= 0) this.reloadFor(h);
+    return true;
   }
 
   /** The priming in the pan going off: a spit of flame and a puff of smoke at the lock. */
@@ -1362,6 +1540,37 @@ export class Weapons {
     if (this._flameT <= 0) {
       this._flameT = 0.5;
       g.minds?.noise(m[0], m[1], m[2], d.loud, 'flame', p);
+      g.minds?.witness({ kind: 'shot', actor: p, weapon: d.id, x: m[0], y: m[1], z: m[2] });
+    }
+    return true;
+  }
+
+  /**
+   * One frame of the frost thrower: a freezing mist toward whatever is under
+   * the crosshair, ten units of coolant a second.
+   */
+  _frost(p, e) {
+    const g = this.game, d = e.def, dt = g.dt;
+    if (p.reload || p.swap || p.weapon !== e || p.cuffed || p.cuffing || !p.h.armOk(-1)) return false;
+    if (e.ammo <= 0) { if (!this._dry) { this._dry = true; g.audio?.play('click', 0.5); g.ui?.toast('Out of coolant. Reload.'); } return false; }
+    this._dry = false;
+    e.burnT = (e.burnT || 0) + dt;
+    while (e.burnT >= d.gap && e.ammo > 0) { e.burnT -= d.gap; e.ammo--; g.ui?.ammoChanged(); }
+    const a = g.aim, m = e.muzzleWorld || [p.x, p.y + 1.3, p.z];
+    let far = 8;
+    const wl = g.world.rayWorld(a.ox, a.oy, a.oz, a.dx, a.dy, a.dz, far); if (wl >= 0) far = wl;
+    let dx = a.ox + a.dx * far - m[0], dy = a.oy + a.dy * far - m[1], dz = a.oz + a.dz * far - m[2];
+    const l = Math.hypot(dx, dy, dz) || 1;
+    if (l < 0.6) { dx = a.dx; dy = a.dy; dz = a.dz; } else { dx /= l; dy /= l; dz /= l; }
+    dy += 0.02;
+    g.frost?.spray(p, m[0] + dx * 0.05, m[1] + dy * 0.05, m[2] + dz * 0.05, dx, dy, dz, dt);
+    g.audio?.loop('frost' + p.id, 'frost', m[0], m[1], m[2], 1);
+    p.anim.recoil = Math.max(p.anim.recoil || 0, 0.1);
+    g.shake = Math.max(g.shake, 0.08);
+    this._frostT = (this._frostT || 0) - dt;
+    if (this._frostT <= 0) {
+      this._frostT = 0.5;
+      g.minds?.noise(m[0], m[1], m[2], d.loud, 'hiss', p);
       g.minds?.witness({ kind: 'shot', actor: p, weapon: d.id, x: m[0], y: m[1], z: m[2] });
     }
     return true;
@@ -1554,6 +1763,12 @@ export class Weapons {
       if (inp.pressed.drop && !p.cuffed) this.drop();
       if (inp.pressed.holster && !p.cuffed) this.holster();
     }
+    // a drawn bow goes the moment the trigger is let go; anything else that happens lets the string down
+    const dr = this.drawing;
+    if (dr) {
+      if (dr !== this.equipped || p.weapon !== dr || p.state !== ST.ANIM || p.car || p.reload || p.swap || g.doctor != null || !p.h.armOk(-1) || !p.h.armOk(1)) { dr.draw = 0; this.drawing = null; }
+      else if (!inp.down.attack) { this.drawing = null; this._loose(p, dr); }
+    }
     if (!p.anim.action) p.lowAim = 0;
     // every swing in progress, the player's and everybody else's
     for (const h of g.humans) if (h.anim.action && h.state === ST.ANIM) this._melee(h, dt);
@@ -1574,6 +1789,46 @@ export class Weapons {
     let nc = null;
     if (!near && p.state === ST.ANIM && !p.cuffed) { let bd = 1.5; for (const o of g.humans) { if (o === p || !o.cuffed || o.removed) continue; const d = Math.hypot(o.x - p.x, o.z - p.z); if (d < bd) { bd = d; nc = o; } } }
     if (near !== this.near || nc !== this.nearCuffed) { this.near = near; this.nearCuffed = nc; g.ui?.nearChanged(); }
+  }
+
+  /** The string (back as far as it is drawn), the arrow or bolt on it, and a bow's quiver on its owner's back. */
+  _drawExtras(it, show, px, py, pz, qx, qy, qz, qw, h) {
+    const bx = this.game.boxes, d = it.def, S = d.string;
+    if (it.str) {
+      if (!show) { for (const i of it.str) bx.hide(i); for (const i of it.nocked || NONE) bx.hide(i); }
+      else {
+        const inHand = !!h && h.weapon === it && !it.body && h.state === ST.ANIM;
+        let on, K, ox, oy, oz;
+        if (d.hold === 'bow') {
+          const nz = S.rest - S.pull * (inHand ? it.draw || 0 : 0);
+          this._strand(it.str[0], px, py, pz, qx, qy, qz, qw, S.up[0], S.up[1], S.up[2], 0, S.y, nz, true);
+          this._strand(it.str[1], px, py, pz, qx, qy, qz, qw, S.down[0], S.down[1], S.down[2], 0, S.y, nz, true);
+          // an arrow on the string, its nock in the string's corner
+          on = inHand && it.ammo > 0 && !h.reload; K = ARROW_KINDS.arrow; ox = 0.013; oy = S.y + 0.004; oz = nz + 0.372;
+        } else {
+          const nz = it.cocked ? S.latch : S.rest;
+          this._strand(it.str[0], px, py, pz, qx, qy, qz, qw, S.left[0], S.left[1], S.left[2], 0, S.y, nz, false);
+          this._strand(it.str[1], px, py, pz, qx, qy, qz, qw, S.right[0], S.right[1], S.right[2], 0, S.y, nz, false);
+          on = it.ammo > 0 && it.cocked; K = ARROW_KINDS.bolt; ox = 0; oy = S.y + 0.006; oz = S.latch + 0.18;
+        }
+        K.boxes.forEach((e, n) => { if (on) bx.setOn(it.nocked[n], px, py, pz, qx, qy, qz, qw, ox + e[0], oy + e[1], oz + e[2], e[3], e[4], e[5]); else bx.hide(it.nocked[n]); });
+      }
+    }
+    if (it.quiv) {
+      const ok = !!h && !h.removed && !h.hidden && !h.gone[P.CHEST] && !it.body;
+      if (!ok) for (const i of it.quiv) bx.hide(i);
+      else {
+        const c = h.bodies[P.CHEST], s = h.scale;
+        QUIVER.forEach((b, n) => bx.setOn(it.quiv[n], c.px, c.py, c.pz, c.qx, c.qy, c.qz, c.qw, b[0] * s, b[1] * s, b[2] * s, b[3] * s, b[4] * s, b[5] * s, b[7]));
+      }
+    }
+  }
+
+  /** One length of string, from (ax, ay, az) to (cx, cy, cz) in the model's own space: up its length (a bow's), or across it (a crossbow's). */
+  _strand(i, px, py, pz, qx, qy, qz, qw, ax, ay, az, cx, cy, cz, upright) {
+    const dx = cx - ax, dy = cy - ay, dz = cz - az, len = Math.hypot(dx, dy, dz) || 1e-4;
+    if (upright) { const t = Math.atan2(dz, dy); this.game.boxes.setOn(i, px, py, pz, qx, qy, qz, qw, (ax + cx) / 2, (ay + cy) / 2, (az + cz) / 2, 0.0035, len, 0.0035, [Math.sin(t / 2), 0, 0, Math.cos(t / 2)]); }
+    else { const f = Math.atan2(-dz, dx); this.game.boxes.setOn(i, px, py, pz, qx, qy, qz, qw, (ax + cx) / 2, (ay + cy) / 2, (az + cz) / 2, len, 0.004, 0.004, [0, Math.sin(f / 2), 0, Math.cos(f / 2)]); }
   }
 
   /** A bracelet on each wrist and a link of chain between them. */
@@ -1618,10 +1873,28 @@ export class Weapons {
         b.toWorld(0, 0, -d.centre, _a); px = _a[0]; py = _a[1]; pz = _a[2];
         if (b.py < -10) { b.teleport(p.x, 2, p.z); b.vx = b.vy = b.vz = 0; }
       } else if (h && h.hidden) show = false;
-      else if (h && !h.removed && h.weapon === it && !h.gone[P.HAND_R] && h.attached[P.HAND_R]) {
-        // in the hand, lying in the curl of the fingers
-        const hand = h.bodies[P.HAND_R], s = h.scale;
-        if (d.gun && h.state === ST.ANIM) {
+      else if (h && !h.removed && h.weapon === it && !h.gone[d.hold === 'bow' ? P.HAND_L : P.HAND_R] && h.attached[d.hold === 'bow' ? P.HAND_L : P.HAND_R]) {
+        // in the hand, lying in the curl of the fingers (a bow is held in the left)
+        const bowHand = d.hold === 'bow', hand = h.bodies[bowHand ? P.HAND_L : P.HAND_R], s = h.scale;
+        if (bowHand && h.state === ST.ANIM) {
+          // out at arm's length toward whatever its archer is looking at, canted a little; down and turned while an arrow is fetched
+          const yaw = h.isPlayer ? g.camYaw : h.aimYaw ?? h.yaw;
+          const rw = h.anim.reloadW, R = RELOAD.nock, low = h.isPlayer ? 0 : h.gunLow || 0;
+          const pitch = (h.isPlayer ? g.camPitch : h.aimPitch || 0) * (1 - rw) * (1 - low) + R.tilt * rw - low * 0.7;
+          const roll = 0.12 + R.roll * rw + low * 0.3;
+          const sy = Math.sin(yaw / 2), cy = Math.cos(yaw / 2), sx = Math.sin(-pitch / 2), cx = Math.cos(-pitch / 2);
+          qx = cy * sx; qy = sy * cx; qz = -sy * sx; qw = cy * cx;
+          const sr = Math.sin(roll / 2), cr = Math.cos(roll / 2), ax = qx * cr + qy * sr, ay = qy * cr - qx * sr, az = qz * cr + qw * sr, aw = qw * cr - qz * sr;
+          qx = ax; qy = ay; qz = az; qw = aw;
+          it.q[0] = qx; it.q[1] = qy; it.q[2] = qz; it.q[3] = qw;
+          hand.toWorld(-0.016 * s, -0.03 * s, 0.01, _b);
+          rotv(it.q, d.grip[0], d.grip[1], d.grip[2], _a);
+          px = _b[0] - _a[0]; py = _b[1] - _a[1]; pz = _b[2] - _a[2];
+          // an NPC archer draws while their bow is up at somebody
+          if (!h.isPlayer) it.draw = it.ammo > 0 && !h.reload ? clamp01(1 - low * 2) : 0;
+          rotv(it.q, d.muzzle[0], d.muzzle[1], d.muzzle[2], _a);
+          it.muzzleWorld = [px + _a[0], py + _a[1], pz + _a[2]];
+        } else if (d.gun && h.state === ST.ANIM) {
           // a gun points where its owner is looking, whatever the wrist is doing
           const yaw = h.isPlayer ? g.camYaw : h.aimYaw ?? h.yaw;
           const rw = h.anim.reloadW, R = RELOAD[d.reloadKind || d.hold], low = h.isPlayer ? 0 : h.gunLow || 0;
@@ -1673,6 +1946,7 @@ export class Weapons {
         const back = it.slide && i === d.slide ? it.slide * 0.034 : 0;
         bx.setOn(it.inst[i], px, py, pz, qx, qy, qz, qw, b[0], b[1], b[2] - back, b[3], b[4], b[5], b[7] || null);
       }
+      if (it.str || it.quiv) this._drawExtras(it, show, px, py, pz, qx, qy, qz, qw, h);
     }
     for (const o of this.casings) { const b = o.body, z = o.size; bx.set(o.idx, b.px, b.py, b.pz, b.qx, b.qy, b.qz, b.qw, z ? z[0] : 0.012, z ? z[1] : 0.012, z ? z[2] : 0.028); }
     // tracers: a streak that lasts a blink

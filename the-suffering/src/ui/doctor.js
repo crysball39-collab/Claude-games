@@ -149,6 +149,14 @@ export class Doctor {
     const ba = hh.burnArea;
     if (ba > 0.01) add('Burnt in all', `${Math.round(ba * 100)}% of the skin`, ba > 0.2 ? 'bad' : 'warn');
     if (h.fire && h.burning > 0.02) add('On fire', 'now', 'bad');
+    // the cold: frostbite part by part, the rime on them now, and the core of the body
+    for (let i = 0; i < hh.frostbite.length; i++) {
+      const deg = hh.frostDegree(i);
+      if (deg) add(`Frostbite, ${['', 'first', 'second', 'third'][deg]} degree, ${PARTS[i].label}`, deg === 3 ? 'frozen through' : deg === 2 ? 'blistered' : 'white, numb', deg >= 2 ? 'bad' : 'warn');
+    }
+    if (h.frozen) add('Frozen stiff', 'now', 'bad');
+    else if (h.iced > 0.02) add('Iced over', `${Math.round(h.iced * 100)}% of the skin`, h.iced > 0.3 ? 'bad' : 'warn');
+    if (hh.temp < 35) add('Hypothermia', `${hh.temp.toFixed(1)}°C`, hh.temp < 32 ? 'bad' : 'warn');
     if (hh.bleedIn > 0.3) add('Bleeding inside', `${hh.bleedIn.toFixed(1)} ml/s`, 'bad');
     if (hh.bleedOut > 0.05) add('Losing in all', `${(hh.bleedOut + hh.bleedIn).toFixed(1)} ml/s`, hh.bleedOut + hh.bleedIn > 10 ? 'bad' : 'warn');
     if (!ul.children.length) ul.appendChild(el('li', 'empty', 'No wounds.'));
