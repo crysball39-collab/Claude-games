@@ -30,7 +30,9 @@ export class Sound {
         this.master.gain.value = this.volume;
         const comp = ctx.createDynamicsCompressor();
         comp.threshold.value = -16; comp.ratio.value = 6; comp.attack.value = 0.003; comp.release.value = 0.2;
-        this.master.connect(comp); comp.connect(ctx.destination);
+        // slow motion closes this down: the world goes thick and muffled (see slowed)
+        this.slowF = ctx.createBiquadFilter(); this.slowF.type = 'lowpass'; this.slowF.frequency.value = 20000; this.slowF.Q.value = 0.6;
+        this.master.connect(this.slowF); this.slowF.connect(comp); comp.connect(ctx.destination);
         const n = ctx.sampleRate * 2, buf = ctx.createBuffer(1, n, ctx.sampleRate), d = buf.getChannelData(0);
         for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
         this.noiseBuf = buf;
@@ -38,6 +40,12 @@ export class Sound {
       }
       if (this.ctx.state === 'suspended') this.ctx.resume();
     } catch { this.ctx = null; }
+  }
+  /** How far into slow motion the game is (0..1): everything heard through a closing low-pass. */
+  slowed(k) {
+    if (!this.slowF || Math.abs(k - (this.slowK || 0)) < 0.01) return;
+    this.slowK = k;
+    this.slowF.frequency.setTargetAtTime(20000 * Math.pow(700 / 20000, k), this.ctx.currentTime, 0.04);
   }
   setVolume(v) { this.volume = v; if (this.master) this.master.gain.value = v; }
   suspend(on) { if (this.ctx) { try { on ? this.ctx.suspend() : this.ctx.resume(); } catch { /* fine */ } } }
@@ -113,6 +121,9 @@ export class Sound {
       case 'pickup': this._n(d, t, 0.05, 0.4, 'bandpass', 1800, 1200, 2); this._t(d, t, 0.06, 0.15, 'triangle', 420, 520); break;
       case 'punch': this._n(d, t, 0.07, 0.9, 'lowpass', 900, 300); this._t(d, t, 0.1, 0.8, 'sine', 120, 55); break;
       case 'whoosh': this._n(d, t, 0.2, 0.3, 'bandpass', 500, 1500, 1.2, 0.06); break;
+      // into slow motion, a deep falling sweep; out of it, a rising one
+      case 'slowIn': this._n(d, t, 0.75, 0.42, 'lowpass', 2400, 120, 1.6, 0.04); this._t(d, t, 0.75, 0.14, 'sine', 240, 52, 0.03); break;
+      case 'slowOut': this._n(d, t, 0.45, 0.34, 'lowpass', 150, 2600, 1.4, 0.03); this._t(d, t, 0.45, 0.09, 'sine', 58, 260, 0.03); break;
       case 'swish': this._n(d, t, 0.15, 0.35, 'bandpass', 2200, 5200, 2, 0.04); break;
       case 'slash': this._n(d, t, 0.12, 0.4, 'bandpass', 3000, 6000, 2, 0.02); this._n(d, t + 0.02, 0.1, 0.7, 'lowpass', 1500, 500); break;
       case 'chop': this._n(d, t, 0.11, 0.9, 'lowpass', 1100, 350); this._t(d, t, 0.1, 0.7, 'sine', 150, 65); this._n(d, t + 0.02, 0.12, 0.5, 'bandpass', 900, 400, 1); break;

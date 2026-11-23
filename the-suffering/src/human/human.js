@@ -33,6 +33,10 @@ const SPACE = 0.335;
 /** The parts of someone lying down that cannot be walked through. */
 const TRUNK = [P.PELVIS, P.ABDOMEN, P.CHEST, P.HEAD];
 const WALK = 1.5, RUN = 5.0, CROUCH = 1.2, JUMP_V = 4.5;
+/** How much a gunshot takes out of somebody's balance, against any other blow of the same force: a little less. A round
+ *  still staggers them as it did, but they stay on their feet through about one more of them (one that knocks them out,
+ *  or leaves them unable to stand, still puts them down at once). */
+const GUNSHOT_KNOCK = 0.8;
 
 /** Skin of colour (r,g,b) with a burn of `b` (0..100) on it. */
 function burnt(r, g, b, amt) {
@@ -2149,28 +2153,33 @@ export class Human {
     else if (rep.severed >= 0) { this.sever(rep.severed, [info.dir[0] * 1.5, 1.2, info.dir[2] * 1.5]); limbGone = true; }
 
     if (this.h.alive && this.h.conscious && rep.pain > 16 && !this.isPlayer) this.scream = Math.max(this.scream, 0.5);
-    if (wasAlive) this.react(J + rep.pain * 0.35 + rep.bones.length * 16 + (limbGone ? 30 : 0), info.dir[0], info.dir[2], rep, part);
-    // and the shove itself
+    const knock = info.type === 'bullet' ? GUNSHOT_KNOCK : 1;
+    if (wasAlive) this.react(J + rep.pain * 0.35 + rep.bones.length * 16 + (limbGone ? 30 : 0), info.dir[0], info.dir[2], rep, part, knock);
+    // and the shove itself (a round shoves somebody still fighting to stay on their feet a little less)
     if (!b.kinematic && !this.gone[part]) {
-      b.applyImpulse(info.dir[0] * J, info.dir[1] * J + (info.lift || 0), info.dir[2] * J, info.point[0], info.point[1], info.point[2]);
+      const Js = this.state === ST.STUMBLE ? J * knock : J;
+      b.applyImpulse(info.dir[0] * Js, info.dir[1] * Js + (info.lift || 0), info.dir[2] * Js, info.point[0], info.point[1], info.point[2]);
       const core = this.bodies[P.CHEST];
-      if (core !== b && !core.kinematic) core.applyImpulse(info.dir[0] * J * 0.5, 0, info.dir[2] * J * 0.5);
-      this.balance -= J / 110;
+      if (core !== b && !core.kinematic) core.applyImpulse(info.dir[0] * Js * 0.5, 0, info.dir[2] * Js * 0.5);
+      this.balance -= J * knock / 110;
     }
     g.onHit?.(this, info, rep);
     return rep;
   }
 
-  /** Decides whether a blow is shrugged off, staggers, or drops them. */
-  react(force, dx, dz, rep, part = P.CHEST) {
-    if (this.state !== ST.ANIM && this.state !== ST.GETUP) { if (this.state === ST.STUMBLE) this.balance -= force / 120; return; }
+  /**
+   * Decides whether a blow is shrugged off, staggers, or drops them. `give` is how much of it goes into knocking them
+   * off their feet (a gunshot: GUNSHOT_KNOCK).
+   */
+  react(force, dx, dz, rep, part = P.CHEST, give = 1) {
+    if (this.state !== ST.ANIM && this.state !== ST.GETUP) { if (this.state === ST.STUMBLE) this.balance -= force * give / 120; return; }
     const h = this.h;
     let firm = (this.crouching ? 1.35 : 1) * (0.55 + 0.45 * h.mobility) * (this.isPlayer ? 1.25 : 1) * (this.speed > 3.5 ? 0.8 : 1) * this.sturdy * this.knock;
     if (this.state === ST.GETUP) firm *= 0.5;
     if (part === P.HEAD) force *= 1.2;
     if (part >= P.THIGH_L) force *= 1.15;
-    if (!h.alive || !h.conscious || !h.canStand || (rep && rep.ko) || force > 66 * firm) { this.toRagdoll(); return; }
-    if (force > 25 * firm) { this.toStumble(force / firm, dx * force * 0.012, dz * force * 0.012); return; }
+    if (!h.alive || !h.conscious || !h.canStand || (rep && rep.ko) || force * give > 66 * firm) { this.toRagdoll(); return; }
+    if (force > 25 * firm) { this.toStumble(force * give / firm, dx * force * give * 0.012, dz * force * give * 0.012); return; }
     const s = Math.sin(this.yaw), c = Math.cos(this.yaw);
     this.anim.kick(dx * c - dz * s, dx * s + dz * c, force / 36);
     this.guardT = 4;

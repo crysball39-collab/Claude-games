@@ -44,6 +44,7 @@ npm start            # python3 -m http.server 8080, from the repository root
 | Say something | TALK | T |
 | First or third person | VIEW | V |
 | Players on a server | the chip at the top right | N |
+| Slow motion (on, and again for off) | SLOWMO, under PAUSE | 0 |
 | Pause | PAUSE | Esc or P |
 | Get into a car | DRIVE (or CARJACK) at a front door | E |
 | Drive | GAS and BRAKE pedals; BRAKE held at a standstill reverses | W / up, S / down |
@@ -311,8 +312,16 @@ that turn at the knuckle and the middle joint: closed round a grip, a trigger fi
 apart from the rest, balled into a fist, open and spread when the hands go up. A light blow is a flinch. A harder one is a stumble:
 the body is handed to the physics and the legs try to get back under it. Harder still
 and it is a ragdoll, which gets up again if it can, crawls if it cannot walk, and lies
-still if it cannot do either. People crouch, jump, duck at gunshots, vault crates and
+still if it cannot do either. A gunshot staggers somebody as readily as any blow, but takes
+a little less out of their balance: it usually takes one more round to put them on the
+ground (one that knocks them out or leaves them unable to stand still does it at once). People crouch, jump, duck at gunshots, vault crates and
 leap out of the way of cars.
+
+**Slow motion.** SLOWMO, under PAUSE (or 0), slows the whole city to under a third of its
+speed: people, cars, falling bodies, blood, fire and you. Only looking about keeps to real
+time, and the edges of the picture go cold and the sound goes thick while it lasts. SLOWMO
+again and it eases back to normal. It is for playing on your own: on a multiplayer server,
+where everybody else's city keeps its own time, there is no SLOWMO.
 
 **Pushing.** Walk into somebody and keep walking and you push them back ahead of you,
 a step at a time, a little slower than you walk; they keep facing you and tell you what

@@ -32,6 +32,8 @@ export const QUALITY = {
 };
 
 const _v = [0, 0, 0], _n = [0, 0, 0];
+/** How fast the city runs in slow motion. */
+export const SLOWMO = 0.3;
 const SHADOW_UV = cellUV(DECAL.shadow[0], DECAL.shadow[1], ATLAS_COLS, ATLAS_ROWS);
 const RING_UV = cellUV(DECAL.ring[0], DECAL.ring[1], ATLAS_COLS, ATLAS_ROWS);
 
@@ -118,6 +120,8 @@ export class Game {
     this.stats = { fps: 60, ms: 0 };
     // aiming a gun (a bow, a crossbow): AIM toggles it, the right mouse button (or Q) holds it; aimK eases in and out
     this.aiming = false; this.aimToggle = false; this.aimK = 0; this.downFireT = -9;
+    // slow motion (SLOWMO, or 0): the whole city at a fraction of its speed, eased in and out; slowK is how far in
+    this.slowmo = false; this.slowK = 0; this.timeScale = 1; this.realDt = 1 / 60;
 
     for (const c of this.city.crateSpots) this.spawnCrate(c[0], KERB + 0.41 + (c[2] ? 0.82 : 0), c[1]);
 
@@ -263,16 +267,25 @@ export class Game {
   /* --------------------------------- frame -------------------------------- */
 
   frame(realDt) {
-    const dt = this.dt = clamp(realDt, 1 / 144, 1 / 30);
+    const raw = this.realDt = clamp(realDt, 1 / 144, 1 / 30);
     // paused (a menu is open) stops this city, not the others: the servers, and your place on one, go on
-    if (this.paused) { this.mp?.update(dt); this.renderer.render(this.scene, this.camera); return; }
+    if (this.paused) { this.mp?.update(raw); this.renderer.render(this.scene, this.camera); return; }
+    // slow motion: everything in the city (you too) runs slower, eased in and out over a moment; only looking about,
+    // the network and the screen keep to real time. Not on a server, where the others' cities keep their own time.
+    if (this.slowmo && this.mp && this.mp.on) this.slowmo = false;
+    this.slowK = damp(this.slowK, this.slowmo ? 1 : 0, 7, raw);
+    if (!this.slowmo && this.slowK < 0.002) this.slowK = 0;
+    else if (this.slowmo && this.slowK > 0.998) this.slowK = 1;
+    this.timeScale = 1 - (1 - SLOWMO) * this.slowK;
+    const dt = this.dt = raw * this.timeScale;
+    this.audio?.slowed?.(this.slowK);
     this.time += dt;
     const inp = this.input, p = this.player;
     inp.begin();
 
     this._control(dt);
     this.minds?.update(dt);
-    this.mp?.update(dt);
+    this.mp?.update(raw);
     this.police?.update(dt);
     this.traffic?.update(dt);
     this.air.update(dt);
@@ -314,7 +327,7 @@ export class Game {
     this.gore.update(dt, this.camera);
     this.speech?.update(dt);
     this._underlay();
-    this.ui?.update(dt);
+    this.ui?.update(raw);
     this.audio?.listen(this.camPos.x, this.camPos.y, this.camPos.z, this.camYaw);
 
     this.daylight.update();
@@ -322,6 +335,14 @@ export class Game {
     this.boxes.commit(); this.crateBoxes.commit(); this.glass.commit(); this.faceQuads.commit(); this.under.commit();
     this.faces.flush(this.time);
     if (!this.headless) this.renderer.render(this.scene, this.camera);
+  }
+
+  /** Slow motion on or off (or the other way, with no argument). Not on a server. Says whether it is on. */
+  setSlowmo(on = !this.slowmo) {
+    if (on && this.mp && this.mp.on) { this.ui?.toast('Slow motion is for playing on your own, not on a server'); on = false; }
+    this.slowmo = !!on;
+    this.ui?.slowmoChanged?.();
+    return this.slowmo;
   }
 
   /** Runs the game forward without drawing it: for tests, and for nothing else. */
@@ -340,7 +361,7 @@ export class Game {
     lx *= fine; ly *= fine;
     this.camYaw = wrapAngle(this.camYaw - lx);
     this.camPitch = clamp(this.camPitch - ly, -1.2, 1.25);
-    if (p.car) { this.aiming = false; this.aimToggle = false; this.aimK = damp(this.aimK, 0, 12, dt); p.downAim = null; this._drive(dt, lx, ly); return; }
+    if (p.car) { this.aiming = false; this.aimToggle = false; this.aimK = damp(this.aimK, 0, 12, this.realDt); p.downAim = null; this._drive(dt, lx, ly); return; }
     // aiming: anything that shoots, in the hand, and somebody able to hold it up (on their feet, or down on the ground)
     const e = p.weapon, ranged = !!(e && e.def.gun && p.weapon === this.weapons?.equipped);
     const awake = p.h.alive && p.h.conscious && !p.cuffed && p.tased <= 0 && !(p.dazeT > 0) && !p.frozen;
@@ -348,7 +369,7 @@ export class Game {
     if (inp.pressed.aim && ranged && awake) this.aimToggle = !this.aimToggle;
     const able = p.state === ST.ANIM || p.state === ST.RAGDOLL;
     this.aiming = ranged && awake && able && this.doctor == null && (inp.down.alt || this.aimToggle);
-    this.aimK = damp(this.aimK, this.aiming ? 1 : 0, 12, dt);
+    this.aimK = damp(this.aimK, this.aiming ? 1 : 0, 12, this.realDt);
     p.pose.ads = this.aiming && p.state === ST.ANIM ? 1 : 0;
     // down on the ground with a gun: aim it (AIM, or the trigger) and the arm comes up off the ground at the crosshair
     if (inp.down.attack || inp.pressed.attack) this.downFireT = this.time;

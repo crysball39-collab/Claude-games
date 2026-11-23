@@ -58,6 +58,7 @@ export class UI {
     tap('#btn-talk', () => this.openTalk());
     tap('#btn-view', () => { g.firstPerson = !g.firstPerson; $('#btn-view').classList.toggle('on', g.firstPerson); this.toast(g.firstPerson ? 'First person' : 'Third person'); });
     tap('#btn-pause', () => this.pause('main'));
+    tap('#btn-slow', () => g.setSlowmo());
     tap('#btn-resume', () => this.resume());
     tap('#btn-restart', () => { g.respawn(true); this.resume(); });
     tap('#btn-quit', () => { this.pauseOff(); this.showMenu(); });
@@ -106,6 +107,7 @@ export class UI {
       else if (k === 'players') this.mpui?.toggleList();
       else if (k === 'admin') this.adminui?.toggle();
       else if (k === 'view') $('#btn-view').click();
+      else if (k === 'slowmo') g.setSlowmo();
       else if (k === 'talk') this.openTalk();
     };
     // a mouse is captured for looking around; not while the doctor needs it for pointing
@@ -450,7 +452,23 @@ export class UI {
 
   /* ------------------------------ small things ---------------------------- */
 
-  toast(text, secs = 2.4) { const t = $('#toast'); t.textContent = text; t.classList.add('show'); this.toastT = secs; }
+  toast(text, secs = 2.4) {
+    const t = $('#toast');
+    t.textContent = text; t.style.top = '';
+    // clear of whatever is across the top just now (the weapons can run to two or three rows)
+    const r = t.getBoundingClientRect();
+    let top = r.top, moved = true;
+    for (let k = 0; k < 4 && moved; k++) {
+      moved = false;
+      for (const el of document.querySelectorAll('#topbar .hb, #vitals, #weapon-bar > *')) {
+        if (!el.offsetParent) continue;
+        const b = el.getBoundingClientRect();
+        if (b.right > r.left && b.left < r.right && b.bottom > top && b.top < top + r.height) { top = b.bottom + 8; moved = true; }
+      }
+    }
+    if (top > r.top + 0.5) t.style.top = Math.round(top) + 'px';
+    t.classList.add('show'); this.toastT = secs;
+  }
   showMove(label) { const m = $('#move-name'); m.textContent = label; m.classList.add('show'); this.moveT = 0.5; this._label(); }
   hitMark() { $('#crosshair').classList.add('hit'); this.hitT = 0.14; }
 
@@ -532,6 +550,17 @@ export class UI {
     this.nearChanged();
   }
 
+  /** Slow motion has been turned on or off: the button, a sound and a word (quietly, when it was the game that did it). */
+  slowmoChanged(quiet = false) {
+    const on = !!this.g.slowmo, b = $('#btn-slow');
+    if (on === this._slowOn) return;
+    this._slowOn = on;
+    b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    if (quiet) return;
+    this.sound.play(on ? 'slowIn' : 'slowOut', 0.8);
+    this.toast(on ? 'Slow motion' : 'Normal speed');
+  }
+
   update(dt) {
     const g = this.g, p = g.player;
     this._power();
@@ -543,6 +572,9 @@ export class UI {
     this.adminui?.update(dt);
     // a bow in the hands: its label follows the draw
     { const e = this.weapons.equipped; if (e && e.def.hold === 'bow') this.ammoChanged(); }
+    // slow motion: the button lit, and the picture tinted at the edges as far as the city has slowed
+    if (g.slowK !== this._slowShown) { this._slowShown = g.slowK; $('#slowfx').style.opacity = g.slowK.toFixed(3); }
+    if (g.slowmo !== this._slowOn) this.slowmoChanged(true);
     // aimed or not: the button lit, the crosshair closed in
     if (!!g.aiming !== this._aimShown) { this._aimShown = !!g.aiming; $('#btn-aim').classList.toggle('on', this._aimShown); $('#crosshair').classList.toggle('aim', this._aimShown); }
     this.slow += dt;
@@ -566,6 +598,8 @@ export class UI {
         hp.style.background = car.hp > 75 ? 'var(--ok)' : car.hp > 40 ? 'var(--warn)' : 'var(--bad)';
       }
       $('#doctor-hint').hidden = !g.doctor || !!g.selected;
+      // (on a server there is no slowing your own city down)
+      $('#btn-slow').hidden = !!(g.mp && g.mp.on);
       this._stars();
       this._label();
       if (!$('#sandbox').hidden) this._count();

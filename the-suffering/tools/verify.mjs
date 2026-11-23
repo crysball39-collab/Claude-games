@@ -44,11 +44,19 @@ await run(() => {
       g.traffic?.clearCars();
       p.h.heal(); p.reset(0, -18, Math.PI / 2);
       g.camYaw = Math.PI / 2; g.camPitch = -0.08; g.gore.clean(); g.aimToggle = false;
+      if (g.slowmo || g.slowK) { g.slowmo = false; g.slowK = 0; g.timeScale = 1; }
       g.paused = false; g.advance(0.3);
     },
     give(type) { const p = g.player; const it = g.weapons.spawn(type, p.x + 0.3, 1, p.z); g.advance(0.3); g.weapons.pickUp(it); g.advance(0.3); return it; },
     aimAt(b) { const a = g.aim; const dx = b.px - a.ox, dy = b.py - a.oy, dz = b.pz - a.oz; g.camYaw = Math.atan2(dx, dz); g.camPitch = Math.atan2(dy, Math.hypot(dx, dz)); },
     still(h) { h.brain = { update() {}, pause: 0, mode: 'wander' }; return h; },
+    /** How things stand, for a check that fails. */
+    state() {
+      const p = g.player, P = g.police;
+      return { st: p.state, alive: p.h.alive, cuffed: !!p.cuffed, tased: +(p.tased || 0).toFixed(1), reload: !!p.reload, swap: !!p.swap, weapon: p.weapon ? p.weapon.type : null,
+        wanted: P ? P.wanted : -1, cops: g.humans.filter((h) => h.officer).length, slow: g.slowmo, scale: g.timeScale, paused: g.paused, doctor: g.doctor != null, t: +g.time.toFixed(1),
+        gone: p.gone.map((x, i) => (x ? i : -1)).filter((i) => i >= 0), detached: p.attached.map((x, i) => (x ? -1 : i)).filter((i) => i >= 0), id: p.id };
+    },
     /** Signed in as the test admin (whose address the test pages are told is the admin's). */
     async admin() {
       const a = ts.auth;
@@ -696,6 +704,7 @@ if (want('Taser')) {
     w.fire(); g.advance(0.5);
     out.far = far.tased;
     it.ammo = 0; w._dropWire(it); it.cool = 0; w.cool = 0;
+    out.pre = V.state();
     w.reload(); g.advance(2.2);
     out.reloaded = it.ammo;
     w.holster(); g.advance(1);
@@ -711,7 +720,7 @@ if (want('Taser')) {
   check('the trigger sends another cycle down the wires, with no new cartridge', r.again && r.rezap.tased > 3 && r.rezap.free);
   check('they get up again afterwards, and remember it', r.up >= 0 && r.felt, `on their feet ${r.up.toFixed(1)} s after the second cycle began`);
   check('it does not reach past its wires', r.far === 0);
-  check('it reloads, and holsters at the front of the left hip', r.reloaded === 2 && r.holster.hand === null && r.holster.side > 0.05 && r.holster.front > 0.05);
+  check('it reloads, and holsters at the front of the left hip', r.reloaded === 2 && r.holster.hand === null && r.holster.side > 0.05 && r.holster.front > 0.05, JSON.stringify({ reloaded: r.reloaded, holster: r.holster, pre: r.pre }));
 }
 
 /* -------------------------------- handcuffs ----------------------------- */
@@ -739,11 +748,19 @@ if (want('Handcuffs')) {
     v.toRagdoll(); v.dazeT = 8; g.advance(1.3);
     const pb = v.bodies[0];
     p.reset(pb.px - 0.9, pb.pz, Math.PI / 2); g.camYaw = Math.atan2(pb.px - p.x, pb.pz - p.z); g.advance(0.3);
+    out.pre = V.state();
     out.started = w.attack(-1); g.advance(0.6);
     out.mid = { cuffing: !!p.cuffing, kneeling: p.crouching, cuffed: !!v.cuffed };
     // they are turned on to their front and their arms brought round first
     let took = 0.6;
-    for (let i = 0; i < 60 && !v.cuffed; i++) { g.advance(0.1); took += 0.1; }
+    const trace = [], fy = () => { const q = [0, 0, 0]; v.bodies[2].dirToWorld(0, 0, 1, q); return +q[1].toFixed(2); };
+    out.vinfo = { scale: +v.scale.toFixed(2), sturdy: v.sturdy, crouchHeld: !!g.crouchHeld, pcrouch: p.crouching, pscale: +p.scale.toFixed(2) };
+    for (let i = 0; i < 60 && !v.cuffed; i++) {
+      g.advance(0.1); took += 0.1;
+      const hd = v.handled, c = p.cuffing;
+      if (i % 3 === 0) trace.push([fy(), hd ? +hd.k.toFixed(2) : '-', hd ? (hd.raised ? 'R' : 'r') : '-', hd ? hd.side : '-', +Math.hypot(v.x - p.x, v.z - p.z).toFixed(2), c ? +c.t.toFixed(1) : '-', v.state, p.state].join(':'));
+    }
+    out.trace = trace.join(' ');
     const fr = [0, 0, 0]; v.bodies[2].dirToWorld(0, 0, 1, fr);
     out.cuffed = !!v.cuffed; out.took = took; out.front = fr[1] < -0.5; out.inv = w.inventory.map((i) => i.type).join(',');
     const gap = () => { const a = [0, 0, 0], b = [0, 0, 0], s = v.scale; v.bodies[6].toWorld(0, -0.12 * s, 0, a); v.bodies[9].toWorld(0, -0.12 * s, 0, b); return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]); };
@@ -768,7 +785,7 @@ if (want('Handcuffs')) {
   });
   check('they are in the spawn menu', r.spawned && r.label === 'CUFF');
   check('somebody on their feet and minding their own business cannot be cuffed', r.refused && r.stillFree);
-  check('somebody on the ground can: it takes a moment, on one knee, and they are turned on to their front', r.started && r.mid.cuffing && r.mid.kneeling && !r.mid.cuffed && r.cuffed && r.took < 5.5 && r.front && r.inv === '', `cuffed after ${r.took.toFixed(1)} s, ${r.front ? 'face down' : 'not face down'}`);
+  check('somebody on the ground can: it takes a moment, on one knee, and they are turned on to their front', r.started && r.mid.cuffing && r.mid.kneeling && !r.mid.cuffed && r.cuffed && r.took < 5.5 && r.front && r.inv === '', `cuffed after ${r.took.toFixed(1)} s, ${r.front ? 'face down' : 'not face down'} ${JSON.stringify({ started: r.started, mid: r.mid, vinfo: r.vinfo, trace: r.trace })}`);
   check('the wrists are held together', r.downGap < 0.3 && r.standing.gap < 0.3 && r.drawn, `${(r.downGap * 100).toFixed(0)} cm apart on the ground, ${(r.standing.gap * 100).toFixed(0)} cm standing`);
   check('they can stand up, hands behind their back', r.standing.up && r.standing.behind < -0.05, `hands ${(-r.standing.behind * 100).toFixed(0)} cm behind the chest`);
   check('in cuffs they can neither hit nor carry', r.cannot);
@@ -785,6 +802,7 @@ if (want('Light helmet')) {
   const r = await run(() => {
     const g = __game, p = g.player, w = g.weapons, out = {};
     g.advance(1.5);
+    out.pre = V.state();
     const it = w.items.find((i) => i.type === 'helmet');
     out.spawned = !!it;
     p.reset(it.body.px - 0.4, it.body.pz, Math.PI / 2); g.advance(0.4);
@@ -818,7 +836,7 @@ if (want('Light helmet')) {
     out.off = !p.helmet && w.items.some((i) => i.type === 'helmet' && i.body);
     return out;
   });
-  check('it is in the spawn menu and can be put on', r.spawned && r.put && r.worn && r.label === 'PUT ON');
+  check('it is in the spawn menu and can be put on', r.spawned && r.put && r.worn && r.label === 'PUT ON', JSON.stringify({ spawned: r.spawned, put: r.put, worn: r.worn, label: r.label, pre: r.pre }));
   check('a black shell on the head', r.onHead && r.black);
   check('it takes the worst out of a blow to the head', r.blow.helmet.skull > r.blow.bare.skull + 8 && r.blow.helmet.conc < r.blow.bare.conc && r.blow.helmet.state === 'ANIM',
     `skull ${r.blow.helmet.skull.toFixed(0)} against ${r.blow.bare.skull.toFixed(0)} without; concussion ${r.blow.helmet.conc.toFixed(0)} against ${r.blow.bare.conc.toFixed(0)}`);
@@ -1652,9 +1670,10 @@ if (want('Armour tiers')) {
     let ear = 0, earLight = 0;
     for (let i = 0; i < 10; i++) { if (shoot(mk(null, 'medium'), 4, false, 'side', -0.04)) ear++; if (shoot(mk(null, 'light'), 4, false, 'side', -0.04)) earLight++; }
     out.ear = ear; out.earLight = earLight;
-    const V2 = mk(null, 'swat'), vis = [];
+    const V2 = mk(null, 'swat'), vis = [], vlog = [];
+    { const am = V2.armourAt.bind(V2); V2.armourAt = (pt, lp, ln) => { const m = am(pt, lp, ln); vlog.push([m, +lp[1].toFixed(3), +lp[2].toFixed(3), V2.state, V2.visorUp ? 1 : 0, V2.helmet ? V2.helmet.visor : -1].join(':')); return m; }; }
     for (let i = 0; i < 4; i++) { const c = V2.bodies[4], pt = [0, 0, 0], dir = [0, 0, 0]; c.toWorld(0, -0.02, c.hz, pt); c.dirToWorld(0, 0, -1, dir); vis.push(V2.hit({ part: 4, type: 'bullet', power: 1, point: pt, dir, normal: [0, 0, 1], impulse: 1, attacker: p, weapon: 'glock', rifle: false, through: 0.2, hp: 32 }).stopped); }
-    out.visor = { first: vis[0], crazed: V2.helmet.visor >= 3, last: vis[3], glass: V2.helmet.boxes.some((b) => b.glass) };
+    out.visor = { first: vis[0], crazed: V2.helmet.visor >= 3, last: vis[3], glass: V2.helmet.boxes.some((b) => b.glass), vis, log: vlog.join(' ') };
     g.removeHuman(V2);
     g.paused = true;
     return out;
@@ -1666,7 +1685,7 @@ if (want('Armour tiers')) {
   check('soft armour does not stop a rifle round; a S.W.A.T. plate does, front and back but not at the side', !r.mediumRifle && r.plateRifle && !r.sideRifle);
   check('the S.W.A.T. collar stops a pistol round to the neck', r.collar);
   check('a medium helmet comes down over the ears; a light one does not', r.ear >= 7 && r.earLight === 0, `${r.ear}/10 against ${r.earLight}/10`);
-  check('the S.W.A.T. visor is glass you can see through, it stops a pistol round, and after three it is crazed and stops nothing', r.visor.glass && r.visor.first && r.visor.crazed && !r.visor.last);
+  check('the S.W.A.T. visor is glass you can see through, it stops a pistol round, and after three it is crazed and stops nothing', r.visor.glass && r.visor.first && r.visor.crazed && !r.visor.last, JSON.stringify(r.visor));
 }
 
 /* -------------------------------- S.W.A.T. -------------------------------- */
@@ -2672,7 +2691,9 @@ if (want('Aiming')) {
     const civ = g.spawnHuman(p.x + 8, p.z, -Math.PI / 2);
     w.give(civ, 'glock', true); g.advance(0.5);
     w.give(p, 'm1911', true); g.advance(1);
-    for (let s = 0; s < 2; s++) { V.aimAt(civ.bodies[12]); g.advance(1 / 30); w.cool = 0; w.fire(); g.advance(0.3); }
+    // shot (until a round goes in), and put on the ground there and then
+    for (let s = 0; s < 5 && !civ.h.wounds.some((x) => x.type === 'gunshot'); s++) { V.aimAt(civ.bodies[12]); g.advance(1 / 30); w.cool = 0; w.fire(); g.advance(0.15); }
+    out.civHurt = civ.h.wounds.some((x) => x.type === 'gunshot');
     let civFires = 0, koAt = -1, koFires = 0, koAim = null;
     w.npcFire = (h, aim, sk) => { const ok = nf.call(w, h, aim, sk); if (ok && h === civ && h.state === 2) { if (koAt < 0) civFires++; else koFires++; } return ok; };
     if (civ.state !== 2) { civ.toRagdoll(); for (const b of civ.bodies) { b.vx = 1.5; b.vy = 0.5; } }
@@ -2683,7 +2704,7 @@ if (want('Aiming')) {
       if (koAt >= 0 && i === koAt + 4) koAim = !!civ.downAim;
     }
     w.npcFire = nf;
-    out.civ = { fires: civFires, alive: civ.h.alive, ko: { at: koAt, aim: koAim, fires: koFires, awake: civ.h.conscious } };
+    out.civ = { hurt: out.civHurt, fires: civFires, alive: civ.h.alive, ko: { at: koAt, aim: koAim, fires: koFires, awake: civ.h.conscious } };
     p.h.god = false; P.reset(); g.settings.cheatCops = false;
     g.paused = true;
     return out;
@@ -2700,6 +2721,130 @@ if (want('Aiming')) {
   check('a police officer knocked down in a gunfight shoots back from the ground, then gets up', r.cop.mode === 'engage' && r.cop.down.fires >= 2 && r.cop.down.up > 0.6 && /from the ground/.test(r.cop.down.doing) && r.cop.down.after === 0, JSON.stringify(r.cop));
   check('so does anyone else with a gun who is down and has been hurt by somebody', r.civ.fires >= 2, JSON.stringify(r.civ));
   check('knocked out cold while they are at it, the gun goes down and stops', r.civ.ko.at >= 0 && r.civ.ko.aim === false && r.civ.ko.fires === 0 && !r.civ.ko.awake, JSON.stringify(r.civ.ko));
+}
+
+/* -------------------- the HUD: the status box, and the top of the screen -------------------- */
+head('HUD layout');
+if (want('HUD layout')) {
+  // what is up top on a page, and whether any of it spills or sits on something else
+  const layout = () => {
+    const g = __game, p = g.player, W = g.weapons;
+    for (const id of ['m1911', 'glock', 'ak47', 'knife', 'bow']) W.give(p, id, false);
+    W.give(p, 'm4a1', true);
+    g.settings.cheatCops = false; g.police.setWanted(5);
+    g.paused = false; g.advance(0.6); g.paused = true;
+    __ts.ui.toast('A message, to see where it goes');
+    const rect = (e) => { const b = e.getBoundingClientRect(); return { id: e.id || e.textContent, l: b.left, t: b.top, r: b.right, b: b.bottom }; };
+    const ov = (a, b) => Math.min(a.r, b.r) - Math.max(a.l, b.l) > 1 && Math.min(a.b, b.b) - Math.max(a.t, b.t) > 1;
+    const V = rect(document.querySelector('#vitals'));
+    let spill = 0;
+    for (const el of document.querySelectorAll('#vitals .vbar, #vitals .stars b, #vitals i')) { const b = el.getBoundingClientRect(); spill = Math.max(spill, b.right - V.r + 1, V.l + 1 - b.left); }
+    const hbs = [...document.querySelectorAll('#topbar .hb')].filter((e) => e.offsetParent).map(rect);
+    const chips = [...document.querySelectorAll('#weapon-bar > *')].map(rect);
+    const toast = rect(document.querySelector('#toast'));
+    const clash = [];
+    for (const a of [...hbs, ...chips]) {
+      if (a.l < 0 || a.r > innerWidth + 0.5) clash.push(a.id + ' off the screen');
+      if (ov(a, V)) clash.push(a.id + ' on the box');
+      if (ov(a, toast)) clash.push(a.id + ' under the message');
+      for (const b of [...hbs, ...chips]) if (a !== b && a.id < b.id && ov(a, b)) clash.push(a.id + ' on ' + b.id);
+    }
+    const lit = document.querySelectorAll('#wanted .stars b.on').length;
+    g.police.reset(); g.weapons.dropFrom(p, true); for (const it of W.items.slice()) W.remove(it);
+    return { spill: +spill.toFixed(1), lit, box: Math.round(V.r - V.l), buttons: hbs.length, chips: chips.length, clash };
+  };
+  await run((fn) => { window.__lay = eval('(' + fn + ')'); }, layout.toString());
+  const wide = await run(() => { V.stage(); return window.__lay(); });
+  check('five stars and three bars, all inside the status box (the admin, all five stars lit)', wide.spill <= 0 && wide.lit === 5, JSON.stringify(wide));
+  check('across the top, nothing on anything else, the weapons in the room between the buttons, the message below them', wide.clash.length === 0, wide.clash.join(', '));
+  // a phone held upright, the user's size and a small one
+  for (const [w, h] of [[412, 915], [360, 740]]) {
+    const ph = await play({ width: w, height: h, touch: true });
+    const r = await ph.ev(async (fn) => {
+      const a = window.__ts.auth; await a.ready;
+      let rr = await a.signIn({ email: 'admin@test.invalid', password: 'admin-pass-1' });
+      if (rr.error) rr = await a.signUp({ email: 'admin@test.invalid', password: 'admin-pass-1', confirm: 'admin-pass-1', name: 'Admin' });
+      const g = window.__game; g.paused = false; T.clear(); g.advance(0.3); g.paused = true;
+      window.V = { stage() {} };
+      return eval('(' + fn + ')')();
+    }, layout.toString());
+    await ph.close();
+    check(`on a ${w} x ${h} phone, upright: the box holds its stars and bars, every button is on the screen, and nothing is on anything else`, r.spill <= 0 && r.lit === 5 && r.buttons === 8 && r.clash.length === 0, JSON.stringify(r));
+  }
+}
+
+/* ------------------------------- slow motion ------------------------------- */
+head('Slow motion');
+if (want('Slow motion')) {
+  const r = await run(() => {
+    const g = __game, p = g.player, out = {};
+    V.stage(); g.settings.cheatCops = true;
+    const btn = document.querySelector('#btn-slow'), pause = document.querySelector('#btn-pause').getBoundingClientRect(), sb = btn.getBoundingClientRect();
+    out.place = { under: sb.top > pause.bottom, right: Math.abs(sb.right - pause.right) < 2, shown: !btn.hidden };
+    // a crate dropped from six metres, and somebody walking along: how far each gets in half a second of real time
+    const trial = () => {
+      const c = g.spawnCrate(p.x + 3, 6, p.z + 2);
+      const v = V.still(g.spawnHuman(p.x + 2, p.z - 3, Math.PI / 2));
+      g.advance(0.05);
+      const y0 = c.body.py, x0 = v.x, t0 = g.time;
+      for (let i = 0; i < 30; i++) { v.intent.mx = 1; v.intent.mz = 0; v.intent.run = false; g.advance(1 / 60); }
+      const res = { fell: +(y0 - c.body.py).toFixed(2), walked: +(v.x - x0).toFixed(2), time: +(g.time - t0).toFixed(3) };
+      g.removeProp(c); g.removeHuman(v);
+      return res;
+    };
+    out.normal = trial();
+    btn.click();
+    out.on = { lit: btn.classList.contains('on'), pressed: btn.getAttribute('aria-pressed'), said: document.querySelector('#toast').textContent };
+    g.advance(1);
+    out.on.scale = +g.timeScale.toFixed(3); out.on.tint = +document.querySelector('#slowfx').style.opacity;
+    out.slow = trial();
+    // looking about is not slowed
+    const y0 = g.camYaw; __ts.input.look.x += 0.4; g.advance(1 / 60); out.look = +(y0 - g.camYaw).toFixed(3);
+    // and 0 turns it off again
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'Digit0', key: '0' })); window.dispatchEvent(new KeyboardEvent('keyup', { code: 'Digit0', key: '0' }));
+    g.advance(1);
+    out.off = { on: g.slowmo, scale: +g.timeScale.toFixed(3), lit: btn.classList.contains('on'), said: document.querySelector('#toast').textContent };
+    out.back = trial();
+    g.setSlowmo(false); g.advance(0.5);
+    g.paused = true;
+    return out;
+  });
+  check('SLOWMO sits under PAUSE', r.place.under && r.place.right && r.place.shown, JSON.stringify(r.place));
+  check('SLOWMO: everything runs at under a third of its speed, eased in, the edges of the picture tinted', r.on.lit && r.on.pressed === 'true' && r.on.said === 'Slow motion' && Math.abs(r.on.scale - 0.3) < 0.02 && r.on.tint > 0.95, JSON.stringify(r.on));
+  check('a falling crate, a walking man and the clock all slowed', r.slow.time < r.normal.time * 0.35 && r.slow.fell < r.normal.fell * 0.25 && r.slow.walked < r.normal.walked * 0.4, `in half a real second: ${JSON.stringify(r.normal)} normally, ${JSON.stringify(r.slow)} slowed`);
+  check('looking about is not slowed', Math.abs(r.look - 0.4) < 0.01, `${r.look} rad for 0.4 of look`);
+  check('again (or 0) and it eases back to normal', !r.off.on && r.off.scale === 1 && !r.off.lit && r.off.said === 'Normal speed' && Math.abs(r.back.time - r.normal.time) < 0.01, JSON.stringify(r.off));
+}
+
+/* ------------------------- knocked down by gunfire ------------------------- */
+head('Knockdowns');
+if (want('Knockdowns')) {
+  const r = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, out = {};
+    V.stage(); g.settings.cheatCops = true;
+    // what goes into knocking somebody over: a round, and a punch
+    const v = V.still(T.dummy(1.0)); v.h.tough = 20; g.advance(0.4);
+    const gives = []; const rc = v.react.bind(v); v.react = (f, dx, dz, rep, part, give = 1) => { gives.push(give); return rc(f, dx, dz, rep, part, give); };
+    w.attack(0); g.advance(0.6);
+    const punch = gives.slice();
+    gives.length = 0;
+    const it = w.give(p, 'm1911', false), d = it.def; w.remove(it);
+    const c = v.bodies[1], ux = c.px - p.x, uy = c.py - 1.2, uz = c.pz - p.z, ul = Math.hypot(ux, uy, uz);
+    w._bullet(p, d, p.x, 1.2, p.z, ux / ul, uy / ul, uz / ul, d.power, 0); g.advance(0.2);
+    out.give = { punch, round: gives.slice() };
+    g.removeHuman(v);
+    // the same force: from a blow it puts a fresh, steady man down; from a gun it staggers him
+    const fresh = () => { const h = V.still(T.dummy(2)); g.advance(0.5); return h; };
+    const a = fresh(); a.react(75, 1, 0, null, 2, 1); out.blow = a.state; g.removeHuman(a);
+    const b = fresh(); b.react(75, 1, 0, null, 2, out.give.round[0] || 0.8); out.shot = b.state; g.advance(1.5); out.shotLater = b.state; g.removeHuman(b);
+    // and a round still staggers somebody as readily as before
+    const e = fresh(); e.react(30, 1, 0, null, 2, out.give.round[0] || 0.8); out.light = e.state; g.removeHuman(e);
+    g.paused = true;
+    return out;
+  });
+  check('a round takes less out of somebody\'s balance than a blow does', r.give.punch.length > 0 && r.give.punch.every((x) => x === 1) && r.give.round.length > 0 && r.give.round.every((x) => x > 0.7 && x < 0.9), JSON.stringify(r.give));
+  check('the same force that drops a man from a blow only staggers him from a gun, and he stays up', r.blow === 2 && r.shot === 1 && r.shotLater !== 2, JSON.stringify(r));
+  check('a round still staggers as readily as before', r.light === 1, JSON.stringify(r));
 }
 
 head('Special abilities');
@@ -2959,6 +3104,10 @@ if (want('Multiplayer')) {
   const seen = await Promise.all([A, B].map((x) => x.ev(() => { const mp = window.__ts.mp, r = [...mp.remotes.values()][0]; window.__ts.ui.mpui._tags(0.3); return { on: mp.on, count: mp.count, host: mp.isHost, other: r ? r.name : null, puppet: !!(r && r.h && r.h.puppet), tags: document.querySelectorAll('#tags .tag').length, chip: document.querySelector('#mp-chip-n').textContent, ping: mp.you.ping }; })));
   check('JOIN: both are on the server and see each other, a name over each', seen[0].on && seen[1].on && seen[0].other === 'Friend' && seen[1].other === 'Boss' && seen[0].puppet && seen[1].puppet && seen[0].tags === 1 && seen[1].tags === 1 && seen[0].host && !seen[1].host && seen[1].chip === '2/8', JSON.stringify(seen));
   check('the player who joined measures their ping to the host', seen[1].ping > 0, `${seen[1].ping} ms`);
+  // slow motion is not for a server: no button, and asking for it does nothing
+  await step(0.5);
+  const noSlow = await A.ev(() => { const g = window.__game, on = g.setSlowmo(true); g.paused = false; g.advance(0.3); g.paused = true; return { on, now: g.slowmo, scale: g.timeScale, hidden: document.querySelector('#btn-slow').hidden }; });
+  check('on a server there is no SLOWMO: the button goes, and the city keeps time with everybody else', !noSlow.on && !noSlow.now && noSlow.scale === 1 && noSlow.hidden, JSON.stringify(noSlow));
   // B walks; A's stand-in for B follows
   await B.ev(() => { window.__ts.input.move.y = 1; }); await step(1.5); await B.ev(() => { window.__ts.input.move.y = 0; }); await step(0.6);
   const bAt = await B.ev(() => [window.__game.player.x, window.__game.player.z]);

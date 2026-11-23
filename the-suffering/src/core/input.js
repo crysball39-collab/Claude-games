@@ -205,6 +205,7 @@ export class Input {
       case 'KeyN': if (isDown) this.onKey?.('players'); break;
       case 'Backquote': if (isDown) this.onKey?.('admin'); break;
       case 'KeyV': if (isDown) this.onKey?.('view'); break;
+      case 'Digit0': case 'Numpad0': if (isDown) this.onKey?.('slowmo'); break;
       case 'Escape': case 'KeyP': if (isDown) this.onKey?.('pause'); break;
       default:
         if (isDown && /^Digit[1-9]$/.test(code)) this.onSlot?.(Number(code.slice(5)) - 1);

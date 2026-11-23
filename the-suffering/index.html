@@ -22,29 +22,32 @@
   <!-- ================================ HUD ================================ -->
   <div id="hud" hidden>
     <div id="haze" aria-hidden="true"></div>
+    <div id="slowfx" aria-hidden="true"></div>
     <div id="stick-zone"><div id="stick-base"><div id="stick-knob"></div></div></div>
 
-    <div id="top-left">
-      <button id="btn-menu" class="hb" aria-label="Sandbox menu"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>SPAWN</span></button>
-      <button id="btn-abilities" class="hb wide" aria-label="Special abilities"><svg viewBox="0 0 24 24"><path d="M12 3l2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4z"/></svg><span>ABILITIES</span></button>
-      <button id="btn-admin" class="hb" aria-label="Admin menu" hidden><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg><span>ADMIN</span></button>
-      <div id="vitals" aria-label="Your condition">
-        <div class="vrow"><i>YOU</i><div class="vbar"><div id="v-cond"></div></div></div>
-        <div class="vrow"><i>BLOOD</i><div class="vbar blood"><div id="v-blood"></div></div></div>
-        <div class="vrow"><i>STAMINA</i><div class="vbar stamina"><div id="v-stam"></div></div></div>
-        <div class="vrow" id="wanted" aria-label="Wanted level"><i>WANTED</i><span class="stars"><b></b><b></b><b></b><b></b><b></b></span></div>
-        <div id="v-cheat" hidden>INFINITE HP</div>
+    <div id="topbar">
+      <div id="top-left">
+        <button id="btn-menu" class="hb" aria-label="Sandbox menu"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>SPAWN</span></button>
+        <button id="btn-abilities" class="hb wide" aria-label="Special abilities"><svg viewBox="0 0 24 24"><path d="M12 3l2.4 6.6L21 12l-6.6 2.4L12 21l-2.4-6.6L3 12l6.6-2.4z"/></svg><span>ABILITIES</span></button>
+        <button id="btn-admin" class="hb" aria-label="Admin menu" hidden><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg><span>ADMIN</span></button>
+        <div id="vitals" aria-label="Your condition">
+          <div class="vrow"><i>YOU</i><div class="vbar"><div id="v-cond"></div></div></div>
+          <div class="vrow"><i>BLOOD</i><div class="vbar blood"><div id="v-blood"></div></div></div>
+          <div class="vrow"><i>STAMINA</i><div class="vbar stamina"><div id="v-stam"></div></div></div>
+          <div class="vrow" id="wanted" aria-label="Wanted level"><i>WANTED</i><span class="stars"><b></b><b></b><b></b><b></b><b></b></span></div>
+          <div id="v-cheat" hidden>INFINITE HP</div>
+        </div>
       </div>
-    </div>
+      <div id="weapon-bar"></div>
 
-    <div id="top-right">
-      <button id="btn-doctor" class="hb" aria-label="Doctor mode"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>DOCTOR</span></button>
-      <button id="btn-talk" class="hb" aria-label="Say something"><svg viewBox="0 0 24 24"><path d="M5 6h14v9H10l-4 3v-3H5z"/></svg><span>TALK</span></button>
-      <button id="btn-view" class="hb" aria-label="Change view"><svg viewBox="0 0 24 24"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/><circle cx="12" cy="12" r="2.5"/></svg><span>VIEW</span></button>
-      <button id="btn-pause" class="hb" aria-label="Pause"><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg><span>PAUSE</span></button>
+      <div id="top-right">
+        <button id="btn-doctor" class="hb" aria-label="Doctor mode"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>DOCTOR</span></button>
+        <button id="btn-talk" class="hb" aria-label="Say something"><svg viewBox="0 0 24 24"><path d="M5 6h14v9H10l-4 3v-3H5z"/></svg><span>TALK</span></button>
+        <button id="btn-view" class="hb" aria-label="Change view"><svg viewBox="0 0 24 24"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/><circle cx="12" cy="12" r="2.5"/></svg><span>VIEW</span></button>
+        <button id="btn-pause" class="hb" aria-label="Pause"><svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></svg><span>PAUSE</span></button>
+      </div>
+      <button id="btn-slow" class="hb" aria-label="Slow motion" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M7 4h10l-5 8 5 8H7l5-8z"/></svg><span>SLOWMO</span></button>
     </div>
-
-    <div id="weapon-bar"></div>
     <div id="crosshair"><i></i></div>
     <div id="move-name"></div>
     <div id="toast"></div>
@@ -308,6 +311,7 @@
             <h3>Touch</h3>
             <p>Left thumb moves. Drag anywhere else to look. JUMP and CROUCH sit by the right thumb.</p>
             <p>The big button attacks. Tap it again and again for a four move combo; slide your thumb off it left, right, up or down to choose the next move yourself.</p>
+            <p>SLOWMO (under PAUSE) slows the whole city down, you too; looking about stays quick. Again and it is back to normal. Not on a multiplayer server.</p>
             <p>AIM (with a gun, a bow or a crossbow in your hand) brings it up to your eye: the view closes in over your shoulder, the crosshair tightens and your shots go closer to it; you walk while you aim. AIM again lowers it. Knocked flat with a gun, AIM (or just fire) and you shoot from where you lie; you stay down while you hold it up. Anyone else with a gun does the same when they are knocked down in a fight.</p>
             <p>SPAWN opens the sandbox: humans, police officers, a S.W.A.T. team, crates, wooden and steel walls, steel beams, a light bulb, a floodlight, a generator, a car, a police car, a van, rope, wire, light, medium and S.W.A.T. vests and helmets, handcuffs, a poison syringe, the M1911, the Glock-19, the AK-47, the M4A1, the AR-15, the musket, the arquebus, the blunderbuss, the bow, the crossbow, the flamethrower, the frost thrower, the taser, the knife, the machete, the sword and the crowbar. Walk up to a weapon and PICK UP, or to a vest or a helmet and PUT ON.</p>
             <p>ABILITIES, beside SPAWN (the admin account only): choose one and POWER uses it. Tempest Kick sends a green slash flying from your kick. Eat the Cat-Cat Fruit, Model: Leopard, for six more: Finger Pistol, Leo's Flame (five fireballs at the nearest person), Swirling Kick (a ring of air that bursts into flame), Full Leopard (run into somebody to maul them), Leopard Leap and Hybrid Transform (claws; every attack bigger, stronger and faster). A form is turned off with the same button.</p>
@@ -334,7 +338,7 @@
             <p>MULTIPLAYER, on the title screen, when the game is open on claude.ai: a list of the servers people are hosting right now, with each one's name, how many players are on it and your ping to it. JOIN one, or HOST your own. Everyone on a server is a real person: you see each other move, fight (blows, rounds, arrows, flames, frost and powers land on the other player's own game), talk and drive. The chip at the top right (or N) lists the players with their kills, deaths and ping. The city's own people, the police, the traffic and anything spawned are still each player's own. Only the host spawns things on a server.</p>
             <p>The admin account alone has the special abilities and the cheats, single player too, and an ADMIN menu (or the ` key): choose anyone on your server (you are at the top), then APPLY a speed, max HP, toughness (how hard they are to knock over) and wanted level, KICK them, or BAN them for a time with a note they are shown.</p>
             <h3>Keyboard and mouse</h3>
-            <p>WASD move (Shift walks) &middot; mouse looks (click to capture) &middot; Space jump &middot; C crouch &middot; left click or F attack &middot; right click or Q (held) aims a gun, or the heavy attack with fists or a blade &middot; R reload &middot; E pick up &middot; G drop &middot; H holster or draw &middot; Z grab, drag or let go &middot; M abilities &middot; B use the chosen ability (or J K L U I O Y for each) &middot; 1-5 weapons &middot; Tab sandbox &middot; X doctor &middot; T talk &middot; V view &middot; N players (on a server) &middot; ` admin (the admin) &middot; Esc pause</p>
+            <p>WASD move (Shift walks) &middot; mouse looks (click to capture) &middot; Space jump &middot; C crouch &middot; left click or F attack &middot; right click or Q (held) aims a gun, or the heavy attack with fists or a blade &middot; R reload &middot; E pick up &middot; G drop &middot; H holster or draw &middot; Z grab, drag or let go &middot; M abilities &middot; B use the chosen ability (or J K L U I O Y for each) &middot; 1-5 weapons &middot; Tab sandbox &middot; X doctor &middot; T talk &middot; V view &middot; 0 slow motion &middot; N players (on a server) &middot; ` admin (the admin) &middot; Esc pause</p>
             <p>In a car: W or up is the gas &middot; S or down brakes, then reverses &middot; A / D or left / right steer &middot; Space handbrake &middot; H horn (and siren) &middot; E gets out</p>
           </div>
         </section>
