@@ -1516,6 +1516,8 @@ export class Human {
   _ragdolling(dt) {
     const pel = this.bodies[P.PELVIS], chest = this.bodies[P.CHEST], h = this.h;
     this.ragT += dt;
+    // out cold, dead, frozen stiff, locked up by a taser (or dazed after it) or being handled: no gun comes up off the ground
+    if (this.downAim && (!h.alive || !h.conscious || this.frozen || this.tased > 0 || this.dazeT > 0 || this.handled)) this.downAim = null;
     this.x = pel.px; this.z = pel.pz; this.y = groundHeight(this.x, this.z);
     this.vx = pel.vx; this.vz = pel.vz;
     this.speed = Math.hypot(pel.vx, pel.vy, pel.vz);
@@ -1575,24 +1577,30 @@ export class Human {
     const low = pel.py - this.y < 0.45 * this.scale;
     const still = this.speed < 0.55;
     this.stillT = still && low ? this.stillT + dt : 0;
-    if (this.stillT > 0.7 && this.ragT > 1.4 && h.canStand && !this.stayDown) {
+    // (you, with a gun in your hand, are given a moment longer down there: long enough to choose to shoot from it)
+    const armed = this.isPlayer && this.weapon && this.weapon.def.gun && this.weapon.def.hold !== 'bow';
+    if (this.stillT > 0.7 && this.ragT > (armed ? 2.4 : 1.4) && h.canStand && !this.stayDown && !this.downAim) {
       // not everyone springs back up
       // not into somebody else who is getting up right here: one at a time
       if ((this.isPlayer || h.pain < 70 || this.stillT > 4) && (this.stillT > 5 || !this._crowdedUp())) { this.startGetUp(); return; }
     }
     // what a conscious body does while it is down
     const falling = !low || this.speed > 2.5;
+    // a gun in the hand and somebody to point it at: that, before anything else (see _aimDown)
+    const aimDown = !!this.downAim && !falling && !this.cuffed;
+    if (!aimDown && this.downAim) this.downAim.up = 0;
     this.pose.brace = falling ? 1 : 0;
-    const crawl = !falling && !!this.crawlDir && !h.paralysedArms && (h.armOk(1) || h.armOk(-1)) && !this.cuffed;
+    const crawl = !aimDown && !falling && !!this.crawlDir && !h.paralysedArms && (h.armOk(1) || h.armOk(-1)) && !this.cuffed;
     this.pose.crawl = crawl ? 1 : 0;
-    this.pose.writhe = !falling && !crawl && h.pain > 30 ? 1 : 0;
-    const active = falling || crawl || this.pose.writhe > 0;
+    this.pose.writhe = !aimDown && !falling && !crawl && h.pain > 30 ? 1 : 0;
+    const active = falling || crawl || this.pose.writhe > 0 || aimDown;
     this.island.canSleep = !active;
     if (active) this.island.wake();
     this.speed = 0;
     this._solve(dt, 0, 0, 0, 0);
     this.speed = Math.hypot(pel.vx, pel.vy, pel.vz);
     this._muscles(falling ? 0.22 : crawl ? 0.3 : this.pose.writhe ? 0.13 + h.pain * 0.0012 : 0.05, true);
+    if (aimDown) this._aimDown(dt);
     if (this.cuffed) for (const i of ARM_L.concat(ARM_R)) { const b = this.bodies[i]; if (this.attached[i] && this.tone[i] > 0.1) { b.orient = this.orients[i]; b.orient.s = Math.max(b.orient.s || 0, 0.3); } }
     if (crawl && this.anim.crawlPull > 0.25 && chest.grounded > 0) {
       // roll onto the front, then haul
@@ -1601,6 +1609,42 @@ export class Human {
       const pull = this.anim.crawlPull * 30 * dt * (h.armOk(1) && h.armOk(-1) ? 1 : 0.55);
       chest.applyImpulse(this.crawlDir[0] * pull * chest.mass, 0, this.crawlDir[1] * pull * chest.mass);
       pel.applyImpulse(this.crawlDir[0] * pull * pel.mass * 0.5, 0, this.crawlDir[1] * pull * pel.mass * 0.5);
+    }
+  }
+
+  /**
+   * Down, awake, a gun in the hand and somebody to point it at (this.downAim: { yaw, pitch, two }, set by the game for
+   * you and by the Brain for anyone else): the gun arm (both, for a two-handed grip) comes up off the ground and out
+   * along the line, as far as the joints let it, and the head turns to look down it. The gun is laid along the line by
+   * Weapons.late. `up` is how long it has been held there (a shot before the arm is up goes nowhere useful).
+   */
+  _aimDown(dt) {
+    const A = this.downAim, s = this.scale, chest = this.bodies[P.CHEST];
+    A.up = (A.up || 0) + dt;
+    const cp = Math.cos(A.pitch), dx = Math.sin(A.yaw) * cp, dy = Math.sin(A.pitch), dz = Math.cos(A.yaw) * cp;
+    // where the hands meet: out in front of the chest along the line, an arm's length off
+    chest.toWorld(0, 0.12 * s, 0, _a);
+    const reach = 0.6 * s, gx = _a[0] + dx * reach, gy = _a[1] + dy * reach, gz = _a[2] + dz * reach;
+    const two = A.two && this.attached[P.HAND_L] && this.h.armOk(1);
+    for (const side of two ? [1, 0] : [1]) {
+      // the shoulder (+X is the wearer's left)
+      chest.toWorld(side ? -0.17 * s : 0.17 * s, 0.14 * s, 0, _b);
+      let ux = gx - _b[0], uy = gy - _b[1], uz = gz - _b[2];
+      const l = Math.hypot(ux, uy, uz) || 1; ux /= l; uy /= l; uz /= l;
+      armTurn(ux, uy, uz, dx, dz, _aq);
+      for (const i of side ? ARM_R : ARM_L) {
+        if (!this.attached[i]) continue;
+        const b = this.bodies[i], o = this.orients[i];
+        o.x = _aq[0]; o.y = _aq[1]; o.z = _aq[2]; o.w = _aq[3];
+        o.s = 0.8 * Math.max(0.4, this.tone[i]);
+        b.orient = o;
+      }
+    }
+    // the head up and round, looking down the line
+    if (this.attached[P.HEAD]) {
+      const o = this.orients[P.HEAD], hy = Math.sin(A.yaw / 2), hc = Math.cos(A.yaw / 2), px = Math.sin(-A.pitch / 2), pc = Math.cos(-A.pitch / 2);
+      o.x = hc * px; o.y = hy * pc; o.z = -hy * px; o.w = hc * pc; o.s = 0.4;
+      this.bodies[P.HEAD].orient = o;
     }
   }
 
@@ -2501,6 +2545,31 @@ function partCloth(look, part) {
   const c = PARTS[part].cover;
   return c === 'shirt' ? look.top : c === 'pants' ? look.pants : c === 'shoes' ? look.shoes : look.skin;
 }
+
+/**
+ * The turn that lays an arm (or forearm, or hand) along the unit vector u: its own -Y along u, its +Z (the front of an
+ * arm hanging at the side) as near straight up as it will go, so that the palm faces in. (fx, fz) is the way to call
+ * forward when u is straight up or down. Written into `out` as [x, y, z, w].
+ */
+function armTurn(ux, uy, uz, fx, fz, out) {
+  // Z: up, less whatever of it lies along u
+  let zx = -ux * uy, zy = 1 - uy * uy, zz = -uz * uy;
+  let zl = Math.hypot(zx, zy, zz);
+  if (zl < 1e-3) { zx = -fx; zy = 0; zz = -fz; zl = Math.hypot(zx, zz) || 1; }
+  zx /= zl; zy /= zl; zz /= zl;
+  const yx = -ux, yy = -uy, yz = -uz;
+  // X = Y x Z
+  const xx = yy * zz - yz * zy, xy = yz * zx - yx * zz, xz = yx * zy - yy * zx;
+  // the rotation whose columns are X, Y, Z, as a quaternion
+  const m00 = xx, m10 = xy, m20 = xz, m01 = yx, m11 = yy, m21 = yz, m02 = zx, m12 = zy, m22 = zz;
+  const tr = m00 + m11 + m22;
+  if (tr > 0) { const S = Math.sqrt(tr + 1) * 2; out[3] = 0.25 * S; out[0] = (m21 - m12) / S; out[1] = (m02 - m20) / S; out[2] = (m10 - m01) / S; }
+  else if (m00 > m11 && m00 > m22) { const S = Math.sqrt(1 + m00 - m11 - m22) * 2; out[3] = (m21 - m12) / S; out[0] = 0.25 * S; out[1] = (m01 + m10) / S; out[2] = (m02 + m20) / S; }
+  else if (m11 > m22) { const S = Math.sqrt(1 + m11 - m00 - m22) * 2; out[3] = (m02 - m20) / S; out[0] = (m01 + m10) / S; out[1] = 0.25 * S; out[2] = (m12 + m21) / S; }
+  else { const S = Math.sqrt(1 + m22 - m00 - m11) * 2; out[3] = (m10 - m01) / S; out[0] = (m02 + m20) / S; out[1] = (m12 + m21) / S; out[2] = 0.25 * S; }
+  return out;
+}
+const _aq = [0, 0, 0, 1];
 
 /**
  * A rotation that lays a body down with its head toward `yaw`, rolled `roll`

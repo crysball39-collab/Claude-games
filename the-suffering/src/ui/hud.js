@@ -31,6 +31,7 @@ export class UI {
     inp.bind($('#btn-jump'), 'jump');
     inp.bind($('#btn-crouch'), 'crouch');
     inp.bind($('#btn-reload'), 'reload');
+    inp.bind($('#btn-aim'), 'aim');
     inp.bind($('#btn-use'), 'use');
     inp.bind($('#btn-drop'), 'drop');
     inp.bind($('#btn-holster'), 'holster');
@@ -489,6 +490,7 @@ export class UI {
     if (pl.cuffed) worn('CUFFED', 'bound', () => { w.uncuff(pl, null); this.toast('You slip the cuffs'); });
     const d = w.def;
     $('#btn-reload').hidden = !d.gun;
+    $('#btn-aim').hidden = !d.gun;
     $('#btn-drop').hidden = d.id === 'fists';
     $('#btn-holster').hidden = w.inventory.length === 0 || !!pl.cuffed;
     $('#holster-label').textContent = w.current >= 0 ? 'HOLSTER' : 'DRAW';
@@ -541,6 +543,8 @@ export class UI {
     this.adminui?.update(dt);
     // a bow in the hands: its label follows the draw
     { const e = this.weapons.equipped; if (e && e.def.hold === 'bow') this.ammoChanged(); }
+    // aimed or not: the button lit, the crosshair closed in
+    if (!!g.aiming !== this._aimShown) { this._aimShown = !!g.aiming; $('#btn-aim').classList.toggle('on', this._aimShown); $('#crosshair').classList.toggle('aim', this._aimShown); }
     this.slow += dt;
     if (this.slow > 0.2) {
       this.slow = 0;

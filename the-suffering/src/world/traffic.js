@@ -636,23 +636,25 @@ export class Traffic {
     const ang = wrapAngle(Math.atan2(ax - car.x, az - car.z) - car.yaw);
     car.steerIn = clamp(-ang * 2.6, -1, 1);
     // how fast: flat out on a straight, slow for a corner, slower near you
-    let want = car.unit === 'swatvan' ? 14 : 17;
+    let want = car.unit === 'swatvan' ? 14 : 17, cap = Infinity;
     if (w.j && nx !== w) {
       const ix = w.x - car.x, iz = w.z - car.z, ox = nx.x - w.x, oz = nx.z - w.z;
       const c = (ix * ox + iz * oz) / ((Math.hypot(ix, iz) || 1) * (Math.hypot(ox, oz) || 1));
       // a corner: no faster than it can be braked down from to take it at a crawl by the time it is there
-      if (c < 0.7) want = Math.min(want, Math.sqrt(36 + 2 * 6.5 * Math.max(0, wd - 6.5)));
+      if (c < 0.7) cap = Math.min(cap, Math.sqrt(36 + 2 * 6.5 * Math.max(0, wd - 6.5)));
     }
-    if (Math.abs(ang) > 1.2) want = Math.min(want, 5);
-    want = Math.min(want, slow);
+    if (Math.abs(ang) > 1.2) cap = Math.min(cap, 5);
+    cap = Math.min(cap, slow);
     // through a junction a little more carefully, whatever is crossing it
-    if (w.j && wd < 12) want = Math.min(want, 11);
+    if (w.j && wd < 12) cap = Math.min(cap, 11);
     const close = Math.min(toYou, toEnd);
     if (close < 32) want = Math.min(want, 4 + close * 0.42);
     // stuck for good (tangled with a car it hit, say): they get out and come the rest of the way on foot
     a.slowT = Math.abs(fwd) < 2.5 ? (a.slowT || 0) + dt : Math.max(0, (a.slowT || 0) - dt * 2);
     if (a.slowT > 8) { a.state = 'arrived'; a.t = 0; a.bail = true; halt(); return; }
+    // keeping up with you in your car (but never faster into a corner, or into the back of somebody, than it can take)
     if (p.car && fresh) want = Math.max(want, Math.min(20, Math.hypot(p.car.vx, p.car.vz) + 4));
+    want = Math.min(want, cap);
     // somebody in the road just ahead: brake for them (not for you)
     for (const h of g.humans) {
       if (h.removed || h.car || h.isPlayer || h.state !== ST.ANIM) continue;

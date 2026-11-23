@@ -1212,7 +1212,8 @@ export class Weapons {
    */
   npcFire(h, aim, skill = 0.6) {
     const g = this.game, e = h.weapon;
-    if (!e || !e.def.gun || e.cool > 0 || h.reload || h.swap || h.cuffed || h.cuffing || h.state !== ST.ANIM || !h.h.armOk(-1)) return false;
+    const down = h.state === ST.RAGDOLL && !!h.downAim && h.downAim.up > 0.3;
+    if (!e || !e.def.gun || e.cool > 0 || h.reload || h.swap || h.cuffed || h.cuffing || (h.state !== ST.ANIM && !down) || !h.h.armOk(-1)) return false;
     const d = e.def;
     if (d.flame || d.frost) return false;
     if (d.arrow) {
@@ -1232,7 +1233,7 @@ export class Weapons {
     const m = e.muzzleWorld || [h.x, h.y + 1.4 * h.scale, h.z];
     let dx = aim[0] - m[0], dy = aim[1] - m[1], dz = aim[2] - m[2];
     let l = Math.hypot(dx, dy, dz) || 1;
-    const sp = d.spread * 2 + (1 - skill) * 0.075 + (h.speed > 1 ? 0.03 : 0) + clamp01(h.h.pain / 90) * 0.05;
+    const sp = d.spread * 2 + (1 - skill) * 0.075 + (h.speed > 1 ? 0.03 : 0) + clamp01(h.h.pain / 90) * 0.05 + (down ? 0.03 : 0);
     dx = dx / l + rand(-sp, sp); dy = dy / l + rand(-sp, sp) * 0.7; dz = dz / l + rand(-sp, sp);
     l = Math.hypot(dx, dy, dz); dx /= l; dy /= l; dz /= l;
     for (let i = 0, n = d.pellets || 1; i < n; i++) {
@@ -1426,7 +1427,7 @@ export class Weapons {
     const sl = Math.hypot(sx, sy, sz) || 1; sx /= sl; sy /= sl; sz /= sl;
     let dir = sl > 0.8 ? lob(m[0], m[1], m[2], tx, ty, tz, v) : null;
     if (!dir || dir[0] * sx + dir[1] * sy + dir[2] * sz < 0.94) dir = [sx, sy, sz];
-    const sp = h.isPlayer ? d.spread * (h.speed > 2 ? 2.5 : 1) * (h.crouching ? 0.7 : 1) * (1.6 - 0.6 * k) : d.spread * 2.5 + 0.012;
+    const sp = h.isPlayer ? d.spread * (h.speed > 2 ? 2.5 : 1) * (h.crouching ? 0.7 : 1) * (1.6 - 0.6 * k) * (g.aiming ? 0.55 : 1) : d.spread * 2.5 + 0.012;
     let dx = dir[0] + rand(-sp, sp), dy = dir[1] + rand(-sp, sp), dz = dir[2] + rand(-sp, sp);
     const l = Math.hypot(dx, dy, dz); dx /= l; dy /= l; dz /= l;
     A.loose(h, d.arrow, m[0], m[1], m[2], dx * v + (h.vx || 0), dy * v, dz * v + (h.vz || 0), d.power * (0.3 + 0.7 * k), d.id);
@@ -1472,7 +1473,7 @@ export class Weapons {
     let l = Math.hypot(dx, dy, dz) || 1;
     // something right in front of the barrel: shoot where the camera looks
     if (l < 0.7) { dx = a.dx; dy = a.dy; dz = a.dz; l = 1; }
-    const sp = d.spread * (1 + this.heat * 2.2) * (p.speed > 2 ? 1.8 : 1) * (p.crouching ? 0.6 : 1);
+    const sp = d.spread * (1 + this.heat * 2.2) * (p.speed > 2 ? 1.8 : 1) * (p.crouching ? 0.6 : 1) * (g.aiming ? 0.5 : 1) * (p.state === ST.RAGDOLL ? 1.6 : 1);
     dx = dx / l + rand(-sp, sp); dy = dy / l + rand(-sp, sp); dz = dz / l + rand(-sp, sp);
     l = Math.hypot(dx, dy, dz); dx /= l; dy /= l; dz /= l;
     // a handful of shot goes out in a cone; anything else is one round
@@ -1744,7 +1745,7 @@ export class Weapons {
     // a lock that has been sprung: the pan has flashed, and the charge is catching
     if (this.lockT) {
       const L = this.lockT;
-      if (p.weapon !== L.e || p.state !== ST.ANIM || p.car || p.reload || p.swap) this.lockT = null;
+      if (p.weapon !== L.e || (p.state !== ST.ANIM && !(p.state === ST.RAGDOLL && p.downAim)) || p.car || p.reload || p.swap) this.lockT = null;
       else if ((L.t -= dt) <= 0) { this.lockT = null; this._discharge(p, L.e); }
     }
     // the lit match on an arquebus smoulders the whole time it is in somebody's hands
@@ -1760,17 +1761,28 @@ export class Weapons {
     }
     for (const h of g.humans) if (h.swap || h.reload || h.cuffing) this._hands(h, dt);
     // the player's hands
-    if (g.doctor == null && p.state === ST.ANIM && !p.car) {
+    // down on the ground with a gun up: the trigger still works (and nothing else does until you are up)
+    const downShot = p.state === ST.RAGDOLL && !!p.downAim && p.downAim.up > 0.25;
+    // the trigger pulled while the gun is still coming up: it goes off as soon as the gun is up
+    if (p.state !== ST.RAGDOLL || !p.downAim) this.downQueued = false;
+    else if (!downShot && inp.pressed.attack) this.downQueued = true;
+    if (g.doctor == null && (p.state === ST.ANIM || downShot) && !p.car) {
       const def = this.def;
       if (p.swap) { this.queued = false; this.choice = -1; }
-      else if (def.gun) { if (def.auto ? inp.down.attack : inp.pressed.attack) this.fire(); }
+      else if (def.gun) {
+        const pull = def.auto ? inp.down.attack : inp.pressed.attack || this.downQueued;
+        this.downQueued = false;
+        if (pull) this.fire();
+      }
       else if (inp.pressed.attack) this.attack(-1);
       else if (inp.pressed.alt) this.attack(3);
       else if ((this.queued || this.choice >= 0) && !p.anim.busy) this.attack(-1);
-      if (inp.pressed.reload) this.reload();
-      if (inp.pressed.use) this.pickUp();
-      if (inp.pressed.drop && !p.cuffed) this.drop();
-      if (inp.pressed.holster && !p.cuffed) this.holster();
+      if (!downShot) {
+        if (inp.pressed.reload) this.reload();
+        if (inp.pressed.use) this.pickUp();
+        if (inp.pressed.drop && !p.cuffed) this.drop();
+        if (inp.pressed.holster && !p.cuffed) this.holster();
+      }
     }
     // a drawn bow goes the moment the trigger is let go; anything else that happens lets the string down
     const dr = this.drawing;
@@ -1903,8 +1915,8 @@ export class Weapons {
           if (!h.isPlayer) it.draw = it.ammo > 0 && !h.reload ? clamp01(1 - low * 2) : 0;
           rotv(it.q, d.muzzle[0], d.muzzle[1], d.muzzle[2], _a);
           it.muzzleWorld = [px + _a[0], py + _a[1], pz + _a[2]];
-        } else if (d.gun && h.state === ST.ANIM) {
-          // a gun points where its owner is looking, whatever the wrist is doing
+        } else if (d.gun && (h.state === ST.ANIM || (h.state === ST.RAGDOLL && h.downAim && h.downAim.up > 0.05))) {
+          // a gun points where its owner is looking, whatever the wrist is doing (lying on the ground too)
           const yaw = h.isPlayer ? g.camYaw : h.aimYaw ?? h.yaw;
           const rw = h.anim.reloadW, R = RELOAD[d.reloadKind || d.hold], low = h.isPlayer ? 0 : h.gunLow || 0;
           const pitch = (h.isPlayer ? g.camPitch : h.aimPitch || 0) * (1 - rw) * (1 - low) + h.anim.recoil * 0.12 + R.tilt * rw - low * 0.9;

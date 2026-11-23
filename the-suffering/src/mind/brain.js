@@ -58,15 +58,17 @@ export class Brain {
   update(dt) {
     const h = this.h, m = this.m, hh = h.h, it = h.intent, g = this.g;
     it.mx = 0; it.mz = 0; it.run = false; it.crouch = false; it.face = null;
-    h.pose.cower = 0; h.pose.handsUp = 0; h.pose.phone = 0; h.pose.call = 0; h.pose.scan = 0;
+    h.pose.cower = 0; h.pose.handsUp = 0; h.pose.phone = 0; h.pose.call = 0; h.pose.scan = 0; h.pose.ads = 0;
+    if (h.state !== ST.RAGDOLL) { h.downAim = null; this.downLimit = 0; }
     this.modeT += dt; this.sayT -= dt; this.attackT -= dt;
     if (h.state !== ST.ANIM) { h.aimYaw = null; }
     if (!hh.alive) { m.doing = 'dead'; h.crawlDir = null; return; }
     if (!hh.conscious) { m.doing = 'unconscious'; h.crawlDir = null; return; }
     if (h.car) { this._inCar(dt); return; }
 
-    // on fire: they run, screaming, and then, if they think of it, drop and roll
-    if (h.fire && h.burning > 0.15) {
+    // on fire: they run, screaming, and then, if they think of it, drop and roll (and once down, they roll until every
+    // last flame is out: up too soon and what is left of it takes hold again)
+    if (h.fire && (h.burning > 0.15 || h.state === ST.RAGDOLL)) {
       if (h.state === ST.RAGDOLL) {
         // down while still alight, however they got there: roll
         if (!(h.rollT > 0) && hh.canStand) h.rollT = rand(2.5, 4);
@@ -86,8 +88,10 @@ export class Brain {
         return;
       }
     } else { this.burnT = 0; this.burnAfter = 0; }
-    if (h.tased > 0 || (h.state === ST.RAGDOLL && h.dazeT > 0)) { m.doing = h.tased > 0 ? 'rigid on the ground, every muscle locked by a taser' : 'lying stunned'; h.crawlDir = null; h.stayDown = false; return; }
+    if (h.tased > 0 || (h.state === ST.RAGDOLL && h.dazeT > 0)) { m.doing = h.tased > 0 ? 'rigid on the ground, every muscle locked by a taser' : 'lying stunned'; h.crawlDir = null; h.stayDown = false; h.downAim = null; return; }
     if (h.state === ST.RAGDOLL) {
+      // a gun in the hand and somebody to shoot: they shoot from where they lie
+      if (this._downShoot(dt)) return;
       const t = m.threat;
       // too frightened to move: lie still and hope
       h.stayDown = !!(t && t.level > 50 && m.emo.fear > 75 && m.p.bravery < 0.4 && Math.hypot(t.x - h.x, t.z - h.z) < 9);
@@ -424,7 +428,7 @@ export class Brain {
 
     // the muzzle follows the suspect while there is one to see; otherwise low and ready
     const eye = h.y + 1.42 * h.scale;
-    if (seen && (gun || tas) && !h.reload && !h.swap) { h.aimYaw = yaw; h.aimPitch = Math.atan2(c.py - eye, Math.hypot(S.x - h.x, S.z - h.z)); this.aimT += dt; }
+    if (seen && (gun || tas) && !h.reload && !h.swap) { h.aimYaw = yaw; h.aimPitch = Math.atan2(c.py - eye, Math.hypot(S.x - h.x, S.z - h.z)); this.aimT += dt; if (lethal && gun) h.pose.ads = 1; }
     else { h.aimYaw = null; h.aimPitch = gun || tas ? -0.85 : 0; this.aimT = 0; }
 
     if (down) {
@@ -475,6 +479,51 @@ export class Brain {
       this.firedAt = true;
       m.ask('copFire', 70, null, rand(0.2, 0.8));
     }
+  }
+
+  /**
+   * Down on the ground, awake, a gun in the hand, and somebody to shoot at in sight: they shoot from where they lie,
+   * worse than on their feet. An officer shoots at a suspect it has come to shooting with; anybody else at whoever
+   * hurt them. A few seconds of it and then they try to get up; somebody who cannot stand keeps at it. True while that
+   * is what they are doing.
+   */
+  _downShoot(dt) {
+    const h = this.h, m = this.m, g = this.g, W = g.weapons, e = h.weapon;
+    const off = () => { h.downAim = null; return false; };
+    if (!W || !e || !e.def.gun || e.def.taser || e.def.hold === 'bow' || e.def.flame || e.def.frost || !h.h.armOk(-1) || h.cuffed || h.frozen || h.handled || h.reload || h.swap) return off();
+    if (!this.downLimit) this.downLimit = rand(2.5, 5.5);
+    if (h.h.canStand && h.ragT > this.downLimit) return off();
+    let S = null;
+    if (h.officer) {
+      const k = this.sk, T = this.suspect;
+      if (T && k && !T.removed && T.h.alive && !T.cuffed && (T.isPlayer ? (k.wanted || 0) >= 2 : k.crime >= 2.5)) S = T;
+    } else {
+      const t = m.threat, T = t && t.src;
+      if (T && T.h && !T.removed && T.h.alive) { const k = m.known.get(T.id); if (k && (k.hurtMe || k.hostile >= 1)) S = T; }
+    }
+    if (!S) return off();
+    // somebody they were fighting a moment ago is somebody they know the whereabouts of, lying down or not: what
+    // matters is a clear line from where they lie
+    const kn = m.known.get(S.id), seen = m.canSeeHuman(S) > 0;
+    if (!seen && !(kn && g.time - (kn.last || -99) < 4)) return off();
+    const chest = h.bodies[P.CHEST], c = S.bodies[P.CHEST];
+    const dx = c.px - chest.px, dy = c.py - chest.py, dz = c.pz - chest.pz, flat = Math.hypot(dx, dz), dl = Math.hypot(dx, dy, dz) || 1;
+    if (dl > 50 || g.world.rayWorld(chest.px, chest.py + 0.15, chest.pz, dx / dl, dy / dl, dz / dl, dl - 0.6) >= 0) return off();
+    const yaw = Math.atan2(dx, dz), pitch = Math.atan2(dy, flat);
+    h.aimYaw = yaw; h.aimPitch = pitch; h.gunLow = 0;
+    const A = h.downAim || (h.downAim = { yaw, pitch, two: e.def.hold === 'rifle' || chance(0.6), up: 0 });
+    A.yaw = yaw; A.pitch = pitch;
+    m.doing = `shooting at ${m.name(S)} from the ground`;
+    if (A.up > 0.6 && e.cool <= 0 && flat < 45) {
+      // nobody else in the way (the gun stays up on them until there is a clear line)
+      const mu = e.muzzleWorld || [chest.px, chest.py + 0.1, chest.pz];
+      const ax = c.px - mu[0], ay = c.py - mu[1], az = c.pz - mu[2], al = Math.hypot(ax, ay, az) || 1;
+      const first = g.rayPeople(mu[0], mu[1], mu[2], ax / al, ay / al, az / al, al + 0.4, h, 0.14);
+      if (first && first.human !== S) return true;
+      const shot = W.npcFire(h, [c.px + S.vx * 0.08, c.py + rand(-0.15, 0.1), c.pz + S.vz * 0.08], this.skill * 0.7);
+      if (shot && h.officer && !this.firedAt) { this.firedAt = true; m.ask('copFire', 60, null, rand(0.2, 0.6)); }
+    }
+    return true;
   }
 
   /** Called when this officer's handcuffs have just gone on somebody. */

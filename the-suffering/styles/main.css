@@ -106,6 +106,9 @@ h1, h2, h3, p { margin: 0; }
 #crosshair.gun::before { left: 10px; top: -4px; width: 2px; height: 30px; clip-path: polygon(0 0, 100% 0, 100% 30%, 0 30%, 0 70%, 100% 70%, 100% 100%, 0 100%); }
 #crosshair.gun::after { top: 10px; left: -4px; height: 2px; width: 30px; clip-path: polygon(0 0, 30% 0, 30% 100%, 0 100%, 70% 100%, 70% 0, 100% 0, 100% 100%); }
 #crosshair.hit i { background: var(--blood); transform: scale(2); }
+/* aimed: the crosshair closes in */
+#crosshair.aim { transform: scale(0.62); opacity: 1; transition: transform 0.12s; }
+#crosshair { transition: transform 0.12s; }
 
 #move-name {
   position: absolute; left: 50%; top: 58%; transform: translateX(-50%); font: 800 20px/1 var(--display); letter-spacing: 0.18em;
@@ -143,6 +146,10 @@ h1, h2, h3, p { margin: 0; }
 #btn-jump { right: calc(var(--gr) + 106px); bottom: calc(var(--gb) + 10px); }
 #btn-crouch { right: calc(var(--gr) + 86px); bottom: calc(var(--gb) + 88px); }
 #btn-reload { right: calc(var(--gr) + 12px); bottom: calc(var(--gb) + 128px); }
+#btn-aim { right: calc(var(--gr) + 14px); bottom: calc(var(--gb) + 192px); }
+#btn-aim.on { border-color: var(--clinic); background: rgba(116, 219, 233, 0.22); }
+.ic.aim { width: 16px; height: 16px; border: 2px solid currentColor; border-radius: 50%; position: relative; margin-bottom: 2px; }
+.ic.aim::after { content: ""; position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px; border-radius: 50%; background: currentColor; }
 #btn-use { right: calc(var(--gr) + 172px); bottom: calc(var(--gb) + 30px); border-color: var(--warn); }
 #btn-drop { right: calc(var(--gr) + 160px); bottom: calc(var(--gb) + 100px); }
 #btn-holster { right: calc(var(--gr) + 78px); bottom: calc(var(--gb) + 162px); }
@@ -155,7 +162,7 @@ h1, h2, h3, p { margin: 0; }
 #btn-grab .ic { width: 16px; height: 16px; margin-bottom: 2px; }
 #btn-grab.holding { background: rgba(116, 219, 233, 0.22); }
 #ammo {
-  position: absolute; right: calc(var(--gr) + 14px); bottom: calc(var(--gb) + 228px); font: 700 15px/1 var(--mono); font-variant-numeric: tabular-nums;
+  position: absolute; right: calc(var(--gr) + 14px); bottom: calc(var(--gb) + 258px); font: 700 15px/1 var(--mono); font-variant-numeric: tabular-nums;
   text-shadow: 0 1px 4px #000; pointer-events: none;
 }
 #ammo.low { color: var(--bad); }
@@ -395,9 +402,10 @@ h1, h2, h3, p { margin: 0; }
   #btn-jump { right: calc(var(--gr) + 92px); } #btn-crouch { right: calc(var(--gr) + 76px); bottom: calc(var(--gb) + 78px); }
   #btn-reload { bottom: calc(var(--gb) + 112px); } #btn-use { right: calc(var(--gr) + 152px); } #btn-drop { right: calc(var(--gr) + 142px); bottom: calc(var(--gb) + 88px); }
   #btn-holster { right: calc(var(--gr) + 70px); bottom: calc(var(--gb) + 142px); }
+  #btn-aim { bottom: calc(var(--gb) + 168px); }
   #btn-grab { right: calc(var(--gr) + 128px); bottom: calc(var(--gb) + 146px); }
   .ab.power { width: 54px; height: 54px; right: calc(var(--gr) + 184px); bottom: calc(var(--gb) + 140px); }
-  #move-hints { width: 80px; height: 80px; } #ammo { bottom: calc(var(--gb) + 200px); }
+  #move-hints { width: 80px; height: 80px; } #ammo { bottom: calc(var(--gb) + 226px); }
   #stick-base { width: 104px; height: 104px; margin: 0 0 -52px -52px; }
   .card { padding: 14px; gap: 9px; } .mb { height: 42px; } .menu-inner { gap: 10px; }
   .title { font-size: clamp(38px, 20vmin, 70px); }

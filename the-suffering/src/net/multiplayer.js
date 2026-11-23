@@ -310,6 +310,7 @@ export class Multiplayer {
       st: [Math.round(p.x * 100), Math.round(p.y * 100), Math.round(p.z * 100), Math.round(p.yaw * 1000), p.state, Math.round((p.speed || 0) * 100)],
       po: encodePose(p),
       w: p.weapon ? p.weapon.type : null,
+      da: p.state === ST.RAGDOLL && p.downAim && p.downAim.up > 0.05 ? [r3(p.downAim.yaw), r3(p.downAim.pitch)] : null,
       kt: W.inventory.filter((it) => it !== p.weapon).map((it) => it.type).slice(0, 6),
       ar: [p.vest ? p.vest.kind : '', p.helmet ? p.helmet.kind : ''],
       sc: r3(p.scale), fm: g.powers && g.powers.form ? g.powers.form : '',
@@ -404,6 +405,11 @@ export class Multiplayer {
     h.h.alive = pr.al !== 0; h.h.conscious = h.h.alive && pr.cs !== 0;
     h.remoteHp = num(pr.hp, 0, 100);
     h.state = num(Array.isArray(pr.st) ? pr.st[4] : 0, 0, 3) | 0;
+    // down, with a gun up at something: their gun points where they are aiming it, as it does on their screen
+    if (Array.isArray(pr.da) && h.state === ST.RAGDOLL) {
+      const A = h.downAim || (h.downAim = { yaw: 0, pitch: 0, two: true, up: 1 });
+      A.yaw = num(pr.da[0], -100, 100); A.pitch = num(pr.da[1], -1.6, 1.6); h.aimYaw = A.yaw; h.aimPitch = A.pitch;
+    } else if (h.downAim) { h.downAim = null; h.aimYaw = undefined; h.aimPitch = undefined; }
     this._carOf(r, pr.car);
     if (Array.isArray(pr.ev)) for (const e of pr.ev.slice(0, 16)) { if (!this.server) return; this._event(r, p, e); }
   }

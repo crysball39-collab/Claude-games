@@ -116,6 +116,8 @@ export class Game {
     this.paused = false;
     this.maxPeople = 34;
     this.stats = { fps: 60, ms: 0 };
+    // aiming a gun (a bow, a crossbow): AIM toggles it, the right mouse button (or Q) holds it; aimK eases in and out
+    this.aiming = false; this.aimToggle = false; this.aimK = 0; this.downFireT = -9;
 
     for (const c of this.city.crateSpots) this.spawnCrate(c[0], KERB + 0.41 + (c[2] ? 0.82 : 0), c[1]);
 
@@ -132,6 +134,7 @@ export class Game {
     // a tall screen needs a wider lens to see the same street
     const base = this.settings.fov || 64;
     this.camera.fov = w >= h ? base : clamp(base * (1 + (h / w - 1) * 0.42), base, 96);
+    this.baseFov = this.camera.fov;
     this.camera.updateProjectionMatrix();
     this.width = w; this.height = h;
   }
@@ -331,17 +334,37 @@ export class Game {
   /** The player's thumbs. */
   _control(dt) {
     const inp = this.input, p = this.player, s = this.settings;
-    const [lx, ly] = inp.takeLook();
+    let [lx, ly] = inp.takeLook();
+    // zoomed in to aim, the look is finer
+    const fine = 1 - 0.45 * this.aimK;
+    lx *= fine; ly *= fine;
     this.camYaw = wrapAngle(this.camYaw - lx);
     this.camPitch = clamp(this.camPitch - ly, -1.2, 1.25);
-    if (p.car) { this._drive(dt, lx, ly); return; }
+    if (p.car) { this.aiming = false; this.aimToggle = false; this.aimK = damp(this.aimK, 0, 12, dt); p.downAim = null; this._drive(dt, lx, ly); return; }
+    // aiming: anything that shoots, in the hand, and somebody able to hold it up (on their feet, or down on the ground)
+    const e = p.weapon, ranged = !!(e && e.def.gun && p.weapon === this.weapons?.equipped);
+    const awake = p.h.alive && p.h.conscious && !p.cuffed && p.tased <= 0 && !(p.dazeT > 0) && !p.frozen;
+    if (!ranged || !awake) this.aimToggle = false;
+    if (inp.pressed.aim && ranged && awake) this.aimToggle = !this.aimToggle;
+    const able = p.state === ST.ANIM || p.state === ST.RAGDOLL;
+    this.aiming = ranged && awake && able && this.doctor == null && (inp.down.alt || this.aimToggle);
+    this.aimK = damp(this.aimK, this.aiming ? 1 : 0, 12, dt);
+    p.pose.ads = this.aiming && p.state === ST.ANIM ? 1 : 0;
+    // down on the ground with a gun: aim it (AIM, or the trigger) and the arm comes up off the ground at the crosshair
+    if (inp.down.attack || inp.pressed.attack) this.downFireT = this.time;
+    const downed = p.state === ST.RAGDOLL && awake && !p.handled && ranged && e.def.hold !== 'bow' && p.h.armOk(-1);
+    if (downed && (this.aiming || this.time - this.downFireT < 1.6)) {
+      const A = p.downAim || (p.downAim = { yaw: 0, pitch: 0, two: true, up: 0 });
+      A.yaw = this.camYaw; A.pitch = this.camPitch; A.two = true;
+    } else p.downAim = null;
     const sy = Math.sin(this.camYaw), cy = Math.cos(this.camYaw);
     const mx = inp.move.x, my = inp.move.y;
     const it = p.intent;
     // forward is where the camera looks; right is to the camera's right
     it.mx = sy * my - cy * mx;
     it.mz = cy * my + sy * mx;
-    it.run = true;
+    // aiming, you walk
+    it.run = !this.aiming;
     if (inp.pressed.crouch) this.crouchHeld = !this.crouchHeld;
     if (inp.pressed.jump) { it.jump = true; this.crouchHeld = false; }
     it.crouch = !!this.crouchHeld;
@@ -412,8 +435,8 @@ export class Game {
       ty = down ? chest.py + 0.55 : p.y + (p.crouching ? 1.2 : 1.56) * p.scale;
       const k = 1 - Math.exp(-dt * (down ? 6 : 16));
       this.pivot.x += (tx - this.pivot.x) * k; this.pivot.y += (ty - this.pivot.y) * k; this.pivot.z += (tz - this.pivot.z) * k;
-      const side = 0.42, ox = this.pivot.x + rx * side, oy = this.pivot.y + 0.12, oz = this.pivot.z + rz * side;
-      let dist = this.camDist;
+      const ak = this.aimK, side = 0.42 + 0.28 * ak, ox = this.pivot.x + rx * side, oy = this.pivot.y + 0.12 + 0.06 * ak, oz = this.pivot.z + rz * side;
+      let dist = this.camDist + (1.7 - this.camDist) * ak;
       // nothing solid between the shoulder and the lens
       const hit = this.world.rayWorld(ox, oy, oz, -dx, -dy, -dz, dist + 0.3);
       if (hit >= 0) dist = Math.max(0.35, hit - 0.25);
@@ -429,6 +452,9 @@ export class Game {
       const gy = groundHeight(this.camPos.x, this.camPos.z) + 0.18;
       if (this.camPos.y < gy) this.camPos.y = gy;
     }
+    // zoomed in while aiming
+    const fov = (this.baseFov || cam.fov) / (1 + 0.5 * this.aimK);
+    if (Math.abs(cam.fov - fov) > 0.01) { cam.fov = fov; cam.updateProjectionMatrix(); }
     this.shake = Math.max(0, this.shake - dt * 3.2);
     const sh = this.shake * this.shake * 0.05;
     cam.position.set(this.camPos.x + rand(-sh, sh), this.camPos.y + rand(-sh, sh), this.camPos.z + rand(-sh, sh));

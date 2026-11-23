@@ -31,7 +31,8 @@ npm start            # python3 -m http.server 8080, from the repository root
 | Jump / crouch | JUMP, CROUCH | Space, C |
 | Attack | the big red button | left click or F |
 | Draw a bow, and loose | hold the red button (DRAW), let go | hold left click or F, let go |
-| Choose the move | slide off the button left, up, right or down | right click or Q for the heavy one |
+| Choose the move | slide off the button left, up, right or down | right click or Q for the heavy one (fists and blades) |
+| Aim a gun, a bow or a crossbow | AIM (on, and again for off) | hold right click or Q |
 | Pick up / drop / reload | PICK UP, DROP, RELOAD | E, G, R |
 | Holster or draw | HOLSTER / DRAW | H |
 | Grab, drag or let go | GRAB (DRAG, LET GO); ATTACK throws what you carry | Z |
@@ -79,6 +80,21 @@ Reloading is done by hand and takes as long as
 it looks: the gun comes in to the chest, the empty magazine drops to the ground, the left
 hand fetches a full one from the belt and seats it, and the action is racked. You cannot
 fire until it is finished.
+
+**Aiming.** With a gun, a bow or a crossbow in your hand there is an AIM button over
+RELOAD (on a keyboard, hold the right mouse button or Q). It brings the gun up to your
+eye: the view closes in over your shoulder and zooms, the crosshair tightens, you walk
+instead of running, and the rounds go much closer to where the crosshair is than they do
+from the hip. AIM again and you lower it.
+
+**Shooting from the ground.** Knocked flat with a gun in your hand, you are not out of
+it. AIM, or just pull the trigger, and your arm comes up from where you lie, the gun
+pointed wherever you look, both hands on it, and it fires, a little less steadily than
+standing. You stay down while you hold it up; lower it and you get up. Everyone else with
+a gun does the same: a police officer knocked over in a gunfight, or anybody with a gun
+who has been hurt and is down, lies there and shoots back at whoever they were fighting,
+holding fire while somebody else is in the way, and gets up again a few seconds later. A
+bow needs you on your feet to draw it.
 
 **Black powder.** Three guns from before cartridges, each loaded with one shot.
 The *musket* is a flintlock: pull the trigger and the flint strikes, the priming in the

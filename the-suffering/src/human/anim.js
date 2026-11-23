@@ -240,7 +240,7 @@ export class Animator {
     this.t = Math.random() * 10;
     this.phase = Math.random();
     this.run = 0; this.moving = 0; this.crouch = 0; this.air = 0; this.land = 0;
-    this.w = { guard: 0, blade: 0, pistol: 0, rifle: 0, bow: 0, cower: 0, handsUp: 0, hurt: 0, talk: 0, stagger: 0, writhe: 0, crawl: 0, brace: 0, phone: 0, kneel: 0, cuffed: 0, cuffing: 0, call: 0, scan: 0, sit: 0, drive: 0, slump: 0, hang: 0, rope: 0, gunner: 0 };
+    this.w = { guard: 0, blade: 0, pistol: 0, rifle: 0, bow: 0, cower: 0, handsUp: 0, hurt: 0, talk: 0, stagger: 0, writhe: 0, crawl: 0, brace: 0, phone: 0, kneel: 0, cuffed: 0, cuffing: 0, call: 0, scan: 0, sit: 0, drive: 0, slump: 0, hang: 0, rope: 0, gunner: 0, ads: 0 };
     this.action = null;
     this.flinch = 0; this.flX = 0; this.flZ = 0;
     this.aim = 0; this.lookYaw = 0; this.lookPitch = 0;
@@ -407,6 +407,18 @@ export class Animator {
       this._to(CH.shR, 1.35 + up * 0.8, a); this._to(CH.shROut, 0.5 + 0.25 * dr, a); this._to(CH.shRIn, 0.3, a); this._to(CH.elR, 0.9 + 1.35 * dr, a);
       // turned well round, waist and chest, so the drawing hand can bring the string to the jaw; the head comes back to the mark
       ch[CH.spineTwist] += -1.0 * a; ch[CH.waistTwist] += -0.35 * a; ch[CH.neckTwist] += 1.15 * a;
+    }
+    // aimed: the rifle up into the cheek and the head down to its sights; a pistol out at the full stretch of both arms
+    if (W.ads > 0.01) {
+      const ar = W.ads * W.rifle, ap = W.ads * W.pistol;
+      if (ar > 0.01) {
+        this._to(CH.shR, 0.92 + up * 0.75, ar); this._to(CH.elR, 1.42 - up * 0.2, ar); this._to(CH.shROut, 0.3, ar);
+        ch[CH.neckBend] += 0.18 * ar; ch[CH.headSide] += 0.14 * ar; ch[CH.headTwist] += 0.1 * ar; ch[CH.spineBend] += 0.05 * ar;
+      }
+      if (ap > 0.01) {
+        this._to(CH.elR, 0.02, ap); this._to(CH.elL, 0.34, ap); this._to(CH.shLIn, 0.6, ap);
+        ch[CH.neckBend] += 0.1 * ap; ch[CH.spineBend] += 0.06 * ap;
+      }
     }
     if (W.pistol + W.rifle + W.bow > 0.01) {
       const a = Math.min(1, W.pistol + W.rifle + W.bow);

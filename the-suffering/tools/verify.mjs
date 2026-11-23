@@ -43,7 +43,7 @@ await run(() => {
       if (p.car) g.traffic.exit(p);
       g.traffic?.clearCars();
       p.h.heal(); p.reset(0, -18, Math.PI / 2);
-      g.camYaw = Math.PI / 2; g.camPitch = -0.08; g.gore.clean();
+      g.camYaw = Math.PI / 2; g.camPitch = -0.08; g.gore.clean(); g.aimToggle = false;
       g.paused = false; g.advance(0.3);
     },
     give(type) { const p = g.player; const it = g.weapons.spawn(type, p.x + 0.3, 1, p.z); g.advance(0.3); g.weapons.pickUp(it); g.advance(0.3); return it; },
@@ -1552,7 +1552,8 @@ if (want('Flamethrower')) {
     out.fuel = it.ammo;
     out.lit = !!v.fire;
     let ran = 0, rolled = false;
-    for (let i = 0; i < 40; i++) { g.advance(0.25); if (v.fire && v.state === 0 && v.speed > 2) ran++; if (v.rollT > 0) rolled = true; }
+    // (a bad burn can take ten or twelve seconds to smother)
+    for (let i = 0; i < 64; i++) { g.advance(0.25); if (v.fire && v.state === 0 && v.speed > 2) ran++; if (v.rollT > 0) rolled = true; }
     out.burn = { area: v.h.burnArea, worst: Math.max(...v.h.burns), out: !v.fire, said: [...new Set(said)].join(','), ran, rolled };
     g.ui.toggleDoctor(true); g.ui.doctor.select(v); g.ui.update(0.3);
     out.doctor = [...document.querySelectorAll('#doc-wounds li')].map((li) => li.textContent).filter((t) => /Burn/.test(t)).length;
@@ -2550,6 +2551,157 @@ if (want('Pursuit')) {
   check('when it is over, they all go home', r.home.helis === 0 && r.home.units === 0, JSON.stringify(r.home));
 }
 
+/* ------------------- aiming, and shooting from the ground ------------------- */
+head('Aiming');
+if (want('Aiming')) {
+  const r = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, P = g.police, out = {};
+    const btn = document.querySelector('#btn-aim'), xh = document.querySelector('#crosshair');
+    const tap = (k) => { T.press(k); g.advance(1 / 30); T.release(k); g.advance(1 / 30); };
+    const fresh = () => { V.stage(); g.settings.cheatCops = true; p.h.god = false; };
+    const knock = () => { p.toRagdoll(); for (const b of p.bodies) { b.vx = -2; b.vy = 1; } g.advance(1.2); };
+    const fwd = (q) => [2 * (q[0] * q[2] + q[3] * q[1]), 2 * (q[1] * q[2] - q[3] * q[0]), 1 - 2 * (q[0] * q[0] + q[1] * q[1])];
+    // 1. the button: up with a gun in your hand, not with your fists or a blade
+    fresh();
+    out.button = { fists: btn.hidden };
+    w.give(p, 'knife', true); g.advance(0.8); out.button.knife = btn.hidden;
+    const gun = w.give(p, 'm1911', true); g.advance(1.2); out.button.gun = !btn.hidden;
+    // 2. AIM: in over the shoulder, zoomed, and you walk; AIM again and it is off
+    const base = g.baseFov, far = g.camDistNow;
+    tap('aim'); g.advance(0.6);
+    out.on = { aiming: g.aiming, fov: +g.camera.fov.toFixed(1), base: +base.toFixed(1), dist: +g.camDistNow.toFixed(2), far: +far.toFixed(2), lit: btn.classList.contains('on'), xh: xh.classList.contains('aim'), ads: p.pose.ads };
+    const x0 = p.x, z0 = p.z;
+    __ts.input.move.y = 1; g.advance(1.5); __ts.input.move.y = 0;
+    out.on.walked = +Math.hypot(p.x - x0, p.z - z0).toFixed(2);
+    g.advance(0.3);
+    tap('aim'); g.advance(0.6);
+    out.off = { aiming: g.aiming, fov: +g.camera.fov.toFixed(1), lit: btn.classList.contains('on'), xh: xh.classList.contains('aim') };
+    // or held: the right mouse button, or Q
+    T.press('alt'); g.advance(0.4); out.held = g.aiming; T.release('alt'); g.advance(0.4); out.let = g.aiming;
+    // 3. aimed, the rounds go closer to where the crosshair is: 28 shots each way at 25 m
+    out.acc = {};
+    for (const mode of ['hip', 'aimed']) {
+      let hits = 0;
+      for (let k = 0; k < 4; k++) {
+        p.reset(0, -18, Math.PI / 2); g.camYaw = Math.PI / 2; g.advance(0.3);
+        const v = V.still(T.dummy(25)); v.h.tough = 50; g.advance(0.3);
+        let n = 0; const vh = v.hit.bind(v); v.hit = (info) => { n++; return vh(info); };
+        g.aimToggle = mode === 'aimed';
+        for (let i = 0; i < 20; i++) { V.aimAt(v.bodies[2]); g.advance(1 / 30); }
+        for (let s = 0; s < 7; s++) { V.aimAt(v.bodies[2]); g.advance(1 / 60); V.aimAt(v.bodies[2]); g.advance(1 / 60); w.cool = 0; w.heat = 0; gun.ammo = 7; const before = n; w.fire(); g.advance(0.05); if (n > before) hits++; }
+        g.removeHuman(v);
+      }
+      out.acc[mode] = hits;
+    }
+    g.aimToggle = false;
+    // 4. knocked down with a gun in your hand: AIM, and the gun comes up from where you lie
+    fresh();
+    const g19 = w.give(p, 'glock', true); g.advance(1);
+    const v = V.still(T.dummy(7)); v.h.tough = 3; g.advance(0.3);
+    knock();
+    out.down = { state: p.state, conscious: p.h.conscious };
+    g.aimToggle = true;
+    for (let i = 0; i < 40; i++) { V.aimAt(v.bodies[2]); g.advance(1 / 30); }
+    const m = g19.muzzleWorld, c = v.bodies[2], f = fwd(g19.q);
+    const tx = c.px - m[0], ty = c.py - m[1], tz = c.pz - m[2], tl = Math.hypot(tx, ty, tz);
+    out.down.aiming = g.aiming; out.down.pointing = +((f[0] * tx + f[1] * ty + f[2] * tz) / tl).toFixed(3);
+    // the right arm out along the line of the aim, shoulder to hand
+    const DA = p.downAim, sh = [0, 0, 0], hd = p.bodies[10];
+    if (DA) {
+      const cp = Math.cos(DA.pitch), ad = [Math.sin(DA.yaw) * cp, Math.sin(DA.pitch), Math.cos(DA.yaw) * cp];
+      p.bodies[2].toWorld(-0.17 * p.scale, 0.14 * p.scale, 0, sh);
+      const ux = hd.px - sh[0], uy = hd.py - sh[1], uz = hd.pz - sh[2], ul = Math.hypot(ux, uy, uz) || 1;
+      out.down.arm = +((ux * ad[0] + uy * ad[1] + uz * ad[2]) / ul).toFixed(3);
+    }
+    out.down.fov = +g.camera.fov.toFixed(1);
+    // and it shoots
+    let hitsN = 0; const vh = v.hit.bind(v); v.hit = (info) => { hitsN++; return vh(info); };
+    let shots = 0;
+    for (let i = 0; i < 96; i++) { V.aimAt(v.bodies[2]); if (i % 12 === 0) { T.press('attack'); g.advance(1 / 30); T.release('attack'); shots++; } else g.advance(1 / 30); }
+    out.down.shots = shots; out.down.fired = 15 - g19.ammo; out.down.hits = hitsN; out.down.still = p.state;
+    // AIM off: up you get
+    g.aimToggle = false;
+    let upAt = -1;
+    for (let i = 0; i < 80 && upAt < 0; i++) { g.advance(0.1); if (p.state === 0) upAt = (i + 1) / 10; }
+    out.down.upAt = upAt;
+    // 5. one pull of the trigger while down, without AIM: the gun comes up and the round goes
+    fresh();
+    const g2 = w.give(p, 'glock', true); g.advance(1);
+    const v2 = V.still(T.dummy(7)); v2.h.tough = 3; g.advance(0.3);
+    knock();
+    const a0 = g2.ammo;
+    V.aimAt(v2.bodies[2]); T.press('attack'); g.advance(1 / 30); T.release('attack');
+    let firedAt = -1;
+    for (let i = 0; i < 30; i++) { V.aimAt(v2.bodies[2]); g.advance(1 / 30); if (firedAt < 0 && g2.ammo < a0) firedAt = (i + 1) / 30; }
+    out.tap = { state: p.state, firedAt: +firedAt.toFixed(2) };
+    // 6. a musket from the ground: the pan flashes, then the charge
+    fresh();
+    const mus = w.give(p, 'musket', true); g.advance(1.5);
+    const v3 = V.still(T.dummy(8)); v3.h.tough = 3; g.advance(0.3);
+    knock(); g.aimToggle = true;
+    for (let i = 0; i < 30; i++) { V.aimAt(v3.bodies[2]); g.advance(1 / 30); }
+    let fired = false;
+    for (let k = 0; k < 4 && !fired; k++) {
+      V.aimAt(v3.bodies[2]); T.press('attack'); g.advance(1 / 30); T.release('attack');
+      for (let i = 0; i < 40; i++) { V.aimAt(v3.bodies[2]); g.advance(1 / 30); }
+      fired = mus.ammo === 0;
+    }
+    out.musket = { fired, state: p.state, hurt: v3.h.wounds.length };
+    g.aimToggle = false;
+    // 7. a police officer knocked down in a gunfight shoots back from the ground
+    fresh(); g.settings.cheatCops = false; p.h.god = true;
+    const R = P.response, ru = R.update; R.update = () => {};
+    const o = g.spawnOfficer(p.x + 9, p.z, -Math.PI / 2); g.advance(0.5);
+    P.raise(2, 'test', { x: p.x, z: p.z });
+    for (let i = 0; i < 30; i++) g.advance(0.1);
+    out.cop = { mode: o.brain.mode, weapon: o.weapon && o.weapon.type };
+    const nf = w.npcFire; let downFires = 0, maxUp = 0, doing = '';
+    w.npcFire = (h, aim, sk) => { const ok = nf.call(w, h, aim, sk); if (ok && h.state === 2) downFires++; return ok; };
+    o.toRagdoll(); for (const b of o.bodies) { b.vx = 1.5; b.vy = 0.5; }
+    // (down for up to five and a half seconds, then the getting up)
+    for (let i = 0; i < 100; i++) {
+      if (P.wanted < 2) P.raise(2, 'test'); P.lastSeen = { x: p.x, z: p.z, t: g.time };
+      g.advance(0.1);
+      if (o.downAim) { maxUp = Math.max(maxUp, o.downAim.up); doing = o.mind.doing; }
+      if (i > 20 && o.state === 0 && !o.downAim) break;
+    }
+    w.npcFire = nf; R.update = ru;
+    out.cop.down = { fires: downFires, up: +maxUp.toFixed(2), doing, after: o.state };
+    // 8. so does anybody with a gun who has been hurt by somebody, and is down
+    fresh(); p.h.god = true;
+    const civ = g.spawnHuman(p.x + 8, p.z, -Math.PI / 2);
+    w.give(civ, 'glock', true); g.advance(0.5);
+    w.give(p, 'm1911', true); g.advance(1);
+    for (let s = 0; s < 2; s++) { V.aimAt(civ.bodies[12]); g.advance(1 / 30); w.cool = 0; w.fire(); g.advance(0.3); }
+    let civFires = 0, koAt = -1, koFires = 0, koAim = null;
+    w.npcFire = (h, aim, sk) => { const ok = nf.call(w, h, aim, sk); if (ok && h === civ && h.state === 2) { if (koAt < 0) civFires++; else koFires++; } return ok; };
+    if (civ.state !== 2) { civ.toRagdoll(); for (const b of civ.bodies) { b.vx = 1.5; b.vy = 0.5; } }
+    for (let i = 0; i < 60; i++) {
+      g.advance(0.1);
+      // then knocked out cold where they lie: the gun goes down with the arm, and no more rounds
+      if (koAt < 0 && civFires >= 2) { koAt = i; civ.h.ko = 8; }
+      if (koAt >= 0 && i === koAt + 4) koAim = !!civ.downAim;
+    }
+    w.npcFire = nf;
+    out.civ = { fires: civFires, alive: civ.h.alive, ko: { at: koAt, aim: koAim, fires: koFires, awake: civ.h.conscious } };
+    p.h.god = false; P.reset(); g.settings.cheatCops = false;
+    g.paused = true;
+    return out;
+  });
+  check('a gun in your hand puts an AIM button up (fists and blades do not)', r.button.fists && r.button.knife && r.button.gun, JSON.stringify(r.button));
+  check('AIM: the view closes in over your shoulder and zooms, the AIM button lit and the crosshair tight; the gun up to the eye', r.on.aiming && r.on.fov < r.on.base * 0.75 && r.on.dist < r.on.far - 1 && r.on.lit && r.on.xh && r.on.ads === 1, JSON.stringify(r.on));
+  check('aiming, you walk rather than run', r.on.walked > 0.8 && r.on.walked < 3.2, `${r.on.walked} m in 1.5 s`);
+  check('AIM again and it is off; or hold the right mouse button (or Q) to aim only while it is held', !r.off.aiming && Math.abs(r.off.fov - r.on.base) < 1 && !r.off.lit && !r.off.xh && r.held && !r.let, JSON.stringify({ off: r.off, held: r.held, let: r.let }));
+  check('aimed shots go closer to the crosshair than shots from the hip', r.acc.aimed >= 22 && r.acc.aimed > r.acc.hip, `at 25 m: ${r.acc.hip} of 28 from the hip, ${r.acc.aimed} of 28 aimed`);
+  check('knocked down with a gun, AIM brings it up from where you lie, pointed at the crosshair', r.down.state === 2 && r.down.aiming && r.down.pointing > 0.97 && r.down.arm > 0.8, JSON.stringify(r.down));
+  check('and it shoots from the ground, and hits; you stay down while you aim, and get up when you stop', r.down.fired === r.down.shots && r.down.hits >= 6 && r.down.still === 2 && r.down.upAt > 0 && r.down.upAt < 5, JSON.stringify(r.down));
+  check('one pull of the trigger while you are down: the gun comes up and the round goes', r.tap.state === 2 && r.tap.firedAt > 0 && r.tap.firedAt < 0.5, JSON.stringify(r.tap));
+  check('a musket from the ground: a flash in the pan, then the charge', r.musket.fired && r.musket.state === 2 && r.musket.hurt >= 1, JSON.stringify(r.musket));
+  check('a police officer knocked down in a gunfight shoots back from the ground, then gets up', r.cop.mode === 'engage' && r.cop.down.fires >= 2 && r.cop.down.up > 0.6 && /from the ground/.test(r.cop.down.doing) && r.cop.down.after === 0, JSON.stringify(r.cop));
+  check('so does anyone else with a gun who is down and has been hurt by somebody', r.civ.fires >= 2, JSON.stringify(r.civ));
+  check('knocked out cold while they are at it, the gun goes down and stops', r.civ.ko.at >= 0 && r.civ.ko.aim === false && r.civ.ko.fires === 0 && !r.civ.ko.awake, JSON.stringify(r.civ.ko));
+}
+
 head('Special abilities');
 if (want('Special abilities')) {
   await run(async () => { await V.admin(); V.stage(); __game.paused = false; __game.powers.forget(); });
@@ -2834,6 +2986,28 @@ if (want('Multiplayer')) {
   await step(1);
   const shotB = await B.ev(() => { const p = window.__game.player; return { holes: p.h.wounds.filter((w) => w.type === 'gunshot').length, weapon: p.lastWeapon }; });
   check('so does a round; and everybody else sees and hears the shot', shotB.holes >= 1 && shotB.weapon === 'm1911', JSON.stringify(shotB));
+  // down on the ground with that gun up at somebody: everybody else sees the gun pointed where it is aimed
+  const aDown = await A.ev(() => {
+    const g = window.__game, p = g.player;
+    g.paused = false; p.toRagdoll(); g.advance(1.2); g.aimToggle = true; g.advance(0.8); g.paused = true;
+    return { st: p.state, yaw: p.downAim ? +p.downAim.yaw.toFixed(3) : null, pitch: p.downAim ? +p.downAim.pitch.toFixed(3) : null };
+  });
+  await step(1);
+  const downB = await B.ev(() => {
+    const r = [...window.__ts.mp.remotes.values()][0], h = r.h, it = h.weapon, A = h.downAim;
+    if (!it || !A) return { st: h.state, da: !!A };
+    const q = it.q, f = [2 * (q[0] * q[2] + q[3] * q[1]), 2 * (q[1] * q[2] - q[3] * q[0]), 1 - 2 * (q[0] * q[0] + q[1] * q[1])];
+    const cp = Math.cos(A.pitch), d = [Math.sin(A.yaw) * cp, Math.sin(A.pitch), Math.cos(A.yaw) * cp];
+    return { st: h.state, da: true, yaw: +A.yaw.toFixed(3), dot: +(f[0] * d[0] + f[1] * d[1] + f[2] * d[2]).toFixed(3), shown: it.shown };
+  });
+  await A.ev(() => {
+    const g = window.__game, p = g.player;
+    g.aimToggle = false; g.paused = false; g.advance(4);
+    if (p.state !== 0) { p.h.heal(); p.reset(p.x, p.z, p.yaw); g.advance(0.3); }
+    g.paused = true;
+  });
+  await step(1);
+  check('a player down on the ground with a gun up: everybody else sees them lying there, the gun aimed where they aim it', aDown.st === 2 && downB.st === 2 && downB.da && downB.shown && downB.dot > 0.98 && Math.abs(downB.yaw - aDown.yaw) < 0.05, JSON.stringify({ aDown, downB }));
   // the admin's Tempest Kick, at B: B's game takes the cut, and B's screen shows the slash
   await face(5);
   await A.ev(() => { const g = window.__game; g.weapons.select(-1); g.paused = false; g.advance(0.8); g.paused = true; });
