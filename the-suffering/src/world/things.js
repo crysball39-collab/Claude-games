@@ -204,8 +204,9 @@ export class Things {
     for (const t of this.list) {
       const b = t.body, def = t.def;
       const was = t.lit;
-      t.powered = def.light && live ? live.has(t.prop) : false;
-      t.lit = t.powered && !t.broken && (t.type !== 'flood' || t.on);
+      // (one in the host's city, shown here: lit when it is lit there)
+      t.powered = t.mirror ? !!t.netLit : def.light && live ? live.has(t.prop) : false;
+      t.lit = t.mirror ? !!t.netLit && !t.broken : t.powered && !t.broken && (t.type !== 'flood' || t.on);
       if (t.powered) powered++;
       if (t.lit !== was) { this._paint(t); if (t.lit) { g.audio?.at('switch', b.px, b.py, b.pz, 0.25); g.minds?.noise(b.px, b.py, b.pz, 62, 'light', null); } }
       // glass does not take knocks

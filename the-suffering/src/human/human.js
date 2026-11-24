@@ -53,6 +53,8 @@ const _ch0 = new Float32Array(CHANNELS);
 let _id = 1;
 
 const ARM_L = [P.UARM_L, P.FARM_L, P.HAND_L], ARM_R = [P.UARM_R, P.FARM_R, P.HAND_R];
+/** The parts whose cloth can be torn away altogether: sleeves, and trouser legs below the knee. */
+const STRIP = new Set([P.UARM_L, P.UARM_R, P.FARM_L, P.FARM_R, P.SHIN_L, P.SHIN_R]);
 const LEG_L = [P.THIGH_L, P.SHIN_L, P.FOOT_L], LEG_R = [P.THIGH_R, P.SHIN_R, P.FOOT_R];
 
 function hairBoxes(style) {
@@ -121,9 +123,11 @@ export class Human {
     this.claws = false;                    // claws at the ends of the fingers
     this.hidden = false;                   // not drawn at all: something else is being drawn in their place
     this.bulk = 1;                         // drawn this much broader than they are
+    this.brawn = null;                     // or this much, part by part (the Hulk: the chest and the arms far more than the head)
     this.fur = null;                       // fur all over instead of skin and clothes, as a colour
     this.beast = false;                    // an animal's head on them instead of a face and hair
     this.powerMul = 1; this.reachMul = 1;  // blows land harder, and reach further
+    this.jumpMul = 1;                      // jumps go this much higher
     this.sturdy = 1;                       // this much harder to knock off their feet
     this.boost = 1; this.knock = 1;        // what the admin has set: speed, and how hard they are to knock down
     this.ice = null; this.iced = 0;        // rime on each part (the frost keeps it), and how much of the skin is under it
@@ -188,6 +192,7 @@ export class Human {
     this.skinParts = [];
     this.cloth = [];                       // each part's cloth colour, or -1 where it is skin
     this.soak = new Float32Array(PART_COUNT);   // how much blood each part's clothing has taken up, 0..1
+    this.tear = new Float32Array(PART_COUNT);   // how torn each part's clothing is: at 1, a sleeve or a trouser leg comes away
     this._soakQ = new Int8Array(PART_COUNT);
     for (let i = 0; i < PART_COUNT; i++) {
       const p = PARTS[i];
@@ -403,6 +408,8 @@ export class Human {
       e.gazeX = clamp(-this.lookYaw * 0.8, -1, 1); e.gazeY = 0;
       e.pupil = 1.3 + F * 0.7;
     }
+    // the Hulk: a scowl, and the teeth bared
+    if (this.snarl && h.alive && h.conscious) { e.browTilt = 1; e.browRaise = 0; e.mouthCurve = Math.min(e.mouthCurve, -0.6); e.mouthWide = Math.max(e.mouthWide, 0.45); e.teeth = true; e.tears = 0; }
     const key = faceKey(e);
     if (key !== this._faceKey) { this._faceKey = key; this.game.faces.draw(this.faceCell, this.look, e); }
   }
@@ -850,6 +857,64 @@ export class Human {
     this._tintCloth();
   }
 
+  /** The colour of this person's skin, as it shows through a tear (a form's, if they are in one). */
+  skinHex() { return this.coat ? this.coat[P.NECK] : this.fur ?? this.look.skin; }
+
+  /**
+   * Clothes torn where a blow, a blade or a round met them (not where armour took it): a hole, or a blade's long slit,
+   * with the skin showing through; scraps of cloth thrown off; and, torn enough, a sleeve or a trouser leg gone. Cloth
+   * gives under a fist, so a punch only splits it when it is a hard one.
+   */
+  _tear(part, type, power, lp, ln, info, rep) {
+    // (Infinite HP: not a mark on them, their clothes included)
+    if (!this.clothed[part] || this.gone[part] || !this.attached[part] || this.cloth[part] < 0 || this.h.god) return;
+    // under a coat only what is cloth in it tears: the Hulk's green is his skin
+    if (this.coat && this.coat[part] === this.skinHex()) return;
+    const g = this.game, s = this.scale;
+    let k = 0, kind = 'tear', size = 0, angle;
+    if (type === 'bullet') { k = info.shot ? 0.1 : 0.22 + power * 0.08; size = (info.shot ? 0.032 : info.rifle ? 0.085 : 0.066) * s; }
+    else if (type === 'cut') { k = 0.22 + Math.min(power, 3) * 0.12; kind = 'rip'; size = (0.045 + Math.min(power, 3) * 0.025) * s; if (rep && rep.wound && rep.wound.angle != null) angle = rep.wound.angle; }
+    else if (type === 'stab') { k = 0.18 + power * 0.08; kind = 'rip'; size = 0.034 * s; }
+    else if (type === 'crush') { k = 0.35; size = 0.1 * s; }
+    else if (type === 'blunt') {
+      if (power < 0.6 || !chance(clamp01((power - 0.55) * 1.3))) return;
+      k = 0.1 + Math.min(power, 4) * 0.08; size = Math.min(0.15, 0.04 + power * 0.02) * s;
+    } else return;
+    this.tear[part] += k;
+    g.gore.tear(this, part, kind, lp, ln, size, angle);
+    if (info.point) g.gore.scraps(info.point[0], info.point[1], info.point[2], -(info.dir ? info.dir[0] : 0) * 1.2, 0.5, -(info.dir ? info.dir[2] : 0) * 1.2, this.cloth[part], type === 'blunt' ? 1 : type === 'bullet' ? 2 : 3);
+    this.tears = (this.tears || 0) + 1;
+    g.mp?.onTear?.(this, part, kind, lp, ln, size);
+    if (this.tear[part] >= 1 && STRIP.has(part) && !this.coat) this.stripCloth(part, info.dir);
+  }
+
+  /**
+   * The cloth on a part gone altogether: a sleeve torn off (a sleeve torn off at the shoulder takes the forearm's part
+   * of it too), a trouser leg torn away below the knee. The skin shows; the holes and the blood go with the cloth.
+   */
+  stripCloth(part, dir = null) {
+    if (this.cloth[part] < 0 || this.gone[part]) return;
+    const g = this.game, b = this.bodies[part], hex = this.cloth[part];
+    this.cloth[part] = -1; this.clothed[part] = false;
+    if (!this.skinParts.includes(part)) this.skinParts.push(part);
+    this.soak[part] = 0; this._soakQ[part] = -1; this._pallor = -1; this._burnKey = -1; this._iceKey = -1;
+    g.gore.clearTears(this, part);
+    g.gore.scraps(b.px, b.py, b.pz, dir ? dir[0] * 1.5 : 0, 1, dir ? dir[2] * 1.5 : 0, hex, 7);
+    this.stripped = (this.stripped || 0) | (1 << part);
+    this._tintSkin();
+    if (part === P.UARM_L && this.cloth[P.FARM_L] >= 0) this.stripCloth(P.FARM_L, dir);
+    if (part === P.UARM_R && this.cloth[P.FARM_R] >= 0) this.stripCloth(P.FARM_R, dir);
+  }
+
+  /** A tear another player's game made in their clothes, shown on their stand-in here. */
+  tearMark(part, kind, lp, ln, size) {
+    if (!this.clothed[part] || this.gone[part] || this.cloth[part] < 0) return;
+    const g = this.game, b = this.bodies[part];
+    g.gore.tear(this, part, kind === 'rip' ? 'rip' : 'tear', lp, ln, size);
+    b.toWorld(lp[0], lp[1], lp[2], _a);
+    g.gore.scraps(_a[0], _a[1], _a[2], 0, 0.5, 0, this.cloth[part], 2);
+  }
+
   /** Clothing that has soaked up a lot of blood goes dark with it, all over. */
   _tintCloth() {
     for (let i = 0; i < PART_COUNT; i++) {
@@ -1061,7 +1126,7 @@ export class Human {
       if (L.t === 0) { this.vy = L.vy; this.grounded = false; this.vx = L.vx; this.vz = L.vz; this.jumpCool = 0.6; }
       L.t += dt;
       tvx = L.vx; tvz = L.vz;
-      if ((this.grounded && L.t > 0.12) || L.t > 2.5) this.leap = null;
+      if ((this.grounded && L.t > 0.12) || L.t > (L.max || 2.5)) this.leap = null;
     }
     if (this.grabStep) {
       // up to whatever the hands are going for, or back a little from something underfoot
@@ -1092,7 +1157,7 @@ export class Human {
 
     // up and down
     if (it.jump && this.grounded && this.jumpCool <= 0 && h.legOk(1) && h.legOk(-1) && !this.anim.busy && !this.cuffing && this.dragMax > 2.5) {
-      this.vy = JUMP_V * lerp(0.6, 1, mob) * (h.stamina < 15 ? 0.75 : 1); this.grounded = false; this.jumpCool = 0.35; h.spend(7);
+      this.vy = JUMP_V * this.jumpMul * lerp(0.6, 1, mob) * (h.stamina < 15 ? 0.75 : 1); this.grounded = false; this.jumpCool = 0.35; h.spend(7);
       g.audio?.at('step', this.x, this.y, this.z, 0.5);
     }
     it.jump = false;
@@ -1252,7 +1317,7 @@ export class Human {
     // crates and the like: shove them, and be stopped by them
     for (const o of g.props) {
       const b = o.body;
-      if (b === this.holdBody) continue;           // what they are dragging along behind them
+      if (b === this.holdBody || o.carried) continue;           // what they are dragging along behind them, or holding over somebody's head
       if (b.py + b.boundR < lo || b.py - b.boundR > hi) continue;
       // anything whose top is below the knee is stepped on to, not walked into
       const up = Math.abs(1 - 2 * (b.qx * b.qx + b.qz * b.qz));
@@ -1280,10 +1345,17 @@ export class Human {
     }
     // cars
     for (const car of g.traffic ? g.traffic.cars : []) {
+      if (car.carried) continue;                    // up over somebody's head
       const b = car.body;
       const dx = nx - b.px, dz = nz - b.pz;
       if (dx * dx + dz * dz > 9) continue;
       if (ny > b.py + b.hy) continue;
+      // a car in the air (thrown, or blown up) goes over somebody it is not low enough to hit
+      if (!b.kinematic) {
+        const qx = b.qx, qy = b.qy, qz = b.qz, qw = b.qw;
+        const ey = b.hx * Math.abs(2 * (qx * qy + qw * qz)) + b.hy * Math.abs(1 - 2 * (qx * qx + qz * qz)) + b.hz * Math.abs(2 * (qy * qz - qw * qx));
+        if (b.py - ey > hi) continue;
+      }
       b.toLocal(nx, b.py, nz, _a);
       const cx = clamp(_a[0], -b.hx, b.hx), cz = clamp(_a[2], -b.hz, b.hz);
       b.toWorld(cx, 0, cz, _b);
@@ -1851,12 +1923,12 @@ export class Human {
   _draw() {
     const g = this.game, bx = g.boxes;
     if (this.hidden) { this._hideAll(); return; }
-    const bk = this.bulk;
+    const bk = this.bulk, br = this.brawn;
     for (let i = 0; i < PART_COUNT; i++) {
       if (this.gone[i]) continue;
       if (i === P.HAND_L || i === P.HAND_R) continue;
-      const b = this.bodies[i], s = this.sizes[i];
-      bx.set(this.inst[i], b.px, b.py, b.pz, b.qx, b.qy, b.qz, b.qw, s[0] * bk, s[1] * (1 + (bk - 1) * 0.3), s[2] * bk);
+      const b = this.bodies[i], s = this.sizes[i], k = br ? br[i] : bk;
+      bx.set(this.inst[i], b.px, b.py, b.pz, b.qx, b.qy, b.qz, b.qw, s[0] * k, s[1] * (1 + (k - 1) * 0.3), s[2] * k);
     }
     this._drawHand(P.HAND_L, 0, -1);
     this._drawHand(P.HAND_R, 1, 1);
@@ -1935,6 +2007,7 @@ export class Human {
     if (this.helmet) { for (const v of this.helmet.boxes) { mul(v.l); mul(v.z); } this.helmet.lift *= k; }
     if (this.caps) for (const c of this.caps) { mul(c.l); mul(c.z); }
     this.scale = s; this.h.scale = s;
+    this.game.gore?.rescale?.(this, k);
     this.repose();
   }
 
@@ -1944,6 +2017,8 @@ export class Human {
     this._pallor = -1; this._burnKey = -1; this._soakQ.fill(-1);
     for (let i = 0; i < PART_COUNT; i++) if (!this.gone[i]) this.game.boxes.colorHex(this.inst[i], coat ? coat[i] : this.cloth[i] >= 0 ? this.cloth[i] : this.look.skin);
     this._tintSkin(); this._tintCloth();
+    // what shows through the tears is whatever the skin now is
+    this.game.gore.retintTears?.(this);
   }
 
   /** Claws grown out of the ends of the fingers (on), or gone again (off). */
@@ -2132,6 +2207,8 @@ export class Human {
     this.lastAttacker = info.attacker || this.lastAttacker;
     if (info.weapon) this.lastWeapon = info.weapon;
     if (rep.wound) g.gore.wound(this, rep.wound);
+    // and the clothes over it torn
+    if (!stopped) this._tear(part, type, power, lp, ln, info, rep);
     if (rep.exit) {
       g.gore.wound(this, rep.exit);
       b.toWorld(rep.exit.x, rep.exit.y, rep.exit.z, _a);

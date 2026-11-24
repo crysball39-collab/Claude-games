@@ -331,7 +331,8 @@ export class Police {
     this.reports = this.reports.filter((r) => r.status !== 'closed' || now - r.t < 400);
 
     // who is sent, and in what: on foot from the station, in cars, in the air; and home again when it is over
-    this.response.update(dt);
+    // (on somebody else's server the police, and everything they send, are the host's)
+    if (!g.mirror) this.response.update(dt);
   }
 
   /**

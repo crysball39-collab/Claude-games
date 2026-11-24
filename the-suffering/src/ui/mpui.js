@@ -188,7 +188,7 @@ export class MPUI {
         q.kick.appendChild(kb);
       } else if (!kick && q.kick.firstChild) q.kick.textContent = '';
     });
-    put($('#pl-stats'), 'Everyone here is a real person. Fights between players count on both screens; the city’s own people, police and traffic are each player’s own.');
+    put($('#pl-stats'), 'Everyone here is a real person. Fights between players count on both screens, and the city (its people, police, traffic and everything in it) is the host’s, the same for everybody.');
   }
 
   /* ------------------------------------ the feed ------------------------------------ */

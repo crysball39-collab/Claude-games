@@ -184,7 +184,7 @@ export const DECAL = {
   shadow: [0, 3], ring: [1, 3], flash: [2, 3], smoke: [3, 3], streak: [[4, 3], [5, 3]], glow: [6, 3], white: [7, 3],
   run: [[0, 4], [1, 4], [2, 4]], soak: [[3, 4], [4, 4]], soakDry: [5, 4], exitWood: [6, 4], exitMetal: [7, 4],
   scorch: [0, 5], flame: [[1, 5], [2, 5], [3, 5]], ember: [4, 5], soot: [5, 5], burn: [6, 5], crack: [7, 5],
-  frost: [0, 6], ice: [1, 6], rime: [2, 6], vapour: [3, 6],
+  frost: [0, 6], ice: [1, 6], rime: [2, 6], vapour: [3, 6], tear: [[4, 6], [5, 6]], rip: [6, 6], fissure: [7, 6],
 };
 
 const BLOOD = '#7d0606', BLOOD_DARK = '#4a0202', BLOOD_BRIGHT = '#a30c0c';
@@ -345,6 +345,67 @@ function drawFrost(x, rng) {
   }
 }
 
+/**
+ * A hole torn in cloth. White where the skin shows through (each one is tinted to the skin under it), inside a dark,
+ * frayed rim with threads standing out of it.
+ */
+function drawTear(x, rng) {
+  x.fillStyle = 'rgba(26,22,20,0.9)'; blobPath(x, 64, 64, 42, 0.6, rng, 16); x.fill();
+  x.strokeStyle = 'rgba(18,15,13,0.85)'; x.lineCap = 'round';
+  for (let i = 0; i < 26; i++) {
+    const a = rng() * TAU, r0 = 33 + rng() * 9, len = 5 + rng() * 12, b = a + (rng() - 0.5) * 0.5;
+    x.lineWidth = 1 + rng() * 1.4;
+    x.beginPath(); x.moveTo(64 + Math.cos(a) * r0, 64 + Math.sin(a) * r0); x.lineTo(64 + Math.cos(b) * (r0 + len), 64 + Math.sin(b) * (r0 + len)); x.stroke();
+  }
+  x.fillStyle = '#ffffff'; blobPath(x, 64, 64, 31, 0.65, rng, 14); x.fill();
+  // the torn edge throws a little shadow on to the skin, along its top
+  const g = x.createLinearGradient(0, 30, 0, 70);
+  g.addColorStop(0, 'rgba(0,0,0,0.35)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = g; blobPath(x, 64, 62, 29, 0.6, rng, 14); x.fill();
+}
+
+/** Cloth slit by a blade: a long, narrow opening, ragged along both lips, the skin showing white (tinted) inside. */
+function drawRip(x, rng) {
+  const lip = (w, wob) => {
+    x.beginPath(); x.moveTo(6, 64);
+    for (let i = 1; i <= 12; i++) { const t = i / 12, px = 6 + t * 116, hw = Math.sin(t * Math.PI) * w; x.lineTo(px, 64 - hw - (rng() - 0.5) * wob); }
+    for (let i = 11; i >= 0; i--) { const t = i / 12, px = 6 + t * 116, hw = Math.sin(t * Math.PI) * w; x.lineTo(px, 64 + hw + (rng() - 0.5) * wob); }
+    x.closePath();
+  };
+  x.fillStyle = 'rgba(24,20,18,0.9)'; lip(22, 9); x.fill();
+  x.strokeStyle = 'rgba(16,13,12,0.8)'; x.lineCap = 'round';
+  for (let i = 0; i < 18; i++) { const px = 14 + rng() * 100, up = rng() < 0.5 ? -1 : 1, hw = Math.sin((px - 6) / 116 * Math.PI) * 20; x.lineWidth = 1 + rng(); x.beginPath(); x.moveTo(px, 64 + up * hw); x.lineTo(px + (rng() - 0.5) * 6, 64 + up * (hw + 4 + rng() * 8)); x.stroke(); }
+  x.fillStyle = '#ffffff'; lip(14, 6); x.fill();
+}
+
+/**
+ * Road broken by a blow from above: a dark, crushed hollow in the middle, a ring of powdered stone round it, and
+ * cracks running out from it, forking as they go.
+ */
+function drawFissure(x, rng) {
+  const g = x.createRadialGradient(64, 64, 2, 64, 64, 30);
+  g.addColorStop(0, 'rgba(18,16,14,0.92)'); g.addColorStop(0.55, 'rgba(34,31,28,0.75)'); g.addColorStop(1, 'rgba(40,37,33,0)');
+  x.fillStyle = g; blobPath(x, 64, 64, 30, 0.45, rng, 14); x.fill();
+  // the dust of it, pale, thrown out round the hollow
+  x.fillStyle = 'rgba(190,182,168,0.22)'; blobPath(x, 64, 64, 44, 0.5, rng, 16); x.fill();
+  x.fillStyle = 'rgba(16,14,12,0.6)'; blobPath(x, 64, 64, 17, 0.5, rng, 12); x.fill();
+  x.lineCap = 'round'; x.lineJoin = 'round';
+  const crack = (px, py, a, len, w, depth) => {
+    x.strokeStyle = `rgba(14,12,10,${0.85 - depth * 0.15})`; x.lineWidth = w;
+    x.beginPath(); x.moveTo(px, py);
+    const steps = 4 + ((rng() * 3) | 0);
+    for (let k = 1; k <= steps; k++) {
+      a += (rng() - 0.5) * 0.7;
+      px += Math.cos(a) * len / steps; py += Math.sin(a) * len / steps;
+      x.lineTo(px, py);
+      if (depth < 2 && rng() < 0.28) { x.stroke(); crack(px, py, a + (rng() < 0.5 ? -1 : 1) * (0.5 + rng() * 0.5), len * 0.45, w * 0.6, depth + 1); x.strokeStyle = `rgba(14,12,10,${0.85 - depth * 0.15})`; x.lineWidth = w; x.beginPath(); x.moveTo(px, py); }
+      w *= 0.88; x.lineWidth = w;
+    }
+    x.stroke();
+  };
+  for (let i = 0; i < 9; i++) { const a = (i / 9) * TAU + (rng() - 0.5) * 0.5; crack(64 + Math.cos(a) * 12, 64 + Math.sin(a) * 12, a, 30 + rng() * 22, 2.6 + rng() * 1.6, 0); }
+}
+
 /** A skin of ice on the ground: pale, glossy, with a sheen across it and fine cracks. */
 function drawIce(x, rng) {
   const g = x.createRadialGradient(56, 52, 6, 64, 64, 62);
@@ -443,6 +504,9 @@ function paintDecals(x) {
   cell(DECAL.frost, () => drawFrost(x, mulberry(491)));
   cell(DECAL.ice, () => drawIce(x, mulberry(503)));
   cell(DECAL.rime, () => drawRime(x));
+  DECAL.tear.forEach((c, i) => cell(c, () => drawTear(x, mulberry(520 + i * 17))));
+  cell(DECAL.rip, () => drawRip(x, mulberry(557)));
+  cell(DECAL.fissure, () => drawFissure(x, mulberry(563)));
 
   cell(DECAL.entry, () => {
     const g = x.createRadialGradient(64, 64, 4, 64, 64, 26);

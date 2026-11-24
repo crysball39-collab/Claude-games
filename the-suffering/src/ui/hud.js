@@ -94,7 +94,7 @@ export class UI {
       const a = ABILITIES.find((x) => x.key === letter);
       if (!a) return;
       if (!g.powers.has(a.id)) { this.toast(a.name + ' comes from the Cat-Cat Fruit. Eat it first (ABILITIES, or M).'); return; }
-      g.powers.use(a.id);
+      g.powers.use(a.id, 'key');
     };
     inp.onCycle = (d) => w.cycle(d);
     inp.onKey = (k) => {
@@ -250,6 +250,10 @@ export class UI {
     };
     box.appendChild(el('h3', '', 'Technique'));
     const t = el('div', 'grid one'); t.appendChild(card(ABILITY.tempest)); box.appendChild(t);
+    box.appendChild(el('h3', '', 'Hulk'));
+    const hk = el('div', 'grid one');
+    for (const a of ABILITIES) if (a.group === 'hulk') hk.appendChild(card(a));
+    box.appendChild(hk);
     box.appendChild(el('h3', '', 'Cat-Cat Fruit, Model: Leopard'));
     if (!P.fruit) {
       const f = el('button', 'item fruit');
@@ -281,7 +285,7 @@ export class UI {
     const a = ABILITY[P.selected];
     b.hidden = !a || !P.has(a.id) || !!this.g.player.car || !(this.g.auth && this.g.auth.admin);
     if (b.hidden) return;
-    $('#power-label').textContent = a.form && P.form === a.id ? 'TURN BACK' : a.short;
+    $('#power-label').textContent = a.form && P.form === a.id ? 'TURN BACK' : a.id === 'rock' && P.carry ? 'THROW' : a.short;
     b.style.setProperty('--cd', P.coolFrac(a.id).toFixed(3));
   }
   toggleDoctor(on) {

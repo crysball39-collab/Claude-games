@@ -119,6 +119,8 @@ export class Speech {
     const g = this.g, now = g.time;
     if (!text) return;
     if (!human.isPlayer && (!human.h.alive || !human.h.conscious || human.gone[P.HEAD] || !human.attached[P.HEAD])) return;
+    // the host's people are heard on everybody's screen
+    if (!human.isPlayer && !human.puppet) g.mp?.npcSay?.(human, text, !!o.shout);
     let b = this.active.find((x) => x.human === human);
     if (!b) {
       const node = this.pool.pop() || el('div', 'bubble');

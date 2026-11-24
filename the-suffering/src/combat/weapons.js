@@ -337,7 +337,7 @@ export class Weapons {
     const def = WEAPONS[type];
     if (!def || type === 'fists') return null;
     if (this.items.length >= 24) {
-      const old = this.items.find((i) => !i.holder && !this.inventory.includes(i));
+      const old = this.items.find((i) => !i.holder && !this.inventory.includes(i) && !i.mirror);
       if (old) this.remove(old);
     }
     const item = this._make(type);
@@ -407,6 +407,8 @@ export class Weapons {
     item.prop = { kind: 'weapon', body, island, item };
     body.owner = item.prop;
     g.props.push(item.prop);
+    // on somebody else's server, what we drop is theirs to keep
+    if (g.mirror && !item.mirror) g.mp?.shared?.handOff('item', item);
   }
 
   _offGround(item) {
@@ -459,6 +461,8 @@ export class Weapons {
       return false;
     }
     if (item.holder === p || p.cuffed) return false;
+    // one lying in the host's city: ours now, and gone from theirs
+    if (item.mirror && (item.def.wear || (p.h.armOk(-1) && this.inventory.length < 4))) g.mp?.shared?.picked(item);
     if (item.def.wear) {
       const helmet = item.def.wear === 'helmet', kind = item.def.armour || 'light';
       const on = helmet ? p.helmet : p.vest;
@@ -481,6 +485,8 @@ export class Weapons {
     // off the ground, or off somebody who is in no state to object
     const from = item.holder;
     if (from) { const k = from.kit ? from.kit.indexOf(item) : -1; if (k >= 0) from.kit.splice(k, 1); if (from.weapon === item) from.weapon = null; g.police?.touched(from, p); }
+    // off one of the host's people, shown here: the host takes it off them too
+    if (from && from.remote && from.remote.npc != null) g.mp?._emit?.('nk', from.remote.npc.toString(36), item.type);
     this._offGround(item);
     this.inventory.push(item);
     this.current = this.inventory.length - 1;
@@ -1243,6 +1249,7 @@ export class Weapons {
     }
     h.anim.recoil = 1;
     this._muzzle(m, dx, dy, dz, d);
+    g.mp?.npcGun?.(h, d.id, m, [dx, dy, dz]);
     if (!d.lock) this._casing(h, m, dx, dz);
     g.audio?.at(d.sound, m[0], m[1], m[2], 1);
     g.minds?.noise(m[0], m[1], m[2], d.loud, 'gunshot', h);

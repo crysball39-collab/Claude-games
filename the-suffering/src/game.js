@@ -122,6 +122,8 @@ export class Game {
     this.aiming = false; this.aimToggle = false; this.aimK = 0; this.downFireT = -9;
     // slow motion (SLOWMO, or 0): the whole city at a fraction of its speed, eased in and out; slowK is how far in
     this.slowmo = false; this.slowK = 0; this.timeScale = 1; this.realDt = 1 / 60;
+    // on somebody else's server this city shows theirs, and keeps nothing of its own but you
+    this.mirror = false;
 
     for (const c of this.city.crateSpots) this.spawnCrate(c[0], KERB + 0.41 + (c[2] ? 0.82 : 0), c[1]);
 
@@ -250,6 +252,13 @@ export class Game {
     return prop;
   }
 
+  /** The city as it is when nobody else's is being shown in it: its crates, its parked cars and traffic, its police. */
+  restoreCity() {
+    for (const c of this.city.crateSpots) this.spawnCrate(c[0], KERB + 0.41 + (c[2] ? 0.82 : 0), c[1]);
+    if (this.traffic) { this.traffic.clearCars(); this.traffic.setCount(this.traffic.want); }
+    this.staffStation(true);
+  }
+
   removeProp(p) {
     const i = this.props.indexOf(p);
     if (i < 0) return;
@@ -259,6 +268,7 @@ export class Game {
     if (p.vox) p.vox.dispose();
     if (p.thing) this.things.forget(p.thing);
     if (p.fire) this.fire.crates.delete(p);
+    p.dispose?.();
     this.gore.clearBody(p.body);
     p.removed = true;
     this.weapons?.onPropRemoved(p);

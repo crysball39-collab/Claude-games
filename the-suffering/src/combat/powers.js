@@ -22,6 +22,18 @@
                        finger: every attack bigger, harder and faster, and
                        punches become claws
 
+   And one that needs nothing eaten: HULK TRANSFORM, half as big again, green
+   and very hard to hurt (the shirt and the shoes burst off, the trousers
+   split), with three moves of its own:
+     HULK PUNCH        one enormous punch: whoever it lands on is sent flying,
+                       and so is a car
+     HULK SMASH        both fists into the ground, and everyone near is thrown
+                       off their feet; held, a leap at the nearest person and
+                       the smash on top of them
+     ROCK THROW        a rock torn out of the ground and held overhead, thrown
+                       with the same button; next to a car, or what is left of
+                       one, the car instead
+
    They are chosen in the ABILITIES menu, beside SPAWN; POWER uses whichever
    was chosen, and each has a key. Nobody watching is unmoved.
    ========================================================================== */
@@ -29,7 +41,7 @@ import * as THREE from 'three';
 import { Boxes } from '../render/boxes.js';
 import { ST } from '../human/human.js';
 import { P, PART_COUNT } from '../human/rig.js';
-import { rayBody } from '../physics/world.js';
+import { Body, Island, rayBody } from '../physics/world.js';
 import { groundHeight } from '../world/city.js';
 import { clamp, clamp01, lerp, smooth, rand, chance, pick, wrapAngle, TAU } from '../core/util.js';
 
@@ -41,6 +53,10 @@ export const ABILITIES = [
   { id: 'leopard', name: 'Full Leopard', short: 'LEOPARD', key: 'I', fruit: true, cool: 1.5, form: true, desc: 'A leopard on all fours, very fast. Run into somebody to pounce, bite and maul them; then you turn back.' },
   { id: 'leap', name: 'Leopard Leap', short: 'LEAP', key: 'O', fruit: true, cool: 1.8, desc: 'A leopard’s bound. Whoever you land on takes a Finger Pistol from each hand.' },
   { id: 'hybrid', name: 'Hybrid Transform', short: 'HYBRID', key: 'Y', fruit: true, cool: 1.5, form: true, desc: 'Half leopard, standing, with claws: every attack bigger, stronger and faster.' },
+  { id: 'hulk', name: 'Hulk Transform', short: 'HULK', key: '6', fruit: false, group: 'hulk', cool: 1.5, form: true, desc: 'Half as big again, green and very hard to hurt; far stronger than anything else here. The shirt does not survive it.' },
+  { id: 'hulkPunch', name: 'Hulk Punch', short: 'H.PUNCH', key: '7', fruit: false, group: 'hulk', hulk: true, cool: 0.9, desc: 'One enormous punch. Whoever it lands on goes flying, and so does a car.' },
+  { id: 'hulkSmash', name: 'Hulk Smash', short: 'SMASH', key: '8', fruit: false, group: 'hulk', hulk: true, cool: 2.2, desc: 'Both fists into the ground: everyone near is thrown off their feet. Hold it to leap at the nearest person and smash down on them.' },
+  { id: 'rock', name: 'Rock Throw', short: 'ROCK', key: '9', fruit: false, group: 'hulk', hulk: true, cool: 0.6, desc: 'Tear a rock out of the ground; the same button throws it. Next to a car, or a wreck, you pick that up instead.' },
 ];
 export const ABILITY = Object.fromEntries(ABILITIES.map((a) => [a.id, a]));
 
@@ -49,6 +65,7 @@ const DEF = {
   tempest: { id: 'tempest', name: 'Tempest Kick', melee: true, moves: [] },
   swirl: { id: 'swirl', name: 'Swirling Kick', melee: true, moves: [] },
   finger: { id: 'fingerpistol', name: 'Finger Pistol', melee: true, pierce: true, moves: [] },
+  hulkPunch: { id: 'hulkpunch', name: 'Hulk Punch', melee: true, smash: true, moves: [] },
 };
 /** What the slash and the burst are, to a car they hit. */
 const SLASH_HIT = { def: { blade: true, blunt: true, hitSound: 'clang' }, clip: { power: 2.4, limb: 'blade' } };
@@ -59,7 +76,20 @@ const SUIT = 0x17181c, LAPEL = 0x25272d, SHOE = 0x0b0b0d, HAT = 0x111114, BAND =
 const HYBRID_COAT = Array.from({ length: PART_COUNT }, (_, i) => (i === P.HEAD || i === P.NECK || i === P.HAND_L || i === P.HAND_R ? FUR : i === P.FOOT_L || i === P.FOOT_R ? SHOE : SUIT));
 /** How much bigger the hybrid stands, and how much more it takes. */
 const HYBRID_SIZE = 1.3, HYBRID_TOUGH = 2.6, HYBRID_STURDY = 2.8;
-const _a = [0, 0, 0], _b = [0, 0, 0], _q = [0, 0, 0, 1];
+/** The Hulk: green skin, and what is left of whatever trousers they had on (dark ones, if they had none). */
+const HULK_SKIN = 0x5d9b3b, TROUSERS = 0x2f3644;
+const LEGS = new Set([P.PELVIS, P.THIGH_L, P.THIGH_R, P.SHIN_L, P.SHIN_R]);
+const hulkCoat = (h) => Array.from({ length: PART_COUNT }, (_, i) => (LEGS.has(i) && h.cloth[i] >= 0 ? h.cloth[i] : i === P.PELVIS ? TROUSERS : HULK_SKIN));
+/** How much bigger the Hulk stands, how much more it takes, how much harder it is to knock down. */
+const HULK_SIZE = 1.45, HULK_TOUGH = 5, HULK_STURDY = 6;
+/** And how much broader than that, part by part: a huge chest, shoulders and arms, thick legs, a head no bigger than it was. */
+const HULK_BRAWN = Array.from({ length: PART_COUNT }, (_, i) => ({ [P.PELVIS]: 1.3, [P.ABDOMEN]: 1.32, [P.CHEST]: 1.42, [P.NECK]: 1.55, [P.HEAD]: 1.02,
+  [P.UARM_L]: 1.55, [P.UARM_R]: 1.55, [P.FARM_L]: 1.5, [P.FARM_R]: 1.5, [P.THIGH_L]: 1.45, [P.THIGH_R]: 1.45, [P.SHIN_L]: 1.4, [P.SHIN_R]: 1.4, [P.FOOT_L]: 1.18, [P.FOOT_R]: 1.18 })[i] || 1);
+/** Its face over the green: darker lids and lips, heavy black brows. */
+const HULK_FACE = { skinShade: 'rgb(61,104,38)', lip: 'rgb(48,86,30)', brow: 'rgb(20,26,14)', browW: 3.6 };
+const STONE = [0x7f7b74, 0x6f6c66, 0x8b8780, 0x77736c], DIRT = 0x5a4531, DIRT_D = 0x463424;
+const RUBBLE = new Float32Array([0.42, 0.4, 0.37, 0.33, 0.27, 0.2]);
+const _a = [0, 0, 0], _b = [0, 0, 0], _q = [0, 0, 0, 1], _q2 = [0, 0, 0, 1];
 const _ch = { lp: [0, 0, 0], ln: [0, 0, 0], xn: [0, 0, 0], tag: '', piece: 0, exit: 0, glass: -1 };
 
 export class Powers {
@@ -77,12 +107,15 @@ export class Powers {
     this.cast = null;              // fireballs still to come
     this.maul = null;
     this.leapT = 0;
+    this.carry = null;             // the Hulk's rock or car, overhead
+    this.smash = null;             // HULK SMASH: winding up, or in the air
     // things that glow: drawn unlit and added on to whatever is behind them
     this.glow = new Boxes(game.scene, 360, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending }), { shadows: false });
     this.leo = null;               // the leopard's boxes
     this.hyb = null;               // the hybrid's: spots, head, tail
     this.phase = 0;                // the leopard's stride
-    this.stats = { tempest: 0, slashHits: 0, finger: 0, fireballs: 0, fireHits: 0, swirls: 0, bursts: 0, mauls: 0, bites: 0, leaps: 0, leapHits: 0, transforms: 0, eaten: 0 };
+    this.stats = { tempest: 0, slashHits: 0, finger: 0, fireballs: 0, fireHits: 0, swirls: 0, bursts: 0, mauls: 0, bites: 0, leaps: 0, leapHits: 0, transforms: 0, eaten: 0,
+      hulkPunches: 0, flung: 0, smashes: 0, smashLeaps: 0, smashHits: 0, rocks: 0, lifts: 0, throws: 0, carsThrown: 0, holes: 0 };
   }
 
   /* ---------------------------------- asking ---------------------------------- */
@@ -100,16 +133,24 @@ export class Powers {
     return true;
   }
 
-  /** POWER, or an ability's own key. */
-  use(id = this.selected) {
+  /**
+   * POWER, or an ability's own key. `via` says which ('power', 'key'), so that HULK SMASH can tell a tap from a hold;
+   * 'hold' holds it whatever the keys say (for tests).
+   */
+  use(id = this.selected, via = '') {
     const g = this.g, p = g.player, a = ABILITY[id];
     if (!a) return false;
     // abilities are the admin's, and nobody else's, single player or not
     if (!g.auth || !g.auth.admin) { g.ui?.toast('Abilities are only for the admin account.'); return false; }
     if (!this.has(id)) { g.ui?.toast('That comes from the Cat-Cat Fruit. Eat it first (ABILITIES).'); return false; }
+    // the Hulk's moves are the Hulk's
+    if (a.hulk && this.form !== 'hulk') { g.ui?.toast(a.name + ' is the Hulk\u2019s. HULK TRANSFORM (6) first.'); return false; }
     if (p.state !== ST.ANIM || p.car || p.cuffed || !p.h.alive || !p.h.conscious || this.eating || this.maul || g.doctor != null) return false;
     // a form is put on, and taken off again, with the same button
     if (a.form && this.form === id) { this.revert(); this.cool[id] = 0.6; return true; }
+    // a rock (or a car) held overhead: the button that picked it up throws it
+    if (id === 'rock' && this.carry) return this._throwCarry();
+    if (this.carry && !a.form) { g.ui?.toast('Your hands are full. ROCK THROW (9) throws it.'); return false; }
     if (!this.ready(id)) return false;
     if (this.form === 'leopard' && id !== 'leopard') { g.ui?.toast('Not as a leopard. FULL LEOPARD again turns you back.'); return false; }
     if (g.grab?.hold) g.grab.release('let go');
@@ -122,6 +163,10 @@ export class Powers {
       case 'leap': ok = this._leap(); break;
       case 'leopard': ok = this._become('leopard'); break;
       case 'hybrid': ok = this._become('hybrid'); break;
+      case 'hulk': ok = this._become('hulk'); break;
+      case 'hulkPunch': ok = this._hulkPunch(); break;
+      case 'hulkSmash': ok = this._smashStart(via); break;
+      case 'rock': ok = this._pickUp(); break;
     }
     if (ok) { this.cool[id] = a.cool * (this.form === 'hybrid' ? 0.65 : 1); g.ui?.showMove?.(a.name.toUpperCase()); }
     return ok;
@@ -414,6 +459,8 @@ export class Powers {
       if (p.weapon && !p.weapon.def.wear) g.weapons.holster?.();
       p.hidden = true; p.speedMul = 2.35;
       g.ui?.toast('Full Leopard. Run into somebody to pounce on them. FULL LEOPARD again turns you back.', 3.5);
+    } else if (form === 'hulk') {
+      this._hulkOn(p);
     } else {
       // a leopard in a black suit and a black top hat with a red band: bigger, and very hard to put down
       this.was = { scale: p.scale, tough: p.h.tough };
@@ -438,6 +485,7 @@ export class Powers {
         p.setCoat(null); p.setClaws(false); p.beast = false; p.bulk = 1; p.powerMul = 1; p.reachMul = 1; p.anim.speedUp = 1; p.sturdy = 1;
         if (this.was) { p.setScale(this.was.scale); p.h.tough = this.was.tough; this.was = null; }
       }
+      if (was === 'hulk') this._hulkOff(p, quiet);
       if (!quiet) {
         for (let i = 0; i < 6; i++) g.gore.puff('smoke', p.x + rand(-0.4, 0.4), p.y + rand(0.3, 1.5), p.z + rand(-0.4, 0.4), rand(0.4, 0.8), rand(0.5, 0.9), 0.8, 0.72, 0.5);
         g.audio?.at('whump', p.x, p.y + 1, p.z, 0.4);
@@ -445,7 +493,8 @@ export class Powers {
     }
     if (this.leo) for (const i of this.leo.all) g.boxes.hide(i);
     if (this.hyb) for (const i of this.hyb.all) g.boxes.hide(i);
-    this.maul = null;
+    this.maul = null; this.smash = null;
+    if (this.carry) this._release(false);
     g.ui?.abilitiesChanged();
   }
 
@@ -457,7 +506,7 @@ export class Powers {
     for (const k in this.cool) if (this.cool[k] > 0) this.cool[k] -= dt;
     // the keys and the button
     if (g.doctor == null && !g.paused) {
-      if (inp.pressed.power) this.use();
+      if (inp.pressed.power) this.use(this.selected, 'power');
     }
     // things that were to happen a moment later
     for (let i = this.later.length - 1; i >= 0; i--) { const e = this.later[i]; if ((e.t -= dt) <= 0) { this.later.splice(i, 1); e.fn(); } }
@@ -469,10 +518,17 @@ export class Powers {
       const u = act.t / act.clip.dur;
       if (act.power === 'tempestKick' && u >= 0.42) { act.fired = true; this._slash(p); }
       if (act.power === 'swirlKick' && u >= 0.5) { act.fired = true; this._ring(p); }
+      if (act.power === 'hulkPunch' && (u >= 0.52 || act.hitThing)) { act.fired = true; this._hulkImpact(p); }
+      if (act.power === 'hulkSmash' && u >= 0.58 && this.smash && !this.smash.leap) { act.fired = true; this._groundSmash(p); }
+      if (act.power === 'hulkThrow' && u >= 0.48) { act.fired = true; this._release(true); }
     }
+    // whoever a Hulk Punch lands on goes flying
+    if (act && act.power === 'hulkPunch' && act.hits) for (const o of act.hits) if (!act.flung.has(o)) { act.flung.add(o); this._hurl(p, o); }
     // a pointing finger goes back into the fist when the thrust is over
     if (!act || (act.name !== 'fingerPistol' && act.name !== 'fingerPistolL' && act.name !== 'doubleFinger')) { if (!this.later.length) p.point[0] = p.point[1] = 0; }
     if (this.leapT > 0) this._leapCheck();
+    if (this.smash) this._smashing(dt);
+    if (this.carry) this._carrying(dt);
     // the forms
     if (this.form) {
       this.formT += dt;
@@ -503,12 +559,14 @@ export class Powers {
     }
     this._drawLeopard(dt);
     this._drawHybrid(dt);
+    if (this.carry) this._hold(dt);
+    this._drawRocks();
     // other players in a form
     for (const h of g.humans) {
       const c = h.costume;
       if (!c || !c.form || h.removed) continue;
       c.formT += dt;
-      if (c.form === 'leopard') this._drawLeopard(dt, c, h); else this._drawHybrid(dt, c, h);
+      if (c.form === 'leopard') this._drawLeopard(dt, c, h); else if (c.form === 'hybrid') this._drawHybrid(dt, c, h);
     }
     this.glow.commit();
   }
@@ -790,7 +848,7 @@ export class Powers {
       const dx = b.px - x, dy = b.py - y, dz = b.pz - z, d = Math.hypot(dx, dy, dz);
       if (d > R + 0.5) continue;
       const f = (1 - clamp01(d / (R + 0.5))) ** 1.5, ux = dx / (d || 1), uz = dz / (d || 1);
-      if (!b.kinematic) { const J = b.mass * 7 * f; b.applyImpulse(ux * J, J * 0.6, uz * J); }
+      if (!b.kinematic || pr.mirror) { const J = b.mass * 7 * f; b.applyImpulse(ux * J, J * 0.6, uz * J); }
       if (pr.kind === 'crate') g.fire?.igniteCrate(pr, 1.2 * f);
       if (pr.vox && pr.vox.mat === 'wood' && f > 0.2) g.fire?.patch(b.px, b.py, b.pz, 0.3, rand(3, 5), by);
     }
@@ -873,6 +931,558 @@ export class Powers {
     // and the leopard is a person again, standing over what it did
     this.revert();
     g.ui?.toast('You turn back.');
+  }
+
+  /* --------------------------------- the Hulk ---------------------------------- */
+
+  /** Bigger, broader and green: the shirt and the shoes burst off in pieces, the trousers split down the legs. */
+  _hulkOn(p) {
+    const g = this.g, s0 = p.scale;
+    if (p.weapon && !p.weapon.def.wear) g.weapons.holster?.();
+    this.was = { scale: s0, tough: p.h.tough, look: p.look };
+    const c = p.bodies[P.CHEST];
+    for (const part of [P.CHEST, P.ABDOMEN, P.UARM_L, P.UARM_R, P.FARM_L, P.FARM_R, P.FOOT_L, P.FOOT_R]) {
+      if (p.gone[part] || !p.clothed[part] || p.cloth[part] < 0) continue;
+      const b = p.bodies[part];
+      g.gore.scraps(b.px, b.py, b.pz, (b.px - c.px) * 5, 0.5, (b.pz - c.pz) * 5, p.cloth[part], 4);
+    }
+    g.gore.clearTears?.(p);
+    p.setScale(s0 * HULK_SIZE);
+    p.h.tough = this.was.tough * HULK_TOUGH; p.sturdy = HULK_STURDY;
+    p.look = Object.assign({}, p.look, HULK_FACE); p._faceKey = null; p.snarl = true;
+    if (p.vest) p.removeVest();
+    p.setCoat(hulkCoat(p)); p.bulk = 1.3; p.brawn = HULK_BRAWN; p.pose.brute = 1;
+    p.powerMul = 2.6; p.reachMul = 1.4; p.anim.speedUp = 1.12; p.speedMul = 1.3; p.jumpMul = 1.7;
+    this._shred(p);
+    g.shake = Math.max(g.shake, 0.7);
+    this.stats.hulks = (this.stats.hulks || 0) + 1;
+    g.ui?.toast('Hulk. Half as big again, green, and very hard to hurt. HULK PUNCH (7), HULK SMASH (8: hold it to leap), ROCK THROW (9).', 4.5);
+  }
+
+  /** A person again, the size they were; what is left of their own clothes hangs in tatters. */
+  _hulkOff(p, quiet) {
+    const g = this.g;
+    p.snarl = false; p.pose.lift = 0; p.pose.brute = 0; p.dragMax = Infinity; p.brawn = null;
+    p.setCoat(null); p.bulk = 1; p.powerMul = 1; p.reachMul = 1; p.anim.speedUp = 1; p.sturdy = 1; p.jumpMul = 1;
+    g.gore.clearTears?.(p);
+    if (this.was) { p.look = this.was.look; p._faceKey = null; p.setScale(this.was.scale); p.h.tough = this.was.tough; this.was = null; }
+    if (!quiet || !p.h.alive) this._tatters(p);
+  }
+
+  /** The trousers, split as the legs swell: long rips up the thighs and the shins, ragged at the bottom. */
+  _shred(h) {
+    const g = this.g, s = h.scale;
+    for (const part of [P.THIGH_L, P.THIGH_R, P.SHIN_L, P.SHIN_R, P.PELVIS]) {
+      if (h.gone[part] || !h.coat || h.coat[part] === HULK_SKIN) continue;
+      const b = h.bodies[part], shin = part === P.SHIN_L || part === P.SHIN_R;
+      const n = part === P.PELVIS ? 1 : shin ? 3 : 2;
+      for (let k = 0; k < n; k++) {
+        const out = part === P.THIGH_L || part === P.SHIN_L ? 1 : -1;
+        const ln = [[0, 0, 1], [out, 0, 0], [0, 0, 1], [0, 0, -1]][k % 4];
+        const lp = [ln[0] * b.hx, (shin ? rand(-0.95, -0.25) : rand(-0.6, 0.6)) * b.hy, ln[2] * b.hz];
+        g.gore.tear(h, part, k % 2 ? 'tear' : 'rip', lp, ln, (shin ? 0.05 : 0.045) * s, Math.PI / 2 + rand(-0.35, 0.35));
+      }
+    }
+  }
+
+  /** What the Hulk leaves of somebody's clothes: split down the back and the sides, and maybe a sleeve gone. */
+  _tatters(p) {
+    const g = this.g, s = p.scale;
+    for (const part of [P.CHEST, P.ABDOMEN, P.CHEST, P.UARM_L, P.UARM_R, P.THIGH_L, P.THIGH_R]) {
+      if (p.gone[part] || !p.clothed[part] || p.cloth[part] < 0) continue;
+      const b = p.bodies[part], ln = pick([[1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]]);
+      g.gore.tear(p, part, chance(0.6) ? 'rip' : 'tear', [ln[0] * b.hx, rand(-0.7, 0.7) * b.hy, ln[2] * b.hz], ln, rand(0.04, 0.06) * s, Math.PI / 2 + rand(-0.5, 0.5));
+    }
+    for (const arm of [P.UARM_L, P.UARM_R]) if (p.clothed[arm] && !p.gone[arm] && p.cloth[arm] >= 0 && chance(0.5)) p.stripCloth(arm);
+  }
+
+  /** HULK PUNCH: a wind-up from the hip, and everything behind it. */
+  _hulkPunch() {
+    const g = this.g, p = g.player;
+    if (p.anim.busy || p.swap || p.reload) return false;
+    if (!p.h.armOk(-1) || !p.attached[P.HAND_R]) { g.ui?.toast('You need your right arm for that.'); return false; }
+    g.weapons._swing(p, 'hulkPunch', DEF.hulkPunch);
+    const act = p.anim.action;
+    if (act) { act.power = 'hulkPunch'; act.flung = new Set(); }
+    g.audio?.at('growl', p.x, p.y + 1.8 * p.scale, p.z, 0.8);
+    this.stats.hulkPunches++;
+    return true;
+  }
+
+  /** Somebody the Hulk Punch landed on: off their feet and through the air. */
+  _hurl(p, o) {
+    const g = this.g, fx = Math.sin(p.yaw), fz = Math.cos(p.yaw);
+    this.stats.flung++;
+    this._fly(o, fx * 12, 4.5, fz * 12, p);
+    g.shake = Math.max(g.shake, 0.7);
+    g.audio?.at('impact', o.x, o.y + 1, o.z, 1);
+  }
+
+  /** Somebody thrown: here, or (another player, or somebody in a city that is somebody else's) by whoever keeps them. */
+  _fly(o, vx, vy, vz, by) {
+    if (!o || o.removed) return;
+    if (o.puppet) { this.g.mp?.flyRemote?.(o, vx, vy, vz, by); return; }
+    if (o.h.god) return;
+    if (o.state !== ST.RAGDOLL) o.toRagdoll();
+    for (let i = 0; i < PART_COUNT; i++) {
+      if (!o.attached[i]) continue;
+      const b = o.bodies[i];
+      b.vx = vx + rand(-0.8, 0.8); b.vy = vy + rand(-0.4, 0.6); b.vz = vz + rand(-0.8, 0.8);
+      b.wx += rand(-5, 5); b.wy += rand(-2, 2); b.wz += rand(-5, 5);
+    }
+    o.island?.wake?.();
+  }
+
+  /** The Hulk Punch at full stretch: a blast of air off the fist, and whatever is in front of it goes. */
+  _hulkImpact(p) {
+    const g = this.g, s = p.scale, fx = Math.sin(p.yaw), fz = Math.cos(p.yaw), hand = p.bodies[P.HAND_R];
+    const ox = p.x, oy = clamp(hand.py, p.y + 0.8 * s, p.y + 1.5 * s), oz = p.z, reach = 1.9 * s;
+    g.audio?.at('whump', hand.px, hand.py, hand.pz, 0.9);
+    g.shake = Math.max(g.shake, 0.5);
+    for (let k = 1; k <= 4; k++) g.gore.puff('smoke', hand.px + fx * k * 0.28, hand.py, hand.pz + fz * k * 0.28, 0.22 + k * 0.08, 0.35, 0.93, 0.93, 0.95);
+    // a car in front of it goes over (and is a wreck from then on)
+    if (g.traffic) for (const car of g.traffic.cars) {
+      if (car.carried || Math.hypot(car.x - p.x, car.z - p.z) > 6) continue;
+      if (car.ray(ox, oy, oz, fx, 0, fz, reach, _ch) < 0 && car.ray(ox, p.y + 0.55 * s, oz, fx, 0, fz, reach, _ch) < 0) continue;
+      this._knockCar(car, fx * 11, 4.5, fz * 11, 3, p);
+      g.audio?.at('crash', car.x, car.y + 0.8, car.z, 1);
+      g.shake = Math.max(g.shake, 0.8);
+      break;
+    }
+    // crates, rocks, a generator: knocked flying
+    for (const pr of g.props) {
+      if (pr.carried || pr.vox || (pr.body.kinematic && !pr.mirror)) continue;
+      const t = rayBody(pr.body, ox, oy, oz, fx, 0, fz, reach, null, 0.12);
+      if (t < 0) continue;
+      const J = pr.body.mass * 13;
+      pr.body.applyImpulse(fx * J, J * 0.35, fz * J, ox + fx * t, oy, oz + fz * t);
+      if (pr.thing) g.things?.hurt(pr.thing, 6, [0, 0, 0], 'blow');
+      g.audio?.at(pr.kind === 'crate' ? 'splinter' : 'thud', pr.body.px, pr.body.py, pr.body.pz, 0.9);
+    }
+    // a wall: a hole through it the size of a fist and a forearm
+    for (const pr of g.props) {
+      if (!pr.vox) continue;
+      const t = pr.vox.ray(ox, oy, oz, fx, 0, fz, reach);
+      if (t >= 0) this._hole(pr.vox, ox + fx * (t + 0.08), oy, oz + fz * (t + 0.08), 0.3 * s, fx, 0, fz);
+    }
+  }
+
+  /** Every cube of a wall within `r` of a point, knocked out the way the blow went. */
+  _hole(v, x, y, z, r, dx, dy, dz) {
+    let n = 0;
+    for (let c = 0; c < v.cells.length; c++) {
+      if (!v.cells[c]) continue;
+      v.world(c, _a);
+      const ex = _a[0] - x, ey = _a[1] - y, ez = _a[2] - z;
+      if (ex * ex + ey * ey + ez * ez > r * r) continue;
+      v.remove(c, dx * 6 + rand(-1, 1), dy * 6 + rand(0, 2), dz * 6 + rand(-1, 1));
+      n++;
+    }
+    if (n) { this.g.audio?.at(v.mat === 'wood' ? 'splinter' : 'crack', x, y, z, 1); this.stats.holes += n; }
+    return n;
+  }
+
+  /** A car knocked over or thrown: a wreck from now on. */
+  _knockCar(car, vx, vy, vz, spin, by) {
+    const g = this.g;
+    if (car.mirror) { g.mp?.knockCar?.(car, vx, vy, vz, spin); return; }
+    g.traffic.fling(car, vx, vy, vz, spin, by);
+    this.stats.carsThrown++;
+  }
+
+  /** HULK SMASH: both fists go up. Let go (a tap) and they come down on the ground; hold on and the Hulk jumps. */
+  _smashStart(via) {
+    const g = this.g, p = g.player;
+    if (p.anim.busy || p.swap || p.reload || !p.grounded || this.smash) return false;
+    if (!p.h.legOk(1) || !p.h.legOk(-1)) { g.ui?.toast('Not on those legs.'); return false; }
+    p.anim.play('hulkSmash');
+    const act = p.anim.action;
+    if (act) act.power = 'hulkSmash';
+    // from a test, or the game itself, with no button held: a tap
+    this.smash = { t: 0, via: via || 'tap', leap: false, ground: !(via === 'power' || via === 'key' || via === 'hold'), target: null, air: 0 };
+    g.audio?.at('roar', p.x, p.y + 1.8 * p.scale, p.z, 0.7);
+    return true;
+  }
+
+  _smashing(dt) {
+    const g = this.g, p = g.player, S = this.smash, inp = g.input;
+    S.t += dt;
+    if (p.state !== ST.ANIM || !p.h.conscious || this.form !== 'hulk') { this.smash = null; p.pose.lift = 0; return; }
+    if (!S.leap) {
+      const held = S.via === 'hold' || (S.via === 'power' ? !!inp.down.power : S.via === 'key' ? !!inp.key?.('Digit8') : false);
+      if (!held) S.ground = true;
+      if (!S.ground && S.t >= 0.28) { this._smashLeap(); return; }
+      const act = p.anim.action;
+      if (!act || act.name !== 'hulkSmash') this.smash = null;        // something else cut it short
+      return;
+    }
+    S.air += dt;
+    if (p.leap) {
+      p.pose.lift = 1;
+      // in the air: steering for wherever they are now
+      const t = S.target, L = p.leap;
+      if (t && !t.removed) {
+        const drop = Math.max(0, p.y - t.y), vy = p.vy;
+        const rem = (vy + Math.sqrt(vy * vy + 2 * 9.81 * drop)) / 9.81;
+        if (rem > 0.1) {
+          const dx = t.x - p.x, dz = t.z - p.z, d = Math.hypot(dx, dz), want = Math.min(24, d / rem), k = Math.min(1, dt * 5);
+          L.vx += (dx / (d || 1) * want - L.vx) * k; L.vz += (dz / (d || 1) * want - L.vz) * k;
+          if (d > 0.3) p.intent.face = Math.atan2(dx, dz);
+        }
+      }
+      return;
+    }
+    // down again: the smash, on top of them
+    this._slam(p);
+  }
+
+  /** Held: up, a long way, at whoever is nearest (or the way you are looking, if nobody is). */
+  _smashLeap() {
+    const g = this.g, p = g.player, S = this.smash;
+    const t = this._nearest(p, 45);
+    S.leap = true; S.target = t; S.air = 0;
+    let tx, tz, ty;
+    if (t) { tx = t.x; tz = t.z; ty = t.y; } else { tx = p.x + Math.sin(g.camYaw) * 12; tz = p.z + Math.cos(g.camYaw) * 12; ty = p.y; }
+    const dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz);
+    const H = clamp(1.5 + d * 0.15, 2, 6), vy = Math.sqrt(2 * 9.81 * H);
+    const T = vy / 9.81 + Math.sqrt(2 * Math.max(0.3, p.y + H - ty) / 9.81);
+    const yaw = d > 0.2 ? Math.atan2(dx, dz) : p.yaw;
+    p.yaw = yaw; p.intent.face = yaw;
+    p.anim.action = null;
+    p.leap = { vx: dx / T, vy, vz: dz / T, t: 0, max: T + 1.2 };
+    p.pose.lift = 1;
+    this.stats.smashLeaps++;
+    g.audio?.at('roar', p.x, p.y + 1.8 * p.scale, p.z, 1);
+    g.audio?.at('whump', p.x, p.y, p.z, 0.7);
+    const gy = groundHeight(p.x, p.z);
+    if (Math.abs(p.y - gy) < 0.35) g.gore.crater?.(p.x, gy, p.z, 0.55);
+    for (let k = 0; k < 6; k++) g.gore.puff('smoke', p.x + rand(-0.6, 0.6), p.y + 0.1, p.z + rand(-0.6, 0.6), rand(0.5, 0.9), rand(0.8, 1.4), 0.55, 0.5, 0.44);
+    g.minds?.witness({ kind: 'power', actor: p, power: 'smash', x: p.x, y: p.y + 1, z: p.z });
+    g.ui?.showMove?.('HULK LEAP');
+  }
+
+  /** Coming down out of the leap: both fists into whoever is under them, and into the ground. */
+  _slam(p) {
+    const g = this.g, S = this.smash, s = p.scale;
+    this.smash = null; p.pose.lift = 0;
+    p.anim.play('hulkSmash');
+    const act = p.anim.action;
+    if (act) { act.t = act.clip.dur * 0.46; act.power = 'slam'; act.fired = true; }
+    const fx = Math.sin(p.yaw), fz = Math.cos(p.yaw), x = p.x + fx * 0.7 * s, z = p.z + fz * 0.7 * s;
+    const t = S.target;
+    if (t && !t.removed && Math.hypot(t.x - x, t.z - z) < 2.6 * s && Math.abs(t.y - p.y) < 2) this._crush(t, p);
+    this._quake(x, p.y, z, 7.5, 1.4, p);
+    this.stats.smashes++;
+    g.ui?.showMove?.('HULK SMASH');
+  }
+
+  /** Both fists, from above, on somebody. */
+  _crush(t, by) {
+    const g = this.g;
+    this.stats.smashHits++;
+    for (const part of [P.CHEST, P.ABDOMEN, P.HEAD, P.PELVIS]) {
+      if (t.gone[part]) continue;
+      const b = t.bodies[part];
+      t.hit({ part, type: 'blunt', power: part === P.HEAD ? rand(2.2, 3) : rand(2.6, 3.6), point: [b.px, b.py + b.hy, b.pz], dir: [0, -1, 0], normal: [0, 1, 0], impulse: 0, attacker: by, weapon: 'hulksmash' });
+    }
+    if (t.puppet) { this._fly(t, 0, -4, 0, by); return; }
+    if (t.h.god) return;
+    if (t.state !== ST.RAGDOLL) t.toRagdoll();
+    for (const b of t.bodies) { b.vy = Math.min(b.vy, -5); b.vx *= 0.3; b.vz *= 0.3; }
+    g.minds?.witness({ kind: 'attack', actor: by, victim: t, weapon: 'hulksmash', part: P.CHEST, x: t.x, y: t.y + 1, z: t.z, rep: { pain: 60, bones: [] } });
+  }
+
+  /** A tap of HULK SMASH: the fists come down on the ground in front. */
+  _groundSmash(p) {
+    const s = p.scale, fx = Math.sin(p.yaw), fz = Math.cos(p.yaw);
+    this.smash = null;
+    this._quake(p.x + fx * 0.8 * s, p.y, p.z + fz * 0.8 * s, 6.5, 1.1, p);
+    this.stats.smashes++;
+  }
+
+  /** Fists into the ground: it breaks and shakes, and everything standing near is thrown down. */
+  _quake(x, y, z, R, power, by, ghost = false) {
+    const g = this.g;
+    if (!ghost && by && by.isPlayer) g.mp?.powerFx('quake', [x, y, z], [0, 1, 0], power);
+    g.audio?.at('explosion', x, y, z, 0.5 * power);
+    g.audio?.at('whump', x, y, z, 1);
+    g.audio?.at('crack', x, y, z, 0.9);
+    g.minds?.noise(x, y, z, 118, 'explosion', by);
+    g.minds?.witness({ kind: 'power', actor: by, power: 'smash', x, y: y + 1, z });
+    const cam = Math.hypot(g.camX - x, g.camZ - z);
+    g.shake = Math.max(g.shake, clamp(1.8 - cam / 14, 0.25, 1.8));
+    // the road breaks; dust and pieces of it are thrown up all round
+    const gy = groundHeight(x, z);
+    if (Math.abs(y - gy) < 0.4) g.gore.crater?.(x, gy, z, 1.1 * power);
+    for (let k = 0; k < 18; k++) {
+      const a = (k / 18) * TAU + rand(-0.15, 0.15), r = rand(0.5, 1.8) * power;
+      g.gore.puff('smoke', x + Math.cos(a) * r, y + rand(0.05, 0.5), z + Math.sin(a) * r, rand(0.7, 1.3) * power, rand(1.2, 2.4), 0.56, 0.52, 0.46);
+    }
+    for (let k = 0; k < 4; k++) g.gore.puff('smoke', x + rand(-0.4, 0.4), y + 0.4, z + rand(-0.4, 0.4), 1.7 * power, 1.5, 0.62, 0.58, 0.52);
+    if (g.voxels?.chip) for (let k = 0; k < 14 + 8 * power; k++) {
+      const a = rand(TAU), sp = rand(1.5, 5) * power, sz = rand(0.05, 0.13);
+      g.voxels.chip(x + Math.cos(a) * rand(0, 0.6), y + 0.06, z + Math.sin(a) * rand(0, 0.6), Math.cos(a) * sp, rand(2.5, 6.5) * power, Math.sin(a) * sp, [sz, sz * rand(0.6, 1), sz * rand(0.7, 1.2)], RUBBLE, chance(0.7) ? 0 : 3);
+    }
+    this.glows.push({ x, y: y + 0.5, z, c: 0xd8c8a8, i: 6 * power, d: 10, t: 0, life: 0.25 });
+    if (ghost) return;
+    this.stats.quakes = (this.stats.quakes || 0) + 1;
+    for (const h of g.humans) {
+      if (h.removed || h === by || h.car) continue;
+      const dx = h.x - x, dz = h.z - z, d = Math.hypot(dx, dz);
+      if (d > R || Math.abs(h.y - y) > 2.5) continue;
+      const f = (1 - d / R) ** 1.2, ux = dx / (d || 1), uz = dz / (d || 1);
+      // the ground comes up under them: the legs take it
+      const n = f > 0.6 ? 3 : f > 0.3 ? 2 : 1;
+      for (let k = 0; k < n; k++) {
+        const part = pick([P.SHIN_L, P.SHIN_R, P.THIGH_L, P.THIGH_R, P.PELVIS, P.FOOT_L, P.FOOT_R]);
+        if (h.gone[part]) continue;
+        const b = h.bodies[part];
+        h.hit({ part, type: 'blunt', power: f * 2 * power * rand(0.8, 1.2), point: [b.px, b.py - b.hy * 0.5, b.pz], dir: [ux * 0.3, 0.95, uz * 0.3], normal: [0, -1, 0], impulse: 0, attacker: by, weapon: 'hulksmash' });
+      }
+      if (h.puppet) { if (f > 0.1) this._fly(h, ux * 5 * f, 2.5 + 5 * f, uz * 5 * f, by); continue; }
+      if (h.h.god) continue;
+      if (f > 0.12 && h.state !== ST.RAGDOLL) h.toRagdoll();
+      else if (h.state === ST.ANIM) h.toStumble(30 + f * 80, ux * 3 * f, uz * 3 * f);
+      if (h.state === ST.RAGDOLL) for (const b of h.bodies) { b.vx += ux * 5 * f; b.vy += 2 + 5 * f * power; b.vz += uz * 5 * f; b.wx += rand(-3, 3) * f; b.wz += rand(-3, 3) * f; }
+      g.minds?.witness({ kind: 'attack', actor: by, victim: h, weapon: 'hulksmash', part: P.PELVIS, x: h.x, y: h.y + 1, z: h.z, rep: { pain: 30, bones: [] } });
+    }
+    // things jump
+    for (const pr of g.props) {
+      if (pr.carried || (pr.vox && pr.vox.anchored)) continue;
+      const b = pr.body;
+      if (b.kinematic && !pr.mirror) continue;
+      const dx = b.px - x, dz = b.pz - z, d = Math.hypot(dx, dz);
+      if (d > R + 1 || Math.abs(b.py - y) > 3) continue;
+      const f = 1 - d / (R + 1);
+      b.applyImpulse(dx / (d || 1) * b.mass * 2.5 * f, b.mass * (2.5 + 4 * f) * power, dz / (d || 1) * b.mass * 2.5 * f);
+      b.wx += rand(-4, 4) * f; b.wz += rand(-4, 4) * f;
+    }
+    // cars bounce on their springs; the nearest go over
+    if (g.traffic) for (const car of g.traffic.cars.slice()) {
+      if (car.carried) continue;
+      const d = Math.hypot(car.x - x, car.z - z);
+      if (d > R + 2) continue;
+      const f = 1 - d / (R + 2), ux = (car.x - x) / (d || 1), uz = (car.z - z) / (d || 1);
+      if (f > 0.5) this._knockCar(car, ux * 3.5 * f, (3 + 4 * f) * power, uz * 3.5 * f, 1.8 * f, by);
+      else { car.damage?.(6 * f, by); car.bump = Math.max(car.bump || 0, 0.12 * f); }
+    }
+  }
+
+  /** ROCK THROW: a car if one is within reach (a wreck will do), and otherwise a rock out of the ground. */
+  _pickUp() {
+    const g = this.g, p = g.player, s = p.scale;
+    if (p.anim.busy || p.swap || p.reload || !p.grounded) return false;
+    if (!p.h.armOk(1) || !p.h.armOk(-1) || !p.attached[P.HAND_L] || !p.attached[P.HAND_R]) { g.ui?.toast('You need both arms for that.'); return false; }
+    if (p.weapon && !p.weapon.def.wear) { g.ui?.toast('Your hands are full. Put it away first (H).'); return false; }
+    let car = null, best = 1.8 * s;
+    if (g.traffic) for (const c of g.traffic.cars) {
+      if (c.carried || c.seats.some((h) => h && h.isPlayer)) continue;
+      const b = c.body;
+      if (Math.hypot(b.px - p.x, b.pz - p.z) > 8) continue;
+      b.toLocal(p.x, b.py, p.z, _a);
+      const e = Math.hypot(Math.max(0, Math.abs(_a[0]) - b.hx), Math.max(0, Math.abs(_a[2]) - b.hz));
+      if (e < best) { best = e; car = c; }
+    }
+    if (!(car ? this._liftCar(p, car) : this._pullRock(p))) return false;
+    p.anim.play('hulkPull');
+    const act = p.anim.action;
+    if (act) act.power = 'hulkPull';
+    return true;
+  }
+
+  _liftCar(p, car) {
+    const g = this.g;
+    if (car.mirror && !g.mp?.takeCar?.(car)) return false;
+    const yaw = Math.atan2(car.body.px - p.x, car.body.pz - p.z);
+    p.yaw = yaw; p.intent.face = yaw;
+    g.traffic.lift(car, p);
+    const b = car.body;
+    this.carry = { kind: 'car', car, body: b, t: 0, phase: 'pull', from: [b.px, b.py, b.pz], fromQ: [b.qx, b.qy, b.qz, b.qw], tilt: [0, 0, 0, 1], throwQ: false, half: car.wreckCy || 0.76 };
+    this.stats.lifts++;
+    g.audio?.at('creak', b.px, b.py, b.pz, 1);
+    g.audio?.at('growl', p.x, p.y + 1.8 * p.scale, p.z, 0.9);
+    g.minds?.witness({ kind: 'power', actor: p, power: 'lift', x: b.px, y: b.py, z: b.pz });
+    g.ui?.showMove?.('CAR LIFT');
+    return true;
+  }
+
+  _pullRock(p) {
+    const g = this.g, s = p.scale, fx = Math.sin(p.yaw), fz = Math.cos(p.yaw);
+    const x = p.x + fx * 1.0 * s, z = p.z + fz * 1.0 * s, gy = groundHeight(x, z);
+    if (Math.abs(p.y - gy) > 0.5) { g.ui?.toast('There is no ground here to pull a rock out of.'); return false; }
+    const rock = this._makeRock(x, gy - 0.12, z);
+    const b = rock.body;
+    rock.carried = p;
+    b.setKinematic(true);
+    b.skipIsland = p.island;
+    // held a little askew, as it came out
+    const t1 = rand(-0.35, 0.35), t2 = rand(-0.35, 0.35), tilt = [Math.sin(t1 / 2), 0, Math.sin(t2 / 2), Math.cos(t1 / 2) * Math.cos(t2 / 2)];
+    const tl = Math.hypot(tilt[0], tilt[1], tilt[2], tilt[3]); for (let i = 0; i < 4; i++) tilt[i] /= tl;
+    this.carry = { kind: 'rock', prop: rock, body: b, t: 0, phase: 'pull', from: [x, gy - 0.12, z], fromQ: [b.qx, b.qy, b.qz, b.qw], tilt, throwQ: false, half: b.hy };
+    // the ground breaks open where it comes out
+    g.gore.crater?.(x, gy, z, 0.75);
+    for (let k = 0; k < 8; k++) g.gore.puff('smoke', x + rand(-0.5, 0.5), gy + rand(0.05, 0.4), z + rand(-0.5, 0.5), rand(0.5, 0.9), rand(1, 1.8), 0.5, 0.45, 0.38);
+    g.audio?.at('crack', x, gy, z, 1);
+    g.audio?.at('whump', x, gy, z, 0.6);
+    g.ui?.showMove?.('ROCK');
+    return true;
+  }
+
+  /** A boulder: a box to the physics, and to look at a lump of stone with earth still on its underside. */
+  _makeRock(x, y, z, k = rand(0.9, 1.12)) {
+    const g = this.g, bx = g.boxes;
+    const rocks = g.props.filter((o) => o.kind === 'rock' && !o.carried && !o.mirror && !o.puppetOf);
+    if (rocks.length >= 8) g.removeProp(rocks[0]);
+    const hx = 0.4 * k, hy = 0.3 * k, hz = 0.34 * k;
+    const body = new Body({ hx, hy, hz, mass: 150 * k * k * k, x, y, z, shape: 1, dense: true, kind: 'rock', friction: 0.9, bounce: 0.04, angDamp: 0.7 });
+    const a = rand(TAU); body.qy = Math.sin(a / 2); body.qw = Math.cos(a / 2);
+    const island = new Island(null);
+    island.add(body);
+    g.world.addIsland(island);
+    const lumps = [];
+    const lump = (hex, lx, ly, lz, sx, sy, sz, ax, ay) => {
+      const i = bx.alloc(); bx.colorHex(i, hex);
+      const cx = Math.cos(ax / 2), sx2 = Math.sin(ax / 2), cy = Math.cos(ay / 2), sy2 = Math.sin(ay / 2);
+      lumps.push({ i, l: [lx, ly, lz], s: [sx, sy, sz], q: [sx2 * cy, cx * sy2, -sx2 * sy2, cx * cy] });
+    };
+    // a core, and lumps set into it at angles round the corners, so that it is rounded and uneven and not a box
+    lump(pick(STONE), 0, 0, 0, hx * 1.72, hy * 1.72, hz * 1.72, 0, 0);
+    const corners = [[1, 1, 1], [-1, 1, -1], [1, 1, -1], [-1, 1, 1], [1, -1, 1], [-1, -1, -1], [0, 1, 0]];
+    for (const [cx, cy, cz] of corners) {
+      const f = rand(0.95, 1.2);
+      lump(pick(STONE), cx * hx * 0.36, cy * hy * 0.32, cz * hz * 0.34, hx * 1.05 * f, hy * 1.02 * f, hz * 1.05 * f, rand(-0.6, 0.6), rand(-0.8, 0.8));
+    }
+    lump(DIRT, 0, -hy * 0.74, 0, hx * 1.6, hy * 0.5, hz * 1.5, 0, 0.2);
+    lump(DIRT_D, hx * 0.3, -hy * 0.6, -hz * 0.35, hx * 0.8, hy * 0.5, hz * 0.7, 0.3, 0);
+    const prop = { kind: 'rock', body, island, lumps, born: g.time, solid: true, stone: true, dispose: () => { for (const l of lumps) bx.release(l.i); } };
+    body.owner = prop;
+    g.props.push(prop);
+    this.stats.rocks++;
+    return prop;
+  }
+
+  /** Every frame something is held: what the hands are doing with it, how fast the Hulk can go with it. */
+  _carrying(dt) {
+    const g = this.g, p = g.player, C = this.carry;
+    C.t += dt;
+    if (C.kind === 'car' ? C.car.removed || !g.traffic.cars.includes(C.car) : C.prop.removed) { this.carry = null; p.pose.lift = 0; p.dragMax = Infinity; return; }
+    // knocked down, out cold, turned back: it falls
+    if (p.state !== ST.ANIM || !p.h.conscious || this.form !== 'hulk' || p.car) { this._release(false); return; }
+    const act = p.anim.action;
+    if (C.phase === 'pull' && (!act || act.name !== 'hulkPull' || act.t / act.clip.dur >= 0.97)) { C.phase = 'hold'; if (C.throwQ) { C.throwQ = false; this._throwCarry(); } }
+    if (C.phase === 'throw' && (!act || act.name !== 'hulkThrow')) { this._release(true); return; }
+    p.pose.lift = C.phase === 'hold' ? 1 : 0;
+    p.dragMax = (C.kind === 'car' ? 1.9 : 2.7) * p.scale;
+  }
+
+  /** Where the held thing is: still in the ground, coming up out of it in the hands, or up overhead. */
+  _hold(dt) {
+    const g = this.g, p = g.player, C = this.carry, b = C.body;
+    if (!b || p.removed) return;
+    const s = p.scale, hl = p.bodies[P.HAND_L], hr = p.bodies[P.HAND_R];
+    const top = [(hl.px + hr.px) / 2, Math.max(hl.py, hr.py) + C.half + 0.03 * s, (hl.pz + hr.pz) / 2];
+    // a car is held across the shoulders, a rock any way up
+    const yaw = p.yaw + (C.kind === 'car' ? Math.PI / 2 : 0);
+    const want = mulq([0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)], C.tilt, _q);
+    let px = top[0], py = top[1], pz = top[2], q = want;
+    if (C.phase === 'pull') {
+      const act = p.anim.action, u = act && act.name === 'hulkPull' ? act.t / act.clip.dur : 1;
+      const lift = C.kind === 'rock' ? C.half + 0.08 : 0;
+      if (u < 0.42) {
+        // the hands dig in under it; a rock comes up a little way out of the ground
+        const k = smooth(clamp01((u - 0.12) / 0.3));
+        px = C.from[0]; py = C.from[1] + lift * k; pz = C.from[2]; q = C.fromQ;
+      } else {
+        const k = smooth(clamp01((u - 0.42) / 0.5));
+        px = lerp(C.from[0], top[0], k); py = lerp(C.from[1] + lift, top[1], k); pz = lerp(C.from[2], top[2], k);
+        q = nlerp(C.fromQ, want, k, _q2);
+      }
+    }
+    b.setPose(px, py, pz, q[0], q[1], q[2], q[3], dt);
+    if (C.kind === 'car') C.car.follow();
+  }
+
+  /** ROCK THROW again, with something held: back over the head, and away the way you are looking. */
+  _throwCarry() {
+    const g = this.g, p = g.player, C = this.carry;
+    if (C.phase === 'pull') { C.throwQ = true; return true; }
+    if (C.phase !== 'hold' || p.anim.busy) return false;
+    const yaw = g.camYaw;
+    p.yaw += clamp(wrapAngle(yaw - p.yaw), -1.2, 1.2); p.intent.face = yaw;
+    p.anim.play('hulkThrow');
+    const act = p.anim.action;
+    if (act) act.power = 'hulkThrow';
+    C.phase = 'throw';
+    g.audio?.at('growl', p.x, p.y + 1.8 * p.scale, p.z, 0.9);
+    return true;
+  }
+
+  /** It leaves the hands: thrown (hard, the way you are looking), or let fall. */
+  _release(thrown) {
+    const g = this.g, p = g.player, C = this.carry;
+    if (!C) return;
+    this.carry = null;
+    p.pose.lift = 0; p.dragMax = Infinity;
+    const b = C.body;
+    let vx = b.vx, vy = b.vy, vz = b.vz;
+    if (thrown) {
+      const v = this._throwAt(b.px, b.py, b.pz, C.kind === 'car' ? 16 : 24);
+      vx = v[0] + p.vx * 0.3; vy = v[1]; vz = v[2] + p.vz * 0.3;
+      this.stats.throws++;
+      g.audio?.at('whoosh', b.px, b.py, b.pz, 1);
+      g.audio?.at('roar', p.x, p.y + 1.8 * p.scale, p.z, 0.5);
+      g.minds?.witness({ kind: 'power', actor: p, power: 'throw', x: b.px, y: b.py, z: b.pz });
+      g.shake = Math.max(g.shake, 0.4);
+    }
+    if (C.kind === 'car') {
+      if (!C.car.removed) g.traffic.drop(C.car, vx, vy, vz, thrown ? 0.45 : 0.3, p);
+      if (thrown) this.stats.carsThrown++;
+      // on somebody else's server it lands in their city
+      if (g.mirror && !C.car.removed) g.mp?.shared?.handOff('car', C.car);
+    } else {
+      const pr = C.prop;
+      pr.carried = null;
+      if (!pr.removed) { b.setKinematic(false); b.vx = vx; b.vy = vy; b.vz = vz; b.wx = rand(-3, 3); b.wy = rand(-2, 2); b.wz = rand(-3, 3); b.island?.wake?.(); pr.thrownBy = p; }
+      if (g.mirror && !pr.removed) g.mp?.shared?.handOff('rock', pr);
+    }
+    // it can hit the one who threw it once it is clear of them
+    this.later.push({ t: 0.5, fn: () => { b.skipIsland = null; } });
+  }
+
+  /**
+   * How to throw something from (x0, y0, z0) at speed `sp` so that it comes down on what the crosshair is on: somebody
+   * close to the line of it if there is anybody, or whatever the line meets (a wall, the road), or a long way off.
+   */
+  _throwAt(x0, y0, z0, sp) {
+    const g = this.g, a = g.aim, p = g.player;
+    let tx, ty, tz, best = 0.13;
+    for (const h of g.humans) {
+      if (h === p || h.removed || !h.attached[P.CHEST]) continue;
+      const c = h.bodies[P.CHEST], ex = c.px - a.ox, ey = c.py - a.oy, ez = c.pz - a.oz, d = Math.hypot(ex, ey, ez);
+      if (d > 60 || d < 1.5) continue;
+      const off = Math.acos(clamp((ex * a.dx + ey * a.dy + ez * a.dz) / d, -1, 1));
+      if (off < best) { best = off; tx = c.px; ty = c.py - 0.2; tz = c.pz; }
+    }
+    if (tx === undefined) {
+      let far = g.world.rayWorld(a.ox, a.oy, a.oz, a.dx, a.dy, a.dz, 60);
+      if (far < 0) far = 45;
+      if (a.dy < -0.01) far = Math.min(far, (a.oy - groundHeight(p.x, p.z)) / -a.dy);
+      tx = a.ox + a.dx * far; ty = a.oy + a.dy * far; tz = a.oz + a.dz * far;
+    }
+    const dx = tx - x0, dz = tz - z0, d = Math.hypot(dx, dz) || 1e-3, h = ty - y0, G = 9.81, v2 = sp * sp;
+    const disc = v2 * v2 - G * (G * d * d + 2 * h * v2);
+    // the flatter of the two arcs that get there (as far as it will go, if it will not)
+    const th = disc >= 0 ? Math.atan2(v2 - Math.sqrt(disc), G * d) : Math.PI / 4;
+    return [dx / d * sp * Math.cos(th), sp * Math.sin(th), dz / d * sp * Math.cos(th)];
+  }
+
+  _drawRocks() {
+    const g = this.g, bx = g.boxes;
+    for (const pr of g.props) {
+      if (pr.kind !== 'rock' || !pr.lumps) continue;
+      const b = pr.body;
+      for (const l of pr.lumps) bx.setOn(l.i, b.px, b.py, b.pz, b.qx, b.qy, b.qz, b.qw, l.l[0], l.l[1], l.l[2], l.s[0], l.s[1], l.s[2], l.q);
+    }
   }
 
   /* --------------------------------- drawing ---------------------------------- */
@@ -1059,10 +1669,12 @@ export class Powers {
     const bx = this.g.boxes, c = h.costume || (h.costume = { form: null, leo: null, hyb: null, phase: 0, formT: 0, maul: null });
     if (c.form === form) return;
     if (c.form === 'hybrid') { h.setCoat(null); h.setClaws(false); h.beast = false; h.bulk = 1; }
+    if (c.form === 'hulk') { h.setCoat(null); h.bulk = 1; h.brawn = null; h.snarl = false; this.g.gore.clearTears?.(h); if (c.look) { h.look = c.look; c.look = null; h._faceKey = null; } }
     if (c.form === 'leopard') h.hidden = false;
     for (const set of [c.leo, c.hyb]) if (set) for (const i of set.all) bx.release(i);
     c.leo = null; c.hyb = null; c.form = form; c.formT = 0;
     if (form === 'hybrid') { h.setCoat(HYBRID_COAT); h.setClaws(true); h.beast = true; h.bulk = 1.06; }
+    if (form === 'hulk') { c.look = h.look; h.look = Object.assign({}, h.look, HULK_FACE); h._faceKey = null; h.snarl = true; this.g.gore.clearTears?.(h); h.setCoat(hulkCoat(h)); h.bulk = 1.3; h.brawn = HULK_BRAWN; this._shred(h); }
     if (form === 'leopard') h.hidden = true;
   }
 
@@ -1071,6 +1683,7 @@ export class Powers {
     if (kind === 'slash') this._addSlash(by, m[0], m[1], m[2], d[0], d[1], d[2], big, true);
     else if (kind === 'ring') this._addRing(by, m[0], m[1], m[2], d[0], d[1], d[2], big, true);
     else if (kind === 'fire') this._addFire(by, m[0], m[1], m[2], d[0], d[1], d[2], big, null, true);
+    else if (kind === 'quake') this._quake(m[0], m[1], m[2], 6.5, big, by, true);
   }
 
   /** Back to the start: everything in flight gone, any form undone. */
@@ -1078,12 +1691,14 @@ export class Powers {
     for (const o of this.shots) for (const k of o.inst) this.glow.release(k);
     this.shots.length = 0; this.later.length = 0; this.glows.length = 0;
     if (this.eating) this._stopEating(false);
+    if (this.carry) this._release(false);
     if (this.form) this.revert(true);
-    this.cast = null; this.maul = null; this.leapT = 0;
+    this.cast = null; this.maul = null; this.leapT = 0; this.smash = null;
   }
   /** The player has been put back together: a form does not survive it, the fruit does. */
   onRespawn() {
-    this.form = null; this.maul = null; this.cast = null; this.eating = null; this.leapT = 0; this.was = null;
+    if (this.carry) this._release(false);
+    this.form = null; this.maul = null; this.cast = null; this.eating = null; this.leapT = 0; this.was = null; this.smash = null;
     if (this.leo) for (const i of this.leo.all) this.g.boxes.hide(i);
     if (this.hyb) for (const i of this.hyb.all) this.g.boxes.hide(i);
     this.g.ui?.abilitiesChanged();
@@ -1102,6 +1717,14 @@ function mulq(a, b, out) {
   const ax = a[0], ay = a[1], az = a[2], aw = a[3], bx = b[0], by = b[1], bz = b[2], bw = b[3];
   out[0] = aw * bx + ax * bw + ay * bz - az * by; out[1] = aw * by - ax * bz + ay * bw + az * bx;
   out[2] = aw * bz + ax * by - ay * bx + az * bw; out[3] = aw * bw - ax * bx - ay * by - az * bz;
+  return out;
+}
+/** Most of the way from one turn to another (`k` of it), the short way round. */
+function nlerp(a, b, k, out) {
+  const s = a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3] < 0 ? -1 : 1;
+  let x = a[0] + (b[0] * s - a[0]) * k, y = a[1] + (b[1] * s - a[1]) * k, z = a[2] + (b[2] * s - a[2]) * k, w = a[3] + (b[3] * s - a[3]) * k;
+  const l = Math.hypot(x, y, z, w) || 1;
+  out[0] = x / l; out[1] = y / l; out[2] = z / l; out[3] = w / l;
   return out;
 }
 /** The shortest turn that takes +X to (x,y,z), a unit vector. */

@@ -472,6 +472,71 @@ export class Gore {
     if (d && (kind === 'dot' || kind === 'splat')) d.stain = true;
     if (d && kind === 'frost') d.frost = true;
   }
+  /**
+   * A tear in somebody's clothes ('tear', a ragged hole; 'rip', a blade's long slit), with the skin under it showing
+   * through: the hole is tinted to that skin. It sits under any wound drawn at the same place.
+   */
+  tear(human, part, kind, lp, ln, size, angle = rand(TAU)) {
+    if (!this.enabled || human.gone[part]) return null;
+    const b = human.bodies[part], rip = kind === 'rip';
+    const d = this._attach(b, this._onFace(b, lp, ln, rip ? size * 2.3 : size, rip ? size * 0.6 : size, angle, 0.0028), rip ? UV.rip : pick(UV.tear), human, part);
+    if (!d) return null;
+    const c = rgb(human.skinHex ? human.skinHex() : human.look.skin);
+    this.body.tint(d.quad, c[0], c[1], c[2], 1);
+    d.tear = true; d.rip = rip;
+    return d;
+  }
+  /** The tears in somebody's clothes, tinted again to whatever their skin is now (a form came or went). */
+  retintTears(human) {
+    const c = rgb(human.skinHex ? human.skinHex() : human.look.skin);
+    for (const d of this.bDecals) if (d.human === human && d.tear) this.body.tint(d.quad, c[0], c[1], c[2], 1);
+  }
+  /** The tears on one part (all of them, for -1): a sleeve that has come away takes its holes with it. */
+  clearTears(human, part = -1) {
+    for (let i = this.bDecals.length - 1; i >= 0; i--) { const d = this.bDecals[i]; if (d.human === human && d.tear && (part < 0 || d.part === part)) this._detach(i); }
+  }
+  /** Scraps of torn cloth, thrown off a body: light, and fluttering down. */
+  scraps(x, y, z, vx, vy, vz, hex, n = 3) {
+    const g = this.game;
+    for (let i = 0; i < n; i++) {
+      while (this.gibsList.length >= this.maxGibs) this._dropGib(0);
+      // (too light to push anybody about, so they pass through people: only the ground stops them)
+      const b = new Body({ hx: rand(0.014, 0.03), hy: 0.006, hz: rand(0.018, 0.045), mass: 0.06, x: x + rand(-0.04, 0.04), y: y + rand(-0.04, 0.04), z: z + rand(-0.04, 0.04),
+        kind: 'casing', friction: 0.95, linDamp: 2.2, angDamp: 1.6, inertiaFloor: 0.0004, collides: false });
+      b.vx = vx + rand(-1.4, 1.4); b.vy = vy + rand(0.6, 2.4); b.vz = vz + rand(-1.4, 1.4);
+      b.wx = rand(-18, 18); b.wy = rand(-18, 18); b.wz = rand(-18, 18);
+      const isl = new Island(null); isl.add(b);
+      g.world.addIsland(isl);
+      const idx = g.boxes.alloc();
+      g.boxes.colorHex(idx, hex);
+      // cloth does not bleed where it lands
+      this.gibsList.push({ body: b, island: isl, idx, born: g.time, bled: 3, cloth: true });
+    }
+    this.stats.scraps = (this.stats.scraps || 0) + n;
+  }
+
+  /** Broken road where something came down on it very hard: a crushed hollow, and cracks running out from it. */
+  crater(x, y, z, r) {
+    if (!this.enabled) return -1;
+    this.stats.craters = (this.stats.craters || 0) + 1;
+    return this._groundDecal(UV.fissure, x, y, z, r * 2, r * 2, rand(TAU), 1);
+  }
+
+  /**
+   * Somebody made bigger or smaller where they stand: every mark on them goes with the skin it is on, so it stays on
+   * the surface instead of sinking into it (or standing off it).
+   */
+  rescale(human, k) {
+    for (const d of this.bDecals) {
+      if (d.human !== human) continue;
+      const c = d.c;
+      for (let i = 0; i < c.length; i++) c[i] *= k;
+      const r = d.run;
+      if (r) { r.lp = [r.lp[0] * k, r.lp[1] * k, r.lp[2] * k]; r.w *= k; r.len *= k; r.max *= k; r.reach *= k; }
+      d.settled = false;
+    }
+  }
+
   /** The rime on somebody, gone: it has thawed. */
   clearFrost(human) {
     for (let i = this.bDecals.length - 1; i >= 0; i--) { const d = this.bDecals[i]; if (d.human === human && d.frost) this._detach(i); }
@@ -529,7 +594,7 @@ export class Gore {
     this.ground.flat(i, x, y + 0.012 + (i % 7) * 0.0008, z, w, d, rot);
     this.ground.uvRect(i, cell[0], cell[1], cell[2], cell[3]);
     this.ground.tint(i, 1, 1, 1, alpha);
-    this.gInfo[i] = { born: this.game.time, alpha, pool: null, x, y, z, rot, wall: false, blood: cell !== UV.vomit && cell !== UV.hole && cell !== UV.chip && cell !== UV.scorch && cell !== UV.soot };
+    this.gInfo[i] = { born: this.game.time, alpha, pool: null, x, y, z, rot, wall: false, blood: cell !== UV.vomit && cell !== UV.hole && cell !== UV.chip && cell !== UV.scorch && cell !== UV.soot && cell !== UV.fissure };
     return i;
   }
 
@@ -1094,6 +1159,17 @@ export class Gore {
       const asleep = b.island && b.island.sleeping;
       if (asleep && d.settled) continue;
       d.settled = asleep;
+      // somebody drawn broader than they are (the Hulk, the hybrid): the mark sits on the skin that is drawn
+      const H = d.human, k = H && d.part >= 0 && b === H.bodies[d.part] ? (H.brawn ? H.brawn[d.part] : H.bulk) : 1;
+      if (k !== 1) {
+        const ky = 1 + (k - 1) * 0.3;
+        b.toWorld(c[0] * k, c[1] * ky, c[2] * k, _v); const ax = _v[0], ay = _v[1], az = _v[2];
+        b.toWorld(c[3] * k, c[4] * ky, c[5] * k, _v); const bx = _v[0], by = _v[1], bz = _v[2];
+        b.toWorld(c[6] * k, c[7] * ky, c[8] * k, _v); const cx = _v[0], cy = _v[1], cz = _v[2];
+        b.toWorld(c[9] * k, c[10] * ky, c[11] * k, _v);
+        B.corners(d.quad, ax, ay, az, bx, by, bz, cx, cy, cz, _v[0], _v[1], _v[2]);
+        continue;
+      }
       b.toWorld(c[0], c[1], c[2], _v); const ax = _v[0], ay = _v[1], az = _v[2];
       b.toWorld(c[3], c[4], c[5], _v); const bx = _v[0], by = _v[1], bz = _v[2];
       b.toWorld(c[6], c[7], c[8], _v); const cx = _v[0], cy = _v[1], cz = _v[2];

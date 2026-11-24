@@ -396,6 +396,8 @@ export class VoxelThing {
     }
     this.dirtyShape = true;
     this.sys.dirty.add(this);
+    // a wall in the host's city, shown here: the cubes we knock out go to the host
+    if (this.mirror && !this.syncing) this.g.mp?.shared?.voxLost(this, c);
   }
 
   /* ---------------------------------- fire -------------------------------- */
@@ -749,7 +751,8 @@ export class Voxels {
     if (this.dirty.size) {
       const list = [...this.dirty];
       this.dirty.clear();
-      for (const t of list) if (!t.removed && t.dirtyShape) t.settle();
+      // (a wall of the host's, shown here, only takes its new shape: the host says what breaks off it)
+      for (const t of list) if (!t.removed && t.dirtyShape) { if (t.mirror) { t.dirtyShape = false; t._reshape(); } else t.settle(); }
     }
     this.fireT += dt;
     if (this.fireT >= 0.1) {

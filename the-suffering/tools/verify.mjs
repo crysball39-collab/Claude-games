@@ -24,7 +24,8 @@ await run(() => {
     stage() {
       if (ts.mp && ts.mp.on) ts.mp.leave(true);
       // a section starts with you alive, and nobody after you (a chase left over is a chase in the next section)
-      if (!g.player.h.alive) g.respawn(false);
+      // (and whole: a section that ends with you missing a foot, shot off in a gunfight, does not hand it on to the next)
+      if (!g.player.h.alive || g.player.gone.some(Boolean)) g.respawn(false);
       const dead = document.querySelector('#dead');
       if (dead && !dead.hidden && g.ui) { dead.hidden = true; g.ui.deadT = 0; if (g.ui.input) g.ui.input.enabled = true; }
       g.police?.reset();
@@ -2967,6 +2968,143 @@ if (want('Hybrid suit')) {
   check('turning back undoes all of it', r.back);
 }
 
+/* -------------------------------- cloth tearing -------------------------------- */
+head('Cloth tearing');
+if (want('Cloth tearing')) {
+  const r = await run(() => {
+    V.stage();
+    const g = __game, p = g.player, out = {};
+    const v = V.still(g.spawnHuman(p.x + 3, p.z, -Math.PI / 2)); v.h.tough = 25; v.sturdy = 50;
+    g.advance(0.5);
+    const hitAt = (part, type, lx, ly, power = 1, extra = {}) => {
+      const b = v.bodies[part], pt = [0, 0, 0], dir = [0, 0, 0];
+      b.toWorld(lx, ly, b.hz, pt); b.dirToWorld(0, 0, -1, dir);
+      return v.hit({ part, type, power, point: pt, dir, normal: [0, 0, 1], impulse: 0.1, attacker: p, weapon: type === 'bullet' ? 'm1911' : type === 'cut' ? 'knife' : 'fists', hp: 30, through: 0, ...extra });
+    };
+    const tears = (part, rip) => g.gore.bDecals.filter((d) => d.human === v && d.tear && (part == null || d.part === part) && (rip == null || !!d.rip === rip)).length;
+    const scraps0 = g.gore.stats.scraps || 0;
+    out.clothed = v.clothed[2] && v.clothed[1];
+    // a round through the shirt
+    hitAt(2, 'bullet', 0.06, 0.05); out.shot = tears(2, false); out.scraps = (g.gore.stats.scraps || 0) - scraps0;
+    // a knife across the belly: a long slit
+    hitAt(1, 'cut', 0.02, 0.02, 1.6); out.slit = tears(1, true);
+    // light taps do nothing to the cloth; hard punches tear it
+    const before = tears(1);
+    for (let i = 0; i < 4; i++) hitAt(1, 'blunt', -0.05 + i * 0.01, -0.03, 0.35);
+    out.taps = tears(1) - before;
+    for (let i = 0; i < 4; i++) hitAt(1, 'blunt', -0.05 + i * 0.01, -0.03, 2.4);
+    out.punched = tears(1) - before;
+    // what shows through a hole is the skin under it
+    const d = g.gore.bDecals.find((x) => x.human === v && x.tear), sk = v.skinHex();
+    const c = g.gore.body.mesh.geometry.attributes.color, tint = c ? [c.array[d.quad * 16], c.array[d.quad * 16 + 1], c.array[d.quad * 16 + 2]] : null;
+    // (colours are kept linear)
+    const lin = (u) => (u <= 0.04045 ? u / 12.92 : Math.pow((u + 0.055) / 1.055, 2.4));
+    out.tint = tint && tint.map((x) => +x.toFixed(3)); out.skin = [((sk >> 16) & 255) / 255, ((sk >> 8) & 255) / 255, (sk & 255) / 255].map((x) => +lin(x).toFixed(3));
+    // round after round through one sleeve: it goes, and the arm is bare
+    const sleeve = v.cloth[8];
+    for (let i = 0; i < 6 && v.cloth[8] >= 0; i++) hitAt(8, 'bullet', 0, 0.06 - i * 0.03);
+    out.sleeveGone = sleeve >= 0 && v.cloth[8] < 0 && !v.clothed[8] && !!(v.stripped & (1 << 8)) && v.cloth[9] < 0;
+    // bare skin has nothing to tear
+    const h0 = tears(4);
+    hitAt(4, 'blunt', 0, 0, 2.4); out.headTears = tears(4) - h0;
+    // and with Infinite HP not even the clothes are marked
+    g.settings.cheatHp = true; const me = g.respawn(false); g.advance(0.3);
+    const b = me.bodies[2], pt = [0, 0, 0], dir = [0, 0, 0];
+    b.toWorld(0.03, 0.04, b.hz, pt); b.dirToWorld(0, 0, -1, dir);
+    me.hit({ part: 2, type: 'bullet', power: 1.2, point: pt, dir, normal: [0, 0, 1], impulse: 0.1, weapon: 'm1911', hp: 30, through: 0 });
+    out.god = { on: me.h.god, tears: g.gore.bDecals.filter((x) => x.human === me && x.tear).length };
+    g.settings.cheatHp = false; g.respawn(false);
+    g.advance(0.5); g.paused = true;
+    return out;
+  });
+  check('a round through clothing leaves a ragged hole, and threads fly off it', r.clothed && r.shot >= 1 && r.scraps >= 2, JSON.stringify(r));
+  check('a blade slits it', r.slit >= 1);
+  check('a light tap does not tear cloth; hard punches do', r.taps === 0 && r.punched >= 2, `taps ${r.taps}, punches ${r.punched}`);
+  check('the skin shows through the holes', r.tint && r.tint.every((x, i) => Math.abs(x - r.skin[i]) < 0.02), `${r.tint} vs ${r.skin}`);
+  check('a sleeve shot through enough times is torn away, and the arm is bare', r.sleeveGone);
+  check('bare skin does not tear', r.headTears === 0);
+  check('with Infinite HP not even your clothes are marked', r.god.on && r.god.tears === 0, JSON.stringify(r.god));
+}
+
+/* ------------------------------------ the Hulk ------------------------------------ */
+head('Hulk');
+if (want('Hulk')) {
+  await run(() => V.admin());
+  const r = await run(() => {
+    V.stage();
+    const g = __game, p = g.player, P = g.powers, out = {};
+    const still = (dx, dz, yaw = -Math.PI / 2) => { const h = V.still(g.spawnHuman(p.x + dx, p.z + dz, yaw)); h.h.tough = 1; return h; };
+    const cool = () => { for (const k in P.cool) P.cool[k] = 0; };
+    out.locked = !P.use('hulkPunch');
+    const s0 = p.scale, t0 = p.h.tough, pants = p.cloth[0], scraps0 = g.gore.stats.scraps || 0;
+    // the key: 6
+    __ts.input.onAbilityKey('6'); g.advance(0.6);
+    out.form = P.form; out.size = p.scale / s0; out.tough = p.h.tough / t0; out.sturdy = p.sturdy;
+    out.green = p.coat && p.coat[2] === 0x5d9b3b && p.coat[4] === 0x5d9b3b; out.trousers = p.coat && p.coat[0] === (pants >= 0 ? pants : 0x2f3644);
+    out.broad = p.brawn && p.brawn[2] > 1.3 && p.brawn[5] > 1.4 && p.brawn[4] < 1.1;
+    out.burst = (g.gore.stats.scraps || 0) - scraps0;
+    out.split = g.gore.bDecals.filter((d) => d.human === p && d.tear && (d.part === 11 || d.part === 12 || d.part === 14 || d.part === 15)).length;
+    out.label = document.querySelector('#abilities-body') ? true : true;
+    p.react(90, 1, 0, null); g.advance(0.4); out.standing = T.state(p) !== 'RAGDOLL';
+    // HULK PUNCH (7): whoever it lands on goes flying
+    let h = still(1.6, 0); g.advance(0.3); cool();
+    const x0 = h.x;
+    __ts.input.onAbilityKey('7'); g.advance(1.4);
+    out.punch = { flung: +Math.hypot(h.x - x0, h.z - p.z).toFixed(1), st: T.state(h), hurt: h.h.wounds.length };
+    // HULK SMASH (8), a tap: everybody near is thrown off their feet; far off, nobody
+    V.stage(); P.use('hulk'); g.advance(0.6);
+    const near = [still(2, 0), still(0, 2.5), still(-3, 0)], far = still(10, 0);
+    g.advance(0.3); cool();
+    const cr0 = g.gore.stats.craters || 0;
+    out.tap = P.use('hulkSmash'); g.advance(0.8);
+    out.smashDown = near.filter((x) => T.state(x) === 'RAGDOLL').length; out.farUp = T.state(far) !== 'RAGDOLL'; out.crater = (g.gore.stats.craters || 0) - cr0;
+    // held: a leap, and the smash on top of whoever is nearest
+    V.stage(); P.use('hulk'); g.advance(0.6);
+    h = still(13, 3); g.advance(0.3); cool();
+    const sh0 = P.stats.smashHits;
+    P.use('hulkSmash', 'hold');
+    let top = p.y, flew = false;
+    for (let i = 0; i < 70; i++) { g.advance(0.05); top = Math.max(top, p.y); if (P.smash && P.smash.leap) flew = true; if (flew && !P.smash) break; }
+    out.leap = { flew, top: +top.toFixed(2), landed: !P.smash, gap: +Math.hypot(h.x - p.x, h.z - p.z).toFixed(2), hit: P.stats.smashHits - sh0, st: T.state(h) };
+    // ROCK THROW (9): out of the ground, up overhead, and at whoever is in the sights
+    V.stage(); P.use('hulk'); g.advance(0.6); cool();
+    P.choose('rock');
+    __ts.input.onAbilityKey('9'); g.advance(1.2);
+    const C = P.carry;
+    out.rock = { held: !!C && C.kind === 'rock' && C.phase === 'hold', over: C ? +(C.body.py - p.bodies[4].py).toFixed(2) : null, label: document.querySelector('#power-label').textContent };
+    h = still(11, 0); g.advance(0.3);
+    V.aimAt(h.bodies[2]);
+    __ts.input.onAbilityKey('9'); g.advance(2.0);
+    out.thrown = { gone: !P.carry, st: T.state(h), hurt: h.h.wounds.length, rocks: g.props.filter((o) => o.kind === 'rock').length };
+    // next to a car: the car instead
+    V.stage(); P.use('hulk'); g.advance(0.6); cool();
+    const car = g.traffic._make('sedan', 0x2a6fb0); car.x = p.x + 3.2; car.z = p.z; car.yaw = 0; car.y = 0; car.mode = 'parked'; car.hand = 1; car.place(0);
+    g.advance(0.3);
+    P.use('rock'); g.advance(1.2);
+    out.car = { held: !!P.carry && P.carry.kind === 'car' && car.carried === p, over: +(car.body.py - p.bodies[4].py).toFixed(2) };
+    g.camYaw = Math.PI / 2; g.camPitch = -0.05;
+    const cx = car.body.px;
+    P.use('rock'); g.advance(2.5);
+    out.carThrown = { wreck: car.wreck, far: +(car.body.px - cx).toFixed(1), loose: !car.carried && !car.body.kinematic };
+    // and back to a person
+    cool(); P.use('hulk'); g.advance(0.5);
+    out.back = { form: P.form, size: +(p.scale / s0).toFixed(3), coat: p.coat, brawn: p.brawn, tatters: g.gore.bDecals.filter((d) => d.human === p && d.tear).length };
+    g.paused = true;
+    return out;
+  });
+  check('the Hulk’s moves need the Hulk', r.locked);
+  check('HULK TRANSFORM (6): half as big again, five times as tough, green, broad in the chest and arms, the trousers kept', r.form === 'hulk' && r.size > 1.4 && r.tough > 4.9 && r.green && r.trousers && r.broad, JSON.stringify({ size: r.size, tough: r.tough, green: r.green, trousers: r.trousers, broad: r.broad }));
+  check('the shirt and the shoes burst off in pieces, the trousers split down the legs', r.burst >= 8 && r.split >= 4, `${r.burst} scraps, ${r.split} splits`);
+  check('a shove that floors anybody else leaves the Hulk standing', r.standing);
+  check('HULK PUNCH (7): whoever it lands on is knocked flying', r.punch.flung > 5 && r.punch.st === 'RAGDOLL' && r.punch.hurt > 0, JSON.stringify(r.punch));
+  check('HULK SMASH (8), tapped: the ground breaks and everybody near is thrown off their feet; further off, nobody', r.tap && r.smashDown === 3 && r.farUp && r.crater >= 1, `${r.smashDown} of 3 down, far one standing ${r.farUp}`);
+  check('HULK SMASH, held: a leap at the nearest person, and the smash on top of them', r.leap.flew && r.leap.top > 2 && r.leap.landed && r.leap.gap < 2.6 && r.leap.hit >= 1 && r.leap.st === 'RAGDOLL', JSON.stringify(r.leap));
+  check('ROCK THROW (9): a rock pulled out of the ground and held overhead; POWER says THROW', r.rock.held && r.rock.over > 0.4 && r.rock.label === 'THROW', JSON.stringify(r.rock));
+  check('pressed again, the rock is thrown, and comes down on whoever was in the sights', r.thrown.gone && r.thrown.st === 'RAGDOLL' && r.thrown.hurt > 0, JSON.stringify(r.thrown));
+  check('next to a car, ROCK THROW picks up the car instead, and throws it', r.car.held && r.car.over > 0.5 && r.carThrown.wreck && r.carThrown.loose && r.carThrown.far > 6, JSON.stringify({ ...r.car, ...r.carThrown }));
+  check('turning back: the size they were, their own colours, their clothes in tatters', !r.back.form && Math.abs(r.back.size - 1) < 1e-3 && r.back.coat == null && r.back.brawn == null && r.back.tatters >= 3, JSON.stringify(r.back));
+}
+
 /* ---------------------------------- accounts ---------------------------------- */
 head('Accounts');
 if (want('Accounts')) {
@@ -3320,6 +3458,119 @@ if (want('Multiplayer')) {
   const errs2 = [...C.logs, ...D.logs].filter((l) => !/401|Failed to load resource|willReadFrequently/.test(l));
   check('no errors on either page', errs2.length === 0, errs2.slice(0, 3).join(' | '));
   await M2.close();
+}
+
+/* ---------------------------------- one city ---------------------------------- */
+head('Shared city');
+if (want('Shared city')) {
+  const M = await openMany([{ uid: 'u_owner', owner: true }, { uid: 'u_friend' }], { width: 900, height: 540 });
+  const [A, B] = M.pages;
+  for (const x of [A, B]) await x.page.waitForFunction(() => window.__game && window.__ts.mp, null, { timeout: 180000 });
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const step = async (secs, dt = 0.1, who = [A, B]) => { for (let s = 0; s < secs; s += dt) { for (const x of who) await x.ev((dt) => { const g = window.__game; g.paused = false; g.advance(dt); g.paused = true; }, dt); await sleep(12); } };
+  const enter = (x, email, name) => x.ev(async ([email, name]) => {
+    const a = window.__ts.auth; await a.ready;
+    let r = await a.signIn({ email, password: 'secret-12' });
+    if (r.error) r = await a.signUp({ email, password: 'secret-12', confirm: 'secret-12', name });
+    document.querySelector('#auth').hidden = true; await window.__ts.mp.ready; window.__ts.ui.play(); window.__game.paused = true;
+  }, [email, name]);
+  await enter(A, TEST_ADMIN, 'Boss'); await enter(B, 'friend.player@gmail.com', 'Friend');
+  // A's city is the busy one; B's has its own people and cars until it joins
+  await A.ev(() => { const g = window.__game; window.__ts.settings.people = 0; g.traffic.setCount(0); g.traffic.clearCars(); for (const h of g.humans.slice()) if (!h.isPlayer) g.removeHuman(h); });
+  const own = await B.ev(() => { const g = window.__game; g.spawnHuman(g.player.x + 4, g.player.z, 0); return { people: g.humans.filter((h) => !h.isPlayer).length, cars: g.traffic.cars.length }; });
+  await A.ev(async () => { await window.__ts.mp.host({ name: 'One City', max: 8 }); window.__game.paused = true; });
+  await step(1.2);
+  await B.ev(async () => { await window.__ts.ui.mpui._join(window.__ts.mp.servers[0].id); window.__game.paused = true; });
+  await step(2);
+  // A puts people and things in the street, near B
+  const ids = await A.ev(() => {
+    const g = window.__game, b = [...window.__ts.mp.remotes.values()][0].h;
+    const still = (h) => { h.brain = { update() {}, pause: 0, mode: 'wander' }; return h; };
+    const t = window.__t = {
+      n1: still(g.spawnHuman(b.x + 3, b.z, -Math.PI / 2)), cop: still(g.spawnOfficer(b.x + 3, b.z + 2, -Math.PI / 2)),
+      crate: g.spawnCrate(b.x - 2, 0.5, b.z + 2), gun: g.weapons.spawn('m1911', b.x + 1, 0.4, b.z - 1.5),
+      wall: g.voxels.wall('wood', b.x - 4, b.z - 3, 0), gen: g.things.spawn('generator', b.x - 2, b.z - 3, 0),
+    };
+    const car = t.car = g.traffic._make('sedan', 0x2a6fb0); car.x = b.x + 1; car.z = b.z + 6; car.yaw = Math.PI / 2; car.y = 0; car.mode = 'parked'; car.hand = 1; car.place(0);
+    return { n1: t.n1.id, cop: t.cop.id, car: car.id };
+  });
+  await step(3);
+  const seen = await B.ev((ids) => {
+    const g = window.__game, S = window.__ts.mp.shared, G = [...S.ghosts.values()].filter((x) => x.obj);
+    const n1 = S.person(ids.n1), cop = S.person(ids.cop), car = S.ghosts.get('c' + ids.car);
+    return { mode: S.mode, own: g.humans.filter((h) => !h.isPlayer && !h.puppet).length, people: G.filter((x) => x.ty === 'h').length, things: G.filter((x) => x.ty === 'o').map((x) => x.obj.kind + (x.obj.item ? ':' + x.obj.item.type : '') + (x.obj.thing ? ':' + x.obj.thing.type : '')),
+      n1: n1 && [n1.x, n1.z], cop: cop && { kit: (cop.kit || []).map((i) => i.type).sort().join(','), vest: cop.vest ? cop.vest.kind : null, at: [cop.x, cop.z] }, car: car && car.obj ? [car.obj.x, car.obj.z] : null };
+  }, ids);
+  const truth = await A.ev(() => { const t = window.__t; return { n1: [t.n1.x, t.n1.z], cop: [t.cop.x, t.cop.z], car: [t.car.x, t.car.z], people: window.__game.humans.filter((h) => !h.isPlayer && !h.puppet).length }; });
+  const off = (a, b) => (a && b ? Math.hypot(a[0] - b[0], a[1] - b[1]) : 99);
+  check('joining a server: your own city empties, and you see the host’s instead', own.people >= 1 && seen.mode === 'mirror' && seen.own === 0 && seen.people === truth.people, JSON.stringify({ own, mode: seen.mode, left: seen.own, people: seen.people, host: truth.people }));
+  check('the host’s people stand where they stand there, carrying and wearing what they do', off(seen.n1, truth.n1) < 0.15 && off(seen.cop.at, truth.cop) < 0.15 && /m1911/.test(seen.cop.kit) && seen.cop.vest === 'light', JSON.stringify({ n1: off(seen.n1, truth.n1).toFixed(3), cop: seen.cop }));
+  const want = ['crate', 'weapon:m1911', 'wall', 'thing:generator'];
+  check('and so does everything spawned or lying about: crates, guns, walls, generators, cars', want.every((k) => seen.things.includes(k)) && off(seen.car, truth.car) < 0.15, JSON.stringify({ things: seen.things, car: off(seen.car, truth.car).toFixed(3) }));
+  // B hits one of A's people: it lands in A's city
+  await B.ev((id) => { const g = window.__game, p = g.player, n = window.__ts.mp.shared.person(id); p.reset(n.x - 1.0, n.z, Math.PI / 2); g.camYaw = Math.PI / 2; g.camPitch = -0.1; g.paused = false; g.advance(0.4); for (let i = 0; i < 4; i++) { g.weapons.attack(i % 3); g.advance(0.7); } g.paused = true; }, ids.n1);
+  await step(1.5);
+  const hurt = await A.ev(() => { const n = window.__t.n1; return { wounds: n.h.wounds.length, by: n.lastAttacker && n.lastAttacker.remote ? n.lastAttacker.remote.name : null }; });
+  check('a blow on one of the host’s people lands in the host’s city, put down to whoever struck it', hurt.wounds >= 1 && hurt.by === 'Friend', JSON.stringify(hurt));
+  // B picks up A's gun, then drops it again
+  const pick = await B.ev(() => { const g = window.__game, p = g.player, W = g.weapons, it = W.items.find((i) => i.mirror && i.type === 'm1911'); if (!it) return { found: false }; p.reset(it.body.px - 0.5, it.body.pz, Math.PI / 2); g.paused = false; g.advance(0.3); const ok = W.pickUp(it); g.advance(0.2); g.paused = true; return { found: true, ok, inv: W.inventory.map((i) => i.type) }; });
+  await step(1.5);
+  const gone = await A.ev(() => window.__game.weapons.items.filter((i) => i.type === 'm1911' && i.body).length);
+  await B.ev(() => { const g = window.__game; g.paused = false; g.weapons.drop(); g.advance(0.2); g.paused = true; });
+  await step(2);
+  const dropped = await Promise.all([A, B].map((x) => x.ev(() => window.__game.weapons.items.filter((i) => i.type === 'm1911' && i.body).map((i) => (i.mirror ? 'shown' : 'own')))));
+  check('a gun of the host’s picked up is gone from their city; dropped, it is back there, once', pick.ok && pick.inv.includes('m1911') && gone === 0 && dropped[0].join() === 'own' && dropped[1].join() === 'shown', JSON.stringify({ pick, gone, dropped }));
+  // B knocks the crate A spawned
+  const c0 = await A.ev(() => { const b = window.__t.crate.body; return [b.px, b.pz]; });
+  await B.ev(() => { const g = window.__game, c = g.props.filter((o) => o.kind === 'crate' && o.mirror).sort((a, b) => Math.hypot(a.body.px - g.player.x, a.body.pz - g.player.z) - Math.hypot(b.body.px - g.player.x, b.body.pz - g.player.z))[0]; c.body.applyImpulse(240, 40, 0, c.body.px, c.body.py, c.body.pz); });
+  await step(1.5);
+  const c1 = await A.ev(() => { const b = window.__t.crate.body; return [b.px, b.pz]; });
+  check('a knock on one of the host’s things moves it in their city', Math.hypot(c1[0] - c0[0], c1[1] - c0[1]) > 1, `${Math.hypot(c1[0] - c0[0], c1[1] - c0[1]).toFixed(2)} m`);
+  // B takes A's car, and leaves it
+  const take = await B.ev((id) => { const g = window.__game, p = g.player, G = window.__ts.mp.shared.ghosts.get('c' + id); if (!G || !G.obj) return { found: false }; const car = G.obj; p.reset(car.x, car.z - 2.2, 0); g.paused = false; g.advance(0.3); const ok = g.traffic.enter(p, car); g.advance(0.5); g.paused = true; return { found: true, ok, inCar: p.car === car }; }, ids.car);
+  await step(1.5);
+  const carA = await A.ev(() => ({ world: window.__game.traffic.cars.some((c) => c === window.__t.car), driving: !![...window.__ts.mp.remotes.values()][0].car }));
+  await B.ev(() => { const g = window.__game; g.paused = false; g.traffic.exit(g.player); g.advance(0.3); g.paused = true; });
+  await step(3);
+  const back = await Promise.all([A, B].map((x) => x.ev(() => window.__game.traffic.cars.filter((c) => c.nonce || (c.mirror && c.mirror.intro && c.mirror.intro.n)).length)));
+  const counts = await Promise.all([A, B].map((x) => x.ev(() => window.__game.traffic.cars.length)));
+  check('a car of the host’s is yours while you drive it, and back in their city when you leave it', take.ok && take.inCar && !carA.world && carA.driving && back[0] === 1 && back[1] === 1 && counts[0] === counts[1], JSON.stringify({ take, carA, back, counts }));
+  // A's officer shoots at B, and shouts: B is hit, and hears it
+  await A.ev(() => { const g = window.__game, o = window.__t.cop; g.weapons.draw(o, o.kit.find((i) => i.type === 'm1911')); g.paused = false; g.advance(1); g.paused = true; });
+  await B.ev(() => { const g = window.__game, p = g.player, S = window.__ts.mp.shared, cop = [...S.ghosts.values()].find((G) => G.obj && G.obj.vest); p.h.heal(); p.reset(cop.obj.x - 5, cop.obj.z, Math.PI / 2); g.paused = false; g.advance(0.3); g.paused = true; });
+  await step(1.5);
+  for (let i = 0; i < 4; i++) {
+    await A.ev(() => { const g = window.__game, o = window.__t.cop, c = [...window.__ts.mp.remotes.values()][0].h.bodies[2]; g.paused = false; g.advance(0.2); if (o.weapon) o.weapon.cool = 0; g.weapons.npcFire(o, [c.px, c.py, c.pz], 1); g.advance(0.05); g.paused = true; });
+    await step(0.5);
+  }
+  await A.ev(() => { window.__game.speech.say(window.__t.cop, 'Police! Drop it!', { shout: true }); });
+  await step(1.2);
+  const shot = await B.ev(() => { const g = window.__game, p = g.player, A = p.lastAttacker; return { holes: p.h.wounds.filter((w) => w.type === 'gunshot').length, byOfficer: !!(A && A.remote && A.remote.npc != null && A.vest), heard: g.speech.active.some((b) => b.text === 'Police! Drop it!' && b.human.remote && b.human.remote.npc != null) }; });
+  check('the host’s people hurt the other players too: an officer’s rounds land, put down to the officer', shot.holes >= 1 && shot.byOfficer, JSON.stringify(shot));
+  check('and what they say is heard on everybody’s screen', shot.heard);
+  // A as the Hulk, with a rock overhead: B sees it all
+  await A.ev(() => { const g = window.__game, P = g.powers; g.paused = false; P.use('hulk'); g.advance(0.6); for (const k in P.cool) P.cool[k] = 0; P.use('rock'); g.advance(1.2); g.paused = true; });
+  await step(2.5);
+  const hulk = await B.ev(() => { const r = [...window.__ts.mp.remotes.values()][0], h = r.h, S = window.__ts.mp.shared, rock = [...S.ghosts.values()].find((G) => G.obj && G.obj.kind === 'rock'); return { form: h.costume && h.costume.form, big: +h.scale.toFixed(2), green: !!h.coat && h.coat[2] === 0x5d9b3b, rock: rock ? +(rock.obj.body.py - h.bodies[4].py).toFixed(2) : null }; });
+  check('another player as the Hulk is the Hulk on your screen, rock and all', hulk.form === 'hulk' && hulk.big > 1.3 && hulk.green && hulk.rock > 0.3, JSON.stringify(hulk));
+  // the host leaves: B's game takes the city over
+  await A.ev(async () => { const g = window.__game; g.paused = false; g.powers.clear(); g.paused = true; await window.__ts.mp.leave(true); });
+  await step(3, 0.1, [B]);
+  const after = await B.ev(() => { const g = window.__game, S = window.__ts.mp.shared; return { mode: S.mode, host: window.__ts.mp.isHost, people: g.humans.filter((h) => !h.isPlayer).map((h) => (h.puppet ? 'shown' : h.mind ? 'real' : 'mindless')), crates: g.props.filter((o) => o.kind === 'crate').map((o) => (o.body.kinematic ? 'fixed' : 'loose')), cars: g.traffic.cars.filter((c) => c.mirror).length }; });
+  check('when the host leaves, the next host’s game makes the city its own: its people, things and cars real', after.mode === 'host' && after.host && after.people.length >= 2 && after.people.every((x) => x === 'real') && after.crates.length >= 1 && after.crates.every((x) => x === 'loose') && after.cars === 0, JSON.stringify(after));
+  // the admin, on somebody else's server, as the Hulk: what it does lands in that city
+  await A.ev(async () => { await window.__ts.mp.join(window.__ts.mp.servers[0].id); window.__game.paused = true; });
+  await step(3);
+  const pre = await B.ev(() => { const g = window.__game, n = g.humans.find((h) => !h.isPlayer && !h.puppet && !h.vest && !h.car); n.brain = { update() {}, pause: 0, mode: 'wander' }; n.h.heal?.(); window.__v = n; return { id: n.id, x: n.x }; });
+  await step(1.5);
+  const ph = await A.ev((id) => { const g = window.__game, P = g.powers, p = g.player, n = window.__ts.mp.shared.person(id); if (!n) return { found: false }; g.paused = false; P.use('hulk'); g.advance(0.6); p.reset(n.x - 1.6, n.z, Math.PI / 2); g.camYaw = Math.PI / 2; g.advance(0.3); for (const k in P.cool) P.cool[k] = 0; const ok = P.use('hulkPunch'); g.advance(1.2); g.paused = true; return { found: true, ok }; }, pre.id);
+  let top = 0;
+  for (let i = 0; i < 15; i++) { await step(0.1); top = Math.max(top, await B.ev(() => { const b = window.__v.bodies[0]; return Math.hypot(b.vx, b.vy, b.vz); })); }
+  const flew = await B.ev(() => { const n = window.__v; return { st: n.state, x: n.x }; });
+  check('the Hulk punching somebody in another player’s city sends them flying there', ph.ok && flew.st === 2 && top > 8, JSON.stringify({ ph, top: +top.toFixed(1), moved: +(flew.x - pre.x).toFixed(1) }));
+  const errs = [...A.logs, ...B.logs].filter((l) => !/401|Failed to load resource|willReadFrequently/.test(l));
+  check('no errors on either player’s page', errs.length === 0, errs.slice(0, 3).join(' | '));
+  await M.close();
 }
 
 /* --------------------------------- report ------------------------------- */

@@ -167,6 +167,7 @@ export class Traffic {
   }
 
   _add() {
+    if (this.game.mirror) return null;        // on somebody else's server: their traffic, not ours
     const g = this.game, J = g.city.junctions;
     const a = J[(Math.random() * J.length) | 0];
     const b = J[pick(a.out)];
@@ -201,6 +202,7 @@ export class Traffic {
     }
     for (const j of g.city.junctions) if (j.holder === car) j.holder = null;
     car.dispose();
+    car.removed = true; car.carried = null;
     const i = this.cars.indexOf(car);
     if (i >= 0) this.cars.splice(i, 1);
     if (this.near === car) this.near = null;
@@ -261,6 +263,8 @@ export class Traffic {
   enter(h, car) {
     const g = this.game;
     if (!car || !car.drivable || h.car) return false;
+    // one of the host's cars: it is ours to drive from now (and goes back to them when we leave it)
+    if (car.mirror && !(g.mp?.shared?.takeCar(car))) return false;
     const d = car.seats[0];
     if (d === h) return false;
     if (d) {
@@ -1183,7 +1187,7 @@ export class Traffic {
     const g = this.game, now = g.time;
     for (const car of this.cars) {
       const sp = Math.abs(car.speed);
-      if (car.wreck || sp < 0.5) continue;
+      if (car.wreck || car.mirror || sp < 0.5) continue;
       for (const h of g.humans) {
         if (h.removed || h.car || h.state === ST.ANIM) continue;
         if ((h.x - car.x) ** 2 + (h.z - car.z) ** 2 > 16) continue;
@@ -1332,6 +1336,7 @@ export class Traffic {
     this.stats.explosions++;
     car.toWorld(0, 0.8, car.van ? 1.0 : 0.3, _c);
     const x = _c[0], y = _c[1], z = _c[2];
+    g.mp?.boomFx?.(x, y, z, 1);
     // the shell blackens, the glass goes, the bonnet and the roof are blown out
     for (let i = 0; i < car.windows.length; i++) if (car.windows[i]) car.breakGlass(i);
     for (const k in car.lamps) for (const idx of car.lamps[k]) { car.lampsBroken[idx] = true; car._lamp(idx, 0x1a1a1a); }
@@ -1370,6 +1375,61 @@ export class Traffic {
     for (let k = 0; k < 8; k++) this._debris(car, x, y, z);
     const d = car.lastBy;
     if (d && d.isPlayer) g.police?.raise(2, car.unit || car.kind === 'police' ? 'you blew up a police car' : 'you blew up a car', { x, z }, { kind: car.unit || car.kind === 'police' ? 'copCar' : 'car', key: 'car' + car.id });
+  }
+
+  /**
+   * Thrown, or punched clean off its wheels: a free body from now on, and a wreck nobody will drive again (but not on
+   * fire: that comes, if it does, from what it hits). Anybody in it falls out first.
+   */
+  fling(car, vx, vy, vz, spin = 2, by = null) {
+    const g = this.game;
+    if (!car.wreck) {
+      car.wreck = true; car.mode = 'wreck'; car.traffic = false; car.hp = Math.min(car.hp, 12); car.lastBy = by || car.lastBy;
+      for (const h of car.seats.slice()) {
+        if (!h) continue;
+        const sp = car.seatAt[h.seat];
+        car.toWorld(sp[0], sp[1] + 0.2, sp[2], _a);
+        car.seats[h.seat] = null;
+        h.leaveCar(_a[0], _a[2], car.yaw, car, true);
+        h.toRagdoll();
+        if (h.isPlayer) g.ui?.drivingChanged?.(false);
+      }
+      const b = car.body;
+      car.wreckCy = car.van ? 0.82 : 0.76;
+      b.setBox(BODY.hx, car.wreckCy, BODY.hz, car.spec.mass * 0.9, true);
+      car.toWorld(0, car.wreckCy, 0, _a);
+      b.teleport(_a[0], _a[1], _a[2]);
+      b.setKinematic(false);
+      car.island.mover = false;
+    }
+    const b = car.body;
+    b.vx = vx; b.vy = vy; b.vz = vz;
+    b.wx = rand(-spin, spin); b.wy = rand(-spin, spin) * 0.5; b.wz = rand(-spin, spin);
+    car.island.wake?.();
+    car.vx = car.vz = car.w = 0;
+    this.stats.flung = (this.stats.flung || 0) + 1;
+  }
+
+  /**
+   * Picked up whole by somebody strong enough (the Hulk): whoever was in it falls out, and it is a loose body from now
+   * on, held wherever they hold it (they do not walk into it, and it does not hit them).
+   */
+  lift(car, by) {
+    this.fling(car, 0, 0, 0, 0, by);
+    const b = car.body;
+    b.vx = b.vy = b.vz = 0; b.wx = b.wy = b.wz = 0;
+    b.setKinematic(true);
+    b.skipIsland = by && by.island ? by.island : null;
+    car.carried = by;
+    this.stats.lifted = (this.stats.lifted || 0) + 1;
+  }
+
+  /** Let go of (`vx`...: thrown); it flies, falls and lands like any wreck. */
+  drop(car, vx, vy, vz, spin, by) {
+    if (!car.carried) return;
+    car.carried = null;
+    car.body.setKinematic(false);
+    this.fling(car, vx, vy, vz, spin, by);
   }
 
   /** Paint burnt off: the shell goes black and brown, the seats to ash. */
@@ -1535,6 +1595,8 @@ export class Traffic {
       car.honk = Math.max(0, (car.honk || 0) - dt);
       car.panic = Math.max(0, (car.panic || 0) - dt);
       if (car.heat) car.heat = Math.max(0, car.heat - dt * 0.25);
+      // held up over somebody's head: wherever they hold it; or one of the host's cars, shown here, where they say
+      if (car.carried || car.mirror) continue;
       if (car.wreck) { car.follow(); continue; }
       if (car.mode === 'rail') {
         if (!this._fit(car.seats[0]) || car.seats[0].isPlayer) this.loosen(car);
@@ -1546,7 +1608,7 @@ export class Traffic {
     for (const car of this.cars) {
       if (car.fire < 0) continue;
       car.fire += dt;
-      if (!car.wreck && car.fire >= car.boomT) this.explode(car);
+      if (!car.wreck && !car.mirror && car.fire >= car.boomT) this.explode(car);
     }
     this._crush(dt);
     this._effects(dt);
@@ -1554,7 +1616,7 @@ export class Traffic {
     this._nearCar();
     // the traffic is kept topped up, out of sight
     this.topT = (this.topT || 0) + dt;
-    if (this.topT > 2) {
+    if (this.topT > 2 && !g.mirror) {
       this.topT = 0;
       const live = this.cars.filter((c) => c.traffic && !c.wreck && c.mode === 'rail').length;
       if (live < this.want) this._add();

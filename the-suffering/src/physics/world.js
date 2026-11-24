@@ -97,6 +97,7 @@ export class Body {
     this.yields = false;               // while kinematic, leaves slow props alone
     this.nohit = null;                 // one body this one does not collide with: what a hand is holding
     this.skipIsland = null;            // and a whole island it does not: what somebody is reaching in among
+    this.onPush = null;                // (ix, iy, iz, wx, wy, wz): told of a knock it cannot take itself, being kinematic
     this.slow = false;                 // a prop that is not moving fast enough to hurt anyone
 
     // points tested against the ground and static geometry: x,y,z,radius ...
@@ -210,7 +211,8 @@ export class Body {
 
   /** An instantaneous shove at a world point. Wakes whatever it belongs to. */
   applyImpulse(ix, iy, iz, wx, wy, wz) {
-    if (this.kinematic) return;
+    // something moved by somebody else's game (a stand-in for a thing in the host's city): the knock goes to them
+    if (this.kinematic) { if (this.onPush) this.onPush(ix, iy, iz, wx, wy, wz); return; }
     if (this.island) this.island.wake();
     this.vx += ix * this.invMass; this.vy += iy * this.invMass; this.vz += iz * this.invMass;
     if (wx !== undefined) {

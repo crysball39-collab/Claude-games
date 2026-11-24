@@ -15,9 +15,10 @@
                 takes it; what it does to them comes back with their body
      cars       a car somebody drives goes with them
      talk       what anybody says, and who killed whom
-
-   Not shared, for now: the city's own people, the police, the traffic, and
-   things spawned or lying about. Each player has their own.
+     the city   the host's people, police, traffic and helicopters, and
+                everything spawned or lying about, go out in the host's
+                presence too, and everybody else's game shows them (see
+                shared.js): one city for everybody on the server
 
    Everything goes out in each player's presence, which anyone in the room
    may set (sending events needs a sharing level that not every viewer has),
@@ -39,6 +40,7 @@ import { WEAPONS } from '../combat/weapons.js';
 import { ABILITY } from '../combat/powers.js';
 import { groundHeight } from '../world/city.js';
 import { clamp } from '../core/util.js';
+import { Shared, flames } from './shared.js';
 
 const V = 1;                 // what a presence object means; changes when its shape does
 const SEND = 1 / 15;         // seconds between sends of your state
@@ -85,6 +87,8 @@ export class Multiplayer {
     this.lastWound = 0;
     this.stats = { hitsOut: 0, hitsIn: 0, cmdsOut: 0, cmdsIn: 0, refused: 0, joins: 0, hosts: 0 };
     this.onFeed = null; this.onChange = null; this.onKicked = null;
+    this.shared = new Shared(game, this);
+    this.hostT = 0; this.seenHost = false;
     this.ready = this._init();
   }
 
@@ -166,7 +170,7 @@ export class Multiplayer {
     if (this.banned) return { error: this.banText() };
     const id = Math.random().toString(36).slice(2, 10).padEnd(8, '0');
     this.stats.hosts++;
-    return this._enter({ id, name: cleanText(name, 40) || this._name() + "'s server", max: clamp(Math.round(max) || 8, 2, MAX_PLAYERS) });
+    return this._enter({ id, name: cleanText(name, 40) || this._name() + "'s server", max: clamp(Math.round(max) || 8, 2, MAX_PLAYERS), own: true });
   }
 
   async join(id) {
@@ -195,6 +199,9 @@ export class Multiplayer {
     g.lookSeed = this._seed(); g.playerName = this._name();
     g.respawn(true);
     this._player = g.player; this.reapply();
+    // your own server's city is everybody's; on somebody else's, yours empties and shows theirs
+    this.hostT = 0; this.seenHost = false;
+    if (s.own) this.shared.host(); else this.shared.mirror();
     this.sendT = 0; this.lobbyT = 0;
     this._feed('sys', `${this._name()} joined ${this.server.name}`);
     this.onChange?.();
@@ -207,6 +214,7 @@ export class Multiplayer {
     this.server = null;
     for (const r of this.remotes.values()) this._drop(r);
     this.remotes.clear(); this.out = []; this.hostPeer = null;
+    this.shared.off();
     try { await s.room.leave(); } catch { /* gone already */ }
     this.lobbyT = 0;
     if (!quiet) this.g.ui?.toast('Left ' + s.name + '.');
@@ -288,6 +296,14 @@ export class Multiplayer {
     // the host answers pings at once
     if (this.isHost) { const pk = JSON.stringify(this._pongs(peers)); if (pk !== this.pkJson) { this.pkJson = pk; this.sendT = 0; } }
     this._flushChill(dt);
+    // the host gone (and you longest on): what you were shown is your city now, and everybody's
+    if (!this.isHost) this.seenHost = true;
+    if (this.shared.mode === 'mirror' && this.isHost) {
+      this.hostT += dt;
+      if (this.hostT > (this.seenHost ? 1.5 : 4)) { this.shared.host(); this._feed('sys', 'You are the host now: the city is yours.'); }
+    } else this.hostT = 0;
+    this.shared.update(dt);
+    this.shared.tidy(dt);
     // a new body (you died and got up again): everyone is told, and what the admin set still holds
     if (g.player !== this._player) { this._player = g.player; this.respawns++; this.reapply(); }
     if ((this.sendT -= dt) <= 0 && this.server === s) { this.sendT = SEND; this._send(peers); }
@@ -303,7 +319,12 @@ export class Multiplayer {
   /** Your state, for everyone else on the server. */
   _send(peers = this.server.room.peers()) {
     const s = this.server, g = this.g, p = g.player, W = g.weapons, now = g.time;
-    this.out = this.out.filter((e) => now - e.t < LIFE).slice(-14);
+    // the events that matter (a blow, a word) stay their full time, the fourteen newest; those that only show, less
+    this.out = this.out.filter((e) => now - e.t < (e.fx ? 1.5 : LIFE));
+    const keep = [];
+    let nImp = 0, nFx = 0;
+    for (let i = this.out.length - 1; i >= 0; i--) { const e = this.out[i]; if (e.fx ? nFx++ < 10 : nImp++ < 14) keep.push(e); }
+    this.out = keep.reverse();
     const car = p.car;
     const pres = {
       v: V, nm: this._name(), sd: this._seed(), jt: s.jt, rs: this.respawns,
@@ -314,17 +335,47 @@ export class Multiplayer {
       kt: W.inventory.filter((it) => it !== p.weapon).map((it) => it.type).slice(0, 6),
       ar: [p.vest ? p.vest.kind : '', p.helmet ? p.helmet.kind : ''],
       sc: r3(p.scale), fm: g.powers && g.powers.form ? g.powers.form : '',
-      gn: p.gone.reduce((m, v, i) => (v ? m | (1 << i) : m), 0),
+      gn: p.gone.reduce((m, v, i) => (v ? m | (1 << i) : m), 0), ts: p.stripped || 0,
       al: p.h.alive ? 1 : 0, cs: p.h.conscious ? 1 : 0, hp: Math.round(p.h.condition.pct), fi: p.fire && p.burning > 0.1 ? 1 : 0,
       car: car ? [car.kind, car.paint, r2(car.x), r2(car.y), r2(car.z), r3(car.yaw), r3(car.pitch), r3(car.roll), r2(car.steer || 0), r2(car.spin || 0)] : null,
       k: this.you.kills, d: this.you.deaths, ms: this.you.ping, ad: this.auth.admin ? 1 : 0,
       pg: this.isHost ? null : this.ping.n, pk: this.isHost ? this._pongs(peers) : null,
+      cr: this._carried(), wd: null,
       ev: this.out.map((e) => e.e),
     };
-    // within the platform's 4 KiB: the oldest events give way first
+    // within the platform's 4 KiB: events give way, the ones that only show first, then the oldest
     let json = JSON.stringify(pres);
-    while (bytes(json) > 3900 && pres.ev.length) { pres.ev.shift(); this.out.shift(); json = JSON.stringify(pres); }
+    const trim = (limit) => {
+      while (bytes(json) > limit && pres.ev.length) {
+        let i = this.out.findIndex((e) => e.fx);
+        if (i < 0) i = 0;
+        this.out.splice(i, 1); pres.ev.splice(i, 1);
+        json = JSON.stringify(pres);
+      }
+    };
+    // the host's city, for everybody else: whatever room is left, and never less than 1400 bytes of it
+    if (this.shared.mode === 'host' && this.remotes.size) {
+      trim(3880 - 1400);
+      const wd = this.shared.pack(3880 - bytes(json) - 8);
+      if (wd) { pres.wd = wd; json = JSON.stringify(pres); }
+    }
+    trim(3900);
+    if (bytes(json) > 4000) { pres.wd = null; json = JSON.stringify(pres); }
     s.room.presence(pres).catch(() => {});
+  }
+
+  /** What you are holding up over your head (as the Hulk), for everybody else to see you holding: on a server you host, it is in the city. */
+  _carried() {
+    const C = this.g.powers && this.g.powers.carry;
+    if (!C || this.shared.mode === 'host') return null;
+    const b = C.body, q = [r3(b.qx), r3(b.qy), r3(b.qz), r3(b.qw)], at = [r2(b.px), r2(b.py), r2(b.pz)];
+    return C.kind === 'car' ? ['c', C.car.kind, C.car.paint, at, q] : ['r', r3(b.hx / 0.4), at, q];
+  }
+
+  /** Cosmetic: something the host's people did that shows or sounds on everybody's screen (dropped first when there is no room). */
+  _fx(kind, ...args) {
+    if (!this.server || this.shared.mode !== 'host' || !this.remotes.size) return;
+    this.out.push({ t: this.g.time, fx: true, e: [++this.seq, kind, ...args] });
   }
 
   _emit(kind, ...args) {
@@ -354,13 +405,14 @@ export class Multiplayer {
     const h = new Human(g, playerLook(r.seed, r.name), x, z, yaw);
     h.puppet = true; h.remote = r; h.h.god = true;
     g.humans.push(h);
-    r.h = h; r.snaps.length = 0; r.kitKey = null; r.armKey = null; r.form = ''; r.gone = 0;
+    r.h = h; r.snaps.length = 0; r.kitKey = null; r.armKey = null; r.form = ''; r.gone = 0; r.ts = 0;
     return h;
   }
 
   _drop(r) {
     const g = this.g;
     if (r.car) { r.car.dispose(); r.car = null; }
+    this._dropCarry(r);
     if (r.h && !r.h.removed) { g.powers?.dress?.(r.h, null); g.removeHuman(r.h); }
     r.h = null;
   }
@@ -397,13 +449,17 @@ export class Multiplayer {
     // a form: the hybrid's size and suit, or the leopard
     const sc = num(pr.sc, 0.5, 2, h.scale);
     if (Math.abs(sc - h.scale) > 0.004) h.setScale(sc);
-    const fm = pr.fm === 'hybrid' || pr.fm === 'leopard' ? pr.fm : '';
+    const fm = pr.fm === 'hybrid' || pr.fm === 'leopard' || pr.fm === 'hulk' ? pr.fm : '';
     if (fm !== r.form) { r.form = fm; g.powers?.dress?.(h, fm || null); }
     // parts they no longer have
     const gone = (pr.gn | 0) & ((1 << PART_COUNT) - 1);
     if (gone !== r.gone) this._gone(r, gone);
+    // sleeves and trouser legs torn away
+    const ts = (pr.ts | 0) & ((1 << PART_COUNT) - 1);
+    if (ts !== r.ts) { for (let i = 0; i < PART_COUNT; i++) if ((ts & (1 << i)) && !(r.ts & (1 << i))) h.stripCloth(i); r.ts = ts; }
     h.h.alive = pr.al !== 0; h.h.conscious = h.h.alive && pr.cs !== 0;
     h.remoteHp = num(pr.hp, 0, 100);
+    h.netFire = pr.fi === 1;
     h.state = num(Array.isArray(pr.st) ? pr.st[4] : 0, 0, 3) | 0;
     // down, with a gun up at something: their gun points where they are aiming it, as it does on their screen
     if (Array.isArray(pr.da) && h.state === ST.RAGDOLL) {
@@ -411,7 +467,39 @@ export class Multiplayer {
       A.yaw = num(pr.da[0], -100, 100); A.pitch = num(pr.da[1], -1.6, 1.6); h.aimYaw = A.yaw; h.aimPitch = A.pitch;
     } else if (h.downAim) { h.downAim = null; h.aimYaw = undefined; h.aimPitch = undefined; }
     this._carOf(r, pr.car);
-    if (Array.isArray(pr.ev)) for (const e of pr.ev.slice(0, 16)) { if (!this.server) return; this._event(r, p, e); }
+    this._carryOf(r, pr.cr);
+    // the host's city
+    if (r.peer === this.hostPeer && this.shared.mode === 'mirror' && pr.wd) this.shared.unpack(pr.wd, r.peer);
+    if (Array.isArray(pr.ev)) for (const e of pr.ev.slice(0, 26)) { if (!this.server) return; this._event(r, p, e); }
+  }
+
+  _dropCarry(r) {
+    const C = r.carry;
+    if (!C) return;
+    r.carry = null;
+    if (C.kind === 'c') C.obj.dispose(); else if (!C.obj.removed) this.g.removeProp(C.obj);
+  }
+
+  /** What another player holds over their head (as the Hulk): a rock, or a car, there in their hands. */
+  _carryOf(r, c) {
+    const g = this.g;
+    const kind = Array.isArray(c) && (c[0] === 'r' || c[0] === 'c') ? c[0] : null;
+    const at = kind ? vec(kind === 'c' ? c[3] : c[2], 1e4) : null, q = kind && Array.isArray(kind === 'c' ? c[4] : c[3]) ? (kind === 'c' ? c[4] : c[3]).map((v) => num(v, -1, 1)) : null;
+    const want = kind && at && q && q.length === 4 ? kind + (kind === 'c' ? word(c[1]) + num(c[2], 0, 0xffffff) : '') : '';
+    if (!want || (r.carry && r.carry.key !== want)) {
+      this._dropCarry(r);
+      if (!want) return;
+    }
+    if (!r.carry) {
+      let obj = null;
+      if (kind === 'c') { obj = new Car(g, CARS.has(c[1]) ? c[1] : 'sedan', num(c[2], 0, 0xffffff, 0xb8312b) | 0); obj.mode = 'remote'; obj.body.collides = false; obj.wreckCy = obj.van ? 0.82 : 0.76; }
+      else if (g.powers) { obj = g.powers._makeRock(at[0], at[1], at[2], num(c[1], 0.85, 1.2, 1)); obj.puppetOf = r; obj.body.setKinematic(true); obj.body.collides = false; }
+      if (!obj) return;
+      r.carry = { key: want, kind, obj, snaps: [] };
+    }
+    const l = Math.hypot(q[0], q[1], q[2], q[3]) || 1;
+    r.carry.snaps.push({ t: g.time, at, q: q.map((v) => v / l) });
+    if (r.carry.snaps.length > 4) r.carry.snaps.shift();
   }
 
   _kit(r, pr) {
@@ -467,6 +555,7 @@ export class Multiplayer {
     h.vx = pel.vx; h.vz = pel.vz; h.x = pel.px; h.z = pel.pz; h.y = groundHeight(h.x, h.z);
     const st = (k < 0.5 ? a : b).st;
     h.yaw = num(st[3], -7000, 7000) / 1000; h.speed = num(st[5], 0, 5000) / 100;
+    flames(g, h, dt);
     if (r.car && r.carSnaps.length) {
       const C = r.carSnaps;
       let ca = C[0], cb = C[0];
@@ -479,6 +568,23 @@ export class Multiplayer {
       car.vx = (cb.x - ca.x) / Math.max(cs, 0.05); car.vz = (cb.z - ca.z) / Math.max(cs, 0.05); car.speed = Math.hypot(car.vx, car.vz);
       car.seats[0] = h;
       car.place(dt); car.draw(dt);
+    }
+    // what they hold overhead
+    const C = r.carry;
+    if (C && C.snaps.length) {
+      let a = C.snaps[0], b = C.snaps[0];
+      for (let i = C.snaps.length - 1; i >= 0; i--) if (C.snaps[i].t <= t) { a = C.snaps[i]; b = C.snaps[i + 1] || C.snaps[i]; break; }
+      const sp = b.t - a.t, k = sp > 1e-4 ? clamp((t - a.t) / sp, 0, 1) : 1, lerp = (u, v) => u + (v - u) * k;
+      const x = lerp(a.at[0], b.at[0]), y = lerp(a.at[1], b.at[1]), z = lerp(a.at[2], b.at[2]), q = b.q;
+      if (C.kind === 'c') {
+        const car = C.obj, cy = car.wreckCy;
+        car.body.setPose(x, y, z, q[0], q[1], q[2], q[3], dt);
+        car.group.position.set(x, y, z); car.group.quaternion.set(q[0], q[1], q[2], q[3]);
+        // the group is at the car's ground point, the body at its middle
+        const ux = 2 * (q[0] * q[1] - q[3] * q[2]), uy = 1 - 2 * (q[0] * q[0] + q[2] * q[2]), uz = 2 * (q[1] * q[2] + q[3] * q[0]);
+        car.group.position.set(x - ux * cy, y - uy * cy, z - uz * cy);
+        car.draw(dt);
+      } else C.obj.body.setPose(x, y, z, q[0], q[1], q[2], q[3], dt);
     }
   }
 
@@ -496,7 +602,7 @@ export class Multiplayer {
         return;
       }
       case 'die': {
-        const killer = e[2] === me ? this._name() : (this.remotes.get(e[2]) || {}).name || '';
+        const killer = e[2] === me ? this._name() : (this.remotes.get(e[2]) || {}).name || (typeof e[4] === 'string' ? cleanName(e[4]) : '');
         if (e[2] === me && me) { this.you.kills++; this.sendT = 0; }
         this._feed('kill', killer, weaponName(word(e[3])), r.name, { mine: e[2] === me });
         return;
@@ -505,20 +611,13 @@ export class Multiplayer {
         if (e[2] !== me || !me || !pl.h) return;
         const d = e[3];
         if (!d || typeof d !== 'object') return;
-        const part = num(d.p, 0, PART_COUNT - 1) | 0, type = TYPES.has(d.ty) ? d.ty : 'blunt';
-        if (pl.gone[part]) return;
-        const lp = vec(d.lp, 1), ld = vec(d.ld, 1.01) || [0, 0, 1], ln = vec(d.ln, 1.01);
-        const b = pl.bodies[part];
-        b.toWorld(lp ? lp[0] : 0, lp ? lp[1] : 0, lp ? lp[2] : 0, _a);
-        b.dirToWorld(ld[0], ld[1], ld[2], _b);
+        // one of the host's people did it, or the player themselves
+        const by = typeof d.by === 'string' && r.peer === this.hostPeer ? this.shared.person(parseInt(d.by, 36)) : null;
         this.stats.hitsIn++;
-        const arrow = d.ar === 2 ? 'bolt' : d.ar === 1 ? 'arrow' : null;
-        const rep = pl.hit({ part, type, power: num(d.pw, 0, 6), hp: d.hp == null ? undefined : num(d.hp, 0, 200), impulse: num(d.im, 0, 160), through: num(d.th, 0, 1), chop: num(d.ch, 0, 3), lift: num(d.lf, 0, 200),
-          weapon: word(d.w) || 'fists', rifle: !!d.rf, shot: !!d.sh, ball: !!d.bl, arrow, point: [_a[0], _a[1], _a[2]], dir: [_b[0], _b[1], _b[2]], normal: ln || undefined, attacker: r.h });
-        // an arrow that went in stays in, here as on their screen
-        if (arrow && rep && !rep.stopped && !pl.gone[part]) g.arrows?.stickAt(pl, part, [_a[0], _a[1], _a[2]], [_b[0], _b[1], _b[2]], arrow, 0.1);
+        this.applyHit(pl, d, by || r.h);
         return;
       }
+      case 'fly': if (e[2] === me && me) g.powers?._fly(pl, num(e[3], -30, 30), num(e[4], -30, 30), num(e[5], -30, 30), r.h); return;
       case 'shv': if (e[2] === me && me) pl.shove(num(e[3], -20, 20), num(e[4], -20, 20), num(e[5], 0, 160), r.h); return;
       case 'tz': if (e[2] === me && me) pl.tase(num(e[3], 0, 6), r.h, e[4] === 'shock' ? 'shock' : 'taser'); return;
       case 'frz': {
@@ -541,6 +640,13 @@ export class Multiplayer {
       }
       case 'brn': if (e[2] === me && me) g.fire?.ignite(pl, num(e[3], 0, PART_COUNT - 1) | 0, num(e[4], 0, 1), r.h, word(e[5]) || 'flamethrower'); return;
       case 'car': if (e[2] === me && me && r.car && !pl.car) { r.car.vx = num(e[4], -60, 60); r.car.vz = num(e[5], -60, 60); pl.struckByCar(r.car, num(e[3], 0, 60)); } return;
+      case 'tr': {
+        // their clothes torn, so the tear shows on their stand-in too
+        if (!r.h) return;
+        const part = num(e[2], 0, PART_COUNT - 1) | 0, lp = vec(e[4], 1), ln = vec(e[5], 1.01);
+        if (lp && ln) r.h.tearMark(part, e[3] === 'rip' ? 'rip' : 'tear', lp, ln, num(e[6], 0.01, 0.2, 0.05));
+        return;
+      }
       case 'wd': {
         // a wound they took, so it shows on their stand-in too
         if (!r.h) return;
@@ -584,8 +690,34 @@ export class Multiplayer {
         return;
       }
       default:
+        // what another player did to the city you host, and (from the host) what its people did that shows
+        if (this.shared.hostEvent(r, e)) return;
+        if (r.peer === this.hostPeer) this.shared.fxEvent(e);
     }
   }
+
+  /** A blow (a round, a cut...) that somebody else's game says landed on `t`: you, or, if you host, one of your city's people. */
+  applyHit(t, d, attacker) {
+    const g = this.g;
+    if (!d || typeof d !== 'object' || !t || t.removed) return null;
+    const part = num(d.p, 0, PART_COUNT - 1) | 0, type = TYPES.has(d.ty) ? d.ty : 'blunt';
+    if (t.gone[part]) return null;
+    const lp = vec(d.lp, 1), ld = vec(d.ld, 1.01) || [0, 0, 1], ln = vec(d.ln, 1.01);
+    const b = t.bodies[part];
+    b.toWorld(lp ? lp[0] : 0, lp ? lp[1] : 0, lp ? lp[2] : 0, _a);
+    b.dirToWorld(ld[0], ld[1], ld[2], _b);
+    const arrow = d.ar === 2 ? 'bolt' : d.ar === 1 ? 'arrow' : null, weapon = word(d.w) || 'fists';
+    const rep = t.hit({ part, type, power: num(d.pw, 0, 9), hp: d.hp == null ? undefined : num(d.hp, 0, 200), impulse: num(d.im, 0, 160), through: num(d.th, 0, 1), chop: num(d.ch, 0, 3), lift: num(d.lf, 0, 200),
+      weapon, rifle: !!d.rf, shot: !!d.sh, ball: !!d.bl, arrow, point: [_a[0], _a[1], _a[2]], dir: [_b[0], _b[1], _b[2]], normal: ln || undefined, attacker });
+    // an arrow that went in stays in, here as on their screen
+    if (arrow && rep && !rep.stopped && !t.gone[part]) g.arrows?.stickAt(t, part, [_a[0], _a[1], _a[2]], [_b[0], _b[1], _b[2]], arrow, 0.1);
+    // one of the city's people: whoever saw it saw who did it
+    if (!t.isPlayer) g.minds?.witness({ kind: 'attack', actor: attacker, victim: t, weapon, part, x: _a[0], y: _a[1], z: _a[2], rep });
+    return rep;
+  }
+
+  /** Is `by` somebody whose blows this game sends on: you, or, if you host, one of your city's people. */
+  _mine(by) { return by === this.g.player || (this.shared.mode === 'host' && !!by && !!by.h && !by.puppet && !by.isPlayer); }
 
   /* ---------------------------- what happens to you, sent ---------------------------- */
 
@@ -593,7 +725,7 @@ export class Multiplayer {
   hitRemote(h, info) {
     const g = this.g, r = h.remote;
     if (info.point) g.gore.burst(info.point[0], info.point[1], info.point[2], -(info.dir ? info.dir[0] : 0), 0.4, -(info.dir ? info.dir[2] : 0), info.type === 'blunt' ? 3 : 8, 2);
-    if (!r || !this.server || info.attacker !== g.player || !TYPES.has(info.type)) return FAKE_REP;
+    if (!r || !this.server || !this._mine(info.attacker) || !TYPES.has(info.type) || !info.point || !info.dir) return FAKE_REP;
     const b = h.bodies[info.part];
     if (!b || h.gone[info.part]) return null;
     b.toLocal(info.point[0], info.point[1], info.point[2], _a);
@@ -606,30 +738,57 @@ export class Multiplayer {
     if (info.rifle) d.rf = 1; if (info.shot) d.sh = 1; if (info.ball) d.bl = 1;
     if (info.arrow) d.ar = info.arrow === 'bolt' ? 2 : 1;
     if (Array.isArray(info.normal)) d.ln = info.normal.map(r3);
-    this._emit('hit', r.peer, d);
+    // one of the host's people, shown here: it goes to the host; another player: to them (saying which of your people did it, if one did)
+    if (r.npc != null) this._emit('nh', r.npc.toString(36), d);
+    else { if (info.attacker !== g.player && info.attacker && info.attacker.id != null) d.by = info.attacker.id.toString(36); this._emit('hit', r.peer, d); }
     this.stats.hitsOut++;
     return FAKE_REP;
   }
-  shoveRemote(h, vx, vz, force, by) { if (h.remote && this.server && by === this.g.player) this._emit('shv', h.remote.peer, r2(vx), r2(vz), r2(force)); }
-  taseRemote(h, secs, by, how) { if (h.remote && this.server && by === this.g.player) this._emit('tz', h.remote.peer, r2(secs), how); }
+  shoveRemote(h, vx, vz, force, by) {
+    if (!h.remote || !this.server || !this._mine(by)) return;
+    if (h.remote.npc != null) this._emit('nsv', h.remote.npc.toString(36), r2(vx), r2(vz), r2(force)); else this._emit('shv', h.remote.peer, r2(vx), r2(vz), r2(force));
+  }
+  taseRemote(h, secs, by, how) {
+    if (!h.remote || !this.server || !this._mine(by)) return;
+    if (h.remote.npc != null) this._emit('ntz', h.remote.npc.toString(36), r2(secs), how); else this._emit('tz', h.remote.peer, r2(secs), how);
+  }
+  /** Somebody thrown (by the Hulk): on their own screen, or (one of the host's people) by the host. */
+  flyRemote(h, vx, vy, vz, by) {
+    if (!h.remote || !this.server || !this._mine(by)) return;
+    if (h.remote.npc != null) this._emit('nfl', h.remote.npc.toString(36), r2(vx), r2(vy), r2(vz)); else this._emit('fly', h.remote.peer, r2(vx), r2(vy), r2(vz));
+  }
+  /** One of the host's cars, knocked over (or thrown) from here: the host does it. */
+  knockCar(car, vx, vy, vz, spin) { if (car.mirror && this.server) this._emit('kc', car.mirror.id.toString(36), [r2(vx), r2(vy), r2(vz)], r2(spin)); }
+  takeCar(car) { return this.shared.takeCar(car); }
+  /** The host's people, heard and seen everywhere: what they say, the shots they fire, the blasts. */
+  npcSay(h, text, shout) { if (!h.isPlayer && !h.puppet) this._fx('ns', h.id.toString(36), cleanText(text, 140), shout ? 1 : 0); }
+  npcGun(h, type, m, d) { if (!h.isPlayer && !h.puppet) this._fx('ng', h.id.toString(36), type, m.map(r2), d.map(r3)); }
+  boomFx(x, y, z, k = 1) { this._fx('bm', [r2(x), r2(y), r2(z)], r2(k)); }
   /** Frost on another player's stand-in: added up, and sent four times a second (a spray is a great many small chills). */
   chillRemote(h, part, amount, who, weapon) {
-    if (!h.remote || !this.server || who !== this.g.player) return;
-    const A = this.chillAcc || (this.chillAcc = new Map()), peer = h.remote.peer;
+    if (!h.remote || !this.server || !this._mine(who)) return;
+    const A = this.chillAcc || (this.chillAcc = new Map()), npc = h.remote.npc, peer = npc != null ? 'npc:' + npc : h.remote.peer;
     let a = A.get(peer);
-    if (!a) A.set(peer, (a = { parts: new Float32Array(PART_COUNT), weapon: word(weapon) || 'frostthrower' }));
+    if (!a) A.set(peer, (a = { parts: new Float32Array(PART_COUNT), weapon: word(weapon) || 'frostthrower', npc: npc != null ? npc : null, peer: h.remote.peer }));
     a.parts[part] = Math.min(1, a.parts[part] + amount);
   }
   _flushChill(dt) {
     if (!this.chillAcc || !this.chillAcc.size || (this.chillT = (this.chillT || 0) - dt) > 0) return;
     this.chillT = 0.25;
-    for (const [peer, a] of this.chillAcc) this._emit('frz', peer, Array.from(a.parts, r2), a.weapon);
+    for (const a of this.chillAcc.values()) { if (a.npc != null) this._emit('nfz', a.npc.toString(36), Array.from(a.parts, r2), a.weapon); else this._emit('frz', a.peer, Array.from(a.parts, r2), a.weapon); }
     this.chillAcc.clear();
   }
   /** One of your arrows away: the others see it fly. */
   arrowFx(kind, m, v, weapon) { if (this.server) this._emit('arw', kind === 'bolt' ? 'bolt' : 'arrow', m.map(r2), v.map(r2), weapon); }
-  burnRemote(h, part, amount, who, weapon) { if (h.remote && this.server && who === this.g.player) this._emit('brn', h.remote.peer, part, r2(amount), word(weapon) || 'flamethrower'); }
-  carRemote(h, car, closing) { if (h.remote && this.server && car && car.seats[0] === this.g.player) this._emit('car', h.remote.peer, r2(closing), r2(car.vx), r2(car.vz)); }
+  burnRemote(h, part, amount, who, weapon) {
+    if (!h.remote || !this.server || !this._mine(who)) return;
+    if (h.remote.npc != null) this._emit('nbr', h.remote.npc.toString(36), part, r2(amount), word(weapon) || 'flamethrower'); else this._emit('brn', h.remote.peer, part, r2(amount), word(weapon) || 'flamethrower');
+  }
+  carRemote(h, car, closing) {
+    // (a car of the host's that hits another player: their own game sees it hit them, and takes it)
+    if (!h.remote || !this.server || !car || car.seats[0] !== this.g.player) return;
+    if (h.remote.npc != null) this._emit('ncr', h.remote.npc.toString(36), r2(closing), r2(car.vx), r2(car.vz)); else this._emit('car', h.remote.peer, r2(closing), r2(car.vx), r2(car.vz));
+  }
   /** Your gun went off: everyone else sees the flash and hears it, and the round marks what it hits. */
   gunFx(type, m, d) { if (this.server) this._emit('gun', type, m.map(r2), d.map(r3)); }
   /** One of your powers went out: the others see it fly (it hurts nobody there). */
@@ -644,16 +803,28 @@ export class Multiplayer {
     this._feed('chat', this._name(), '', text, { mine: true, admin: this.auth.admin });
   }
 
-  /** You were hurt: a mark of it for the others' screens. */
+  /** You were hurt (or, if you host, one of your city's people was): a mark of it for the others' screens. */
   onHit(h, info, rep) {
     const g = this.g;
-    if (!this.server || h !== g.player || !rep || rep.stopped || !info || !info.point || g.time - this.lastWound < 0.2) return;
+    if (!this.server || !rep || rep.stopped || !info || !info.point) return;
+    const npc = h !== g.player && !h.isPlayer && !h.puppet && this.shared.mode === 'host';
+    if (h !== g.player && !npc) return;
+    if (g.time - (npc ? h.netWoundT || 0 : this.lastWound) < 0.2) return;
     const b = h.bodies[info.part];
     if (!b) return;
-    this.lastWound = g.time;
+    if (npc) h.netWoundT = g.time; else this.lastWound = g.time;
     b.toLocal(info.point[0], info.point[1], info.point[2], _a);
     const ln = Array.isArray(info.normal) ? info.normal : [0, 0, 1];
-    this._emit('wd', info.part, info.type, [r3(_a[0]), r3(_a[1]), r3(_a[2])], ln.map(r3));
+    if (npc) this._fx('nw', h.id.toString(36), info.part, info.type, [r3(_a[0]), r3(_a[1]), r3(_a[2])], ln.map(r3));
+    else this._emit('wd', info.part, info.type, [r3(_a[0]), r3(_a[1]), r3(_a[2])], ln.map(r3));
+  }
+
+  /** Your clothes torn (or one of your city's people's): the tear shows on everybody else's screen too. */
+  onTear(h, part, kind, lp, ln, size) {
+    if (!this.server) return;
+    const args = [part, kind === 'rip' ? 'rip' : 'tear', [r3(lp[0]), r3(lp[1]), r3(lp[2])], [r3(ln[0]), r3(ln[1]), r3(ln[2])], r3(size)];
+    if (h === this.g.player) this._emit('tr', ...args);
+    else if (!h.isPlayer && !h.puppet && this.shared.mode === 'host') this._fx('nt', h.id.toString(36), ...args);
   }
 
   /** Somebody died. If it was you, everybody hears who did it. */
@@ -663,7 +834,9 @@ export class Multiplayer {
     this.you.deaths++;
     const by = h.lastAttacker && typeof h.lastAttacker === 'object' && h.lastAttacker.puppet ? h.lastAttacker.remote : null;
     const w = word(h.lastWeapon) || '';
-    this._emit('die', by ? by.peer : '', w);
+    // killed by one of the host's people: by name
+    const npc = by && by.npc != null ? cleanName(by.name) : '';
+    this._emit('die', by && !npc ? by.peer : '', w, npc);
     this._feed('kill', by ? by.name : '', weaponName(w), this._name(), { mine: true });
   }
 
@@ -744,7 +917,7 @@ export class Multiplayer {
 }
 
 /** What a weapon (or a power) is called in the feed. */
-const POWER_WORD = { tempest: 'Tempest Kick', fingerpistol: 'Finger Pistol', flame: "Leo's Flame", swirl: 'Swirling Kick', leopard: 'Full Leopard', claws: 'Claws', leap: 'Leopard Leap', crash: 'Car', car: 'Car', explosion: 'Explosion', shrapnel: 'Explosion', fists: 'Fists' };
+const POWER_WORD = { hulkpunch: 'Hulk Punch', hulksmash: 'Hulk Smash', tempest: 'Tempest Kick', fingerpistol: 'Finger Pistol', flame: "Leo's Flame", swirl: 'Swirling Kick', leopard: 'Full Leopard', claws: 'Claws', leap: 'Leopard Leap', crash: 'Car', car: 'Car', explosion: 'Explosion', shrapnel: 'Explosion', fists: 'Fists' };
 export function weaponName(id) {
   if (!id) return '';
   if (POWER_WORD[id]) return POWER_WORD[id];

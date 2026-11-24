@@ -70,6 +70,8 @@ export class Input {
   exitLock() { if (this.locked && document.exitPointerLock) document.exitPointerLock(); }
 
   _press(name) { this._qp.add(name); this.down[name] = true; }
+  /** Is this key (a KeyboardEvent code) held down right now? */
+  key(code) { return !!this._keys[code]; }
   _release(name) { if (this.down[name]) { this._qr.add(name); this.down[name] = false; } }
 
   /** Makes a HUD element behave as a held button. */
@@ -198,6 +200,10 @@ export class Input {
       case 'KeyM': if (isDown) this.onKey?.('abilities'); break;
       case 'KeyJ': case 'KeyK': case 'KeyL': case 'KeyU': case 'KeyI': case 'KeyO': case 'KeyY':
         if (isDown && this.enabled) this.onAbilityKey?.(code.slice(3));
+        break;
+      // the number keys past the weapons are the Hulk's
+      case 'Digit6': case 'Digit7': case 'Digit8': case 'Digit9':
+        if (isDown && this.enabled) this.onAbilityKey?.(code.slice(5));
         break;
       case 'KeyT': if (isDown && this.enabled) { e.preventDefault(); this.onKey?.('talk'); } break;
       case 'Tab': if (isDown) this.onKey?.('menu'); break;

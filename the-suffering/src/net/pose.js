@@ -58,3 +58,69 @@ export function poseBetween(h, a, b, k, dt) {
     body.setPose(px, py, pz, qx, qy, qz, qw, dt);
   }
 }
+
+/* ---------------------------------- lighter ---------------------------------- */
+
+/*
+ * A body in fewer characters still, for the many people of a shared city: the
+ * pelvis to the centimetre, every other part to a centimetre and a half from
+ * it, every turn to a degree or so (168 characters). `frame`, if given (a
+ * THREE.Object3D: the car or helicopter they sit in), makes it a pose in that
+ * frame, so that whoever puts it back puts it back in the same seat.
+ */
+const NL = 6 + PART_COUNT * 7, STEP = 0.015;
+const i8 = (v) => (v > 127 ? 127 : v < -127 ? -127 : Math.round(v)) & 255;
+const s8 = (u) => (u > 127 ? u - 256 : u);
+const _lp = [0, 0, 0], _lq = [0, 0, 0, 1];
+
+function toFrame(F, px, py, pz, qx, qy, qz, qw) {
+  // the inverse of the frame's turn, applied to the offset from it, and to the part's own turn
+  const fp = F.position, fq = F.quaternion, ax = -fq.x, ay = -fq.y, az = -fq.z, aw = fq.w;
+  const x = px - fp.x, y = py - fp.y, z = pz - fp.z;
+  const tx = 2 * (ay * z - az * y), ty = 2 * (az * x - ax * z), tz = 2 * (ax * y - ay * x);
+  _lp[0] = x + aw * tx + (ay * tz - az * ty); _lp[1] = y + aw * ty + (az * tx - ax * tz); _lp[2] = z + aw * tz + (ax * ty - ay * tx);
+  _lq[0] = aw * qx + ax * qw + ay * qz - az * qy; _lq[1] = aw * qy - ax * qz + ay * qw + az * qx;
+  _lq[2] = aw * qz + ax * qy - ay * qx + az * qw; _lq[3] = aw * qw - ax * qx - ay * qy - az * qz;
+}
+
+export function encodeLite(h, frame = null) {
+  const u = new Uint8Array(NL), dv = new DataView(u.buffer);
+  const B = h.bodies, pose = new Float32Array(PART_COUNT * 7);
+  for (let i = 0; i < PART_COUNT; i++) {
+    const b = B[i], o = i * 7;
+    if (frame) { toFrame(frame, b.px, b.py, b.pz, b.qx, b.qy, b.qz, b.qw); pose[o] = _lp[0]; pose[o + 1] = _lp[1]; pose[o + 2] = _lp[2]; pose[o + 3] = _lq[0]; pose[o + 4] = _lq[1]; pose[o + 5] = _lq[2]; pose[o + 6] = _lq[3]; }
+    else { pose[o] = b.px; pose[o + 1] = b.py; pose[o + 2] = b.pz; pose[o + 3] = b.qx; pose[o + 4] = b.qy; pose[o + 5] = b.qz; pose[o + 6] = b.qw; }
+  }
+  const rx = q16(pose[0] * 100), ry = q16(pose[1] * 100), rz = q16(pose[2] * 100);
+  dv.setInt16(0, rx, true); dv.setInt16(2, ry, true); dv.setInt16(4, rz, true);
+  const ox = rx / 100, oy = ry / 100, oz = rz / 100;
+  for (let i = 0; i < PART_COUNT; i++) {
+    const o = i * 7, k = 6 + i * 7, s = pose[o + 6] < 0 ? -1 : 1;
+    u[k] = i8((pose[o] - ox) / STEP); u[k + 1] = i8((pose[o + 1] - oy) / STEP); u[k + 2] = i8((pose[o + 2] - oz) / STEP);
+    u[k + 3] = i8(pose[o + 3] * s * 127); u[k + 4] = i8(pose[o + 4] * s * 127); u[k + 5] = i8(pose[o + 5] * s * 127); u[k + 6] = i8(pose[o + 6] * s * 127);
+  }
+  let bin = '';
+  for (let i = 0; i < NL; i++) bin += String.fromCharCode(u[i]);
+  return btoa(bin);
+}
+
+/** Back again: 17 x (x, y, z, qx, qy, qz, qw), in the world or in the frame it was sent in; null if it is not one. */
+export function decodeLite(s) {
+  if (typeof s !== 'string' || s.length > 200) return null;
+  let bin;
+  try { bin = atob(s); } catch { return null; }
+  if (bin.length !== NL) return null;
+  const u = new Uint8Array(NL);
+  for (let i = 0; i < NL; i++) u[i] = bin.charCodeAt(i);
+  const dv = new DataView(u.buffer), out = new Float32Array(PART_COUNT * 7);
+  const ox = dv.getInt16(0, true) / 100, oy = dv.getInt16(2, true) / 100, oz = dv.getInt16(4, true) / 100;
+  for (let i = 0; i < PART_COUNT; i++) {
+    const k = 6 + i * 7, o = i * 7;
+    out[o] = ox + s8(u[k]) * STEP; out[o + 1] = oy + s8(u[k + 1]) * STEP; out[o + 2] = oz + s8(u[k + 2]) * STEP;
+    let x = s8(u[k + 3]), y = s8(u[k + 4]), z = s8(u[k + 5]), w = s8(u[k + 6]);
+    const l = Math.hypot(x, y, z, w);
+    if (l < 20) { x = 0; y = 0; z = 0; w = 1; } else { x /= l; y /= l; z /= l; w /= l; }
+    out[o + 3] = x; out[o + 4] = y; out[o + 5] = z; out[o + 6] = w;
+  }
+  return out;
+}

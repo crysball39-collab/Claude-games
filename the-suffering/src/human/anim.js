@@ -186,6 +186,45 @@ export const CLIPS = {
       k(1, { ...GUARD, hipL: 0, hipR: 0, kneeL: 0.05, kneeR: 0.05, rootY: 0, spineBend: 0.08, rootPitch: 0 }),
     ],
   },
+  /* ---- the Hulk ---- */
+  hulkPunch: {
+    label: 'HULK PUNCH', dur: 0.72, hit: [0.44, 0.68], limb: 'handR', lunge: 0.35, reach: 0.6, power: 3.0, kind: 'blunt', push: true,
+    keys: [
+      k(0, GUARD),
+      k(0.34, { ...GUARD, shR: 0.15, shROut: 0.55, elR: 2.25, spineTwist: -0.8, waistTwist: -0.32, spineBend: 0.12, rootY: -0.14, rootZ: -0.1 }),
+      k(0.52, { ...GUARD, shR: 1.76, shROut: 0.08, shRIn: -0.2, elR: 0.04, spineTwist: 0.62, waistTwist: 0.3, spineBend: 0.3, rootY: -0.08, rootZ: 0.26 }),
+      k(0.68, { ...GUARD, shR: 1.72, shROut: 0.08, shRIn: -0.2, elR: 0.08, spineTwist: 0.64, waistTwist: 0.3, spineBend: 0.32, rootY: -0.08, rootZ: 0.28 }),
+      k(1, GUARD),
+    ],
+  },
+  hulkSmash: {
+    label: 'HULK SMASH', dur: 0.86, hit: [0, 0], lunge: 0, reach: 1, power: 0, kind: 'blunt',
+    keys: [
+      k(0, { ...GUARD, hipL: 0, hipR: 0, kneeL: 0.05, kneeR: 0.05, ankleL: 0, ankleR: 0, neckBend: 0 }),
+      k(0.36, { ...GUARD, shL: 2.95, shR: 2.95, shLOut: 0.15, shROut: 0.15, shLIn: 0.1, shRIn: 0.1, elL: 0.55, elR: 0.55, spineBend: -0.2, rootY: 0.02, hipL: 0, hipR: 0, kneeL: 0.1, kneeR: 0.1, ankleL: 0, ankleR: 0, neckBend: -0.25 }),
+      k(0.56, { ...GUARD, shL: 0.7, shR: 0.7, shLOut: 0.05, shROut: 0.05, shLIn: 0.25, shRIn: 0.25, elL: 0.12, elR: 0.12, spineBend: 0.95, rootY: -0.42, rootZ: 0.12, hipL: 1.0, hipR: 1.0, kneeL: 1.4, kneeR: 1.4, ankleL: 0.35, ankleR: 0.35, neckBend: 0.2 }),
+      k(0.76, { ...GUARD, shL: 0.72, shR: 0.72, shLOut: 0.05, shROut: 0.05, shLIn: 0.25, shRIn: 0.25, elL: 0.14, elR: 0.14, spineBend: 0.92, rootY: -0.4, rootZ: 0.12, hipL: 0.98, hipR: 0.98, kneeL: 1.36, kneeR: 1.36, ankleL: 0.33, ankleR: 0.33, neckBend: 0.2 }),
+      k(1, { ...GUARD, hipL: 0, hipR: 0, kneeL: 0.05, kneeR: 0.05, ankleL: 0, ankleR: 0, neckBend: 0 }),
+    ],
+  },
+  hulkPull: {
+    label: 'ROCK', dur: 0.9, hit: [0, 0], lunge: 0, reach: 1, power: 0, kind: 'blunt',
+    keys: [
+      k(0, { ...GUARD, hipL: 0, hipR: 0, kneeL: 0.05, kneeR: 0.05, ankleL: 0, ankleR: 0 }),
+      k(0.32, { ...GUARD, shL: 1.0, shR: 1.0, shLOut: 0.1, shROut: 0.1, shLIn: 0.2, shRIn: 0.2, elL: 0.2, elR: 0.2, spineBend: 0.9, rootY: -0.45, rootZ: 0.1, hipL: 1.05, hipR: 1.05, kneeL: 1.5, kneeR: 1.5, ankleL: 0.4, ankleR: 0.4 }),
+      k(0.45, { ...GUARD, shL: 1.1, shR: 1.1, shLOut: 0.12, shROut: 0.12, shLIn: 0.2, shRIn: 0.2, elL: 0.3, elR: 0.3, spineBend: 0.75, rootY: -0.38, rootZ: 0.08, hipL: 0.95, hipR: 0.95, kneeL: 1.35, kneeR: 1.35, ankleL: 0.35, ankleR: 0.35 }),
+      k(1, { ...GUARD, shL: 2.8, shR: 2.8, shLOut: 0.3, shROut: 0.3, shLIn: 0, shRIn: 0, elL: 0.75, elR: 0.75, spineBend: -0.08, rootY: 0, hipL: 0, hipR: 0, kneeL: 0.05, kneeR: 0.05, ankleL: 0, ankleR: 0 }),
+    ],
+  },
+  hulkThrow: {
+    label: 'THROW', dur: 0.62, hit: [0, 0], lunge: 0.1, reach: 1, power: 0, kind: 'blunt',
+    keys: [
+      k(0, { ...GUARD, shL: 2.8, shR: 2.8, shLOut: 0.3, shROut: 0.3, shLIn: 0, shRIn: 0, elL: 0.75, elR: 0.75, spineBend: -0.08 }),
+      k(0.3, { ...GUARD, shL: 3.15, shR: 3.15, shLOut: 0.25, shROut: 0.25, shLIn: 0, shRIn: 0, elL: 0.9, elR: 0.9, spineBend: -0.35, rootZ: -0.08 }),
+      k(0.48, { ...GUARD, shL: 1.55, shR: 1.55, shLOut: 0.15, shROut: 0.15, shLIn: 0.1, shRIn: 0.1, elL: 0.1, elR: 0.1, spineBend: 0.45, rootZ: 0.22 }),
+      k(1, GUARD),
+    ],
+  },
 
   /* ---- knife. These, and the machete's, are solved from hand positions by
      tools/pose-solve.mjs: the carry, the swing, and back to the carry ---- */
@@ -240,7 +279,7 @@ export class Animator {
     this.t = Math.random() * 10;
     this.phase = Math.random();
     this.run = 0; this.moving = 0; this.crouch = 0; this.air = 0; this.land = 0;
-    this.w = { guard: 0, blade: 0, pistol: 0, rifle: 0, bow: 0, cower: 0, handsUp: 0, hurt: 0, talk: 0, stagger: 0, writhe: 0, crawl: 0, brace: 0, phone: 0, kneel: 0, cuffed: 0, cuffing: 0, call: 0, scan: 0, sit: 0, drive: 0, slump: 0, hang: 0, rope: 0, gunner: 0, ads: 0 };
+    this.w = { guard: 0, blade: 0, pistol: 0, rifle: 0, bow: 0, cower: 0, handsUp: 0, hurt: 0, talk: 0, stagger: 0, writhe: 0, crawl: 0, brace: 0, phone: 0, kneel: 0, cuffed: 0, cuffing: 0, call: 0, scan: 0, sit: 0, drive: 0, slump: 0, hang: 0, rope: 0, gunner: 0, ads: 0, lift: 0, brute: 0 };
     this.action = null;
     this.flinch = 0; this.flX = 0; this.flZ = 0;
     this.aim = 0; this.lookYaw = 0; this.lookPitch = 0;
@@ -407,6 +446,20 @@ export class Animator {
       this._to(CH.shR, 1.35 + up * 0.8, a); this._to(CH.shROut, 0.5 + 0.25 * dr, a); this._to(CH.shRIn, 0.3, a); this._to(CH.elR, 0.9 + 1.35 * dr, a);
       // turned well round, waist and chest, so the drawing hand can bring the string to the jaw; the head comes back to the mark
       ch[CH.spineTwist] += -1.0 * a; ch[CH.waistTwist] += -0.35 * a; ch[CH.neckTwist] += 1.15 * a;
+    }
+    // the Hulk's stance: hunched, the head pushed forward, the arms bowed out from a body too broad to hang them against
+    if (W.brute > 0.01) {
+      const B = W.brute;
+      ch[CH.shLOut] += 0.34 * B; ch[CH.shROut] += 0.34 * B; ch[CH.shL] += 0.14 * B; ch[CH.shR] += 0.14 * B;
+      ch[CH.elL] += 0.28 * B; ch[CH.elR] += 0.28 * B;
+      ch[CH.spineBend] += 0.12 * B; ch[CH.neckBend] += 0.14 * B; ch[CH.headBend] -= 0.16 * B;
+    }
+    // something huge held up overhead in both hands (a rock, a car)
+    if (W.lift > 0.01) {
+      const L = W.lift;
+      this._to(CH.shL, 2.8, L); this._to(CH.shR, 2.8, L); this._to(CH.shLOut, 0.3, L); this._to(CH.shROut, 0.3, L);
+      this._to(CH.shLIn, 0, L); this._to(CH.shRIn, 0, L); this._to(CH.elL, 0.75, L); this._to(CH.elR, 0.75, L);
+      ch[CH.spineBend] -= 0.08 * L;
     }
     // aimed: the rifle up into the cheek and the head down to its sights; a pistol out at the full stretch of both arms
     if (W.ads > 0.01) {

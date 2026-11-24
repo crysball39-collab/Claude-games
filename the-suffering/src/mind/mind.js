@@ -25,7 +25,7 @@ import { ST } from '../human/human.js';
 import { clamp, clamp01, rand, chance, wrapAngle } from '../core/util.js';
 
 const _e = [0, 0, 0], _g = [0, 0, 0], _t = [0, 0, 0];
-const WEAPON_WORD = { tempest: 'flying slash', fingerpistol: 'bare finger', flame: 'fireball', swirl: 'ring of fire', leopard: 'leopard', claws: 'claws', fists: 'fists', knife: 'knife', machete: 'machete', sword: 'sword', crowbar: 'crowbar', m1911: 'pistol', glock: 'pistol', musket: 'musket', arquebus: 'matchlock', blunderbuss: 'blunderbuss', flamethrower: 'flamethrower', frostthrower: 'frost thrower', bow: 'bow', crossbow: 'crossbow', rope: 'rope', wire: 'live wire', ak47: 'rifle', m4a1: 'rifle', ar15: 'rifle', taser: 'taser', cuffs: 'pair of handcuffs', scanner: 'fingerprint scanner', syringe: 'syringe', car: 'car', carjack: 'bare hands', explosion: 'bomb', shrapnel: 'bomb' };
+const WEAPON_WORD = { hulkpunch: 'enormous fist', hulksmash: 'fists, from above', tempest: 'flying slash', fingerpistol: 'bare finger', flame: 'fireball', swirl: 'ring of fire', leopard: 'leopard', claws: 'claws', fists: 'fists', knife: 'knife', machete: 'machete', sword: 'sword', crowbar: 'crowbar', m1911: 'pistol', glock: 'pistol', musket: 'musket', arquebus: 'matchlock', blunderbuss: 'blunderbuss', flamethrower: 'flamethrower', frostthrower: 'frost thrower', bow: 'bow', crossbow: 'crossbow', rope: 'rope', wire: 'live wire', ak47: 'rifle', m4a1: 'rifle', ar15: 'rifle', taser: 'taser', cuffs: 'pair of handcuffs', scanner: 'fingerprint scanner', syringe: 'syringe', car: 'car', carjack: 'bare hands', explosion: 'bomb', shrapnel: 'bomb' };
 const WEAPON_FEAR = { tempest: 90, fingerpistol: 72, flame: 96, swirl: 96, leopard: 99, claws: 92, fists: 22, knife: 60, machete: 76, sword: 80, crowbar: 55, m1911: 88, glock: 87, musket: 85, arquebus: 82, blunderbuss: 88, flamethrower: 98, frostthrower: 94, bow: 84, crossbow: 86, rope: 8, wire: 30, ak47: 94, m4a1: 95, ar15: 93, taser: 44, cuffs: 0, scanner: 0, syringe: 52, car: 80, carjack: 30, explosion: 99, shrapnel: 99 };
 /** Fires bullets. */
 export const isGun = (id) => id === 'm1911' || id === 'glock' || id === 'ak47' || id === 'm4a1' || id === 'ar15' || id === 'musket' || id === 'arquebus' || id === 'blunderbuss';
@@ -387,10 +387,11 @@ export class Mind {
       case 'power': {
         // somebody doing something no person can do
         if (A === h || w.d > 40) return;
-        const what = { tempest: 'kick so fast that a green blade of air flew off their foot', swirl: 'kick a spinning ring of air that burst into flames', flame: 'throw fireballs out of their bare hands', leap: 'leap through the air like an animal', leopard: 'turn into a leopard', hybrid: 'turn into some kind of leopard-man, with claws', eat: 'eat a strange swirled fruit' }[ev.power] || 'do something impossible';
+        const what = { tempest: 'kick so fast that a green blade of air flew off their foot', swirl: 'kick a spinning ring of air that burst into flames', flame: 'throw fireballs out of their bare hands', leap: 'leap through the air like an animal', leopard: 'turn into a leopard', hybrid: 'turn into some kind of leopard-man, with claws', eat: 'eat a strange swirled fruit',
+          hulk: 'swell up into a huge green monster, tearing out of their clothes', smash: 'smash the street apart with their fists', lift: 'pick up a car over their head', throw: 'throw something enormous through the air' }[ev.power] || 'do something impossible';
         this.note('saw', 'power', `saw ${this.name(A)} ${what}`, ev.power === 'eat' ? 0.3 : 0.9, { o: A });
         if (ev.power === 'eat') break;
-        const beast = ev.power === 'leopard' || ev.power === 'hybrid';
+        const beast = ev.power === 'leopard' || ev.power === 'hybrid' || ev.power === 'hulk';
         this.stir('surprise', 75 * k); this.stir('fear', (beast ? 72 : 46) * k);
         if (!h.officer || beast) this.ask(beast ? 'sawTransform' : 'sawPower', 70, null, rand(0.3, 0.9));
         this._threaten(A, (beast ? 80 : 55) * k);

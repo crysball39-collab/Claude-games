@@ -368,6 +368,13 @@ that has been used drips from its tip. Clothing round a wound soaks the blood up
 stain that spreads with what has been lost, and clothing that lies in a pool soaks from
 underneath; cloth that has taken up a great deal goes dark all over.
 
+Clothes tear where they are hit. A round leaves a ragged hole with threads standing out
+of it (a rifle round a bigger one, a shot pellet a small one), a blade a long slit, a
+stab a short one, a hard punch or kick a rip (a light one does nothing to the cloth),
+something heavy landing on somebody a wide tear; scraps of the cloth fly off. Whatever
+is under the cloth shows through the hole. A sleeve or a trouser leg below the knee that
+has been torn often enough comes away altogether, and the arm or the leg is bare.
+
 **State.** Alongside the injuries, the body keeps track of how it is doing.
 
 - *Stamina* is spent running, jumping and fighting and comes back with rest, more slowly
@@ -477,11 +484,28 @@ shared with.
   drives them. What anybody says (TALK) shows over them and in the chat; deaths go in the
   kill feed with who did it and with what. A name and a health bar over every other
   player; the chip at the top right (or N) lists the players with kills, deaths and pings.
+- **The city** is the host's, and everybody sees the same one: its people (the police
+  and S.W.A.T. too), its traffic, parked cars and helicopters, and everything spawned or
+  lying about: guns, crates, rocks, lamps and generators, walls and beams. The rest of the
+  players' own cities empty when they join. The host's game sends it in whatever room
+  its presence has left: each person as a compact pose (somebody in a car in that car's
+  own frame), what they hold and wear and how they are; each car and thing where it is,
+  with its damage, the glass gone from a car, the cubes knocked out of a wall. Whatever
+  moves, and whatever is near the other players, is sent most often; anything somebody
+  missed hearing about they ask for again. What you do to the city goes to the host's
+  game, which does it: a blow, a round, a flame or a shove on one of its people; a knock
+  on a crate; cubes knocked out of a wall; a gun picked up. The city's people fight you as
+  they fight anybody, and their blows and rounds land in your game. A car you get into
+  is yours until you get out, and then it is back in the city; whatever you drop is the
+  city's. What the city's people say, and their shots, are heard and seen by everyone.
 - **The host** is whoever has been on the server longest, and only the host spawns things
-  there. When the host leaves, the next player in line hosts it and it stays in the list.
-- **Not shared, for now:** the city's own people, the police, the traffic and parked cars,
-  and anything spawned or lying about: each player has their own. Fights with your own
-  city's people happen only on your screen.
+  there. When the host leaves, the next player in line hosts it, it stays in the list, and
+  what that player was being shown becomes their city: its people are real people, its
+  things are loose, its cars are parked where they were.
+- **Not shared, for now:** ropes and wires, fire and ice on the ground, blood on the
+  ground, limbs that have come off, and the police's interest in anybody but the host: on
+  a server the police answer to the host's city (the admin can still set your wanted
+  level).
 - **Not here:** a copy of the game opened on its own has no room to play through, so it is
   single player.
 
@@ -572,7 +596,7 @@ node tools/overlap.mjs   # how far body parts get inside each other, scenario by
 | `src/physics/world.js` | the rigid body engine: XPBD, joints with limits, muscles, sleeping islands |
 | `src/human/` | the rig, the animation and attack clips, the medical model, armour, the human itself |
 | `src/mind/` | senses, memory and emotion; behaviour; scripted lines; speech; the Claude connection; the police (`police.js`) and who they send after you (`response.js`) |
-| `src/net/` | accounts (`accounts.js`); multiplayer over the claude.ai room (`multiplayer.js`: the server list, hosting and joining, other players' stand-ins, hits sent to their owners); a body's pose in a few hundred characters (`pose.js`) |
+| `src/net/` | accounts (`accounts.js`); multiplayer over the claude.ai room (`multiplayer.js`: the server list, hosting and joining, other players' stand-ins, hits sent to their owners); the host's city, shared (`shared.js`: rosters, intros and states in the host's presence, stand-ins for its people, things, cars and helicopters, and what the others do to them); a body's pose in a few hundred characters, or half that (`pose.js`) |
 | `src/combat/` | weapons and ballistics; arrows and bolts (`arrows.js`); frost and ice (`frost.js`); blood, wounds and dismemberment |
 | `src/world/` | the city, its pavement network; cars (`car.js`: the model, glass, dents, damage) and everything with wheels (`traffic.js`: driving, police pursuit, collisions, crashes, explosions); police helicopters (`heli.js`) |
 | `src/render/` | instanced boxes, decal batches, procedural textures |

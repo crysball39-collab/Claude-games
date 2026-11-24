@@ -280,6 +280,8 @@ export class Heli {
   update(dt) {
     const g = this.g;
     this.t += dt; this.stateT += dt;
+    // one in the host's city, shown here: it goes where they send it, and only its rotors are its own
+    if (this.mirror) { this.place(); if (!this.down) this._effects(dt); return; }
     if (this.down) { this._wrecked(dt); return; }
     // the pilot shot, or the tail gone: it comes down
     if (this.state !== 'crash' && (this.hp <= 0 || !this.pilotOk)) { this.state = 'crash'; this.stateT = 0; this.air.stats.downed++; g.audio?.at('whump', this.x, this.y, this.z, 1); }
@@ -637,6 +639,14 @@ export class Air {
       if (kind === 'gunner') { const r = (h.kit || []).find((it) => it.def.rifle); if (r && g.weapons) g.weapons.draw(h, r); }
     }
     this.stats.sent++;
+    return hl;
+  }
+
+  /** A helicopter in the host's city, as it is shown here: flown by what they send, its crew their stand-ins. */
+  ghost(kind, x, y, z, yaw) {
+    const hl = new Heli(this, kind, x, y, z, yaw);
+    hl.mirror = true;
+    this.list.push(hl);
     return hl;
   }
 

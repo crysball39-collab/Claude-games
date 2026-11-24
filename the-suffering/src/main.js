@@ -141,10 +141,10 @@ async function boot() {
     if (!game.paused) {
       // the streets refill, a face at a time, out of sight
       popT += dt;
-      if (popT > 1.3) { popT = 0; populate(game, settings.people); }
+      if (popT > 1.3) { popT = 0; if (!game.mirror) populate(game, settings.people); }
       // a post left empty is filled again, in time
       copT += dt;
-      if (copT > 40) { copT = 0; game.staffStation(false); }
+      if (copT > 40) { copT = 0; if (!game.mirror) game.staffStation(false); }
       // running feet are heard, and so is the nearest engine
       const p = game.player;
       if (p.state === ST.ANIM && p.speed > 3.2 && p.grounded) {
