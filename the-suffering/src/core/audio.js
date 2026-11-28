@@ -164,6 +164,13 @@ export class Sound {
         this._n(d, t, 0.14, 1.3, 'highpass', 1400); this._n(d, t + 0.08, 2.4, 0.55, 'lowpass', 420, 70, 0.5, 0.25);
         for (let i = 0; i < 5; i++) this._n(d, t + 0.15 + rand(0, 0.9), 0.04, 0.3, 'bandpass', 2000 + rand(0, 2500), 1200, 2);
         break;
+      // the army's: a heavy machine gun's hammer, a tank's gun, a missile leaving its pod
+      case 'mg': this._n(d, t, 0.22, 1.25, 'lowpass', 3600, 420, 0.5); this._t(d, t, 0.15, 1.1, 'sine', 96, 34); this._n(d, t, 0.03, 0.9, 'highpass', 3000); this._n(d, t + 0.05, 0.5, 0.22, 'bandpass', 520, 220, 0.4); break;
+      case 'cannon':
+        this._t(d, t, 0.7, 1.6, 'sine', 58, 24); this._n(d, t, 0.06, 1.5, 'highpass', 1300); this._n(d, t, 1.1, 1.5, 'lowpass', 1600, 70, 0.6, 0.003);
+        this._n(d, t + 0.1, 1.8, 0.45, 'lowpass', 380, 60, 0.5, 0.2);
+        break;
+      case 'missile': this._n(d, t, 0.08, 0.9, 'highpass', 1800); this._n(d, t, 0.9, 0.7, 'bandpass', 900, 2400, 0.9, 0.02); this._n(d, t, 1.2, 0.45, 'lowpass', 700, 200, 0.7, 0.05); this._t(d, t, 0.3, 0.35, 'sine', 110, 50); break;
       // the string: a bow's twang and the hiss of the arrow leaving; a crossbow's snap; and where they land
       case 'bow': this._t(d, t, 0.2, 0.5, 'triangle', 230, 118); this._n(d, t, 0.05, 0.55, 'bandpass', 1500, 700, 1.5); this._n(d, t + 0.01, 0.22, 0.22, 'bandpass', 700, 1800, 1.2, 0.03); break;
       case 'crossbow': this._n(d, t, 0.03, 0.9, 'highpass', 2400); this._t(d, t, 0.12, 0.6, 'triangle', 300, 90); this._n(d, t, 0.08, 0.6, 'lowpass', 900, 300); this._t(d, t + 0.01, 0.22, 0.22, 'sine', 160, 110); break;
@@ -324,6 +331,19 @@ export class Sound {
       const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = 2350; const og = ctx.createGain(); og.gain.value = 0.025; o.connect(og); og.connect(g); o.start(); nodes.push(o);
       noise('bandpass', 950, 2.5, 0.07);
       base = 0.9;
+    } else if (kind === 'tracks') {
+      // a tank: a big diesel's throb, and the clatter of the tracks over their wheels
+      const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 24;
+      const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 190;
+      const am = ctx.createGain(); am.gain.value = 0.6;
+      const lfo = ctx.createOscillator(); lfo.type = 'square'; lfo.frequency.value = 7.5; const lg = ctx.createGain(); lg.gain.value = 0.35;
+      lfo.connect(lg); lg.connect(am.gain);
+      o.connect(f); f.connect(am); am.connect(g); o.start(); lfo.start(); nodes.push(o, lfo);
+      const clank = noise('bandpass', 1500, 2.2, 0.0);
+      const cl = ctx.createOscillator(); cl.type = 'square'; cl.frequency.value = 11; const cg = ctx.createGain(); cg.gain.value = 0.14;
+      cl.connect(cg); cg.connect(clank.gain); cl.start(); nodes.push(cl);
+      noise('lowpass', 140, 0.8, 0.35);
+      base = 0.85;
     } else if (kind === 'buzz') {
       const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = 120; o.connect(g); o.start(); nodes.push(o);
       base = 0.04;

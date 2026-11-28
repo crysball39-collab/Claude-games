@@ -11,7 +11,7 @@
    Whatever is said is also a sound in the world: people near enough hear the
    words, people further off hear some of them.
    ========================================================================== */
-import { line, flavour, isShout, classify } from './lines.js';
+import { LINES, line, flavour, isShout, classify } from './lines.js';
 import { P } from '../human/rig.js';
 import { ST } from '../human/human.js';
 import { $, el, clamp, rand } from '../core/util.js';
@@ -244,6 +244,8 @@ export class Speech {
     const vars = Object.assign({ first: L.first, job: L.persona.job, errand: L.persona.errand }, want.vars || {});
     if (kind === 'reply') kind = this._replyKind(m, vars.text || '');
     if (h.officer && COP[kind] !== undefined) { kind = COP[kind]; if (!kind) return; }
+    // a soldier says it the army's way, where the army has a way of saying it
+    if (h.soldier && kind.startsWith('cop') && LINES['mil' + kind.slice(3)]) kind = 'mil' + kind.slice(3);
     let text = line(kind, vars);
     if (!text) return;
     text = flavour(text, m.p, m.mood);

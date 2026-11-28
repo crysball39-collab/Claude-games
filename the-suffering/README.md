@@ -182,6 +182,15 @@ one, and after three is crazed glass that stops nothing. Put on one of a kind yo
 already wearing and you swap it, leaving the old one where the new one lay. A vest or
 helmet that is not thin stops taser probes.
 
+**Arm, leg and neck guards.** Light (black) and medium (olive drab), each its own item
+to put on: arm guards are pads over the upper arms and the forearms, strapped on;
+leg guards cover the thighs and the shins, with a cap over each knee; a neck guard is a
+padded collar, and the medium one has a plate over the throat. Each stops a pistol round
+or a slash where it covers (a bruise instead of a hole), not the hands or the feet, nor
+the wrist below the pad, and not a rifle round; the medium ones turn a musket ball far
+more often than the light ones, and some stabs. Each shows as a chip in the weapon bar
+(ARMS, LEGS, NECK, MED for the medium ones); tap it to take them off.
+
 **The S.W.A.T. team.** Four of them from the sandbox, in black: plate carriers,
 visored helmets, an M4A1, a Glock-19, a taser and cuffs each. They are police, and
 behave as police, but go for the rifle first. At two stars it is the S.W.A.T. team that
@@ -516,7 +525,7 @@ a vest and carries an M1911, a taser, a pair of handcuffs and a fingerprint scan
 their belt.
 
 They know nothing they have not seen or been told. What they know about you is your
-*wanted level*, shown under your vitals: up to five stars.
+*wanted level*, shown under your vitals: up to six stars.
 
 - *One star*: they want you in handcuffs. You are told to stop; stand still, or put
   your hands up, and one officer cuffs you while the others cover. Run, keep fighting or
@@ -533,7 +542,10 @@ They know nothing they have not seen or been told. What they know about you is y
   its open doors, and whichever door faces you shoots at you. The other finds somewhere
   open near you, hovers, drops a rope from each door, and four S.W.A.T. come down them two
   at a time; then it pulls the ropes in and leaves. From up there they see you unless a
-  building is in the way, and at night a searchlight follows you. It can be shot down:
+  building is in the way, and at night a searchlight follows you. Lose them and it does not
+  follow you: it searches round where you were last seen, in wider and wider circles, its
+  searchlight sweeping. It flies nose first, turning to face where it is going and banking
+  into the turn, and drifts sideways or backwards only slowly. It can be shot down:
   enough rounds and it smokes, burns and comes down spinning, and a round through the
   pilot does the same; where it lands it blows up, and whoever is still in it is thrown
   out. Anyone shot on the rope lets go of it.
@@ -541,11 +553,28 @@ They know nothing they have not seen or been told. What they know about you is y
   down its sides holding the rail, who jump down as it slows; and S.W.A.T. teams coming on
   foot from out of sight. The streets clear of traffic.
 - *Five stars*: all of it, more often, and two helicopters at once.
+- *Six stars*: the army. The police hang back, and the streets empty. Soldiers come in
+  olive drab, medium armour all over (vest, helmet, arm, leg and neck guards), with an
+  AR-15 and a Glock: on foot from out of sight, and in army trucks, two in the cab and six
+  on the benches under the canvas, who get down over the tailgate when it pulls up near
+  you. Jeeps come with a gunner standing at a machine gun on a post in the back: the jeep
+  stops where it can see you, the gun turns to you, and its bursts walk on to you the
+  longer it keeps at it. Attack helicopters stand off at a distance with their nose on you,
+  a gun under the chin and a pod of missiles under each stub wing; when the nose is right
+  on you two missiles come, one from each side, trailing smoke; then it moves round to
+  come at you from somewhere else. They are armoured: rounds do them less harm than a
+  police helicopter. And a tank: tracks, a turret that turns to you (slowly), a long gun
+  that fires a shell every few seconds that bursts where it lands, and a machine gun
+  beside it in between; its driver and gunner are shut in and its commander stands in the
+  hatch. Rifle rounds only spark off a tank; blasts hurt it, and enough of them set it
+  burning. Every gun of theirs needs a moment to get on to you, and a building between
+  you stops all of it.
 
 Every crime they hear of while you are wanted is held against you, each one once however
 many saw it or rang in about it, and enough of it is another star: a second killing is a
-third star; killing an officer is three stars at once; blowing up a police car or
-bringing down their helicopter counts for a great deal.
+third star; killing an officer (a soldier is one too) is three stars at once; blowing up
+a police car, bringing down a helicopter or destroying anything of the army's counts
+for a great deal.
 
 An officer who sees you do something gives you the stars for it there and then and tells
 the others by radio. Anybody else has to ring 911: a witness steps back, gets their phone

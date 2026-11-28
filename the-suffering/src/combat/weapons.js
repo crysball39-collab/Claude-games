@@ -240,6 +240,36 @@ export const WEAPONS = {
     boxes: [[0, 0.035, 0, 0.25, 0.1, 0.27, 0x15171a], [0, -0.035, -0.12, 0.25, 0.1, 0.03, 0x15171a], [0.115, -0.03, -0.02, 0.024, 0.08, 0.2, 0x15171a], [-0.115, -0.03, -0.02, 0.024, 0.08, 0.2, 0x15171a],
       [0.13, -0.06, -0.006, 0.034, 0.06, 0.074, 0x2a2c30], [-0.13, -0.06, -0.006, 0.034, 0.06, 0.074, 0x2a2c30], [0, -0.05, 0.145, 0.236, 0.16, 0.01, 0x8fa6b8], [0, 0.04, 0.14, 0.064, 0.036, 0.022, 0x22252a]],
   },
+  /* guards for the arms, the legs and the neck: a pair of sleeves, a pair of long pads, a collar */
+  armsL: {
+    id: 'armsL', name: 'Light arm guards', tag: 'Arm guards', wear: 'arms', armour: 'light', mass: 1.0, half: [0.13, 0.05, 0.17], centre: 0,
+    boxes: [[0.065, 0, 0.07, 0.11, 0.09, 0.2, VEST], [-0.065, 0, 0.07, 0.11, 0.09, 0.2, VEST], [0.065, 0, -0.1, 0.1, 0.085, 0.14, VEST], [-0.065, 0, -0.1, 0.1, 0.085, 0.14, VEST],
+      [0.065, 0.047, 0.07, 0.112, 0.008, 0.016, 0x3a3d42], [-0.065, 0.047, 0.07, 0.112, 0.008, 0.016, 0x3a3d42]],
+  },
+  armsM: {
+    id: 'armsM', name: 'Medium arm guards', tag: 'Arm guards', wear: 'arms', armour: 'medium', mass: 1.9, half: [0.14, 0.06, 0.19], centre: 0,
+    boxes: [[0.068, 0, 0.08, 0.12, 0.1, 0.22, 0x3d4232], [-0.068, 0, 0.08, 0.12, 0.1, 0.22, 0x3d4232], [0.068, 0, -0.11, 0.11, 0.095, 0.15, 0x3d4232], [-0.068, 0, -0.11, 0.11, 0.095, 0.15, 0x3d4232],
+      [0.068, 0.055, -0.02, 0.1, 0.02, 0.06, 0x31352a], [-0.068, 0.055, -0.02, 0.1, 0.02, 0.06, 0x31352a], [0.068, 0.052, 0.08, 0.122, 0.008, 0.016, 0x55513f], [-0.068, 0.052, 0.08, 0.122, 0.008, 0.016, 0x55513f]],
+  },
+  legsL: {
+    id: 'legsL', name: 'Light leg guards', tag: 'Leg guards', wear: 'legs', armour: 'light', mass: 1.6, half: [0.16, 0.05, 0.26], centre: 0,
+    boxes: [[0.08, 0, 0.1, 0.14, 0.09, 0.3, VEST], [-0.08, 0, 0.1, 0.14, 0.09, 0.3, VEST], [0.08, 0, -0.15, 0.12, 0.085, 0.2, VEST], [-0.08, 0, -0.15, 0.12, 0.085, 0.2, VEST],
+      [0.08, 0.04, -0.03, 0.12, 0.03, 0.06, 0x1c1e22], [-0.08, 0.04, -0.03, 0.12, 0.03, 0.06, 0x1c1e22]],
+  },
+  legsM: {
+    id: 'legsM', name: 'Medium leg guards', tag: 'Leg guards', wear: 'legs', armour: 'medium', mass: 2.9, half: [0.17, 0.06, 0.28], centre: 0,
+    boxes: [[0.085, 0, 0.11, 0.15, 0.1, 0.32, 0x3d4232], [-0.085, 0, 0.11, 0.15, 0.1, 0.32, 0x3d4232], [0.085, 0, -0.16, 0.13, 0.095, 0.22, 0x3d4232], [-0.085, 0, -0.16, 0.13, 0.095, 0.22, 0x3d4232],
+      [0.085, 0.05, -0.03, 0.13, 0.04, 0.08, 0x31352a], [-0.085, 0.05, -0.03, 0.13, 0.04, 0.08, 0x31352a], [0.085, 0.052, 0.11, 0.152, 0.008, 0.018, 0x55513f], [-0.085, 0.052, 0.11, 0.152, 0.008, 0.018, 0x55513f]],
+  },
+  neckL: {
+    id: 'neckL', name: 'Light neck guard', tag: 'Neck guard', wear: 'neck', armour: 'light', mass: 0.4, half: [0.1, 0.04, 0.1], centre: 0,
+    boxes: [[0, 0, 0.075, 0.2, 0.07, 0.03, VEST], [0, 0, -0.075, 0.2, 0.07, 0.03, VEST], [0.085, 0, 0, 0.03, 0.07, 0.12, VEST], [-0.085, 0, 0, 0.03, 0.07, 0.12, VEST]],
+  },
+  neckM: {
+    id: 'neckM', name: 'Medium neck guard', tag: 'Neck guard', wear: 'neck', armour: 'medium', mass: 0.8, half: [0.11, 0.05, 0.11], centre: 0,
+    boxes: [[0, 0, 0.08, 0.22, 0.09, 0.035, 0x3d4232], [0, 0, -0.08, 0.22, 0.09, 0.035, 0x3d4232], [0.09, 0, 0, 0.035, 0.09, 0.13, 0x3d4232], [-0.09, 0, 0, 0.035, 0.09, 0.13, 0x3d4232],
+      [0, 0.01, 0.1, 0.15, 0.08, 0.02, 0x31352a]],
+  },
 };
 
 /** Turns three perpendicular unit vectors (where a thing's own X, Y and Z end up) into a rotation. */
@@ -464,17 +494,17 @@ export class Weapons {
     // one lying in the host's city: ours now, and gone from theirs
     if (item.mirror && (item.def.wear || (p.h.armOk(-1) && this.inventory.length < 4))) g.mp?.shared?.picked(item);
     if (item.def.wear) {
-      const helmet = item.def.wear === 'helmet', kind = item.def.armour || 'light';
-      const on = helmet ? p.helmet : p.vest;
+      const slot = item.def.wear, kind = item.def.armour || 'light';
+      const on = this._worn(p, slot);
       if (p.state !== ST.ANIM) return false;
       // already wearing one: the old one comes off and is left where the new one was
       if (on) {
         const id = on.def.item, x = item.body.px, y = item.body.py + 0.1, z = item.body.pz;
-        if (helmet) p.removeHelmet(); else p.removeVest();
+        this._takeOff(p, slot);
         this.remove(item);
         this.spawn(id, x, y, z);
       } else this.remove(item);
-      if (helmet) p.wearHelmet(kind); else p.wearVest(kind);
+      this._putOn(p, slot, kind);
       g.audio?.play('pickup', 0.5);
       g.ui?.toast(item.def.name + ' on' + (on ? ', ' + on.def.name.toLowerCase() + ' off' : ''));
       g.ui?.weaponsChanged();
@@ -518,14 +548,18 @@ export class Weapons {
   /** Takes off the vest, or the helmet, and leaves it at the player's feet. */
   shedVest() { this._shed('vest'); }
   shedHelmet() { this._shed('helmet'); }
+  /** What somebody wears in a slot ('vest', 'helmet', 'arms', 'legs', 'neck'), and putting it on or taking it off. */
+  _worn(h, slot) { return slot === 'helmet' ? h.helmet : slot === 'vest' ? h.vest : h.guards[slot] || null; }
+  _putOn(h, slot, kind) { if (slot === 'helmet') h.wearHelmet(kind); else if (slot === 'vest') h.wearVest(kind); else h.wearGuard(slot, kind); }
+  _takeOff(h, slot) { if (slot === 'helmet') h.removeHelmet(); else if (slot === 'vest') h.removeVest(); else h.removeGuard(slot); }
   _shed(what) {
     const p = this.game.player;
     if (p.state !== ST.ANIM || p.cuffed) return;
-    const on = what === 'helmet' ? p.helmet : p.vest;
+    const on = this._worn(p, what);
     if (!on) return;
     const id = on.def.item, name = on.def.name;
-    if (what === 'helmet') p.removeHelmet(); else p.removeVest();
-    this.spawn(id, p.x + Math.sin(p.yaw) * 0.5, p.y + (what === 'helmet' ? 1.5 : 1.0), p.z + Math.cos(p.yaw) * 0.5);
+    this._takeOff(p, what);
+    this.spawn(id, p.x + Math.sin(p.yaw) * 0.5, p.y + (what === 'helmet' ? 1.5 : what === 'neck' ? 1.4 : what === 'legs' ? 0.6 : 1.0), p.z + Math.cos(p.yaw) * 0.5);
     this.game.ui?.toast(name + ' off');
     this.game.ui?.weaponsChanged();
   }

@@ -35,12 +35,13 @@ await run(() => {
       g.weapons.dropFrom(p, true);
       if (p.vest) p.removeVest();
       if (p.helmet) p.removeHelmet();
+      for (const slot of ['arms', 'legs', 'neck']) p.removeGuard?.(slot);
       if (p.cuffed) g.weapons.uncuff(p, null);
       p.tased = 0; p.dazeT = 0;
       for (const it of g.weapons.items.slice()) g.weapons.remove(it);
       g.grab?.clear();
       g.powers?.clear();
-      g.ropes?.clear(); g.fire?.clear(); g.frost?.clear(); g.arrows?.clear(); g.air?.clear(); g.power?.clear(); g.voxels?.clear(); if (g.daylight && g.daylight.mode !== 'day') g.daylight.set('day');
+      g.ropes?.clear(); g.fire?.clear(); g.frost?.clear(); g.arrows?.clear(); g.air?.clear(); g.army?.clear(); g.power?.clear(); g.voxels?.clear(); if (g.daylight && g.daylight.mode !== 'day') g.daylight.set('day');
       if (p.car) g.traffic.exit(p);
       g.traffic?.clearCars();
       p.h.heal(); p.reset(0, -18, Math.PI / 2);
@@ -1689,6 +1690,76 @@ if (want('Armour tiers')) {
   check('the S.W.A.T. visor is glass you can see through, it stops a pistol round, and after three it is crazed and stops nothing', r.visor.glass && r.visor.first && r.visor.crazed && !r.visor.last, JSON.stringify(r.visor));
 }
 
+/* -------------------------------- arm, leg and neck guards -------------------------------- */
+head('Armour guards');
+if (want('Armour guards')) {
+  await run(() => { V.stage(); __game.paused = false; });
+  await t.page.click('#btn-menu');
+  const listed = await run(() => ['armsL', 'armsM', 'legsL', 'legsM', 'neckL', 'neckM'].every((k) => !!document.querySelector(`[data-spawn="${k}"]`)));
+  await t.page.click('[data-spawn="armsM"]');
+  await t.page.click('[data-close="sandbox"]');
+  const r = await run(() => {
+    const g = __game, p = g.player, w = g.weapons, out = {};
+    g.advance(1.2);
+    const it = w.items.find((i) => i.type === 'armsM');
+    out.spawned = !!it;
+    if (it) { p.reset(it.body.px - 0.5, it.body.pz, Math.PI / 2); g.advance(0.4); out.label = document.querySelector('#use-label').textContent; w.pickUp(); g.advance(0.3); }
+    out.worn = p.guards.arms && p.guards.arms.kind;
+    out.parts = p.guards.arms ? [...new Set(p.guards.arms.boxes.map((b) => b.part))].sort((a, b) => a - b).join(',') : '';
+    out.chip = [...document.querySelectorAll('#weapon-bar .slot')].some((b) => b.textContent === 'MED ARMS');
+    // light ones for the medium ones: the medium ones are left lying
+    const l = w.spawn('armsL', p.x + 0.4, 1, p.z); g.advance(0.6); w.pickUp(l); g.advance(0.3);
+    out.swapped = p.guards.arms && p.guards.arms.kind === 'light' && w.items.some((i) => i.type === 'armsM' && i.body);
+    for (const k of ['legsM', 'neckM']) { const x = w.spawn(k, p.x + 0.4, 1, p.z); g.advance(0.6); w.pickUp(x); g.advance(0.3); }
+    out.all = !!(p.guards.arms && p.guards.legs && p.guards.legs.kind === 'medium' && p.guards.neck && p.guards.neck.kind === 'medium');
+    out.chips = [...document.querySelectorAll('#weapon-bar .slot')].map((b) => b.textContent).filter((x) => /ARMS|LEGS|NECK/.test(x)).join(',');
+    const chip = [...document.querySelectorAll('#weapon-bar .slot')].find((b) => b.textContent === 'MED LEGS');
+    if (chip) chip.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    g.advance(0.5);
+    out.shed = !p.guards.legs && w.items.some((i) => i.type === 'legsM' && i.body);
+    for (const s of ['arms', 'legs', 'neck']) p.removeGuard(s);
+    for (const i of w.items.slice()) w.remove(i);
+    // shot by shot
+    const mk = (kind) => { const h = V.still(g.spawnHuman(p.x + 4, p.z, -Math.PI / 2)); if (kind) for (const s of ['arms', 'legs', 'neck']) h.wearGuard(s, kind); g.advance(0.05); return h; };
+    const shoot = (h, part, how = 'pistol', y = 0, keep = false) => {
+      const c = h.bodies[part], n = [0, 0, 1], pt = [0, 0, 0], dir = [0, 0, 0];
+      c.toWorld(0, y * c.hy, c.hz, pt); c.dirToWorld(0, 0, -1, dir);
+      const rep = h.hit({ part, type: 'bullet', power: how === 'rifle' ? 1.4 : 1, point: pt, dir, normal: n, impulse: 4, attacker: p, weapon: how === 'rifle' ? 'm4a1' : how === 'ball' ? 'musket' : 'glock', rifle: how === 'rifle', ball: how === 'ball', through: 0.2, hp: 32 });
+      const st = rep.stopped;
+      if (!keep) g.removeHuman(h);
+      return st;
+    };
+    const PARTS = { uarm: 5, farm: 9, thigh: 11, shin: 15, neck: 3 };
+    out.light = {}; out.bare = {};
+    for (const [k, part] of Object.entries(PARTS)) { out.light[k] = shoot(mk('light'), part); out.bare[k] = shoot(mk(null), part); }
+    out.hand = shoot(mk('medium'), 7);
+    out.foot = shoot(mk('medium'), 16);
+    out.wrist = shoot(mk('medium'), 6, 'pistol', -0.47);
+    out.rifle = shoot(mk('medium'), 11, 'rifle');
+    let ballM = 0, ballL = 0;
+    for (let i = 0; i < 20; i++) { if (shoot(mk('medium'), 11, 'ball')) ballM++; if (shoot(mk('light'), 11, 'ball')) ballL++; }
+    out.ballM = ballM; out.ballL = ballL;
+    // the word on what stopped it, and a bruise, no hole
+    const A = mk('light'), st = shoot(A, 12, 'pistol', 0, true);
+    out.bruise = { stopped: st, wounds: A.h.wounds.map((x) => x.type).join(','), hits: A.guards.legs.hits };
+    g.removeHuman(A);
+    // a soldier's kit: all of it, medium
+    const F = V.still(g.spawnHuman(p.x + 4, p.z, -Math.PI / 2)); F.wearFull('medium'); g.advance(0.05);
+    out.full = [F.vest && F.vest.kind, F.helmet && F.helmet.kind, ...['arms', 'legs', 'neck'].map((s) => F.guards[s] && F.guards[s].kind)].join(',');
+    g.removeHuman(F);
+    g.paused = true;
+    return out;
+  });
+  check('six guards in the spawn menu: arm, leg and neck, light and medium; they go on', listed && r.spawned && r.label === 'PUT ON' && r.worn === 'medium' && r.chip, `${r.label}, worn: ${r.worn}, chip ${r.chip}`);
+  check('arm guards cover the upper arms and the forearms', r.parts === '5,6,8,9', 'parts ' + r.parts);
+  check('another pair swaps for the pair you had; all three slots at once, each with its chip; the chip takes them off', r.swapped && r.all && r.shed && /ARMS/.test(r.chips) && /MED LEGS/.test(r.chips) && /MED NECK/.test(r.chips), `${r.chips}; swapped ${r.swapped}, all ${r.all}, shed ${r.shed}`);
+  check('a light guard stops a pistol round to the upper arm, the forearm, the thigh, the shin and the neck', Object.values(r.light).every(Boolean) && !Object.values(r.bare).some(Boolean), JSON.stringify(r.light) + ' bare ' + JSON.stringify(r.bare));
+  check('not the hands or the feet, nor the wrist below the pad; and not a rifle round', !r.hand && !r.foot && !r.wrist && !r.rifle, JSON.stringify({ hand: r.hand, foot: r.foot, wrist: r.wrist, rifle: r.rifle }));
+  check('a medium guard turns a musket ball far more often than a light one', r.ballM >= 14 && r.ballL <= 13, `${r.ballM}/20 against ${r.ballL}/20`);
+  check('a round a guard stops leaves a bruise, not a hole', r.bruise.stopped && !/gunshot/.test(r.bruise.wounds) && r.bruise.hits === 1, JSON.stringify(r.bruise));
+  check('a full medium set: vest, helmet, arms, legs and neck', r.full === 'medium,medium,medium,medium,medium', r.full);
+}
+
 /* -------------------------------- S.W.A.T. -------------------------------- */
 head('S.W.A.T.');
 if (want('S.W.A.T')) {
@@ -2569,6 +2640,155 @@ if (want('Pursuit')) {
   check('and S.W.A.T. come on foot, from out of sight', !!r.van.foot && r.van.foot.d > 25, JSON.stringify(r.van.foot));
   check('at five stars two helicopters at once, and cars, vans and S.W.A.T. sent more often (a minute of it)', r.five.helis === 2 && r.five.cars >= 2 && r.five.vans >= 2 && r.five.teams >= 2, JSON.stringify(r.five));
   check('when it is over, they all go home', r.home.helis === 0 && r.home.units === 0, JSON.stringify(r.home));
+}
+
+/* ------------------------------- six stars: the army ------------------------------- */
+head('Army');
+if (want('Army')) {
+  const r = await run(() => {
+    const g = __game, p = g.player, P = g.police, T = g.traffic, A = g.air, M = g.army, W = g.weapons, out = {};
+    const R = P.response, room = g.maxPeople;
+    const fresh = (x = 0, z = 21) => {
+      V.stage(); P.reset(); g.settings.cheatCops = false; g.maxPeople = room;
+      for (const h of g.humans.slice()) if (h.officer) g.removeHuman(h);
+      p.h.heal(); p.h.god = true; p.knock = 10; p.reset(x, z, Math.PI / 2); g.advance(0.3);
+    };
+    const hold = (n, secs, each = null) => {
+      for (let i = 0; i < secs * 10; i++) {
+        if (p.cuffed) W.uncuff(p, null);
+        if (P.wanted < n) P.raise(n, 'test', { x: p.x, z: p.z });
+        P.lastSeen = { x: p.x, z: p.z, t: g.time };
+        g.advance(0.1);
+        if (each && each(i / 10) === true) return i / 10;
+      }
+      return -1;
+    };
+    // 1. six stars: enough held against you makes it, and the box shows it
+    fresh(); g.maxPeople = 0;
+    for (let k = 1; k < 40 && P.wanted < 6; k++) P.raise(2, 'test', { x: p.x, z: p.z }, { kind: 'murder', victim: { id: 920000 + k } });
+    out.heat = { wanted: P.wanted, heat: P.heat };
+    g.ui?.wantedChanged(P.wanted, 'test');
+    const vb = document.querySelector('#vitals').getBoundingClientRect(), stars = [...document.querySelectorAll('#wanted .stars b')];
+    out.stars = { boxes: stars.length, lit: stars.filter((b) => b.classList.contains('on')).length, army: document.querySelector('#wanted').classList.contains('army'), inside: stars.every((b) => b.getBoundingClientRect().right <= vb.right + 0.5) };
+    out.admin = [...document.querySelectorAll('#ad-wanted option')].map((o) => o.value).join(',');
+    // 2. the army comes (a minute and a half of six stars): soldiers on foot, a truck of them, jeeps, an attack helicopter, a tank
+    fresh(0, 21);
+    const seen = { troops: 0, trucks: 0, jeeps: 0, attack: 0, tanks: 0 }, m0 = { ...M.stats };
+    hold(6, 90, () => {
+      seen.troops = Math.max(seen.troops, R._troopsOnFoot()); seen.trucks = Math.max(seen.trucks, R.units('armytruck')); seen.jeeps = Math.max(seen.jeeps, R.units('gunjeep'));
+      seen.attack = Math.max(seen.attack, R.units('attack')); seen.tanks = Math.max(seen.tanks, R.units('tank'));
+    });
+    out.sent = { ...seen, rounds: M.stats.rounds - m0.rounds, shells: M.stats.shells - m0.shells, missiles: M.stats.missiles - m0.missiles, booms: M.stats.booms - m0.booms, room: g.maxPeople };
+    // (one not yet hurt: somebody knocked down drops what is in their hands)
+    // (or, if the fighting has been rough on all of them, one still riding in something)
+    const sol = g.humans.find((h) => h.soldier && !h.car && h.h.alive && !h.h.wounds.length && h.state !== 2) || g.humans.find((h) => h.soldier && h.car && h.h.alive && !h.h.wounds.length);
+    out.soldier = sol ? { desc: sol.look.desc, armour: [sol.vest && sol.vest.kind, sol.helmet && sol.helmet.kind, ...['arms', 'legs', 'neck'].map((k) => sol.guards[k] && sol.guards[k].kind)].join(','), kit: (sol.kit || []).map((i) => i.type).sort().join(',') } : null;
+    // and when it drops back, the army goes home: the attack helicopters away, the trucks, jeeps and tank taken off once out of sight
+    P.wanted = 5; P.heat = 50;
+    for (let i = 0; i < 40; i++) { P.lastSeen = { x: p.x, z: p.z, t: g.time }; g.advance(0.1); }
+    out.five = { attack: A.list.filter((x) => x.kind === 'attack' && !x.down && x.state !== 'leave').length, room: g.maxPeople };
+    P.clear('test');
+    for (let i = 0; i < 900 && (A.list.some((x) => !x.down) || T.cars.some((c) => c.unit)); i++) { g.advance(0.1); if (i === 20) p.reset(-54, 54, 0); }
+    out.home = { helis: A.list.filter((x) => !x.down).length, units: T.cars.filter((c) => c.unit).length };
+    // (from here each is sent by hand: nothing else comes while it is watched)
+    const respond = R.update;
+    R.update = () => {};
+    // rounds from the army's guns that come near you
+    const nb = W._bullet.bind(W);
+    let near = 0, fired = 0;
+    W._bullet = (sh, d, ox, oy, oz, dx, dy, dz, ...rest) => {
+      if (d && d.id === 'mg' && !rest[1]) { fired++; const c = p.bodies[2], ex = c.px - ox, ey = c.py - oy, ez = c.pz - oz, al = ex * dx + ey * dy + ez * dz; if (Math.hypot(ex - dx * al, ey - dy * al, ez - dz * al) < 2.5) near++; }
+      return nb(sh, d, ox, oy, oz, dx, dy, dz, ...rest);
+    };
+    const bearing = (car) => { car.turretPoint(0, 0, 0, _v3, true); car.dirToLocal(p.x - _v3[0], 0, p.z - _v3[2], _v3); return Math.abs(Math.atan2(_v3[0], _v3[2]) - car.tYaw); };
+    const _v3 = [0, 0, 0];
+    // 3. a jeep: it comes, stops where it can see you, its gunner stays on the gun, the gun turns to you and fires
+    fresh(0, 21);
+    const jeep = T.spawnUnit('gunjeep', { x: 46, z: 18 + 2.15, yaw: -Math.PI / 2 });
+    const jArr = hold(6, 30, () => jeep.ai.state === 'arrived');
+    near = 0; fired = 0;
+    hold(6, 8);
+    out.jeep = { arrived: jArr, d: +Math.hypot(jeep.x - p.x, jeep.z - p.z).toFixed(1), gunner: !!(jeep.seats[2] && jeep.seats[2].soldier && jeep.seats[2].pose.drive === 0), off: +bearing(jeep).toFixed(2), fired, near, passengerOut: !jeep.seats[1] };
+    // the gunner's hands are on the gun's grips
+    const gn = jeep.seats[2];
+    if (gn) { jeep.turretPoint(0.065, -0.03, -0.33, _v3, true); const hb = gn.bodies[7]; out.jeep.grip = +Math.hypot(hb.px - _v3[0], hb.py - _v3[1], hb.pz - _v3[2]).toFixed(2); }
+    // 4. a tank: its crew shut in, the commander up in the hatch; it stops off, the turret turns, the gun fires a shell that bursts
+    fresh(0, 21);
+    const tank = T.spawnUnit('tank', { x: 52, z: 18 + 2.15, yaw: -Math.PI / 2 });
+    const tArr = hold(6, 40, () => tank.ai.state === 'arrived');
+    const sh0 = M.stats.shells, b0 = M.stats.booms;
+    const shot = hold(6, 14, () => M.stats.booms > b0);
+    out.tank = { arrived: tArr, d: +Math.hypot(tank.x - p.x, tank.z - p.z).toFixed(1), crew: tank.seats.map((h) => (!h ? '-' : h.hidden ? 'in' : 'up')).join(','), off: +bearing(tank).toFixed(2), shells: M.stats.shells - sh0, burst: shot >= 0, locked: !T.enter(g.humans.find((h) => !h.officer && !h.isPlayer && !h.car) || p, tank) };
+    // its armour: rifle rounds do not go through or do it any harm; a blast or two does
+    const hp0 = tank.hp, crew0 = tank.seats.filter((h) => h && h.h.alive).map((h) => h.h.wounds.length).join(',');
+    const rr = (a, b) => a + Math.random() * (b - a);
+    for (let k = 0; k < 20; k++) { tank.toWorld(rr(-1.2, 1.2), rr(0.6, 1.8), rr(-2.5, 2.5), _v3); W._bullet(p, { id: 'm4a1', rifle: true, power: 1.4, hp: 34, impulse: 4 }, _v3[0] + 8, _v3[1], _v3[2], -1, 0, 0, 1.4, 0); }
+    out.armour = { hp: +(hp0 - tank.hp).toFixed(1), crew: tank.seats.filter((h) => h && h.h.alive).map((h) => h.h.wounds.length).join(',') === crew0 };
+    T.blast(tank.x + 2.5, tank.y + 1, tank.z, 1, p, null); T.blast(tank.x - 2.5, tank.y + 1, tank.z, 1, p, null);
+    out.armour.blast = +(hp0 - tank.hp).toFixed(1);
+    // 5. an army truck: two in the cab, six on the benches; it stops near you, and they get down over the tailgate
+    fresh(0, 21);
+    const truck = T.spawnUnit('armytruck', { x: 46, z: 18 + 2.15, yaw: -Math.PI / 2 });
+    out.truck = { aboard: truck.seats.filter((h) => h && h.soldier).length, benches: truck.seats.slice(2).filter((h) => h && h.pose.sit > 0.5).length };
+    const kArr = hold(6, 30, () => truck.ai.state === 'arrived');
+    // where each one off the benches gets down: behind it, over the tailgate
+    const behind = [], un = T.unseat.bind(T);
+    T.unseat = (h, raw) => { const seat = h.seat, sp = un(h, raw); if (sp && h.armyTeam && seat >= 2) { truck.toLocal(sp.x, 0, sp.z, _v3); behind.push(_v3[2] < -truck.hl ? 1 : 0); } return sp; };
+    const off = hold(6, 10, () => truck.seats.slice(2).every((h) => !h));
+    T.unseat = un;
+    // and once down, nobody walks through it
+    let inside = 0;
+    hold(6, 4, () => { for (const h of g.humans) if (h.armyTeam && !h.car && T._inside(truck, h.x, h.z, -0.1)) inside++; });
+    out.truck.arrived = kArr; out.truck.off = off; out.truck.down = behind.length; out.truck.back = behind.reduce((a, b) => a + b, 0); out.truck.inside = inside;
+    // 6. an attack helicopter: it stands off, its nose on you, the chin gun in bursts and the missiles, which burst
+    fresh(0, 21);
+    const atk = A.spawn('attack', 0.6);
+    near = 0; fired = 0;
+    const mi0 = M.stats.missiles, bo0 = M.stats.booms;
+    const ran = hold(6, 45, () => M.stats.missiles - mi0 >= 2 && M.stats.booms - bo0 >= 2 && fired >= 8);
+    out.attack = { kind: atk.kind, crew: atk.seats.filter((h) => h && h.soldier).length, state: atk.state, ring: +Math.hypot(atk.x - p.x, atk.z - p.z).toFixed(1), fired, near, missiles: M.stats.missiles - mi0, booms: M.stats.booms - bo0, ran };
+    // and it is harder to bring down than a police one: the same rounds do it less harm
+    const pol = A.spawn('gunner', 2.0);
+    const h1 = atk.hp, h2 = pol.hp;
+    A.shot(atk, 1, p, atk.x, atk.y, atk.z, true); A.shot(pol, 1, p, pol.x, pol.y, pol.z, true);
+    out.attack.tougher = (h1 - atk.hp) < (h2 - pol.hp);
+    W._bullet = nb;
+    // 7. a helicopter that cannot see you does not follow you: it searches where you were last seen; and it flies forward
+    fresh(-54, -54);
+    const hl = A.spawn('gunner', 0.3);
+    let side = 0;
+    hold(3, 20, () => { const fx = Math.sin(hl.yaw), fz = Math.cos(hl.yaw); side = Math.max(side, Math.abs(hl.vx * fz - hl.vz * fx)); return hl.state === 'orbit' && hl.t > 14; });
+    // gone somewhere it cannot see you, well out of its sight
+    P.lastSeen = { x: p.x, z: p.z, t: g.time };
+    const lx = p.x, lz = p.z;
+    // (the far corner of the city, out of its reach)
+    p.reset(54, 54, 0); g.advance(0.2);
+    let toYou = 0, toLast = 0, n = 0;
+    for (let i = 0; i < 150; i++) {
+      if (P.wanted < 3) P.raise(3, 'test');
+      g.advance(0.1);
+      const fx = Math.sin(hl.yaw), fz = Math.cos(hl.yaw); side = Math.max(side, Math.abs(hl.vx * fz - hl.vz * fx));
+      if (i > 50) { toYou += Math.hypot(hl.x - p.x, hl.z - p.z); toLast += Math.hypot(hl.x - lx, hl.z - lz); n++; }
+    }
+    out.search = { seen: +hl.seen.toFixed(1), toYou: Math.round(toYou / n), toLast: Math.round(toLast / n), side: +side.toFixed(1) };
+    R.update = respond;
+    p.h.god = false; p.knock = 1; P.reset(); A.clear(); M.clear();
+    g.paused = true;
+    return out;
+  });
+  check('six stars: when enough is held against you; the sixth star fits in the status box, and the admin can set it', r.heat.wanted === 6 && r.stars.boxes === 6 && r.stars.lit === 6 && r.stars.army && r.stars.inside && /,6$/.test(r.admin), JSON.stringify({ ...r.heat, ...r.stars, admin: r.admin }));
+  check('at six stars the army comes: soldiers on foot, an army truck, jeeps, an attack helicopter and a tank', r.sent.troops >= 2 && r.sent.trucks >= 1 && r.sent.jeeps >= 1 && r.sent.attack >= 1 && r.sent.tanks >= 1, JSON.stringify(r.sent));
+  check('and they fire: machine guns, the tank\'s shells, missiles', r.sent.rounds > 20 && r.sent.shells >= 1 && r.sent.missiles >= 2 && r.sent.booms >= 2, JSON.stringify(r.sent));
+  check('a soldier wears medium armour all over (vest, helmet, arms, legs, neck) and carries an AR-15 and a Glock', !!r.soldier && r.soldier.desc === 'a soldier' && r.soldier.armour === 'medium,medium,medium,medium,medium' && r.soldier.kit === 'ar15,glock', JSON.stringify(r.soldier));
+  check('at five stars again the attack helicopters leave; when it is over the army goes home', r.five.attack === 0 && r.home.helis === 0 && r.home.units === 0, JSON.stringify({ five: r.five, home: r.home }));
+  check('a jeep stops where it can see you; its gunner stays on the gun, hands on its grips, and it turns to you and fires', r.jeep.arrived > 0 && r.jeep.d < 24 && r.jeep.gunner && r.jeep.off < 0.12 && r.jeep.fired >= 6 && r.jeep.near >= 3 && r.jeep.grip < 0.12, JSON.stringify(r.jeep));
+  check('a tank: driver and gunner shut in, the commander in the hatch; it stops off, turns its turret to you and fires a shell that bursts', r.tank.arrived > 0 && r.tank.d > 15 && r.tank.d < 34 && r.tank.crew === 'in,in,up' && r.tank.off < 0.06 && r.tank.shells >= 1 && r.tank.burst && r.tank.locked, JSON.stringify(r.tank));
+  check('rifle rounds do a tank no harm, and do not get through to its crew; blasts do', r.armour.hp < 2 && r.armour.crew && r.armour.blast > 8, JSON.stringify(r.armour));
+  check('an army truck: two in the cab, six on the benches; it stops near you and they get down over the tailgate', r.truck.aboard === 8 && r.truck.benches === 6 && r.truck.arrived > 0 && r.truck.off >= 0 && r.truck.down === 6 && r.truck.back === 6 && r.truck.inside === 0, JSON.stringify(r.truck));
+  check('an attack helicopter, crewed by soldiers, stands off and fires its chin gun and its missiles, which burst', r.attack.kind === 'attack' && r.attack.crew === 2 && r.attack.ring > 25 && r.attack.fired >= 8 && r.attack.near >= 2 && r.attack.missiles >= 2 && r.attack.booms >= 2, JSON.stringify(r.attack));
+  check('it is armoured: the same rounds do it less harm than a police helicopter', r.attack.tougher);
+  check('a helicopter that cannot see you does not follow you: it searches where you were last seen', r.search.seen > 4 && r.search.toLast < 70 && r.search.toYou > r.search.toLast + 40, JSON.stringify(r.search));
+  check('it flies forward: it never slides sideways faster than a jog (4 m/s)', r.search.side <= 4.6, JSON.stringify(r.search));
 }
 
 /* ------------------- aiming, and shooting from the ground ------------------- */
@@ -3548,6 +3768,35 @@ if (want('Shared city')) {
   const shot = await B.ev(() => { const g = window.__game, p = g.player, A = p.lastAttacker; return { holes: p.h.wounds.filter((w) => w.type === 'gunshot').length, byOfficer: !!(A && A.remote && A.remote.npc != null && A.vest), heard: g.speech.active.some((b) => b.text === 'Police! Drop it!' && b.human.remote && b.human.remote.npc != null) }; });
   check('the host’s people hurt the other players too: an officer’s rounds land, put down to the officer', shot.holes >= 1 && shot.byOfficer, JSON.stringify(shot));
   check('and what they say is heard on everybody’s screen', shot.heard);
+  // the army in the host's city: a tank (its turret turned), a soldier in their armour; its guns seen firing on B's screen
+  await B.ev(() => { const A = window.__game.army; window.__seenArmy = { rounds: 0, flying: 0 }; const gr = A.ghostRound.bind(A), la = A.launch.bind(A); A.ghostRound = (...a) => { window.__seenArmy.rounds++; return gr(...a); }; A.launch = (...a) => { if (a[11]) window.__seenArmy.flying++; return la(...a); }; });
+  const army = await A.ev(() => {
+    const g = window.__game, b = [...window.__ts.mp.remotes.values()][0].h;
+    const tank = window.__t.tank = g.traffic.spawnParked('tank', b.x + 10, b.z + 8, 0);
+    tank.tYaw = 1.2; tank.tPitch = 0.1;
+    const sol = window.__t.sol = g.spawnSoldier(b.x - 3, b.z + 3, 0); sol.brain = { update() {}, pause: 0, mode: 'wander' };
+    g.paused = false; g.advance(0.2); g.paused = true;
+    return { tank: tank.id, sol: sol.id };
+  });
+  await step(2.5);
+  await A.ev(() => {
+    const g = window.__game, sol = window.__t.sol, tank = window.__t.tank, M = g.army;
+    // a burst over B's head, and a shell away down the street
+    for (let k = 0; k < 4; k++) M.fire(sol, sol.x, sol.y + 1.6, sol.z, 0.2, 0.6, 1);
+    // (up into the sky, where it bursts on nothing and nobody)
+    const at = [0, 0, 0]; tank.turretPoint(0, 0, 4.6, at, true); M.cannon(sol, tank, at[0], at[1], at[2], 0.05, 1, 0.05);
+    g.paused = false; g.advance(0.1); g.paused = true;
+  });
+  await step(2);
+  const armyB = await B.ev((ids) => {
+    const S = window.__ts.mp.shared, T = S.ghosts.get('c' + ids.tank), sol = S.person(ids.sol);
+    const car = T && T.obj;
+    return { kind: car && car.kind, tYaw: car ? +car.tYaw.toFixed(2) : null, olive: car ? car.paint === 0x545b3e : false, soldier: sol ? [sol.vest && sol.vest.kind, sol.helmet && sol.helmet.kind, ...['arms', 'legs', 'neck'].map((k) => sol.guards[k] && sol.guards[k].kind)].join(',') : null, ...window.__seenArmy };
+  }, army);
+  check('the army in the host\'s city is there on everybody\'s screen: a tank with its turret turned, a soldier in all their armour', armyB.kind === 'tank' && Math.abs(armyB.tYaw - 1.2) < 0.06 && armyB.olive && armyB.soldier === 'medium,medium,medium,medium,medium', JSON.stringify(armyB));
+  check('and its guns are seen firing there: machine-gun rounds, a shell in flight', armyB.rounds >= 3 && armyB.flying >= 1, JSON.stringify(armyB));
+  await A.ev(() => { const g = window.__game, t = window.__t; g.traffic.remove(t.tank); g.removeHuman(t.sol); g.army.clear(); });
+  await step(1);
   // A as the Hulk, with a rock overhead: B sees it all
   await A.ev(() => { const g = window.__game, P = g.powers; g.paused = false; P.use('hulk'); g.advance(0.6); for (const k in P.cool) P.cool[k] = 0; P.use('rock'); g.advance(1.2); g.paused = true; });
   await step(2.5);

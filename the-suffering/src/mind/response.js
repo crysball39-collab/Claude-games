@@ -13,6 +13,12 @@
      four stars   black S.W.A.T. vans (two in the cab, two on the steps), and
                   S.W.A.T. teams coming on foot from out of sight
      five stars   all of it, more often and more of it, and two helicopters
+     six stars    the army: army trucks with soldiers in the back, who get
+                  down and come for you; jeeps with a gunner on a machine
+                  gun, which stop where they can see you and open up; attack
+                  helicopters with a chin gun and missiles; tanks, whose
+                  turret turns to you and whose gun fires shells that burst;
+                  and soldiers on foot. The police hang back
 
    Everything comes from somewhere you cannot see, a fair way off, and goes
    home the same way once it is over: whatever is out of your sight when you
@@ -33,19 +39,26 @@ const LEVELS = [
   { foot: 6, cars: 2, carGap: 22, helis: 1, heliGap: 28, cap: 18 },
   { foot: 6, cars: 2, carGap: 20, helis: 1, heliGap: 24, vans: 1, vanGap: 30, swat: 4, swatGap: 22, cap: 22 },
   { foot: 6, cars: 3, carGap: 12, helis: 2, heliGap: 14, vans: 2, vanGap: 16, swat: 6, swatGap: 12, cap: 28 },
+  // the army, with the police hanging back: trucks, jeeps, tanks and attack helicopters, and soldiers on foot
+  { foot: 3, cars: 1, carGap: 26, helis: 1, heliGap: 30, vans: 1, vanGap: 34, swat: 3, swatGap: 26,
+    trucks: 1, truckGap: 30, jeeps: 2, jeepGap: 20, tanks: 1, tankGap: 45, attack: 2, attackGap: 40, troops: 6, troopGap: 18, cap: 40 },
 ];
 /** How much of the usual traffic is left on the streets at each level (a city clears its streets for this). */
-const TRAFFIC = [1, 1, 1, 1, 0.6, 0.4];
+const TRAFFIC = [1, 1, 1, 1, 0.6, 0.4, 0.25];
+/** How many people the city can hold at six stars (the army takes room). */
+const ARMY_PEOPLE = 42;
+/** What each unit is called, in the police log. */
+const WORD = { police: 'a patrol car', swatvan: 'a S.W.A.T. van', armytruck: 'an army truck', gunjeep: 'a gun jeep', tank: 'a tank' };
 
 export class Response {
   constructor(police) {
     this.P = police;
     this.g = police.g;
     this.reinT = 0;
-    this.t = { car: 0, heli: 0, van: 0, swat: 0 };
+    this.t = { car: 0, heli: 0, van: 0, swat: 0, truck: 0, jeep: 0, tank: 0, attack: 0, troops: 0 };
     this.level = 0;
     this.calmT = 0;
-    this.stats = { cars: 0, helis: 0, vans: 0, swat: 0, foot: 0, home: 0 };
+    this.stats = { cars: 0, helis: 0, vans: 0, swat: 0, foot: 0, home: 0, trucks: 0, jeeps: 0, tanks: 0, attack: 0, troops: 0 };
   }
 
   get cfg() { return LEVELS[this.P.wanted] || null; }
@@ -56,7 +69,7 @@ export class Response {
   /** Units on the go: patrol cars and vans still running, helicopters still flying. */
   units(kind) {
     const T = this.g.traffic, A = this.g.air;
-    if (kind === 'heli') return A ? A.list.filter((x) => !x.down && x.state !== 'leave').length : 0;
+    if (kind === 'heli' || kind === 'attack') return A ? A.list.filter((x) => !x.down && x.state !== 'leave' && (x.kind === 'attack') === (kind === 'attack')).length : 0;
     return T ? T.cars.filter((c) => c.unit === kind && c.drivable && c.seats.some((h) => h && h.officer)).length : 0;
   }
 
@@ -69,8 +82,17 @@ export class Response {
       if (n >= 2) this.t.car = Math.min(this.t.car, rand(5, 9));
       if (n >= 3) this.t.heli = Math.min(this.t.heli, rand(8, 13));
       if (n >= 4) { this.t.van = Math.min(this.t.van, rand(7, 12)); this.t.swat = Math.min(this.t.swat, rand(4, 8)); }
+      if (n >= 6 && this.level < 6) {
+        // the army, one after another: soldiers first, then a truck of them, the jeeps, a helicopter, a tank
+        const T = this.t;
+        T.troops = rand(2, 4); T.truck = rand(4, 7); T.jeep = rand(9, 13); T.attack = rand(12, 17); T.tank = rand(17, 24);
+        g.ui?.toast('SIX STARS. The army is coming: soldiers, army trucks, jeeps with machine guns, attack helicopters, tanks.', 4.5);
+      }
     }
     this.level = n;
+    // room for the army in the city while it is here
+    if (n >= 6 && g.maxPeople < ARMY_PEOPLE && g.maxPeople > 0) { this.basePeople = g.maxPeople; g.maxPeople = ARMY_PEOPLE; }
+    else if (n < 6 && this.basePeople && g.maxPeople === ARMY_PEOPLE) { g.maxPeople = this.basePeople; this.basePeople = 0; }
     for (const k in this.t) this.t[k] -= dt;
     // the streets clear at four and five stars, and fill again after (to what they were, unless that was changed meanwhile)
     const T = g.traffic;
@@ -97,10 +119,16 @@ export class Response {
         else if (C.helis && this.t.heli <= 0 && this.units('heli') < C.helis) { this.t.heli = C.heliGap * rand(0.8, 1.2); if (this._heli()) this.stats.helis++; }
         else if (C.vans && this.t.van <= 0 && this.units('swatvan') < C.vans && force + 4 <= cap + 2) { this.t.van = C.vanGap * rand(0.8, 1.2); if (this._car('swatvan')) this.stats.vans++; }
         else if (C.swat && this.t.swat <= 0 && this._swatOnFoot() < C.swat) { this.t.swat = C.swatGap * rand(0.8, 1.2); if (this._swatTeam()) this.stats.swat++; }
+        // the army
+        else if (C.troops && this.t.troops <= 0 && this._troopsOnFoot() < C.troops) { this.t.troops = C.troopGap * rand(0.8, 1.2); if (this._troops()) this.stats.troops++; }
+        else if (C.trucks && this.t.truck <= 0 && this.units('armytruck') < C.trucks && force + 8 <= cap + 4) { this.t.truck = C.truckGap * rand(0.8, 1.2); if (this._car('armytruck')) this.stats.trucks++; }
+        else if (C.jeeps && this.t.jeep <= 0 && this.units('gunjeep') < C.jeeps) { this.t.jeep = C.jeepGap * rand(0.8, 1.2); if (this._car('gunjeep')) this.stats.jeeps++; }
+        else if (C.attack && this.t.attack <= 0 && this.units('attack') < C.attack) { this.t.attack = C.attackGap * rand(0.8, 1.2); if (this._heli('attack')) this.stats.attack++; }
+        else if (C.tanks && this.t.tank <= 0 && this.units('tank') < C.tanks) { this.t.tank = C.tankGap * rand(0.8, 1.2); if (this._car('tank')) this.stats.tanks++; }
       }
     }
     // the helicopters stay while it is a helicopter's business, and go home when it is not
-    if (g.air) for (const hl of g.air.list) if (!hl.down && hl.state !== 'leave' && (n < 3 || (hl.kind === 'gunner' && this.units('heli') > (C && C.helis || 0)))) hl.leave();
+    if (g.air) for (const hl of g.air.list) if (!hl.down && hl.state !== 'leave' && (n < 3 || (hl.kind === 'attack' && n < 6) || (hl.kind === 'gunner' && this.units('heli') > (C && C.helis || 0)))) hl.leave();
     this._home(dt);
   }
 
@@ -135,7 +163,7 @@ export class Response {
    * A point on a street, in its right hand lane and facing along it, between `min` and `max` metres from you, out of
    * your sight if there is one, with no car on it. Null if there is nowhere.
    */
-  streetSpot(min = 45, max = 95) {
+  streetSpot(min = 45, max = 95, room = 9) {
     const g = this.g, p = g.player, J = g.city.junctions, T = g.traffic;
     const best = [];
     for (const a of J) for (const id of a.out) {
@@ -146,9 +174,11 @@ export class Response {
         const x = a.x + dx * s - dz * LANE, z = a.z + dz * s + dx * LANE;
         const d = Math.hypot(x - p.x, z - p.z);
         if (d < min || d > max) continue;
-        if (T && T.cars.some((c) => Math.hypot(c.x - x, c.z - z) < 9)) continue;
+        if (T && T.cars.some((c) => Math.hypot(c.x - x, c.z - z) < room + (c.hl || 2.15) - 2.15)) continue;
         const seen = this._inSight(x, 1.2, z);
-        best.push({ x, z, yaw: Math.atan2(dx, dz), score: (seen ? 0 : 100) + rand(0, 30) - Math.abs(d - (min + max) / 2) * 0.3 });
+        // (heading your way, if it can: a truck or a tank cannot turn round in a street)
+        const toward = (p.x - x) * dx + (p.z - z) * dz > 0;
+        best.push({ x, z, yaw: Math.atan2(dx, dz), score: (seen ? 0 : 100) + (toward ? 25 : 0) + rand(0, 30) - Math.abs(d - (min + max) / 2) * 0.3 });
       }
     }
     if (!best.length) return null;
@@ -176,27 +206,50 @@ export class Response {
   _car(kind) {
     const g = this.g, T = g.traffic;
     if (!T || !T.spawnUnit) return null;
-    const at = this.streetSpot();
+    // (the army's, bigger, with more room round them)
+    const at = this.streetSpot(45, 95, kind === 'tank' ? 16 : kind === 'armytruck' ? 13 : 9);
     if (!at) return null;
     const car = T.spawnUnit(kind, at);
     if (!car) return null;
     car.cameSeen = this._inSight(at.x, 1.2, at.z);
     for (const h of car.seats) if (h) this.P.extra.add(h);
-    this.P.note(kind === 'swatvan' ? 'a S.W.A.T. van sent' : 'a patrol car sent');
+    this.P.note(WORD[kind] ? WORD[kind] + ' sent' : 'a patrol car sent');
     return car;
   }
 
-  /** A helicopter: two door gunners, or four to go down the ropes (at five stars the second is the other kind). */
-  _heli() {
+  /**
+   * A helicopter: two door gunners, or four to go down the ropes (at five stars the second is the other kind); or,
+   * asked for, the army's attack helicopter.
+   */
+  _heli(want = null) {
     const g = this.g, A = g.air;
     if (!A) return null;
-    const other = A.list.find((x) => !x.down && x.state !== 'leave');
-    const kind = other ? (other.kind === 'gunner' ? 'drop' : 'gunner') : chance(0.5) ? 'gunner' : 'drop';
+    const other = A.list.find((x) => !x.down && x.state !== 'leave' && x.kind !== 'attack');
+    const kind = want || (other ? (other.kind === 'gunner' ? 'drop' : 'gunner') : chance(0.5) ? 'gunner' : 'drop');
     const hl = A.spawn(kind);
     if (!hl) return null;
     for (const h of hl.seats) if (h) this.P.extra.add(h);
-    this.P.note(`a helicopter sent (${kind === 'gunner' ? 'door gunners' : 'to rope a team down'})`);
+    this.P.note(kind === 'attack' ? 'an attack helicopter sent' : `a helicopter sent (${kind === 'gunner' ? 'door gunners' : 'to rope a team down'})`);
     return hl;
+  }
+
+  _troopsOnFoot() { return this.g.humans.filter((h) => h.soldier && h.footTeam && !h.removed && !h.car && h.h.alive && h.h.conscious).length; }
+
+  /** Three soldiers on foot, from somewhere you cannot see. */
+  _troops() {
+    const g = this.g, at = this._footSpot(34, 64);
+    if (!at || !g.spawnSoldier) return null;
+    const out = [], yaw = Math.atan2(g.player.x - at.x, g.player.z - at.z);
+    for (let i = 0; i < 3; i++) {
+      const x = at.x + Math.sin(yaw + Math.PI / 2) * (i - 1) * 0.9, z = at.z + Math.cos(yaw + Math.PI / 2) * (i - 1) * 0.9;
+      if (!g.city.isClear(x, z, 0.35)) continue;
+      const h = g.spawnSoldier(x, z, yaw, { x, z, yaw, kind: 'beat' });
+      h.footTeam = true; h.armyTeam = true;
+      this.P.extra.add(h);
+      out.push(h);
+    }
+    if (out.length) this.P.note('soldiers on foot');
+    return out.length ? out : null;
   }
 
   _swatOnFoot() { return this.g.humans.filter((h) => h.swat && h.footTeam && !h.removed && h.h.alive && h.h.conscious).length; }
@@ -238,7 +291,7 @@ export class Response {
       if (!c.unit) continue;
       // a unit nobody is in any more, or one sent for more stars than there are now, once you cannot see it
       const empty = !c.seats.some((h) => h && h.officer && h.h.alive);
-      const done = (c.unit === 'police' && P.wanted < 2) || (c.unit === 'swatvan' && P.wanted < 4);
+      const done = (c.unit === 'police' && P.wanted < 2) || (c.unit === 'swatvan' && P.wanted < 4) || (c.army && P.wanted < 6);
       if (!(done && (this.calmT > 15 || P.wanted)) && !(empty && this.calmT > 30)) continue;
       const d = Math.hypot(c.x - p.x, c.z - p.z);
       if (d < 40 || this._inSight(c.x, 1.2, c.z)) continue;
@@ -253,7 +306,9 @@ export class Response {
     if (T) for (const c of T.cars.slice()) if (c.unit) T.remove(c);
     if (T && this.thinned != null) { if (T.want === this.thinned) T.setCount(this.baseCars); this.thinned = null; }
     g.air?.clear();
-    this.t = { car: 0, heli: 0, van: 0, swat: 0 };
+    g.army?.clear();
+    this.t = { car: 0, heli: 0, van: 0, swat: 0, truck: 0, jeep: 0, tank: 0, attack: 0, troops: 0 };
     this.level = 0; this.calmT = 0;
+    if (this.basePeople && g.maxPeople === ARMY_PEOPLE) { g.maxPeople = this.basePeople; this.basePeople = 0; }
   }
 }

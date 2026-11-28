@@ -5,7 +5,7 @@
    ========================================================================== */
 import { $, el, clamp, put, putClass, keyed } from '../core/util.js';
 
-const WANT = ['None', '★', '★★', '★★★', '★★★★', '★★★★★'];
+const WANT = ['None', '★', '★★', '★★★', '★★★★', '★★★★★', '★★★★★★'];
 
 export class AdminUI {
   constructor(game, ui, mp, auth) {
@@ -116,7 +116,7 @@ export class AdminUI {
     }
     v = v || { speed: 1, hp: 100, tough: 1, wanted: 0 };
     $('#ad-speed').value = String(clamp(v.speed, 0.25, 4)); $('#ad-hp').value = String(clamp(v.hp, 25, 1000));
-    $('#ad-tough').value = String(clamp(v.tough, 0.25, 10)); $('#ad-wanted').value = String(clamp(v.wanted | 0, 0, 5));
+    $('#ad-tough').value = String(clamp(v.tough, 0.25, 10)); $('#ad-wanted').value = String(clamp(v.wanted | 0, 0, 6));
     $('#ad-speed').dispatchEvent(new Event('input'));
   }
 

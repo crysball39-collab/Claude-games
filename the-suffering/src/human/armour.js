@@ -12,6 +12,14 @@
               a collar, shoulder pads and a groin flap; a high-cut ballistic
               helmet with a clear visor down over the face
 
+   And guards, worn as well as a vest and a helmet, light or medium:
+     arms     pads over the upper arms and the forearms (medium: thicker, with
+              hard caps over the elbows and the shoulders)
+     legs     pads over the thighs and the shins (medium: with knee caps)
+     neck     a collar (medium: higher, with a plate over the throat)
+   Light guards are soft armour like a light vest's, medium like a medium
+   vest's: they stop a pistol round, and slow a rifle's.
+
    Soft armour catches a pistol round and spreads it into a bruise; a rifle
    round goes through it with less behind it. A plate stops both, and the
    person behind it still feels like they were kicked by a horse. Nothing
@@ -45,8 +53,37 @@ export const HELMETS = {
   medium: { kind: 'medium', name: 'Medium helmet', item: 'helmetM', mass: 1.5, lift: 0.024, fall: 0.42 },
   swat: { kind: 'swat', name: 'S.W.A.T. helmet', item: 'helmetS', mass: 2.3, lift: 0.024, fall: 0.38 },
 };
-/** Which kind an item is, by its id. */
-export const ARMOUR_ITEM = { vest: ['vest', 'light'], vestM: ['vest', 'medium'], vestS: ['vest', 'swat'], helmet: ['helmet', 'light'], helmetM: ['helmet', 'medium'], helmetS: ['helmet', 'swat'] };
+/** Guards for the arms, the legs and the neck, worn along with a vest and a helmet. */
+export const SLOTS = ['arms', 'legs', 'neck'];
+export const GUARDS = {
+  arms: {
+    light: { slot: 'arms', kind: 'light', name: 'Light arm guards', item: 'armsL', mass: 1.0, lift: 0.014 },
+    medium: { slot: 'arms', kind: 'medium', name: 'Medium arm guards', item: 'armsM', mass: 1.9, lift: 0.019 },
+  },
+  legs: {
+    light: { slot: 'legs', kind: 'light', name: 'Light leg guards', item: 'legsL', mass: 1.6, lift: 0.016 },
+    medium: { slot: 'legs', kind: 'medium', name: 'Medium leg guards', item: 'legsM', mass: 2.9, lift: 0.021 },
+  },
+  neck: {
+    light: { slot: 'neck', kind: 'light', name: 'Light neck guard', item: 'neckL', mass: 0.4, lift: 0.014 },
+    medium: { slot: 'neck', kind: 'medium', name: 'Medium neck guard', item: 'neckM', mass: 0.8, lift: 0.019 },
+  },
+};
+const SLOT_PARTS = { arms: [P.UARM_L, P.UARM_R, P.FARM_L, P.FARM_R], legs: [P.THIGH_L, P.THIGH_R, P.SHIN_L, P.SHIN_R], neck: [P.NECK] };
+
+/** Which kind an item is, by its id: [what it is worn as, its kind]. */
+export const ARMOUR_ITEM = { vest: ['vest', 'light'], vestM: ['vest', 'medium'], vestS: ['vest', 'swat'], helmet: ['helmet', 'light'], helmetM: ['helmet', 'medium'], helmetS: ['helmet', 'swat'],
+  armsL: ['arms', 'light'], armsM: ['arms', 'medium'], legsL: ['legs', 'light'], legsM: ['legs', 'medium'], neckL: ['neck', 'light'], neckM: ['neck', 'medium'] };
+
+/** What a guard puts between a blow and a part (`hy` its half length), or null if it does not cover it there. */
+export function guardCover(slot, kind, part, lp, ln, hy) {
+  const parts = SLOT_PARTS[slot];
+  if (!parts || !parts.includes(part)) return null;
+  // the forearm guard stops short of the wrist, the shin guard short of the ankle
+  if ((part === P.FARM_L || part === P.FARM_R) && lp[1] < -0.36 * hy) return null;
+  if ((part === P.SHIN_L || part === P.SHIN_R) && lp[1] < -0.5 * hy) return null;
+  return kind === 'medium' ? 'soft3' : 'soft2';
+}
 
 /**
  * What the vest puts between a blow and the body, at a point on a part (lp,
@@ -151,6 +188,46 @@ export function vestBoxes(kind, sz, s, police) {
     // white letters' worth of patch across the back, and a small one on the chest
     add(P.CHEST, [0, 0.07 * s, -(c[2] * 0.5 + 0.062 * s)], [0.21 * s, 0.05 * s, 0.006 * s], WHITE);
     add(P.CHEST, [0.06 * s, 0.075 * s, c[2] * 0.5 + 0.061 * s], [0.1 * s, 0.03 * s, 0.006 * s], WHITE);
+  }
+  return out;
+}
+
+/**
+ * The boxes a set of guards is made of, each riding on a part, as vestBoxes: [part, local centre, size, colour].
+ * Light: black pads with grey straps; medium: olive, thicker, with hard caps and buckles.
+ */
+export function guardBoxes(slot, kind, sz, s) {
+  const out = [], med = kind === 'medium';
+  const add = (part, l, z, hex) => out.push([part, l, z, hex]);
+  const PAD = med ? OLIVE : BLACK, CAP = med ? OLIVE_D : TRIM, STRAP = med ? WEB : 0x3a3d42, t = (med ? 0.032 : 0.022) * s;
+  if (slot === 'arms') {
+    for (const [up, fo] of [[P.UARM_L, P.FARM_L], [P.UARM_R, P.FARM_R]]) {
+      const u = sz[up], f = sz[fo];
+      add(up, [0, -u[1] * 0.06, 0], [u[0] + t, u[1] * 0.72, u[2] + t], PAD);
+      add(up, [0, -u[1] * 0.06, 0], [u[0] + t + 0.006 * s, 0.018 * s, u[2] + t + 0.006 * s], STRAP);
+      add(fo, [0, f[1] * 0.12, 0], [f[0] + t * 0.9, f[1] * 0.6, f[2] + t * 0.9], PAD);
+      add(fo, [0, f[1] * 0.0, 0], [f[0] + t * 0.9 + 0.006 * s, 0.016 * s, f[2] + t * 0.9 + 0.006 * s], STRAP);
+      if (med) {
+        // a hard cap over the point of the elbow, and one over the shoulder
+        add(up, [0, -u[1] * 0.47, -u[2] * 0.42], [u[0] * 0.95, 0.07 * s, 0.05 * s], CAP);
+        add(up, [0, u[1] * 0.38, 0], [u[0] + t + 0.012 * s, u[1] * 0.2, u[2] + t + 0.012 * s], CAP);
+      }
+    }
+  } else if (slot === 'legs') {
+    for (const [th, sh] of [[P.THIGH_L, P.SHIN_L], [P.THIGH_R, P.SHIN_R]]) {
+      const a = sz[th], b = sz[sh];
+      add(th, [0, -a[1] * 0.04, a[2] * 0.08], [a[0] + t, a[1] * 0.7, a[2] + t * 0.8], PAD);
+      add(th, [0, -a[1] * 0.04, 0], [a[0] + t + 0.006 * s, 0.02 * s, a[2] + t + 0.006 * s], STRAP);
+      add(sh, [0, b[1] * 0.08, b[2] * 0.14], [b[0] + t * 0.8, b[1] * 0.66, b[2] * 0.72 + t], PAD);
+      add(sh, [0, b[1] * 0.02, 0], [b[0] + t + 0.006 * s, 0.018 * s, b[2] + t + 0.006 * s], STRAP);
+      // a knee cap, at the top of the shin, in front
+      add(sh, [0, b[1] * 0.44, b[2] * 0.5 + 0.012 * s], [b[0] * 1.05, (med ? 0.085 : 0.06) * s, (med ? 0.05 : 0.03) * s], med ? CAP : TRIM);
+    }
+  } else if (slot === 'neck') {
+    const n = sz[P.NECK];
+    add(P.NECK, [0, med ? 0.006 * s : -0.004 * s, -0.004 * s], [n[0] + t * 1.6, n[1] * (med ? 1.05 : 0.8), n[2] + t * 1.6], PAD);
+    if (med) add(P.NECK, [0, -0.01 * s, n[2] * 0.5 + t * 0.9], [n[0] * 0.8, n[1] * 0.85, 0.02 * s], CAP);   // the throat plate
+    add(P.NECK, [0, -n[1] * 0.32, 0], [n[0] + t * 1.6 + 0.008 * s, 0.014 * s, n[2] + t * 1.6 + 0.008 * s], STRAP);
   }
   return out;
 }

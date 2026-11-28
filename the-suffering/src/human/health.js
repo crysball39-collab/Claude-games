@@ -151,6 +151,10 @@ export class Health {
     this.events = [];                 // things that happened this tick: 'vomit', 'faint', 'arrest', 'death', 'wake'
     this.deathNo = 0;                 // how many times this body has died (a doctor can bring it back)
     this.god = false;
+    // what every figure starts at: a figure that something has turned into nonsense (not a number) goes back to it,
+    // rather than taking every other figure with it
+    this._init = {};
+    for (const k of Object.keys(this)) if (typeof this[k] === 'number') this._init[k] = this[k];
   }
 
   get bloodPct() { return (this.blood / this.bloodMax) * 100; }
@@ -558,6 +562,9 @@ export class Health {
    */
   tick(dt, { fear = 0, anger = 0, moving = 0, running = 0 } = {}) {
     this.events.length = 0;
+    for (const k in this._init) if (!Number.isFinite(this[k])) this[k] = this._init[k];
+    if (!Number.isFinite(fear)) fear = 0;
+    if (!Number.isFinite(anger)) anger = 0;
     if (this.god && this.alive) {
       // whatever else is true, they are whole
       this.blood = this.bloodMax; this.air = 98; this.pain = 0; this.shock = 0; this.nausea = 0; this.dizzy = 0; this.concussion = 0; this.bleedOut = 0;

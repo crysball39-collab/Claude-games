@@ -41,6 +41,7 @@ import { ABILITY } from '../combat/powers.js';
 import { groundHeight } from '../world/city.js';
 import { clamp } from '../core/util.js';
 import { Shared, flames } from './shared.js';
+import { SLOTS } from '../human/armour.js';
 
 const V = 1;                 // what a presence object means; changes when its shape does
 const SEND = 1 / 15;         // seconds between sends of your state
@@ -59,6 +60,7 @@ const cleanText = (s, n) => strip(s).replace(/\s+/g, ' ').trim().slice(0, n);
 const TYPES = new Set(['blunt', 'cut', 'stab', 'bullet', 'crush', 'burn', 'needle']);
 const CARS = new Set(['sedan', 'car', 'police', 'van', 'taxi']);
 const ARMOUR = new Set(['light', 'medium', 'swat']);
+const GUARD_KINDS = new Set(['light', 'medium']);
 const word = (s) => (typeof s === 'string' && /^[a-zA-Z0-9]{1,20}$/.test(s) ? s : null);
 const num = (v, a, b, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? clamp(v, a, b) : d);
 const vec = (a, lim) => (Array.isArray(a) && a.length === 3 && a.every((v) => typeof v === 'number' && Number.isFinite(v)) ? a.map((v) => clamp(v, -lim, lim)) : null);
@@ -333,7 +335,7 @@ export class Multiplayer {
       w: p.weapon ? p.weapon.type : null,
       da: p.state === ST.RAGDOLL && p.downAim && p.downAim.up > 0.05 ? [r3(p.downAim.yaw), r3(p.downAim.pitch)] : null,
       kt: W.inventory.filter((it) => it !== p.weapon).map((it) => it.type).slice(0, 6),
-      ar: [p.vest ? p.vest.kind : '', p.helmet ? p.helmet.kind : ''],
+      ar: [p.vest ? p.vest.kind : '', p.helmet ? p.helmet.kind : '', ...SLOTS.map((s) => (p.guards[s] ? p.guards[s].kind : ''))],
       sc: r3(p.scale), fm: g.powers && g.powers.form ? g.powers.form : '',
       gn: p.gone.reduce((m, v, i) => (v ? m | (1 << i) : m), 0), ts: p.stripped || 0,
       al: p.h.alive ? 1 : 0, cs: p.h.conscious ? 1 : 0, hp: Math.round(p.h.condition.pct), fi: p.fire && p.burning > 0.1 ? 1 : 0,
@@ -439,12 +441,13 @@ export class Multiplayer {
     const kitKey = String(word(pr.w) || '') + '|' + (Array.isArray(pr.kt) ? pr.kt.map(word).join(',') : '');
     if (kitKey !== r.kitKey) { r.kitKey = kitKey; this._kit(r, pr); }
     const ar = Array.isArray(pr.ar) ? pr.ar : [];
-    const armKey = (ARMOUR.has(ar[0]) ? ar[0] : '') + '|' + (ARMOUR.has(ar[1]) ? ar[1] : '');
+    const armKey = (ARMOUR.has(ar[0]) ? ar[0] : '') + '|' + (ARMOUR.has(ar[1]) ? ar[1] : '') + SLOTS.map((s, i) => '|' + (GUARD_KINDS.has(ar[2 + i]) ? ar[2 + i] : '')).join('');
     if (armKey !== r.armKey) {
       r.armKey = armKey;
-      h.removeVest(); h.removeHelmet();
+      h.removeVest(); h.removeHelmet(); for (const s of SLOTS) h.removeGuard(s);
       if (ARMOUR.has(ar[0])) h.wearVest(ar[0]);
       if (ARMOUR.has(ar[1])) h.wearHelmet(ar[1]);
+      SLOTS.forEach((s, i) => { if (GUARD_KINDS.has(ar[2 + i])) h.wearGuard(s, ar[2 + i]); });
     }
     // a form: the hybrid's size and suit, or the leopard
     const sc = num(pr.sc, 0.5, 2, h.scale);
@@ -679,7 +682,7 @@ export class Multiplayer {
         if (!c || typeof c !== 'object') return;
         this.stats.cmdsIn++;
         if (c.op === 'set') {
-          this._applyAdmin({ sp: num(c.sp, 0.1, 5, 1), hp: num(c.hp, 1, 10000, 100), tg: num(c.tg, 0.1, 20, 1), wl: num(c.wl, 0, 5) | 0 });
+          this._applyAdmin({ sp: num(c.sp, 0.1, 5, 1), hp: num(c.hp, 1, 10000, 100), tg: num(c.tg, 0.1, 20, 1), wl: num(c.wl, 0, 6) | 0 });
           g.ui?.toast(`The admin set your speed to ${num(c.sp, 0.1, 5, 1)}x, max HP to ${num(c.hp, 1, 10000, 100) | 0} and toughness to ${num(c.tg, 0.1, 20, 1)}x.`, 4);
         } else if (c.op === 'kick') {
           const note = cleanText(c.note, 200);
@@ -764,6 +767,11 @@ export class Multiplayer {
   npcSay(h, text, shout) { if (!h.isPlayer && !h.puppet) this._fx('ns', h.id.toString(36), cleanText(text, 140), shout ? 1 : 0); }
   npcGun(h, type, m, d) { if (!h.isPlayer && !h.puppet) this._fx('ng', h.id.toString(36), type, m.map(r2), d.map(r3)); }
   boomFx(x, y, z, k = 1) { this._fx('bm', [r2(x), r2(y), r2(z)], r2(k)); }
+  /** The army's guns, seen everywhere: a round from a mounted machine gun; a shell or a missile on its way. */
+  armyFx(kind, ...a) {
+    if (kind === 'mg') this._fx('mg', [r2(a[0]), r2(a[1]), r2(a[2])], [r3(a[3]), r3(a[4]), r3(a[5])]);
+    else if (kind === 'pj') this._fx('pj', a[0] === 'missile' ? 'missile' : 'shell', [r2(a[1]), r2(a[2]), r2(a[3])], [r2(a[4]), r2(a[5]), r2(a[6])], a[7] ? a[7].map(r2) : 0);
+  }
   /** Frost on another player's stand-in: added up, and sent four times a second (a spray is a great many small chills). */
   chillRemote(h, part, amount, who, weapon) {
     if (!h.remote || !this.server || !this._mine(who)) return;
@@ -853,7 +861,7 @@ export class Multiplayer {
   /** Speed, max HP, toughness and wanted level for a player on the server ('me' for you). */
   adminApply(target, vals) {
     if (!this.auth.admin) return { error: 'Only the admin can do that.' };
-    const v = { sp: num(+vals.speed, 0.1, 5, 1), hp: num(+vals.hp, 1, 10000, 100), tg: num(+vals.tough, 0.1, 20, 1), wl: num(+vals.wanted, 0, 5) | 0 };
+    const v = { sp: num(+vals.speed, 0.1, 5, 1), hp: num(+vals.hp, 1, 10000, 100), tg: num(+vals.tough, 0.1, 20, 1), wl: num(+vals.wanted, 0, 6) | 0 };
     if (target === 'me' || (this.myPeer && target === this.myPeer)) { this._applyAdmin(v); return { ok: true, who: 'you' }; }
     const r = this.remotes.get(target);
     if (!r) return { error: 'They are not on this server any more.' };
@@ -917,7 +925,7 @@ export class Multiplayer {
 }
 
 /** What a weapon (or a power) is called in the feed. */
-const POWER_WORD = { hulkpunch: 'Hulk Punch', hulksmash: 'Hulk Smash', tempest: 'Tempest Kick', fingerpistol: 'Finger Pistol', flame: "Leo's Flame", swirl: 'Swirling Kick', leopard: 'Full Leopard', claws: 'Claws', leap: 'Leopard Leap', crash: 'Car', car: 'Car', explosion: 'Explosion', shrapnel: 'Explosion', fists: 'Fists' };
+const POWER_WORD = { hulkpunch: 'Hulk Punch', hulksmash: 'Hulk Smash', tempest: 'Tempest Kick', fingerpistol: 'Finger Pistol', flame: "Leo's Flame", swirl: 'Swirling Kick', leopard: 'Full Leopard', claws: 'Claws', leap: 'Leopard Leap', crash: 'Car', car: 'Car', explosion: 'Explosion', shrapnel: 'Explosion', fists: 'Fists', mg: 'Machine gun', cannon: 'Tank', missile: 'Missile' };
 export function weaponName(id) {
   if (!id) return '';
   if (POWER_WORD[id]) return POWER_WORD[id];

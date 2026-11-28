@@ -25,8 +25,8 @@ import { ST } from '../human/human.js';
 import { clamp, clamp01, rand, chance, wrapAngle } from '../core/util.js';
 
 const _e = [0, 0, 0], _g = [0, 0, 0], _t = [0, 0, 0];
-const WEAPON_WORD = { hulkpunch: 'enormous fist', hulksmash: 'fists, from above', tempest: 'flying slash', fingerpistol: 'bare finger', flame: 'fireball', swirl: 'ring of fire', leopard: 'leopard', claws: 'claws', fists: 'fists', knife: 'knife', machete: 'machete', sword: 'sword', crowbar: 'crowbar', m1911: 'pistol', glock: 'pistol', musket: 'musket', arquebus: 'matchlock', blunderbuss: 'blunderbuss', flamethrower: 'flamethrower', frostthrower: 'frost thrower', bow: 'bow', crossbow: 'crossbow', rope: 'rope', wire: 'live wire', ak47: 'rifle', m4a1: 'rifle', ar15: 'rifle', taser: 'taser', cuffs: 'pair of handcuffs', scanner: 'fingerprint scanner', syringe: 'syringe', car: 'car', carjack: 'bare hands', explosion: 'bomb', shrapnel: 'bomb' };
-const WEAPON_FEAR = { tempest: 90, fingerpistol: 72, flame: 96, swirl: 96, leopard: 99, claws: 92, fists: 22, knife: 60, machete: 76, sword: 80, crowbar: 55, m1911: 88, glock: 87, musket: 85, arquebus: 82, blunderbuss: 88, flamethrower: 98, frostthrower: 94, bow: 84, crossbow: 86, rope: 8, wire: 30, ak47: 94, m4a1: 95, ar15: 93, taser: 44, cuffs: 0, scanner: 0, syringe: 52, car: 80, carjack: 30, explosion: 99, shrapnel: 99 };
+const WEAPON_WORD = { hulkpunch: 'enormous fist', hulksmash: 'fists, from above', tempest: 'flying slash', fingerpistol: 'bare finger', flame: 'fireball', swirl: 'ring of fire', leopard: 'leopard', claws: 'claws', fists: 'fists', knife: 'knife', machete: 'machete', sword: 'sword', crowbar: 'crowbar', m1911: 'pistol', glock: 'pistol', musket: 'musket', arquebus: 'matchlock', blunderbuss: 'blunderbuss', flamethrower: 'flamethrower', frostthrower: 'frost thrower', bow: 'bow', crossbow: 'crossbow', rope: 'rope', wire: 'live wire', ak47: 'rifle', m4a1: 'rifle', ar15: 'rifle', taser: 'taser', cuffs: 'pair of handcuffs', scanner: 'fingerprint scanner', syringe: 'syringe', car: 'car', carjack: 'bare hands', explosion: 'bomb', shrapnel: 'bomb', mg: 'machine gun', cannon: 'tank', missile: 'missile' };
+const WEAPON_FEAR = { hulkpunch: 99, hulksmash: 99, tempest: 90, fingerpistol: 72, flame: 96, swirl: 96, leopard: 99, claws: 92, fists: 22, knife: 60, machete: 76, sword: 80, crowbar: 55, m1911: 88, glock: 87, musket: 85, arquebus: 82, blunderbuss: 88, flamethrower: 98, frostthrower: 94, bow: 84, crossbow: 86, rope: 8, wire: 30, ak47: 94, m4a1: 95, ar15: 93, taser: 44, cuffs: 0, scanner: 0, syringe: 52, car: 80, carjack: 30, explosion: 99, shrapnel: 99, mg: 99, cannon: 99, missile: 99 };
 /** Fires bullets. */
 export const isGun = (id) => id === 'm1911' || id === 'glock' || id === 'ak47' || id === 'm4a1' || id === 'ar15' || id === 'musket' || id === 'arquebus' || id === 'blunderbuss';
 /** Looses arrows (or bolts): a weapon from a distance, if not a gun. */
@@ -76,6 +76,7 @@ export class Mind {
 
   /** Changes a feeling by an amount, as much as this person's nature allows. */
   stir(name, amount) {
+    if (!Number.isFinite(amount)) return;          // (something nobody has a word for is no reason to feel nothing, or everything)
     const p = this.p;
     let k = 1;
     if (name === 'fear') k = 1.55 - p.bravery;
@@ -225,8 +226,8 @@ export class Mind {
           this.note('saw', 'armed', `saw ${this.name(o)} holding a ${WEAPON_WORD[armed]}`, 0.7, { o });
           if (o.officer && !h.officer) { this.stir('fear', 12 * falloff(d)); this.stir('surprise', 24); }
           else if (!h.officer) {
-            this.stir('fear', WEAPON_FEAR[armed] * 0.45 * falloff(d)); this.stir('surprise', 30);
-            this._threaten(o, WEAPON_FEAR[armed] * 0.5 * falloff(d));
+            this.stir('fear', (WEAPON_FEAR[armed] ?? 60) * 0.45 * falloff(d)); this.stir('surprise', 30);
+            this._threaten(o, (WEAPON_FEAR[armed] ?? 60) * 0.5 * falloff(d));
             this.ask('sawWeapon', 62, { weapon: WEAPON_WORD[armed], sex: o.look.sex });
           } else if (!o.officer) this._threaten(o, 40);
         }
@@ -302,6 +303,7 @@ export class Mind {
   }
 
   _threaten(src, level, x, z) {
+    if (!Number.isFinite(level)) level = 60;
     const now = this.game.time;
     const t = this.threat;
     if (t && t.level > level && (!src || t.src !== src)) { if (now - t.t > 4) t.level *= 0.9; else return; }
@@ -416,7 +418,7 @@ export class Mind {
       case 'swing':
         if (A === h || ev.weapon === 'fists' || w.d > 12) return;
         this._know(A).armed = ev.weapon;
-        this._threaten(A, WEAPON_FEAR[ev.weapon] * 0.6 * k);
+        this._threaten(A, (WEAPON_FEAR[ev.weapon] ?? 60) * 0.6 * k);
         this.stir('fear', 14 * k);
         break;
       case 'death':

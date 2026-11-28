@@ -951,6 +951,7 @@ export class Powers {
     p.h.tough = this.was.tough * HULK_TOUGH; p.sturdy = HULK_STURDY;
     p.look = Object.assign({}, p.look, HULK_FACE); p._faceKey = null; p.snarl = true;
     if (p.vest) p.removeVest();
+    for (const s of ['arms', 'legs', 'neck']) p.removeGuard(s);
     p.setCoat(hulkCoat(p)); p.bulk = 1.3; p.brawn = HULK_BRAWN; p.pose.brute = 1;
     p.powerMul = 2.6; p.reachMul = 1.4; p.anim.speedUp = 1.12; p.speedMul = 1.3; p.jumpMul = 1.7;
     this._shred(p);
@@ -1276,7 +1277,7 @@ export class Powers {
     if (p.weapon && !p.weapon.def.wear) { g.ui?.toast('Your hands are full. Put it away first (H).'); return false; }
     let car = null, best = 1.8 * s;
     if (g.traffic) for (const c of g.traffic.cars) {
-      if (c.carried || c.seats.some((h) => h && h.isPlayer)) continue;
+      if (c.carried || c.kind === 'tank' || c.seats.some((h) => h && h.isPlayer)) continue;
       const b = c.body;
       if (Math.hypot(b.px - p.x, b.pz - p.z) > 8) continue;
       b.toLocal(p.x, b.py, p.z, _a);

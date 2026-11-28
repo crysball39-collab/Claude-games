@@ -423,6 +423,7 @@ export class UI {
     box.classList.toggle('searching', n > 0 && !P.seen);
     box.classList.toggle('lethal', n >= 2);
     box.classList.toggle('extreme', n >= 4);
+    box.classList.toggle('army', n >= 6);
   }
 
   cheatChanged() {
@@ -508,6 +509,7 @@ export class UI {
     const tier = (a) => (a.kind === 'swat' ? 'SWAT ' : a.kind === 'medium' ? 'MED ' : '');
     if (pl.vest) worn(tier(pl.vest) + 'VEST', 'worn', () => w.shedVest());
     if (pl.helmet) worn(tier(pl.helmet) + 'HELMET', 'worn', () => w.shedHelmet());
+    for (const [slot, word] of [['arms', 'ARMS'], ['legs', 'LEGS'], ['neck', 'NECK']]) if (pl.guards[slot]) worn(tier(pl.guards[slot]) + word, 'worn', () => w._shed(slot));
     // in a sandbox, handcuffs are only as locked as you want them to be
     if (pl.cuffed) worn('CUFFED', 'bound', () => { w.uncuff(pl, null); this.toast('You slip the cuffs'); });
     const d = w.def;

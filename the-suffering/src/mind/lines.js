@@ -171,6 +171,21 @@ export const LINES = {
   copSearch: ["Dispatch, no sign of him on this block.", "Anybody seen this guy?", "Checking the alley.", "Nothing here. Moving on.", "Dispatch, still looking.", "He's around here somewhere."],
   copSpotted: ["There he is! That's him!", "Dispatch, I've got eyes on the suspect!", "Police! Don't move! Stay right there!", "Suspect spotted! He's right here!", "Hey! You! Stop!"],
 
+  /* -------------------------------- the army -------------------------------- */
+  milChallenge: ["Drop the {weapon}! Drop it now!", "Weapon down or you're dead!", "Drop it! Hands up!", "Put it down! Last warning!", "Weapon on the ground! NOW!"],
+  milHalt: ["Contact! Hostile in the open!", "Don't move! Get on the ground!", "Target! Right there!", "Hostile! Hold it right there!", "On the ground! NOW!"],
+  milFire: ["Engaging!", "Contact front!", "Weapons free! Weapons free!", "Taking fire! Return fire!", "Suppressing!", "Light him up!"],
+  milDown: ["Target down!", "Hostile down. Stay on him.", "He's down! Cover him!", "Hostile's down. Watch him."],
+  milCalm: ["Don't move. Don't even breathe.", "Hands where I can see them.", "Stay down. Stay down!", "Slow. Real slow."],
+  milClear: ["Area secure.", "All clear. Fall back.", "Sector clear.", "Stand down. Stand down."],
+  milIdle: ["Eyes open.", "Hold this position.", "Quiet. Too quiet.", "Watch your sectors.", "Check your corners."],
+  milReload: ["Reloading!", "Changing mags!", "Cover me, reloading!", "Mag out! Cover!"],
+  milRespond: ["Move, move, move!", "On me! Let's go!", "Go, go, go!", "Stack up! Move!", "Civilians, clear the area!"],
+  milGreet: ["Keep moving.", "This area is closed. Move along.", "Get indoors. Now.", "Move. Now."],
+  milMedic: ["Medic! I need a medic!", "Man down! Man down!", "Get a medic up here!", "Stay with me, we're getting you out!"],
+  milSearch: ["Check the alley!", "Sweep the block!", "No sign of him here. Moving.", "Watch the rooftops!", "Spread out. Find him."],
+  milSpotted: ["Eyes on target!", "Target spotted! Twelve o'clock!", "Contact! There he is!", "Hostile in sight!", "I've got him! Moving to engage!"],
+
   /* ----------------------------- handcuffs, the cell ----------------------------- */
   cuffed: ["These are too tight.", "You can't do this. Let me go!", "I didn't do anything!", "Please. Take them off.", "I can't feel my hands.", "What am I being arrested for?",
     "This is a mistake. This is a mistake."],

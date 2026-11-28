@@ -46,6 +46,7 @@ import { VoxelThing } from '../world/voxels.js';
 import { BODY } from '../world/car.js';
 import { groundHeight } from '../world/city.js';
 import { clamp, rand } from '../core/util.js';
+import { SLOTS } from '../human/armour.js';
 
 const enc = new TextEncoder();
 const bytes = (s) => enc.encode(s).length;
@@ -63,8 +64,8 @@ const r3 = (v) => Math.round(v * 1000) / 1000;
 
 /** How far behind the newest word of it a stand-in is drawn: always one place either side of it, and no further back than this. */
 const LAG_MIN = 0.1, LAG_MAX = 0.6;
-const CARS = new Set(['sedan', 'car', 'police', 'van', 'taxi', 'swatvan']);
-const HELIS = new Set(['gunner', 'drop']);
+const CARS = new Set(['sedan', 'car', 'police', 'van', 'taxi', 'swatvan', 'armytruck', 'gunjeep', 'tank']);
+const HELIS = new Set(['gunner', 'drop', 'attack']);
 const ARMOUR = new Set(['light', 'medium', 'swat']);
 const MASK = (1 << PART_COUNT) - 1;
 const TYPES = new Set(['blunt', 'cut', 'stab', 'bullet', 'crush', 'burn', 'needle']);
@@ -318,7 +319,7 @@ export class Shared {
   _intro(e) {
     const o = e.o, i = b36(e.id);
     switch (e.ty) {
-      case 'h': return { y: 'h', i, L: packLook(o.look), f: (o.officer ? 1 : 0) | (o.swat ? 2 : 0) | (o.pilot ? 4 : 0) };
+      case 'h': return { y: 'h', i, L: packLook(o.look), f: (o.officer ? 1 : 0) | (o.swat ? 2 : 0) | (o.pilot ? 4 : 0) | (o.soldier ? 8 : 0) };
       case 'c': { const x = { y: 'c', i, k: o.kind, p: o.paint }; if (o.nonce) x.n = o.nonce; return x; }
       case 'a': return { y: 'a', i, k: o.kind };
       default: {
@@ -345,8 +346,8 @@ export class Shared {
       return o.state + ':' + f(P.PELVIS) + ':' + f(P.HEAD) + ':' + f(P.HAND_L) + ':' + f(P.HAND_R) + ':' + f(P.FOOT_L) + ':' + f(P.FOOT_R) + (o.car ? ':' + o.car.id : '');
     }
     if (e.ty === 'c') return o.wreck ? 'w' + q(o.body.px) + ',' + q(o.body.py) + ',' + q(o.body.pz) + ',' + q(o.body.qx) + ',' + q(o.body.qy) + ',' + q(o.body.qz) + ',' + o.hp + ',' + o.fire
-      : q(o.x) + ',' + q(o.z) + ',' + q(o.yaw) + ',' + q(o.steer || 0) + ',' + Math.round(o.hp) + ',' + (o.fire >= 0 ? 1 : 0) + (o.siren ? 's' : '') + this._glass(o);
-    if (e.ty === 'a') return q(o.x) + ',' + q(o.y) + ',' + q(o.z) + ',' + q(o.yaw) + ',' + q(o.pitch) + ',' + q(o.roll) + (o.down ? 'd' : '');
+      : q(o.x) + ',' + q(o.z) + ',' + q(o.yaw) + ',' + q(o.steer || 0) + ',' + Math.round(o.hp) + ',' + (o.fire >= 0 ? 1 : 0) + (o.siren ? 's' : '') + this._glass(o) + (o.turretCfg ? ',' + q(o.tYaw) + ',' + q(o.tPitch) + ',' + (o.recoil > 0.3 ? 1 : 0) : '');
+    if (e.ty === 'a') return q(o.x) + ',' + q(o.y) + ',' + q(o.z) + ',' + q(o.yaw) + ',' + q(o.pitch) + ',' + q(o.roll) + (o.down ? 'd' : '') + (o.chin ? ',' + q(o.chinYaw) + ',' + q(o.chinPitch) : '');
     const b = o.body;
     return q(b.px) + ',' + q(b.py) + ',' + q(b.pz) + ',' + q(b.qx) + ',' + q(b.qy) + ',' + q(b.qz) + ':' + this._extra(o);
   }
@@ -372,9 +373,11 @@ export class Shared {
       case 'c': {
         const live = o.fire >= 0 ? 1 : 0, gl = this._glass(o);
         if (o.wreck) { const b = o.body; return ['c', i, 1, cm(b.px), cm(b.py), cm(b.pz), k3(b.qx), k3(b.qy), k3(b.qz), k3(b.qw), Math.round(o.hp), live, gl]; }
-        return ['c', i, 0, cm(o.x), cm(o.y), cm(o.z), k3(o.yaw), k3(o.pitch), k3(o.roll), k3(o.steer || 0), k3(o.spin || 0) % 100000, Math.round(o.hp), live, gl, o.siren ? 1 : 0];
+        const x = ['c', i, 0, cm(o.x), cm(o.y), cm(o.z), k3(o.yaw), k3(o.pitch), k3(o.roll), k3(o.steer || 0), k3(o.spin || 0) % 100000, Math.round(o.hp), live, gl, o.siren ? 1 : 0];
+        if (o.turretCfg) x.push(k3(o.tYaw), k3(o.tPitch));
+        return x;
       }
-      case 'a': return ['a', i, cm(o.x), cm(o.y), cm(o.z), k3(o.yaw), k3(o.pitch), k3(o.roll), o.down ? 1 : 0];
+      case 'a': return o.chin ? ['a', i, cm(o.x), cm(o.y), cm(o.z), k3(o.yaw), k3(o.pitch), k3(o.roll), o.down ? 1 : 0, k3(o.chinYaw), k3(o.chinPitch)] : ['a', i, cm(o.x), cm(o.y), cm(o.z), k3(o.yaw), k3(o.pitch), k3(o.roll), o.down ? 1 : 0];
       default: {
         const b = o.body;
         return ['o', i, cm(b.px), cm(b.py), cm(b.pz), k3(b.qx), k3(b.qy), k3(b.qz), k3(b.qw), this._extra(o)];
@@ -386,7 +389,7 @@ export class Shared {
   _status(h) {
     const kit = (h.kit || []).filter((it) => it !== h.weapon).map((it) => it.type).slice(0, 6).join('.');
     const fl = (h.h.alive ? 1 : 0) | (h.h.conscious ? 2 : 0) | (h.cuffed ? 4 : 0) | (h.fire && h.burning > 0.1 ? 8 : 0);
-    const out = [h.weapon ? h.weapon.type : '', kit, (h.vest ? h.vest.kind : '') + '|' + (h.helmet ? h.helmet.kind : ''),
+    const out = [h.weapon ? h.weapon.type : '', kit, (h.vest ? h.vest.kind : '') + '|' + (h.helmet ? h.helmet.kind : '') + SLOTS.map((s) => '|' + (h.guards[s] ? h.guards[s].kind : '')).join(''),
       h.gone.reduce((m, v, i) => (v ? m | (1 << i) : m), 0), h.stripped || 0, fl, Math.round(h.h.condition.pct)];
     if (h.state === ST.RAGDOLL && h.downAim && h.downAim.up > 0.05) out.push(r3(h.downAim.yaw), r3(h.downAim.pitch));
     return out;
@@ -488,11 +491,12 @@ export class Shared {
           s.x = num(e[3], -1e5, 1e5) / 100; s.y = num(e[4], -1e4, 1e5) / 100; s.z = num(e[5], -1e5, 1e5) / 100;
           s.yaw = num(e[6], -1e5, 1e5) / 1000; s.pitch = num(e[7], -4000, 4000) / 1000; s.roll = num(e[8], -4000, 4000) / 1000;
           s.steer = num(e[9], -3000, 3000) / 1000; s.spin = num(e[10], -1e5, 1e5) / 1000; s.hp = num(e[11], 0, 100); s.fire = e[12] === 1; s.glass = num(e[13], 0, 255) | 0; s.siren = e[14] === 1;
+          if (e.length > 16) { s.tYaw = num(e[15], -4000, 4000) / 1000; s.tPitch = num(e[16], -2000, 2000) / 1000; }
         }
         this._snap(G, s, now);
         return;
       }
-      case 'a': this._snap(G, { x: num(e[2], -1e5, 1e5) / 100, y: num(e[3], -1e4, 1e5) / 100, z: num(e[4], -1e5, 1e5) / 100, yaw: num(e[5], -1e5, 1e5) / 1000, pitch: num(e[6], -4000, 4000) / 1000, roll: num(e[7], -4000, 4000) / 1000, down: e[8] === 1 }, now); return;
+      case 'a': this._snap(G, { x: num(e[2], -1e5, 1e5) / 100, y: num(e[3], -1e4, 1e5) / 100, z: num(e[4], -1e5, 1e5) / 100, yaw: num(e[5], -1e5, 1e5) / 1000, pitch: num(e[6], -4000, 4000) / 1000, roll: num(e[7], -4000, 4000) / 1000, down: e[8] === 1, cy: e.length > 10 ? num(e[9], -4000, 4000) / 1000 : 0, cp: e.length > 10 ? num(e[10], -2000, 2000) / 1000 : 0 }, now); return;
       default:
     }
   }
@@ -633,12 +637,14 @@ export class Shared {
       if (ok(w)) W.give(h, w, true);
     }
     const ar = typeof e[4] === 'string' ? e[4].split('|') : [];
-    const arKey = (ARMOUR.has(ar[0]) ? ar[0] : '') + '|' + (ARMOUR.has(ar[1]) ? ar[1] : '');
+    const GK = (k) => k === 'light' || k === 'medium';
+    const arKey = (ARMOUR.has(ar[0]) ? ar[0] : '') + '|' + (ARMOUR.has(ar[1]) ? ar[1] : '') + SLOTS.map((s, i) => '|' + (GK(ar[2 + i]) ? ar[2 + i] : '')).join('');
     if (arKey !== G.arKey) {
       G.arKey = arKey;
-      h.removeVest(); h.removeHelmet();
+      h.removeVest(); h.removeHelmet(); for (const s of SLOTS) h.removeGuard(s);
       if (ARMOUR.has(ar[0])) h.wearVest(ar[0]);
       if (ARMOUR.has(ar[1])) h.wearHelmet(ar[1]);
+      SLOTS.forEach((s, i) => { if (GK(ar[2 + i])) h.wearGuard(s, ar[2 + i]); });
     }
     const gone = (e[5] | 0) & MASK;
     if (gone !== G.gone) {
@@ -755,8 +761,8 @@ export class Shared {
       if (!car.wreck) {
         // a free body from now on, on the host: here, a body the size of the whole car, moved by what they send
         car.wreck = true; car.mode = 'mirror';
-        car.wreckCy = car.van ? 0.82 : 0.76;
-        car.body.setBox(BODY.hx, car.wreckCy, BODY.hz, car.spec.mass * 0.9, true);
+        car.wreckCy = car.wreckH;
+        car.body.setBox(car.hw, car.wreckCy, car.hl, car.spec.mass * 0.9, true);
         car.body.setKinematic(true);
       }
       const A = a.wreck ? a : b;
@@ -771,6 +777,10 @@ export class Shared {
       const span = Math.max(0.05, b.t - A.t);
       car.vx = (b.x - A.x) / span; car.vz = (b.z - A.z) / span; car.speed = Math.hypot(car.vx, car.vz);
       car.siren = b.siren;
+      if (b.tYaw != null && car.turretCfg) {
+        let dt2 = b.tYaw - (A.tYaw ?? b.tYaw); while (dt2 > Math.PI) dt2 -= Math.PI * 2; while (dt2 < -Math.PI) dt2 += Math.PI * 2;
+        car.tYaw = (A.tYaw ?? b.tYaw) + dt2 * k; car.tPitch = l(A.tPitch ?? b.tPitch, b.tPitch);
+      }
       car.place(dt);
     }
     car.hp = b.hp;
@@ -785,6 +795,7 @@ export class Shared {
     const { a, b, k } = r, l = (u, v) => u + (v - u) * k;
     let dy = b.yaw - a.yaw; while (dy > Math.PI) dy -= Math.PI * 2; while (dy < -Math.PI) dy += Math.PI * 2;
     hl.x = l(a.x, b.x); hl.y = l(a.y, b.y); hl.z = l(a.z, b.z); hl.yaw = a.yaw + dy * k; hl.pitch = l(a.pitch, b.pitch); hl.roll = l(a.roll, b.roll);
+    if (hl.chin) { hl.chinYaw = l(a.cy || 0, b.cy || 0); hl.chinPitch = l(a.cp || 0, b.cp || 0); }
     hl.down = b.down;
     hl.place();
   }
@@ -1036,6 +1047,21 @@ export class Shared {
         if (p) this._boom(p[0], p[1], p[2], num(e[3], 0.2, 3, 1));
         return true;
       }
+      // the army's: a round from a mounted gun; a shell or a missile, flying (it bursts there, and the blast comes after)
+      case 'mg': {
+        const m = vec(e[2], 1e4), d = vec(e[3], 1.01);
+        if (m && d) g.army?.ghostRound(m[0], m[1], m[2], d[0], d[1], d[2]);
+        return true;
+      }
+      case 'pj': {
+        const m = vec(e[3], 1e4), v = vec(e[4], 400), t = vec(e[5], 1e4);
+        if (m && v) {
+          if (e[2] === 'missile') g.audio?.at('missile', m[0], m[1], m[2], 1);
+          else g.audio?.at('cannon', m[0], m[1], m[2], 1.2);
+          g.army?.launch(e[2] === 'missile' ? 'missile' : 'shell', null, m[0], m[1], m[2], v[0], v[1], v[2], null, null, t, true);
+        }
+        return true;
+      }
       default: return false;
     }
   }
@@ -1067,8 +1093,9 @@ export class Shared {
         if (o.h.alive && !o.car) {
           const h = g.spawnHuman(o.x, o.z, o.yaw, o.look);
           if (h) {
-            h.officer = !!(o.ghostOf & 1); h.swat = !!(o.ghostOf & 2);
+            h.officer = !!(o.ghostOf & 1); h.swat = !!(o.ghostOf & 2); h.soldier = !!(o.ghostOf & 8);
             if (o.vest) h.wearVest(o.vest.kind); if (o.helmet) h.wearHelmet(o.helmet.kind);
+            for (const s of SLOTS) if (o.guards[s]) h.wearGuard(s, o.guards[s].kind);
             if (W) for (const it of o.kit || []) W.give(h, it.type, it === o.weapon);
           }
         }

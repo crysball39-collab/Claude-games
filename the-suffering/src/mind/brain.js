@@ -363,7 +363,7 @@ export class Brain {
     const dx = tx - h.x, dz = tz - h.z, d = Math.hypot(dx, dz) || 1;
     const kit = h.kit || NOKIT;
     // a rifle, if they were sent out with one, for anything that is going to need shooting
-    const rifle = kit.find((i) => i.def.rifle), pistol = kit.find((i) => i.type === 'm1911') || kit.find((i) => i.def.gun && !i.def.taser), taser = kit.find((i) => i.def.taser), cuffs = kit.find((i) => i.def.cuffs);
+    const rifle = kit.find((i) => i.def.rifle), pistol = kit.find((i) => i.type === 'm1911') || kit.find((i) => i.def.gun && !i.def.taser && !i.def.rifle) || kit.find((i) => i.def.gun && !i.def.taser), taser = kit.find((i) => i.def.taser), cuffs = kit.find((i) => i.def.cuffs);
     const inHand = h.weapon, gun = !!(inHand && inHand.def.gun && !inHand.def.taser), tas = !!(inHand && inHand.def.taser);
     const sGun = !!(S.weapon && S.weapon.def.gun && !S.weapon.def.taser), sArmed = !!(S.weapon && !S.weapon.def.tool), sBlade = sArmed && !sGun;
     const down = S.state === ST.RAGDOLL || !S.h.conscious || S.tased > 0;
@@ -407,7 +407,7 @@ export class Brain {
     }
 
     // what should be in the hand?
-    const want = lethal || sGun || !taser || (taser.ammo <= 0 && !taser.wire && !pistol) ? ((lethal || h.swat) && rifle ? rifle : pistol) : taser;
+    const want = lethal || sGun || !taser || (taser.ammo <= 0 && !taser.wire && !pistol) ? ((lethal || h.swat || h.soldier) && rifle ? rifle : pistol) : taser;
     if (want && inHand !== want && !h.swap && !h.reload && !h.cuffing) W.draw(h, want);
     if (!want && !inHand) {
       // nothing on the belt: fists, or distance
@@ -870,10 +870,16 @@ export class Brain {
     const h = this.h, m = this.m, g = this.g, car = h.car, T = g.traffic;
     const driver = car.seats[0] === h, sp = Math.hypot(car.vx, car.vz);
     const K = car.seatKind && car.seatKind[h.seat];
+    // the army's crews stay with what they crew while it still goes: a jeep's driver and gunner, a tank's three
+    if (((K && K.stay) || (driver && car.unit === 'gunjeep')) && car.drivable) {
+      m.doing = K && K.hatch ? 'commanding the tank, head and shoulders out of the hatch' : K && K.gunner ? 'on the jeep\'s machine gun' : car.kind === 'tank' ? (driver ? 'driving the tank' : 'laying the tank\'s gun') : 'driving the jeep';
+      this.outT = null;
+      return;
+    }
     const there = car.ai && car.ai.state === 'arrived';
     const nobody = !car.seats[0] || !T._fit(car.seats[0]);
     m.doing = there ? 'getting out to deal with the suspect' : driver ? 'driving to the suspect, lights and siren going' : K && K.hang ? 'riding on the side of the van' : 'riding to the suspect, lights and siren going';
-    if (!(there || nobody) || sp > (K && K.hang ? 3.2 : 1.2)) { this.outT = null; return; }
+    if (!(there || nobody || !car.drivable) || sp > (K && K.hang ? 3.2 : 1.2)) { this.outT = null; return; }
     if (this.outT == null) this.outT = g.time + (K && K.hang ? rand(0, 0.25) : rand(0.25, 1.1));
     if (g.time < this.outT) return;
     this.outT = null;
@@ -895,7 +901,7 @@ export class Brain {
       const t = this.m.threat;
       let best = null, bd = 10;
       for (const o of T.cars) {
-        if (!o.drivable || o.seats[0] || o.hp < 40) continue;
+        if (!o.drivable || o.seats[0] || o.hp < 40 || o.locked || o.army) continue;
         const d = Math.hypot(o.x - h.x, o.z - h.z);
         // not toward whatever they are running from
         if (t && Math.hypot(o.x - t.x, o.z - t.z) < Math.hypot(h.x - t.x, h.z - t.z) - 1) continue;

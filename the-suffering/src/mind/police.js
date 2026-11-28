@@ -9,7 +9,7 @@
    examine it, and their fingerprint scanner names whoever touched it with
    bare hands.
 
-   What they know about you comes out as a wanted level, up to five stars:
+   What they know about you comes out as a wanted level, up to six stars:
      one star     they want you in handcuffs: you are told to stop, tased if
                   you will not, and arrested
      two stars    you have used a gun or a blade on someone, killed, or gone
@@ -17,6 +17,9 @@
      three stars  you have killed an officer, or kept on: a helicopter as well
      four stars   black S.W.A.T. vans, and S.W.A.T. teams on foot
      five stars   all of it, more often, and two helicopters
+     six stars    the army: soldiers, army trucks full of them, jeeps with
+                  a machine gun on a turret, attack helicopters with missiles
+                  and a gun, and tanks
    Every crime they hear of while you are wanted adds to what they hold
    against you (each one once, however many saw it or rang in), and enough of
    it is another star. Who is sent, and how, is the Response's business.
@@ -29,15 +32,15 @@ import { P } from '../human/rig.js';
 import { clamp, rand, chance, pick } from '../core/util.js';
 import { Response } from './response.js';
 
-export const MAX_WANTED = 5;
+export const MAX_WANTED = 6;
 /** Seconds without being seen before each level drops by one. */
-const COOL = [0, 70, 95, 110, 125, 140];
+const COOL = [0, 70, 95, 110, 125, 140, 160];
 /** How many stars each kind of thing earns, once they know it was you. */
-export const STARS = { assault: 1, menace: 1, prints: 1, suspicion: 1, resisting: 1, weapon: 2, stabbing: 2, shooting: 2, shots: 2, murder: 2, officer: 2, burning: 2, electrocution: 2, freezing: 2, car: 2, copCar: 2, copKill: 3, heli: 3 };
+export const STARS = { assault: 1, menace: 1, prints: 1, suspicion: 1, resisting: 1, weapon: 2, stabbing: 2, shooting: 2, shots: 2, murder: 2, officer: 2, burning: 2, electrocution: 2, freezing: 2, car: 2, copCar: 2, copKill: 3, heli: 3, army: 3 };
 /** How much each thing adds to what they hold against you: the more of it, the more of them come. */
-const HEAT = { assault: 1, menace: 1, prints: 1, suspicion: 0.5, resisting: 1, weapon: 1, stabbing: 2, shooting: 2, shots: 1, murder: 5, officer: 3, burning: 3, electrocution: 3, freezing: 3, car: 3, copCar: 6, copKill: 9, heli: 14 };
-/** What they have to hold against you for three, four and five stars. */
-export const HEAT_AT = [0, 0, 0, 12, 28, 50];
+const HEAT = { assault: 1, menace: 1, prints: 1, suspicion: 0.5, resisting: 1, weapon: 1, stabbing: 2, shooting: 2, shots: 1, murder: 5, officer: 3, burning: 3, electrocution: 3, freezing: 3, car: 3, copCar: 6, copKill: 9, heli: 14, army: 16 };
+/** What they have to hold against you for three, four, five and six stars. */
+export const HEAT_AT = [0, 0, 0, 12, 28, 50, 80];
 /** What a report is about, in the words the station would use. */
 const WHAT = {
   body: 'a body', assault: 'an assault', stabbing: 'a stabbing', shooting: 'a shooting', shots: 'shots fired', murder: 'a killing', menace: 'a man threatening people with a weapon',
@@ -139,7 +142,7 @@ export class Police {
     }
   }
 
-  /** What they hold against you, as stars: three, four or five once there is enough of it (else none). */
+  /** What they hold against you, as stars: three to six once there is enough of it (else none). */
   get heatStars() { let n = 0; for (let k = 3; k <= MAX_WANTED; k++) if (this.heat >= HEAT_AT[k]) n = k; return n; }
 
   /** One thing held against you: counted once (the same victim, or the same place and moment, is the same thing). */
@@ -157,7 +160,7 @@ export class Police {
     return true;
   }
 
-  /** The admin says how wanted you are: up to five stars, or none. */
+  /** The admin says how wanted you are: up to six stars, or none. */
   setWanted(level, why = 'admin') {
     level = Math.max(0, Math.min(MAX_WANTED, level | 0));
     if (level === 0) { this.clear(why); return; }
@@ -173,7 +176,7 @@ export class Police {
   killed(h) {
     const p = this.g.player;
     if (!h || !h.officer || h.lastAttacker !== p || !p || !p.h.alive) return;
-    this.raise(STARS.copKill, h.swat ? 'you killed a S.W.A.T. officer' : 'you killed a police officer', { x: p.x, z: p.z }, { kind: 'copKill', victim: h });
+    this.raise(STARS.copKill, h.soldier ? 'you killed a soldier' : h.swat ? 'you killed a S.W.A.T. officer' : 'you killed a police officer', { x: p.x, z: p.z }, { kind: 'copKill', victim: h });
   }
 
   /** An officer has you in sight. */

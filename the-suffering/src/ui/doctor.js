@@ -95,7 +95,7 @@ export class Doctor {
     const hits = (n) => (n ? ` (hit ${n} time${n === 1 ? '' : 's'})` : '');
     const visor = h.helmet && h.helmet.visor >= 3 ? ', its visor crazed' : h.helmet && h.helmet.visor > 0 ? ', its visor starred' : '';
     const nm = (d) => (d.name.startsWith('S.W.A.T.') ? d.name : d.name.toLowerCase());
-    const extra = (h.vest ? ', ' + nm(h.vest.def) + hits(h.vest.hits) : '') + (h.helmet ? ', ' + nm(h.helmet.def) + hits(h.helmet.hits) + visor : '') + (h.cuffed ? ', in handcuffs' : '') + (kit.length ? ', carrying ' + kit.join(' and ') : '');
+    const extra = (h.vest ? ', ' + nm(h.vest.def) + hits(h.vest.hits) : '') + (h.helmet ? ', ' + nm(h.helmet.def) + hits(h.helmet.hits) + visor : '') + ['arms', 'legs', 'neck'].map((s) => (h.guards && h.guards[s] ? ', ' + nm(h.guards[s].def) + hits(h.guards[s].hits) : '')).join('') + (h.cuffed ? ', in handcuffs' : '') + (kit.length ? ', carrying ' + kit.join(' and ') : '');
     $('#doc-sub').textContent = (h.isPlayer ? `${L.outfit}` : `${L.age}, ${L.noun}, ${L.outfit}`) + extra;
     const label = $('#doc-cond-label');
     label.textContent = c.label; label.className = c.tone;

@@ -20,7 +20,7 @@
    Anyone lying in the road is driven over: under the wheels it is a tonne
    and a half on whatever part of them is there.
    ========================================================================== */
-import { Car, WheelSet, BODY, WHEEL_R, WHEELBASE, TRACK, carDecal } from './car.js';
+import { Car, WheelSet, WHEEL_R, WHEELBASE, TRACK, carDecal, ARMY_KINDS } from './car.js';
 import { Boxes } from '../render/boxes.js';
 import { Body, Island } from '../physics/world.js';
 import { ROAD_W, LANE, KERB, ROADS, groundHeight } from './city.js';
@@ -34,6 +34,11 @@ import { clamp, clamp01, lerp, rand, pick, chance, wrapAngle, damp, TAU } from '
 const CRUISE = 8.2, TURN_SPEED = 4.2, ACCEL = 3.2, BRAKE = 8.5;
 const HALF = ROAD_W / 2;
 const HL = 2.15, HW = 0.9;
+/** The army's paint: olive drab, a little different on each. */
+const ARMY_PAINT = { armytruck: 0x4b5136, gunjeep: 0x4f5638, tank: 0x545b3e };
+/** How fast each kind of unit goes after you, flat out, and how close it comes before it stops. */
+const UNIT_SPEED = { police: 17, swatvan: 14, armytruck: 13, gunjeep: 16, tank: 9 };
+const UNIT_STOP = { armytruck: 15, gunjeep: 17, tank: 26 };
 const uvOf = (c) => cellUV(c[0], c[1], ATLAS_COLS, ATLAS_ROWS);
 const HOLE_UV = uvOf(DECAL.hole), EXIT_UV = uvOf(DECAL.exitMetal), CRACK_UV = uvOf(DECAL.crack), SCORCH_UV = uvOf(DECAL.scorch);
 const SPLAT_UV = DECAL.splat.map(uvOf), SOOT_UV = uvOf(DECAL.soot);
@@ -101,7 +106,7 @@ export class Traffic {
 
   /** A car from the sandbox: parked where it is put, nobody in it. */
   spawnParked(kind, x, z, yaw) {
-    const paint = kind === 'police' ? 0xf0f0ec : kind === 'taxi' ? 0xe0b021 : pick(CAR_PAINT);
+    const paint = kind === 'police' ? 0xf0f0ec : kind === 'taxi' ? 0xe0b021 : ARMY_PAINT[kind] || pick(CAR_PAINT);
     const car = this._make(kind, paint);
     car.x = x; car.z = z; car.yaw = yaw; car.y = groundHeight(x, z);
     car.mode = 'parked'; car.hand = 1; car.traffic = false; car.spawned = true;
@@ -112,25 +117,27 @@ export class Traffic {
   }
 
   /**
-   * A police unit sent after you: a patrol car with two officers, or a S.W.A.T. van with four (two in the cab, two on
-   * its steps). It appears on a street (the Response picks one out of your sight), already moving, lights and siren
-   * going, and drives itself to you (see _pursue).
+   * A unit sent after you: a patrol car with two officers, or a S.W.A.T. van with four (two in the cab, two on its
+   * steps); at six stars, the army's: a truck with two in the cab and six in the back, a jeep with a gunner at its
+   * machine gun, a tank with its crew of three. It appears on a street (the Response picks one out of your sight),
+   * already moving (the police with lights and siren going), and drives itself to you (see _pursue).
    */
   spawnUnit(kind, at) {
-    const g = this.game;
-    if (!g.spawnOfficer || !g.spawnSwat) return null;
-    const car = this._make(kind, kind === 'police' ? 0xf0f0ec : 0x16181c);
+    const g = this.game, army = ARMY_KINDS.has(kind);
+    if (!g.spawnOfficer || !g.spawnSwat || (army && !g.spawnSoldier)) return null;
+    const car = this._make(kind, kind === 'police' ? 0xf0f0ec : army ? ARMY_PAINT[kind] : 0x16181c);
     car.x = at.x; car.z = at.z; car.yaw = at.yaw; car.y = groundHeight(at.x, at.z);
-    car.mode = 'loose'; car.traffic = false; car.hand = 0; car.unit = kind; car.siren = true; car.quiet = false;
+    car.mode = 'loose'; car.traffic = false; car.hand = 0; car.unit = kind; car.siren = !army; car.quiet = false;
     car.ai = { state: 'pursue', t: 0, stuck: 0, route: null, routeT: 0, wp: 0, rx: 0, rz: 0 };
-    const v0 = 7;
+    const v0 = kind === 'tank' ? 3 : 7;
     car.vx = Math.sin(at.yaw) * v0; car.vz = Math.cos(at.yaw) * v0; car.speed = v0;
     car.place(0);
-    const n = kind === 'swatvan' ? 4 : 2;
+    const n = army ? car.seats.length : kind === 'swatvan' ? 4 : 2;
     for (let i = 0; i < n; i++) {
-      const h = kind === 'swatvan' ? g.spawnSwat(car.x, car.z, car.yaw) : g.spawnOfficer(car.x, car.z, car.yaw);
+      const h = army ? g.spawnSoldier(car.x, car.z, car.yaw) : kind === 'swatvan' ? g.spawnSwat(car.x, car.z, car.yaw) : g.spawnOfficer(car.x, car.z, car.yaw);
       if (!h) continue;
       if (kind === 'swatvan') h.vanTeam = true;
+      if (army) h.armyTeam = true;
       this.seat(h, car, i, true);
     }
     this.stats.units = (this.stats.units || 0) + 1;
@@ -230,12 +237,15 @@ export class Traffic {
   }
   _doorSpot(car, i, who = null) {
     const sp = car.seatAt[i] || car.seatAt[0], side = sp[0] > 0 ? 1 : -1;
-    const tries = [[side * 1.42, sp[2] + 0.15], [side * 1.42, sp[2] - 0.75], [side * 1.42, sp[2] + 1.05], [side * 2.1, sp[2]], [-side * 1.42, sp[2] + 0.15], [-side * 1.42, sp[2] - 0.75], [0, HL + 0.8], [0, -HL - 0.8]];
+    const K = car.seatKind && car.seatKind[i], o = car.hw + 0.52, b = car.hl + 0.7;
+    // out of the back of an army truck, over the tailgate; anybody else out of the side they sat on
+    const tries = K && K.back ? [[sp[0] * 0.5, -b], [sp[0] * 0.5 + side * 0.7, -b - 0.2], [sp[0] * 0.5 - side * 0.7, -b - 0.2], [sp[0] * 0.5, -b - 0.9], [side * o, -car.hl + 0.4], [side * (o + 0.7), -car.hl]]
+      : [[side * o, sp[2] + 0.15], [side * o, sp[2] - 0.75], [side * o, sp[2] + 1.05], [side * (o + 0.7), sp[2]], [-side * o, sp[2] + 0.15], [-side * o, sp[2] - 0.75], [0, b + 0.1], [0, -b - 0.1]];
     for (const [lx, lz] of tries) {
       car.toWorld(lx, 0, lz, _a);
       if (this._clearSpot(_a[0], _a[2], car, who)) return { x: _a[0], z: _a[2], yaw: car.yaw + (lx >= 0 ? Math.PI / 2 : -Math.PI / 2) };
     }
-    car.toWorld(side * 1.42, 0, sp[2], _a);
+    car.toWorld(side * o, 0, sp[2], _a);
     return { x: _a[0], z: _a[2], yaw: car.yaw };
   }
   /** Room for somebody to stand: no wall, no car, and nobody already standing (or lying) there. */
@@ -253,7 +263,7 @@ export class Traffic {
     const ex = x - c.x, ez = z - c.z;
     const fx = Math.sin(c.yaw), fz = Math.cos(c.yaw);
     const lz = ex * fx + ez * fz, lx = ex * fz - ez * fx;
-    return Math.abs(lx) < HW + pad && Math.abs(lz) < HL + pad;
+    return Math.abs(lx) < c.hw + pad && Math.abs(lz) < c.hl + pad;
   }
 
   /** Able to drive: alive, awake, not in cuffs, not rigid with a taser's current. */
@@ -262,7 +272,7 @@ export class Traffic {
   /** The player (or anyone) takes a car: whoever is driving it is pulled out first. */
   enter(h, car) {
     const g = this.game;
-    if (!car || !car.drivable || h.car) return false;
+    if (!car || !car.drivable || h.car || car.locked) return false;
     // one of the host's cars: it is ours to drive from now (and goes back to them when we leave it)
     if (car.mirror && !(g.mp?.shared?.takeCar(car))) return false;
     const d = car.seats[0];
@@ -413,7 +423,7 @@ export class Traffic {
         // someone lying in the road is driven round if possible and over if not
         if (h.state === ST.RAGDOLL && car.blocked > (h.h.alive ? 7 : 3)) continue;
         person = true;
-        stopIn = Math.min(stopIn, along - HL - 1.1);
+        stopIn = Math.min(stopIn, along - car.hl - 1.1);
       }
     }
     const obstacle = (bx, bz, hx, hz, ux, uz, fixed) => {
@@ -429,7 +439,7 @@ export class Traffic {
       if (car.blocked > 3.5 && !fixed) return;
       thing = true;
       if (fixed) wall = true;
-      stopIn = Math.min(stopIn, near - HL - 0.9);
+      stopIn = Math.min(stopIn, near - car.hl - 0.9);
     };
     for (const o of g.props) {
       if (!o.solid) continue;
@@ -443,7 +453,7 @@ export class Traffic {
     for (const o of this.cars) {
       if (o === car || o.mode === 'rail') continue;
       if ((o.x - car.x) ** 2 + (o.z - car.z) ** 2 > (look + 7) ** 2) continue;
-      obstacle(o.x, o.z, HW, HL, Math.cos(o.yaw), -Math.sin(o.yaw), true);
+      obstacle(o.x, o.z, o.hw, o.hl, Math.cos(o.yaw), -Math.sin(o.yaw), true);
     }
 
     // speed
@@ -584,12 +594,15 @@ export class Traffic {
       car.ai = { state: 'rejoin', t: 0, stuck: 0 };
       return;
     }
+    const stopAt = UNIT_STOP[car.unit] || 0;
     if (a.state === 'arrived') {
       halt();
       car.quiet = true;
-      // everyone got out and you have gone: whoever is left at the wheel comes after you again
+      // everyone got out and you have gone: whoever is left at the wheel comes after you again (a jeep or a tank, as
+      // soon as you are out of its reach)
       const dd = Math.hypot((p.car || p).x - car.x, (p.car || p).z - car.z);
-      if (a.t > 6 && dd > 45 && car.seats[0] && !car.seats[0].isPlayer && P.lastSeen && g.time - P.lastSeen.t < 6) { a.state = 'pursue'; a.t = 0; car.quiet = false; a.route = null; }
+      const far = stopAt && car.unit !== 'armytruck' ? stopAt + 14 : 45;
+      if (a.t > (far < 45 ? 2 : 6) && dd > far && car.seats[0] && !car.seats[0].isPlayer && P.lastSeen && g.time - P.lastSeen.t < 6) { a.state = 'pursue'; a.t = 0; car.quiet = false; a.route = null; }
       return;
     }
     if (a.state === 'back') {
@@ -604,7 +617,7 @@ export class Traffic {
     const tx = fresh || !P.lastSeen ? you.x : P.lastSeen.x, tz = fresh || !P.lastSeen ? you.z : P.lastSeen.z;
     a.routeT -= dt;
     if (!a.route || a.routeT <= 0 || Math.hypot(tx - a.rx, tz - a.rz) > 10) {
-      a.route = this._streetRoute(car.x, car.z, car.yaw, tx, tz, Math.abs(fwd));
+      a.route = this._streetRoute(car.x, car.z, car.yaw, tx, tz, Math.abs(fwd), car.hl > 2.5);
       a.wp = 0; a.routeT = 3; a.rx = tx; a.rz = tz;
     }
     const R = a.route;
@@ -613,7 +626,9 @@ export class Traffic {
     const toEnd = Math.hypot(end.x - car.x, end.z - car.z);
     const youStopped = !p.car || Math.hypot(p.car.vx, p.car.vz) < 2.5;
     // (somewhere off the street, the nearest it can get on the street is as near as it gets)
-    if ((fresh && youStopped && toYou < (p.car ? 10 : 13)) || (youStopped && toEnd < 6.5)) { a.state = 'arrived'; a.t = 0; halt(); return; }
+    // (a jeep or a tank stops where it can fight, whether or not you have stopped; a truck stops near enough to unload)
+    const fights = car.unit === 'gunjeep' || car.unit === 'tank';
+    if ((fresh && (youStopped || fights) && toYou < (stopAt || (p.car ? 10 : 13))) || (youStopped && toEnd < 6.5)) { a.state = 'arrived'; a.t = 0; halt(); return; }
     // the next point on the way, and the one after (to know whether it is a corner)
     while (a.wp < R.length - 1 && Math.hypot(R[a.wp].x - car.x, R[a.wp].z - car.z) < (R[a.wp].j ? 5.5 : 3)) a.wp++;
     const w = R[a.wp], nx = R[Math.min(R.length - 1, a.wp + 1)];
@@ -640,7 +655,7 @@ export class Traffic {
     const ang = wrapAngle(Math.atan2(ax - car.x, az - car.z) - car.yaw);
     car.steerIn = clamp(-ang * 2.6, -1, 1);
     // how fast: flat out on a straight, slow for a corner, slower near you
-    let want = car.unit === 'swatvan' ? 14 : 17, cap = Infinity;
+    let want = UNIT_SPEED[car.unit] || 17, cap = Infinity;
     if (w.j && nx !== w) {
       const ix = w.x - car.x, iz = w.z - car.z, ox = nx.x - w.x, oz = nx.z - w.z;
       const c = (ix * ox + iz * oz) / ((Math.hypot(ix, iz) || 1) * (Math.hypot(ox, oz) || 1));
@@ -677,7 +692,7 @@ export class Traffic {
    * nearest where they are going, then (if that is not on a street) nothing further. Each point is { x, z, j } (j: a
    * junction, where the way may turn).
    */
-  _streetRoute(x, z, yaw, tx, tz, speed = 0) {
+  _streetRoute(x, z, yaw, tx, tz, speed = 0, big = false) {
     const J = this.game.city.junctions, E = ROADS[ROADS.length - 1], S = ROADS[0];
     // the nearest point on a street's middle, and which junctions are at either end of that piece of it
     const onStreet = (px, pz) => {
@@ -696,8 +711,9 @@ export class Traffic {
     };
     const A = onStreet(x, z), B = onStreet(tx, tz);
     const fx = Math.sin(yaw), fz = Math.cos(yaw);
-    // turning round in the street costs time, more the faster it is going
-    const turnRound = 25 + speed * 4;
+    // turning round in the street costs time, more the faster it is going (a truck or a tank cannot turn round in a
+    // street at all: it goes round the block)
+    const turnRound = (big ? 150 : 25) + speed * 4;
     const out = [];
     // the same piece of street: straight there (turning round first if it is behind)
     const same = A.ends[0] === B.ends[0] && A.ends[1] === B.ends[1];
@@ -709,7 +725,7 @@ export class Traffic {
     const dist = new Float32Array(N * K).fill(Infinity), prev = new Int16Array(N * K).fill(-1), done = new Uint8Array(N * K);
     const turn = (f, u, v) => {
       if (f === NONE) return 0;
-      if (v === f) return 90;
+      if (v === f) return big ? 240 : 90;
       const ax = J[u].x - J[f].x, az = J[u].z - J[f].z, bx = J[v].x - J[u].x, bz = J[v].z - J[u].z;
       return ax * bx + az * bz > 0 ? 0 : 4;
     };
@@ -885,7 +901,7 @@ export class Traffic {
     const cx = car.x - bx, cz = car.z - bz;
     let best = Infinity, nx = 0, nz = 0, axis = 0;
     const test = (ax, az, k) => {
-      const rc = HW * Math.abs(lx * ax + lz * az) + HL * Math.abs(fx * ax + fz * az);
+      const rc = car.hw * Math.abs(lx * ax + lz * az) + car.hl * Math.abs(fx * ax + fz * az);
       const rb = ex * Math.abs(ax) + ez * Math.abs(az);
       const d = cx * ax + cz * az;
       const o = rc + rb - Math.abs(d);
@@ -899,7 +915,7 @@ export class Traffic {
       // the box's face: the corner of the car furthest into it
       let m = Infinity;
       for (const [a, b] of CORNERS) {
-        const px = car.x + fx * HL * a + lx * HW * b, pz = car.z + fz * HL * a + lz * HW * b;
+        const px = car.x + fx * car.hl * a + lx * car.hw * b, pz = car.z + fz * car.hl * a + lz * car.hw * b;
         const v = px * nx + pz * nz;
         if (v < m) { m = v; out.px = px; out.pz = pz; }
       }
@@ -922,7 +938,7 @@ export class Traffic {
     const cx = car.x - bx, cz = car.z - bz;
     let best = Infinity, nx = 0, nz = 0, mine = false;
     const test = (ax, az, own) => {
-      const ra = HW * Math.abs(lx * ax + lz * az) + HL * Math.abs(fx * ax + fz * az);
+      const ra = car.hw * Math.abs(lx * ax + lz * az) + car.hl * Math.abs(fx * ax + fz * az);
       const rb = hx * Math.abs(ux * ax + uz * az) + hz * Math.abs(vx * ax + vz * az);
       const d = cx * ax + cz * az;
       const o = ra + rb - Math.abs(d);
@@ -935,7 +951,7 @@ export class Traffic {
     if (!mine) {
       let m = Infinity;
       for (const [a, b] of CORNERS) {
-        const px = car.x + fx * HL * a + lx * HW * b, pz = car.z + fz * HL * a + lz * HW * b;
+        const px = car.x + fx * car.hl * a + lx * car.hw * b, pz = car.z + fz * car.hl * a + lz * car.hw * b;
         const v = px * nx + pz * nz;
         if (v < m) { m = v; out.px = px; out.pz = pz; }
       }
@@ -952,7 +968,7 @@ export class Traffic {
 
   _collide(car, h) {
     const g = this.game, W = g.world;
-    const r = HL + 0.4;
+    const r = car.hl + 0.4;
     W.queryStatics(car.x - r, car.z - r, car.x + r, car.z + r, _near);
     for (let i = 0; i < _near.length; i++) {
       const s = _near[i];
@@ -962,19 +978,19 @@ export class Traffic {
     // other cars
     for (const o of this.cars) {
       if (o === car) continue;
-      if ((o.x - car.x) ** 2 + (o.z - car.z) ** 2 > 22) continue;
+      if ((o.x - car.x) ** 2 + (o.z - car.z) ** 2 > (car.hl + o.hl + 0.4) ** 2) continue;
       // two cars both under their own physics meet once, not twice
       if (o.mode === 'loose' && !o.wreck && o.id < car.id) continue;
       if (o.wreck && o.body.py - o.body.boundR > car.y + 1.4) continue;
       const ux = Math.cos(o.yaw), uz = -Math.sin(o.yaw);
-      if (this._obbObb(car, o.x, o.z, HW, HL, ux, uz, _hit)) this._carCar(car, o, _hit);
+      if (this._obbObb(car, o.x, o.z, o.hw, o.hl, ux, uz, _hit)) this._carCar(car, o, _hit);
     }
     // heavy things lying about, and walls that were put up
     for (const o of g.props) {
       if (!o.solid) continue;
       const b = o.body;
       if (b.py + b.boundR < car.y + 0.32 || b.py - b.boundR > car.y + 1.4) continue;
-      const rr = HL + b.boundR + 0.2;
+      const rr = car.hl + b.boundR + 0.2;
       if ((b.px - car.x) ** 2 + (b.pz - car.z) ** 2 > rr * rr) continue;
       const fixed = o.vox && o.vox.anchored;
       if (!fixed && b.mass < 120) continue;              // light things: the physics shoves them aside
@@ -1002,12 +1018,12 @@ export class Traffic {
    * a wall), along the normal at the contact. Returns its size.
    */
   _resolve(a, c, b, e, mb = 0, bvx = 0, bvz = 0, bw = 0) {
-    const ma = a.spec.mass, Ia = ma * (4 * HL * HL + 4 * HW * HW) / 12;
+    const ma = a.spec.mass, Ia = ma * (4 * a.hl * a.hl + 4 * a.hw * a.hw) / 12;
     const rax = c.px - a.x, raz = c.pz - a.z;
     let vpx = a.vx + a.w * raz, vpz = a.vz - a.w * rax;
     let ib = 0, Ib = 0, rbx = 0, rbz = 0;
     if (b) {
-      ib = 1 / mb; Ib = mb * (4 * HL * HL + 4 * HW * HW) / 12;
+      ib = 1 / mb; Ib = mb * (4 * (b.hl || HL) ** 2 + 4 * (b.hw || HW) ** 2) / 12;
       rbx = c.px - b.x; rbz = c.pz - b.z;
       vpx -= bvx + bw * rbz; vpz -= bvz - bw * rbx;
     }
@@ -1118,13 +1134,14 @@ export class Traffic {
     const g = this.game;
     car.toLocal(wx, car.y + 0.6, wz, _a);
     car.dirToLocal(ix, 0, iz, _b);
-    const lx = clamp(_a[0], -HW, HW), lz = clamp(_a[2], -HL, HL);
-    // the contact is on the skin: a point just inside it
-    const depth = clamp((dv - 1.4) * 0.05, 0, 0.8) * (what === 'person' ? 0.35 : 1);
+    const lx = clamp(_a[0], -car.hw, car.hw), lz = clamp(_a[2], -car.hl, car.hl);
+    // the contact is on the skin: a point just inside it (a tank's armour hardly marks)
+    const armoured = car.kind === 'tank';
+    const depth = clamp((dv - 1.4) * 0.05, 0, 0.8) * (what === 'person' ? 0.35 : 1) * (armoured ? 0.15 : 1);
     const radius = 0.32 + Math.min(0.55, dv * 0.035);
     car.dent(lx, clamp(_a[1], 0.35, 1.15), lz, _b[0], 0, _b[2], depth, radius);
     const by = other && other.seats ? other.seats[0] : null;
-    car.damage(Math.pow(Math.max(0, dv - 2.5), 1.6), by);
+    car.damage(Math.pow(Math.max(0, dv - 2.5), 1.6) * (armoured ? 0.05 : 1), by);
     if (car.hitCool <= 0 || dv > 4) {
       car.hitCool = 0.25;
       const loud = clamp01(dv / 10);
@@ -1245,23 +1262,33 @@ export class Traffic {
       return 0.92;
     }
     if (hit.glass === -2) return 1;          // through a window that is already gone
+    // canvas: through it, hardly slowed; nothing there at all (the open back of a truck, the top of a jeep)
+    if (hit.tag === 'canvas') { g.gore.puff('smoke', wx, wy, wz, 0.14, 0.3, 0.42, 0.41, 0.3); return 0.96; }
+    if (hit.tag === 'open' || hit.tag === 'frame') return 1;
+    // a tank's armour: a spark and a whine, and nothing gets through
+    if (hit.tag === 'armour') {
+      g.gore.puff('flash', wx, wy, wz, 0.24, 0.05, 1, 0.92, 0.7);
+      g.audio?.at(chance(0.6) ? 'ricochet' : 'clang', wx, wy, wz, 0.75);
+      car.damage(0.03 * power, shooter);
+      return 0;
+    }
     // metal: a hole, a spark
     const d = g.gore._attach(car.body, carDecal(car, lp, ln, 0.11, 0.11, rand(TAU)), HOLE_UV, null, -1);
     if (d) d.stain = true;
     g.gore.puff('flash', wx, wy, wz, 0.2, 0.06, 1, 0.9, 0.6);
     g.audio?.at('ricochet', wx, wy, wz, 0.7);
     // what is behind the metal there
-    const engine = !car.van ? lp[2] > 1.05 : lp[2] > 1.45;
+    const engine = car.kind === 'armytruck' ? lp[2] > 2.3 && lp[1] < 1.7 : car.kind === 'gunjeep' ? lp[2] > 1.0 : !car.van ? lp[2] > 1.05 : lp[2] > 1.45;
     const tank = lp[2] < -1.25 && lp[1] < 0.6;
     const k = def && def.rifle ? 1.4 : 1;
     if (engine) car.damage(2.6 * power * k, shooter);
     else if (tank) { car.damage(1.1 * power * k, shooter); if (car.hp < 70 && chance(0.06 * k)) car.catchFire(shooter); }
     else car.damage(0.35 * power, shooter);
     // a tyre
-    for (let w = 0; w < 4; w++) {
+    for (let w = 0; w < car.wheelPos.length; w++) {
       const wp = car.wheelPos[w];
-      if (Math.hypot(lp[0] - wp[0], lp[1] - wp[1], lp[2] - wp[2]) < WHEEL_R + 0.05 && !(car.flat && car.flat[w])) {
-        car.flat = car.flat || [0, 0, 0, 0];
+      if (Math.hypot(lp[0] - wp[0], lp[1] - wp[1], lp[2] - wp[2]) < car.wheelR[w] + 0.05 && !(car.flat && car.flat[w])) {
+        car.flat = car.flat || car.wheelPos.map(() => 0);
         car.flat[w] = 1; car.flats = car.flat.reduce((s, v) => s + v, 0);
         car.wheelBend[w] = Math.max(car.wheelBend[w], 0.02);
         car.pull = clamp(car.pull + (wp[0] > 0 ? 0.03 : -0.03) * (wp[2] > 0 ? 1 : 0.5), -0.12, 0.12);
@@ -1355,16 +1382,16 @@ export class Traffic {
       for (const b of h.bodies) { b.vx += (b.px - x) * 3 + rand(-1, 1); b.vy += rand(3, 6); b.vz += (b.pz - z) * 3 + rand(-1, 1); }
       if (h.isPlayer) g.ui?.drivingChanged?.(false);
     }
-    // the wreck: a free body now, as tall as the whole car, thrown up by its own blast
-    const b = car.body;
-    car.wreckCy = car.van ? 0.82 : 0.76;
-    b.setBox(BODY.hx, car.wreckCy, BODY.hz, car.spec.mass * 0.9, true);
+    // the wreck: a free body now, as tall as the whole car, thrown up by its own blast (a tank only rocks)
+    const b = car.body, tank = car.kind === 'tank';
+    car.wreckCy = car.wreckH;
+    b.setBox(car.hw, car.wreckCy, car.hl, car.spec.mass * 0.9, true);
     car.toWorld(0, car.wreckCy, 0, _a);
     b.teleport(_a[0], _a[1], _a[2]);
     b.setKinematic(false);
     car.island.mover = false;
-    b.vx = car.vx * 0.6; b.vz = car.vz * 0.6; b.vy = rand(3.5, 5.5);
-    b.wx = rand(-1.5, 1.5); b.wy = rand(-0.8, 0.8); b.wz = rand(-1.5, 1.5);
+    b.vx = car.vx * 0.6; b.vz = car.vz * 0.6; b.vy = tank ? rand(0.6, 1.2) : rand(3.5, 5.5);
+    b.wx = rand(-1.5, 1.5) * (tank ? 0.1 : 1); b.wy = rand(-0.8, 0.8) * (tank ? 0.1 : 1); b.wz = rand(-1.5, 1.5) * (tank ? 0.1 : 1);
     car.island.wake?.();
     car.vx = car.vz = car.w = 0;
     this.blast(x, y, z, 1, car.lastBy, car);
@@ -1374,7 +1401,10 @@ export class Traffic {
     // pieces of it
     for (let k = 0; k < 8; k++) this._debris(car, x, y, z);
     const d = car.lastBy;
-    if (d && d.isPlayer) g.police?.raise(2, car.unit || car.kind === 'police' ? 'you blew up a police car' : 'you blew up a car', { x, z }, { kind: car.unit || car.kind === 'police' ? 'copCar' : 'car', key: 'car' + car.id });
+    if (d && d.isPlayer) {
+      if (car.army) g.police?.raise(3, car.kind === 'tank' ? 'you destroyed a tank' : 'you destroyed an army vehicle', { x, z }, { kind: 'army', key: 'car' + car.id });
+      else g.police?.raise(2, car.unit || car.kind === 'police' ? 'you blew up a police car' : 'you blew up a car', { x, z }, { kind: car.unit || car.kind === 'police' ? 'copCar' : 'car', key: 'car' + car.id });
+    }
   }
 
   /**
@@ -1383,6 +1413,12 @@ export class Traffic {
    */
   fling(car, vx, vy, vz, spin = 2, by = null) {
     const g = this.game;
+    // nobody throws a tank: it takes the blow on its armour, and it hurts it
+    if (car.kind === 'tank' && !car.carried) {
+      if (!car.wreck) { car.damage(22, by); car.toLocal(car.x - vx, car.y + 0.9, car.z - vz, _a); car.dent(clamp(_a[0], -car.hw, car.hw), 0.9, clamp(_a[2], -car.hl, car.hl), -Math.sign(_a[0]) * 0.5, 0, -Math.sign(_a[2]) * 0.5, 0.06, 0.7); }
+      g.audio?.at('clang', car.x, car.y + 1, car.z, 1);
+      return;
+    }
     if (!car.wreck) {
       car.wreck = true; car.mode = 'wreck'; car.traffic = false; car.hp = Math.min(car.hp, 12); car.lastBy = by || car.lastBy;
       for (const h of car.seats.slice()) {
@@ -1395,8 +1431,8 @@ export class Traffic {
         if (h.isPlayer) g.ui?.drivingChanged?.(false);
       }
       const b = car.body;
-      car.wreckCy = car.van ? 0.82 : 0.76;
-      b.setBox(BODY.hx, car.wreckCy, BODY.hz, car.spec.mass * 0.9, true);
+      car.wreckCy = car.wreckH;
+      b.setBox(car.hw, car.wreckCy, car.hl, car.spec.mass * 0.9, true);
       car.toWorld(0, car.wreckCy, 0, _a);
       b.teleport(_a[0], _a[1], _a[2]);
       b.setKinematic(false);
@@ -1446,6 +1482,13 @@ export class Traffic {
     car.innerMesh.geometry.attributes.color.needsUpdate = true;
     const set = this.wheelSet;
     for (const [t, h] of car.wheelIdx) { set.tyres.colorHex(t, 0x0b0b0c); set.hubs.colorHex(h, 0x3a3532); }
+  }
+
+  /** A black mark on the ground where something burst (not where it burst in the air). */
+  scorch(x, y, z, size = 4) {
+    const gy = groundHeight(x, z);
+    if (y - gy > 2.5) return;
+    this.game.gore._groundDecal(SCORCH_UV, x, gy + 0.014, z, size, size, rand(TAU), 0.9);
   }
 
   /**
@@ -1556,13 +1599,15 @@ export class Traffic {
       if (d > R + 2) continue;
       const f = (1 - Math.max(0, d - 1.5) / R) ** 2;
       o.toLocal(x, y, z, _a);
-      const lx = clamp(_a[0], -HW, HW), lz = clamp(_a[2], -HL, HL);
+      const lx = clamp(_a[0], -o.hw, o.hw), lz = clamp(_a[2], -o.hl, o.hl);
       const ux = -_a[0], uz = -_a[2], ul = Math.hypot(ux, uz) || 1;
-      o.dent(lx, 0.8, lz, -ux / ul * 0 + (lx - _a[0]) / (Math.hypot(lx - _a[0], lz - _a[2]) || 1), 0, (lz - _a[2]) / (Math.hypot(lx - _a[0], lz - _a[2]) || 1), f * 0.35, 0.9);
+      // (a tank takes a blast on its armour: a few of them, close, and it burns)
+      const tank = o.kind === 'tank', heavy = Math.min(1, 1800 / o.spec.mass);
+      o.dent(lx, 0.8, lz, -ux / ul * 0 + (lx - _a[0]) / (Math.hypot(lx - _a[0], lz - _a[2]) || 1), 0, (lz - _a[2]) / (Math.hypot(lx - _a[0], lz - _a[2]) || 1), f * (tank ? 0.08 : 0.35), 0.9);
       for (let i = 0; i < o.windows.length; i++) if (o.windows[i] && chance(f * 1.4)) o.breakGlass(i);
-      o.damage(f * 95, by);
-      if (o.wreck) { o.body.applyImpulse(dx / (d || 1) * f * 9000, f * 6000, dz / (d || 1) * f * 9000, o.body.px, o.body.py, o.body.pz); o.island.wake?.(); }
-      else if (o.mode !== 'rail' || f > 0.2) { if (o.mode === 'rail') this.loosen(o); if (o.mode === 'parked') o.mode = 'loose'; o.vx += dx / (d || 1) * f * 6; o.vz += dz / (d || 1) * f * 6; }
+      o.damage(f * 95 * (tank ? 0.24 : 1), by);
+      if (o.wreck) { if (!tank) { o.body.applyImpulse(dx / (d || 1) * f * 9000, f * 6000, dz / (d || 1) * f * 9000, o.body.px, o.body.py, o.body.pz); o.island.wake?.(); } }
+      else if (o.mode !== 'rail' || f > 0.2) { if (o.mode === 'rail') this.loosen(o); if (o.mode === 'parked') o.mode = 'loose'; o.vx += dx / (d || 1) * f * 6 * heavy; o.vz += dz / (d || 1) * f * 6 * heavy; }
       // the people in it
       for (const h of o.seats) if (h && f > 0.3) { const b = h.bodies[P.HEAD]; h.hit({ part: P.HEAD, type: 'blunt', power: f * 1.6, point: [b.px, b.py, b.pz], dir: [dx / (d || 1), 0, dz / (d || 1)], impulse: 0, attacker: by, weapon: 'explosion' }); }
     }
@@ -1698,7 +1743,7 @@ export class Traffic {
     let best = null, bd = 1.7;
     if (p && !p.car && p.state === ST.ANIM && !p.cuffed) {
       for (const c of this.cars) {
-        if (!c.drivable) continue;
+        if (!c.drivable || c.locked) continue;
         if ((c.x - p.x) ** 2 + (c.z - p.z) ** 2 > 16) continue;
         // either front door: from the passenger side you climb across
         const sp = c.seatAt[0];

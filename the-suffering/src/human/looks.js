@@ -125,6 +125,31 @@ export function swatLook() {
   return L;
 }
 
+const RANKS = ['Private', 'Private', 'Private', 'Corporal', 'Corporal', 'Sergeant'];
+
+/** A soldier: olive drab fatigues and tan boots, under the medium armour (all of it) and the helmet the game puts on them. */
+export function soldierLook() {
+  const L = officerLook();
+  const f = L.sex === 'f';
+  L.age = Math.round(rand(19, 41));
+  L.soldier = true;
+  L.top = pick([0x4d5539, 0x525a3c, 0x484f36]); L.pants = pick([0x434a33, 0x3e4530]); L.shoes = 0x4a3b28;
+  L.longSleeve = true; L.shorts = false;
+  L.style = f ? 'bun' : pick(['short', 'bald', 'short']); L.hat = 0;
+  const rank = pick(RANKS);
+  L.name = rank + ' ' + L.name.replace(/^Officer /, ''); L.title = rank;
+  L.wears = 'army fatigues';
+  L.desc = 'a soldier';
+  L.noun = f ? 'woman, soldier' : 'man, soldier';
+  L.outfit = 'olive drab fatigues';
+  const p = L.persona;
+  p.job = 'soldier'; p.errand = pick(['deployed to the city', 'on the callout with the platoon', 'first deployment', 'on a tour that should have ended last week']);
+  p.quirk = pick(['speaks in clipped radio phrases', 'goes very quiet and precise when things are bad', 'makes dark jokes under stress', 'counts things to stay calm']);
+  p.bravery = rand(0.84, 0.99); p.temper = rand(0.25, 0.6); p.jumpy = rand(0.02, 0.25); p.patience = rand(0.4, 0.85); p.squeamish = rand(0, 0.25);
+  L.mass = Math.max(L.mass, f ? 64 : 80);
+  return L;
+}
+
 /**
  * You. With a `seed` (each account has one), the same body in clothes, skin
  * and hair of its own, the same on every screen: how other players know you.

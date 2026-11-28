@@ -8,7 +8,7 @@ import { Boxes } from './render/boxes.js';
 import { Quads, cellUV } from './render/quads.js';
 import { decalAtlas, FaceAtlas, crateTexture, DECAL, ATLAS_COLS, ATLAS_ROWS } from './render/textures.js';
 import { Human, ST } from './human/human.js';
-import { playerLook, randomLook, officerLook, swatLook } from './human/looks.js';
+import { playerLook, randomLook, officerLook, swatLook, soldierLook } from './human/looks.js';
 import { P } from './human/rig.js';
 import { Gore } from './combat/gore.js';
 import { Voxels } from './world/voxels.js';
@@ -21,6 +21,7 @@ import { Fire } from './combat/fire.js';
 import { Frost } from './combat/frost.js';
 import { Arrows } from './combat/arrows.js';
 import { Air } from './world/heli.js';
+import { Army } from './world/army.js';
 import { Power } from './world/power.js';
 import { Daylight } from './world/daylight.js';
 import { clamp, clamp01, damp, dampAngle, lerp, rand, wrapAngle } from './core/util.js';
@@ -100,6 +101,7 @@ export class Game {
     this.frost = new Frost(this);
     this.arrows = new Arrows(this);
     this.air = new Air(this);
+    this.army = new Army(this);
     this.power = new Power(this);
     this.daylight = new Daylight(this);
     this.daylight.set(settings.tod || 'day');
@@ -195,6 +197,16 @@ export class Game {
     h.swat = true;
     h.wearVest('swat'); h.wearHelmet('swat');
     for (const kit of ['m4a1', 'glock', 'taser', 'cuffs']) this.weapons?.give(h, kit);
+    if (h.brain) h.brain.post = post || { x, z, yaw, kind: 'spot' };
+    return h;
+  }
+
+  /** A soldier: olive drab, medium armour all over (vest, helmet, arms, legs and neck), an AR-15 at the ready and a Glock. */
+  spawnSoldier(x, z, yaw = 0, post = null) {
+    const h = this.spawnHuman(x, z, yaw, soldierLook());
+    h.soldier = true;
+    h.wearFull('medium');
+    for (const kit of ['ar15', 'glock']) this.weapons?.give(h, kit);
     if (h.brain) h.brain.post = post || { x, z, yaw, kind: 'spot' };
     return h;
   }
@@ -299,6 +311,7 @@ export class Game {
     this.police?.update(dt);
     this.traffic?.update(dt);
     this.air.update(dt);
+    this.army.update(dt);
     this.grab.update(dt);
     this.powers.update(dt);
     for (const h of this.humans) h.update(dt);

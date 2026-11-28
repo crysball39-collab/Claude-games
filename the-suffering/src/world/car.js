@@ -26,6 +26,37 @@ import { clamp, clamp01, lerp, rand } from '../core/util.js';
 /** The physics box: it rides high, so a body lying in the road goes under it (and under the wheels). */
 export const BODY = { hx: 0.9, hy: 0.6, hz: 2.15, cy: 0.9 };
 export const WHEEL_R = 0.33, WHEELBASE = 2.64, TRACK = 1.72;
+/**
+ * Each kind's size: half its length and width on the ground, its box's half height and how high the middle of the
+ * box is, and how tall (half) it lies as a wreck.
+ */
+const DIMS = {
+  car: { hl: 2.15, hw: 0.9, hy: 0.6, cy: 0.9, wreck: 0.76 },
+  van: { hl: 2.15, hw: 0.9, hy: 0.7, cy: 1.0, wreck: 0.82 },
+  armytruck: { hl: 3.0, hw: 1.18, hy: 1.05, cy: 1.6, wreck: 1.2 },
+  gunjeep: { hl: 2.2, hw: 1.0, hy: 0.5, cy: 0.85, wreck: 0.62 },
+  tank: { hl: 3.3, hw: 1.7, hy: 0.62, cy: 0.95, wreck: 1.0 },
+};
+/** The army's: a truck with a canvas back, a jeep with a machine gun on a post, a tank. */
+export const ARMY_KINDS = new Set(['armytruck', 'gunjeep', 'tank']);
+/**
+ * What turns on top of it, and the gun on that: where the ring is (its own space), where the gun pivots (the
+ * turret's), how fast each turns, how far the gun goes down and up, where its muzzle is (the gun's), and where the
+ * one working it stands or has their hands.
+ */
+export const TURRET = {
+  gunjeep: { ring: [0, 1.66, -0.92], gun: [0, 0.1, 0], yawRate: 2.6, pitchRate: 1.6, pitch: [-0.32, 0.85], muzzle: [0, 0.01, 1.3], stand: [0, -0.64], grips: [[0.065, -0.03, -0.33], [-0.065, -0.03, -0.33]] },
+  tank: { ring: [0, 1.31, -0.25], gun: [0, 0.38, 1.5], yawRate: 0.7, pitchRate: 0.32, pitch: [-0.12, 0.32], muzzle: [0, 0, 4.58], coax: [0.3, 0.02, 0.62], stand: [-0.55, -0.4], grips: [[-0.32, 0.86, -0.18], [-0.78, 0.86, -0.18]] },
+};
+/** The wheels each kind runs on: where (and how big, if not the usual for it), how wide, and which of them steer. */
+const WHEELS = {
+  car: { r: 0.33, w: 0.24, steer: 1, at: [[0.86, 0.33, 1.32], [-0.86, 0.33, 1.32], [0.86, 0.33, -1.32], [-0.86, 0.33, -1.32]] },
+  armytruck: { r: 0.5, w: 0.36, steer: 1.5, at: [[1.0, 0.5, 2.02], [-1.0, 0.5, 2.02], [1.0, 0.5, -1.35], [-1.0, 0.5, -1.35], [1.0, 0.5, -2.35], [-1.0, 0.5, -2.35]] },
+  gunjeep: { r: 0.42, w: 0.3, steer: 1, at: [[0.92, 0.42, 1.4], [-0.92, 0.42, 1.4], [0.92, 0.42, -1.3], [-0.92, 0.42, -1.3]] },
+  // the tank: six road wheels a side inside the track, the drive sprocket at the front and the idler at the back
+  tank: { r: 0.38, w: 0.42, steer: Infinity, tyre: 0x22241f, hub: 0x4a5038,
+    at: [-2.3, -1.38, -0.46, 0.46, 1.38, 2.3].flatMap((z) => [[1.38, 0.4, z], [-1.38, 0.4, z]]).concat([[1.38, 0.6, 2.88, 0.3], [-1.38, 0.6, 2.88, 0.3], [1.38, 0.6, -2.88, 0.3], [-1.38, 0.6, -2.88, 0.3]]) },
+};
 const SEG = 0.15;
 
 const _lambert = new THREE.MeshLambertMaterial({ vertexColors: true });
@@ -40,6 +71,9 @@ export const SPECS = {
   police: { mass: 1700, top: 52, accel: 5.4, rev: 9, grip: 10.2, seats: 4, steer: 0.6 },
   van: { mass: 2300, top: 36, accel: 3.0, rev: 6, grip: 8.0, seats: 2, steer: 0.56 },
   swatvan: { mass: 3300, top: 40, accel: 3.7, rev: 6, grip: 8.8, seats: 4, steer: 0.56 },
+  armytruck: { mass: 7400, top: 30, accel: 2.7, rev: 5, grip: 8.6, seats: 8, steer: 0.5 },
+  gunjeep: { mass: 2500, top: 40, accel: 4.4, rev: 8, grip: 9.6, seats: 3, steer: 0.6 },
+  tank: { mass: 42000, top: 14, accel: 2.4, rev: 4, grip: 13, seats: 3, steer: 0.55 },
 };
 
 /** Where the hips go, in the car's own space (nose toward +Z, +X its left, the ground at y = 0). The driver sits on the left. */
@@ -48,15 +82,27 @@ const SEATS = {
   van: [[0.42, 0.64, 0.8], [-0.42, 0.64, 0.8]],
   // the S.W.A.T. van: two in the cab, and one standing on the step down each side of the back, holding the rail
   swatvan: [[0.42, 0.64, 0.8], [-0.42, 0.64, 0.8], [1.13, 1.4, -0.55], [-1.13, 1.4, -0.55]],
+  // the army truck: two in the cab, and six on the benches down each side of the back, facing in
+  armytruck: [[0.5, 1.62, 1.98], [-0.5, 1.62, 1.98], [0.84, 1.68, -0.3], [-0.84, 1.68, -0.3], [0.84, 1.68, -1.15], [-0.84, 1.68, -1.15], [0.84, 1.68, -2.0], [-0.84, 1.68, -2.0]],
+  // the jeep: two in front, and the gunner standing in the back at the gun (where, depends on where the gun points)
+  gunjeep: [[0.42, 0.9, 0.2], [-0.42, 0.9, 0.2], [0, 1.4, -1.56]],
+  // the tank: the driver down in the front of the hull, the gunner in the turret, the commander up in the hatch
+  tank: [[0, 0.78, 2.2], [0.45, 1.12, -0.3], [-0.55, 1.9, -0.65]],
 };
 /** Seats that are not ordinary seats (see Human._riding): standing on a step, a hand up on the rail above it. */
 const SEAT_KIND = {
   swatvan: [null, null, { stand: true, foot: 0.45, hang: true, side: 1, rail: [0.94, 1.93] }, { stand: true, foot: 0.45, hang: true, side: -1, rail: [-0.94, 1.93] }],
+  // (on the benches, facing across; out over the tailgate)
+  armytruck: [null, null, ...[0, 1, 2].flatMap(() => [{ yaw: -Math.PI / 2, back: true }, { yaw: Math.PI / 2, back: true }])],
+  // (behind the gun, hands on its grips, turning with it; staying with it when the others get out)
+  gunjeep: [null, null, { stand: true, foot: 0.61, turret: true, gunner: true, stay: true }],
+  // (the driver and the gunner shut in; the commander head and shoulders out of the hatch, on the turret)
+  tank: [{ hide: true, stay: true }, { hide: true, stay: true }, { stand: true, foot: 1.16, turret: true, hatch: true, gunner: true, stay: true }],
 };
 /** S, W, A, T in blocks, five high: for the side of the van. */
 const GLYPH = { S: ['111', '100', '111', '001', '111'], W: ['10001', '10001', '10101', '10101', '01010'], A: ['010', '101', '111', '101', '101'], T: ['111', '010', '010', '010', '010'] };
 /** Where the steering wheel is. */
-const WHEEL_AT = { sedan: [0.38, 0.92, 0.5], van: [0.42, 1.0, 1.2] };
+const WHEEL_AT = { sedan: [0.38, 0.92, 0.5], van: [0.42, 1.0, 1.2], armytruck: [0.5, 2.02, 2.42], gunjeep: [0.42, 1.2, 0.68], tank: [0, 0.95, 2.45] };
 
 /* ------------------------------- the shape -------------------------------- */
 
@@ -69,6 +115,24 @@ const WHEEL_AT = { sedan: [0.38, 0.92, 0.5], van: [0.42, 1.0, 1.2] };
 function shapeFor(kind) {
   const P = (nx, ny, nz, px, py, pz, tag) => { const l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l; return [nx, ny, nz, nx * px + ny * py + nz * pz, tag]; };
   const lower = [P(1, 0, 0, 0.9, 0, 0, 'side'), P(-1, 0, 0, -0.9, 0, 0, 'side'), P(0, 1, 0, 0, 0.77, 0, 'top'), P(0, -1, 0, 0, 0.27, 0, 'under'), P(0, 0, 1, 0, 0, 2.15, 'front'), P(0, 0, -1, 0, 0, -2.15, 'back')];
+  const B = (x0, x1, y0, y1, z0, z1, t) => [P(1, 0, 0, x1, 0, 0, t[0]), P(-1, 0, 0, x0, 0, 0, t[1]), P(0, 1, 0, 0, y1, 0, t[2]), P(0, -1, 0, 0, y0, 0, t[3]), P(0, 0, 1, 0, 0, z1, t[4]), P(0, 0, -1, 0, 0, z0, t[5])];
+  if (kind === 'armytruck') {
+    // the frame under the bed; the cab, low and then glass; the canvas over the back, open at the tail
+    return [B(-1.18, 1.18, 0.55, 1.21, -3.0, 1.3, ['side', 'side', 'top', 'under', 'front', 'back']),
+      B(-1.15, 1.15, 0.55, 1.75, 1.3, 2.98, ['side', 'side', 'top', 'under', 'front', 'back']),
+      B(-1.13, 1.13, 1.75, 2.63, 1.33, 2.95, ['tside', 'tside', 'roof', 'floor', 'screen', 'cabback']),
+      B(-1.18, 1.18, 1.21, 2.65, -3.0, 1.28, ['canvas', 'canvas', 'canvas', 'floor', 'canvas', 'open'])];
+  }
+  if (kind === 'gunjeep') {
+    // the bonnet, the open tub behind it, the windscreen standing up between them
+    return [B(-1.0, 1.0, 0.4, 1.11, 1.0, 2.25, ['side', 'side', 'top', 'under', 'front', 'back']),
+      B(-1.0, 1.0, 0.4, 1.18, -1.85, 1.0, ['side', 'side', 'open', 'under', 'front', 'back']),
+      B(-0.9, 0.9, 1.11, 1.5, 0.96, 1.0, ['frame', 'frame', 'frame', 'frame', 'screen', 'screen'])];
+  }
+  if (kind === 'tank') {
+    const A = ['armour', 'armour', 'armour', 'armour', 'armour', 'armour'];
+    return [B(-1.7, 1.7, 0.3, 1.32, -3.3, 3.3, A), B(-1.12, 1.12, 1.32, 2.05, -2.3, 1.5, A)];
+  }
   if (kind === 'van' || kind === 'swatvan') {
     const cab = [P(1, 0, 0, 0.87, 0, 0, 'vside'), P(-1, 0, 0, -0.87, 0, 0, 'vside'), P(0, -1, 0, 0, 0.77, 0, 'floor'), P(0, 1, 0, 0, 1.57, 0, 'roof'), P(0, 0, -1, 0, 0, -2.15, 'doors'), P(0, 0.25, 0.76, 0, 0.79, 1.45, 'screen')];
     return [lower, cab];
@@ -164,13 +228,21 @@ export class Car {
     this.spec = SPECS[kind] || SPECS.sedan;
     this.van = kind === 'van' || kind === 'swatvan';
     this.swat = kind === 'swatvan';
-    this.seatAt = SEATS[kind === 'swatvan' ? 'swatvan' : this.van ? 'van' : 'sedan'];
+    this.army = ARMY_KINDS.has(kind);
+    const D = DIMS[kind] || (this.van ? DIMS.van : DIMS.car);
+    this.hl = D.hl; this.hw = D.hw; this.hy = D.hy; this.cy = D.cy; this.wreckH = D.wreck;
+    this.seatAt = SEATS[SEATS[kind] ? kind : this.van ? 'van' : 'sedan'];
     this.seatKind = SEAT_KIND[kind] || null;
     this.seats = this.seatAt.map(() => null);
     this.shape = shapeFor(kind);
+    // a turret: which way it points (from the nose) and how high its gun is laid; the gun's kick back when it fires
+    this.turretCfg = TURRET[kind] || null;
+    this.tYaw = 0; this.tPitch = 0; this.recoil = 0;
+    // nobody but its crew gets into a tank
+    this.locked = kind === 'tank';
     this._build();
     // the physics body: kinematic while anyone (or nothing) is driving it, a free body once it is a wreck
-    this.body = new Body({ hx: BODY.hx, hy: BODY.hy + (this.van ? 0.1 : 0), hz: BODY.hz, mass: this.spec.mass, y: BODY.cy, shape: 1, kind: 'car', friction: 0.6, angDamp: 0.4 });
+    this.body = new Body({ hx: this.hw, hy: this.hy, hz: this.hl, mass: this.spec.mass, y: this.cy, shape: 1, kind: 'car', friction: 0.6, angDamp: 0.4 });
     this.body.setKinematic(true);
     this.body.owner = this;
     this.island = new Island(null); this.island.add(this.body); this.island.mover = true;
@@ -192,9 +264,59 @@ export class Car {
   /* -------------------------------- the model ----------------------------- */
 
   _build() {
-    const g = this.g, kind = this.kind, van = this.van, police = kind === 'police', taxi = kind === 'taxi', swat = kind === 'swatvan';
-    const paint = this.paint, trim = 0x232528, dark = 0x15171a, door = police ? 0x16306b : paint;
+    const g = this.g, kind = this.kind, van = this.van;
     const S = new Shell(), G = new Panes(true), L = new Panes(false), I = new Merger();
+    this.windows = [];
+    if (this.army) this._armyParts(S, G, L, I); else this._carParts(S, G, L, I);
+    const shellGeo = S.build(), glassGeo = G.build(), lampGeo = L.build(), intGeo = I.build();
+    this.lampsBroken = {};
+    this._glassP = G; this._lampP = L;
+    /* ---- the steering wheel, which turns ---- */
+    const W = new Merger();
+    for (let k = 0; k < 10; k++) {
+      const a = (k / 10) * Math.PI * 2;
+      W.box(Math.cos(a) * 0.17, Math.sin(a) * 0.17, 0, 0.035, 0.11, 0.035, 0x141517, 0, 0, a);
+    }
+    W.box(0, 0, 0, 0.3, 0.035, 0.03, 0x141517); W.box(0, -0.08, 0, 0.035, 0.16, 0.03, 0x141517); W.box(0, 0, 0.02, 0.09, 0.09, 0.05, 0x1f2124);
+    W.box(0, 0, 0.16, 0.05, 0.05, 0.3, 0x141517);
+    const wheelGeo = W.build();
+
+    const grp = new THREE.Group();
+    this.shellMesh = new THREE.Mesh(shellGeo, _lambert);
+    this.glassMesh = new THREE.Mesh(glassGeo, _glass); this.glassMesh.renderOrder = 6;
+    this.lampMesh = new THREE.Mesh(lampGeo, _glow);
+    this.innerMesh = new THREE.Mesh(intGeo, _lambert);
+    this.wheelMesh = new THREE.Mesh(wheelGeo, _lambert);
+    const wa = WHEEL_AT[WHEEL_AT[kind] ? kind : van ? 'van' : 'sedan'];
+    this.wheelPivot = new THREE.Group();
+    this.wheelPivot.position.set(wa[0], wa[1], wa[2]);
+    this.wheelPivot.rotation.x = -0.42;
+    this.wheelPivot.add(this.wheelMesh);
+    for (const m of [this.shellMesh, this.innerMesh]) { m.castShadow = !!g.shadows; m.receiveShadow = !!g.shadows; }
+    grp.add(this.shellMesh, this.innerMesh, this.wheelPivot, this.lampMesh, this.glassMesh);
+    if (this.turretCfg) this._turretParts(grp);
+    this.group = grp;
+    g.scene.add(grp);
+    // the metal as it was made, for the dents to be measured against
+    this.base = Float32Array.from(shellGeo.attributes.position.array);
+    this.glassBase = Float32Array.from(glassGeo.attributes.position.array);
+    this.lampBase = Float32Array.from(lampGeo.attributes.position.array);
+    // wheels: drawn with everyone else's, from the shared set
+    const WS = WHEELS[kind] || WHEELS.car;
+    this.wheelPos = WS.at.map((a) => [a[0], a[1], a[2]]);
+    this.wheelR = WS.at.map((a) => a[3] || WS.r);
+    this.wheelW = WS.w; this.steerZ = WS.steer;
+    this.wheelBend = this.wheelPos.map(() => 0);
+    this.wheelIdx = [];
+    const set = g.traffic && g.traffic.wheelSet;
+    if (set) for (let k = 0; k < this.wheelPos.length; k++) this.wheelIdx.push([set.tyres.alloc(), set.hubs.alloc(), g.boxes.alloc()]);
+    if (set) for (const [t, h, b] of this.wheelIdx) { set.tyres.colorHex(t, WS.tyre || 0x141517); set.hubs.colorHex(h, WS.hub || (this.army ? 0x4a5038 : 0x8d9197)); g.boxes.colorHex(b, this.army ? 0x3a3f2c : 0x6f7378); }
+  }
+
+  /** An ordinary car or van: the painted shell, the glass, the lamps, and the inside. */
+  _carParts(S, G, L, I) {
+    const kind = this.kind, van = this.van, police = kind === 'police', taxi = kind === 'taxi', swat = kind === 'swatvan';
+    const paint = this.paint, trim = 0x232528, dark = 0x15171a, door = police ? 0x16306b : paint;
     /* ---- the painted shell ---- */
     if (van) {
       S.box(0, 0.52, 1.8, 1.8, 0.5, 0.7, paint);                 // the nose
@@ -252,7 +374,6 @@ export class Car {
       }
     }
     if (taxi) S.box(0, 1.58, -0.1, 0.5, 0.16, 0.22, 0xf4e9b0);
-    const shellGeo = S.build();
     /* ---- glass ---- */
     const GL = 0x9fb3c2, A = 0.3;
     this.windows = [];
@@ -269,7 +390,6 @@ export class Car {
       win(4, [-0.81, 0.8, -0.17], [-0.81, 0.8, 0.97], [-0.81, 1.44, 0.56], [-0.81, 1.44, -0.17], false);
       win(5, [-0.81, 0.8, -1.4], [-0.81, 0.8, -0.27], [-0.81, 1.44, -0.27], [-0.81, 1.44, -1.12], false);
     }
-    const glassGeo = G.build();
     /* ---- lamps ---- */
     const zf = 2.181, zb = -2.181;
     this.lamps = {
@@ -285,9 +405,6 @@ export class Car {
       this.lamps.bar.push(L.quad([0.16, y, zz - 0.32], [0.56, y, zz - 0.32], [0.56, y + 0.09, zz - 0.32], [0.16, y + 0.09, zz - 0.32], 0x2b6cff, 1, 1));
       this.lamps.bar.push(L.quad([-0.56, y, zz - 0.32], [-0.16, y, zz - 0.32], [-0.16, y + 0.09, zz - 0.32], [-0.56, y + 0.09, zz - 0.32], 0xd41f1f, 1, 1));
     }
-    this.lampsBroken = {};
-    const lampGeo = L.build();
-    this._glassP = G; this._lampP = L;
     /* ---- the inside: seats, dashboard, floor ---- */
     const SEAT = 0x2c2f34, DASH = 0x1c1e21, FLOOR = 0x232527;
     if (van) {
@@ -303,49 +420,191 @@ export class Car {
       I.box(0, 0.52, 0.42, 0.22, 0.3, 0.7, DASH);                // the console between the seats
       I.box(0, 0.98, -1.35, 1.5, 0.03, 0.3, DASH);               // the shelf under the back window
     }
-    const intGeo = I.build();
-    /* ---- the steering wheel, which turns ---- */
-    const W = new Merger();
-    for (let k = 0; k < 10; k++) {
-      const a = (k / 10) * Math.PI * 2;
-      W.box(Math.cos(a) * 0.17, Math.sin(a) * 0.17, 0, 0.035, 0.11, 0.035, 0x141517, 0, 0, a);
-    }
-    W.box(0, 0, 0, 0.3, 0.035, 0.03, 0x141517); W.box(0, -0.08, 0, 0.035, 0.16, 0.03, 0x141517); W.box(0, 0, 0.02, 0.09, 0.09, 0.05, 0x1f2124);
-    W.box(0, 0, 0.16, 0.05, 0.05, 0.3, 0x141517);
-    const wheelGeo = W.build();
+  }
 
-    const grp = new THREE.Group();
-    this.shellMesh = new THREE.Mesh(shellGeo, _lambert);
-    this.glassMesh = new THREE.Mesh(glassGeo, _glass); this.glassMesh.renderOrder = 6;
-    this.lampMesh = new THREE.Mesh(lampGeo, _glow);
-    this.innerMesh = new THREE.Mesh(intGeo, _lambert);
-    this.wheelMesh = new THREE.Mesh(wheelGeo, _lambert);
-    const wa = WHEEL_AT[van ? 'van' : 'sedan'];
-    this.wheelPivot = new THREE.Group();
-    this.wheelPivot.position.set(wa[0], wa[1], wa[2]);
-    this.wheelPivot.rotation.x = -0.42;
-    this.wheelPivot.add(this.wheelMesh);
-    for (const m of [this.shellMesh, this.innerMesh]) { m.castShadow = !!g.shadows; m.receiveShadow = !!g.shadows; }
-    grp.add(this.shellMesh, this.innerMesh, this.wheelPivot, this.lampMesh, this.glassMesh);
-    this.group = grp;
-    g.scene.add(grp);
-    // the metal as it was made, for the dents to be measured against
-    this.base = Float32Array.from(shellGeo.attributes.position.array);
-    this.glassBase = Float32Array.from(glassGeo.attributes.position.array);
-    this.lampBase = Float32Array.from(lampGeo.attributes.position.array);
-    // wheels: drawn with everyone else's, from the shared set
-    this.wheelIdx = [];
-    const set = g.traffic && g.traffic.wheelSet;
-    if (set) for (let k = 0; k < 4; k++) this.wheelIdx.push([set.tyres.alloc(), set.hubs.alloc(), g.boxes.alloc()]);
-    if (set) for (const [t, h, b] of this.wheelIdx) { set.tyres.colorHex(t, 0x141517); set.hubs.colorHex(h, 0x8d9197); g.boxes.colorHex(b, 0x6f7378); }
-    this.wheelPos = [[0.86, WHEEL_R, 1.32], [-0.86, WHEEL_R, 1.32], [0.86, WHEEL_R, -1.32], [-0.86, WHEEL_R, -1.32]];
-    this.wheelBend = [0, 0, 0, 0];
+  /** The army's three: a truck with a canvas back, a jeep with a gun on a post, a tank. Shell, glass, lamps and the inside. */
+  _armyParts(S, G, L, I) {
+    const kind = this.kind, paint = this.paint, dark = 0x1f211c;
+    const GL = 0x9fb3c2, A = 0.3;
+    const win = (i, a, b, c, d, laminated) => { this.windows[i] = { pane: G.quad(a, b, c, d, GL, A, laminated ? 3 : 2), laminated, cracks: 0, broken: false }; };
+    const lamps = this.lamps = { head: [], tail: [], rev: [], bar: [] };
+    // (a headlamp is wound one way to face forward, a tail lamp the other to face back)
+    const head = (x0, x1, y0, y1, z) => lamps.head.push(L.quad([x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z], 0xfff3c8, 1, 1));
+    const tail = (x0, x1, y0, y1, z) => lamps.tail.push(L.quad([x0, y0, z], [x1, y0, z], [x1, y1, z], [x0, y1, z], 0x6e0c0c, 1, 1));
+    const SEAT = 0x2e312a, DASH = 0x1c1e1a, FLOOR = 0x262822, WOOD = 0x6b5b3e;
+    if (kind === 'armytruck') {
+      const CANVAS = 0x5d5c40, CANVAS_D = 0x51503a;
+      // the frame, the bumpers
+      for (const sx of [0.55, -0.55]) S.box(sx, 0.8, -0.1, 0.16, 0.22, 5.8, dark);
+      S.box(0, 0.74, 2.98, 2.34, 0.24, 0.14, dark); S.box(0, 0.76, -3.0, 2.3, 0.18, 0.1, dark);
+      // the cab: the engine under its front, a door each side, a windscreen in two halves, a flat roof
+      S.box(0, 1.15, 2.72, 2.3, 0.9, 0.5, paint);
+      S.box(0, 0.98, 1.95, 2.28, 0.22, 1.3, dark);
+      for (const sx of [1, -1]) {
+        S.box(sx * 1.12, 1.3, 2.0, 0.06, 0.9, 1.3, paint);
+        S.box(sx * 1.11, 2.18, 2.9, 0.08, 0.86, 0.08, paint);
+        S.box(sx * 1.11, 2.18, 1.38, 0.08, 0.86, 0.1, paint);
+        S.box(sx * 1.0, 1.04, 2.02, 0.42, 0.06, 1.12, paint);
+        S.box(sx * 1.15, 0.66, 2.0, 0.14, 0.05, 0.5, dark);
+      }
+      S.box(0, 2.62, 2.14, 2.28, 0.07, 1.62, paint);
+      S.box(0, 2.18, 2.925, 0.07, 0.86, 0.05, paint);
+      S.box(0, 1.96, 1.34, 2.28, 1.3, 0.06, paint);
+      S.box(0, 1.15, 2.98, 1.5, 0.6, 0.03, dark);
+      // the back: a flat bed with low sides, and canvas over hoops; open at the tail, over the tailgate
+      S.box(0, 1.16, -0.86, 2.36, 0.1, 4.3, paint);
+      for (const sx of [1, -1]) S.box(sx * 1.16, 1.44, -0.86, 0.05, 0.46, 4.3, paint);
+      S.box(0, 1.44, 1.27, 2.36, 0.46, 0.05, paint);
+      S.box(0, 1.36, -3.0, 2.36, 0.3, 0.05, paint);
+      for (const sx of [1, -1]) S.box(sx * 1.17, 2.14, -0.86, 0.03, 0.94, 4.3, CANVAS);
+      S.box(0, 2.63, -0.86, 2.38, 0.05, 4.32, CANVAS);
+      S.box(0, 2.14, 1.28, 2.36, 0.94, 0.03, CANVAS_D);
+      for (const sx of [1, -1]) S.box(sx * 1.15, 2.14, -2.97, 0.06, 0.96, 0.06, dark);
+      S.box(0, 2.62, -2.97, 2.3, 0.07, 0.07, dark);
+      // a fuel tank and a toolbox under the bed
+      S.box(-1.02, 0.86, 0.5, 0.3, 0.4, 0.9, dark); S.box(1.02, 0.86, 0.5, 0.3, 0.32, 0.7, dark);
+      win(0, [1.07, 1.62, 2.935], [-1.07, 1.62, 2.935], [-1.07, 2.57, 2.935], [1.07, 2.57, 2.935], true);
+      win(2, [1.155, 1.78, 2.84], [1.155, 1.78, 1.45], [1.155, 2.52, 1.45], [1.155, 2.52, 2.84], false);
+      win(4, [-1.155, 1.78, 1.45], [-1.155, 1.78, 2.84], [-1.155, 2.52, 2.84], [-1.155, 2.52, 1.45], false);
+      head(0.95, 0.68, 0.96, 1.14, 3.0); head(-0.68, -0.95, 0.96, 1.14, 3.0);
+      tail(0.78, 1.0, 0.84, 0.96, -3.06); tail(-1.0, -0.78, 0.84, 0.96, -3.06);
+      // the cab's floor, seats and dashboard; the benches down the back
+      I.box(0, 1.12, 1.95, 2.18, 0.05, 1.2, FLOOR);
+      for (const sx of [0.5, -0.5]) { I.box(sx, 1.46, 1.98, 0.56, 0.12, 0.5, SEAT); I.box(sx, 1.86, 1.66, 0.56, 0.7, 0.1, SEAT, -0.12); }
+      I.box(0, 1.72, 2.5, 2.1, 0.2, 0.26, DASH);
+      for (const sx of [0.86, -0.86]) { I.box(sx, 1.55, -1.12, 0.36, 0.07, 3.5, WOOD); for (const z of [-2.6, -1.1, 0.4]) I.box(sx, 1.38, z, 0.06, 0.3, 0.06, dark); }
+    } else if (kind === 'gunjeep') {
+      const CAN = 0x3e4530;
+      // the tub (a floor, sides, a back), the bonnet and the engine under it, the bulkhead under the windscreen
+      S.box(0, 0.58, -0.4, 1.86, 0.06, 2.9, dark);
+      for (const sx of [1, -1]) S.box(sx * 0.96, 0.88, -0.4, 0.06, 0.6, 2.9, paint);
+      S.box(0, 0.88, -1.83, 1.98, 0.6, 0.06, paint);
+      S.box(0, 0.96, 1.62, 1.98, 0.3, 1.2, paint);
+      S.box(0, 0.66, 1.62, 1.98, 0.36, 1.2, paint);
+      S.box(0, 0.95, 1.02, 1.92, 0.5, 0.06, paint);
+      S.box(0, 0.76, 2.23, 1.42, 0.44, 0.04, dark);
+      for (const sx of [1, -1]) {
+        S.box(sx * 1.02, 0.94, 1.42, 0.14, 0.05, 0.9, paint);
+        S.box(sx * 1.02, 0.94, -1.3, 0.14, 0.05, 0.84, paint);
+        S.box(sx * 0.9, 1.31, 0.98, 0.05, 0.42, 0.05, paint);
+        S.box(sx * 0.9, 1.45, -0.36, 0.06, 0.56, 0.06, dark);
+      }
+      S.box(0, 1.52, 0.98, 1.84, 0.05, 0.05, paint);
+      S.box(0, 1.74, -0.36, 1.86, 0.06, 0.06, dark);
+      S.box(0, 0.5, 2.3, 2.04, 0.14, 0.12, dark); S.box(0, 0.5, -1.9, 2.0, 0.14, 0.1, dark);
+      // the post the gun turns on, and the cans strapped on the back
+      S.box(0, 0.63, -0.92, 0.42, 0.05, 0.42, dark);
+      S.box(0, 1.12, -0.92, 0.12, 1.06, 0.12, dark);
+      for (const sx of [0.52, -0.52]) S.box(sx, 0.9, -1.93, 0.32, 0.44, 0.14, CAN);
+      win(0, [0.86, 1.12, 0.99], [-0.86, 1.12, 0.99], [-0.86, 1.48, 0.99], [0.86, 1.48, 0.99], true);
+      head(0.86, 0.62, 0.84, 0.98, 2.26); head(-0.62, -0.86, 0.84, 0.98, 2.26);
+      tail(0.72, 0.9, 0.74, 0.86, -1.87); tail(-0.9, -0.72, 0.74, 0.86, -1.87);
+      for (const sx of [0.42, -0.42]) { I.box(sx, 0.74, 0.18, 0.5, 0.12, 0.5, SEAT); I.box(sx, 1.05, -0.08, 0.5, 0.52, 0.1, SEAT, -0.1); }
+      I.box(0, 1.08, 0.9, 1.8, 0.12, 0.16, DASH);
+    } else {
+      const TRACK = 0x1d1e1b;
+      // the hull: its body, the belly between the tracks, the sloped plates at the front, the deck at the back
+      S.box(0, 0.98, -0.1, 2.3, 0.66, 5.7, paint);
+      S.box(0, 0.55, 0, 2.0, 0.3, 5.4, dark);
+      S.box(0, 1.1, 2.98, 2.3, 0.1, 0.8, paint, 0.5);
+      S.box(0, 0.68, 3.14, 2.1, 0.08, 0.6, dark, -0.88);
+      S.box(0, 0.98, -2.97, 2.25, 0.62, 0.06, paint);
+      for (const sx of [0.7, -0.7]) S.box(sx, 1.15, -3.02, 0.28, 0.16, 0.06, dark);
+      S.box(0, 1.33, -2.05, 2.0, 0.04, 1.5, dark);
+      S.box(0, 1.34, 2.1, 0.6, 0.06, 0.5, dark);
+      // the tracks (over the wheels, under them, round the sprocket and the idler); fenders over them; skirts down the sides
+      for (const sx of [1, -1]) {
+        S.box(sx * 1.38, 0.83, 0, 0.56, 0.06, 5.8, TRACK);
+        S.box(sx * 1.38, 0.04, 0, 0.56, 0.08, 4.9, TRACK);
+        S.box(sx * 1.38, 0.435, 2.81, 0.56, 0.07, 0.92, TRACK, -1.04);
+        S.box(sx * 1.38, 0.435, -2.81, 0.56, 0.07, 0.92, TRACK, 1.04);
+        S.box(sx * 1.38, 1.3, 0, 0.64, 0.05, 6.4, paint);
+        S.box(sx * 1.68, 0.98, 0, 0.04, 0.5, 5.9, paint);
+      }
+      head(1.3, 1.1, 1.16, 1.26, 3.22); head(-1.1, -1.3, 1.16, 1.26, 3.22);
+      tail(1.0, 1.2, 1.12, 1.22, -3.01); tail(-1.2, -1.0, 1.12, 1.22, -3.01);
+      I.box(0, 0.75, 1.9, 0.5, 0.1, 0.5, dark);
+    }
+  }
+
+  /** What turns on top: the jeep's gun on its post, behind a shield; the tank's turret, with its long gun. */
+  _turretParts(grp) {
+    const T = this.turretCfg, paint = this.paint, dark = 0x1f211c, metal = 0x2b2d2f, g = this.g;
+    const tm = new Merger(), gm = new Merger();
+    if (this.kind === 'gunjeep') {
+      tm.box(0, 0.03, 0, 0.2, 0.06, 0.2, dark);
+      tm.box(0, 0.08, 0.04, 0.1, 0.1, 0.16, dark);
+      tm.box(0, 0.26, 0.46, 0.72, 0.42, 0.03, paint);
+      tm.box(0, 0.49, 0.44, 0.3, 0.06, 0.03, paint);
+      gm.box(0, 0, 0.04, 0.14, 0.15, 0.62, metal);
+      gm.box(0, 0.01, 0.78, 0.055, 0.055, 0.92, 0x1d1e20);
+      gm.box(0, 0.01, 0.46, 0.09, 0.09, 0.28, metal);
+      gm.box(0, 0.01, 1.25, 0.09, 0.09, 0.08, 0x1d1e20);
+      gm.box(0.13, -0.04, 0.04, 0.12, 0.16, 0.26, 0x3e4530);
+      for (const sx of [0.065, -0.065]) gm.box(sx, -0.03, -0.31, 0.03, 0.1, 0.05, metal);
+      gm.box(0, 0.1, -0.1, 0.03, 0.05, 0.03, metal);
+    } else {
+      const BARREL = 0x3c4130;
+      tm.box(0, 0.08, 0, 1.9, 0.16, 2.1, dark);
+      tm.box(0, 0.4, -0.1, 2.2, 0.62, 2.5, paint);
+      for (const sx of [1, -1]) tm.box(sx * 0.72, 0.38, 1.22, 0.72, 0.56, 0.62, paint, 0, sx * 0.38, 0);
+      tm.box(0, 0.45, -1.7, 1.9, 0.5, 0.8, paint);
+      for (const sx of [1, -1]) tm.box(sx * 1.12, 0.45, -1.1, 0.08, 0.34, 1.4, dark);
+      tm.cyl(-0.55, 0.78, -0.4, 0.66, 0.16, paint);
+      tm.box(-0.55, 1.0, -0.86, 0.56, 0.06, 0.5, paint, 1.15);
+      tm.box(-0.55, 0.92, -0.05, 0.07, 0.07, 0.72, dark);
+      tm.box(-0.55, 0.88, -0.32, 0.1, 0.12, 0.2, dark);
+      tm.box(0.5, 0.73, -0.3, 0.5, 0.04, 0.5, dark);
+      tm.box(0.62, 0.82, 0.55, 0.3, 0.2, 0.35, dark);
+      for (const sx of [1, -1]) tm.box(sx * 1.0, 0.56, 0.98, 0.16, 0.14, 0.3, dark);
+      tm.box(0.75, 1.32, -1.65, 0.02, 1.4, 0.02, dark);
+      gm.box(0, 0, 0.12, 0.92, 0.5, 0.38, paint);
+      gm.box(0, 0, 2.35, 0.17, 0.17, 4.1, BARREL);
+      gm.box(0, 0, 2.6, 0.27, 0.27, 0.56, BARREL);
+      gm.box(0, 0, 4.44, 0.22, 0.22, 0.24, dark);
+      gm.box(0.3, 0.02, 0.42, 0.06, 0.06, 0.32, dark);
+    }
+    this.turret = new THREE.Group();
+    this.turret.position.set(T.ring[0], T.ring[1], T.ring[2]);
+    this.turretMesh = new THREE.Mesh(tm.build(), _lambert);
+    this.gunGrp = new THREE.Group();
+    this.gunGrp.position.set(T.gun[0], T.gun[1], T.gun[2]);
+    this.gunMesh = new THREE.Mesh(gm.build(), _lambert);
+    for (const m of [this.turretMesh, this.gunMesh]) { m.castShadow = !!g.shadows; m.receiveShadow = !!g.shadows; }
+    this.gunGrp.add(this.gunMesh);
+    this.turret.add(this.turretMesh, this.gunGrp);
+    grp.add(this.turret);
+    this.turretMeshes = [this.turretMesh, this.gunMesh];
+  }
+
+  /**
+   * A point on the turret (its own space: `gun` set, the gun's, which is laid up or down on it) in the car's own
+   * space; `world` too, in the world.
+   */
+  turretPoint(lx, ly, lz, out, gun = false, world = true) {
+    const T = this.turretCfg;
+    let x = lx, y = ly, z = lz;
+    if (gun) {
+      const c = Math.cos(this.tPitch), s = Math.sin(this.tPitch);
+      const y2 = y * c + z * s, z2 = -y * s + z * c;
+      x += T.gun[0]; y = y2 + T.gun[1]; z = z2 + T.gun[2];
+    }
+    const c = Math.cos(this.tYaw), s = Math.sin(this.tYaw);
+    const hx = x * c + z * s + T.ring[0], hy = y + T.ring[1], hz = -x * s + z * c + T.ring[2];
+    if (!world) { out[0] = hx; out[1] = hy; out[2] = hz; return out; }
+    return this.toWorld(hx, hy, hz, out);
+  }
+
+  /** The way the gun points, in the world. */
+  gunDir(out) {
+    const cp = Math.cos(this.tPitch), sp = Math.sin(this.tPitch), c = Math.cos(this.tYaw), s = Math.sin(this.tYaw);
+    return this.dirToWorld(s * cp, sp, c * cp, out);
   }
 
   dispose() {
     const g = this.g;
     g.scene.remove(this.group);
-    for (const m of [this.shellMesh, this.glassMesh, this.lampMesh, this.innerMesh, this.wheelMesh]) m.geometry.dispose();
+    for (const m of [this.shellMesh, this.glassMesh, this.lampMesh, this.innerMesh, this.wheelMesh, ...(this.turretMeshes || [])]) m.geometry.dispose();
     g.world.removeIsland(this.island);
     g.gore.clearBody(this.body);
     const set = g.traffic && g.traffic.wheelSet;
@@ -362,9 +621,9 @@ export class Car {
     grp.rotation.set(this.pitch, this.yaw, this.roll, 'YXZ');
     const q = grp.quaternion;
     if (!this.wreck) {
-      // the body's centre is BODY.cy up from the ground, in the car's own space
+      // the body's centre is its height up from the ground, in the car's own space
       const ux = 2 * (q.x * q.y - q.w * q.z), uy = 1 - 2 * (q.x * q.x + q.z * q.z), uz = 2 * (q.y * q.z + q.w * q.x);
-      const c = BODY.cy + (this.van ? 0.1 : 0);
+      const c = this.cy;
       this.body.setPose(this.x + ux * c, this.y + uy * c, this.z + uz * c, q.x, q.y, q.z, q.w, dt);
     }
     this.dx = Math.sin(this.yaw); this.dz = Math.cos(this.yaw);
@@ -373,7 +632,7 @@ export class Car {
   /** The car follows its body: once it is a wreck, the physics moves it. */
   follow() {
     const b = this.body, grp = this.group;
-    const c = this.wreckCy || BODY.cy + (this.van ? 0.1 : 0);
+    const c = this.wreckCy || this.cy;
     // the ground point is the body's centre less its height, along the body's own up
     const qx = b.qx, qy = b.qy, qz = b.qz, qw = b.qw;
     const ux = 2 * (qx * qy - qw * qz), uy = 1 - 2 * (qx * qx + qz * qz), uz = 2 * (qy * qz + qw * qx);
@@ -504,6 +763,9 @@ export class Car {
     } else if (tag === 'vside') {
       if (y < 0.8 || y > 1.5 || z < 0.45) return -1;
       i = lp[0] > 0 ? 2 : 4;
+    } else if (tag === 'tside') {
+      if (y < 1.78 || y > 2.52 || z < 1.45 || z > 2.84) return -1;
+      i = lp[0] > 0 ? 2 : 4;
     } else return -1;
     const w = this.windows[i];
     return w ? (w.broken ? -2 : i) : -1;
@@ -632,7 +894,7 @@ export class Car {
     // lamps in the way of it
     if (depth > 0.03) this.breakLampsNear(lx, ly, lz, radius * 0.9);
     // a corner hit hard enough bends the wheel there
-    for (let k = 0; k < 4; k++) {
+    for (let k = 0; k < this.wheelPos.length; k++) {
       const wp = this.wheelPos[k];
       const d = Math.hypot(wp[0] - lx, wp[1] - ly, wp[2] - lz);
       if (d < radius * 1.4 && depth > 0.12) this.wheelBend[k] = Math.min(0.35, this.wheelBend[k] + depth * 0.5);
@@ -683,12 +945,18 @@ export class Car {
       const on = live && this.siren, f = Math.floor(g.time * 6) % 2;
       this.lamps.bar.forEach((i, k) => this._lamp(i, !on ? (k % 2 ? 0x5a1414 : 0x1b2f66) : (k % 2 === f ? (k % 2 ? 0xff3030 : 0x4a8cff) : 0x101010)));
     }
+    // the turret, and the gun on it
+    if (this.turret) {
+      this.turret.rotation.y = this.tYaw;
+      this.gunGrp.rotation.x = -this.tPitch;
+      this.gunMesh.position.z = -this.recoil;
+    }
     // the wheels
     if (set && this.wheelIdx.length) {
       const q = this.group.quaternion;
-      for (let k = 0; k < 4; k++) {
-        const wp = this.wheelPos[k], [ti, hi, bi] = this.wheelIdx[k];
-        const left = wp[0] > 0, front = wp[2] > 0;
+      for (let k = 0; k < this.wheelIdx.length; k++) {
+        const wp = this.wheelPos[k], [ti, hi, bi] = this.wheelIdx[k], R = this.wheelR[k], W = this.wheelW;
+        const left = wp[0] > 0, front = wp[2] >= this.steerZ;
         const steer = front ? this.steer : 0;
         const bend = this.wheelBend[k] * (left ? 1 : -1);
         // the wheel's own turn: about Y for steering (and a bent one splayed), about X as it rolls
@@ -697,13 +965,13 @@ export class Car {
         this.toWorld(wp[0], wp[1] - this.wheelBend[k] * 0.1, wp[2], _o);
         // tyre: a cylinder lying along X
         _q3.copy(_q2).multiply(_qcyl);
-        set.tyres.set(ti, _o[0], _o[1], _o[2], _q3.x, _q3.y, _q3.z, _q3.w, WHEEL_R * 2, 0.24, WHEEL_R * 2);
+        set.tyres.set(ti, _o[0], _o[1], _o[2], _q3.x, _q3.y, _q3.z, _q3.w, R * 2, W, R * 2);
         // the hub on its outside face, and a bar across it so it can be seen to turn
         const side = left ? 1 : -1;
-        _v1.set(side * 0.125, 0, 0).applyQuaternion(_q2);
-        set.hubs.set(hi, _o[0] + _v1.x, _o[1] + _v1.y, _o[2] + _v1.z, _q3.x, _q3.y, _q3.z, _q3.w, 0.36, 0.02, 0.36);
-        _v1.set(side * 0.136, 0, 0).applyQuaternion(_q2);
-        g.boxes.set(bi, _o[0] + _v1.x, _o[1] + _v1.y, _o[2] + _v1.z, _q2.x, _q2.y, _q2.z, _q2.w, 0.012, 0.3, 0.05);
+        _v1.set(side * (W * 0.52 + 0.001), 0, 0).applyQuaternion(_q2);
+        set.hubs.set(hi, _o[0] + _v1.x, _o[1] + _v1.y, _o[2] + _v1.z, _q3.x, _q3.y, _q3.z, _q3.w, R * 1.09, 0.02, R * 1.09);
+        _v1.set(side * (W * 0.57), 0, 0).applyQuaternion(_q2);
+        g.boxes.set(bi, _o[0] + _v1.x, _o[1] + _v1.y, _o[2] + _v1.z, _q2.x, _q2.y, _q2.z, _q2.w, 0.012, R * 0.9, 0.05);
       }
     }
   }
@@ -728,7 +996,7 @@ export class WheelSet {
 /** A quad lying on a surface of the car (body-local corners for a decal on its physics body). */
 export function carDecal(car, lp, ln, w, h, angle = 0, lift = 0.006) {
   // body space is the car's own space less the body's height
-  const cy = car.wreckCy || BODY.cy + (car.van ? 0.1 : 0);
+  const cy = car.wreckCy || car.cy;
   const nx = ln[0], ny = ln[1], nz = ln[2];
   // two directions along the surface
   let ux, uy, uz;

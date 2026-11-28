@@ -14,13 +14,27 @@
               pulls the ropes in and leaves.
 
    Whoever is in it can see you from up there unless a building is in the
-   way, and tells the rest of them where you are. At night a searchlight
-   under its nose follows you.
+   way, and tells the rest of them where you are. It knows where you are
+   only while somebody can see you: lose them and it searches, in wider and
+   wider circles round where you were last seen. It flies the way a
+   helicopter does, nose first, turning to face where it is going and
+   banking into the turn; it drifts sideways or back only slowly. At night
+   a searchlight under its nose follows you, or sweeps where you were.
 
    It can be shot. Rounds hole it; enough of them and the engine smokes,
    then burns, and it loses its tail and comes down spinning; so does one
    whose pilot has been shot. Where it comes down it blows up, and whoever is
    still in it is thrown out. Anyone shot on the rope falls.
+
+   At six stars the army sends its own, a third kind:
+
+     attack   narrow and olive, a gunner in front and the pilot above and
+              behind, a gun under the chin and a pod of missiles under each
+              stub wing. It stands off at a distance, its nose on you, and
+              the chin gun walks its bursts on to you; when the nose is
+              right on you it fires its missiles, two at a time, one from
+              each side; then it moves round to come at you from somewhere
+              else. It is armoured: rounds do it less harm.
    ========================================================================== */
 import * as THREE from 'three';
 import { Merger } from '../render/merge.js';
@@ -30,8 +44,13 @@ import { P, PELVIS_HEIGHT } from '../human/rig.js';
 import { ST } from '../human/human.js';
 import { clamp, clamp01, lerp, rand, chance, pick, damp, wrapAngle, TAU } from '../core/util.js';
 
+/** Turns `a` toward `b` by no more than `r`. */
+const approach = (a, b, r) => a + clamp(wrapAngle(b - a), -r, r);
+
 const CRUISE_Y = 64;           // over everything in the city, going to and from
-const MAX_SPEED = 24, ACCEL = 7, CLIMB = 7, YAW_RATE = 1.1;
+const MAX_SPEED = 24, ACCEL = 7, CLIMB = 7, YAW_RATE = 0.9;
+/** How fast it can go sideways, or backwards, rather than where its nose points. */
+const SIDE = 4, BACK = 3;
 const ROTOR_R = 5.2;
 const ROPE_DOOR = 0.9;         // where the ropes hang from, out from the middle
 const BLUE = 0x16306b, WHITE = 0xe7eaee, DARK = 0x23262b, INSIDE = 0x34383e, GREY = 0x8b9096;
@@ -46,7 +65,14 @@ const CREW = {
     at: [[-0.38, 0.95, 1.15], [0.48, 1.06, 0.22], [-0.48, 1.06, 0.22], [0.48, 1.06, -0.62], [-0.48, 1.06, -0.62]],
     kind: [{ pilot: true }, { yaw: Math.PI / 2, side: 1 }, { yaw: -Math.PI / 2, side: -1 }, { yaw: Math.PI / 2, side: 1 }, { yaw: -Math.PI / 2, side: -1 }],
   },
+  // the army's: the pilot behind and above, the gunner in front, under the one long canopy
+  attack: {
+    at: [[0, 1.2, 0.95], [0, 0.98, 2.05]],
+    kind: [{ pilot: true }, { chin: true }],
+  },
 };
+/** The attack helicopter's chin gun: where it turns (its own space), how far its muzzle is out, how far it turns. */
+const CHIN = { at: [0, 0.3, 2.65], len: 0.95, yaw: 1.9, pitch: [-1.2, 0.2] };
 
 const _a = [0, 0, 0], _b = [0, 0, 0];
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
@@ -103,6 +129,50 @@ function bodyGeometry() {
   return _geo;
 }
 
+let _atkGeo = null;
+/** The attack helicopter, all that does not move: a narrow olive body, two seats in line, stub wings, the pods. */
+function attackGeometry() {
+  if (_atkGeo) return _atkGeo;
+  const m = new Merger(), glass = new Merger(), gun = new Merger();
+  const OL = 0x3f4535, OD = 0x2f3428, BK = 0x1b1c1a;
+  // the body, the nose, the sensors on its tip
+  m.box(0, 0.75, 0.9, 0.95, 0.7, 3.4, OL);
+  m.box(0, 0.62, 2.9, 0.8, 0.55, 0.7, OL);
+  m.box(0, 0.55, 3.32, 0.52, 0.34, 0.26, OD);
+  // the canopies, the gunner's lower in front, the pilot's higher behind; the frame between them
+  glass.box(0, 1.36, 2.12, 0.84, 0.6, 1.0, 0, -0.16);
+  glass.box(0, 1.56, 0.98, 0.84, 0.66, 1.1, 0, -0.08);
+  m.box(0, 1.09, 1.55, 0.92, 0.06, 2.5, OD);
+  m.box(0, 1.66, 1.56, 0.06, 0.5, 0.06, OD);
+  // behind the cockpit: the engines either side, the gearbox, the mast
+  m.box(0, 1.25, -0.6, 1.0, 0.9, 1.6, OL);
+  for (const sx of [1, -1]) m.box(sx * 0.62, 1.45, -0.55, 0.42, 0.42, 1.5, OD);
+  m.box(0, 1.8, -0.3, 0.7, 0.35, 0.9, OL);
+  m.cyl(0, 2.1, -0.2, 0.2, 0.4, BK);
+  // the stub wings, and under each end a pod of missiles (their noses showing at the front)
+  m.box(0, 1.0, -0.2, 3.2, 0.07, 0.7, OL);
+  for (const sx of [1, -1]) {
+    m.box(sx * 1.25, 0.78, -0.15, 0.36, 0.34, 1.3, OD);
+    for (const [ox, oy] of [[-0.08, -0.08], [0.08, -0.08], [-0.08, 0.08], [0.08, 0.08]]) m.cyl(sx * 1.25 + ox, 0.78 + oy, 0.5, 0.1, 0.06, 0x6b6e66, Math.PI / 2);
+    m.box(sx * 0.7, 0.86, -0.2, 0.16, 0.2, 0.9, OD);
+  }
+  // the tail boom, the fin, the tailplane, the tail rotor's hub
+  m.box(0, 1.2, -2.6, 0.45, 0.45, 2.4, OL);
+  m.box(0, 1.25, -4.6, 0.3, 0.3, 1.8, OL);
+  m.box(0, 1.95, -5.55, 0.08, 1.3, 0.8, OL, -0.3);
+  m.box(0, 1.25, -4.9, 1.7, 0.06, 0.45, OL);
+  m.cyl(0.12, 2.2, -5.75, 0.12, 0.16, BK, 0, 0, Math.PI / 2);
+  // wheels that do not come up: two under the cockpit, one under the tail
+  for (const sx of [1, -1]) { m.box(sx * 0.6, 0.3, 1.6, 0.06, 0.4, 0.06, BK); m.cyl(sx * 0.6, 0.16, 1.6, 0.32, 0.1, BK, 0, 0, Math.PI / 2); }
+  m.box(0, 0.65, -4.9, 0.05, 0.5, 0.05, BK); m.cyl(0, 0.4, -4.9, 0.2, 0.06, BK, 0, 0, Math.PI / 2);
+  // the chin gun: a ball under the nose, its barrel (it turns as one piece)
+  gun.box(0, 0, 0, 0.3, 0.22, 0.3, OD);
+  gun.box(0, -0.02, 0.48, 0.07, 0.07, 0.95, BK);
+  gun.box(0, -0.02, 0.18, 0.12, 0.12, 0.3, BK);
+  _atkGeo = { body: m.build(), glass: glass.build(), gun: gun.build() };
+  return _atkGeo;
+}
+
 let _rotorGeo = null;
 function rotorGeometry() {
   if (_rotorGeo) return _rotorGeo;
@@ -144,6 +214,8 @@ export class Heli {
     this.seatKind = C.kind.map((k) => ({ ...k }));
     this.seats = this.seatAt.map(() => null);
     this.spin = 0; this.spinRate = 36; this.tailSpin = 0;
+    this.chinYaw = 0; this.chinPitch = 0;
+    this.boxes = kind === 'attack' ? ATTACK_BOXES : BOXES;
     this._build();
     this.place();
   }
@@ -151,15 +223,32 @@ export class Heli {
   get drivable() { return !this.down; }
 
   _build() {
-    const g = this.g, G = bodyGeometry(), R = rotorGeometry();
+    const g = this.g, atk = this.kind === 'attack', G = atk ? attackGeometry() : bodyGeometry(), R = rotorGeometry();
     const grp = this.group = new THREE.Group();
     this.bodyMesh = new THREE.Mesh(G.body, _bodyMat);
     this.bodyMesh.castShadow = !!g.shadows;
     this.glassMesh = new THREE.Mesh(G.glass, _glassMat); this.glassMesh.renderOrder = 6;
-    this.rotor = new THREE.Mesh(R.main, _bodyMat); this.rotor.position.set(0, 2.72, 0.1); this.rotor.castShadow = !!g.shadows;
+    const mast = atk ? [0, 2.32, -0.2] : [0, 2.72, 0.1];
+    this.rotor = new THREE.Mesh(R.main, _bodyMat); this.rotor.position.set(mast[0], mast[1], mast[2]); this.rotor.castShadow = !!g.shadows;
     this.blur = new THREE.Mesh(new THREE.CircleGeometry(ROTOR_R, 28).rotateX(-Math.PI / 2), _blurMat);
-    this.blur.position.set(0, 2.74, 0.1); this.blur.renderOrder = 5;
-    this.tail = new THREE.Mesh(R.tail, _bodyMat); this.tail.position.set(0.2, 2.05, -5.85);
+    this.blur.position.set(mast[0], mast[1] + 0.02, mast[2]); this.blur.renderOrder = 5;
+    this.tail = new THREE.Mesh(R.tail, _bodyMat); this.tail.position.set(atk ? 0.2 : 0.2, atk ? 2.2 : 2.05, atk ? -5.75 : -5.85);
+    if (atk) {
+      // the attack helicopter: no lettering, the chin gun that turns, the beam and the lamps as any other
+      this.chin = new THREE.Mesh(G.gun, _bodyMat);
+      this.chin.position.set(CHIN.at[0], CHIN.at[1], CHIN.at[2]);
+      this.chin.rotation.order = 'YXZ';
+      const lamp = (hex, x, y, z, sz = 0.09) => { const l = new THREE.Mesh(new THREE.BoxGeometry(sz, sz, sz), new THREE.MeshBasicMaterial({ color: hex })); l.position.set(x, y, z); grp.add(l); return l; };
+      lamp(0xff2a2a, 1.62, 1.02, -0.2); lamp(0x2aff5a, -1.62, 1.02, -0.2);
+      this.beacon = lamp(0x3a0808, 0, 2.62, -5.75, 0.12);
+      this.beam = new THREE.Mesh(new THREE.ConeGeometry(2.4, 1, 18, 1, true).translate(0, -0.5, 0), _beamMat);
+      this.beam.visible = false; this.beam.renderOrder = 7;
+      g.scene.add(this.beam);
+      this.signs = [];
+      grp.add(this.bodyMesh, this.glassMesh, this.rotor, this.blur, this.tail, this.chin);
+      g.scene.add(grp);
+      return;
+    }
     // POLICE down each side of the boom, and under the belly
     if (!_signTex) _signTex = signTexture('POLICE');
     const sm = new THREE.MeshBasicMaterial({ map: _signTex, side: THREE.DoubleSide });
@@ -241,19 +330,28 @@ export class Heli {
   _fly(dt, tx, ty, tz, face = null, top = MAX_SPEED) {
     const dx = tx - this.x, dz = tz - this.z, d = Math.hypot(dx, dz);
     const want = Math.min(top, Math.sqrt(2 * ACCEL * 0.8 * d), d * 2.2);
-    const wx = d > 0.01 ? dx / d * want : 0, wz = d > 0.01 ? dz / d * want : 0;
+    let wx = d > 0.01 ? dx / d * want : 0, wz = d > 0.01 ? dz / d * want : 0;
+    // the nose round toward where it is going (anywhere fast), or where it is told to look (hovering, or circling slowly)
+    const yawT = want > 7 || face == null ? (want > 1.5 ? Math.atan2(wx, wz) : this.yaw) : face;
+    const turn = clamp(wrapAngle(yawT - this.yaw), -YAW_RATE * dt, YAW_RATE * dt);
+    this.yaw += turn; this.w = turn / dt;
+    // and it goes the way its nose points: sideways or backwards only slowly, so that to go somewhere else it turns first
+    const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
+    const wf = clamp(wx * fx + wz * fz, -BACK, top), ws = clamp(wx * fz - wz * fx, -SIDE, SIDE);
+    wx = fx * wf + fz * ws; wz = fz * wf - fx * ws;
     const ax = clamp((wx - this.vx) * 2, -ACCEL, ACCEL), az = clamp((wz - this.vz) * 2, -ACCEL, ACCEL);
     this.vx += ax * dt; this.vz += az * dt;
+    // what it carries sideways out of a turn bleeds off quickly: it does not skid along like a car on ice
+    const vf0 = this.vx * fx + this.vz * fz, vs0 = this.vx * fz - this.vz * fx;
+    if (Math.abs(vs0) > SIDE) {
+      const vs1 = Math.sign(vs0) * (SIDE + (Math.abs(vs0) - SIDE) * Math.max(0, 1 - dt * 6));
+      this.vx = fx * vf0 + fz * vs1; this.vz = fz * vf0 - fx * vs1;
+    }
     const wy = clamp((ty - this.y) * 0.9, -CLIMB, CLIMB);
     this.vy += clamp((wy - this.vy) * 3, -8, 8) * dt;
     this.x += this.vx * dt; this.y += this.vy * dt; this.z += this.vz * dt;
     this.speed = Math.hypot(this.vx, this.vz);
-    // the nose round toward where it is told to look, or where it is going
-    const yawT = face != null ? face : this.speed > 3 ? Math.atan2(this.vx, this.vz) : this.yaw;
-    const turn = clamp(wrapAngle(yawT - this.yaw), -YAW_RATE * dt, YAW_RATE * dt);
-    this.yaw += turn; this.w = turn / dt;
     // leaning into it: the nose down to go forward, over to the side to turn or slide
-    const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
     const fwdA = ax * fx + az * fz, sideA = ax * fz - az * fx;
     const vf = this.vx * fx + this.vz * fz;
     this.pitch = damp(this.pitch, clamp(vf * 0.012 + fwdA * 0.03, -0.3, 0.3), 3, dt);
@@ -270,11 +368,16 @@ export class Heli {
     return top;
   }
 
-  /** Where you are, as far as it knows. */
+  /**
+   * Where you are, as far as it knows: where you are, while its crew (or anybody in the police) can see you; where you
+   * were last seen, when nobody can (`search` set); and, before anybody has seen you at all, where it was sent.
+   */
   _you() {
-    const g = this.g, p = g.player, P = g.police;
-    if (this.seen < 3 || !P || !P.lastSeen) { const y = p.car || p; return { x: y.x, z: y.z }; }
-    return { x: P.lastSeen.x, z: P.lastSeen.z };
+    const g = this.g, p = g.player, P = g.police, y = p.car || p;
+    const now = P ? P.now : g.time;
+    if (this.seen < 0.6 || (P && P.lastSeen && now - P.lastSeen.t < 0.6)) { this.sent = { x: y.x, z: y.z }; return { x: y.x, z: y.z }; }
+    if (P && P.lastSeen) return { x: P.lastSeen.x, z: P.lastSeen.z, search: true };
+    return this.sent ? { x: this.sent.x, z: this.sent.z, search: true } : { x: y.x, z: y.z };
   }
 
   update(dt) {
@@ -287,7 +390,7 @@ export class Heli {
     if (this.state !== 'crash' && (this.hp <= 0 || !this.pilotOk)) { this.state = 'crash'; this.stateT = 0; this.air.stats.downed++; g.audio?.at('whump', this.x, this.y, this.z, 1); }
     const S = this.state;
     if (S === 'inbound') this._inbound(dt);
-    else if (S === 'orbit') this._orbit(dt);
+    else if (S === 'orbit') { if (this.kind === 'attack') this._attack(dt); else this._orbit(dt); }
     else if (S === 'dropping') this._dropping(dt);
     else if (S === 'leave') this._leave(dt);
     else if (S === 'crash') this._crash(dt);
@@ -305,15 +408,16 @@ export class Heli {
       if (!this.drop) this.drop = this._dropSpot(you.x, you.z);
       if (this.drop) { tx = this.drop.x; tz = this.drop.z; }
     } else {
-      // to its place on the circle round you
-      tx = you.x + Math.sin(this.theta) * 22; tz = you.z + Math.cos(this.theta) * 22;
+      // to its place on the circle round you (well off, for the army's)
+      const R = this.kind === 'attack' ? 46 : 22;
+      tx = you.x + Math.sin(this.theta) * R; tz = you.z + Math.cos(this.theta) * R;
     }
     const d = Math.hypot(tx - this.x, tz - this.z);
     // high until it is over the place, then down to work (a drop goes down only once it is right over its spot)
     this._fly(dt, tx, d > 30 || this.kind === 'drop' ? CRUISE_Y : this._workAlt(you.x, you.z), tz);
     if (d < 30) {
       if (this.kind === 'drop' && this.drop) { this.state = 'dropping'; this.stateT = 0; this.phase = 'down'; }
-      else if (this.kind === 'gunner') { this.state = 'orbit'; this.stateT = 0; this.theta = Math.atan2(this.x - you.x, this.z - you.z); }
+      else if (this.kind === 'gunner' || this.kind === 'attack') { this.state = 'orbit'; this.stateT = 0; this.theta = Math.atan2(this.x - you.x, this.z - you.z); }
     }
   }
 
@@ -324,12 +428,114 @@ export class Heli {
   _orbit(dt) {
     const you = this._you();
     this.target = you;
-    const R = this.seen > 6 ? 30 : 22;
+    // circling close over you while it can see you; searching in wider and wider circles round where you were, once it cannot
+    const R = you.search ? clamp(26 + (this.seen - 1) * 2.5, 26, 64) : 22;
     this.theta += this.circle * (7 / R) * dt;
     const tx = you.x + Math.sin(this.theta) * R, tz = you.z + Math.cos(this.theta) * R;
     // the inside door toward the middle: going round one way the left side faces in, the other way the right
     const tangent = Math.atan2(Math.cos(this.theta) * this.circle, -Math.sin(this.theta) * this.circle);
     this._fly(dt, tx, this._workAlt(you.x, you.z), tz, tangent, 16);
+  }
+
+  /**
+   * The attack helicopter at work: a run (standing off, its nose on you, the chin gun and the missiles), then a move
+   * round to another side, then another run. Lose it, and it searches in wider and wider circles where you were.
+   */
+  _attack(dt) {
+    const you = this._you();
+    this.target = you;
+    const alt = this._workAlt(you.x, you.z) + 6;
+    if (you.search) {
+      this.atk = 'run'; this.phaseT = 0;
+      const R = clamp(30 + (this.seen - 1) * 2.5, 30, 70);
+      this.theta += this.circle * (8 / R) * dt;
+      this._fly(dt, you.x + Math.sin(this.theta) * R, alt, you.z + Math.cos(this.theta) * R, null, 18);
+      this._weapons(dt, null);
+      return;
+    }
+    this.phaseT = (this.phaseT || 0) - dt;
+    if (this.phaseT <= 0) {
+      this.atk = this.atk === 'run' ? 'move' : 'run';
+      this.phaseT = this.atk === 'run' ? rand(6, 9) : rand(4, 6);
+      if (this.atk === 'move') this.theta += this.circle * rand(1.0, 1.8);
+    }
+    const R = 46, tx = you.x + Math.sin(this.theta) * R, tz = you.z + Math.cos(this.theta) * R;
+    const face = Math.atan2(you.x - this.x, you.z - this.z);
+    if (this.atk === 'move') this._fly(dt, tx, alt, tz, null, 20);
+    else this._fly(dt, tx, alt, tz, face, 7);
+    this._weapons(dt, face);
+  }
+
+  /** A direction in its own space, in the world (and back). */
+  _dirWorld(dx, dy, dz, out) {
+    const q = this.group.quaternion, qx = q.x, qy = q.y, qz = q.z, qw = q.w;
+    const tx = 2 * (qy * dz - qz * dy), ty = 2 * (qz * dx - qx * dz), tz = 2 * (qx * dy - qy * dx);
+    out[0] = dx + qw * tx + (qy * tz - qz * ty); out[1] = dy + qw * ty + (qz * tx - qx * tz); out[2] = dz + qw * tz + (qx * ty - qy * tx);
+    return out;
+  }
+  _dirLocal(dx, dy, dz, out) {
+    const q = this.group.quaternion, qx = -q.x, qy = -q.y, qz = -q.z, qw = q.w;
+    const tx = 2 * (qy * dz - qz * dy), ty = 2 * (qz * dx - qx * dz), tz = 2 * (qx * dy - qy * dx);
+    out[0] = dx + qw * tx + (qy * tz - qz * ty); out[1] = dy + qw * ty + (qz * tx - qx * tz); out[2] = dz + qw * tz + (qx * ty - qy * tx);
+    return out;
+  }
+
+  /**
+   * Its guns: the chin gun turns to you as far as it can and fires in bursts while the gunner can see you; the
+   * missiles go, two at a time, when it is on a run with its nose on you and you are far enough off for them.
+   */
+  _weapons(dt, face) {
+    const g = this.g, p = g.player, A = g.army, Pz = g.police;
+    const fitH = (h) => h && !h.removed && h.h.alive && h.h.conscious;
+    const shooter = fitH(this.seats[1]) ? this.seats[1] : fitH(this.seats[0]) ? this.seats[0] : null;
+    const live = A && shooter && p && p.h.alive && Pz && Pz.wanted >= 2 && this.seen < 0.6;
+    let yawT = 0, pitchT = -0.3, c = null;
+    if (live) {
+      c = p.car ? [p.car.x, p.car.y + 1, p.car.z] : [p.bodies[P0].px, p.bodies[P0].py, p.bodies[P0].pz];
+      this.toWorld(CHIN.at[0], CHIN.at[1], CHIN.at[2], _a);
+      this._dirLocal(c[0] - _a[0], c[1] - _a[1], c[2] - _a[2], _b);
+      yawT = clamp(Math.atan2(_b[0], _b[2]), -CHIN.yaw, CHIN.yaw);
+      pitchT = clamp(Math.atan2(_b[1], Math.hypot(_b[0], _b[2])), CHIN.pitch[0], CHIN.pitch[1]);
+    }
+    const ey = wrapAngle(yawT - this.chinYaw), ep = pitchT - this.chinPitch;
+    this.chinYaw = approach(this.chinYaw, yawT, 3 * dt);
+    this.chinPitch += clamp(ep, -2.4 * dt, 2.4 * dt);
+    if (!live) { this.gunOn = 0; this.salvo = 0; return; }
+    const ex = c[0] - _a[0], ey2 = c[1] - _a[1], ez = c[2] - _a[2], d = Math.hypot(ex, ey2, ez);
+    const clear = d < 115 && g.world.rayWorld(_a[0], _a[1], _a[2], ex / d, ey2 / d, ez / d, d - 0.6) < 0;
+    const err = Math.abs(ey) + Math.abs(ep);
+    this.gunOn = clear && err < 0.09 ? (this.gunOn || 0) + dt : 0;
+    // the chin gun, in bursts, closer and closer
+    this.burstT = (this.burstT || 0) - dt; this.shotT = (this.shotT || 0) - dt;
+    if (this.gunOn > 1.0 && this.burstT <= 0 && this.shotT <= 0) {
+      if (!(this.burst > 0)) this.burst = 5 + ((Math.random() * 6) | 0);
+      this.shotT = 0.09;
+      const spread = lerp(0.08, 0.02, clamp01((this.gunOn - 1) / 3.5));
+      const cp = Math.cos(this.chinPitch), sp = Math.sin(this.chinPitch);
+      this._dirWorld(Math.sin(this.chinYaw) * cp, sp, Math.cos(this.chinYaw) * cp, _b);
+      const mx = _a[0] + _b[0] * CHIN.len, my = _a[1] + _b[1] * CHIN.len, mz = _a[2] + _b[2] * CHIN.len;
+      A.fire(shooter, mx, my, mz, _b[0] + rand(-spread, spread), _b[1] + rand(-spread, spread), _b[2] + rand(-spread, spread));
+      if (--this.burst <= 0) this.burstT = rand(1.0, 1.9);
+      if (!this.saidFire) { this.saidFire = true; shooter.mind?.ask('copFire', 70, null, rand(0.1, 0.5)); }
+    }
+    // the missiles
+    if (this.missT == null) this.missT = rand(2.5, 4.5);
+    this.missT -= dt;
+    const nose = face == null ? 9 : Math.abs(wrapAngle(face - this.yaw));
+    if (this.missT <= 0 && clear && nose < 0.22 && d > 20 && d < 105 && this.atk === 'run') { this.missT = rand(6, 9); this.salvo = 2; this.salvoT = 0; }
+    if (this.salvo > 0) {
+      this.salvoT -= dt;
+      if (this.salvoT <= 0) {
+        const side = this.salvo % 2 ? 1 : -1;
+        this.toWorld(side * 1.25, 0.78, 0.7, _a);
+        const tgt = [c[0] + rand(-1.6, 1.6), c[1] - 0.6, c[2] + rand(-1.6, 1.6)];
+        // off the rail along the nose, and then it steers for where it was sent
+        this._dirWorld(0, 0, 1, _b);
+        const ux = tgt[0] - _a[0], uy = tgt[1] - _a[1], uz = tgt[2] - _a[2], ul = Math.hypot(ux, uy, uz) || 1;
+        A.missile(shooter, this, _a[0], _a[1], _a[2], _b[0] * 0.6 + ux / ul * 0.4, _b[1] * 0.6 + uy / ul * 0.4, _b[2] * 0.6 + uz / ul * 0.4, tgt);
+        this.salvo--; this.salvoT = 0.35;
+      }
+    }
   }
 
   /** Somewhere open near you to put a team down: a street or the park, nothing tall within the rotor's reach. */
@@ -484,9 +690,13 @@ export class Heli {
     if (g.fire) for (let k = 0; k < 8; k++) { const a = rand(TAU), r = rand(0.5, 3.5); g.fire.patch(this.x + Math.cos(a) * r, groundHeight(this.x, this.z) + 0.02, this.z + Math.sin(a) * r, rand(0.3, 0.6), rand(10, 20), this.lastBy); }
     // a wreck: blackened
     this.bodyMesh.material = _wreckMat; this.rotor.material = _wreckMat; this.tail.visible = false;
+    if (this.chin) this.chin.material = _wreckMat;
     for (const s of this.signs) s.visible = false;
     this.air.stats.crashed++;
-    if (this.lastBy && this.lastBy.isPlayer) g.police?.raise(3, 'you brought down a police helicopter', { x: this.x, z: this.z }, { kind: 'heli', key: 'heli' + this.id });
+    if (this.lastBy && this.lastBy.isPlayer) {
+      if (this.kind === 'attack') g.police?.raise(3, 'you brought down an army helicopter', { x: this.x, z: this.z }, { kind: 'army', key: 'heli' + this.id });
+      else g.police?.raise(3, 'you brought down a police helicopter', { x: this.x, z: this.z }, { kind: 'heli', key: 'heli' + this.id });
+    }
     void spd;
   }
 
@@ -524,6 +734,7 @@ export class Heli {
 
   _effects(dt) {
     const g = this.g;
+    if (this.chin) { this.chin.rotation.y = this.chinYaw; this.chin.rotation.x = -this.chinPitch; }
     this.spin += this.spinRate * dt;
     this.rotor.rotation.y = this.spin;
     this.tailSpin += this.spinRate * 4.7 * dt;
@@ -551,7 +762,9 @@ export class Heli {
     const T = this.target;
     if (night && T && (this.state === 'orbit' || this.state === 'dropping' || this.state === 'inbound')) {
       this.toWorld(0, 0.2, 2.1, _a);
-      const ty = groundHeight(T.x, T.z) + 0.5, dx = T.x - _a[0], dy = ty - _a[1], dz = T.z - _a[2], d = Math.hypot(dx, dy, dz) || 1;
+      // searching, it sweeps the ground round where you were
+      const sx = T.search ? T.x + Math.sin(this.t * 0.6) * 14 : T.x, sz = T.search ? T.z + Math.cos(this.t * 0.45) * 14 : T.z;
+      const ty = groundHeight(sx, sz) + 0.5, dx = sx - _a[0], dy = ty - _a[1], dz = sz - _a[2], d = Math.hypot(dx, dy, dz) || 1;
       g.lights?.ask('spot', _a[0], _a[1], _a[2], 0xfff6e0, 120, Math.min(120, d + 20), dx / d, dy / d, dz / d, 3);
       this.beam.visible = true;
       this.beam.position.set(_a[0], _a[1], _a[2]);
@@ -571,7 +784,7 @@ export class Heli {
     const tx = 2 * (qy * dz - qz * dy), ty = 2 * (qz * dx - qx * dz), tz = 2 * (qx * dy - qy * dx);
     const lx = dx + qw * tx + (qy * tz - qz * ty), ly = dy + qw * ty + (qz * tx - qx * tz), lz = dz + qw * tz + (qx * ty - qy * tx);
     let best = -1;
-    for (const B of BOXES) {
+    for (const B of this.boxes) {
       let t0 = 0, t1 = maxT;
       for (let k = 0; k < 3; k++) {
         const oo = o[k], dd = k === 0 ? lx : k === 1 ? ly : lz, lo = B[k] - B[k + 3], hi = B[k] + B[k + 3];
@@ -590,7 +803,7 @@ export class Heli {
   hurt(amount, by, x, y, z) {
     if (this.down) return;
     const g = this.g;
-    this.hp -= amount;
+    this.hp -= amount * (this.kind === 'attack' ? 0.55 : 1);
     if (by) this.lastBy = by;
     this.air.stats.hits++;
     g.gore.puff('flash', x, y, z, 0.18, 0.05, 1, 0.88, 0.6);
@@ -606,6 +819,9 @@ export class Heli {
  */
 const BOXES = [[0, 1.25, 1.6, 0.76, 0.75, 0.95], [0, 0.5, 0.35, 0.75, 0.14, 2.0], [0, 1.97, -0.2, 0.75, 0.06, 0.85], [0, 1.3, -1.45, 0.65, 0.65, 0.45],
   [0, 1.5, -3.6, 0.26, 0.26, 2.4], [0, 2.2, -0.25, 0.48, 0.22, 0.9], [0, 2.15, -5.75, 0.06, 0.6, 0.4]];
+/** The attack helicopter's: body and nose, canopy, engines, wings and pods, boom, fin. */
+const ATTACK_BOXES = [[0, 0.75, 0.9, 0.48, 0.35, 1.7], [0, 0.62, 2.9, 0.4, 0.28, 0.4], [0, 1.4, 1.55, 0.42, 0.32, 1.1], [0, 1.25, -0.6, 0.5, 0.45, 0.8],
+  [0, 0.92, -0.2, 1.6, 0.16, 0.65], [0, 1.22, -3.4, 0.22, 0.22, 2.1], [0, 1.95, -5.55, 0.05, 0.65, 0.4]];
 const _wreckMat = new THREE.MeshLambertMaterial({ vertexColors: true, color: 0x3a3634 });
 
 /* -------------------------------- the lot ---------------------------------- */
@@ -619,8 +835,8 @@ export class Air {
 
   /** A helicopter of that kind, crewed, coming in from the edge of the city, high. */
   spawn(kind = 'gunner', from = null) {
-    const g = this.g;
-    if (!g.spawnOfficer || !g.spawnSwat) return null;
+    const g = this.g, army = kind === 'attack';
+    if (!g.spawnOfficer || !g.spawnSwat || (army && !g.spawnSoldier)) return null;
     const p = g.player;
     const a = from != null ? from : rand(TAU);
     const x = p.x + Math.sin(a) * 120, z = p.z + Math.cos(a) * 120;
@@ -628,11 +844,11 @@ export class Air {
     hl.theta = a;
     this.list.push(hl);
     // the pilot, and the team
-    const pilot = g.spawnOfficer(hl.x, hl.z, hl.yaw);
+    const pilot = army ? g.spawnSoldier(hl.x, hl.z, hl.yaw) : g.spawnOfficer(hl.x, hl.z, hl.yaw);
     pilot.pilot = true;
     this._seat(pilot, hl, 0);
     for (let i = 1; i < hl.seats.length; i++) {
-      const h = g.spawnSwat(hl.x, hl.z, hl.yaw);
+      const h = army ? g.spawnSoldier(hl.x, hl.z, hl.yaw) : g.spawnSwat(hl.x, hl.z, hl.yaw);
       h.heliTeam = true;
       this._seat(h, hl, i);
       // the door gunners with their rifles out
@@ -724,7 +940,8 @@ export class Air {
   crew(h, brain, dt) {
     const g = this.g, hl = h.car, m = h.mind, K = hl.seatKind[h.seat] || {};
     h.intent.face = null;
-    if (K.pilot) { if (m) m.doing = hl.state === 'crash' ? 'fighting the controls of a falling helicopter' : 'flying the police helicopter'; h.aimYaw = null; return; }
+    if (K.pilot) { if (m) m.doing = hl.state === 'crash' ? 'fighting the controls of a falling helicopter' : hl.kind === 'attack' ? 'flying the attack helicopter' : 'flying the police helicopter'; h.aimYaw = null; return; }
+    if (K.chin) { if (m) m.doing = 'in the front seat of the attack helicopter, on its gun and its missiles'; h.aimYaw = null; return; }
     if (K.rope) { if (m) m.doing = 'sliding down a rope from the helicopter'; h.aimYaw = null; return; }
     if (!K.gun) { if (m) m.doing = hl.state === 'dropping' ? 'about to go down the rope' : 'riding in the police helicopter, waiting to go down the ropes'; h.aimYaw = null; return; }
     if (m) m.doing = 'in the helicopter\'s open door, with a rifle';
